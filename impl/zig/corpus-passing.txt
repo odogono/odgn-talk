@@ -17,6 +17,7 @@ collecting/next-filter
 collecting/partial-error
 collecting/waiting-body
 collecting/zero-passes
+computed-sends/forwarding
 computed-sends/names
 computed-sends/unhandled
 dates/value-encoding
@@ -83,6 +84,9 @@ suspension/answers
 suspension/joins
 suspension/late-failure
 suspension/timeout-block-join
+suspension/timeout-block-waits
+suspension/wait-for
+suspension/wait-observation
 suspension/wait-precision
 tell-block/equivalent
 tell-block/join

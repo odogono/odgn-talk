@@ -146,6 +146,9 @@ pub const Run = struct {
     waited: Waited = .{},
     /// The Join it is in, from `join-start` to its closing `end`.
     join: ?*Join = null,
+    /// The frame count at which running stops: 0, or while a pending
+    /// `wait for`'s test body runs, the frames below it.
+    base: usize = 0,
 };
 
 /// A Join's members, in start order.
@@ -186,6 +189,9 @@ pub const Resume = union(enum) {
     woke,
     /// The reply to a `send … and wait`.
     reply: *Value,
+    /// A `wait for` that fired: the message, or Nothing for a timeout or
+    /// an `after`, and the branch's number.
+    event: struct { message: ?*Value, branch: u32, binds: u32 = 0 },
     /// A `send … and wait` that got no reply, and why.
     send_failed: struct { reason: []const u8, err: ?*Value },
     /// Every member of its Join answered.
@@ -214,7 +220,30 @@ pub const Pending = struct {
     member: ?usize = null,
     /// Whether the deadline is a Timeout Block's, whose `after` it is.
     block: bool = false,
+    /// A `wait for`'s branches, and the number of the `after` branch, or 0
+    /// for `or d`, that its deadline fires.
+    event: ?*EventWait = null,
+    branch: u32 = 0,
 };
+
+/// A pending `wait for` (chapter 8, The event table): its entry, and what
+/// each branch popped.
+pub const EventWait = struct {
+    entry: u32,
+    branches: []EventBranch,
+    /// Whether it is the block form, which pushes the branch's number.
+    any: bool,
+};
+
+/// A `when` branch's `from` and captured values, or an `after` branch's
+/// deadline.
+pub const EventBranch = union(enum) {
+    when: struct { from: ?*Value, captures: []*Value },
+    after: i128,
+};
+
+/// No deadline: a `wait for` that can wait for ever.
+const never: i128 = std.math.maxInt(i128);
 
 /// A Script's work: a message for dispatch, or a Run ready to resume.
 pub const Work = union(enum) { message: Delivery, run: *Run };
@@ -353,7 +382,7 @@ pub const Group = struct {
         }
         g.scripts.deinit(g.gpa);
         // A live Run removed its own wait; any left belongs to none.
-        for (g.pending.items) |p| g.gpa.destroy(p);
+        for (g.pending.items) |p| g.destroyPending(p);
         g.pending.deinit(g.gpa);
         var it = g.results.valueIterator();
         while (it.next()) |v| v.*.release();
@@ -451,6 +480,7 @@ pub const Group = struct {
             },
             .reply => |v| v.release(),
             .send_failed => |x| if (x.err) |e| e.release(),
+            .event => |x| if (x.message) |v| v.release(),
             else => {},
         }
     }
@@ -462,13 +492,28 @@ pub const Group = struct {
         if (d.from) |x| g.gpa.free(x);
     }
 
+    fn destroyPending(g: *Group, p: *Pending) void {
+        if (p.event) |e| {
+            for (e.branches) |b| switch (b) {
+                .when => |x| {
+                    if (x.from) |v| v.release();
+                    releaseAll(x.captures, g.gpa);
+                },
+                .after => {},
+            };
+            g.gpa.free(e.branches);
+            g.gpa.destroy(e);
+        }
+        g.gpa.destroy(p);
+    }
+
     fn destroyRun(g: *Group, run: *Run) void {
         if (run.waiting) |p| {
             for (g.pending.items, 0..) |x, i| if (x == p) {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
-            g.gpa.destroy(p);
+            g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
         g.dropJoin(run);
@@ -555,7 +600,8 @@ pub const Group = struct {
             }
             const i = first orelse break;
             const p = g.pending.orderedRemove(i);
-            try g.ready(p, if (p.call != null or p.id.len > 0 or p.block) .timeout else .woke);
+            const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
+            try g.ready(p, with);
         }
         // Turns: each Script with work, in load order, round and round.
         var busy = true;
@@ -565,7 +611,10 @@ pub const Group = struct {
                 if (s.work.items.len == 0) continue;
                 busy = true;
                 switch (s.work.orderedRemove(0)) {
-                    .message => |d| try g.startRun(s, d),
+                    .message => |d| {
+                        try g.observe(s, d);
+                        try g.startRun(s, d);
+                    },
                     .run => |r| try g.resumeRun(s, r),
                 }
             }
@@ -582,7 +631,7 @@ pub const Group = struct {
     /// The earliest deadline still pending.
     fn next(g: *Group) ?i128 {
         var best: ?i128 = null;
-        for (g.pending.items) |p| if (best == null or p.deadline < best.?) {
+        for (g.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
             best = p.deadline;
         };
         return best;
@@ -595,7 +644,7 @@ pub const Group = struct {
         if (p.member) |index| {
             // A Join Member: the Run is ready when every member has
             // answered, or when the first fails.
-            defer g.gpa.destroy(p);
+            defer g.destroyPending(p);
             const join = run.join.?;
             const member = &join.members.items[index];
             member.pending = null;
@@ -618,7 +667,7 @@ pub const Group = struct {
                     _ = g.pending.orderedRemove(i);
                     break;
                 };
-                g.gpa.destroy(w);
+                g.destroyPending(w);
             }
             run.waiting = null;
             try run.script.work.append(g.gpa, .{ .run = run });
@@ -626,7 +675,7 @@ pub const Group = struct {
         }
         run.resume_with = with;
         run.waiting = null;
-        defer g.gpa.destroy(p);
+        defer g.destroyPending(p);
         run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms };
         try run.script.work.append(g.gpa, .{ .run = run });
     }
@@ -753,6 +802,11 @@ pub const Group = struct {
                 const at = try chunks.numberValue(gpa, @intCast(index + 1));
                 defer at.release();
                 return try withKey(gpa, e, "index", at);
+            },
+            .event => |x| {
+                try frame.stack.append(gpa, .{ .value = x.message orelse try nothing(gpa) });
+                if (ins.op == .wait_for_any) try frame.stack.append(gpa, .{ .value = try chunks.numberValue(gpa, x.branch) });
+                return null;
             },
             .reply => |v| {
                 // A reply charges nothing more.
@@ -971,6 +1025,163 @@ pub const Group = struct {
         return g.wrongKind("quantity", d);
     }
 
+    /// `wait-for` and `wait-for-any` (chapter 5, `wait for` a message):
+    /// takes the values its entry's branches popped, and suspends until a
+    /// message matches a branch, an `after` passes or the timeout does.
+    fn waitFor(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        const index: u32 = @intCast(ins.operands[0].int);
+        const entry = run.script.unit.events[index];
+        var count: usize = @intFromBool(entry.timeout);
+        for (entry.branches) |b| count += switch (b) {
+            .when => |w| @as(usize, @intFromBool(w.from)) + w.captures,
+            .after => 1,
+        };
+        const popped = try gpa.alloc(*Value, count);
+        defer releaseAll(popped, gpa);
+        const first = frame.stack.items.len - count;
+        for (frame.stack.items[first..], popped) |slot, *v| v.* = slot.value;
+        frame.stack.shrinkRetainingCapacity(first);
+        // Each `from` names a Script, and each duration is exact.
+        const now = nanos(g.clock);
+        var deadline: i128 = never;
+        var fires: u32 = 0;
+        var at: usize = 0;
+        for (entry.branches, 1..) |b, number| switch (b) {
+            .when => |w| {
+                if (w.from) {
+                    if (popped[at].data != .text) return g.wrongKind("object", popped[at]);
+                }
+                at += @as(usize, @intFromBool(w.from)) + w.captures;
+            },
+            .after => {
+                const ns = waitMillis(popped[at]) orelse return g.notDuration(popped[at]);
+                at += 1;
+                if (now + ns < deadline) {
+                    deadline = now + ns;
+                    fires = @intCast(number);
+                }
+            },
+        };
+        if (entry.timeout) {
+            const ns = waitMillis(popped[at]) orelse return g.notDuration(popped[at]);
+            deadline = now + ns;
+        }
+        if (blockDeadline(frame)) |b| if (b.at <= now) {
+            m.uncharged = true;
+            return g.raiseDeadline(b, null);
+        };
+        const branches = try gpa.alloc(EventBranch, entry.branches.len);
+        at = 0;
+        for (entry.branches, branches) |b, *held| switch (b) {
+            .when => |w| {
+                const from: ?*Value = if (w.from) popped[at].retain() else null;
+                if (w.from) at += 1;
+                const captures = try gpa.alloc(*Value, w.captures);
+                for (captures, popped[at .. at + w.captures]) |*c, v| c.* = v.retain();
+                at += w.captures;
+                held.* = .{ .when = .{ .from = from, .captures = captures } };
+            },
+            .after => {
+                held.* = .{ .after = now + waitMillis(popped[at]).? };
+                at += 1;
+            },
+        };
+        const event = try gpa.create(EventWait);
+        event.* = .{ .entry = index, .branches = branches, .any = ins.op == .wait_for_any };
+        try g.suspendRun(run, if (event.any) "wait-for-any" else "wait-for", .{ .run = run, .deadline = deadline, .order = 0, .event = event, .branch = fires });
+        return .suspended;
+    }
+
+    /// Observation before dispatch: every pending `wait for` in the Script
+    /// that the message matches makes its Run ready, in the order the waits
+    /// began.
+    fn observe(g: *Group, s: *Script, d: Delivery) !void {
+        var waits: std.ArrayList(*Pending) = .empty;
+        defer waits.deinit(g.gpa);
+        for (g.pending.items) |p| if (p.event != null and p.run.script == s) try waits.append(g.gpa, p);
+        if (waits.items.len == 0) return;
+        const message = try g.messageMap(d);
+        defer message.release();
+        for (waits.items) |p| {
+            const branch = try g.eventMatch(p, d) orelse continue;
+            for (g.pending.items, 0..) |y, i| if (y == p) {
+                _ = g.pending.orderedRemove(i);
+                break;
+            };
+            const binds: u32 = switch (g.eventEntry(p).branches[branch - 1]) {
+                .when => |w| @intCast(w.binds.len),
+                .after => 0,
+            };
+            try g.ready(p, .{ .event = .{ .message = message.retain(), .branch = branch, .binds = binds } });
+        }
+    }
+
+    fn eventEntry(g: *Group, p: *const Pending) lower.Event {
+        _ = g;
+        return p.run.script.unit.events[p.event.?.entry];
+    }
+
+    /// The number of the first `when` branch of a pending `wait for` that
+    /// a message matches, having bound its names, or null.
+    fn eventMatch(g: *Group, p: *Pending, d: Delivery) !?u32 {
+        const run = p.run;
+        const unit = &run.script.unit;
+        const event = p.event.?;
+        for (unit.events[event.entry].branches, event.branches, 1..) |b, held, number| {
+            const w = switch (b) {
+                .when => |w| w,
+                .after => continue,
+            };
+            if (!std.mem.eql(u8, w.message, d.message)) continue;
+            const arity = if (w.body) |body| unit.bodies[body].params.len else 0;
+            if (arity != d.args.len) continue;
+            // `from` a Script: that Script sent it.
+            if (held.when.from) |from| {
+                const sender = d.from orelse continue;
+                const end = std.mem.indexOfScalar(u8, sender, '/') orelse sender.len;
+                if (!std.mem.eql(u8, sender[0..end], from.data.text)) continue;
+            }
+            if (w.body) |body| {
+                const values = try g.eventTest(run, body, d.args, held.when.captures) orelse continue;
+                defer values.release();
+                const frame = &run.frames.items[run.frames.items.len - 1];
+                for (w.binds, values.data.list) |slot, v| {
+                    frame.locals[slot].release();
+                    frame.locals[slot] = v.retain();
+                }
+            }
+            return @intCast(number);
+        }
+        return null;
+    }
+
+    /// Runs a `when` branch's test body on its waiting Run, which it
+    /// charges: the values its names bind, or null if it fails.
+    fn eventTest(g: *Group, run: *Run, body: u32, args: []const *Value, captures: []const *Value) !?*Value {
+        const base = run.frames.items.len;
+        try g.pushFrame(run, body, args);
+        const frame = &run.frames.items[base];
+        const first = run.script.unit.bodies[body].capture_slot;
+        for (captures, first..) |v, slot| {
+            frame.locals[slot].release();
+            frame.locals[slot] = v.retain();
+        }
+        const fuel = run.fuel;
+        run.base = base;
+        defer run.base = 0;
+        const outcome = try g.execute(run, true);
+        g.pump_fuel += run.fuel - fuel;
+        return switch (outcome) {
+            .returned => |v| v,
+            .errored => |e| blk: {
+                e.release();
+                break :blk null;
+            },
+            else => null,
+        };
+    }
+
     /// Starts a Join Member: its wait is pending, but the Run goes on.
     fn startMember(g: *Group, run: *Run, wait: Pending) !void {
         const join = run.join.?;
@@ -1003,7 +1214,7 @@ pub const Group = struct {
                     _ = g.pending.orderedRemove(i);
                     break;
                 };
-                g.gpa.destroy(p);
+                g.destroyPending(p);
             }
             if (x.with) |w| g.releaseResume(w);
         }
@@ -1073,7 +1284,7 @@ pub const Group = struct {
                 .unhandled, .clause_failed => "unhandled",
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
-            if (outcome == .suspended) if (run.waiting) |p| if ((p.call == null and p.id.len == 0) or p.block) {
+            if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
                 const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(p.deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(p.deadline, std.time.ns_per_s)) };
                 const text = model.dates.string(g.scratch.allocator(), model.dates.fields(at), true) catch "";
                 out.print(" until={s}", .{text}) catch {};
@@ -1193,6 +1404,14 @@ pub const Group = struct {
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
             total += 48;
         };
+        // A pending `wait for`'s captured values; a named Script is not a
+        // value.
+        if (run.waiting) |p| if (p.event) |e| for (e.branches) |b| switch (b) {
+            .when => |x| for (x.captures) |v| {
+                total += costs.size(v);
+            },
+            .after => {},
+        };
         // A Join's pending members, and the answers that came early; once
         // a member has failed, only its failure.
         if (run.join) |join| {
@@ -1261,7 +1480,7 @@ pub const Group = struct {
                 run.alloc += cost.alloc;
                 // The default Fuel per Run. Limits and their rollback are
                 // step 4's; this bound keeps every Run finite until then.
-                if (run.fuel > fuel_per_run) {
+                if (run.fuel > fuel_per_run and run.base == 0) {
                     charge.release();
                     switch (done) {
                         .returned, .raised => |v| v.release(),
@@ -1278,7 +1497,7 @@ pub const Group = struct {
                 .next => {},
                 .returned => |v| {
                     g.popFrame(run);
-                    if (run.frames.items.len == 0) return .{ .returned = v };
+                    if (run.frames.items.len == run.base) return .{ .returned = v };
                     const caller = &run.frames.items[run.frames.items.len - 1];
                     try caller.stack.append(g.gpa, .{ .value = v });
                 },
@@ -2082,6 +2301,7 @@ pub const Group = struct {
             // later.
             .load_object => try g.push(frame, try model.text(gpa, ops[0].text)),
 
+            .wait_for, .wait_for_any => return g.waitFor(run, frame, ins, m),
             .wait => {
                 const d = pop(frame);
                 defer d.release();
@@ -3171,13 +3391,15 @@ fn failureMap(gpa: Allocator, f: Failure) !*Value {
 }
 
 /// What a settled wait retains: an answer or reply, a failure's Data (an
-/// empty map when it has none), or a failed send's error.
+/// empty map when it has none), a failed send's error, or a matched
+/// event's message and a slot for each value its test bound.
 fn retained(r: Resume) u64 {
     return switch (r) {
         .answer => |x| costs.size(x.value),
         .reply => |v| costs.size(v),
         .send_failed => |x| if (x.err) |e| costs.size(e) else 0,
         .failed => |f| if (f.data) |d| costs.size(d) else 16,
+        .event => |x| (if (x.message) |v| costs.size(v) else 0) + 8 * @as(u64, x.binds),
         else => 0,
     };
 }
