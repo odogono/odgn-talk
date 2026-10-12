@@ -967,7 +967,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "not a container",
-			RaisedWhen: "A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token",
+			RaisedWhen: "A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token",
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "unterminated interpolation",

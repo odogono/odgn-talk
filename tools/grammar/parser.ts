@@ -891,10 +891,10 @@ export class Parser {
     }
     const e = this.chunkLevel();
     let root = e;
-    while (root && root.k !== 'Name') {
-      root = root.of ?? root.base;
+    while (root && ['Chunk', 'OrdinalChunk', 'Key', 'Group'].includes(root.k)) {
+      root = root.k === 'Group' ? root.e : (root.of ?? root.base);
     }
-    if (!root) {
+    if (!root || root.k !== 'Name') {
       throw new SyntaxError(
         t,
         'not a container',

@@ -495,6 +495,8 @@ and, unless the pattern ended in `...`, `bin-end F`. A name bound by an earlier 
 
 ### Containers
 
+Only chunk and key levels occur on a Container’s path to its root Name. A Built-in property on that path is rejected during parsing ([chapter 2](02-grammar.md#statements)), so no property write, test or delete lowering exists. Property reads in the expressions computing indexes, keys or delimiters lower normally.
+
 A write into a Container rooted in a name, with levels `l1` (next to the root) to `lk` (the leaf), lowers to one store to the root ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)):
 
 1. Anything the statement evaluates before the Container, such as the value in `put e into c`, into a temp `v`.
