@@ -24,3 +24,5 @@ export {
   type TranscriptItem,
 } from './transcript';
 export type { Setup } from '../setup';
+/** Each Built-in's call notation and description, for editors. */
+export { builtinDocs } from '../generated/builtin-docs';
