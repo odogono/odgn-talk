@@ -101,8 +101,12 @@ out, and display, encoding and canonical Unit strings return an owned
 `talk_owned_bytes`, released with `talk_owned_bytes_release`. Child accessors
 return owned references; the header documents each lifetime. Encoding refuses
 Function Values at any depth and resolves Host Objects through the decoder's
-callback. Pattern decoding reparses canonical source; compilation and matching
-belong to the front end. Value construction and decoding guard nesting at 128
+callback. Decoding accepts only the forms the encoder writes: a decoded value
+must re-encode to the number, tag and payload the input spelled, so `{"$dec":
+"3"}`, `1.0` and a non-UTC or non-shortest `$instant` are refused. JSON white
+space and string escapes are syntax, and text is normalised to NFC. Pattern
+decoding reparses canonical source; compilation and matching belong to the
+front end. Value construction and decoding guard nesting at 128
 levels, independently of future Run budgets.
 
 ## Corpus runner

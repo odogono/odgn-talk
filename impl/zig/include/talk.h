@@ -148,8 +148,11 @@ double talk_decimal_float64_lossy(const talk_decimal *n);
 talk_host_error_code talk_encode_value(const talk_value *v, talk_owned_bytes *out);
 /* C only: returns a borrowed, existing object or NULL. Decode retains it. */
 typedef talk_value *(*talk_resolve_object)(void *context, const char *kind, size_t kind_len, const char *id, size_t id_len);
-/* Reads the Value Encoding. Nesting beyond 128 levels is refused, and an
- * $object is refused unless resolve returns the object it names. */
+/* Reads the Value Encoding. Any number, tag or payload the encoder would not
+ * write is refused with TALK_INVALID_VALUE; JSON white space and string
+ * escapes are syntax, and text is normalised to NFC as talk_text does.
+ * Nesting beyond 128 levels is refused, and an $object is refused unless
+ * resolve returns the object it names. */
 talk_host_error_code talk_decode_value(const unsigned char *s, size_t len, talk_resolve_object resolve, void *context, talk_value **out);
 /* C only: reads the chapter 11 display form, including NFC normalization.
  * Host objects and functions require a Group reader. Patterns are reparsed. */
