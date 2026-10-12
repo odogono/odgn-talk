@@ -101,9 +101,11 @@ load-diagnostics/unknown-kind
 load-diagnostics/unknown-name
 load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
+math/domain-errors
 math/floats
 math/fractional-power
 math/fractional-power-errors
+math/number-functions
 objects/guard-keys
 objects/message-path
 objects/properties

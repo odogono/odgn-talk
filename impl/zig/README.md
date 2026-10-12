@@ -194,12 +194,17 @@ mailbox, and writes the `counters` record without draining Host Inputs.
 So far the machine runs straight-line code, branches, loops, functions, chunks
 and properties, keys, lists and maps, `match` with its destructuring tests,
 Bytes builds and Binary Patterns, `as` conversions, number, Quantity and date
-arithmetic, `^`, and the Built-ins but the transcendental ones. `floor`,
+arithmetic, `^`, and the Built-ins. `floor`,
 `ceiling`, `truncate` and `round` round the coefficient exactly by the General
 Decimal Arithmetic's modes; `upper` and `lower` use the full case mappings, with
 Final_Sigma, then NFC; the date fields, ISO weeks, `toCivil` and `toInstant`
 work on proleptic Gregorian days; and the float Built-ins read and write IEEE
-754 bytes through the shortest round-trip decimal. A Built-in that raises still
+754 bytes through the shortest round-trip decimal. `sqrt` and `power` are the
+decimal `power`, exact where the value is. `exp`, `ln`, `log10` and the
+trigonometric functions ([transcendental](src/decimal/transcendental.zig))
+bound the exact value in a fixed-point interval, with pi by Machin's formula
+and each series' tail bounded, and round both ends; by Ziv's method, a
+disagreement retries with twice the guard bits. A Built-in that raises still
 pays its rate. A
 raised error unwinds in two phases: the catch search walks the Unwind Table
 outward, charging `unwind` per frame it leaves and running each catch test in
@@ -317,8 +322,7 @@ frame and no Handler Clause and writes `fn=` in place of a Handler.
 Reload.
 
 `timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
-effects, Broadcasts and the transcendental Built-ins (`sqrt`, `exp`, `ln`,
-`log10`, `power` and the trigonometric ones) come next. A Run past the default Fuel per Run ends
+effects and Broadcasts come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 

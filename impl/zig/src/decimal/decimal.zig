@@ -3,7 +3,7 @@
 const std = @import("std");
 const utf8 = @import("../unicode/utf8.zig");
 const properties = @import("../unicode/properties.zig");
-const Big = std.math.big.int.Managed;
+pub const Big = std.math.big.int.Managed;
 const Allocator = std.mem.Allocator;
 pub const Error = error{ InvalidValue, Overflow, DivisionByZero, OutOfDomain, OutOfMemory };
 /// 10^34: every coefficient is below it, so a Decimal has at most 34 digits.
@@ -196,7 +196,7 @@ fn digitCount(n: Big) error{OutOfMemory}!i32 {
 
 /// Finish |n/d| * 10^exp. Both integers are positive. Rounding uses the
 /// quotient and exact remainder, so ties and subnormals have one rounding.
-fn finish(n: *Big, d: *Big, exp: i32, ideal: i32, negative: bool, bounded: bool) Error!Decimal {
+pub fn finish(n: *Big, d: *Big, exp: i32, ideal: i32, negative: bool, bounded: bool) Error!Decimal {
     const a = n.allocator;
     if (n.toConst().eqlZero()) return .{ .exponent = std.math.clamp(ideal, -6176, 0) };
     var order = (try digitCount(n.*)) - (try digitCount(d.*));
@@ -326,7 +326,7 @@ fn integerPower(a: Allocator, x: Decimal, n: i128) Error!Decimal {
 }
 
 /// `x` without trailing zeros in its coefficient.
-fn reduce(x: Decimal) Decimal {
+pub fn reduce(x: Decimal) Decimal {
     var r = x;
     while (r.coefficient % 10 == 0) : (r.exponent += 1) r.coefficient /= 10;
     return r;
@@ -547,7 +547,7 @@ fn roundBound(a: Allocator, m: *const Big, k: i32, p: usize, ideal: i128, negati
 }
 
 /// ln x, ln 2, and their error bounds, in fixed point with `p` fraction bits.
-const Logarithm = struct {
+pub const Logarithm = struct {
     value: Big,
     err: Big,
     ln2: Big,
@@ -556,7 +556,7 @@ const Logarithm = struct {
     /// x = m 2^k 10^e with 1 <= m < 2, so ln x = ln m + k ln 2 + e ln 10,
     /// where ln 10 = 3 ln 2 + ln 1.25. Each logarithm is 2 atanh((m-1)/(m+1)),
     /// whose argument is below 1/3.
-    fn init(a: Allocator, x: Decimal, p: usize) Error!Logarithm {
+    pub fn init(a: Allocator, x: Decimal, p: usize) Error!Logarithm {
         const k: u7 = @intCast(127 - @clz(x.coefficient));
         const low = @as(u128, 1) << k;
         var ln2 = try logOfRatio(a, 1, 3, p);
@@ -589,13 +589,13 @@ const Logarithm = struct {
     }
 };
 
-const Approximation = struct { value: Big, err: u64 };
+pub const Approximation = struct { value: Big, err: u64 };
 
 /// 2 atanh(`num`/`den`) = ln((den+num)/(den-num)), for 0 <= num/den <= 1/3,
 /// as z + z^3/3 + z^5/5 + ... Each computed power of z stays within 2 ulps,
 /// since z^2 < 1/9 shrinks the error it carries, so each term adds at most
 /// 3 ulps; the tail past the last nonzero power adds at most 3 more.
-fn logOfRatio(a: Allocator, num: u128, den: u128, p: usize) Error!Approximation {
+pub fn logOfRatio(a: Allocator, num: u128, den: u128, p: usize) Error!Approximation {
     var z = try Big.initSet(a, num);
     defer z.deinit();
     try z.shiftLeft(&z, p);
