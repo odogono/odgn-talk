@@ -2876,7 +2876,23 @@ pub const Group = struct {
                     .div => .div,
                     else => .mod,
                 };
+                const dated = x.data == .instant or x.data == .civil_date or y.data == .instant or y.data == .civil_date;
+                if (dated and (op == .add or op == .subtract)) {
+                    const r = try g.dateArithmetic(op == .subtract, x, y);
+                    m.result = r.retain();
+                    try g.push(frame, r);
+                    return .next;
+                }
                 const r = model.arithmetic(gpa, op, x, y) catch |e| return g.arithmeticError(e, x, y);
+                m.result = r.retain();
+                try g.push(frame, r);
+            },
+            .power => {
+                const y = pop(frame);
+                defer y.release();
+                const x = pop(frame);
+                defer x.release();
+                const r = try g.raisePower(x, y);
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -2906,7 +2922,10 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                const r = model.range(gpa, x, y) catch return g.wrongKind("number", if (x.data != .number and x.data != .quantity) x else y);
+                const r = model.range(gpa, x, y) catch |e| return switch (e) {
+                    error.IncompatibleUnits => g.arithmeticError(e, x, y),
+                    else => g.wrongKind("number", if (x.data != .number and x.data != .quantity) x else y),
+                };
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -3672,6 +3691,8 @@ pub const Group = struct {
                     return .next;
                 }
                 var raised: builtins.Raised = .{};
+                // A Built-in that raises still pays its rate.
+                m.builtin = ops[0].text;
                 const r = builtins.call(a, gpa, ops[0].text, args, &raised, m) catch |e| switch (e) {
                     error.Raised => return g.raiseBuiltin(raised),
                     else => |other| return other,
@@ -3890,6 +3911,162 @@ pub const Group = struct {
         return true;
     }
 
+    /// `+` and `-` with a date (chapter 3, Date arithmetic): an exact
+    /// duration in whole nanoseconds, or a calendar one in whole months, or
+    /// the difference of two dates of one kind.
+    fn dateArithmetic(g: *Group, subtract: bool, x: *Value, y: *Value) !*Value {
+        const gpa = g.gpa;
+        const a = g.scratch.allocator();
+        const x_date = x.data == .instant or x.data == .civil_date;
+        if (!x_date) return g.wrongKind(kindName(x), y);
+        const date_only = x.data == .civil_date and !x.data.civil_date.has_time;
+        switch (y.data) {
+            .quantity => |q| {
+                const second = units.Unit.parse("s") catch unreachable;
+                const month = units.Unit.parse("month") catch unreachable;
+                const takes = if (date_only) "day" else "s";
+                if (q.unit.compatible(month) and x.data == .civil_date) {
+                    const months = q.unit.toBase(a, q.number) catch return error.OutOfMemory;
+                    const n = months.integer(i64) catch return g.incompatible("month", q.unit);
+                    return g.addMonths(x, if (subtract) -n else n);
+                }
+                if (!q.unit.compatible(second)) return g.incompatible(takes, q.unit);
+                var ns = waitMillis(y).?;
+                if (subtract) ns = -ns;
+                switch (x.data) {
+                    .instant => |t| {
+                        const total = @as(i128, t.seconds) * std.time.ns_per_s + t.nanos + ns;
+                        const out: model.dates.Instant = .{ .seconds = @intCast(@divFloor(total, std.time.ns_per_s)), .nanos = @intCast(@mod(total, std.time.ns_per_s)) };
+                        model.dates.validateInstant(out) catch return g.dateOutOfRange(@divFloor(total, std.time.ns_per_s));
+                        return model.scalar(gpa, .{ .instant = out });
+                    },
+                    else => {
+                        const f = x.data.civil_date;
+                        if (date_only and @mod(ns, std.time.ns_per_day) != 0) return g.incompatible("day", q.unit);
+                        const total = @as(i128, model.dates.seconds(f)) * std.time.ns_per_s + f.nanosecond + ns;
+                        if (total < -62135596800 * @as(i128, std.time.ns_per_s) or total >= 253402300800 * @as(i128, std.time.ns_per_s)) return g.dateOutOfRange(@divFloor(total, std.time.ns_per_s));
+                        var out = model.dates.fields(.{ .seconds = @intCast(@divFloor(total, std.time.ns_per_s)), .nanos = @intCast(@mod(total, std.time.ns_per_s)) });
+                        out.has_time = f.has_time;
+                        return model.scalar(gpa, .{ .civil_date = out });
+                    },
+                }
+            },
+            .instant, .civil_date => {
+                const same = std.meta.activeTag(x.data) == std.meta.activeTag(y.data) and (x.data != .civil_date or x.data.civil_date.has_time == y.data.civil_date.has_time);
+                if (!subtract) return g.wrongKind("quantity", y);
+                if (!same) return g.wrongKind(kindName(x), y);
+                if (date_only) {
+                    const days = @divFloor(model.dates.seconds(x.data.civil_date) - model.dates.seconds(y.data.civil_date), 86400);
+                    return model.scalar(gpa, .{ .quantity = .{ .number = model.Decimal.fromInt(days), .unit = units.Unit.parse("day") catch unreachable } });
+                }
+                const ns = instantNanos(x) - instantNanos(y);
+                // Exact, with no more places than it needs.
+                var n: model.Decimal = .{ .coefficient = @intCast(@abs(ns)), .exponent = -9, .negative = ns < 0 };
+                while (n.exponent < 0 and n.coefficient % 10 == 0) {
+                    n.coefficient /= 10;
+                    n.exponent += 1;
+                }
+                if (n.coefficient == 0) n.exponent = 0;
+                return model.scalar(gpa, .{ .quantity = .{ .number = n, .unit = units.Unit.parse("s") catch unreachable } });
+            },
+            else => return g.wrongKind(if (subtract) kindName(x) else "quantity", y),
+        }
+    }
+
+    fn instantNanos(v: *const Value) i128 {
+        return switch (v.data) {
+            .instant => |t| @as(i128, t.seconds) * std.time.ns_per_s + t.nanos,
+            else => @as(i128, model.dates.seconds(v.data.civil_date)) * std.time.ns_per_s + v.data.civil_date.nanosecond,
+        };
+    }
+
+    /// A Civil Date moved by whole months, its day clamped to the month's
+    /// last, its time kept.
+    fn addMonths(g: *Group, x: *Value, months: i64) !*Value {
+        var f = x.data.civil_date;
+        const index = @as(i64, f.year) * 12 + (f.month - 1) + months;
+        const year = @divFloor(index, 12);
+        if (year < 1 or year > 9999) return g.yearOutOfRange(year);
+        f.year = @intCast(year);
+        f.month = @intCast(@mod(index, 12) + 1);
+        while (true) {
+            model.dates.validate(f) catch {
+                f.day -= 1;
+                continue;
+            };
+            break;
+        }
+        return model.scalar(g.gpa, .{ .civil_date = f });
+    }
+
+    fn incompatible(g: *Group, left: []const u8, right: units.Unit) error{ Raised, OutOfMemory } {
+        const l = model.text(g.gpa, left) catch return error.OutOfMemory;
+        defer l.release();
+        const r = model.text(g.gpa, right.string(g.scratch.allocator(), false) catch return error.OutOfMemory) catch return error.OutOfMemory;
+        defer r.release();
+        return g.raise("incompatible units", &.{ .{ .key = "left", .value = l }, .{ .key = "right", .value = r } });
+    }
+
+    /// `out of range` for a date at `seconds` since the epoch, with the
+    /// year it would have.
+    fn dateOutOfRange(g: *Group, seconds: i128) error{ Raised, OutOfMemory } {
+        return g.yearOutOfRange(builtins.yearOf(@intCast(seconds)));
+    }
+
+    fn yearOutOfRange(g: *Group, year: i64) error{ Raised, OutOfMemory } {
+        const field = model.text(g.gpa, "year") catch return error.OutOfMemory;
+        defer field.release();
+        const value = chunks.numberValue(g.gpa, year) catch return error.OutOfMemory;
+        defer value.release();
+        return g.raise("out of range", &.{ .{ .key = "field", .value = field }, .{ .key = "value", .value = value } });
+    }
+
+    /// `a ^ b`: an exact power for an integer `b`, else `power(a, b)`'s
+    /// result and domain; a Quantity takes only a positive integer.
+    fn raisePower(g: *Group, x: *Value, y: *Value) !*Value {
+        const gpa = g.gpa;
+        const a = g.scratch.allocator();
+        if (y.data == .quantity) return g.wrongKind("number", y);
+        if (y.data != .number) return g.wrongKind("number", y);
+        const overflow = struct {
+            fn raise(gr: *Group) error{ Raised, OutOfMemory } {
+                const op = model.text(gr.gpa, "^") catch return error.OutOfMemory;
+                defer op.release();
+                return gr.raise("overflow", &.{.{ .key = "operator", .value = op }});
+            }
+        }.raise;
+        switch (x.data) {
+            .number => |n| {
+                const r = model.decimal.power(a, n, y.data.number) catch |e| return switch (e) {
+                    error.OutOfDomain => blk: {
+                        const function = model.text(gpa, "power") catch return error.OutOfMemory;
+                        defer function.release();
+                        break :blk g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = x } });
+                    },
+                    error.DivisionByZero => g.raise("division by zero", &.{}),
+                    error.Overflow => overflow(g),
+                    error.OutOfMemory => error.OutOfMemory,
+                    else => g.wrongKind("number", x),
+                };
+                return model.scalar(gpa, .{ .number = r });
+            },
+            .quantity => |q| {
+                const n = y.data.number.integer(i64) catch return g.wrongKind("integer", y);
+                if (n < 1) return g.wrongKind("integer", y);
+                var unit = q.unit;
+                var i: i64 = 1;
+                while (i < n) : (i += 1) unit = units.Unit.combine(unit, q.unit, false) catch return g.incompatible(q.unit.string(a, false) catch return error.OutOfMemory, units.Unit.parse("1") catch q.unit);
+                const r = model.decimal.power(a, q.number, y.data.number) catch |e| return switch (e) {
+                    error.Overflow => overflow(g),
+                    error.OutOfMemory => error.OutOfMemory,
+                    else => g.wrongKind("number", x),
+                };
+                return model.scalar(gpa, .{ .quantity = .{ .number = r, .unit = unit } });
+            },
+            else => return g.wrongKind("number", x),
+        }
+    }
+
     fn raiseBuiltin(g: *Group, raised: builtins.Raised) error{ Raised, OutOfMemory } {
         defer for (raised.fields[0..raised.len]) |f| f.value.release();
         return g.raise(raised.code, raised.fields[0..raised.len]);
@@ -3898,10 +4075,23 @@ pub const Group = struct {
     fn arithmeticError(g: *Group, e: model.Error, x: *Value, y: *Value) error{ Raised, OutOfMemory } {
         return switch (e) {
             error.DivisionByZero => g.raise("division by zero", &.{}),
-            error.IncompatibleUnits => g.raise("incompatible units", &.{}),
+            error.IncompatibleUnits => blk: {
+                // `left` and `right` are the two Units.
+                if (x.data == .quantity and y.data == .quantity) {
+                    const a = g.scratch.allocator();
+                    const left = model.text(g.gpa, x.data.quantity.unit.string(a, false) catch return error.OutOfMemory) catch return error.OutOfMemory;
+                    defer left.release();
+                    const right = model.text(g.gpa, y.data.quantity.unit.string(a, false) catch return error.OutOfMemory) catch return error.OutOfMemory;
+                    defer right.release();
+                    break :blk g.raise("incompatible units", &.{ .{ .key = "left", .value = left }, .{ .key = "right", .value = right } });
+                }
+                break :blk g.raise("incompatible units", &.{});
+            },
             error.Overflow => g.raise("overflow", &.{}),
             error.OutOfMemory => error.OutOfMemory,
-            else => g.wrongKind("number", if (x.data != .number and x.data != .quantity) x else y),
+            // A Quantity takes a Quantity: a plain number added to one is
+            // the wrong kind for it.
+            else => if (x.data == .quantity and y.data == .number) g.wrongKind("quantity", y) else g.wrongKind("number", if (x.data != .number and x.data != .quantity) x else y),
         };
     }
 
