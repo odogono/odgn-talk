@@ -348,7 +348,7 @@ pub const Expr = struct {
         conversion: struct { value: *Expr, kind: ?Kind, unit: ?Tok },
         /// `the k of x`, `x's k`, `the "k" of x`, `the (k) of x`.
         key: struct { base: *Expr, key: ?Tok, computed: ?*Expr },
-        property: struct { base: *Expr, name: Tok, code_points: bool, delimiter: ?*Expr },
+        property: struct { base: *Expr, name: Tok, code_points: bool, delimiter: ?*Expr, delimited: ?Tok },
         chunk: Chunk,
         whose: Whose,
         list: []const ListItem,
@@ -395,6 +395,7 @@ pub const Whose = struct {
     kind: ChunkKind,
     source: *Expr,
     delimiter: ?*Expr,
+    delimited: ?Tok,
     /// For an ordinal: the ordinal chunk.
     ordinal: ?*Expr,
     condition: *Expr,

@@ -1184,7 +1184,7 @@ const Parser = struct {
         if (e.data == .chunk and e.data.chunk.ordinal != null and try p.atWord("whose", .operator)) {
             const op = try p.next(.operator);
             const condition = try p.whoseCondition();
-            return p.mk(op, .{ .whose = .{ .whose = op, .every = false, .word = e.pos, .kind = e.data.chunk.kind, .source = e.data.chunk.of, .delimiter = e.data.chunk.delimiter, .ordinal = e, .condition = condition } }, &.{ e, condition });
+            return p.mk(op, .{ .whose = .{ .whose = op, .every = false, .word = e.pos, .kind = e.data.chunk.kind, .source = e.data.chunk.of, .delimiter = e.data.chunk.delimiter, .delimited = e.data.chunk.delimited, .ordinal = e, .condition = condition } }, &.{ e, condition });
         }
         return e;
     }
@@ -1482,7 +1482,10 @@ const Parser = struct {
                     c.delimiter = d;
                     c.delimited = delimited;
                 },
-                .property => |*pr| pr.delimiter = d,
+                .property => |*pr| {
+                    pr.delimiter = d;
+                    pr.delimited = delimited;
+                },
                 else => unreachable,
             }
             e.depth = @max(e.depth, d.depth + 1);
@@ -1517,7 +1520,7 @@ const Parser = struct {
             break :blk try p.postfix(try p.primary());
         };
         if (code_points or properties.has(p.word(p.tokens.items[key]))) {
-            return p.mk(pos, .{ .property = .{ .base = b, .name = key, .code_points = code_points, .delimiter = null } }, &.{b});
+            return p.mk(pos, .{ .property = .{ .base = b, .name = key, .code_points = code_points, .delimiter = null, .delimited = null } }, &.{b});
         }
         return p.mk(pos, .{ .key = .{ .base = b, .key = key, .computed = null } }, &.{b});
     }
@@ -1703,14 +1706,15 @@ const Parser = struct {
         _ = try p.expectWord("of", .operator);
         const source = try p.postfix(try p.primary());
         var delimiter: ?*Expr = null;
+        var delimited: ?Tok = null;
         if (try p.atWord("delimited", .operator) and p.isWord(try p.peek2("delimited-by", .operator), "by")) {
-            _ = try p.next(.operator);
+            delimited = try p.next(.operator);
             _ = try p.next(.operand);
             delimiter = try p.postfix(try p.primary());
         }
         const op = try p.expectWord("whose", .operator);
         const condition = try p.whoseCondition();
-        return p.mk(op, .{ .whose = .{ .whose = op, .every = true, .word = w, .kind = k, .source = source, .delimiter = delimiter, .ordinal = null, .condition = condition } }, &.{ source, delimiter, condition });
+        return p.mk(op, .{ .whose = .{ .whose = op, .every = true, .word = w, .kind = k, .source = source, .delimiter = delimiter, .delimited = delimited, .ordinal = null, .condition = condition } }, &.{ source, delimiter, condition });
     }
 
     /// A Name operand that is the condition's first token is a Whose Key.

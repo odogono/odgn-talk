@@ -15,7 +15,7 @@ It is under construction, step by step through
 [Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
 generated tables, Unicode text primitives, reference-counted values, native
 decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
-the front end's lexer and lossless parser.
+the front end's lexer, lossless parser and checker.
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -43,10 +43,12 @@ tests and check commands.
   and writer, lossless Value Encoding and canonical Pattern source reader.
 - `src/syntax/`: the modal lexer of chapter 1 and the predictive parser of
   chapter 2, which builds a lossless syntax tree.
+- `src/check/`: the checker, which raises chapter 2's load-time diagnostics
+  and resolves the names the lowering reads.
 - `src/corpus/`: case discovery, metadata, encoding replay and Trace parsing.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
-`check`, `lower`, `machine` and Trace writing join `src/` in the later parts
+`lower`, `machine` and Trace writing join `src/` in the later parts
 of step 1, and `session` and the REPL in step 6.
 
 ## Syntax
@@ -69,6 +71,28 @@ Source nesting is bounded at 128 recursive parser regions, and an expression
 tree at 128 levels, so hostile source ends in `source nesting too deep`, never
 a stack overflow. Like the Go Core's limit, that code is an implementation
 limit outside the Spec's catalogue.
+
+## Checking
+
+`check.check` takes a parsed unit and a `Context`: whether it is a Library,
+the well-known objects, the Script's Grants and the Group's Libraries. It
+returns every load-time diagnostic, ordered by position and then by
+`diagnostics.toml`'s order, with what each Name refers to, each body's locals
+and captures, and which Handlers may suspend. `check.exports` gives what a
+checked Library exports to its importers. The stdlib Libraries' exports and
+the Built-ins come from `stdlib.toml`.
+
+A Handler may suspend when a clause holds a written Suspension Point, or a
+Command Call to a Handler that may, found over the call graph to a fixpoint.
+That decides `missing and wait`, `needless and wait` and `can't suspend here`.
+A `, deciding` Handler's `veto` and `pass` are checked over every path through
+its body for `after a suspension`.
+
+Capability calls are checked only when the `Context` gives the Grants, and
+`wrong argument` (a literal against an Operation's Shape), `missing grant`,
+`import cycle`, `pattern too large` and `initialiser failed` are not raised
+yet: they need the Group's Shapes and Library graph, Text Pattern programs, and
+a run of the initialiser, which later parts of step 1 and step 2 bring.
 
 ## Building and testing
 
@@ -183,7 +207,9 @@ bun run zig:generate        # the catalogues
 bun run unicode:generate    # the Unicode table, for every Core
 ```
 
-The catalogues include `grammar.toml`'s word lists, which the parser reads.
+The catalogues include `grammar.toml`'s word lists, which the parser reads,
+and `stdlib.toml`'s Built-ins and stdlib Library exports, which the checker
+reads.
 `bun run check` holds both to their sources and fails on a stale table. The
 emitters write `zig fmt`'s canonical form themselves, so the check needs no Zig
 toolchain; CI's `zig fmt --check` holds them to it.
