@@ -38,6 +38,7 @@ errors/fail-error-map
 errors/items-delimiter
 limits/wait-deadline
 limits/wait-zero-next-pump
+load-diagnostics/argument-labels
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here

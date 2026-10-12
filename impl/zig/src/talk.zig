@@ -441,6 +441,17 @@ fn queue(s: *Script, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64
     return .ok;
 }
 
+pub const Counters = extern struct { fuel_total: i64, alloc_total: i64, runs: i64, faults: i64, persistent_state: i64, mailbox_len: i64 };
+
+export fn talk_script_counters(s: *Script, out: *Counters) void {
+    const g = s.group;
+    out.* = std.mem.zeroes(Counters);
+    const script = g.group.script(s.name) orelse return;
+    const read = g.group.counters(script);
+    g.flush();
+    out.* = .{ .fuel_total = @intCast(read.fuel_total), .alloc_total = @intCast(read.alloc_total), .runs = @intCast(read.runs), .faults = @intCast(read.faults), .persistent_state = @intCast(read.persistent_state), .mailbox_len = @intCast(read.mailbox_len) };
+}
+
 export fn talk_script_deliver(s: *Script, m: *const Message, id: ?*Buffer) HostErrorCode {
     var n: u64 = 0;
     return queue(s, m, false, id, &n);
