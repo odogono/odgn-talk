@@ -217,8 +217,19 @@ allows it. A Run that errors, faults or ends `effect failed` first, or a
 `, dropping` clause that drops it, leaves it undecided, after the `run`
 record. A Delivery, Request or Decision whose name has a `:` but isn't a
 Selector with one argument per part is refused at the call, with its `>`
-line, no id, and `refused code="invalid value"`. Broadcast Decisions and
-`cancel-delivery` are still to come. Frames are on the heap, so
+line, no id, and `refused code="invalid value"`. `cancel-delivery` comes
+with step 4.
+
+A Broadcast (`talk_broadcast`) or Broadcast Decision (`talk_decide_broadcast`)
+finds its recipients when the queue is drained: the Scripts with a Handler
+for the message or a `wait for` pending on it, in load order, each with its
+own delivery id, which the `>` line lists. A recipient's Delivery carries the
+broadcast id, never climbs, never reaches a Fallback and is never
+`unhandled`; neither does a Decision's. A Broadcast Decision gathers each
+recipient's part, its veto, its undecided outcome or its allowing, and writes
+one `decided` record once the last has one: vetoed if any vetoed, undecided
+if none did but one was undecided, and allowed otherwise, at once when there
+are no recipients. Frames are on the heap, so
 the run loop never recurses on Script depth. Every instruction is charged by
 its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 0 terms, with `scanned` reported by the operation itself, and Persistent State

@@ -137,22 +137,41 @@ pub const Delivery = struct {
     /// A Decision whose Verdict is still open: it travels with the message
     /// until a clause takes it, a `wait for` takes it, or its path ends.
     decision: bool = false,
+    /// A Decision's message, open or not, which never reaches a Fallback.
+    decides: bool = false,
+    /// The broadcast id of a Broadcast's recipient, or 0. A Broadcast never
+    /// climbs, never reaches a Fallback and is never `unhandled`.
+    broadcast: u64 = 0,
 };
 
 /// A Decision's Verdict (chapter 5, Decisions).
 pub const Verdict = enum { allowed, vetoed, undecided };
 
-/// A sealed Decision, which the Host reads by its delivery id: who vetoed
-/// it and why, or who left it undecided and how.
-pub const Decided = struct {
-    verdict: Verdict,
-    script: []const u8 = "",
-    run: []const u8 = "",
+/// A recipient's veto, with its reason, or how it left a Decision
+/// undecided.
+pub const Mark = struct {
+    script: []const u8,
+    run: []const u8,
     /// A veto's reason.
     reason: ?*Value = null,
     /// How an undecided Run ended.
     outcome: []const u8 = "",
 };
+
+/// One recipient's part in a Decision.
+pub const Part = union(enum) { allowed, vetoed: Mark, undecided: Mark };
+
+/// A sealed Decision, which the Host reads by its delivery or broadcast
+/// id: every veto and every undecided recipient, in recipient order.
+pub const Decided = struct {
+    verdict: Verdict,
+    vetoes: []Mark = &.{},
+    undecided: []Mark = &.{},
+};
+
+/// A Broadcast Decision some recipient hasn't sealed: each recipient's
+/// delivery id and, once sealed, its part.
+pub const OpenBroadcast = struct { deliveries: []u64, parts: []?Part };
 
 pub const Run = struct {
     id: []const u8,
@@ -645,7 +664,21 @@ const Input = union(enum) {
     dispose: *objects.Object,
     /// An answer or failure for a suspending call, by its id.
     settle: struct { id: []const u8, with: Resume },
+    /// A Broadcast, or a Broadcast Decision. Its recipients, each with its
+    /// delivery id, are found when the queue is drained.
+    broadcast: Broadcast,
 };
+
+const Broadcast = struct {
+    id: u64,
+    message: []const u8,
+    args: []*Value,
+    decision: bool,
+    recipients: ?[]Recipient = null,
+};
+
+/// A Broadcast's recipient: its Script and its own delivery id.
+const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
     gpa: Allocator,
@@ -659,8 +692,12 @@ pub const Group = struct {
     pump_fuel: u64 = 0,
     /// Request results by delivery id, for the Host.
     results: std.AutoHashMapUnmanaged(u64, *Value) = .empty,
-    /// Sealed Decisions by delivery id, for the Host.
+    /// Sealed Decisions by delivery id, and Broadcast Decisions by broadcast
+    /// id, for the Host.
     decided: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
+    decided_broadcasts: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
+    open_broadcasts: std.AutoHashMapUnmanaged(u64, OpenBroadcast) = .empty,
+    broadcasts: u64 = 0,
     /// The error an instruction raised, until the run loop takes it.
     pending_error: ?*Value = null,
     /// Whether the Core raised it, so it gets a `message`.
@@ -697,6 +734,7 @@ pub const Group = struct {
                 g.gpa.free(x.id);
                 g.releaseResume(x.with);
             },
+            .broadcast => |b| g.releaseBroadcast(b),
             .set_parent, .dispose => {},
         };
         g.inputs.deinit(g.gpa);
@@ -725,13 +763,14 @@ pub const Group = struct {
         var it = g.results.valueIterator();
         while (it.next()) |v| v.*.release();
         g.results.deinit(g.gpa);
-        var decided = g.decided.valueIterator();
-        while (decided.next()) |x| {
-            g.gpa.free(x.script);
-            g.gpa.free(x.run);
-            if (x.reason) |v| v.release();
+        inline for (.{ &g.decided, &g.decided_broadcasts }) |map| {
+            var decided = map.valueIterator();
+            while (decided.next()) |x| g.releaseDecided(x.*);
+            map.deinit(g.gpa);
         }
-        g.decided.deinit(g.gpa);
+        var open = g.open_broadcasts.valueIterator();
+        while (open.next()) |x| g.releaseOpen(x.*);
+        g.open_broadcasts.deinit(g.gpa);
         g.scratch.deinit();
     }
 
@@ -1035,6 +1074,83 @@ pub const Group = struct {
         return id;
     }
 
+    /// Queues a Broadcast, or with `decision` a Broadcast Decision. Takes
+    /// the arguments.
+    pub fn broadcast(g: *Group, message: []const u8, args: []*Value, decision: bool) !u64 {
+        const name = try g.gpa.dupe(u8, message);
+        errdefer g.gpa.free(name);
+        const copy = try g.gpa.dupe(*Value, args);
+        errdefer g.gpa.free(copy);
+        g.broadcasts += 1;
+        try g.inputs.append(g.gpa, .{ .broadcast = .{ .id = g.broadcasts, .message = name, .args = copy, .decision = decision } });
+        return g.broadcasts;
+    }
+
+    /// Writes a Broadcast the Host call refused, with no id, then its
+    /// `refused` record.
+    pub fn refuseBroadcast(g: *Group, message: []const u8, args: []*Value, decision: bool, code: []const u8) void {
+        g.writeInput(.{ .broadcast = .{ .id = 0, .message = message, .args = args, .decision = decision } });
+        g.write("refused code=\"{s}\"\n", .{code});
+    }
+
+    fn releaseBroadcast(g: *Group, b: Broadcast) void {
+        g.gpa.free(b.message);
+        releaseAll(b.args, g.gpa);
+        if (b.recipients) |r| g.gpa.free(r);
+    }
+
+    /// Whether a Script wants a Broadcast's message: it has a Handler for
+    /// it, or a `wait for` pending on it. A Fallback doesn't count.
+    fn wants(g: *Group, s: *const Script, message: []const u8) bool {
+        for (s.unit.bodies) |b| if (b.kind == .handler and std.mem.eql(u8, b.name, message)) return true;
+        for (g.pending.items) |p| {
+            const event = p.event orelse continue;
+            if (p.run.script != s) continue;
+            for (s.unit.events[event.entry].branches) |b| switch (b) {
+                .when => |w| if (std.mem.eql(u8, w.message, message)) return true,
+                .after => {},
+            };
+        }
+        return false;
+    }
+
+    /// Finds a Broadcast's recipients, in load order, each with its own
+    /// delivery id.
+    fn resolveBroadcast(g: *Group, b: *Broadcast) !void {
+        if (b.recipients != null) return;
+        var out: std.ArrayList(Recipient) = .empty;
+        errdefer out.deinit(g.gpa);
+        for (g.scripts.items) |s| if (g.wants(s, b.message)) {
+            try out.append(g.gpa, .{ .script = s, .delivery = g.deliveries + 1 });
+            g.deliveries += 1;
+        };
+        b.recipients = try out.toOwnedSlice(g.gpa);
+    }
+
+    /// Posts a Broadcast to each recipient. A Broadcast Decision with none
+    /// is allowed at once.
+    fn drainBroadcast(g: *Group, b: Broadcast) !void {
+        defer g.releaseBroadcast(b);
+        const recipients = b.recipients.?;
+        if (b.decision) {
+            if (recipients.len == 0) return g.seal(b.id, true, &.{});
+            const deliveries = try g.gpa.alloc(u64, recipients.len);
+            errdefer g.gpa.free(deliveries);
+            for (recipients, deliveries) |r, *x| x.* = r.delivery;
+            const parts = try g.gpa.alloc(?Part, recipients.len);
+            errdefer g.gpa.free(parts);
+            @memset(parts, null);
+            try g.open_broadcasts.put(g.gpa, b.id, .{ .deliveries = deliveries, .parts = parts });
+        }
+        for (recipients) |r| {
+            const message = try g.gpa.dupe(u8, b.message);
+            errdefer g.gpa.free(message);
+            const args = try g.gpa.dupe(*Value, b.args);
+            for (args) |v| _ = v.retain();
+            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id });
+        }
+    }
+
     /// Writes a Delivery, Request or Decision the Host call refused, with
     /// no id, then its `refused` record.
     pub fn refuseDelivery(g: *Group, to: []const u8, d: Delivery, code: []const u8) void {
@@ -1046,7 +1162,7 @@ pub const Group = struct {
     pub fn decide(g: *Group, to: []const u8, message: []const u8, args: []*Value) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.queueDelivery(to, .{ .id = id, .message = message, .args = args, .request = false, .decision = true });
+        try g.queueDelivery(to, .{ .id = id, .message = message, .args = args, .request = false, .decision = true, .decides = true });
         return id;
     }
 
@@ -1054,7 +1170,7 @@ pub const Group = struct {
     pub fn decideTo(g: *Group, to: *objects.Object, message: []const u8, args: []*Value) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.queueDelivery("", .{ .id = id, .message = message, .args = args, .request = false, .decision = true, .target = to, .at = to });
+        try g.queueDelivery("", .{ .id = id, .message = message, .args = args, .request = false, .decision = true, .decides = true, .target = to, .at = to });
         return id;
     }
 
@@ -1196,6 +1312,19 @@ pub const Group = struct {
                 out.writeAll("> dispose object=") catch {};
                 display.writeTrace(out, o.value) catch {};
             },
+            .broadcast => |b| {
+                out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
+                // A refused Broadcast never had an id.
+                if (b.id > 0) out.print(" b{d}", .{b.id}) catch {};
+                out.print(" message={s}", .{b.message}) catch {};
+                writeArgs(out, b.args);
+                const recipients = b.recipients orelse &.{};
+                if (recipients.len > 0) {
+                    out.writeAll(" recipients=[") catch {};
+                    for (recipients, 0..) |r, i| out.print("{s}{s}:d{d}", .{ if (i > 0) ", " else "", r.script.name, r.delivery }) catch {};
+                    out.writeAll("]") catch {};
+                }
+            },
         }
         out.writeAll("\n") catch {};
     }
@@ -1204,6 +1333,9 @@ pub const Group = struct {
     /// then Scripts take turns until none has work.
     pub fn pump(g: *Group, clock: model.dates.Instant) !void {
         g.clock = clock;
+        // A Broadcast's recipients are those that want it now, as the queue
+        // is drained.
+        for (g.inputs.items) |*input| if (input.* == .broadcast) try g.resolveBroadcast(&input.broadcast);
         for (g.inputs.items) |input| g.writeInput(input);
         const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
         g.write("> pump clock={s}\n", .{shown});
@@ -1253,6 +1385,7 @@ pub const Group = struct {
                 const p = g.pending.orderedRemove(i);
                 try g.ready(p, x.with);
             },
+            .broadcast => |b| try g.drainBroadcast(b),
         };
         g.inputs.clearRetainingCapacity();
         consumed = 0;
@@ -1295,7 +1428,7 @@ pub const Group = struct {
                         var taken = d;
                         if (try g.observe(s, d) and d.decision) {
                             taken.decision = false;
-                            try g.seal(d.id, .{ .verdict = .allowed });
+                            try g.takePart(d, .allowed);
                         }
                         try g.startRun(s, taken);
                     },
@@ -1404,6 +1537,7 @@ pub const Group = struct {
     /// Delivery, or the Run whose error it handles.
     fn writeOrigin(w: *std.Io.Writer, d: Delivery) void {
         if (d.from) |from| w.print(" from={s}", .{from}) catch {} else w.print(" delivery=d{d}", .{d.id}) catch {};
+        if (d.broadcast > 0) w.print(" broadcast=b{d}", .{d.broadcast}) catch {};
     }
 
     /// Starts a Run for a message: dispatch tries each clause of the
@@ -1466,9 +1600,10 @@ pub const Group = struct {
                 outcome = end;
                 break;
             }
-        } else if (!d.internal_error) {
+        } else if (!d.internal_error and !d.decides and d.broadcast == 0) {
             // No named clause took it: the Fallback's clauses, with the
-            // message map, built without charge.
+            // message map, built without charge. A Broadcast, a Decision and
+            // an `error` message never reach them.
             const message = try g.messageMap(d);
             defer message.release();
             for (s.unit.bodies, 0..) |b, i| {
@@ -1492,7 +1627,7 @@ pub const Group = struct {
     fn takeVerdict(g: *Group, run: *Run, deciding: bool) !void {
         if (!run.delivery.decision) return;
         run.delivery.decision = false;
-        if (deciding) run.verdict = true else try g.seal(run.delivery.id, .{ .verdict = .allowed });
+        if (deciding) run.verdict = true else try g.takePart(run.delivery, .allowed);
     }
 
     fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value) !?Outcome {
@@ -2008,34 +2143,119 @@ pub const Group = struct {
         return taken;
     }
 
-    /// Seals a Decision with its `decided` record, keeping it for the Host.
-    /// `script` and `run` are copied.
-    fn seal(g: *Group, id: u64, decided: Decided) !void {
-        if (g.trace) |w| {
-            w.print("decided d{d} verdict={s}", .{ id, @tagName(decided.verdict) }) catch {};
-            switch (decided.verdict) {
+    fn releaseMark(g: *Group, m: Mark) void {
+        g.gpa.free(m.script);
+        g.gpa.free(m.run);
+        if (m.reason) |v| v.release();
+    }
+
+    fn releaseDecided(g: *Group, x: Decided) void {
+        for (x.vetoes) |m| g.releaseMark(m);
+        for (x.undecided) |m| g.releaseMark(m);
+        g.gpa.free(x.vetoes);
+        g.gpa.free(x.undecided);
+    }
+
+    fn releaseOpen(g: *Group, x: OpenBroadcast) void {
+        for (x.parts) |part| if (part) |q| switch (q) {
+            .allowed => {},
+            .vetoed, .undecided => |m| g.releaseMark(m),
+        };
+        g.gpa.free(x.parts);
+        g.gpa.free(x.deliveries);
+    }
+
+    /// A Mark of the Group's own, with copied names and a retained reason.
+    fn ownMark(g: *Group, m: Mark) !Mark {
+        const name = try g.gpa.dupe(u8, m.script);
+        errdefer g.gpa.free(name);
+        const run_id = try g.gpa.dupe(u8, m.run);
+        if (m.reason) |v| _ = v.retain();
+        return .{ .script = name, .run = run_id, .reason = m.reason, .outcome = m.outcome };
+    }
+
+    /// A recipient's part in the Decision its Delivery carries. A single
+    /// Decision is sealed at once; a Broadcast Decision once every
+    /// recipient has its part.
+    fn takePart(g: *Group, d: Delivery, part: Part) !void {
+        var owned: Part = switch (part) {
+            .allowed => .allowed,
+            .vetoed => |m| .{ .vetoed = try g.ownMark(m) },
+            .undecided => |m| .{ .undecided = try g.ownMark(m) },
+        };
+        if (d.broadcast == 0) {
+            const parts = [_]?Part{owned};
+            return g.seal(d.id, false, &parts);
+        }
+        const open = g.open_broadcasts.getPtr(d.broadcast) orelse {
+            switch (owned) {
                 .allowed => {},
-                .vetoed => {
-                    w.print(" vetoes=[{{script: \"{s}\", run: \"{s}\", reason: ", .{ decided.script, decided.run }) catch {};
-                    display.writeTrace(w, decided.reason.?) catch {};
-                    w.writeAll("}]") catch {};
-                },
-                .undecided => {
-                    w.print(" undecided=[{{script: \"{s}\"", .{decided.script}) catch {};
-                    if (decided.run.len > 0) w.print(", run: \"{s}\"", .{decided.run}) catch {};
-                    w.print(", outcome: \"{s}\"}}]", .{decided.outcome}) catch {};
-                },
+                .vetoed, .undecided => |*m| g.releaseMark(m.*),
+            }
+            return;
+        };
+        const i = std.mem.indexOfScalar(u64, open.deliveries, d.id).?;
+        open.parts[i] = owned;
+        for (open.parts) |x| if (x == null) return;
+        const done = g.open_broadcasts.fetchRemove(d.broadcast).?.value;
+        defer {
+            g.gpa.free(done.parts);
+            g.gpa.free(done.deliveries);
+        }
+        try g.seal(d.broadcast, true, done.parts);
+    }
+
+    /// Seals a Decision from its recipients' parts, which it takes, with
+    /// its `decided` record, and keeps it for the Host: vetoed if any
+    /// recipient vetoed, undecided if none did but one was undecided, and
+    /// allowed otherwise.
+    fn seal(g: *Group, id: u64, is_broadcast: bool, parts: []const ?Part) !void {
+        var vetoes: std.ArrayList(Mark) = .empty;
+        var undecided: std.ArrayList(Mark) = .empty;
+        for (parts) |part| switch (part.?) {
+            .allowed => {},
+            .vetoed => |m| vetoes.append(g.gpa, m) catch |e| {
+                g.releaseMark(m);
+                return e;
+            },
+            .undecided => |m| undecided.append(g.gpa, m) catch |e| {
+                g.releaseMark(m);
+                return e;
+            },
+        };
+        const decided: Decided = .{
+            .verdict = if (vetoes.items.len > 0) .vetoed else if (undecided.items.len > 0) .undecided else .allowed,
+            .vetoes = vetoes.toOwnedSlice(g.gpa) catch &.{},
+            .undecided = undecided.toOwnedSlice(g.gpa) catch &.{},
+        };
+        if (g.trace) |w| {
+            w.print("decided {s}{d} verdict={s}", .{ if (is_broadcast) "b" else "d", id, @tagName(decided.verdict) }) catch {};
+            if (decided.vetoes.len > 0) {
+                w.writeAll(" vetoes=[") catch {};
+                for (decided.vetoes, 0..) |m, i| {
+                    if (i > 0) w.writeAll(", ") catch {};
+                    w.print("{{script: \"{s}\", run: \"{s}\", reason: ", .{ m.script, m.run }) catch {};
+                    display.writeTrace(w, m.reason.?) catch {};
+                    w.writeAll("}") catch {};
+                }
+                w.writeAll("]") catch {};
+            }
+            if (decided.undecided.len > 0) {
+                w.writeAll(" undecided=[") catch {};
+                for (decided.undecided, 0..) |m, i| {
+                    if (i > 0) w.writeAll(", ") catch {};
+                    w.print("{{script: \"{s}\"", .{m.script}) catch {};
+                    if (m.run.len > 0) w.print(", run: \"{s}\"", .{m.run}) catch {};
+                    w.print(", outcome: \"{s}\"}}", .{m.outcome}) catch {};
+                }
+                w.writeAll("]") catch {};
             }
             w.writeAll("\n") catch {};
         }
-        var kept = decided;
-        kept.script = try g.gpa.dupe(u8, decided.script);
-        errdefer g.gpa.free(kept.script);
-        kept.run = try g.gpa.dupe(u8, decided.run);
-        errdefer g.gpa.free(kept.run);
-        if (decided.reason) |v| kept.reason = v.retain();
-        errdefer if (kept.reason) |v| v.release();
-        try g.decided.put(g.gpa, id, kept);
+        (if (is_broadcast) &g.decided_broadcasts else &g.decided).put(g.gpa, id, decided) catch |e| {
+            g.releaseDecided(decided);
+            return e;
+        };
     }
 
     fn eventEntry(g: *Group, p: *const Pending) lower.Event {
@@ -2424,11 +2644,11 @@ pub const Group = struct {
         if (run.verdict) switch (outcome) {
             .returned, .suspended => {
                 run.verdict = false;
-                try g.seal(d.id, .{ .verdict = .allowed });
+                try g.takePart(d, .allowed);
             },
             .vetoed => |reason| {
                 run.verdict = false;
-                try g.seal(d.id, .{ .verdict = .vetoed, .script = s.name, .run = run.id, .reason = reason });
+                try g.takePart(d, .{ .vetoed = .{ .script = s.name, .run = run.id, .reason = reason } });
             },
             else => {},
         };
@@ -2453,6 +2673,7 @@ pub const Group = struct {
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
             // A `run` record names a Host Delivery, never a sender.
             if (d.from == null) out.print(" delivery=d{d}", .{d.id}) catch {};
+            if (d.broadcast > 0) out.print(" broadcast=b{d}", .{d.broadcast}) catch {};
             if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
             if (run.fallback) out.writeAll(" fallback=yes") catch {};
             if (d.function) |f| {
@@ -2491,7 +2712,7 @@ pub const Group = struct {
             };
             if (how.len > 0) {
                 run.verdict = false;
-                try g.seal(d.id, .{ .verdict = .undecided, .script = s.name, .run = run.id, .outcome = how });
+                try g.takePart(d, .{ .undecided = .{ .script = s.name, .run = run.id, .outcome = how } });
             }
         }
         s.fuel_total += run.fuel;
@@ -2503,7 +2724,10 @@ pub const Group = struct {
             } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
             .faulted => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } }),
             // A message no clause took, or one passed, climbs the path.
-            .unhandled, .clause_failed, .passed => try g.climb(s, d),
+            // A Broadcast never climbs: its open Verdict is allowed here.
+            .unhandled, .clause_failed, .passed => if (d.broadcast == 0) {
+                try g.climb(s, d);
+            } else if (d.decision) try g.takePart(d, .allowed),
             .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
             .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
             .effect_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } }),
@@ -2587,7 +2811,7 @@ pub const Group = struct {
         }
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
         // A Decision that reaches the end of its path is allowed.
-        if (d.decision) g.seal(d.id, .{ .verdict = .allowed }) catch |e| {
+        if (d.decision) g.takePart(d, .allowed) catch |e| {
             g.releaseDelivery(d);
             return e;
         };

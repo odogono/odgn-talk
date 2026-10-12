@@ -90,6 +90,15 @@ fn requiredIds(ids: []const []const u8) usize {
     }
     return required;
 }
+/// Whether a line may leave a key out: an optional one, a list of ids,
+/// which is written only when it isn't empty, or a filled input key in an
+/// authored line.
+fn omittable(k: schema.CorpusTableRecordEntryKeyEntry, input: bool, authored: bool) bool {
+    if (k.optional orelse false) return true;
+    if (std.mem.eql(u8, k.type, "ids")) return true;
+    return input and authored and (k.filled orelse false);
+}
+
 /// Reads an authored Trace line, which may leave filled input keys out.
 /// Comments and blank lines give null.
 pub fn parse(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver) !?Record {
@@ -137,7 +146,7 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
                     next += 1;
                     break;
                 }
-                if (!(k.optional orelse false) and !(input and authored and (k.filled orelse false))) return error.InvalidValue;
+                if (!omittable(k, input, authored)) return error.InvalidValue;
             }
         }
         const k = chosen orelse return error.InvalidValue;
@@ -146,7 +155,7 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
         try typed(&r, k);
         try fields.append(a, .{ .key = key, .value = line[value_start..r.pos] });
     }
-    for (keys[next..]) |k| if (!(k.optional orelse false) and !(input and authored and (k.filled orelse false))) return error.InvalidValue;
+    for (keys[next..]) |k| if (!omittable(k, input, authored)) return error.InvalidValue;
     const owned_ids = try ids.toOwnedSlice(a);
     errdefer a.free(owned_ids);
     return .{ .input = input, .name = name, .ids = owned_ids, .fields = try fields.toOwnedSlice(a) };

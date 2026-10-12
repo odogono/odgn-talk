@@ -360,6 +360,27 @@ static int decision_test(void) {
     bad |= !talk_deciding_done(allowed) || yes == NULL || yes->verdict != TALK_ALLOWED || yes->delivery_len != 2 || memcmp(yes->delivery, "d2", 2) != 0;
     bad |= strstr(trace, "> decide to=s message=move:with:\nrefused code=\"invalid value\"\n") == NULL;
     bad |= strstr(trace, "decided d1 verdict=vetoed vetoes=[{script: \"s\", run: \"s/r1\", reason: \"blocked\"}]\n") == NULL;
+    /* A Broadcast Decision reaches the Script that wants it, and one that
+     * nothing wants is allowed at once. */
+    talk_deciding *everyone = NULL, *nobody = NULL;
+    talk_owned_bytes broadcast_id = {0};
+    talk_value *one = NULL;
+    talk_int(1, &one);
+    talk_value *one_args[] = {one};
+    talk_message move = {"move", 4, one_args, 1};
+    bad |= talk_decide_broadcast(group, &move, &broadcast_id, &everyone) != TALK_OK;
+    bad |= broadcast_id.len != 2 || memcmp(broadcast_id.data, "b1", 2) != 0;
+    talk_owned_bytes_release(&broadcast_id);
+    talk_value_release(one);
+    talk_message absent = {"absent", 6, NULL, 0};
+    bad |= talk_decide_broadcast(group, &absent, NULL, &nobody) != TALK_OK;
+    bad |= talk_broadcast(group, &absent, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    const talk_decided *all = talk_deciding_decided(everyone);
+    bad |= all == NULL || all->verdict != TALK_VETOED || all->broadcast_len != 2 || memcmp(all->broadcast, "b1", 2) != 0 || all->delivery_len != 0 || all->vetoes_len != 1;
+    const talk_decided *none = talk_deciding_decided(nobody);
+    bad |= none == NULL || none->verdict != TALK_ALLOWED;
+    bad |= strstr(trace, "> decide-broadcast b1 message=move args=[1] recipients=[s:d3]\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
