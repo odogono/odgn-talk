@@ -5,6 +5,7 @@ pub const decimal = @import("decimal/decimal.zig");
 pub const value = @import("value.zig");
 pub const display = @import("display.zig");
 pub const encoding = @import("encoding.zig");
+pub const syntax = @import("syntax/syntax.zig");
 pub const corpus_trace = @import("corpus/trace.zig");
 pub const talk = @import("talk.zig");
 
@@ -15,6 +16,7 @@ pub const generated = struct {
     pub const costs = @import("generated/costs.zig");
     pub const diagnostics = @import("generated/diagnostics.zig");
     pub const errors = @import("generated/errors.zig");
+    pub const grammar = @import("generated/grammar.zig");
     pub const limits = @import("generated/limits.zig");
     pub const machine = @import("generated/machine.zig");
     pub const opcodes = @import("generated/opcodes.zig");
@@ -35,6 +37,7 @@ test {
     _ = value;
     _ = display;
     _ = encoding;
+    _ = syntax;
     _ = @import("pattern.zig");
     _ = corpus_trace;
     _ = @import("dates.zig");
