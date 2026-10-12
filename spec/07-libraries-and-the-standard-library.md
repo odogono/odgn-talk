@@ -797,7 +797,7 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 
 ### `store`
 
-Both Cores and Session Hosts offer `watch` and `unwatch` (#620). The bundled Store implementations route committed changes through the notification router. The staged [Store Notifications](proposals/store-notifications.md) contract defines their behavior; Session notification driving and checkpoints remain #621, and full chapter integration remains #622.
+Both Cores and Session Hosts offer `watch` and `unwatch` (#620). The bundled Store implementations route committed changes through the notification router. The staged [Store Notifications](proposals/store-notifications.md) contract defines their behavior; both Session Hosts deliver Notifications and keep checkpoints (#621), and full chapter integration remains #622.
 
 <!-- generated: stdlib.capability.store -->
 

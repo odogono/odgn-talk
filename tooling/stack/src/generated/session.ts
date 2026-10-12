@@ -3,7 +3,7 @@ export const sessionCommands = [
   {
     "name": ":grant",
     "usage": ":grant <name> <capability> [<binding>]",
-    "does": "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`"
+    "does": "Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included"
   },
   {
     "name": ":mock",
@@ -78,7 +78,7 @@ export const sessionCommands = [
   {
     "name": ":store",
     "usage": ":store [<store>] | :store load <path> [<store>] | :store save <path> [<store>] | :store clear [<store>]",
-    "does": "Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store"
+    "does": "Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store; a load or a clear is a commit, routed to the Store's watches"
   },
   {
     "name": ":export",

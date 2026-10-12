@@ -1,0 +1,51 @@
+# Unblessed: Session Store Notifications, the specification's example (#621); first blessing awaits human review.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on scoresChanged change, queued" & newline & "  say the " & quote & "keys" & quote & " of change" & newline & "end scoresChanged" identity=46b575a59d30c9a01c4c76e81a83c1229c85ec6cecf4582f95f4adda85169ea7
+> extend session source="on entry1" & newline & "ask scores to watch " & quote & "all" & quote & ", " & quote & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry1" & newline identity=501e3154fe8bf2347942303114470d244c50c64460e50e60dfa0375a937f5086
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=scores.watch args=["all", "", "scoresChanged"] result=nothing
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=26 alloc=8 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=26 alloc=8
+pumped state=idle fuel=26
+> extend session source="on entry2" & newline & "ask scores to set " & quote & "alex" & quote & ", 3" & newline & "end entry2" & newline identity=5672c4b7fefd9a02fce065c8a6a07b370948e2f43c8bd575a86e6bf322ab603a
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+effect session/r2.s1 grant=scores phase=begin status=ok
+call session/r2.c1 op=scores.set args=["alex", 3] result=nothing
+effect session/r2.s1 grant=scores phase=commit status=ok
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=25 alloc=8 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=25 alloc=8
+pumped state=idle fuel=25
+> deliver d3 to=session message=scoresChanged args=[{grant: "scores", watch: "all", prefix: "", keys: ["alex"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r3.c1 op=console.write args=[["alex"]]
+seg session/r3 start delivery=d3 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=scoresChanged fuel=21 alloc=0
+pumped state=idle fuel=21
+> extend session source="on entry3" & newline & "ask scores to set " & quote & "alex" & quote & ", 3" & newline & "end entry3" & newline identity=29029d04df9f5417f1f716065e6c409535e3cc87bcd38f7f14cb384cc7ff1b4c
+> request d4 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+effect session/r4.s1 grant=scores phase=begin status=ok
+call session/r4.c1 op=scores.set args=["alex", 3] result=nothing
+effect session/r4.s1 grant=scores phase=commit status=ok
+seg session/r4 start delivery=d4 handler=entry3 clause=1 fuel=25 alloc=8 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry3 fuel=25 alloc=8
+pumped state=idle fuel=25
+> save s1
+> deliver d5 to=session message=scoresChanged args=[{grant: "scores", watch: "all", prefix: "", keys: ["alex"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r5.c1 op=console.write args=[["alex"]]
+seg session/r5 start delivery=d5 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
+run session/r5 outcome=completed delivery=d5 handler=scoresChanged fuel=21 alloc=0
+pumped state=idle fuel=21
+> restore from=s1 fingerprint=95156f403f170c5f3133cb7788871f9780d1c392524e19236cc64cfabd4ceca3 mode=full
+> deliver d5 to=session message=scoresChanged args=[{grant: "scores", watch: "all", prefix: "", keys: [], resync: true}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r5.c1 op=console.write args=[[]]
+seg session/r5 start delivery=d5 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
+run session/r5 outcome=completed delivery=d5 handler=scoresChanged fuel=21 alloc=0
+pumped state=idle fuel=21
+> vars
+vars session
+# Unblessed: Session Store Notifications, the specification's example (#621); first blessing awaits human review.

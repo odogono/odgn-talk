@@ -48,7 +48,10 @@ type WatchLimits struct {
 
 // RouterOptions are the Host's per-Store limits and revisions.
 type RouterOptions struct {
-	Limits func(store string) WatchLimits
+	// Admitted, if set, is told after each Notification a Group admits, with
+	// the router's state locked: it mustn't call the router.
+	Admitted func(*talk.Group)
+	Limits   func(store string) WatchLimits
 	// Revision is the Store's current revision; the router reads it under the
 	// Store's synchronization.
 	Revision func(store string) string
@@ -425,6 +428,15 @@ func (r *Router) hold(w *watch, keys []string, payload talk.Value) {
 	w.heldSize += size
 }
 
+// deliver offers one Notification to the watch's Group.
+func (r *Router) deliver(w *watch, payload talk.Value) outcome {
+	o := w.group.deliver(w.script, w.message, payload)
+	if t, ok := w.group.(groupTarget); ok && o == admitted && r.o.Admitted != nil {
+		r.o.Admitted(t.g)
+	}
+	return o
+}
+
 // drain delivers a watch's pending work, oldest first, until a refusal.
 func (r *Router) drain(w *watch) {
 	for w.hasWork() {
@@ -432,7 +444,7 @@ func (r *Router) drain(w *watch) {
 		if !w.resyncing {
 			keys = w.held[0].keys
 		}
-		switch w.group.deliver(w.script, w.message, w.payload(keys, w.resyncing)) {
+		switch r.deliver(w, w.payload(keys, w.resyncing)) {
 		case full:
 			return
 		case refused:
@@ -553,7 +565,7 @@ func (r *Router) Commit(store string, apply func() ([]string, error)) error {
 			r.hold(w, matched, payload)
 			continue
 		}
-		switch w.group.deliver(w.script, w.message, payload) {
+		switch r.deliver(w, payload) {
 		case full:
 			r.hold(w, matched, payload)
 		case refused:

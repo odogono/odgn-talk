@@ -1,0 +1,19 @@
+# Unblessed: a Notification Handler writing back to a key it watches (#621); first blessing awaits human review.
+# The Handler rounds each score it hears about. Its own write sends it a
+# Notification, and the session pumps again at the same Clock reading until a
+# Pump leaves no Notification queued: the rounded value changes nothing.
+> :grant scores store
+> :clock virtual 2026-09-30T10:00:00Z
+> on scoresChanged change, queued
+|   repeat for each key in the "keys" of change
+|     ask scores to get key
+|     say key & " = " & it
+|     if it is not round(it) then ask scores to set key, round(it)
+|   end repeat
+| end scoresChanged
+> ask scores to watch "rounding", "score/", "scoresChanged"
+> ask scores to set "score/alex", 2.6
+[session/r3] score/alex = 2.6
+[session/r4] score/alex = 3
+> ask scores to set "score/alex", 4
+[session/r6] score/alex = 4

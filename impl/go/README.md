@@ -722,8 +722,13 @@ after Pumps, `Detach` on discard and `Save`/`Restore` for companion
 checkpoints. `store.NewWithWatchLimits` overrides the Session watch limits.
 The Session Store accepts watching with costs 4/2 and limits 100 watches,
 65,536 watch bytes, 1,000 pending Notifications and 1,048,576 pending bytes.
-Session re-pumping, retry/detach and checkpoint integration remain
-[#621](https://github.com/odogono/odgn-talk/issues/621).
+`RouterOptions.Admitted` is told after each Notification a Group admits, with
+the router locked, and `store.NewNotifying` passes it on. The Session Host
+uses it to pump again at the same Clock reading while Notifications are
+queued, retries with `Pumped` after every Pump, keeps checkpoints for
+`:save`/`:restore` and detaches a Group it replaces. A Host call that leaves
+other Host Inputs queued gets one more Pump of its own; see
+`session/pumping_test.go` and the `sessions/store-notif*` Transcripts.
 
 ### Segment-bound Operations
 

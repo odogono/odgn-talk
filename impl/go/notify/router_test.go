@@ -21,7 +21,14 @@ var roomy = WatchLimits{Watches: 100, WatchSize: 65536, Pending: 1000, PendingSi
 
 func setup(t *testing.T, core *talk.Core, revision func(string) string) (*Router, *talk.CapabilityDef) {
 	t.Helper()
-	router := New(RouterOptions{Limits: func(string) WatchLimits { return roomy }, Revision: revision})
+	return setupWith(t, core, RouterOptions{Revision: revision})
+}
+
+// setupWith is setup with the given options, and roomy limits.
+func setupWith(t *testing.T, core *talk.Core, o RouterOptions) (*Router, *talk.CapabilityDef) {
+	t.Helper()
+	o.Limits = func(string) WatchLimits { return roomy }
+	router := New(o)
 	def, err := core.DefineCapability("store", talk.Operation{
 		Name: "watch", Mode: talk.Immediate,
 		Args:   []talk.Shape{talk.TextShape, talk.TextShape, talk.TextShape},
@@ -165,6 +172,30 @@ func TestCommitDeliversInLoadOrderAndRetriesAFullMailbox(t *testing.T) {
 		if got := seen(group, name); got != `[["k"], ["j"]]` {
 			t.Fatalf("%s: %s", name, got)
 		}
+	}
+}
+
+func TestAdmittedIsToldOfEachAdmissionButNotARefusal(t *testing.T) {
+	core := talk.New()
+	var told []*talk.Group
+	router, def := setupWith(t, core, RouterOptions{Revision: revisionOf("r0"), Admitted: func(g *talk.Group) { told = append(told, g) }})
+	group := core.NewGroup(talk.GroupOptions{Name: "g"})
+	s := load(t, group, "a", watcher(`"w", "", "changed"`), map[string]*talk.Grant{"scores": def.GrantAll("default")}, talk.Limits{MailboxDepth: 1})
+	deliver(t, s, "start")
+	pump(t, group)
+	commit(t, router, "default", "k")
+	if len(told) != 1 || told[0] != group {
+		t.Fatal(told)
+	}
+	// The full mailbox refuses the next one, which the router holds.
+	commit(t, router, "default", "j")
+	if len(told) != 1 {
+		t.Fatal(told)
+	}
+	pump(t, group)
+	router.Pumped(group)
+	if len(told) != 2 || told[1] != group {
+		t.Fatal(told)
 	}
 }
 

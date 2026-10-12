@@ -1,0 +1,75 @@
+# Unblessed: :store load and :store clear routing, and checkpoints (#621); first blessing awaits human review.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on changed change, queued" & newline & "  say change" & newline & "end changed" identity=5e79b49a28e5acd1b4553b9f43273d39154b3aca32528ac432420e2ed9b76d31
+> extend session source="on entry1" & newline & "ask scores to watch " & quote & "scores" & quote & ", " & quote & "score/" & quote & ", " & quote & "changed" & quote & newline & "end entry1" & newline identity=c92a7bf947d8a56903ada8aba4276ae419eac8d7b35248ff77ba3ada23c139ba
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=scores.watch args=["scores", "score/", "changed"] result=nothing
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=26 alloc=8 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=26 alloc=8
+pumped state=idle fuel=26
+> extend session source="on entry2" & newline & "ask other to watch " & quote & "everything" & quote & ", " & quote & quote & ", " & quote & "changed" & quote & newline & "end entry2" & newline identity=8102cb3a86202fd4c443eb31c7f2c52aff794f68944362b1ddb8015de4afdcbe
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+call session/r2.c1 op=other.watch args=["everything", "", "changed"] result=nothing
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=26 alloc=8 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=26 alloc=8
+pumped state=idle fuel=26
+> deliver d3 to=session message=changed args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann", "score/bob"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r3.c1 op=console.write args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann", "score/bob"], resync: false}]
+seg session/r3 start delivery=d3 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> deliver d4 to=session message=changed args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/bob"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r4.c1 op=console.write args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/bob"], resync: false}]
+seg session/r4 start delivery=d4 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> deliver d5 to=session message=changed args=[{grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r5.c1 op=console.write args=[{grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}]
+seg session/r5 start delivery=d5 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r5 outcome=completed delivery=d5 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> deliver d6 to=session message=changed args=[{grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r6.c1 op=console.write args=[{grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}]
+seg session/r6 start delivery=d6 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r6 outcome=completed delivery=d6 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> save s1
+> restore from=s1 fingerprint=04c3f975cc47ad1f0acd999a13b4c53a7865aec7474899d329b677766b9cdf77 mode=full
+> extend session source="on entry3" & newline & "ask scores to set " & quote & "score/ann" & quote & ", 5" & newline & "end entry3" & newline identity=aacf5ef6d2cfc77b3922afc53cf80758c85367a56674d2863090df6fb0c81c56
+> request d7 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+effect session/r7.s1 grant=scores phase=begin status=ok
+call session/r7.c1 op=scores.set args=["score/ann", 5] result=nothing
+effect session/r7.s1 grant=scores phase=commit status=ok
+seg session/r7 start delivery=d7 handler=entry3 clause=1 fuel=25 alloc=8 state=0 end=return
+run session/r7 outcome=completed delivery=d7 handler=entry3 fuel=25 alloc=8
+pumped state=idle fuel=25
+> deliver d8 to=session message=changed args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r8.c1 op=console.write args=[{grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann"], resync: false}]
+seg session/r8 start delivery=d8 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r8 outcome=completed delivery=d8 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> save s2
+> deliver d9 to=session message=changed args=[{grant: "other", watch: "everything", prefix: "", keys: ["b"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r9.c1 op=console.write args=[{grant: "other", watch: "everything", prefix: "", keys: ["b"], resync: false}]
+seg session/r9 start delivery=d9 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r9 outcome=completed delivery=d9 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> restore from=s2 fingerprint=7b50264bd9f6f332d9a2b676eef1a52607a1c904b89176c58c38d7676cafc5eb mode=full
+> deliver d9 to=session message=changed args=[{grant: "other", watch: "everything", prefix: "", keys: [], resync: true}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r9.c1 op=console.write args=[{grant: "other", watch: "everything", prefix: "", keys: [], resync: true}]
+seg session/r9 start delivery=d9 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
+run session/r9 outcome=completed delivery=d9 handler=changed fuel=18 alloc=0
+pumped state=idle fuel=18
+> vars
+vars session
+# Unblessed: :store load and :store clear routing, and checkpoints (#621); first blessing awaits human review.

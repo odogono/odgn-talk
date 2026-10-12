@@ -1,6 +1,6 @@
 # Store Notifications
 
-**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); notification routers and the router kit implemented in both Cores (#619); Store watch Operations and Session Store router wiring implemented in both Cores (#620); full Session integration and chapter integration pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Both Cores, the Session Store factories and the reference tools offer `watch` and `unwatch`. Session re-pumping, retry/detach and checkpoints remain #621. The numbered chapters and executable Data Files remain the active specification.
+**Status: accepted design, specified; Grant release hooks implemented in both Cores (#618); notification routers and the router kit implemented in both Cores (#619); Store watch Operations and Session Store router wiring implemented in both Cores (#620); Session Host notifications, checkpoints and Transcripts implemented in both Session Hosts (#621); chapter integration pending.** This is the normative specification handoff for [#227](https://github.com/odogono/odgn-talk/issues/227) and [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md). It builds on the Store of [ADR 0050](../../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md), specified in [chapter 7](../07-libraries-and-the-standard-library.md#store). Both Cores, the Session Store factories and the reference tools offer `watch` and `unwatch`, and both Session Hosts deliver Notifications as [The Session Host](#the-session-host) describes. The numbered chapters and executable Data Files remain the active specification.
 
 Language **1.0-rc.2** and provisional **Cost Model 0** stay unchanged: nothing here adds syntax, instructions or costs. On implementation, move these rules into the chapters named in [Acceptance and delivery handoff](#acceptance-and-delivery-handoff), finish the remaining Data File wording, replace the chapters' pending-addition notices, and retire this document. Examples use `text` fences because documentation `talk` fences are checked against the current Operation catalogue. Their results are specified behavior, not execution evidence.
 
@@ -300,6 +300,8 @@ Each Core supplies a router as a helper built only on this interface, at `@odgn/
 ```ts
 export interface WatchLimits { watches: number; watchSize: number; pending: number; pendingSize: number }
 export interface RouterOptions {
+  /** Optional: told after each Notification a Group admits; it mustn't call the router. */
+  admitted?(group: Group): void;
   limits(store: string): WatchLimits;
   /** The Store's current revision; read under its synchronization. */
   revision(store: string): string;
@@ -321,6 +323,8 @@ export interface NotificationRouter {
 export declare function createRouter(o: RouterOptions): NotificationRouter;
 ```
 
+In Go, `RouterOptions` has the same members, with `Admitted func(*talk.Group)`. A Host that pumps for Notifications, as the Session Host does, learns of them through `admitted`.
+
 The router owns each Store's synchronization, so a Store applies every commit, including Host-originated ones, through `commit`. Revisions, checkpoint bytes and the router's internal layout are each implementation's own, and a checkpoint restores only through the router family that took it, as a save restores only on its own Core family.
 
 ### Host errors
@@ -339,15 +343,18 @@ On implementation, [chapter 12](../12-sessions-and-tooling.md#the-session-store)
 - **Costs:** `watch` costs 4 Fuel and `unwatch` 2, with no declared allocation.
 - **Limits:** for each Session Store, `watches` 100, `watchSize` 65,536, `pending` 1,000 and `pendingSize` 1,048,576.
 - **Revisions:** a Session Store's revision counts its commits with changed keys from 0, within the Session Host's memory.
-- **Pumping:** after a Pump that leaves Host Inputs queued, such as Notifications, the Session Host pumps again at the same Clock reading, and keeps doing so until a Pump leaves none. A Notification's Run is a background Run, so its output lines start with `[<run>] `. A Handler whose own write always changes a key it watches never lets the session settle, as a Handler that keeps sending to itself doesn't.
-- **Host changes:** `:store load` and `:store clear` are commits, routed by their net changes, and the Session Host pumps after one that queues a Notification. Each still runs between Pumps and isn't itself a Host Input.
+- **Retrying:** after each Pump returns, the Session Host calls the router's `pumped`, before it prints the Pump's lines.
+- **Pumping:** after a Pump in which the router admitted a Notification, during the Pump or in that retry, the Session Host pumps again at the same Clock reading if Host Inputs are queued, and keeps doing so until a Pump admits none or leaves none queued. These Pumps belong to the Host call that caused the first, so their lines come with its lines, and under a real Clock they have no `@` line of their own. A Notification's Run is a background Run, so its output lines start with `[<run>] `. A Handler whose own write always changes a key it watches never lets the session settle, as a Handler that keeps sending to itself doesn't.
+- **Other queued inputs:** Host Inputs still queued once those Pumps stop, such as a property getter's `deliver`, get [chapter 12](../12-sessions-and-tooling.md#the-foreground)'s one more Pump, as a Host call of its own with its own `@` line. Notifications it admits are pumped for as above, but it is never followed by another Pump for other inputs. So a getter whose message reads the getter again can't keep the session pumping, while a Handler's write-back Notification is handled before the prompt returns.
+- **Host changes:** `:store load` and `:store clear` are commits, routed by their net changes, and the Session Host pumps after one that admits a Notification, as the Pump the command causes. Each still runs between Pumps and isn't itself a Host Input.
 - **Reload:** redefining a declaration reloads the Session Script, which removes its watches. An Entry can register them again. Extending, by declaring new names, keeps them.
-- **`:save` and `:restore`** keep a checkpoint, not a bare save, with the Session Host's own state. `:restore` restores it through the router, so a Session Store that changed since `:save` sends one marker to each restored watch on it.
+- **`:save` and `:restore`** keep a checkpoint, not a bare save, with the Session Host's own state. `:restore` restores it through the router, so a Session Store that changed since `:save` sends one marker to each restored watch on it, and the Session Host pumps for those markers as the Pump `:restore` causes. It detaches the Group it replaces from the router.
 
-The run ids in this Transcript are illustrative:
+The `sessions/store-notifications` Transcript records this example under a virtual Clock:
 
 ```text
 > :grant scores store
+> :clock virtual 2026-09-30T10:00:00Z
 > on scoresChanged change, queued
 |   say the "keys" of change
 | end scoresChanged
@@ -419,21 +426,35 @@ Add `corpus/notify-kit/` beside [the store kit](../../corpus/store-kit/README.md
 
 ### Session Transcripts
 
-Add Transcripts under `corpus/sessions/` for an ordinary Notification, a Handler of the writer's own change, an unchanged write, `unwatch`, removal by redefinition, `:store load` and `:store clear` routing, and `:save` and `:restore` with and without a Store change since the save.
+Add Transcripts under `corpus/sessions/` for an ordinary Notification, a Handler of the writer's own change, an unchanged write, `unwatch`, removal by redefinition, `:store load` and `:store clear` routing, and `:save` and `:restore` with and without a Store change since the save. #621 adds `store-notifications` (the example above: an ordinary Notification, an unchanged write and a restore after a change), `store-notify-own-writes`, `store-notify-lifecycle` (`unwatch`, Extend and removal by redefinition) and `store-notify-host-changes` (`:store load`, `:store clear`, and restores with and without a change).
 
 ## Acceptance and delivery handoff
 
 Both Cores, routers, Session Hosts and reference tools must be implemented
 before full chapter integration (#622). #620 activates the Operation and Error
 Data Files with their behavior on both Cores and Session Store forwarding;
-#621 completes Session driving and checkpoints. Generated declarations alone
-do not implement behavior.
+#621 completes Session driving and checkpoints ([Session delivery](#session-delivery-621)).
+Generated declarations alone do not implement behavior.
 
 - **Active Data File entries:** `stdlib.toml` (`watch` and `unwatch`), `errors.toml` (`invalid watch` and `watch limit`), `host-errors.toml` (`invalid checkpoint`) and their regenerated consumers (#619, #620). `session.toml` changes only in its `:grant` and `:store` wording. `corpus.toml` and `trace.ebnf` need no change: Notifications are ordinary `deliver` inputs.
 - **Embedding files:** `spec/embedding/talk.ts` and `talk.go` gain the declarations in [Embedding](#embedding), and the message-layer table gains `release`.
 - **Chapters to integrate:** chapter 7's `store` section (Operations, validation, routing, payload, limits), chapter 6's error table, chapter 9's Capabilities, release hook, message layer and Host error catalogue, chapter 10's save rules and checkpoints, chapter 11's scenario tables and chapter 12's Session Store.
 - **Tooling:** the reference checker, LSP and Playground learn the two Operations from the regenerated catalogue. No new Advanced tag is needed.
 - **First blessing:** every new Trace Case, kit sequence and Transcript expectation is written or derived independently and reviewed by a person before blessing. Execution agreement between the Cores isn't approval. Present the expectation diffs, including changed Fingerprints of existing `store` cases, for review.
+
+## Session delivery (#621)
+
+Both Session Hosts retry pending work after each Pump, pump at the same Clock
+reading for admitted Notifications, route `:store load` and `:store clear`,
+keep checkpoints for `:save` and `:restore`, and detach a replaced Group. The
+same change implements chapter 12's one more Pump for other queued Host Inputs
+(#623), with the split [The Session Host](#the-session-host) describes. Both
+routers take an optional `admitted` option for it, and `session.toml` has the
+`:grant` and `:store` wording.
+
+Four new Session Transcripts await first-blessing review, with the changed
+`sessions/object-inspection` and `sessions/save-restore` expectations; see the
+[review package](../../docs/reviews/session-notify-blessings/README.md).
 
 ## Router delivery (#619)
 

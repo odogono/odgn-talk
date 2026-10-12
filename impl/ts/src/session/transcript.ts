@@ -251,8 +251,9 @@ export const replayTranscript = (
     writeFile: () => {},
     writeStoreFile: () => {},
   });
-  // One input may cause two Pumps (the expression and its object reader).
-  // Offer all readings in that input's block and consume them on demand.
+  // One input may cause several Pumps (the expression, its object reader and
+  // the Pump for queued Host Inputs). Offer all readings in that input's
+  // block and consume them on demand.
   const consumed = new Set<number>();
   let readings: { at: bigint; index: number }[] = [];
   let clockStart = 0;
@@ -299,8 +300,8 @@ export const replayTranscript = (
         host.read(item.line);
         break;
       case 'clock':
-        clockStart = i;
-        readings = [{ index: i, at: item.at }];
+        // A deadline's Pump, and any Pump for the Host Inputs it leaves queued.
+        prepare(i - 1);
         host.tick();
         break;
       case 'envelope':

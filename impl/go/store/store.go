@@ -61,8 +61,14 @@ func SessionWatchLimits() notify.WatchLimits {
 }
 func New(quotas Quotas) *Stores { return NewWithWatchLimits(quotas, SessionWatchLimits()) }
 func NewWithWatchLimits(quotas Quotas, limits notify.WatchLimits) *Stores {
+	return NewNotifying(quotas, limits, nil)
+}
+
+// NewNotifying is NewWithWatchLimits whose router tells admitted, if set,
+// after each Notification a Group admits.
+func NewNotifying(quotas Quotas, limits notify.WatchLimits, admitted func(*talk.Group)) *Stores {
 	s := &Stores{quotas: quotas, contents: map[string]map[string]talk.Value{}, segments: map[identity]segment{}}
-	s.Router = notify.New(notify.RouterOptions{Limits: func(string) notify.WatchLimits { return limits }, Revision: func(name string) string { return strconv.FormatUint(s.revision(name), 10) }})
+	s.Router = notify.New(notify.RouterOptions{Admitted: admitted, Limits: func(string) notify.WatchLimits { return limits }, Revision: func(name string) string { return strconv.FormatUint(s.revision(name), 10) }})
 	return s
 }
 func (s *Stores) revision(name string) uint64 {

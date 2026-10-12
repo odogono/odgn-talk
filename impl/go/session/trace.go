@@ -7,6 +7,7 @@ import (
 
 	talk "github.com/odogono/odgn-talk/impl/go"
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
+	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -83,6 +84,9 @@ func parseTime(s string) time.Time {
 	return time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
 }
 func formatTime(t time.Time) string { return talk.InstantFromTime(t).String() }
+
+// pump pumps at the Clock's next reading, then for the Notifications it
+// leaves queued.
 func (h *Host) pump() []string {
 	h.recorded()
 	reading := h.virtual
@@ -95,11 +99,40 @@ func (h *Host) pump() []string {
 	}
 	h.lastClock = reading
 	h.hasClock = true
+	return append(h.pumpAt(reading), h.notifications()...)
+}
+
+// notifications pumps again at the same Clock reading after a Pump that
+// leaves a Notification queued, until a Pump leaves none (Store
+// Notifications, The Session Host). A Handler whose own write always
+// changes a key it watches never lets the session settle.
+func (h *Host) notifications() []string {
+	var out []string
+	for h.notified && sessionio.Queued(h.group) {
+		out = append(out, h.pumpAt(h.lastClock)...)
+	}
+	return out
+}
+
+// notifiedPump pumps for a Host change to a Session Store that queued a
+// Notification.
+func (h *Host) notifiedPump() []string {
+	if !h.notified || h.group == nil {
+		return nil
+	}
+	return h.pump()
+}
+
+// pumpAt is one Pump and its lines. The router first retries the
+// Notifications it holds for the Group.
+func (h *Host) pumpAt(reading time.Time) []string {
 	h.events = nil
+	h.notified = false
 	result, err := h.group.Pump(reading, talk.PumpOptions{})
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
+	h.stores.Router.Pumped(h.group)
 	h.rewound = result.State == talk.Rewound
 	h.objectSession.reports(result.Reports)
 	h.deadline = result.NextDeadline

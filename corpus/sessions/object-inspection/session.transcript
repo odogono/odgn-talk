@@ -48,10 +48,11 @@ read {name: "child", value: <object InspectChild "dynamic">}
 read {name: "error", error: {code: "getter refused", detail: "safe", capability: "InspectRoot", operation: "error"}}
 read {name: "shape", error: {code: "host error", capability: "InspectRoot", operation: "shape"}}
 read {name: "z", value: {z: 2, a: 1, "$sessionFunction": "ordinary"}}
+@ 1970-01-01T00:00:00Z
+[session/r5] %notice
 % {"reply":{"ok":{"delivery":"d6"}},"request":{"args":[4],"fn":{"$sessionFunction":"f2"},"kind":"call"},"type":"input"}
 @ 1970-01-01T00:00:00Z
-% {"exposure":28,"handle":"f3","path":["fn"],"type":"function"}
-[session/r5] %notice
+% {"exposure":30,"handle":"f3","path":["fn"],"type":"function"}
 % {"reply":{"ok":{}},"request":{"kind":"set-parent","object":{"id":"dynamic","kind":"InspectChild"},"parent":{"id":"root","kind":"InspectRoot"}},"type":"input"}
 % {"reply":{"ok":{}},"request":{"kind":"set-parent","object":{"id":"dynamic","kind":"InspectChild"},"parent":null},"type":"input"}
 @ 1970-01-01T00:00:00Z
@@ -101,12 +102,13 @@ read {name: "child", value: <object InspectChild "dynamic">}
 read {name: "error", error: {code: "getter refused", detail: "safe", capability: "InspectRoot", operation: "error"}}
 read {name: "shape", error: {code: "host error", capability: "InspectRoot", operation: "shape"}}
 read {name: "z", value: {z: 2, a: 1, "$sessionFunction": "ordinary"}}
+@ 1970-01-01T00:00:00Z
+[session/r9] %notice
 > :inspect the child of root
 @ 1970-01-01T00:00:00Z
 % {"crossing":14,"object":{"id":"root","kind":"InspectRoot"},"operation":"get","property":"child","type":"property-begin"}
 % {"crossing":14,"reply":{"value":{"$object":["InspectChild","dynamic"]}},"type":"property-end"}
 @ 1970-01-01T00:00:00Z
-[session/r9] %notice
 value {kind: "object", value: <object InspectChild "dynamic">}
 object {kind: "InspectChild", id: "dynamic", disposed: true}
 property {name: "value", shape: "any", readOnly: true, getCost: {fuel: 0, alloc: 0}, setCost: nothing}

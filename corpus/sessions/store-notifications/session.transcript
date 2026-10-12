@@ -1,0 +1,22 @@
+# Unblessed: Session Store Notifications, the specification's example (#621); first blessing awaits human review.
+# A commit that changes a watched key delivers the Handler, in a background
+# Run, at the same Clock reading. A write that changes nothing sends nothing.
+# :store clear is routed; :restore brings the watch back, resynced because the
+# Store changed after :save, so its marker's keys is [].
+> :grant scores store
+> :clock virtual 2026-09-30T10:00:00Z
+> on scoresChanged change, queued
+|   say the "keys" of change
+| end scoresChanged
+> ask scores to watch "all", "", "scoresChanged"
+> ask scores to set "alex", 3
+[session/r3] ["alex"]
+> ask scores to set "alex", 3
+> :save
+saved default
+> :store clear
+cleared default
+[session/r5] ["alex"]
+> :restore
+restored default
+[session/r5] []

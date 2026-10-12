@@ -156,6 +156,7 @@ export type RunEvent =
 export const observeValues = Symbol('Session value exposures');
 export const sessionReply = Symbol('Session message-layer reply');
 export const observeRuns = Symbol('observeRuns');
+export const queuedInputs = Symbol('queuedInputs');
 export type LoadOptions = {
   /** Its Grants, by the name the Script uses for each. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a Grant of any binding, as talk.ts has it.
@@ -867,6 +868,11 @@ export class Group {
   /** TS-internal: receives the records a Session Host follows (ADR 0045). */
   [observeRuns](observer: ((r: RunEvent) => void) | null): void {
     this.observer = observer;
+  }
+
+  /** TS-internal: whether Host Inputs wait for the next Pump (chapter 12, The foreground). */
+  [queuedInputs](): boolean {
+    return this.inputs.length > 0;
   }
 
   /** Worker. A Fingerprint covers code, declarations and limits, never state. */

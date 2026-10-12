@@ -203,8 +203,8 @@ func ReplayTranscript(recorded []session.Item, trace func(string)) (host *sessio
 			prepare(n)
 			host.Read(item.Text)
 		case "clock":
-			clockStart = n
-			readings = []reading{{n, item.At}}
+			// A deadline's Pump, and any Pump for the Host Inputs it leaves queued.
+			prepare(n - 1)
 			host.Tick()
 		case "envelope":
 			host.ReplayObjectItem(n)
