@@ -162,8 +162,8 @@ doesn't declare yet. Those fail only from step 6's conformance gate.
 ## The machine
 
 `talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
-`talk_script_request`, `talk_pending_result`, `talk_pump` and `talk_inspect`
-drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at
+`talk_script_request`, `talk_pending_result`, `talk_pump`, `talk_inspect` and
+`talk_script_counters` drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at
 a time. Loading a Script parses, checks and lowers it, runs its initialiser
 uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Grants, objects, Libraries, limits and Fuel
@@ -171,11 +171,16 @@ Slices aren't reachable through `talk.h` yet.
 
 A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
-`clause` rate at each clause's first instruction. Frames are on the heap, so
+`clause` rate at each clause's first instruction. A Command Call to a Handler
+of the Script, with or without `and wait`, tries its clauses the same way in a
+new frame, and raises `no match` at the call when none takes it. Frames are on the heap, so
 the run loop never recurses on Script depth. Every instruction is charged by
 its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 0 terms, with `scanned` reported by the operation itself, and Persistent State
 is measured over the Script Variables and the mailbox at a Segment's end.
+`talk_script_counters` reads a Script's lifetime Fuel, allocation, Runs and
+Limit Faults, live Runs included, with its current Persistent State and
+mailbox, and writes the `counters` record without draining Host Inputs.
 
 So far the machine runs straight-line code, branches, loops, functions, chunks
 and properties, keys, lists and maps, `match` with its destructuring tests,

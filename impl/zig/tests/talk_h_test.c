@@ -240,6 +240,13 @@ static int suspension_test(void) {
     bad |= started == NULL;
     bad |= strstr(trace, "end=ask-wait\n") == NULL;
     bad |= strstr(trace, "pumped state=idle fuel=") == NULL || strstr(trace, " next=") == NULL;
+    /* The suspended Run's work counts; reading charges nothing. */
+    talk_counters counted;
+    talk_script_counters(script, &counted);
+    bad |= counted.runs != 1 || counted.faults != 0 || counted.mailbox_len != 0 || counted.fuel_total <= 0 || counted.persistent_state <= 0;
+    char record[128];
+    snprintf(record, sizeof record, "> counters waiter\ncounters waiter fuel=%lld alloc=%lld runs=1 faults=0 state=%lld mailbox=0\n", (long long)counted.fuel_total, (long long)counted.alloc_total, (long long)counted.persistent_state);
+    bad |= strstr(trace, record) == NULL;
     talk_value *answer = NULL;
     talk_int(42, &answer);
     bad |= started == NULL || talk_call_answer_with_cost(started, answer, 3) != TALK_OK;

@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "stub", "answer", "fail" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -501,6 +501,10 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_pump(group, seconds, nanos, null, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
+        } else if (std.mem.eql(u8, name, "counters")) {
+            const script = scripts.get(input[name_end + 1 ..]) orelse return error.UnknownScript;
+            var read: c.talk_counters = undefined;
+            c.talk_script_counters(script, &read);
         } else if (std.mem.eql(u8, name, "answer") or std.mem.eql(u8, name, "fail")) {
             // The Host settles a suspending call it started.
             const rest = input[name_end + 1 ..];

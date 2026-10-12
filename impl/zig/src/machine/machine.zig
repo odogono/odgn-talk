@@ -99,6 +99,9 @@ pub const Frame = struct {
     pc: u32,
     locals: []*Value,
     stack: std.ArrayList(Slot) = .empty,
+    /// Whether a Command Call pushed it, so that its `clause-fail` tries
+    /// the Handler's next clause.
+    called: bool = false,
 };
 
 pub const Delivery = struct {
@@ -276,6 +279,11 @@ pub const Script = struct {
     /// Its Runs that are suspended or ready, which its state counts.
     live: std.ArrayList(*Run) = .empty,
     runs: u64 = 0,
+    /// The Fuel and allocation of its Runs that have ended, and how many
+    /// ended in a Limit Fault, for its Counters.
+    fuel_total: u64 = 0,
+    alloc_total: u64 = 0,
+    faults: u64 = 0,
     /// The Script's Grants, by the name it uses, with the Operations it
     /// keeps.
     grants: []ScriptGrant = &.{},
@@ -452,7 +460,7 @@ pub const Group = struct {
         return .{ .loaded = s };
     }
 
-    fn script(g: *Group, name: []const u8) ?*Script {
+    pub fn script(g: *Group, name: []const u8) ?*Script {
         for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) return s;
         return null;
     }
@@ -678,6 +686,26 @@ pub const Group = struct {
         defer g.destroyPending(p);
         run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms };
         try run.script.work.append(g.gpa, .{ .run = run });
+    }
+
+    /// A Script's Counters (chapter 9, Script counters): its lifetime work,
+    /// live Runs included, and its current state. Reading them charges
+    /// nothing and drains no Host Inputs.
+    pub const Counters = struct { fuel_total: u64, alloc_total: u64, runs: u64, faults: u64, persistent_state: u64, mailbox_len: u64 };
+
+    /// Reads a Script's Counters, writing the `counters` Host Input and its
+    /// record.
+    pub fn counters(g: *Group, s: *Script) Counters {
+        var out: Counters = .{ .fuel_total = s.fuel_total, .alloc_total = s.alloc_total, .runs = s.runs, .faults = s.faults, .persistent_state = g.persistentState(s), .mailbox_len = 0 };
+        for (s.live.items) |r| {
+            out.fuel_total += r.fuel;
+            out.alloc_total += r.alloc;
+        }
+        for (s.work.items) |w| if (w == .message) {
+            out.mailbox_len += 1;
+        };
+        g.write("> counters {s}\ncounters {s} fuel={d} alloc={d} runs={d} faults={d} state={d} mailbox={d}\n", .{ s.name, s.name, out.fuel_total, out.alloc_total, out.runs, out.faults, out.persistent_state, out.mailbox_len });
+        return out;
     }
 
     /// Writes a `vars` record for each Script.
@@ -1332,6 +1360,9 @@ pub const Group = struct {
                 out.writeAll("\n") catch {};
             }
         }
+        s.fuel_total += run.fuel;
+        s.alloc_total += run.alloc;
+        if (outcome == .faulted) s.faults += 1;
         switch (outcome) {
             .returned => |v| if (d.waits) {
                 try g.reply(d, .{ .reply = v });
@@ -1427,6 +1458,20 @@ pub const Group = struct {
         return total;
     }
 
+    /// Pushes the first clause of the Handler `name` from body `from` on
+    /// whose parameter count fits, charging it, or returns false.
+    fn nextClause(g: *Group, run: *Run, name: []const u8, from: usize, args: []const *Value) !bool {
+        const bodies = run.script.unit.bodies;
+        for (bodies[from..], from..) |b, i| {
+            if (b.kind != .handler or !std.mem.eql(u8, b.name, name) or b.params.len != args.len) continue;
+            try g.pushFrame(run, @intCast(i), args);
+            run.frames.items[run.frames.items.len - 1].called = true;
+            run.fuel += 4;
+            return true;
+        }
+        return false;
+    }
+
     fn pushFrame(g: *Group, run: *Run, body: u32, args: []const *Value) !void {
         const b = run.script.unit.bodies[body];
         const locals = try g.gpa.alloc(*Value, b.locals);
@@ -1502,8 +1547,29 @@ pub const Group = struct {
                     try caller.stack.append(g.gpa, .{ .value = v });
                 },
                 .clause_failed => {
+                    const failed = &run.frames.items[run.frames.items.len - 1];
+                    if (!failed.called or run.frames.items.len - 1 <= run.base) {
+                        g.popFrame(run);
+                        return .clause_failed;
+                    }
+                    // A Command Call's clause failed: try the next, or
+                    // raise `no match` at the call.
+                    const body = failed.body;
+                    const n = run.script.unit.bodies[body].params.len;
+                    const args = try g.gpa.alloc(*Value, n);
+                    defer releaseAll(args, g.gpa);
+                    for (args, failed.locals[1 .. n + 1]) |*x, v| x.* = v.retain();
                     g.popFrame(run);
-                    return .clause_failed;
+                    if (try g.nextClause(run, run.script.unit.bodies[body].name, body + 1, args)) continue;
+                    const caller = &run.frames.items[run.frames.items.len - 1];
+                    const call_pc = caller.pc - 1;
+                    const call_ins = run.script.unit.code[call_pc];
+                    switch (g.raise("no match", &.{})) {
+                        error.Raised => {},
+                        error.OutOfMemory => return error.OutOfMemory,
+                    }
+                    const err = try g.completeError(run, call_pc, call_ins);
+                    if (try g.unwind(run, err, call_pc, call_ins, charged)) |end| return end;
                 },
                 .raised => |err| {
                     if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
@@ -2635,6 +2701,13 @@ pub const Group = struct {
                     callee.locals[slot].release();
                     callee.locals[slot] = run.script.definitions[def].retain();
                 }
+            },
+            .call_handler, .call_handler_wait => {
+                const n: usize = @intCast(ops[1].int);
+                const args = try a.alloc(*Value, n);
+                for (0..n) |i| args[n - 1 - i] = pop(frame);
+                defer for (args) |v| v.release();
+                if (!try g.nextClause(run, ops[0].text, 0, args)) return g.raise("no match", &.{});
             },
             .call_builtin => {
                 const n: usize = @intCast(ops[1].int);

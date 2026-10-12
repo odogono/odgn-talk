@@ -433,6 +433,20 @@ talk_host_error_code talk_load(talk_group *g, const talk_load_options *o, talk_s
 talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, talk_owned_bytes *id);
 /* Queues a Request; *out settles when a Pump ends its Run. */
 talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* A Script's Counters: its lifetime work since load, live Runs included,
+ * and its current Persistent State and mailbox. */
+typedef struct talk_counters {
+    int64_t fuel_total;
+    int64_t alloc_total;
+    int64_t runs;
+    int64_t faults;
+    int64_t persistent_state;
+    int64_t mailbox_len;
+} talk_counters;
+/* Reads the Script's Counters between Pumps, as the Host Input counters
+ * does: it charges nothing, drains no Host Inputs and writes a counters
+ * record to the Trace. */
+void talk_script_counters(talk_script *s, talk_counters *out);
 /* The Request's result, an owned reference: Nothing until it settles. */
 talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
 /* C only: ends the caller's handle on a Request. */
