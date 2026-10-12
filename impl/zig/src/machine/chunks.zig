@@ -374,6 +374,34 @@ pub fn set(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value:
             }
             return model.list(gpa, out.items) catch error.OutOfMemory;
         },
+        .bytes => |b| {
+            if (kind != .byte) return wrongKind(effect, "text");
+            try checkWriteIndex(gpa, index, b.len, kind, index_value, effect);
+            var out: std.ArrayList(u8) = .empty;
+            switch (index) {
+                .one => |i| {
+                    const p: usize = @intCast(absolute(i, b.len));
+                    // A write never appends.
+                    if (p > b.len) return outOfRange(gpa, kind, index_value, effect);
+                    if (part.data != .number) return wrongKind(effect, "number");
+                    const n = part.data.number.integer(i64) catch return wrongKind(effect, "integer");
+                    if (n < 0 or n > 255) {
+                        effect.raise = .{ .out_of_range = .{ .field = "byte", .value = part.retain() } };
+                        return error.Raised;
+                    }
+                    try out.appendSlice(a, b);
+                    out.items[p - 1] = @intCast(n);
+                },
+                .range => {
+                    if (part.data != .bytes) return wrongKind(effect, "bytes");
+                    const c = covered(index, b.len) orelse return outOfRange(gpa, kind, index_value, effect);
+                    try out.appendSlice(a, b[0 .. c.first - 1]);
+                    try out.appendSlice(a, part.data.bytes);
+                    try out.appendSlice(a, b[c.last..]);
+                },
+            }
+            return model.bytes(gpa, out.items) catch error.OutOfMemory;
+        },
         else => return wrongKind(effect, "text"),
     }
 }

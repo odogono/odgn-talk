@@ -48,6 +48,8 @@ pub const Body = struct {
     params: []const []const u8,
     captures: u32 = 0,
     locals: u32,
+    /// For an `on error` clause with `, during name`: that name's slot.
+    during: ?u32 = null,
     may_suspend: bool,
     first: u32,
     last: u32,
@@ -390,6 +392,7 @@ const Lowerer = struct {
         f.handler = h;
         const params = try f.parameters(h.params);
         try f.finishSlots();
+        if (h.during) |d| f.body.info.during = f.names.get(l.text(d));
         const fail = try f.newLabel();
         // A guard region: the parameter patterns, then the Guard.
         const start = f.pc();

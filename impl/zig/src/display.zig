@@ -50,6 +50,16 @@ fn key(w: *std.Io.Writer, s: []const u8) !void {
 }
 /// Writes `v`'s one-line display form. A Function writes its stored source.
 pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
+    return writeWith(w, v, false);
+}
+
+/// Writes `v` as a Trace writes it: a Core-raised error map without its
+/// `message`, wherever the map appears.
+pub fn writeTrace(w: *std.Io.Writer, v: *const Value) Error!void {
+    return writeWith(w, v, true);
+}
+
+fn writeWith(w: *std.Io.Writer, v: *const Value, trace: bool) Error!void {
     const a = v.allocator;
     switch (v.data) {
         .nothing => try w.writeAll("nothing"),
@@ -81,24 +91,27 @@ pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
             try w.writeByte('[');
             for (xs, 0..) |x, i| {
                 if (i > 0) try w.writeAll(", ");
-                try write(w, x);
+                try writeWith(w, x, trace);
             }
             try w.writeByte(']');
         },
         .map => |xs| {
             try w.writeByte('{');
-            for (xs, 0..) |x, i| {
-                if (i > 0) try w.writeAll(", ");
+            var first = true;
+            for (xs) |x| {
+                if (trace and v.core_message and std.mem.eql(u8, x.key, "message")) continue;
+                if (!first) try w.writeAll(", ");
+                first = false;
                 try key(w, x.key);
                 try w.writeAll(": ");
-                try write(w, x.value);
+                try writeWith(w, x.value, trace);
             }
             try w.writeByte('}');
         },
         .range => |r| {
-            try write(w, r.from);
+            try writeWith(w, r.from, trace);
             try w.writeAll("..");
-            try write(w, r.to);
+            try writeWith(w, r.to, trace);
         },
         .civil_date => |f| {
             const s = try model.dates.string(a, f, false);

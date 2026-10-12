@@ -45,6 +45,9 @@ pub const Value = struct {
     allocator: std.mem.Allocator,
     depth: usize = 1,
     data: Data,
+    /// A Core-raised error map, whose `message` the Trace leaves out
+    /// (chapter 11): its wording is outside parity.
+    core_message: bool = false,
     /// The kind of the value's payload.
     pub fn kind(self: *const Value) Kind {
         return std.meta.activeTag(self.data);
@@ -329,6 +332,7 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
     };
     if (!found) try pairs.append(gpa, .{ .key = normalized.data.text, .value = item });
     const next = try map(gpa, pairs.items);
+    next.core_message = old.core_message and !std.mem.eql(u8, normalized.data.text, "message");
     root.* = next;
     old.release();
 }

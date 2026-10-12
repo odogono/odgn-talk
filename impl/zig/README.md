@@ -182,10 +182,20 @@ its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 is measured over the Script Variables and the mailbox at a Segment's end.
 
 So far the machine runs straight-line code, branches, loops, functions, chunks
-and properties, keys, lists and maps, and a few Built-ins. A raised error ends
-its Run: `try`, the Unwind Table, Text Pattern matching, Lambdas, waits,
-messages between Scripts and Capabilities come next. A Run past the default
-Fuel per Run ends in a minimal `fault` until step 4 brings limits.
+and properties, keys, lists and maps, `match` with its destructuring tests,
+Bytes builds and Binary Patterns, `as` conversions, and a few Built-ins. A
+raised error unwinds in two phases: the catch search walks the Unwind Table
+outward, charging `unwind` per frame it leaves and running each catch test in
+a dispatch activation over the owner's locals, then the exited `finally`
+blocks run, innermost first. An uncaught error ends the Run and queues an
+`error` message to the Script's own mailbox, for its `on error` Handler. Core
+messages are left out of the Trace, since their wording is outside parity.
+
+`contains`, `begins with` and `ends with` with a text or Bytes needle run it as
+a literal program and count the matcher's `steps` ([literal](src/machine/literal.zig)).
+The full Text Pattern matcher, Lambdas, waits, messages between Scripts and
+Capabilities come next. A Run past the default Fuel per Run ends in a minimal
+`fault` until step 4 brings limits.
 
 ## Values and ownership
 
