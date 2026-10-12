@@ -776,7 +776,6 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
     if (name.len == 0) return error.InvalidValue;
     const call = o.@"fn" orelse return error.InvalidValue;
-    if (o.mode != .fire_and_forget and o.result == null) return error.InvalidValue;
     if (o.cost.fuel < 0 or o.cost.alloc < 0) return error.InvalidValue;
     const args_in: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
     const errors_in: []const ErrorDecl = if (o.errors_len == 0) &.{} else (o.errors orelse return error.InvalidValue)[0..o.errors_len];
