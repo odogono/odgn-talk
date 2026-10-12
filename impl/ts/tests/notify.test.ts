@@ -21,10 +21,7 @@ const roomy: WatchLimits = {
   pending: 1000,
   pendingSize: 1_048_576,
 };
-const setup = (
-  revision = () => 'r0',
-  admitted?: (group: Group) => void,
-) => {
+const setup = (revision = () => 'r0', admitted?: (group: Group) => void) => {
   const router = createRouter({ admitted, limits: () => roomy, revision });
   const def = defineCapability<string>(
     'store',
