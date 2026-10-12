@@ -22,10 +22,14 @@ const stdlibSources = resolve(import.meta.dir, '../../spec/stdlib');
 /** The stdlib Libraries' sources, which every Group holds, in stdlib.toml's order. */
 const emitStdlibSources = async (): Promise<string> => {
   let out = `${header('tools/zig/generate.ts from spec/stdlib')}\n`;
-  out += 'pub const Source = struct { name: []const u8, source: []const u8 };\n\n';
+  out +=
+    'pub const Source = struct { name: []const u8, source: []const u8 };\n\n';
   out += 'pub const sources = [_]Source{\n';
   for (const name of stdlib.libraries as string[]) {
-    const source = await readFile(resolve(stdlibSources, `${name}.talk`), 'utf8');
+    const source = await readFile(
+      resolve(stdlibSources, `${name}.talk`),
+      'utf8',
+    );
     out += `    .{ .name = ${zigString(name)}, .source = ${zigString(source)} },\n`;
   }
   return `${out}};\n`;
