@@ -110,6 +110,7 @@ fn unsupported(meta: Metadata, replay: ?trace.Replay) ?[]const u8 {
     return switch (meta.kind) {
         .encoding => if (meta.objects) "Host Object registration is not implemented" else null,
         .trace => if (replay != null) null else "trace execution is not implemented",
+        .disassembly => null,
         inline else => |kind| @tagName(kind) ++ " execution is not implemented",
     };
 }
@@ -218,6 +219,7 @@ const Runner = struct {
     /// runner's FAIL report and returns null.
     fn execute(self: Runner, case: Case) !?usize {
         const gpa = self.init.gpa;
+        if (case.meta.kind == .disassembly) return disassemblyCase(self, case);
         var detail: std.Io.Writer.Allocating = .init(gpa);
         defer detail.deinit();
         const file = try std.fmt.allocPrint(gpa, "../../corpus/{s}/case.{s}", .{ case.name, if (case.meta.kind == .trace) "trace" else "encoding" });
@@ -233,6 +235,22 @@ const Runner = struct {
         }
     }
 };
+/// A Disassembly Case runs through the front end directly: the canonical
+/// disassembly is a compiled unit's, which talk.h doesn't expose.
+fn disassemblyCase(self: Runner, case: Case) !?usize {
+    var arena: std.heap.ArenaAllocator = .init(self.init.gpa);
+    defer arena.deinit();
+    const path = try std.fmt.allocPrint(arena.allocator(), "../../corpus/{s}", .{case.name});
+    var dir = try std.Io.Dir.cwd().openDir(self.init.io, path, .{});
+    defer dir.close(self.init.io);
+    switch (try northtalk.corpus_disassembly.run(arena.allocator(), self.init.io, dir, case.setup)) {
+        .pass => |n| return n,
+        .fail => |why| {
+            try self.out.print("FAIL {s}: {s}\n  reproduce: cd impl/zig && zig build corpus -- {s}\n", .{ case.name, why, case.name });
+            return null;
+        },
+    }
+}
 /// A machine backend plugs into this function; flags, discovery, passing
 /// enforcement and first-divergence reporting stay in this runner.
 pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {

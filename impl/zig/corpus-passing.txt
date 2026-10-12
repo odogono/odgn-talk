@@ -1,5 +1,18 @@
 # Cases protected by the Zig Core's incremental conformance gate.
 bytes/value-encoding
 dates/value-encoding
+disassembly/calls-and-lambdas
+disassembly/collecting
+disassembly/containers
+disassembly/destructuring
+disassembly/english-comparisons
+disassembly/errors-and-loops
+disassembly/expressions
+disassembly/fenced-text
+disassembly/messages-and-waiting
+disassembly/recovery-offers
+disassembly/tell-block
+disassembly/timeout-block
+disassembly/whose
 quantities/value-encoding
 text-model/host-text-normalised-to-nfc

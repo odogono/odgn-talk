@@ -15,7 +15,7 @@ It is under construction, step by step through
 [Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
 generated tables, Unicode text primitives, reference-counted values, native
 decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
-the front end's lexer, lossless parser and checker.
+the front end's lexer, lossless parser, checker and lowering.
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -45,11 +45,14 @@ tests and check commands.
   chapter 2, which builds a lossless syntax tree.
 - `src/check/`: the checker, which raises chapter 2's load-time diagnostics
   and resolves the names the lowering reads.
-- `src/corpus/`: case discovery, metadata, encoding replay and Trace parsing.
+- `src/lower/`: the normative lowering of chapter 8 to `machine.toml`'s
+  instructions, and the canonical disassembly.
+- `src/corpus/`: case discovery, metadata, encoding replay, Trace parsing,
+  case setup and Disassembly Cases.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
-`lower`, `machine` and Trace writing join `src/` in the later parts
-of step 1, and `session` and the REPL in step 6.
+`machine` and Trace writing join `src/` in the last part of step 1, and
+`session` and the REPL in step 6.
 
 ## Syntax
 
@@ -88,11 +91,35 @@ That decides `missing and wait`, `needless and wait` and `can't suspend here`.
 A `, deciding` Handler's `veto` and `pass` are checked over every path through
 its body for `after a suspension`.
 
-Capability calls are checked only when the `Context` gives the Grants, and
-`wrong argument` (a literal against an Operation's Shape), `missing grant`,
+Capability calls, `say` included, are checked only when the `Context` gives
+the Grants, and `wrong argument` (a literal against an Operation's Shape),
+`missing grant`,
 `import cycle`, `pattern too large` and `initialiser failed` are not raised
 yet: they need the Group's Shapes and Library graph, Text Pattern programs, and
 a run of the initialiser, which later parts of step 1 and step 2 bring.
+
+## Lowering
+
+`lower.lower` turns a unit that checks clean into a code unit: its constant
+pool, definitions, variables, objects, body table, code, Unwind Table, offer
+records and event table, each instruction with its source position.
+`lower.disassemble` prints its canonical disassembly. The in-memory
+instructions are the Zig Core's own (ADR 0009), and nothing outside `src/`
+depends on them.
+
+Each body is lowered into its own buffer, with labels local to it, and the
+buffers are laid out in body order at the end. A Lambda or an event test is
+numbered and lowered where the lowering reaches it, so its constants and
+nested bodies are numbered there too. Temps take the lowest free slot; a catch
+handler's dispatch slots start above every slot the protected body used.
+Every inlined copy of a `finally` block, and the exit after it, is cut out of
+the spans of the `try`s it leaves, so an entry split by copies becomes one
+entry per span. The Operation modes that pick `ask`, `ask-wait`, `join-ask`
+or `tell` come from the Context's Grants.
+
+A Container written through a Built-in property, such as `put 1 into the
+length of x`, parses but has no lowering rule in chapter 8; it is written as a
+key of that name, so the lowering stays total.
 
 ## Building and testing
 
@@ -174,14 +201,17 @@ levels, independently of future Run budgets.
 ## Corpus runner
 
 `zig build corpus -- [--list] [--check-passing] [case directory ...]` discovers
-all case kinds and runs encoding cases through `talk.h`, with the Go runner's
-messages. It holds each `case.toml` to the language and Cost Model versions
+all case kinds and runs encoding cases through `talk.h`, and Disassembly
+Cases through the front end, since `talk.h` exposes no compiled unit, with the
+Go runner's messages. It holds each `case.toml` to the language and Cost Model versions
 and to the tables and keys that [corpus.toml](../../spec/data/corpus.toml)
 allows for its kind. Selectors may name a category or a case, with or without
 a `corpus/` prefix. `--list` prints each case's kind and whether it is
 supported or deferred, and a failure prints the first divergent line and the
-command that reproduces it. Trace execution, disassembly, Transcript replay
-and encoding cases that register Host Objects are not supported.
+command that reproduces it. [The case setup reader](src/corpus/case.zig)
+builds each Script's Grants, with their modes and arities, from the case's
+Operation Declarations and Standard Capabilities. Trace execution, Transcript
+replay and encoding cases that register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the
 Zig Core must pass in CI: a listed case that fails, disappears or is
