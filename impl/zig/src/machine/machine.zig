@@ -648,6 +648,8 @@ pub const Group = struct {
         // A live Run removed its own wait; any left belongs to none.
         for (g.pending.items) |p| g.destroyPending(p);
         g.pending.deinit(g.gpa);
+        // An error raised as an allocation was refused, never taken.
+        if (g.pending_error) |e| e.release();
         var it = g.results.valueIterator();
         while (it.next()) |v| v.*.release();
         g.results.deinit(g.gpa);
@@ -664,6 +666,16 @@ pub const Group = struct {
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
         const s = try g.gpa.create(Script);
         s.* = .{ .name = undefined, .identity = codeIdentity(name, source, .script, &.{}), .arena = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{} };
+        // Until it joins the Group, a refusal leaves nothing of it behind.
+        var lowered = false;
+        var joined = false;
+        errdefer if (!joined) {
+            if (lowered) for (s.unit.values) |v| if (v == .value) v.value.release();
+            releaseAll(s.variables, g.gpa);
+            releaseAll(s.definitions, g.gpa);
+            s.arena.deinit();
+            g.gpa.destroy(s);
+        };
         const a = s.arena.allocator();
         s.name = try a.dupe(u8, name);
         const src = try a.dupe(u8, source);
@@ -723,28 +735,52 @@ pub const Group = struct {
             return .{ .refused = diagnostics.items.len };
         }
         s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = context, .values = g.gpa });
+        lowered = true;
         if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, s.imports, options.grants_as_used);
         s.objects = try a.alloc(NamedObject, options.objects.len);
         for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
+        s.variables = try g.newValues(s.unit.variables.len, &.{}, &.{});
+        s.definitions = try g.newValues(s.unit.definitions.len, s.unit.definitions, s.imports);
+        const owner_of: ?[]u8 = if (options.owner != null) try g.gpa.dupe(u8, s.name) else null;
+        g.scripts.append(g.gpa, s) catch |e| {
+            if (owner_of) |x| g.gpa.free(x);
+            return e;
+        };
+        joined = true;
         if (options.owner) |o| {
             s.owner = o;
             if (o.owner_of) |old| g.gpa.free(old);
-            o.owner_of = try g.gpa.dupe(u8, s.name);
+            o.owner_of = owner_of;
         }
-        s.variables = try g.gpa.alloc(*Value, s.unit.variables.len);
-        for (s.variables) |*v| v.* = try nothing(g.gpa);
-        s.definitions = try g.gpa.alloc(*Value, s.unit.definitions.len);
-        for (s.definitions, s.unit.definitions) |*v, d| v.* = try importedDefinition(g.gpa, s.imports, d) orelse try nothing(g.gpa);
-        try g.scripts.append(g.gpa, s);
         // The initialiser runs once, uncharged.
         var run: Run = .{ .id = "", .script = s, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
-        defer run.frames.deinit(g.gpa);
+        defer {
+            g.abandonUnwinding(&run);
+            while (run.frames.items.len > 0) g.popFrame(&run);
+            run.frames.deinit(g.gpa);
+        }
         try g.pushFrame(&run, 0, &.{});
         switch (try g.execute(&run, false)) {
             .returned, .errored => |v| v.release(),
             else => {},
         }
         return .{ .loaded = s };
+    }
+
+    /// `n` Script values: Nothing, or for a definition named
+    /// `<library>:<name>`, that imported Constant's value. All or none.
+    fn newValues(g: *Group, n: usize, names: []const []const u8, imports: []const *Library) ![]*Value {
+        const out = try g.gpa.alloc(*Value, n);
+        var made: usize = 0;
+        errdefer {
+            for (out[0..made]) |v| v.release();
+            g.gpa.free(out);
+        }
+        for (out, 0..) |*v, i| {
+            v.* = (if (i < names.len) try importedDefinition(g.gpa, imports, names[i]) else null) orelse try nothing(g.gpa);
+            made += 1;
+        }
+        return out;
     }
 
     /// Checks the `needs` of every Library a Script imports, directly or
@@ -909,18 +945,29 @@ pub const Group = struct {
     }
 
     fn destroyPending(g: *Group, p: *Pending) void {
-        if (p.event) |e| {
-            for (e.branches) |b| switch (b) {
-                .when => |x| {
-                    if (x.from) |v| v.release();
-                    releaseAll(x.captures, g.gpa);
-                },
-                .after => {},
-            };
-            g.gpa.free(e.branches);
-            g.gpa.destroy(e);
-        }
+        if (p.event) |e| g.releaseEvent(e);
         g.gpa.destroy(p);
+    }
+
+    fn releaseEvent(g: *Group, e: *EventWait) void {
+        g.releaseBranches(e.branches);
+        g.gpa.destroy(e);
+    }
+
+    fn releaseBranches(g: *Group, branches: []EventBranch) void {
+        g.releaseHeld(branches);
+        g.gpa.free(branches);
+    }
+
+    /// What each branch holds, without the branches themselves.
+    fn releaseHeld(g: *Group, branches: []const EventBranch) void {
+        for (branches) |b| switch (b) {
+            .when => |x| {
+                if (x.from) |v| v.release();
+                releaseAll(x.captures, g.gpa);
+            },
+            .after => {},
+        };
     }
 
     fn destroyRun(g: *Group, run: *Run) void {
@@ -932,6 +979,7 @@ pub const Group = struct {
             g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
+        g.abandonUnwinding(run);
         g.dropJoin(run);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
@@ -993,7 +1041,18 @@ pub const Group = struct {
         const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
         g.write("> pump clock={s}\n", .{shown});
         g.pump_fuel = 0;
-        for (g.inputs.items) |input| switch (input) {
+        // Refused partway, the inputs already taken are gone from the queue,
+        // and the rest stay for `deinit`.
+        var consumed: usize = 0;
+        errdefer {
+            const rest = g.inputs.items.len - consumed;
+            std.mem.copyForwards(Input, g.inputs.items[0..rest], g.inputs.items[consumed..]);
+            g.inputs.shrinkRetainingCapacity(rest);
+        }
+        for (g.inputs.items) |input| switch (blk: {
+            consumed += 1;
+            break :blk input;
+        }) {
             .deliver => |d| {
                 defer g.gpa.free(d.script);
                 if (d.delivery.target != null) {
@@ -1004,7 +1063,7 @@ pub const Group = struct {
                     g.releaseDelivery(d.delivery);
                     continue;
                 };
-                try s.work.append(g.gpa, .{ .message = d.delivery });
+                try g.post(s, d.delivery);
             },
             .set_parent => |x| {
                 // Checked again against what earlier inputs left.
@@ -1029,6 +1088,7 @@ pub const Group = struct {
             },
         };
         g.inputs.clearRetainingCapacity();
+        consumed = 0;
         // Due timers, in deadline order, then the order they were set.
         const now = nanos(clock);
         while (true) {
@@ -1060,7 +1120,7 @@ pub const Group = struct {
                             };
                             const to = g.script(owner.owner_of.?).?;
                             if (to != s) {
-                                try to.work.append(g.gpa, .{ .message = d });
+                                try g.post(to, d);
                                 continue;
                             }
                         }
@@ -1185,8 +1245,28 @@ pub const Group = struct {
             if (!any) return g.releaseDelivery(d);
         }
         s.runs += 1;
-        const run = try g.gpa.create(Run);
-        run.* = .{ .id = try std.fmt.allocPrint(g.gpa, "{s}/r{d}", .{ s.name, s.runs }), .script = s, .delivery = d, .handler = d.message };
+        const run = g.gpa.create(Run) catch |e| {
+            g.releaseDelivery(d);
+            return e;
+        };
+        const id = std.fmt.allocPrint(g.gpa, "{s}/r{d}", .{ s.name, s.runs }) catch |e| {
+            g.gpa.destroy(run);
+            g.releaseDelivery(d);
+            return e;
+        };
+        run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message };
+        // A Run that can't go on, as when the Group's allocator refuses,
+        // is dropped whole.
+        const outcome = g.dispatchRun(s, run, d) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
+        try g.endSegment(s, run, outcome);
+    }
+
+    /// A new Run's first Segment: a foreign call's frame, or dispatch to
+    /// its clauses and then the Fallback's.
+    fn dispatchRun(g: *Group, s: *Script, run: *Run, d: Delivery) !Outcome {
         if (d.function) |fv| {
             // A foreign call: one frame, no Handler Clause, so no `clause`.
             const code = g.codeOf(fv).?;
@@ -1197,7 +1277,7 @@ pub const Group = struct {
                 callee.locals[slot].release();
                 callee.locals[slot] = p.value.retain();
             }
-            return g.endSegment(s, run, try g.execute(run, true));
+            return g.execute(run, true);
         }
         var clause: u32 = 0;
         var outcome: Outcome = .unhandled;
@@ -1225,7 +1305,7 @@ pub const Group = struct {
                 }
             }
         }
-        try g.endSegment(s, run, outcome);
+        return outcome;
     }
 
     /// Tries one clause for a Run being dispatched, charging it: null if
@@ -1275,30 +1355,39 @@ pub const Group = struct {
         };
         run.segment_fuel = run.fuel;
         run.segment_alloc = run.alloc;
+        const outcome = g.resumed(run) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
+        try g.endSegment(s, run, outcome);
+    }
+
+    /// A resumed Run's Segment, from what settled its wait.
+    fn resumed(g: *Group, run: *Run) !Outcome {
         const with = run.resume_with.?;
         run.resume_with = null;
         switch (with) {
-            .unparked => return g.endSegment(s, run, try g.execute(run, true)),
+            .unparked => return g.execute(run, true),
             .cancelled => {
                 // Its `finally` blocks run once, innermost first; nothing is
                 // unwound.
                 const top = &run.frames.items[run.frames.items.len - 1];
                 try g.startCleanup(run, try nothing(g.gpa), null, 0, 0, top.pc -| 1, .cancel);
-                return g.endSegment(s, run, (try g.nextCleanup(run)) orelse try g.execute(run, true));
+                return (try g.nextCleanup(run)) orelse try g.execute(run, true);
             },
             else => {},
         }
         const waited = run.waited;
         const frame = &run.frames.items[run.frames.items.len - 1];
         const pc = frame.pc - 1;
-        const ins = s.unit.code[pc];
-        var outcome: ?Outcome = null;
+        const ins = unitOf(run, frame).code[pc];
         const raised: ?*Value = try g.resumeWith(run, frame, with, waited, pc, ins);
         if (raised) |err| {
-            outcome = try g.unwind(run, err, pc, ins, true);
+            const outcome = try g.unwind(run, err, pc, ins, true);
             if (with == .timeout and waited.id.len > 0) g.write("abandon {s}\n", .{waited.id});
+            if (outcome) |end| return end;
         }
-        try g.endSegment(s, run, outcome orelse try g.execute(run, true));
+        return g.execute(run, true);
     }
 
     /// What a resumed Run's wait gave: a value pushed, or an error raised.
@@ -1332,7 +1421,7 @@ pub const Group = struct {
                 const list = try model.list(gpa, values);
                 run.alloc += costs.size(list);
                 g.dropJoin(run);
-                try frame.stack.append(gpa, .{ .value = list });
+                try g.push(frame, list);
                 return null;
             },
             .join_failed => |index| {
@@ -1347,13 +1436,13 @@ pub const Group = struct {
                 return try withKey(gpa, e, "index", at);
             },
             .event => |x| {
-                try frame.stack.append(gpa, .{ .value = x.message orelse try nothing(gpa) });
-                if (ins.op == .wait_for_any) try frame.stack.append(gpa, .{ .value = try chunks.numberValue(gpa, x.branch) });
+                try g.push(frame, x.message orelse try nothing(gpa));
+                if (ins.op == .wait_for_any) try g.push(frame, try chunks.numberValue(gpa, x.branch));
                 return null;
             },
             .reply => |v| {
                 // A reply charges nothing more.
-                try frame.stack.append(gpa, .{ .value = v });
+                try g.push(frame, v);
                 return null;
             },
             .send_failed => |x| {
@@ -1378,7 +1467,7 @@ pub const Group = struct {
                 const size = costs.size(x.value);
                 run.fuel += (size + 31) / 32 + x.fuel;
                 run.alloc += size;
-                try frame.stack.append(gpa, .{ .value = x.value.retain() });
+                try g.push(frame, x.value.retain());
                 return null;
             },
             .failed => |f| {
@@ -1544,7 +1633,10 @@ pub const Group = struct {
         const from: []const u8 = if (waits) blk: {
             run.calls += 1;
             const id = try std.fmt.allocPrint(gpa, "{s}.c{d}", .{ run.id, run.calls });
-            try g.ids.append(gpa, id);
+            g.ids.append(gpa, id) catch |e| {
+                gpa.free(id);
+                return e;
+            };
             break :blk id;
         } else run.id;
         if (g.trace) |out| {
@@ -1557,7 +1649,11 @@ pub const Group = struct {
         }
         const owned = try gpa.dupe(*Value, args.items);
         args.clearRetainingCapacity();
-        try dest.work.append(gpa, .{ .message = .{ .id = 0, .message = try gpa.dupe(u8, name), .args = owned, .request = false, .from = try gpa.dupe(u8, from), .waits = waits, .target = target, .at = at } });
+        var d = try g.newDelivery(name, owned, from);
+        d.waits = waits;
+        d.target = target;
+        d.at = at;
+        try g.post(dest, d);
         if (!waits) return .next;
         if (member) {
             try g.startMember(run, .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
@@ -1653,22 +1749,34 @@ pub const Group = struct {
             return g.raiseDeadline(b, null);
         };
         const branches = try gpa.alloc(EventBranch, entry.branches.len);
-        at = 0;
-        for (entry.branches, branches) |b, *held| switch (b) {
-            .when => |w| {
-                const from: ?*Value = if (w.from) popped[at].retain() else null;
-                if (w.from) at += 1;
-                const captures = try gpa.alloc(*Value, w.captures);
-                for (captures, popped[at .. at + w.captures]) |*c, v| c.* = v.retain();
-                at += w.captures;
-                held.* = .{ .when = .{ .from = from, .captures = captures } };
-            },
-            .after => {
-                held.* = .{ .after = now + waitMillis(popped[at]).? };
-                at += 1;
-            },
+        // Refused partway, the branches held so far are released, until the
+        // wait owns them.
+        var made: usize = 0;
+        var owned = true;
+        errdefer if (owned) {
+            g.releaseHeld(branches[0..made]);
+            gpa.free(branches);
         };
+        at = 0;
+        for (entry.branches, branches) |b, *held| {
+            switch (b) {
+                .when => |w| {
+                    const captures = try gpa.alloc(*Value, w.captures);
+                    const from: ?*Value = if (w.from) popped[at].retain() else null;
+                    if (w.from) at += 1;
+                    for (captures, popped[at .. at + w.captures]) |*c, v| c.* = v.retain();
+                    at += w.captures;
+                    held.* = .{ .when = .{ .from = from, .captures = captures } };
+                },
+                .after => {
+                    held.* = .{ .after = now + waitMillis(popped[at]).? };
+                    at += 1;
+                },
+            }
+            made += 1;
+        }
         const event = try gpa.create(EventWait);
+        owned = false;
         event.* = .{ .entry = index, .branches = branches, .any = ins.op == .wait_for_any };
         try g.suspendRun(run, if (event.any) "wait-for-any" else "wait-for", .{ .run = run, .deadline = deadline, .order = 0, .event = event, .branch = fires });
         return .suspended;
@@ -1775,7 +1883,10 @@ pub const Group = struct {
         p.* = wait;
         p.order = g.timers;
         p.member = join.members.items.len;
-        try g.pending.append(g.gpa, p);
+        g.pending.append(g.gpa, p) catch |e| {
+            g.destroyPending(p);
+            return e;
+        };
         try join.members.append(g.gpa, .{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms } });
     }
 
@@ -1810,7 +1921,10 @@ pub const Group = struct {
 
     /// Suspends a Run at a Suspension Point, with its wait.
     fn suspendRun(g: *Group, run: *Run, at: []const u8, wait: Pending) !void {
-        const p = try g.gpa.create(Pending);
+        const p = g.gpa.create(Pending) catch |e| {
+            if (wait.event) |ev| g.releaseEvent(ev);
+            return e;
+        };
         g.timers += 1;
         p.* = wait;
         // The innermost Timeout Block's deadline bounds it, and wins a tie.
@@ -1820,7 +1934,10 @@ pub const Group = struct {
             p.after_ms = d.ms;
         };
         p.order = g.timers;
-        try g.pending.append(g.gpa, p);
+        g.pending.append(g.gpa, p) catch |e| {
+            g.destroyPending(p);
+            return e;
+        };
         run.waiting = p;
         run.suspended_at = at;
     }
@@ -1849,7 +1966,10 @@ pub const Group = struct {
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
-        if (outcome == .suspended) try s.live.append(g.gpa, run);
+        if (outcome == .suspended) s.live.append(g.gpa, run) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
         const state = g.persistentState(s);
         const d = run.delivery;
         if (g.trace) |out| {
@@ -1942,10 +2062,18 @@ pub const Group = struct {
                 // unless the Run was handling one.
                 if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "errored", .err = e.retain() } });
                 if (!d.internal_error) {
-                    const during = try g.messageMap(d);
-                    const args = try g.gpa.alloc(*Value, 1);
+                    const args = g.gpa.alloc(*Value, 1) catch |err| {
+                        e.release();
+                        return err;
+                    };
                     args[0] = e;
-                    try s.work.append(g.gpa, .{ .message = .{ .id = 0, .message = try g.gpa.dupe(u8, "error"), .args = args, .request = false, .during = during, .from = try g.gpa.dupe(u8, run.id), .internal_error = true } });
+                    var message = try g.newDelivery("error", args, run.id);
+                    message.during = g.messageMap(d) catch |err| {
+                        g.releaseDelivery(message);
+                        return err;
+                    };
+                    message.internal_error = true;
+                    try g.post(s, message);
                 } else e.release();
             },
             else => {},
@@ -1961,11 +2089,28 @@ pub const Group = struct {
         g.destroyRun(run);
     }
 
+    /// A message from a Run, which takes `args`: all or nothing.
+    fn newDelivery(g: *Group, name: []const u8, args: []*Value, from: []const u8) !Delivery {
+        errdefer releaseAll(args, g.gpa);
+        const message = try g.gpa.dupe(u8, name);
+        errdefer g.gpa.free(message);
+        return .{ .id = 0, .message = message, .args = args, .request = false, .from = try g.gpa.dupe(u8, from) };
+    }
+
+    /// Puts a message at the back of a Script's mailbox; refused, the
+    /// message is released.
+    fn post(g: *Group, s: *Script, d: Delivery) !void {
+        s.work.append(g.gpa, .{ .message = d }) catch |e| {
+            g.releaseDelivery(d);
+            return e;
+        };
+    }
+
     /// Routes a Delivery to an object to its nearest Owning Script, or
     /// reports it `unhandled`. Takes it.
     fn route(g: *Group, d: Delivery) !void {
         const owner = d.at.?.owned() orelse return g.unhandled(d);
-        try g.script(owner.owner_of.?).?.work.append(g.gpa, .{ .message = d });
+        try g.post(g.script(owner.owner_of.?).?, d);
     }
 
     /// The end of a message's path: the `unhandled` report, and `send
@@ -2192,7 +2337,10 @@ pub const Group = struct {
             const home = g.script(code.home) orelse return g.raise("function gone", &.{});
             run.calls += 1;
             const id = try std.fmt.allocPrint(g.gpa, "{s}.c{d}", .{ run.id, run.calls });
-            try g.ids.append(g.gpa, id);
+            g.ids.append(g.gpa, id) catch |e| {
+                g.gpa.free(id);
+                return e;
+            };
             if (g.trace) |out| {
                 out.print("send {s} to={s} fn=", .{ id, home.name }) catch {};
                 display.writeTrace(out, fv) catch {};
@@ -2201,7 +2349,10 @@ pub const Group = struct {
             }
             const owned = try g.gpa.alloc(*Value, n);
             for (owned, args) |*x, v| x.* = v.retain();
-            try home.work.append(g.gpa, .{ .message = .{ .id = 0, .message = try g.gpa.dupe(u8, ""), .args = owned, .request = false, .from = try g.gpa.dupe(u8, id), .waits = true, .function = fv.retain() } });
+            var d = try g.newDelivery("", owned, id);
+            d.waits = true;
+            d.function = fv.retain();
+            try g.post(home, d);
             try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
             return .suspended;
         }
@@ -2251,8 +2402,14 @@ pub const Group = struct {
     fn pushFrameIn(g: *Group, run: *Run, library: ?*Library, body: u32, args: []const *Value) !void {
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
         const locals = try g.gpa.alloc(*Value, b.locals);
+        var made: usize = 0;
+        errdefer {
+            for (locals[0..made]) |v| v.release();
+            g.gpa.free(locals);
+        }
         for (locals, 0..) |*l, i| {
             l.* = if (i >= 1 and i <= args.len) args[i - 1].retain() else try nothing(g.gpa);
+            made += 1;
         }
         try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals });
     }
@@ -2300,10 +2457,17 @@ pub const Group = struct {
             var charge: costs.Measures = .{};
             const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
                 error.Raised => blk: {
-                    const err = try g.completeError(run, pc, ins);
+                    const err = g.completeError(run, pc, ins) catch |other| {
+                        charge.release();
+                        return other;
+                    };
                     break :blk Step{ .raised = err };
                 },
-                else => |other| return other,
+                else => |other| {
+                    // Refused: the values the measures hold go too.
+                    charge.release();
+                    return other;
+                },
             };
             if (charged and !charge.uncharged) {
                 const key = costKey(ins, &charge);
@@ -2331,7 +2495,7 @@ pub const Group = struct {
                     g.popFrame(run);
                     if (run.frames.items.len == run.base) return .{ .returned = v };
                     const caller = &run.frames.items[run.frames.items.len - 1];
-                    try caller.stack.append(g.gpa, .{ .value = v });
+                    try g.push(caller, v);
                 },
                 .clause_failed => {
                     const failed = &run.frames.items[run.frames.items.len - 1];
@@ -2585,14 +2749,30 @@ pub const Group = struct {
         const held = try g.gpa.dupe(Frame, run.frames.items[index + 1 ..]);
         defer g.gpa.free(held);
         run.frames.shrinkRetainingCapacity(index + 1);
+        // Refused partway, the frames held aside come back, so the Run that
+        // is dropped still owns them.
+        errdefer run.frames.appendSliceAssumeCapacity(held);
         const owner = &run.frames.items[index];
         const owner_stack = owner.stack;
         const owner_pc = owner.pc;
         var activation: std.ArrayList(Slot) = .empty;
-        for (owner_stack.items[0..@min(entry.depth, owner_stack.items.len)]) |slot| try activation.append(g.gpa, retainSlot(slot));
-        try activation.append(g.gpa, .{ .value = err.retain() });
+        {
+            errdefer {
+                for (activation.items) |slot| slot.release(g.gpa);
+                activation.deinit(g.gpa);
+            }
+            for (owner_stack.items[0..@min(entry.depth, owner_stack.items.len)]) |slot| try activation.append(g.gpa, retainSlot(slot));
+            try activation.append(g.gpa, .{ .value = err.retain() });
+        }
         owner.stack = activation;
         owner.pc = entry.target;
+        errdefer {
+            const o = &run.frames.items[index];
+            for (o.stack.items) |slot| slot.release(g.gpa);
+            o.stack.deinit(g.gpa);
+            o.stack = owner_stack;
+            o.pc = owner_pc;
+        }
         const result: Dispatch = while (true) {
             _ = g.scratch.reset(.retain_capacity);
             const f = &run.frames.items[index];
@@ -2602,10 +2782,16 @@ pub const Group = struct {
             var charge: costs.Measures = .{};
             const done = g.instruction(run, f, ins, &charge) catch |e| switch (e) {
                 error.Raised => blk: {
-                    const raised = try g.completeError(run, pc, ins);
+                    const raised = g.completeError(run, pc, ins) catch |other| {
+                        charge.release();
+                        return other;
+                    };
                     break :blk Step{ .raised = raised };
                 },
-                else => |other| return other,
+                else => |other| {
+                    charge.release();
+                    return other;
+                },
             };
             if (charged) {
                 const cost = costs.charge(costKey(ins, &charge), &charge);
@@ -2751,8 +2937,12 @@ pub const Group = struct {
         passed,
     };
 
+    /// Pushes a value the frame takes; refused, the value is released.
     fn push(g: *Group, frame: *Frame, v: *Value) !void {
-        try frame.stack.append(g.gpa, .{ .value = v });
+        frame.stack.append(g.gpa, .{ .value = v }) catch |e| {
+            v.release();
+            return e;
+        };
     }
 
     fn pop(frame: *Frame) *Value {
@@ -4155,7 +4345,7 @@ pub const Group = struct {
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
         const left: ?u64 = if (run.fuel + decl.cost.fuel >= fuel_per_run) 0 else fuel_per_run - run.fuel - decl.cost.fuel;
-        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left };
+        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
         const suspending = decl.mode == .suspending;
@@ -4288,7 +4478,7 @@ pub const Group = struct {
             try g.push(frame, try nothing(gpa));
             return .next;
         };
-        const outcome = prop.get.call(prop.get.context, o);
+        const outcome = prop.get.call(prop.get.context, gpa, o);
         m.fuel_extra = prop.get_cost.fuel;
         m.alloc_extra = prop.get_cost.alloc;
         switch (outcome) {
@@ -4345,7 +4535,7 @@ pub const Group = struct {
             return g.raiseMismatchAt(bad);
         }
         m.input = value.retain();
-        const outcome = set.call(set.context, o, value);
+        const outcome = set.call(set.context, gpa, o, value);
         m.fuel_extra = prop.set_cost.fuel;
         m.alloc_extra = prop.set_cost.alloc;
         switch (outcome) {

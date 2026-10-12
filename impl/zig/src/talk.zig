@@ -12,6 +12,7 @@ const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
 const standard = @import("machine/standard.zig");
 const objects = machine.objects;
+const group_allocator = @import("machine/group_allocator.zig");
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -303,7 +304,40 @@ pub const GroupOptions = extern struct {
     name_len: usize,
     trace: TraceSink,
     trace_context: ?*anyopaque,
+    allocator: ?*const HostAllocator = null,
+    memory_cap: usize = 0,
 };
+
+/// A Host's allocator, which a Group allocates from.
+pub const HostAllocator = extern struct {
+    context: ?*anyopaque,
+    alloc: *const fn (context: ?*anyopaque, size: usize, alignment: usize) callconv(.c) ?*anyopaque,
+    free: *const fn (context: ?*anyopaque, ptr: ?*anyopaque, size: usize, alignment: usize) callconv(.c) void,
+
+    /// As a Zig allocator: the Host's functions allocate and free, and
+    /// nothing resizes in place.
+    fn allocator(h: *const HostAllocator) std.mem.Allocator {
+        return .{ .ptr = @constCast(h), .vtable = &.{ .alloc = hostAlloc, .resize = std.mem.Allocator.noResize, .remap = std.mem.Allocator.noRemap, .free = hostFree } };
+    }
+
+    fn hostAlloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, _: usize) ?[*]u8 {
+        const h: *const HostAllocator = @ptrCast(@alignCast(ctx));
+        const p = h.alloc(h.context, len, alignment.toByteUnits()) orelse return null;
+        // A Host allocation must honour the alignment asked for.
+        if (!alignment.check(@intFromPtr(p))) {
+            h.free(h.context, p, len, alignment.toByteUnits());
+            return null;
+        }
+        return @ptrCast(p);
+    }
+
+    fn hostFree(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, _: usize) void {
+        const h: *const HostAllocator = @ptrCast(@alignCast(ctx));
+        h.free(h.context, memory.ptr, memory.len, alignment.toByteUnits());
+    }
+};
+
+pub const Memory = extern struct { used: usize, peak: usize, cap: usize, refused: bool };
 
 pub const LoadGrant = extern struct { name: ?[*]const u8, name_len: usize, grant: *caps.Grant };
 
@@ -338,6 +372,10 @@ pub const PumpResult = extern struct { state: GroupState, fuel_used: i64 };
 /// A Group and the writer its Trace goes through on its way to the sink.
 pub const Group = struct {
     core: *Core,
+    /// What the Group holds, physically counted and capped.
+    memory: group_allocator.GroupAllocator,
+    /// The Host's allocator, which `memory` wraps, if it gave one.
+    host: ?HostAllocator,
     group: machine.Group,
     out: std.Io.Writer.Allocating,
     sink: TraceSink,
@@ -415,10 +453,19 @@ export fn talk_core_release(c: ?*Core) void {
 export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostErrorCode {
     out.* = null;
     const g = c.gpa.create(Group) catch return .out_of_memory;
-    g.* = .{ .core = c, .group = undefined, .out = .init(c.gpa), .sink = o.trace, .context = o.trace_context };
-    g.group = .init(c.gpa, if (o.trace != null) &g.out.writer else null);
+    g.* = .{ .core = c, .memory = undefined, .host = if (o.allocator) |h| h.* else null, .group = undefined, .out = undefined, .sink = o.trace, .context = o.trace_context };
+    g.memory = .init(if (g.host) |*h| h.allocator() else c.gpa, o.memory_cap);
+    const gpa = g.memory.allocator();
+    g.out = .init(gpa);
+    g.group = .init(gpa, if (o.trace != null) &g.out.writer else null);
     out.* = g;
     return .ok;
+}
+
+/// C only: what the Group holds now, the most it has held, its cap, and
+/// whether it has refused an allocation.
+export fn talk_group_memory(g: *const Group, out: *Memory) void {
+    out.* = .{ .used = g.memory.used, .peak = g.memory.peak, .cap = g.memory.cap, .refused = g.memory.refused };
 }
 
 export fn talk_group_release(g: ?*Group) void {
@@ -438,6 +485,7 @@ export fn talk_group_release(g: ?*Group) void {
 
 export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorCode {
     out.* = null;
+    if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const name = bytes(o.name, o.name_len) catch return .invalid_value;
     const source = bytes(o.source, o.source_len) catch return .invalid_value;
@@ -470,6 +518,7 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
 /// Queues a Delivery or Request: its delivery number, or the refusal.
 fn queue(s: *Script, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
     const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
@@ -530,6 +579,7 @@ export fn talk_pending_release(p: ?*Pending) void {
 
 export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
     _ = o;
+    if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
     model.dates.validateInstant(clock) catch return .invalid_value;
@@ -801,9 +851,9 @@ fn bridged(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome
         .failed => {
             const code = bytes(failure.code, failure.code_len) catch return .broken;
             const message = bytes(failure.message, failure.message_len) catch return .broken;
-            const owned_code = allocator.dupe(u8, code) catch return .broken;
-            const owned_message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, message) catch {
-                allocator.free(owned_code);
+            const owned_code = call.gpa.dupe(u8, code) catch return .broken;
+            const owned_message: ?[]const u8 = if (failure.message == null) null else call.gpa.dupe(u8, message) catch {
+                call.gpa.free(owned_code);
                 return .broken;
             };
             return .{ .failed = .{ .code = owned_code, .message = owned_message, .data = failure.data } };
@@ -1056,8 +1106,12 @@ export fn talk_call_answer_with_cost(c: *Call, v: *Value, fuel: i64) HostErrorCo
 
 export fn talk_call_fail(c: *Call, e: ?*const ScriptError) HostErrorCode {
     const failure = e orelse return settle(c, .broken);
-    const code = allocator.dupe(u8, bytes(failure.code, failure.code_len) catch return .invalid_value) catch return .out_of_memory;
-    const message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, bytes(failure.message, failure.message_len) catch return .invalid_value) catch return .out_of_memory;
+    // The Group frees them, so its allocator makes them.
+    const code = c.gpa.dupe(u8, bytes(failure.code, failure.code_len) catch return .invalid_value) catch return .out_of_memory;
+    const message: ?[]const u8 = if (failure.message == null) null else c.gpa.dupe(u8, bytes(failure.message, failure.message_len) catch return .invalid_value) catch {
+        c.gpa.free(code);
+        return .out_of_memory;
+    };
     return settle(c, .{ .failed = .{ .code = code, .message = message, .data = if (failure.data) |d| d.retain() else null } });
 }
 
@@ -1090,15 +1144,15 @@ pub const ObjectKindDef = extern struct {
 /// A C property's Get and Set and their context, behind the Core's.
 pub const PropBridge = struct { get: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd, set: PropSetFn, context: ?*anyopaque };
 
-fn propResult(end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
+fn propResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
     switch (end) {
         .answered => return if (value) |v| .{ .value = v } else .done,
         .failed => {
             const code = bytes(failure.code, failure.code_len) catch return .broken;
             const message = bytes(failure.message, failure.message_len) catch return .broken;
-            const owned_code = allocator.dupe(u8, code) catch return .broken;
-            const owned_message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, message) catch {
-                allocator.free(owned_code);
+            const owned_code = gpa.dupe(u8, code) catch return .broken;
+            const owned_message: ?[]const u8 = if (failure.message == null) null else gpa.dupe(u8, message) catch {
+                gpa.free(owned_code);
                 return .broken;
             };
             return .{ .failed = .{ .code = owned_code, .message = owned_message, .data = failure.data } };
@@ -1110,20 +1164,20 @@ fn propResult(end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result
     }
 }
 
-fn propGet(context: ?*anyopaque, o: *objects.Object) objects.Result {
+fn propGet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object) objects.Result {
     const b: *PropBridge = @ptrCast(@alignCast(context.?));
     var value: ?*Value = null;
     var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
     const end = b.get(b.context, o, &value, &failure);
-    const r = propResult(end, value, failure);
+    const r = propResult(gpa, end, value, failure);
     return if (r == .done) .broken else r;
 }
 
-fn propSet(context: ?*anyopaque, o: *objects.Object, v: *const Value) objects.Result {
+fn propSet(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, v: *const Value) objects.Result {
     const b: *PropBridge = @ptrCast(@alignCast(context.?));
     var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
     const end = b.set.?(b.context, o, v, &failure);
-    return switch (propResult(end, null, failure)) {
+    return switch (propResult(gpa, end, null, failure)) {
         .value => |x| blk: {
             x.release();
             break :blk .done;
@@ -1174,6 +1228,7 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
 /// its kind is TALK_DUPLICATE_OBJECT_ID.
 export fn talk_group_object(g: *Group, kind: *const objects.Kind, id: ?[*]const u8, id_len: usize, native: ?*anyopaque, out: *?*objects.Object) HostErrorCode {
     out.* = null;
+    if (g.memory.refused) return .out_of_memory;
     const text = bytes(id, id_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(text)) return .invalid_value;
     out.* = g.group.object(kind, text, native) catch |err| return status(err);
@@ -1210,6 +1265,7 @@ export fn talk_value_as_object(g: *Group, v: *const Value, out: *?*objects.Objec
 /// Queues SetParent; a cycle is TALK_PARENT_CYCLE and a disposed child
 /// TALK_INVALID_VALUE at the call. A NULL parent ends the chain.
 export fn talk_set_parent(g: *Group, o: *objects.Object, parent: ?*objects.Object) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
     if (!g.owns(o)) return .wrong_group;
     if (parent) |p| if (!g.owns(p)) return .wrong_group;
     defer g.flush();
@@ -1218,12 +1274,14 @@ export fn talk_set_parent(g: *Group, o: *objects.Object, parent: ?*objects.Objec
 }
 
 export fn talk_dispose(g: *Group, o: *objects.Object) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
     if (!g.owns(o)) return .wrong_group;
     g.group.dispose(o) catch |err| return status(err);
     return .ok;
 }
 
 fn queueTo(g: *Group, to: *objects.Object, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
     if (!g.owns(to)) return .wrong_group;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
@@ -1322,6 +1380,7 @@ export fn talk_library_identity(l: *const machine.Library, out: *[32]u8) void {
 /// record. A stdlib name is TALK_RESERVED_NAME, a name the Group holds
 /// TALK_NAME_REUSED, and an import it doesn't hold TALK_LIBRARY_MISMATCH.
 export fn talk_add_library(g: *Group, l: *machine.Library) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     g.group.addLibrary(l) catch |err| return status(err);
     return .ok;

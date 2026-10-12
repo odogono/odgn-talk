@@ -1,5 +1,6 @@
 /* talk.h's value API, called as a C Host calls it. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
@@ -53,7 +54,7 @@ static int group_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
     talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
@@ -116,7 +117,7 @@ static int capability_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL}};
@@ -176,7 +177,7 @@ static int standard_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost clock_costs[] = {{"now", 3, {5, 0}}};
     talk_costs costs = {clock_costs, 1};
@@ -222,7 +223,7 @@ static int suspension_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL}};
     talk_capability_def *def = NULL;
@@ -282,7 +283,7 @@ static int object_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_text("off", 3, &lamp_state);
     talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, set_state, NULL, {2, 0}, {5, 0}}};
@@ -334,7 +335,7 @@ static int library_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *base_source = "constant step = 10\nfunction bump n, by = step\n  return n + by\nend bump\n";
     talk_library_source base_src = {"base", 4, "1", 1, base_source, strlen(base_source)};
@@ -373,6 +374,58 @@ static int library_test(void) {
     bad |= strstr(trace, "vars user got=\"0015\"\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* A Host allocator that counts what it hands out, so a test can see that a
+ * Group gives back every byte, even after a refusal. */
+static size_t host_live = 0;
+static void *host_alloc(void *context, size_t size, size_t alignment) {
+    (void)context;
+    if (alignment < sizeof(void *)) alignment = sizeof(void *);
+    /* C11's aligned_alloc wants a size that is a multiple of the alignment. */
+    size_t rounded = (size + alignment - 1) / alignment * alignment;
+    void *p = aligned_alloc(alignment, rounded == 0 ? alignment : rounded);
+    if (p == NULL) return NULL;
+    host_live += size;
+    return p;
+}
+static void host_free(void *context, void *ptr, size_t size, size_t alignment) {
+    (void)context;
+    (void)alignment;
+    host_live -= size;
+    free(ptr);
+}
+
+static int memory_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_allocator host = {NULL, host_alloc, host_free};
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, &host, 256 * 1024};
+    int bad = talk_new_group(core, &options, &group) != TALK_OK;
+    /* Each turn of the loop doubles the text, far past the cap long before
+     * the logical budgets: the Group refuses, and the process goes on. */
+    const char *source = "script variable s\non grow\n  put \"x\" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n";
+    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"grow", 4, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OUT_OF_MEMORY;
+    talk_memory memory;
+    talk_group_memory(group, &memory);
+    bad |= !memory.refused || memory.cap != 256 * 1024 || memory.peak > memory.cap || memory.used > memory.cap;
+    /* It takes no more work. */
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OUT_OF_MEMORY;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OUT_OF_MEMORY;
+    talk_group_release(group);
+    /* And it gave every byte back. */
+    bad |= host_live != 0;
+    if (bad) fprintf(stderr, "memory: live=%zu used=%zu peak=%zu refused=%d\n%s", host_live, memory.used, memory.peak, memory.refused, trace);
     talk_core_release(core);
     return bad;
 }
@@ -451,6 +504,7 @@ int main(void) {
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     return failures == 0 ? 0 : 1;

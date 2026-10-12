@@ -62,7 +62,10 @@ typedef enum talk_host_error_code {
      * LoadError. The Trace has a diag record for each. */
     TALK_LOAD_REFUSED,
     /* C only: the Core couldn't allocate, which Go would report by
-     * panicking. Nothing the call would have built exists. */
+     * panicking. Nothing the call would have built exists, unless a Group's
+     * allocator refused partway: that Group then takes no more work, and
+     * answers every call but talk_group_memory, talk_inspect and
+     * talk_group_release with this code. */
     TALK_OUT_OF_MEMORY
 } talk_host_error_code;
 
@@ -365,12 +368,36 @@ talk_host_error_code talk_call_charge(talk_call *c, int64_t fuel);
  * lives until the callback returns. */
 typedef void (*talk_trace_sink)(void *context, const char *line, size_t len);
 
+/* C only: an allocator the Host supplies for a Group. alloc returns memory
+ * aligned to alignment, or NULL to refuse; free gets back the same size and
+ * alignment. */
+typedef struct talk_allocator {
+    void *context;
+    void *(*alloc)(void *context, size_t size, size_t alignment);
+    void (*free)(void *context, void *ptr, size_t size, size_t alignment);
+} talk_allocator;
+
 typedef struct talk_group_options {
     const char *name;
     size_t name_len;
     talk_trace_sink trace; /* NULL: no Trace is recorded */
     void *trace_context;
+    /* C only: what the Group allocates from; NULL, the Core's allocator. */
+    const talk_allocator *allocator;
+    /* C only: the most bytes the Group may hold, a physical cap above the
+     * logical budgets, so a Core defect becomes TALK_OUT_OF_MEMORY rather
+     * than a crash; 0, 256 MiB. */
+    size_t memory_cap;
 } talk_group_options;
+
+/* C only: what a Group's allocator holds now, the most it has held, its
+ * cap, and whether it has refused an allocation. */
+typedef struct talk_memory {
+    size_t used;
+    size_t peak;
+    size_t cap;
+    bool refused;
+} talk_memory;
 
 /* Host Objects (ADRs 0012, 0016). A property's Get and Set run inside the
  * Run, like an immediate Operation, and are charged the same way. Get
@@ -465,6 +492,8 @@ talk_core *talk_new(void);
 /* C only: ends the Core. Its Groups must be released first. */
 void talk_core_release(talk_core *c);
 talk_host_error_code talk_new_group(talk_core *c, const talk_group_options *o, talk_group **out);
+/* C only: the Group's physical memory. */
+void talk_group_memory(const talk_group *g, talk_memory *out);
 /* Defines a Capability, once per process: its Operations, which the Core
  * orders by name. The definition lives as long as the Core. */
 talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_capability_def **out);

@@ -169,6 +169,19 @@ uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
 
+Each Group allocates everything it holds through its own allocator
+([Group allocator](src/machine/group_allocator.zig)), which wraps the
+`talk_allocator` the Host gives in `talk_group_options`, or the Core's, and
+counts physical bytes against `memory_cap` (256 MiB by default). Cost Model 0
+still charges logical allocation; the cap is for defects. A refused
+allocation becomes `TALK_OUT_OF_MEMORY`: the Run in flight is dropped whole,
+messages and waits that couldn't be queued are released, and the Group takes
+no more work, while `talk_group_release` still gives back every byte.
+`talk_group_memory` reports the bytes held, the peak, the cap and whether a
+refusal happened. A test refuses at every allocation of a run of Scripts with
+sends, Joins, `wait for`, errors and `finally`, and checks that nothing is
+left.
+
 A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
 `clause` rate at each clause's first instruction. A Command Call to a Handler
@@ -347,8 +360,8 @@ retain child values; text and map keys become NFC. Map keys preserve insertion
 order and refuse NFC duplicates. Container writes rebind the root, preserving
 aliases and preventing cycles, including insertion of the previous root into
 its replacement. Every node remembers its allocator, so Zig tests use the
-leak-detecting test allocator. C values use the process allocator; Group
-allocation belongs to the execution API. Handles require Host synchronization
+leak-detecting test allocator. C values use the process allocator; a Group's
+own values use its Group allocator. Handles require Host synchronization
 when shared across threads.
 
 Text and Decimal accessor pointers borrow their value. Byte accessors copy

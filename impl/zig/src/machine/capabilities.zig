@@ -473,6 +473,8 @@ pub const Call = struct {
     starting: bool = true,
     /// For a suspending call, the Group its answer goes to.
     group: ?*anyopaque = null,
+    /// The Group's allocator, which owns a failure's code and message.
+    gpa: std.mem.Allocator,
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {
