@@ -66,6 +66,16 @@ Every build is `-Doptimize=safe` (ReleaseSafe) unless told otherwise, so bounds
 and integer overflow stay checked while the Core reads hostile input.
 `-Doptimize=fast` is refused.
 
+Zig 0.17 renamed standard library APIs that older examples and documentation
+still use. Check names against the installed source, under `lib_dir` from
+`zig env`, rather than online docs:
+
+- `std.builtin` is an alias for `std.lang`, defined in `std/lang.zig`.
+- Optimize modes are `debug`, `safe`, `fast` and `small`, so the flags are
+  `-Doptimize=safe` and so on.
+- `std.testing.refAllDeclsRecursive` is gone; use `refAllDecls` per container.
+- `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
+
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
 the exports directly.
