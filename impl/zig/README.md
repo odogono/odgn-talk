@@ -152,7 +152,13 @@ still use. Check names against the installed source, under `lib_dir` from
 
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
-the exports directly.
+the exports directly, passing structs and text through `talk_alloc` and
+`talk_free`. It is stripped of debug sections and has a 1 MiB stack, since the
+stack sits in linear memory and nothing recurses past the depth guards.
+[`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
+memory per instance and payload to #532's thresholds, in CI; the [first
+figures](../../docs/research/zig-wasi-figures.md) are 2 MiB per instance and
+0.40 MiB of Brotli payload, against the Go reactor's 15.5 and 2.04.
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless
