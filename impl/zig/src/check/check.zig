@@ -689,7 +689,7 @@ const Checker = struct {
         while (true) e = switch (e.data) {
             .chunk => |ch| ch.of,
             .key => |k| k.base,
-            .property => |p| p.base,
+            .group => |g| g,
             .name => |t| {
                 if (c.rootBinds(s, c.text(t))) try c.bind(s, t, false);
                 return;
@@ -1391,10 +1391,7 @@ const Checker = struct {
                     if (k.computed) |k2| try c.expr(s, k2, .normal);
                     e = k.base;
                 },
-                .property => |p| {
-                    if (p.delimiter) |d| try c.expr(s, d, .normal);
-                    e = p.base;
-                },
+                .group => |g| e = g,
                 .name => |t| {
                     const name = c.text(t);
                     const r = try c.resolve(s, t) orelse Ref.local;
@@ -1415,7 +1412,9 @@ const Checker = struct {
     /// `set` writes a key of a Host Object: never a bare variable, and never
     /// a property the Host says is read-only.
     fn setTarget(c: *Checker, s: *Scope, keyword: Tok, target: *const Expr) Allocator.Error!void {
-        switch (target.data) {
+        var e = target;
+        while (e.data == .group) e = e.data.group;
+        switch (e.data) {
             .name => {
                 try c.report(.not_a_property, keyword);
                 try c.expr(s, target, .normal);

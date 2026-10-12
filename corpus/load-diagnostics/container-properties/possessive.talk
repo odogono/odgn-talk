@@ -1,0 +1,3 @@
+on t x
+  set x's length to 1
+end t

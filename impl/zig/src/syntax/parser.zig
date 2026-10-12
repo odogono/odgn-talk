@@ -780,6 +780,8 @@ const Parser = struct {
     }
 
     /// A Container: a Name, or a Chunk Expression or key path rooted in one.
+    /// Parentheses keep the path; a Built-in property anywhere on it is
+    /// `not a container` (ADR 0079).
     fn container(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
         if (!p.startsExpr(t)) return p.failAt(t);
@@ -790,7 +792,7 @@ const Parser = struct {
                 .name => break,
                 .chunk => |c| c.of,
                 .key => |k| k.base,
-                .property => |pr| pr.base,
+                .group => |g| g,
                 else => return p.failCode(.not_a_container, t.start),
             };
         }
@@ -2327,6 +2329,57 @@ test "first syntax errors" {
     try expectOutcome("constant x = `${1 2}`\n", "unexpected token at 1:19");
     try expectOutcome("put 1 into x\n", "unexpected token at 1:1");
     try expectOutcome("on t\n  put 5 s^-1 into x\nend t\n", "bad unit at 2:9");
+}
+
+test "a Container never passes through a Built-in property" {
+    const statements = [_][2][]const u8{
+        .{ "put 1 into ", "" },
+        .{ "put 1 before ", "" },
+        .{ "put 1 after ", "" },
+        .{ "put ...[1] after ", "" },
+        .{ "set ", " to 1" },
+        .{ "add 1 to ", "" },
+        .{ "subtract 1 from ", "" },
+        .{ "multiply ", " by 2" },
+        .{ "divide ", " by 2" },
+        .{ "delete ", "" },
+        .{ "replace \"a\" in ", " with \"b\"" },
+    };
+    var buf: [128]u8 = undefined;
+    var want: [64]u8 = undefined;
+    for (grammar.properties) |property| for (statements) |s| {
+        const source = try std.fmt.bufPrint(&buf, "on t x\n  {s}the {s} of x{s}\nend t\n", .{ s[0], property, s[1] });
+        try expectOutcome(source, try std.fmt.bufPrint(&want, "not a container at 2:{d}", .{3 + s[0].len}));
+    };
+    // Intermediate, possessive, parenthesized, multiple and delimited levels.
+    for ([_][]const u8{
+        "item 1 of the items of x",
+        "x's length",
+        "(the length of x)",
+        "the length of the items of x",
+        "the items of x delimited by \",\"",
+        "the foo of item 1 of the items of x",
+    }) |target| {
+        try expectOutcome(try std.fmt.bufPrint(&buf, "on t x\n  set {s} to 1\nend t\n", .{target}), "not a container at 2:7");
+    }
+    // Keys, and property reads that select the target or give the value.
+    for ([_][]const u8{
+        "put 1 into the \"length\" of x",
+        "put 1 into the (\"length\") of x",
+        "put 1 into the (the length of x) of x",
+        "put 1 into item (the length of x) of x",
+        "put 1 into item 1 of x delimited by (the length of x)",
+        "put the length of x into x",
+        "set the \"length\" of x to 1",
+        "set the (\"length\") of x to 1",
+        "put 1 into (the \"length\" of x)",
+        "put 1 into item 1 of (x)",
+    }) |statement| {
+        try expectOutcome(try std.fmt.bufPrint(&buf, "on t x\n  {s}\nend t\n", .{statement}), "parses");
+    }
+    // The syntax error comes before the root's `can't write` and the value's
+    // `unknown name`.
+    try expectOutcome("constant x = 1\non t\n  put missing into the length of x\nend t\n", "not a container at 3:20");
 }
 
 test "deep nesting is a load error, not a stack overflow" {

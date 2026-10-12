@@ -120,12 +120,6 @@ the spans of the `try`s it leaves, so an entry split by copies becomes one
 entry per span. The Operation modes that pick `ask`, `ask-wait`, `join-ask`
 or `tell` come from the Context's Grants.
 
-A Container written through a Built-in property, such as `put 1 into the
-length of x`, still parses and is written as a key of that name. This
-placeholder diverges from chapter 2's required `not a container` syntax
-rejection; parser enforcement and its removal are tracked in
-[#673](https://github.com/odogono/odgn-talk/issues/673).
-
 ## Building and testing
 
 Run these from `impl/zig/`, after `bun install --frozen-lockfile` and
