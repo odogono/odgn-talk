@@ -324,6 +324,48 @@ static int segment_test(void) {
     return bad;
 }
 
+/* Decisions: a `, deciding` clause vetoes or allows, and a Selector that
+ * isn't one is refused at the call. */
+static int decision_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "on move n, deciding\n  if n is 1 then veto \"blocked\"\nend move\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_deciding *vetoed = NULL, *allowed = NULL, *refused = NULL;
+    for (int i = 1; i <= 2; i++) {
+        talk_value *n = NULL;
+        talk_int(i, &n);
+        talk_value *args[] = {n};
+        talk_message m = {"move", 4, args, 1};
+        bad |= talk_script_decide(script, &m, NULL, i == 1 ? &vetoed : &allowed) != TALK_OK;
+        talk_value_release(n);
+    }
+    bad |= talk_deciding_done(vetoed) || talk_deciding_decided(vetoed) != NULL;
+    talk_message selector = {"move:with:", 10, NULL, 0};
+    bad |= talk_script_decide(script, &selector, NULL, &refused) != TALK_INVALID_VALUE || refused != NULL;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    const talk_decided *no = talk_deciding_decided(vetoed);
+    const char *reason = NULL;
+    size_t reason_len = 0;
+    bad |= no == NULL || no->verdict != TALK_VETOED || no->vetoes_len != 1 || no->vetoes[0].run_len != 4 || memcmp(no->vetoes[0].run, "s/r1", 4) != 0;
+    bad |= no == NULL || no->vetoes_len != 1 || !talk_value_as_text(no->vetoes[0].reason, &reason, &reason_len) || reason_len != 7 || memcmp(reason, "blocked", 7) != 0;
+    const talk_decided *yes = talk_deciding_decided(allowed);
+    bad |= !talk_deciding_done(allowed) || yes == NULL || yes->verdict != TALK_ALLOWED || yes->delivery_len != 2 || memcmp(yes->delivery, "d2", 2) != 0;
+    bad |= strstr(trace, "> decide to=s message=move:with:\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "decided d1 verdict=vetoed vetoes=[{script: \"s\", run: \"s/r1\", reason: \"blocked\"}]\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* console's write: counts what it is shown. */
 static int shown = 0;
 static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -672,6 +714,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");

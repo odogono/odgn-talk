@@ -399,6 +399,7 @@ pub const Group = struct {
     context: ?*anyopaque,
     scripts: std.ArrayList(*Script) = .empty,
     pending: std.ArrayList(*Pending) = .empty,
+    deciding: std.ArrayList(*Deciding) = .empty,
 
     fn owns(g: *Group, o: *const objects.Object) bool {
         for (g.group.objects.items) |x| if (x == o) return true;
@@ -422,6 +423,33 @@ pub const Group = struct {
 pub const Script = struct { group: *Group, name: []const u8 };
 
 pub const Pending = struct { group: *Group, id: u64 };
+
+pub const Verdict = enum(c_int) { allowed, vetoed, undecided };
+pub const Outcome = enum(c_int) { completed, errored, limit_fault, cancelled, unhandled_outcome, dropped, effect_failure_outcome };
+pub const Veto = extern struct { script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, reason: *Value };
+pub const UndecidedBy = extern struct { script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, outcome: Outcome };
+pub const Decided = extern struct {
+    delivery: [*]const u8,
+    delivery_len: usize,
+    broadcast: [*]const u8,
+    broadcast_len: usize,
+    verdict: Verdict,
+    vetoes: [*]const Veto,
+    vetoes_len: usize,
+    undecided: [*]const UndecidedBy,
+    undecided_len: usize,
+};
+
+/// A Decision's future: its Group and delivery id, and the view of its
+/// Verdict, made the first time the Host reads it once sealed.
+pub const Deciding = struct {
+    group: *Group,
+    id: u64,
+    name: []const u8,
+    decided: ?Decided = null,
+    veto: [1]Veto = undefined,
+    undecided: [1]UndecidedBy = undefined,
+};
 
 export fn talk_new() ?*Core {
     const c = allocator.create(Core) catch return null;
@@ -499,6 +527,11 @@ export fn talk_group_release(g: ?*Group) void {
     group.scripts.deinit(gpa);
     for (group.pending.items) |p| gpa.destroy(p);
     group.pending.deinit(gpa);
+    for (group.deciding.items) |d| {
+        gpa.free(d.name);
+        gpa.destroy(d);
+    }
+    group.deciding.deinit(gpa);
     gpa.destroy(group);
 }
 
@@ -535,15 +568,22 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
 }
 
 /// Queues a Delivery or Request: its delivery number, or the refusal.
-fn queue(s: *Script, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
+/// How a Host Input asks a Script something.
+const Asking = enum { deliver, request, decide };
+
+fn queue(s: *Script, m: *const Message, how: Asking, id: ?*Buffer, n_out: *u64) HostErrorCode {
     const g = s.group;
     if (g.memory.refused) return .out_of_memory;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    if (!machine.hostMessageName(name, args.len)) {
+        g.group.refuseDelivery(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide }, "invalid value");
+        return .invalid_value;
+    }
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
     for (owned, args) |*x, v| x.* = v.retain();
     defer g.core.gpa.free(owned);
-    const n = g.group.deliver(s.name, name, owned, request) catch {
+    const n = (if (how == .decide) g.group.decide(s.name, name, owned) else g.group.deliver(s.name, name, owned, how == .request)) catch {
         for (owned) |v| v.release();
         return .out_of_memory;
     };
@@ -568,13 +608,13 @@ export fn talk_script_counters(s: *Script, out: *Counters) void {
 
 export fn talk_script_deliver(s: *Script, m: *const Message, id: ?*Buffer) HostErrorCode {
     var n: u64 = 0;
-    return queue(s, m, false, id, &n);
+    return queue(s, m, .deliver, id, &n);
 }
 
 export fn talk_script_request(s: *Script, m: *const Message, id: ?*Buffer, out: *?*Pending) HostErrorCode {
     out.* = null;
     var n: u64 = 0;
-    const code = queue(s, m, true, id, &n);
+    const code = queue(s, m, .request, id, &n);
     if (code != .ok) return code;
     const p = s.group.core.gpa.create(Pending) catch return .out_of_memory;
     p.* = .{ .group = s.group, .id = n };
@@ -589,6 +629,58 @@ export fn talk_pending_result(p: *const Pending, out: *?*Value) HostErrorCode {
         return .ok;
     }
     return result(out, model.scalar(allocator, .nothing));
+}
+
+fn deciding(g: *Group, n: u64, out: *?*Deciding) HostErrorCode {
+    const gpa = g.core.gpa;
+    const d = gpa.create(Deciding) catch return .out_of_memory;
+    const name = std.fmt.allocPrint(gpa, "d{d}", .{n}) catch {
+        gpa.destroy(d);
+        return .out_of_memory;
+    };
+    d.* = .{ .group = g, .id = n, .name = name };
+    g.deciding.append(gpa, d) catch {
+        gpa.free(name);
+        gpa.destroy(d);
+        return .out_of_memory;
+    };
+    out.* = d;
+    return .ok;
+}
+
+export fn talk_script_decide(s: *Script, m: *const Message, id: ?*Buffer, out: *?*Deciding) HostErrorCode {
+    out.* = null;
+    var n: u64 = 0;
+    const code = queue(s, m, .decide, id, &n);
+    if (code != .ok) return code;
+    return deciding(s.group, n, out);
+}
+
+export fn talk_deciding_done(d: *const Deciding) bool {
+    return d.group.group.decided.contains(d.id);
+}
+
+export fn talk_deciding_decided(d: *Deciding) ?*const Decided {
+    if (d.decided) |*x| return x;
+    const sealed = d.group.group.decided.get(d.id) orelse return null;
+    var x: Decided = .{ .delivery = d.name.ptr, .delivery_len = d.name.len, .broadcast = "", .broadcast_len = 0, .verdict = @fromBackingInt(@intCast(@backingInt(sealed.verdict))), .vetoes = &d.veto, .vetoes_len = 0, .undecided = &d.undecided, .undecided_len = 0 };
+    switch (sealed.verdict) {
+        .allowed => {},
+        .vetoed => {
+            d.veto[0] = .{ .script = sealed.script.ptr, .script_len = sealed.script.len, .run = sealed.run.ptr, .run_len = sealed.run.len, .reason = sealed.reason.? };
+            x.vetoes_len = 1;
+        },
+        .undecided => {
+            const outcomes = [_]struct { []const u8, Outcome }{ .{ "errored", .errored }, .{ "limit fault", .limit_fault }, .{ "cancelled", .cancelled }, .{ "dropped", .dropped }, .{ "effect failed", .effect_failure_outcome } };
+            const outcome = for (outcomes) |o| {
+                if (std.mem.eql(u8, o[0], sealed.outcome)) break o[1];
+            } else .errored;
+            d.undecided[0] = .{ .script = sealed.script.ptr, .script_len = sealed.script.len, .run = sealed.run.ptr, .run_len = sealed.run.len, .outcome = outcome };
+            x.undecided_len = 1;
+        },
+    }
+    d.decided = x;
+    return &d.decided.?;
 }
 
 export fn talk_pending_release(p: ?*Pending) void {
@@ -656,6 +748,9 @@ test "the enums match talk.h's" {
     try expectHeaderEnum(HostErrorCode, "talk_host_error_code", "TALK_");
     try expectHeaderEnum(Kind, "talk_kind", "TALK_KIND_");
     try expectHeaderEnum(GroupState, "talk_group_state", "TALK_");
+    try expectHeaderEnum(Verdict, "talk_verdict", "TALK_");
+    try expectHeaderEnum(Outcome, "talk_outcome", "TALK_");
+    try expectHeaderEnum(EffectStatus, "talk_effect_status", "TALK_EFFECT_");
 }
 
 test "a Group loads, pumps and inspects through the exports" {
@@ -1449,15 +1544,19 @@ export fn talk_dispose(g: *Group, o: *objects.Object) HostErrorCode {
     return .ok;
 }
 
-fn queueTo(g: *Group, to: *objects.Object, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
+fn queueTo(g: *Group, to: *objects.Object, m: *const Message, how: Asking, id: ?*Buffer, n_out: *u64) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
     if (!g.owns(to)) return .wrong_group;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    if (!machine.hostMessageName(name, args.len)) {
+        g.group.refuseDelivery("", .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .target = to }, "invalid value");
+        return .invalid_value;
+    }
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
     for (owned, args) |*x, v| x.* = v.retain();
     defer g.core.gpa.free(owned);
-    const n = g.group.deliverTo(to, name, owned, request) catch {
+    const n = (if (how == .decide) g.group.decideTo(to, name, owned) else g.group.deliverTo(to, name, owned, how == .request)) catch {
         for (owned) |v| v.release();
         return .out_of_memory;
     };
@@ -1473,13 +1572,21 @@ fn queueTo(g: *Group, to: *objects.Object, m: *const Message, request: bool, id:
 /// when the queue is drained.
 export fn talk_deliver(g: *Group, to: *objects.Object, m: *const Message, id: ?*Buffer) HostErrorCode {
     var n: u64 = 0;
-    return queueTo(g, to, m, false, id, &n);
+    return queueTo(g, to, m, .deliver, id, &n);
+}
+
+export fn talk_decide(g: *Group, to: *objects.Object, m: *const Message, id: ?*Buffer, out: *?*Deciding) HostErrorCode {
+    out.* = null;
+    var n: u64 = 0;
+    const code = queueTo(g, to, m, .decide, id, &n);
+    if (code != .ok) return code;
+    return deciding(g, n, out);
 }
 
 export fn talk_request(g: *Group, to: *objects.Object, m: *const Message, id: ?*Buffer, out: *?*Pending) HostErrorCode {
     out.* = null;
     var n: u64 = 0;
-    const code = queueTo(g, to, m, true, id, &n);
+    const code = queueTo(g, to, m, .request, id, &n);
     if (code != .ok) return code;
     const p = g.core.gpa.create(Pending) catch return .out_of_memory;
     p.* = .{ .group = g, .id = n };

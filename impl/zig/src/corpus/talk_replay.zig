@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "answer", "fail", "set-parent", "dispose", "add-library" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "answer", "fail", "set-parent", "dispose", "add-library" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -28,7 +28,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
             const phase = field(input, "phase") orelse return "a stub-effect without a phase";
             if (std.mem.eql(u8, status, "unknown") or (std.mem.eql(u8, phase, "rollback") and !std.mem.eql(u8, status, "ok"))) return "stopping a Group is not implemented";
         }
-        if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request")) {
+        if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
             if (std.mem.startsWith(u8, to, "<object ")) continue;
             for (s.units) |u| {
@@ -729,7 +729,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (code != c.TALK_PARENT_CYCLE and code != c.TALK_INVALID_VALUE) try check(code);
         } else if (std.mem.eql(u8, name, "dispose")) {
             try check(c.talk_dispose(group, store.named(field(input, "object").?) orelse return error.MalformedCase));
-        } else if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request")) {
+        } else if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to_shown = field(input, "to").?;
             const to_object: ?*c.talk_object = if (std.mem.startsWith(u8, to_shown, "<object ")) store.named(to_shown) orelse return error.MalformedCase else null;
             const to = if (to_object != null) null else scripts.get(to_shown) orelse return error.UnknownScript;
@@ -748,11 +748,17 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             }
             const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len };
             var pending: ?*c.talk_pending = null;
-            if (to_object) |o| {
-                if (std.mem.eql(u8, name, "deliver")) try check(c.talk_deliver(group, o, &m, null)) else try check(c.talk_request(group, o, &m, null, &pending));
-            } else if (std.mem.eql(u8, name, "deliver")) {
-                try check(c.talk_script_deliver(to, &m, null));
-            } else try check(c.talk_script_request(to, &m, null, &pending));
+            var deciding: ?*c.talk_deciding = null;
+            const code = if (std.mem.eql(u8, name, "decide"))
+                (if (to_object) |o| c.talk_decide(group, o, &m, null, &deciding) else c.talk_script_decide(to, &m, null, &deciding))
+            else if (to_object) |o|
+                (if (std.mem.eql(u8, name, "deliver")) c.talk_deliver(group, o, &m, null) else c.talk_request(group, o, &m, null, &pending))
+            else if (std.mem.eql(u8, name, "deliver"))
+                c.talk_script_deliver(to, &m, null)
+            else
+                c.talk_script_request(to, &m, null, &pending);
+            // A refusal at the call is in the Trace, as a `refused` record.
+            if (code != c.TALK_INVALID_VALUE) try check(code);
         } else if (std.mem.eql(u8, name, "pump")) {
             const clock = field(input, "clock").?;
             var instant: ?*c.talk_value = null;

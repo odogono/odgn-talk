@@ -205,7 +205,20 @@ first parked Run becomes ready when the clause's Run ends, behind any `error`
 message. `, dropping` ends the new Run `dropped`. `, replacing` cancels the
 earlier Runs: what each waits on is abandoned at once, and in its own turn it
 runs its `finally` blocks, innermost first, with nothing unwound, and ends
-`cancelled`. A waiting sender gets `send failed` with that reason. Frames are on the heap, so
+`cancelled`. A waiting sender gets `send failed` with that reason.
+
+A Decision (`talk_decide`, `talk_script_decide`) is a Delivery that carries
+an open Verdict. A `wait for` that takes it allows it, and so does a selected
+clause without `, deciding`; a selected `, deciding` clause holds it. The
+Verdict is sealed at the end of that Run's first Segment, with a `decided`
+record after its `seg`: `veto` vetoes it, and suspending or ending without one
+allows it. `pass` carries it up the Message Path, and the end of the path
+allows it. A Run that errors, faults or ends `effect failed` first, or a
+`, dropping` clause that drops it, leaves it undecided, after the `run`
+record. A Delivery, Request or Decision whose name has a `:` but isn't a
+Selector with one argument per part is refused at the call, with its `>`
+line, no id, and `refused code="invalid value"`. Broadcast Decisions and
+`cancel-delivery` are still to come. Frames are on the heap, so
 the run loop never recurses on Script depth. Every instruction is charged by
 its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 0 terms, with `scanned` reported by the operation itself, and Persistent State
