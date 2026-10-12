@@ -270,7 +270,7 @@ Subtract       ::= 'subtract' Expression 'from' Container
 Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
-Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
+Container      ::= ChunkLevel  /* only chunks and keys on the path to a root Name, or else `not a container` */
 Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?
@@ -299,7 +299,7 @@ SendList       ::= ListItem ( ',' ListItem )*
 - **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels. A bracketed expression in place of the message name computes it (`send (next) with order to me`), and `(` can't start a Name, so one token decides that too. In the receiver-last form, `...e` in the `with` list spreads a list into the arguments, as in a list literal (`send log with "seen", ...rest to me`).
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
 - **Operations:** the Word after `ask … to` or `tell … to` is always an Operation name, even a Reserved Word (`ask files to delete path`). The one-line `tell` never takes `and wait`. After `tell`'s receiver, `to` gives the one-line form and the end of the line opens a [`tell` block](#blocks), so one token decides.
-- **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name is `not a container`, reported at the Container's first token (`put 1 into 3`, `put "Z" into character 20 of "short"`). What a root Name refers to is a load rule.
+- **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name, or whose path to that root contains a Built-in property, is `not a container`, reported at the Container's first token (`put 1 into 3`, `put 1 into the length of x`, `delete item 1 of the items of x`). This applies to every statement taking a Container, including `set`. Property reads inside computed keys, chunk indexes or delimiters are allowed: they are expressions evaluated to select the target, not levels on its path to the root. What a root Name refers to is a load rule.
 - **`put ...`** splices a list, and so takes only `after` or `before`.
 - **`return` and `veto`** take an expression if one starts next. `return` is never an operand ([chapter 1](01-lexical-structure.md#text-literals)).
 - **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. A Fallback Handler passes its message with `pass any message`, decided on two tokens as in its head, so a Handler for `any:message:` can't name itself in `pass`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
@@ -729,7 +729,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | `unterminated text` | An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener |
 | `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
-| `not a container` | A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token |
+| `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token |
 | `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |
 | `empty interpolation` | An interpolation hole contains no expression |
 | `invalid text escape` | A backtick escape is malformed, octal, or produces an unpaired surrogate |

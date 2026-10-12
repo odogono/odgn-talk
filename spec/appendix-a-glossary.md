@@ -583,7 +583,7 @@ The Script a Function Value was made in, and the only one it ever runs in: a cal
 _Avoid_: owner, origin, owning script (that's for Host Objects)
 
 **Container**:
-Somewhere a value can be put: a variable, or a Chunk Expression or key path rooted in one. Putting into a Container rebinds its root variable.
+Somewhere a value can be put: a variable, or a chain of chunks and keys rooted in one, with no Built-in property along that path. Putting into a Container rebinds its root variable.
 _Avoid_: slot, lvalue, reference
 
 **Constant**:

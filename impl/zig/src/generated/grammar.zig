@@ -966,7 +966,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .code = "not a container",
-            .raised_when = "A Container's root isn't a name, e.g. `put 1 into 3`; reported at the Container's first token",
+            .raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token",
         },
         .{
             .code = "unterminated interpolation",

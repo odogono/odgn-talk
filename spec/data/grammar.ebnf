@@ -103,7 +103,7 @@ Subtract       ::= 'subtract' Expression 'from' Container
 Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
-Container      ::= ChunkLevel  /* rooted in a Name, or else `not a container` */
+Container      ::= ChunkLevel  /* only chunks and keys on the path to a root Name, or else `not a container` */
 Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?

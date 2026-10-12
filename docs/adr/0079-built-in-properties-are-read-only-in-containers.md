@@ -1,0 +1,3 @@
+# Built-in properties are read-only in Containers
+
+A Container may contain only chunk and key levels on its path to a root variable; Built-in properties are read-only, including in `set`. Implicitly writing a same-named map key would disagree with property reads, while writing back a derived property would require new semantics, so we reject both direct and intermediate property targets ([#670](https://github.com/odogono/odgn-talk/issues/670)). Reuse the syntax error `not a container` at the first Container token, matching Go and the existing Container model: this sacrifices a more local property diagnostic and suppresses subsequent load diagnostics, but keeps target validity in parsing; property reads inside key, index and delimiter expressions remain valid.

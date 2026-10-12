@@ -425,6 +425,8 @@ In operand position, `<< … >>` builds Bytes from its fields, in order:
 
 A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 of totals`, `the age of person` ([chapter 2](02-grammar.md#statements) has the syntax).
 
+Built-in properties are read-only: a Container cannot end in or pass through one. Such a target is `not a container` at its first token, including in `set`. A quoted key such as `the "length" of x` or a computed key remains a key; property reads inside computed keys, chunk indexes, delimiters and value expressions remain allowed.
+
 A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first item of xs whose it < 0` is a syntax error at `whose`, and `put 0 into every item of xs whose it < 0` one at `item`. A `repeat for each` over the positions writes chunks one by one.
 
 - **The root** is a local or a Script Variable. A root that is a Constant is a load error. A Built-in Constant's name as a root makes a local that shadows it.
