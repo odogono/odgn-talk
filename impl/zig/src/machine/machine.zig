@@ -149,6 +149,13 @@ pub const Run = struct {
     waited: Waited = .{},
     /// The Join it is in, from `join-start` to its closing `end`.
     join: ?*Join = null,
+    /// The body of the Handler Clause it was dispatched to, whose Queueing
+    /// Policy it follows.
+    clause_body: ?u32 = null,
+    /// Whether it waits in its clause's queue, under `, queued`.
+    parked: bool = false,
+    /// The call a cancellation abandoned, which its last `seg` names.
+    abandoned: []const u8 = "",
     /// The frame count at which running stops: 0, or while a pending
     /// `wait for`'s test body runs, the frames below it.
     base: usize = 0,
@@ -201,6 +208,10 @@ pub const Resume = union(enum) {
     joined,
     /// A member of its Join failed first: its index, from 0.
     join_failed: usize,
+    /// It leaves its clause's queue, to run from its first instruction.
+    unparked,
+    /// It was cancelled, and runs its `finally` blocks.
+    cancelled,
 };
 
 pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Value };
@@ -257,7 +268,7 @@ pub const Accept = struct { frame: usize, pc: u32, stack: std.ArrayList(Slot) };
 
 pub const Cleanup = struct { frame: usize, target: u32, depth: u32 };
 
-pub const Then = union(enum) { accept: Accept, end };
+pub const Then = union(enum) { accept: Accept, end, cancel };
 
 pub const Unwinding = struct {
     err: *Value,
@@ -750,6 +761,9 @@ pub const Group = struct {
             clause += 1;
             if (b.params.len != d.args.len) continue;
             run.clause = clause;
+            run.clause_body = @intCast(i);
+            const busy = g.clauseBusy(s, @intCast(i));
+            if (busy and b.policy == .replacing) try g.cancelClause(s, @intCast(i));
             try g.pushFrame(run, @intCast(i), d.args);
             if (b.during) |slot| if (d.during) |during| {
                 const f = &run.frames.items[run.frames.items.len - 1];
@@ -758,6 +772,16 @@ pub const Group = struct {
             };
             // Dispatch charges the clause at the body's first instruction.
             run.fuel += 4;
+            if (busy and b.policy == .queued) {
+                run.parked = true;
+                run.suspended_at = "park";
+                outcome = .suspended;
+                break;
+            }
+            if (busy and b.policy == .dropping) {
+                outcome = .dropped;
+                break;
+            }
             outcome = try g.execute(run, true);
             if (outcome != .clause_failed) break;
             outcome = .unhandled;
@@ -775,6 +799,17 @@ pub const Group = struct {
         run.segment_alloc = run.alloc;
         const with = run.resume_with.?;
         run.resume_with = null;
+        switch (with) {
+            .unparked => return g.endSegment(s, run, try g.execute(run, true)),
+            .cancelled => {
+                // Its `finally` blocks run once, innermost first; nothing is
+                // unwound.
+                const top = &run.frames.items[run.frames.items.len - 1];
+                try g.startCleanup(run, try nothing(g.gpa), null, 0, 0, top.pc -| 1, .cancel);
+                return g.endSegment(s, run, (try g.nextCleanup(run)) orelse try g.execute(run, true));
+            },
+            else => {},
+        }
         const waited = run.waited;
         const frame = &run.frames.items[run.frames.items.len - 1];
         const pc = frame.pc - 1;
@@ -793,6 +828,8 @@ pub const Group = struct {
         const gpa = g.gpa;
         switch (with) {
             .woke => return null,
+            // resumeRun handles these before any wait's value.
+            .unparked, .cancelled => unreachable,
             .joined => {
                 // Each answer, converted and charged in start order, then
                 // the list of them.
@@ -1310,6 +1347,8 @@ pub const Group = struct {
                 .faulted => "fault",
                 .suspended => run.suspended_at,
                 .unhandled, .clause_failed => "unhandled",
+                .dropped => "dropped",
+                .cancelled => "cancel",
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
             if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
@@ -1318,6 +1357,7 @@ pub const Group = struct {
                 out.print(" until={s}", .{text}) catch {};
             };
             out.writeAll("\n") catch {};
+            if (outcome == .cancelled and run.abandoned.len > 0) out.print("abandon {s}\n", .{run.abandoned}) catch {};
         }
         run.started = true;
         if (outcome == .suspended) {
@@ -1331,6 +1371,8 @@ pub const Group = struct {
                 .errored => "errored",
                 .faulted => "limit-fault",
                 .unhandled, .clause_failed => "unhandled",
+                .dropped => "dropped",
+                .cancelled => "cancelled",
                 .suspended => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
@@ -1369,6 +1411,8 @@ pub const Group = struct {
             } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
             .faulted => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } }),
             .unhandled, .clause_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } }),
+            .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
+            .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
             .errored => |e| {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
@@ -1382,7 +1426,48 @@ pub const Group = struct {
             },
             else => {},
         }
+        // The first Run parked behind it in its `, queued` clause becomes
+        // ready, behind any `error` message.
+        if (run.clause_body) |body| for (s.live.items) |r| if (r.parked and r.clause_body.? == body) {
+            r.parked = false;
+            r.resume_with = .unparked;
+            try s.work.append(g.gpa, .{ .run = r });
+            break;
+        };
         g.destroyRun(run);
+    }
+
+    /// Whether a Run of the clause hasn't ended.
+    fn clauseBusy(g: *Group, s: *Script, body: u32) bool {
+        _ = g;
+        for (s.live.items) |r| if (r.clause_body != null and r.clause_body.? == body) return true;
+        return false;
+    }
+
+    /// `, replacing`: cancels every Run of the clause that hasn't ended.
+    /// What each waits on is abandoned now, and its cleanup runs in its
+    /// Script's turn (chapter 6, Cancellation and Stop).
+    fn cancelClause(g: *Group, s: *Script, body: u32) !void {
+        for (s.live.items) |r| {
+            if (r.clause_body == null or r.clause_body.? != body) continue;
+            if (r.resume_with) |w| switch (w) {
+                .cancelled => continue,
+                else => g.releaseResume(w),
+            };
+            const queued = r.resume_with != null;
+            if (r.waiting) |p| {
+                for (g.pending.items, 0..) |y, i| if (y == p) {
+                    _ = g.pending.orderedRemove(i);
+                    break;
+                };
+                r.abandoned = if (p.call) |c| c.id else p.id;
+                g.destroyPending(p);
+                r.waiting = null;
+            }
+            g.dropJoin(r);
+            r.resume_with = .cancelled;
+            if (!queued) try s.work.append(g.gpa, .{ .run = r });
+        }
     }
 
     fn hasHandler(g: *Group, s: *const Script, name: []const u8) bool {
@@ -1499,6 +1584,9 @@ pub const Group = struct {
         faulted,
         /// It suspended, at `run.suspended_at`.
         suspended,
+        /// Its `, dropping` clause was busy.
+        dropped,
+        cancelled,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -1909,6 +1997,11 @@ pub const Group = struct {
                 while (run.frames.items.len > 0) g.popFrame(run);
                 return .{ .errored = err };
             },
+            .cancel => {
+                err.release();
+                while (run.frames.items.len > 0) g.popFrame(run);
+                return .cancelled;
+            },
         }
     }
 
@@ -1920,7 +2013,7 @@ pub const Group = struct {
                 for (stack.items) |slot| slot.release(g.gpa);
                 stack.deinit(g.gpa);
             },
-            .end => {},
+            .end, .cancel => {},
         }
         u.err.release();
         u.cleanups.deinit(g.gpa);
