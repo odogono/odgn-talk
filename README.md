@@ -26,7 +26,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 - [`spikes/`](spikes/): finished experiments the ADRs cite, kept as evidence.
 - [`docs/`](docs/): the tour, the ADRs and research notes.
 
-Run `bun install` at the root. `bun run check` runs the Spec checks; `bun run test`, `bun run typecheck` and `bun run build` run across the workspaces. Generator checks require Go 1.27 for `gofmt`; see the [Go guide](impl/go/README.md) for Go build and test commands, and the [Zig guide](impl/zig/README.md) for Zig ones.
+Run `bun install` at the root. `bun run check` runs the Spec checks, and the pre-push hook adds `bun run lint` and `bun run format:check`, as CI does; `bun run test`, `bun run typecheck` and `bun run build` run across the workspaces. Generator checks require Go 1.27 for `gofmt`; see the [Go guide](impl/go/README.md) for Go build and test commands, and the [Zig guide](impl/zig/README.md) for Zig ones.
 
 ## The REPL
 

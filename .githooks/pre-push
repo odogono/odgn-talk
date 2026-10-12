@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs the checks CI's Spec job runs (.github/workflows/spec.yml).
+set -e
+bun run lint
+bun run format:check
+bun run check

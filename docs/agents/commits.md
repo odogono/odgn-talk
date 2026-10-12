@@ -1,6 +1,6 @@
 # Commits and the changelog
 
-PRs are squash-merged, so a PR's title becomes the commit on `main`. CI checks every PR title, and requires a changelog fragment for the changes a reader of the changelog would want to hear about. A `commit-msg` hook checks local commits' format; `bun install` turns it on.
+PRs are squash-merged, so a PR's title becomes the commit on `main`. CI checks every PR title, and requires a changelog fragment for the changes a reader of the changelog would want to hear about. A `commit-msg` hook checks local commits' format, and a `pre-push` hook runs the lint, format and Spec checks CI runs; `bun install` turns both on.
 
 ## Subject format
 
