@@ -114,32 +114,86 @@ const Parser = struct {
         return s[0..i];
     }
 
-    fn pattern(p: *Parser) anyerror![]Element {
-        try p.expect("<");
-        var out: std.ArrayList(Element) = .empty;
-        if (p.reader.take(">")) return out.items;
-        _ = p.reader.take(" ");
-        try out.append(p.a(), try p.alternation());
-        while (p.reader.take(", ")) try out.append(p.a(), try p.alternation());
-        try p.expect(">");
-        return out.items;
+    /// A construct waiting for what follows it: a `<…>` or an `or` for its
+    /// next element, an element or a prefix for its atom, and a Capture for
+    /// its body.
+    const Frame = union(enum) {
+        group: std.ArrayList(Element),
+        alternation: std.ArrayList(Element),
+        element,
+        count: usize,
+        repetition: Repeat,
+        capture: []const u8,
+    };
+
+    /// Reads a `<…>`. Constructs wait on an explicit stack of frames, so a
+    /// deeply nested source never deepens the native stack.
+    fn pattern(p: *Parser) ![]Element {
+        if (!std.mem.startsWith(u8, p.rest(), "<")) return error.InvalidValue;
+        var frames: std.ArrayList(Frame) = .empty;
+        defer frames.deinit(p.a());
+        var next = try p.atom(&frames);
+        while (true) {
+            const e = next orelse {
+                next = try p.atom(&frames);
+                continue;
+            };
+            if (frames.items.len == 0) return e.node.group;
+            const top = &frames.items[frames.items.len - 1];
+            next = switch (top.*) {
+                .element => blk: {
+                    _ = frames.pop();
+                    var x = e;
+                    x.as_number = p.reader.take(" as number");
+                    x.fold = p.reader.take(" ignoring case");
+                    x.lazily = p.reader.take(" lazily");
+                    break :blk x;
+                },
+                .count => |n| blk: {
+                    _ = frames.pop();
+                    break :blk .{ .node = .{ .count = .{ .n = n, .atom = try p.boxed(e) } } };
+                },
+                .repetition => |kind| blk: {
+                    _ = frames.pop();
+                    break :blk .{ .node = .{ .repetition = .{ .kind = kind, .atom = try p.boxed(e) } } };
+                },
+                .capture => |n| blk: {
+                    _ = frames.pop();
+                    break :blk .{ .node = .{ .capture = .{ .name = n, .body = try p.boxed(e) } } };
+                },
+                .alternation => |*xs| blk: {
+                    if (xs.items.len == 0 and !std.mem.startsWith(u8, p.rest(), " or ")) {
+                        _ = frames.pop();
+                        break :blk e;
+                    }
+                    try xs.append(p.a(), e);
+                    if (p.reader.take(" or ")) {
+                        try frames.append(p.a(), .element);
+                        break :blk null;
+                    }
+                    const items = xs.items;
+                    _ = frames.pop();
+                    break :blk .{ .node = .{ .alternation = items } };
+                },
+                .group => |*xs| blk: {
+                    try xs.append(p.a(), e);
+                    if (p.reader.take(", ")) {
+                        try p.alternation(&frames);
+                        break :blk null;
+                    }
+                    try p.expect(">");
+                    const items = xs.items;
+                    _ = frames.pop();
+                    break :blk .{ .node = .{ .group = items } };
+                },
+            };
+        }
     }
 
-    fn alternation(p: *Parser) anyerror!Element {
-        const first = try p.element();
-        if (!std.mem.startsWith(u8, p.rest(), " or ")) return first;
-        var items: std.ArrayList(Element) = .empty;
-        try items.append(p.a(), first);
-        while (p.reader.take(" or ")) try items.append(p.a(), try p.element());
-        return .{ .node = .{ .alternation = items.items } };
-    }
-
-    fn element(p: *Parser) anyerror!Element {
-        var e: Element = .{ .node = try p.atom() };
-        e.as_number = p.reader.take(" as number");
-        e.fold = p.reader.take(" ignoring case");
-        e.lazily = p.reader.take(" lazily");
-        return e;
+    /// Starts an `a or b or …`, and its first element.
+    fn alternation(p: *Parser, frames: *std.ArrayList(Frame)) !void {
+        try frames.append(p.a(), .{ .alternation = .empty });
+        try frames.append(p.a(), .element);
     }
 
     fn boxed(p: *Parser, e: Element) !*Element {
@@ -148,10 +202,24 @@ const Parser = struct {
         return b;
     }
 
-    fn atom(p: *Parser) anyerror!Node {
+    /// Reads a whole atom, or starts one that waits for what follows and
+    /// returns null.
+    fn atom(p: *Parser, frames: *std.ArrayList(Frame)) !?Element {
+        const node = try p.leaf(frames) orelse return null;
+        return .{ .node = node };
+    }
+
+    fn leaf(p: *Parser, frames: *std.ArrayList(Frame)) !?Node {
         const s = p.rest();
         if (s.len == 0) return error.InvalidValue;
-        if (s[0] == '<') return .{ .group = try p.pattern() };
+        if (s[0] == '<') {
+            p.reader.pos += 1;
+            if (p.reader.take(">")) return .{ .group = &.{} };
+            _ = p.reader.take(" ");
+            try frames.append(p.a(), .{ .group = .empty });
+            try p.alternation(frames);
+            return null;
+        }
         if (s[0] == '(' and p.template) {
             var i: usize = 1;
             while (i < s.len and std.ascii.isDigit(s[i])) : (i += 1) {}
@@ -174,19 +242,25 @@ const Parser = struct {
             const n = try std.fmt.parseInt(usize, s[0..i], 10);
             p.reader.pos += i;
             try p.expect(" ");
-            return .{ .count = .{ .n = n, .atom = try p.boxed(.{ .node = try p.atom() }) } };
+            try frames.append(p.a(), .{ .count = n });
+            return null;
         }
         const word = p.name();
         if (word.len == 0) return error.InvalidValue;
-        if (p.reader.take(": ")) return .{ .capture = .{ .name = word, .body = try p.boxed(try p.alternation()) } };
+        if (p.reader.take(": ")) {
+            try frames.append(p.a(), .{ .capture = word });
+            try p.alternation(frames);
+            return null;
+        }
         if (std.mem.eql(u8, word, "optional")) {
             try p.expect(" ");
-            return .{ .repetition = .{ .kind = .optional, .atom = try p.boxed(.{ .node = try p.atom() }) } };
+            try frames.append(p.a(), .{ .repetition = .optional });
+            return null;
         }
         if (std.mem.eql(u8, word, "one") or std.mem.eql(u8, word, "zero")) {
             try p.expect(" or more of ");
-            const kind: Repeat = if (word[0] == 'o') .one_or_more else .zero_or_more;
-            return .{ .repetition = .{ .kind = kind, .atom = try p.boxed(.{ .node = try p.atom() }) } };
+            try frames.append(p.a(), .{ .repetition = if (word[0] == 'o') .one_or_more else .zero_or_more });
+            return null;
         }
         if (std.mem.eql(u8, word, "a") or std.mem.eql(u8, word, "an")) {
             try p.expect(" number");
@@ -233,22 +307,10 @@ pub const Problem = union(enum) {
 /// k-th value, a pattern as a group and text as a literal.
 pub fn splice(a: Allocator, template: []const u8, values: []const *Value, problem: *?Problem) ![]Element {
     const elements = try read(a, template, true);
-    for (elements) |*e| try spliceInto(a, e, values, problem);
-    var names: std.ArrayList([]const u8) = .empty;
-    for (elements) |e| if (!try checkCaptures(a, e, false, &names)) {
-        problem.* = .{ .clash = firstPattern(values) };
-        return error.Raised;
-    };
-    return elements;
-}
-
-fn firstPattern(values: []const *Value) *Value {
-    for (values) |v| if (v.data == .pattern) return v;
-    return values[0];
-}
-
-fn spliceInto(a: Allocator, e: *Element, values: []const *Value, problem: *?Problem) !void {
-    switch (e.node) {
+    var stack: std.ArrayList(*Element) = .empty;
+    defer stack.deinit(a);
+    try pushAll(a, &stack, elements);
+    while (stack.pop()) |e| switch (e.node) {
         .splice => |k| {
             const v = values[k - 1];
             e.node = switch (v.data) {
@@ -260,59 +322,121 @@ fn spliceInto(a: Allocator, e: *Element, values: []const *Value, problem: *?Prob
                 },
             };
         },
-        .group, .alternation => |xs| for (xs) |*x| try spliceInto(a, x, values, problem),
-        .repetition => |r| try spliceInto(a, r.atom, values, problem),
-        .count => |c| try spliceInto(a, c.atom, values, problem),
-        .capture => |c| try spliceInto(a, c.body, values, problem),
+        .group, .alternation => |xs| try pushAll(a, &stack, xs),
+        .repetition => |r| try stack.append(a, r.atom),
+        .count => |c| try stack.append(a, c.atom),
+        .capture => |c| try stack.append(a, c.body),
         else => {},
+    };
+    if (!try capturesAreDistinct(a, elements)) {
+        problem.* = .{ .clash = firstPattern(values) };
+        return error.Raised;
+    }
+    return elements;
+}
+
+/// Pushes elements so that they pop in order.
+fn pushAll(a: Allocator, stack: *std.ArrayList(*Element), xs: []Element) !void {
+    var i = xs.len;
+    while (i > 0) {
+        i -= 1;
+        try stack.append(a, &xs[i]);
     }
 }
 
-/// Whether the element's Captures have distinct names and none sits in a
+fn firstPattern(values: []const *Value) *Value {
+    for (values) |v| if (v.data == .pattern) return v;
+    return values[0];
+}
+
+/// Whether the elements' Captures have distinct names and none sits in a
 /// repetition.
-fn checkCaptures(a: Allocator, e: Element, repeated: bool, names: *std.ArrayList([]const u8)) !bool {
-    switch (e.node) {
+fn capturesAreDistinct(a: Allocator, elements: []const Element) !bool {
+    const Item = struct { e: *const Element, repeated: bool };
+    var stack: std.ArrayList(Item) = .empty;
+    defer stack.deinit(a);
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(a);
+    for (elements) |*e| try stack.append(a, .{ .e = e, .repeated = false });
+    while (stack.pop()) |item| switch (item.e.node) {
         .capture => |c| {
-            if (repeated) return false;
+            if (item.repeated) return false;
             for (names.items) |n| if (std.mem.eql(u8, n, c.name)) return false;
             try names.append(a, c.name);
-            return checkCaptures(a, c.body.*, repeated, names);
+            try stack.append(a, .{ .e = c.body, .repeated = false });
         },
-        .group, .alternation => |xs| {
-            for (xs) |x| if (!try checkCaptures(a, x, repeated, names)) return false;
-            return true;
-        },
-        .repetition => |r| return checkCaptures(a, r.atom.*, true, names),
-        .count => |c| return checkCaptures(a, c.atom.*, repeated or c.n != 1, names),
-        else => return true,
-    }
+        .group, .alternation => |xs| for (xs) |*x| try stack.append(a, .{ .e = x, .repeated = item.repeated }),
+        .repetition => |r| try stack.append(a, .{ .e = r.atom, .repeated = true }),
+        .count => |c| try stack.append(a, .{ .e = c.atom, .repeated = item.repeated or c.n != 1 }),
+        else => {},
+    };
+    return true;
 }
 
 // ---------------------------------------------------------------- writing
 
-/// The canonical source of a pattern's elements.
+/// The canonical source of a pattern's elements. What is still to write
+/// waits on an explicit stack, so a deeply nested pattern never deepens the
+/// native stack.
 pub fn write(a: Allocator, elements: []const Element) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
-    try writeGroup(a, &out, elements);
+    var stack: std.ArrayList(Writing) = .empty;
+    defer stack.deinit(a);
+    try stack.append(a, .{ .group = elements });
+    while (stack.pop()) |w| switch (w) {
+        .text => |s| try out.appendSlice(a, s),
+        .group => |xs| try pushGroup(a, &stack, xs),
+        .element => |e| try writeElement(a, &out, &stack, e),
+        .suffix => |e| {
+            if (e.as_number) try out.appendSlice(a, " as number");
+            if (e.fold) try out.appendSlice(a, " ignoring case");
+            if (e.lazily) try out.appendSlice(a, " lazily");
+        },
+    };
     return out.items;
 }
 
-fn writeGroup(a: Allocator, out: *std.ArrayList(u8), elements: []const Element) !void {
-    try out.append(a, '<');
-    var first = true;
-    for (elements) |e| {
-        if (e.node == .group and e.node.group.len == 0 and !e.as_number and !e.fold and !e.lazily) continue;
-        if (!first) try out.appendSlice(a, ", ");
-        const at = out.items.len;
-        try writeElement(a, out, e);
-        // A leading group is written `< <`, never `<<`.
-        if (first and out.items[at] == '<') try out.insert(a, at, ' ');
-        first = false;
+const Writing = union(enum) {
+    text: []const u8,
+    group: []const Element,
+    element: Element,
+    /// An element's `as number`, `ignoring case` and `lazily`.
+    suffix: Element,
+};
+
+/// Pushes a `<…>` so that it is written in order. Empty groups are dropped,
+/// and a leading group is written `< <`, never `<<`.
+fn pushGroup(a: Allocator, stack: *std.ArrayList(Writing), elements: []const Element) !void {
+    const lead = for (elements, 0..) |e, i| {
+        if (!dropped(e)) break i;
+    } else elements.len;
+    try stack.append(a, .{ .text = ">" });
+    var i = elements.len;
+    while (i > lead) {
+        i -= 1;
+        const e = elements[i];
+        if (dropped(e)) continue;
+        try stack.append(a, .{ .element = e });
+        if (i > lead) try stack.append(a, .{ .text = ", " }) else if (startsWithGroup(e)) try stack.append(a, .{ .text = " " });
     }
-    try out.append(a, '>');
+    try stack.append(a, .{ .text = "<" });
 }
 
-fn writeElement(a: Allocator, out: *std.ArrayList(u8), e: Element) anyerror!void {
+fn dropped(e: Element) bool {
+    return e.node == .group and e.node.group.len == 0 and !e.as_number and !e.fold and !e.lazily;
+}
+
+/// Whether an element's source starts with `<`.
+fn startsWithGroup(e: Element) bool {
+    var x = e;
+    while (x.node == .alternation) x = x.node.alternation[0];
+    return x.node == .group;
+}
+
+/// Writes an element's leaf, or the start of its construct, and pushes the
+/// rest.
+fn writeElement(a: Allocator, out: *std.ArrayList(u8), stack: *std.ArrayList(Writing), e: Element) !void {
+    try stack.append(a, .{ .suffix = e });
     switch (e.node) {
         .literal => |t| {
             const v = try model.text(a, t);
@@ -331,10 +455,14 @@ fn writeElement(a: Allocator, out: *std.ArrayList(u8), e: Element) anyerror!void
             .line_end => "line end",
             .word_break => "word break",
         }),
-        .group => |xs| try writeGroup(a, out, xs),
-        .alternation => |xs| for (xs, 0..) |x, i| {
-            if (i > 0) try out.appendSlice(a, " or ");
-            try writeElement(a, out, x);
+        .group => |xs| try stack.append(a, .{ .group = xs }),
+        .alternation => |xs| {
+            var i = xs.len;
+            while (i > 0) {
+                i -= 1;
+                try stack.append(a, .{ .element = xs[i] });
+                if (i > 0) try stack.append(a, .{ .text = " or " });
+            }
         },
         .repetition => |r| {
             try out.appendSlice(a, switch (r.kind) {
@@ -342,21 +470,18 @@ fn writeElement(a: Allocator, out: *std.ArrayList(u8), e: Element) anyerror!void
                 .zero_or_more => "zero or more of ",
                 .optional => "optional ",
             });
-            try writeElement(a, out, r.atom.*);
+            try stack.append(a, .{ .element = r.atom.* });
         },
         .count => |c| {
             try out.print(a, "{d} ", .{c.n});
-            try writeElement(a, out, c.atom.*);
+            try stack.append(a, .{ .element = c.atom.* });
         },
         .capture => |c| {
             try out.print(a, "{s}: ", .{c.name});
-            try writeElement(a, out, c.body.*);
+            try stack.append(a, .{ .element = c.body.* });
         },
         .splice => |k| try out.print(a, "({d})", .{k}),
     }
-    if (e.as_number) try out.appendSlice(a, " as number");
-    if (e.fold) try out.appendSlice(a, " ignoring case");
-    if (e.lazily) try out.appendSlice(a, " lazily");
 }
 
 // ---------------------------------------------------------------- compiling
@@ -384,6 +509,7 @@ const Compiler = struct {
     a: Allocator,
     code: std.ArrayList(Inst) = .empty,
     captures: std.ArrayList(Capture) = .empty,
+    tasks: std.ArrayList(Task) = .empty,
 
     fn here(c: *Compiler) u32 {
         return @intCast(c.code.items.len);
@@ -462,7 +588,62 @@ const Compiler = struct {
         c.split(l, l + 1, c.here(), lazily);
     }
 
-    fn element(c: *Compiler, e: Element, outer_fold: bool) anyerror!void {
+    /// What is still to compile: an element, the rest of a count's copies,
+    /// or the instructions that close a construct once its body is
+    /// compiled.
+    const Task = union(enum) {
+        element: struct { e: Element, fold: bool },
+        /// `n` more copies of a count's atom.
+        copies: struct { e: Element, fold: bool, n: usize },
+        /// After `one or more of`'s body: split back to `l`.
+        one_or_more: struct { l: u32, lazily: bool },
+        /// After `zero or more of`'s body: jump back to the split at `l`.
+        zero_or_more: struct { l: u32, lazily: bool },
+        /// After `optional`'s body: the split at `l` skips to here.
+        optional: struct { l: u32, lazily: bool },
+        save: u32,
+        /// After an `or`'s first alternative, whose split is at `l`: the
+        /// rest.
+        alternative: struct { xs: []const Element, fold: bool, l: u32 },
+        /// After an `or`'s last alternative: the jump at `j` ends here.
+        end_jump: u32,
+    };
+
+    /// Compiles an element. Constructs wait on an explicit stack of tasks,
+    /// so a deeply nested or long pattern never deepens the native stack.
+    fn element(c: *Compiler, e: Element, fold: bool) !void {
+        try c.tasks.append(c.a, .{ .element = .{ .e = e, .fold = fold } });
+        while (c.tasks.pop()) |t| switch (t) {
+            .element => |x| try c.step(x.e, x.fold),
+            .copies => |x| if (x.n > 0) {
+                try c.tasks.append(c.a, .{ .copies = .{ .e = x.e, .fold = x.fold, .n = x.n - 1 } });
+                try c.tasks.append(c.a, .{ .element = .{ .e = x.e, .fold = x.fold } });
+            },
+            .one_or_more => |x| {
+                const at = c.here();
+                try c.emit(.match);
+                c.split(at, x.l, at + 1, x.lazily);
+            },
+            .zero_or_more => |x| {
+                try c.emit(.{ .jump = x.l });
+                c.split(x.l, x.l + 1, c.here(), x.lazily);
+            },
+            .optional => |x| c.split(x.l, x.l + 1, c.here(), x.lazily),
+            .save => |n| try c.emit(.{ .save = n }),
+            .alternative => |x| {
+                // L: split L+1 M, A, jump E, M: the rest, E:
+                const j = c.here();
+                try c.emit(.match);
+                c.code.items[x.l] = .{ .split = .{ x.l + 1, c.here() } };
+                try c.tasks.append(c.a, .{ .end_jump = j });
+                try c.alternation(x.xs[1..], x.fold);
+            },
+            .end_jump => |j| c.code.items[j] = .{ .jump = c.here() },
+        };
+    }
+
+    /// Compiles a leaf, or the start of a construct, pushing the rest.
+    fn step(c: *Compiler, e: Element, outer_fold: bool) !void {
         const fold = outer_fold or e.fold;
         switch (e.node) {
             .literal => |t| try c.literal(t, fold),
@@ -481,29 +662,28 @@ const Compiler = struct {
                 c.split(l, l + 1, c.here(), false);
             },
             .anchor => |k| try c.emit(.{ .assert = k }),
-            .group => |xs| for (xs) |x| try c.element(x, fold),
+            .group => |xs| {
+                var i = xs.len;
+                while (i > 0) {
+                    i -= 1;
+                    try c.tasks.append(c.a, .{ .element = .{ .e = xs[i], .fold = fold } });
+                }
+            },
             .alternation => |xs| try c.alternation(xs, fold),
             .repetition => |r| {
                 const l = c.here();
                 switch (r.kind) {
-                    .one_or_more => {
-                        try c.element(r.atom.*, fold);
-                        const at = c.here();
-                        try c.emit(.match);
-                        c.split(at, l, at + 1, e.lazily);
-                    },
+                    .one_or_more => try c.tasks.append(c.a, .{ .one_or_more = .{ .l = l, .lazily = e.lazily } }),
                     .zero_or_more => {
                         try c.emit(.match);
-                        try c.element(r.atom.*, fold);
-                        try c.emit(.{ .jump = l });
-                        c.split(l, l + 1, c.here(), e.lazily);
+                        try c.tasks.append(c.a, .{ .zero_or_more = .{ .l = l, .lazily = e.lazily } });
                     },
                     .optional => {
                         try c.emit(.match);
-                        try c.element(r.atom.*, fold);
-                        c.split(l, l + 1, c.here(), e.lazily);
+                        try c.tasks.append(c.a, .{ .optional = .{ .l = l, .lazily = e.lazily } });
                     },
                 }
+                try c.tasks.append(c.a, .{ .element = .{ .e = r.atom.*, .fold = fold } });
             },
             .count => |n| {
                 var atom = n.atom.*;
@@ -518,7 +698,7 @@ const Compiler = struct {
                     return;
                 }
                 if (atom.node == .keyword) atom.node.keyword = atom.node.keyword.singular();
-                for (0..n.n) |_| try c.element(atom, fold);
+                try c.tasks.append(c.a, .{ .copies = .{ .e = atom, .fold = fold, .n = n.n } });
             },
             .capture => |cap| {
                 const i: u32 = @intCast(c.captures.items.len);
@@ -528,25 +708,20 @@ const Compiler = struct {
                 try c.emit(.{ .save = 2 * i });
                 var inner = body;
                 inner.lazily = inner.lazily or e.lazily;
-                try c.element(inner, fold);
-                try c.emit(.{ .save = 2 * i + 1 });
+                try c.tasks.append(c.a, .{ .save = 2 * i + 1 });
+                try c.tasks.append(c.a, .{ .element = .{ .e = inner, .fold = fold } });
             },
             .splice => return error.InvalidValue,
         }
     }
 
-    /// `a or b or …`: L: split L+1 M, A, jump E, M: the rest, E:
-    fn alternation(c: *Compiler, xs: []const Element, fold: bool) anyerror!void {
-        if (xs.len == 1) return c.element(xs[0], fold);
+    /// Starts `a or b or …`: its split, then its first alternative.
+    fn alternation(c: *Compiler, xs: []const Element, fold: bool) !void {
+        if (xs.len == 1) return c.tasks.append(c.a, .{ .element = .{ .e = xs[0], .fold = fold } });
         const l = c.here();
         try c.emit(.match);
-        try c.element(xs[0], fold);
-        const j = c.here();
-        try c.emit(.match);
-        const m = c.here();
-        try c.alternation(xs[1..], fold);
-        c.code.items[l] = .{ .split = .{ l + 1, m } };
-        c.code.items[j] = .{ .jump = c.here() };
+        try c.tasks.append(c.a, .{ .alternative = .{ .xs = xs, .fold = fold, .l = l } });
+        try c.tasks.append(c.a, .{ .element = .{ .e = xs[0], .fold = fold } });
     }
 };
 
@@ -622,6 +797,7 @@ const Run = struct {
     a: Allocator,
     program: Program,
     subject: Subject,
+    pending: std.ArrayList(Thread) = .empty,
 
     fn lineBreak(u: []const u8) bool {
         return std.mem.eql(u8, u, "\n") or std.mem.eql(u8, u, "\r") or std.mem.eql(u8, u, "\r\n");
@@ -673,22 +849,29 @@ const Run = struct {
         };
     }
 
-    fn add(r: *const Run, list: *std.ArrayList(Thread), marks: []bool, pc: u32, p: usize, start: usize, slots: []?usize) !void {
-        if (marks[pc]) return;
-        marks[pc] = true;
-        switch (r.program.code[pc]) {
-            .jump => |to| try r.add(list, marks, to, p, start, slots),
-            .split => |to| {
-                try r.add(list, marks, to[0], p, start, slots);
-                try r.add(list, marks, to[1], p, start, slots);
-            },
-            .save => |n| {
-                const copy = try r.a.dupe(?usize, slots);
-                copy[n] = p;
-                try r.add(list, marks, pc + 1, p, start, copy);
-            },
-            .assert => |k| if (r.holds(k, p)) try r.add(list, marks, pc + 1, p, start, slots),
-            .char, .class, .match => try list.append(r.a, .{ .pc = pc, .start = start, .slots = slots }),
+    /// Adds the threads that `pc` reaches without consuming, in priority
+    /// order. The pending branches wait on `r.pending`, so a long chain of
+    /// splits never deepens the native stack.
+    fn add(r: *Run, list: *std.ArrayList(Thread), marks: []bool, pc: u32, p: usize, start: usize, slots: []?usize) !void {
+        r.pending.clearRetainingCapacity();
+        try r.pending.append(r.a, .{ .pc = pc, .start = start, .slots = slots });
+        while (r.pending.pop()) |t| {
+            if (marks[t.pc]) continue;
+            marks[t.pc] = true;
+            switch (r.program.code[t.pc]) {
+                .jump => |to| try r.pending.append(r.a, .{ .pc = to, .start = start, .slots = t.slots }),
+                .split => |to| {
+                    try r.pending.append(r.a, .{ .pc = to[1], .start = start, .slots = t.slots });
+                    try r.pending.append(r.a, .{ .pc = to[0], .start = start, .slots = t.slots });
+                },
+                .save => |n| {
+                    const copy = try r.a.dupe(?usize, t.slots);
+                    copy[n] = p;
+                    try r.pending.append(r.a, .{ .pc = t.pc + 1, .start = start, .slots = copy });
+                },
+                .assert => |k| if (r.holds(k, p)) try r.pending.append(r.a, .{ .pc = t.pc + 1, .start = start, .slots = t.slots }),
+                .char, .class, .match => try list.append(r.a, t),
+            }
         }
     }
 };
@@ -696,7 +879,8 @@ const Run = struct {
 /// Runs `program` over `subject` from position `from`, adding to `steps`.
 /// With `first`, it stops at the first match recorded.
 pub fn run(a: Allocator, program: Program, subject: Subject, from: usize, kind: Kind, first: bool, steps: *u64) !?Found {
-    const r: Run = .{ .a = a, .program = program, .subject = subject };
+    var r: Run = .{ .a = a, .program = program, .subject = subject };
+    defer r.pending.deinit(a);
     const n = subject.units.len;
     const size = program.code.len;
     var list: std.ArrayList(Thread) = .empty;
@@ -864,4 +1048,62 @@ test "canonical sources survive reading and writing" {
     for ([_][]const u8{ "<>", "<\"ID-\", 4 digits>", "< <4 digits>, \"x\">", "<last: word, \", \", first: word>", "<(quote & \"x\"), optional digit>", "<one or more of uppercase letters lazily>", "<n: digits as number, text end>" }) |s| {
         try testing.expectEqualStrings(s, try write(a, try read(a, s, false)));
     }
+}
+
+/// Runs `f` on a thread with a small stack, so recursion on a pattern's
+/// depth or length would overflow it.
+fn onSmallStack(comptime f: fn () anyerror!void) !void {
+    var result: anyerror!void = {};
+    const t = try std.Thread.spawn(.{ .stack_size = 256 * 1024 }, struct {
+        fn go(out: *anyerror!void) void {
+            out.* = f();
+        }
+    }.go, .{&result});
+    t.join();
+    return result;
+}
+
+fn deepPatterns() !void {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const depth = 100_000;
+    var steps: u64 = 0;
+    const subject = try Subject.ofText(a, "xab");
+
+    // Groups nested 100,000 deep, as `put <(p)> into p` makes them.
+    var nested: std.ArrayList(u8) = .empty;
+    try nested.appendNTimes(a, '<', 1);
+    for (0..depth) |_| try nested.appendSlice(a, " <");
+    try nested.appendSlice(a, "\"a\">");
+    try nested.appendNTimes(a, '>', depth);
+    const elements = try read(a, nested.items, false);
+    try testing.expectEqualStrings(nested.items, try write(a, elements));
+    const found = try run(a, try compile(a, elements, false), subject, 0, .search, true, &steps);
+    try testing.expectEqual(@as(usize, 1), found.?.start);
+
+    const inner = try model.scalar(a, .{ .pattern = nested.items });
+    var problem: ?Problem = null;
+    const spliced = try splice(a, "<(1), \"b\">", &.{inner}, &problem);
+    try testing.expectEqual(@as(usize, 2), (try run(a, try compile(a, spliced, false), subject, 0, .search, true, &steps)).?.end - 1);
+
+    // An `or` of 100,000 alternatives, and repetitions nested as deep: the
+    // program is long, and its threads come from long chains of splits.
+    var alternatives: std.ArrayList(u8) = .empty;
+    try alternatives.append(a, '<');
+    for (0..depth) |_| try alternatives.appendSlice(a, "\"z\" or ");
+    try alternatives.appendSlice(a, "\"b\">");
+    const choice = try compile(a, try read(a, alternatives.items, false), false);
+    try testing.expectEqual(@as(usize, 2), (try run(a, choice, subject, 0, .search, true, &steps)).?.start);
+
+    var optionals: std.ArrayList(u8) = .empty;
+    try optionals.append(a, '<');
+    for (0..depth) |_| try optionals.appendSlice(a, "optional ");
+    try optionals.appendSlice(a, "\"a\", \"b\">");
+    const optional = try compile(a, try read(a, optionals.items, false), false);
+    try testing.expectEqual(@as(usize, 1), (try run(a, optional, subject, 0, .search, true, &steps)).?.start);
+}
+
+test "reading, writing, compiling and matching never recurse on a pattern" {
+    try onSmallStack(deepPatterns);
 }
