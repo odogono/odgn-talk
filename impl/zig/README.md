@@ -211,9 +211,17 @@ A `Fail` raises its code with its Data as fields, unless it misuses a
 catalogue code, a reserved key or an undeclared code, which the Script sees
 as `host error`, with a `call-failed` record. The loader checks each literal
 argument's kind against its Shape. The corpus runner answers calls from
-`stub` lines. Suspending Operations, Standard Capabilities, Capability Scopes
-and Segment-bound effects, Lambdas, waits and messages between Scripts come
-next. A Run past the default Fuel per Run ends in a minimal `fault` until
+`stub` lines.
+
+`clock`, `calendar`, `locale` and `console` come from factories with chapter
+7's fixed declarations ([standard](src/machine/standard.zig)). `clock.now`
+answers from the Pump's Clock. The Core makes the chapter's own checks:
+`toInstant`'s date-time and disambiguation and a Locale's option words and
+BCP 47 tag before the call, charged nothing, and each result's rules after it,
+whose failure is `host error`. A Host function receives the resolved
+arguments, with a Locale's options map complete. Suspending Operations,
+`timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
+effects, Lambdas, waits and messages between Scripts come next. A Run past the default Fuel per Run ends in a minimal `fault` until
 step 4 brings limits, including the Text Pattern size limit.
 
 ## Values and ownership

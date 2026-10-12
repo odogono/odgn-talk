@@ -5,6 +5,11 @@ bytes/value-encoding
 capabilities/calls
 capabilities/host-failures
 capabilities/load-checks
+capabilities/standard-calendar
+capabilities/standard-calendar-errors
+capabilities/standard-calendar-validation
+capabilities/standard-locale
+capabilities/standard-locale-validation
 collecting/condition-target
 collecting/exit
 collecting/next-filter
@@ -45,6 +50,7 @@ load-diagnostics/invalid-text-indentation
 load-diagnostics/leaves-finally
 load-diagnostics/missing-handler-wait
 load-diagnostics/name-clash
+load-diagnostics/needless-and-wait
 load-diagnostics/no-conversion
 load-diagnostics/no-item-chunk
 load-diagnostics/not-a-property

@@ -1889,6 +1889,23 @@ pub const Group = struct {
             return g.raiseMismatch(bad, position, &where);
         }
 
+        // The Core's own checks, charged nothing either.
+        if (decl.before) |before| if (try before(a, &granted.grant.capability.operations[index], args, granted.grant.binding)) |problem| {
+            m.uncharged = true;
+            switch (problem) {
+                .out_of_domain => |v| {
+                    const function = try model.text(gpa, op_name);
+                    defer function.release();
+                    return g.raise("out of domain", &.{ .{ .key = "function", .value = function }, .{ .key = "value", .value = v } });
+                },
+                .bad_locale => |tag| {
+                    const locale = try model.text(gpa, tag);
+                    defer locale.release();
+                    return g.raise("bad locale", &.{.{ .key = "locale", .value = locale }});
+                },
+            }
+        };
+
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
         const left: ?u64 = if (run.fuel + decl.cost.fuel >= fuel_per_run) 0 else fuel_per_run - run.fuel - decl.cost.fuel;
@@ -1930,7 +1947,9 @@ pub const Group = struct {
                     const result_shape = decl.result orelse break :blk true;
                     const checked = try capabilities.checkValue(a, gpa, result_shape, v);
                     defer checked.release();
-                    break :blk checked.mismatch == null;
+                    if (checked.mismatch != null) break :blk false;
+                    const after = decl.after orelse break :blk true;
+                    break :blk after(&granted.grant.capability.operations[index], args, v);
                 };
                 if (!ok) {
                     v.release();

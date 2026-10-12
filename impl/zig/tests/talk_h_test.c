@@ -156,6 +156,57 @@ static int capability_test(void) {
     return bad;
 }
 
+/* console's write: counts what it is shown. */
+static int shown = 0;
+static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)args; (void)error;
+    shown += (int)len;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+static talk_call_end unused(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)args; (void)len; (void)result; (void)error;
+    return TALK_CALL_BROKEN;
+}
+
+/* clock's now from the Pump's Clock, and say through console's write. */
+static int standard_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost clock_costs[] = {{"now", 3, {5, 0}}};
+    talk_costs costs = {clock_costs, 1};
+    talk_capability_def *clock = NULL, *console = NULL;
+    int bad = talk_clock_capability(core, &costs, &clock) != TALK_OK;
+    talk_costs missing = {NULL, 0};
+    talk_console_impl impl = {NULL, show, unused};
+    bad |= talk_console_capability(core, &impl, &missing, &console) != TALK_INVALID_VALUE;
+    talk_named_cost console_costs[] = {{"write", 5, {1, 0}}, {"read", 4, {1, 0}}};
+    talk_costs console_all = {console_costs, 2};
+    bad |= talk_console_capability(core, &impl, &console_all, &console) != TALK_OK;
+    talk_grant *clock_grant = NULL, *console_grant = NULL;
+    bad |= talk_capability_def_grant_all(clock, NULL, &clock_grant) != TALK_OK;
+    bad |= talk_capability_def_grant_all(console, NULL, &console_grant) != TALK_OK;
+    talk_load_grant grants[] = {{"clock", 5, clock_grant}, {"console", 7, console_grant}};
+    const char *source = "script variable at\non go\n  ask clock to now\n  put it into at\n  say at\nend go\n";
+    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= strstr(trace, "call timed/r1.c1 op=clock.now args=[] result=2026-09-21T14:13:20Z\n") == NULL;
+    bad |= shown != 1;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -228,5 +279,6 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     return failures == 0 ? 0 : 1;
 }
