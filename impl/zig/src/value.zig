@@ -43,11 +43,12 @@ pub const Data = union(Kind) {
 pub const Value = struct {
     references: usize = 1,
     allocator: std.mem.Allocator,
-    depth: usize = 1,
-    data: Data,
+    depth: u32 = 1,
     /// A Core-raised error map, whose `message` the Trace leaves out
-    /// (chapter 11): its wording is outside parity.
+    /// (chapter 11): its wording is outside parity. It sits beside `depth`
+    /// so that a Value's size doesn't grow.
     core_message: bool = false,
+    data: Data,
     /// The kind of the value's payload.
     pub fn kind(self: *const Value) Kind {
         return std.meta.activeTag(self.data);
@@ -190,7 +191,7 @@ pub fn bytes(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
 }
 /// A list that retains each item.
 pub fn list(gpa: std.mem.Allocator, items: []const *Value) Error!*Value {
-    var depth: usize = 1;
+    var depth: u32 = 1;
     for (items) |v| depth = @max(depth, v.depth + 1);
     if (depth > max_depth) return error.TooDeep;
     const copy = try gpa.dupe(*Value, items);
@@ -203,7 +204,7 @@ pub fn list(gpa: std.mem.Allocator, items: []const *Value) Error!*Value {
 /// A map in insertion order that retains each value and copies each key as
 /// NFC. A key duplicated after normalisation is refused.
 pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
-    var depth: usize = 1;
+    var depth: u32 = 1;
     for (pairs) |p| depth = @max(depth, p.value.depth + 1);
     if (depth > max_depth) return error.TooDeep;
     var out: std.ArrayList(Pair) = .empty;
