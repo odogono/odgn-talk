@@ -38,7 +38,7 @@ The final spec is a `spec/` directory of Markdown chapters, one per area, that s
   - `grammar.ebnf`, in W3C-style EBNF, and `grammar.toml`, which holds the reserved words, the contextual positions and the FOLLOW set
   - `machine.toml`, `costs.toml`, `errors.toml`, `host-errors.toml`, `units.toml` and `limits.toml`
   - `unicode.toml`, which holds the Unicode version and the SHA-256 hash of each Unicode Character Database file used. Each Core generates its tables from those files at build time.
-- **Glossary:** `CONTEXT.md` stays the source, and Appendix A is a generated region.
+- **Glossary:** `GLOSSARY.md` stays the source, and Appendix A is a generated region.
 - **Moves:** `docs/embedding/` moves to `spec/embedding/`, and its README becomes chapter 9. `corpus/` stays at the root, and chapters cite cases by path.
 - **The tour** stays in `docs/tour.md` as an informative introduction, and its header will say the spec wins.
 - **Versions:** narrows ADR 0018. The spec's version is the language version, and `costs.toml` carries the Cost Model version. The handoff is language 1.0-rc with a provisional Cost Model 0. Language 1.0 is declared once both Cores pass the seed corpus and Cost Model 1 has been calibrated against them.

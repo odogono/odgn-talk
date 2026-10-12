@@ -1,6 +1,6 @@
 # Learn NorthTalk in Y minutes
 
-> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour is an informative introduction. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Each section heading names the [ADRs](adr/) behind it. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`CONTEXT.md`](../CONTEXT.md). Anything still undecided is left out.
+> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour is an informative introduction. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Each section heading names the [ADRs](adr/) behind it. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
 
 NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go servers, Bun servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
@@ -611,7 +611,7 @@ end firstBytes
 
 ## Further reading
 
-- [`CONTEXT.md`](../CONTEXT.md): the glossary.
+- [`GLOSSARY.md`](../GLOSSARY.md): the glossary.
 - [`docs/adr/`](adr/): every decision and why it was made.
 - [`corpus/examples/orders-pricing/`](../corpus/examples/orders-pricing/): two Scripts talking to each other, as a conformance case.
 

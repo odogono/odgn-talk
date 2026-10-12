@@ -1069,21 +1069,21 @@ const VIEWS: Record<string, View> = {
       ]),
     ),
 
-  // Appendix A: CONTEXT.md from its first section on, with its relative links
+  // Appendix A: GLOSSARY.md from its first section on, with its relative links
   // rebased onto the region's file.
   glossary: (_d, file) => {
-    const source = join(ROOT, 'CONTEXT.md');
+    const source = join(ROOT, 'GLOSSARY.md');
     const text = glossarySource;
     const start = text.search(/^## /m);
     if (start < 0) {
-      problems.push('CONTEXT.md: no `## ` sections to put in Appendix A');
+      problems.push('GLOSSARY.md: no `## ` sections to put in Appendix A');
       return '';
     }
     return rebaseLinks(text.slice(start).trim(), source, file);
   },
 };
 
-const glossarySource = await Bun.file(join(ROOT, 'CONTEXT.md')).text();
+const glossarySource = await Bun.file(join(ROOT, 'GLOSSARY.md')).text();
 
 // Chapter 11: the Trace's records, as a summary and key by key.
 const recordIds = (r: any) =>

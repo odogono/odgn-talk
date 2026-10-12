@@ -4,7 +4,7 @@ Start with the row for your task, then read the linked rules and tests. Read the
 [implementation guide](README.md) for build details, and the
 [decisions on #625](https://github.com/odogono/odgn-talk/issues/625#issuecomment-6111271797)
 before changing anything they settle. For domain terms, use
-[CONTEXT.md](../../CONTEXT.md); for rationale, use the
+[GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
 [ADR index](../../docs/adr/README.md).
 
 Commands below run from the repository root; Zig commands change to `impl/zig/` first. On a fresh worktree, run

@@ -3,7 +3,7 @@
 Start with the row for your task, then read the linked rules and tests. Read the
 [implementation guide](README.md) when you need feature details or limitations.
 List paths with `rg --files` in the relevant directory before opening files by
-name. For domain terms, use [CONTEXT.md](../../CONTEXT.md); for rationale, use the
+name. For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
 [ADR index](../../docs/adr/README.md).
 
 All commands below run from the repository root. On a fresh worktree, run
