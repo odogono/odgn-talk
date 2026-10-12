@@ -1,9 +1,11 @@
 # Cases protected by the Zig Core's incremental conformance gate.
+builtins/kind-of
 builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
 cancellation/queueing-policies
+capabilities/argument-shapes
 capabilities/calls
 capabilities/host-failures
 capabilities/load-checks
@@ -13,7 +15,9 @@ capabilities/standard-calendar
 capabilities/standard-calendar-errors
 capabilities/standard-calendar-validation
 capabilities/standard-clock
+capabilities/standard-console
 capabilities/standard-locale
+capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
 collecting/condition-target
 collecting/exit
@@ -45,6 +49,8 @@ fallback/forwarding
 fallback/message-path
 fallback/no-match
 fallback/policies
+functions/foreign-calls
+libraries/calls
 libraries/needs-suspending
 libraries/needs-transitive
 libraries/registration
@@ -100,6 +106,7 @@ objects/queued-parent-refusals
 objects/sends
 objects/wait-target
 quantities/value-encoding
+stdlib/errors-name-the-call
 stdlib/lookup
 suspension/answers
 suspension/joins

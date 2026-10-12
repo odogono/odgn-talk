@@ -295,8 +295,22 @@ and the Core adds its `message`. Loading a Script checks the `needs` of every
 Library it imports against its Grants, at the `use` line, and `grantsAsUsed`
 keeps the Operations those `needs` call.
 
+A Lambda makes a Function Value with its captures, by name in slot order, and
+a function's bare name makes one with none. Each Group keeps one record of
+the code a Function Value runs, its Home Script, unit and body, which the
+value's identity names. It displays as `<function home:where {captures}>`,
+where `where` puts a Library's name before a function's name or a Lambda's
+position. Its size is 32 and its captures, since `items` is 0 for it.
+`call-value` runs one whose Home Script is this one, and that can't suspend,
+in the caller's Run with its captures and defaults, after the `wrong kind`,
+`would suspend` and `wrong arity` checks. `call-value-wait` may run one that
+suspends, and sends another Script's to its Home Script, whose Run has one
+frame and no Handler Clause and writes `fn=` in place of a Handler.
+`functionArity` and `functionName` read the code. Stale values wait for
+Reload.
+
 `timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
-effects, Lambdas and Broadcasts come next. A Run past the default Fuel per Run ends
+effects, Broadcasts and most Built-ins come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 

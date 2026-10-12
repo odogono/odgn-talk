@@ -145,7 +145,22 @@ pub fn contents(v: *const Value) u64 {
             total += 16 + p.key.len + size(p.value);
         },
         .range => |r| total = size(r.from) + size(r.to),
-        .function => |f| total = contents(f.captures),
+        .function => |f| total = captured(f.captures),
+        else => {},
+    }
+    return total;
+}
+
+/// The sizes of a Function Value's captured values, without their names.
+fn captured(captures: *const Value) u64 {
+    var total: u64 = 0;
+    switch (captures.data) {
+        .map => |m| for (m) |p| {
+            total += size(p.value);
+        },
+        .list => |l| for (l) |x| {
+            total += size(x);
+        },
         else => {},
     }
     return total;
@@ -164,6 +179,7 @@ pub fn size(v: *const Value) u64 {
         .range => 16 + contents(v),
         .instant, .civil_date, .object => 16,
         .pattern => 16 + 8 * matcher.programSize(v),
-        .function => |f| 32 + 8 * f.captures.data.list.len + contents(f.captures),
+        // `items` is 0 for a Function Value; `contents` is its captures.
+        .function => |f| 32 + captured(f.captures),
     };
 }

@@ -130,6 +130,9 @@ pub const Delivery = struct {
     /// when it reaches the head of a mailbox: its Target, or after a climb,
     /// the parent of the object whose Owning Script passed it on.
     at: ?*objects.Object = null,
+    /// A foreign Function Value call: the Function Value its Run calls,
+    /// with the arguments, in place of a Handler.
+    function: ?*Value = null,
 };
 
 pub const Run = struct {
@@ -512,6 +515,15 @@ pub fn stdlibLibrary(name: []const u8) ?*Library {
     return null;
 }
 
+/// The code a Function Value runs: its Home Script, the unit its body is
+/// in, a Library's or else the Home Script's own, and the body. A Group
+/// keeps one for each, so a value's identity says which.
+pub const FunctionCode = struct {
+    home: []const u8,
+    library: ?*Library,
+    body: u32,
+};
+
 /// A well-known object the Host binds at Load, by name.
 pub const NamedObject = struct { name: []const u8, object: *objects.Object };
 
@@ -580,6 +592,8 @@ pub const Group = struct {
     /// The Libraries the Host added, besides the stdlib's, which it holds
     /// but doesn't own.
     libraries: std.ArrayList(*Library) = .empty,
+    /// The code of each Function Value made, by identity.
+    functions: std.ArrayList(*FunctionCode) = .empty,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
@@ -602,6 +616,11 @@ pub const Group = struct {
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
         g.libraries.deinit(g.gpa);
+        for (g.functions.items) |f| {
+            g.gpa.free(f.home);
+            g.gpa.destroy(f);
+        }
+        g.functions.deinit(g.gpa);
         for (g.calls.items) |c| {
             g.gpa.free(c.id);
             g.gpa.destroy(c);
@@ -882,6 +901,7 @@ pub const Group = struct {
     }
 
     fn releaseDelivery(g: *Group, d: Delivery) void {
+        if (d.function) |f| f.release();
         releaseAll(d.args, g.gpa);
         g.gpa.free(d.message);
         if (d.during) |x| x.release();
@@ -1167,6 +1187,18 @@ pub const Group = struct {
         s.runs += 1;
         const run = try g.gpa.create(Run);
         run.* = .{ .id = try std.fmt.allocPrint(g.gpa, "{s}/r{d}", .{ s.name, s.runs }), .script = s, .delivery = d, .handler = d.message };
+        if (d.function) |fv| {
+            // A foreign call: one frame, no Handler Clause, so no `clause`.
+            const code = g.codeOf(fv).?;
+            try g.callFunction(run, code.library, code.body, d.args);
+            const callee = &run.frames.items[run.frames.items.len - 1];
+            const body = g.functionBody(code).?;
+            for (fv.data.function.captures.data.map, body.capture_slot..) |p, slot| {
+                callee.locals[slot].release();
+                callee.locals[slot] = p.value.retain();
+            }
+            return g.endSegment(s, run, try g.execute(run, true));
+        }
         var clause: u32 = 0;
         var outcome: Outcome = .unhandled;
         for (s.unit.bodies, 0..) |b, i| {
@@ -1828,7 +1860,11 @@ pub const Group = struct {
                 // one.
                 if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
                 if (run.fallback) out.writeAll(" fallback=yes") catch {};
-                if (outcome != .unhandled and outcome != .clause_failed) out.print(" clause={d}", .{run.clause}) catch {};
+                if (d.function) |f| {
+                    out.writeAll(" fn=") catch {};
+                    display.writeTrace(out, f) catch {};
+                }
+                if (d.function == null and outcome != .unhandled and outcome != .clause_failed) out.print(" clause={d}", .{run.clause}) catch {};
             }
             const end: []const u8 = switch (outcome) {
                 .returned => "return",
@@ -1871,6 +1907,10 @@ pub const Group = struct {
             if (d.from == null) out.print(" delivery=d{d}", .{d.id}) catch {};
             if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
             if (run.fallback) out.writeAll(" fallback=yes") catch {};
+            if (d.function) |f| {
+                out.writeAll(" fn=") catch {};
+                display.writeTrace(out, f) catch {};
+            }
             switch (outcome) {
                 .returned => |v| if (v.data != .nothing) {
                     out.writeAll(" value=") catch {};
@@ -1968,6 +2008,7 @@ pub const Group = struct {
         out.message = try gpa.dupe(u8, d.message);
         out.from = if (d.from) |x| try gpa.dupe(u8, x) else null;
         out.during = if (d.during) |x| x.retain() else null;
+        out.function = if (d.function) |x| x.retain() else null;
         return out;
     }
 
@@ -2028,6 +2069,7 @@ pub const Group = struct {
             .message => |d| {
                 var contents: u64 = 0;
                 for (d.args) |v| contents += costs.size(v);
+                if (d.function) |f| contents += costs.size(f);
                 total += 32 + contents;
             },
             .run => {},
@@ -2078,6 +2120,98 @@ pub const Group = struct {
         // A ready Run retains what it resumes with in place of its call.
         if (run.resume_with) |r| total += retained(r);
         return total;
+    }
+
+    /// The Group's record of a Function Value's code, made once.
+    fn functionCode(g: *Group, home: []const u8, library: ?*Library, body: u32) !*FunctionCode {
+        for (g.functions.items) |f| if (f.library == library and f.body == body and std.mem.eql(u8, f.home, home)) return f;
+        const f = try g.gpa.create(FunctionCode);
+        errdefer g.gpa.destroy(f);
+        f.* = .{ .home = try g.gpa.dupe(u8, home), .library = library, .body = body };
+        try g.functions.append(g.gpa, f);
+        return f;
+    }
+
+    /// The code of a Function Value this Group made.
+    fn codeOf(g: *Group, v: *const Value) ?*FunctionCode {
+        if (v.data != .function) return null;
+        for (g.functions.items) |f| if (@intFromPtr(f) == v.data.function.identity) return f;
+        return null;
+    }
+
+    fn functionBody(g: *Group, f: *const FunctionCode) ?lower.Body {
+        if (f.library) |l| return l.unit.bodies[f.body];
+        const home = g.script(f.home) orelse return null;
+        return home.unit.bodies[f.body];
+    }
+
+    /// A Function Value: `<function home:where {captures}>`, where `where`
+    /// is a Library's name and `:` before its function's name or the
+    /// Lambda's position.
+    fn functionValue(g: *Group, run: *Run, library: ?*Library, body: u32, where: []const u8, captures: *Value) !*Value {
+        const f = try g.functionCode(run.script.name, library, body);
+        var shown: std.Io.Writer.Allocating = .init(g.scratch.allocator());
+        try shown.writer.print("<function {s}:", .{run.script.name});
+        if (library) |l| try shown.writer.print("{s}:", .{l.name});
+        try shown.writer.writeAll(where);
+        if (captures.data.map.len > 0) {
+            try shown.writer.writeByte(' ');
+            display.write(&shown.writer, captures) catch return error.OutOfMemory;
+        }
+        try shown.writer.writeByte('>');
+        return model.function(g.gpa, run.script.name, shown.written(), @intFromPtr(f), captures) catch |err| switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            else => g.raise("too deep", &.{}),
+        };
+    }
+
+    /// `call-value` and `call-value-wait`: a Function Value whose Home
+    /// Script is this one runs in the caller's Run, with its captures.
+    fn callValue(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction) !Step {
+        const n: usize = @intCast(ins.operands[0].int);
+        const args = try g.scratch.allocator().alloc(*Value, n);
+        for (0..n) |i| args[n - 1 - i] = pop(frame);
+        defer for (args) |v| v.release();
+        const fv = pop(frame);
+        defer fv.release();
+        if (fv.data != .function) return g.wrongKind("function", fv);
+        const code = g.codeOf(fv) orelse return g.raise("function gone", &.{});
+        const body = g.functionBody(code) orelse return g.raise("function gone", &.{});
+        const waits = ins.op == .call_value_wait;
+        // Another Script's Function Value is a message to it, which only
+        // `and wait` may send; one that may suspend needs `and wait` too.
+        const foreign = !std.mem.eql(u8, code.home, run.script.name);
+        if ((foreign or body.may_suspend) and !waits) return g.raise("would suspend", &.{});
+        var required: usize = 0;
+        for (body.params) |p| {
+            if (std.mem.indexOf(u8, p, " = ") == null) required += 1;
+        }
+        if (n < required or n > body.params.len) return g.raise("wrong arity", &.{});
+        if (foreign) {
+            // A message to the Home Script, whose reply ends the wait.
+            const home = g.script(code.home) orelse return g.raise("function gone", &.{});
+            run.calls += 1;
+            const id = try std.fmt.allocPrint(g.gpa, "{s}.c{d}", .{ run.id, run.calls });
+            try g.ids.append(g.gpa, id);
+            if (g.trace) |out| {
+                out.print("send {s} to={s} fn=", .{ id, home.name }) catch {};
+                display.writeTrace(out, fv) catch {};
+                writeArgs(out, args);
+                out.writeAll(" wait=yes\n") catch {};
+            }
+            const owned = try g.gpa.alloc(*Value, n);
+            for (owned, args) |*x, v| x.* = v.retain();
+            try home.work.append(g.gpa, .{ .message = .{ .id = 0, .message = try g.gpa.dupe(u8, ""), .args = owned, .request = false, .from = try g.gpa.dupe(u8, id), .waits = true, .function = fv.retain() } });
+            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
+            return .suspended;
+        }
+        try g.callFunction(run, code.library, code.body, args);
+        const callee = &run.frames.items[run.frames.items.len - 1];
+        for (fv.data.function.captures.data.map, body.capture_slot..) |p, slot| {
+            callee.locals[slot].release();
+            callee.locals[slot] = p.value.retain();
+        }
+        return .next;
     }
 
     /// Calls a function body of a unit: a new frame, with the defaults of
@@ -3421,6 +3555,48 @@ pub const Group = struct {
                 defer for (args) |v| v.release();
                 try g.callFunction(run, frame.library, body, args);
             },
+            .make_closure => {
+                // A Lambda: its captures by name, in slot order.
+                const body: u32 = @intCast(ops[0].int);
+                const n: usize = @intCast(ops[1].int);
+                const names = unit.bodies[body].capture_names;
+                const pairs = try a.alloc(model.Pair, n);
+                var i = n;
+                while (i > 0) {
+                    i -= 1;
+                    pairs[i] = .{ .key = names[i], .value = pop(frame) };
+                }
+                defer for (pairs) |p| p.value.release();
+                const captures = try model.map(gpa, pairs);
+                defer captures.release();
+                const where = try std.fmt.allocPrint(a, "{d}:{d}", .{ ins.position.line, ins.position.column });
+                const v = try g.functionValue(run, frame.library, body, where, captures);
+                m.count = n;
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .make_function, .make_imported_function => {
+                // A named function's bare name: the unit's own, or an
+                // imported one, `<library>:<name>`.
+                var library = frame.library;
+                var body: u32 = undefined;
+                var name: []const u8 = undefined;
+                if (ins.op == .make_function) {
+                    body = @intCast(ops[0].int);
+                    name = unit.bodies[body].name;
+                } else {
+                    const colon = std.mem.indexOfScalar(u8, ops[0].text, ':').?;
+                    library = importOf(run, frame, ops[0].text[0..colon]) orelse return g.raise("not implemented", &.{});
+                    name = ops[0].text[colon + 1 ..];
+                    body = library.?.function(name) orelse return g.raise("not implemented", &.{});
+                }
+                const captures = try model.map(gpa, &.{});
+                defer captures.release();
+                const v = try g.functionValue(run, library, body, name, captures);
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .call_value, .call_value_wait => return g.callValue(run, frame, ins),
             .call_import => {
                 // `<library>:<name>`: a function of a Library the unit
                 // imports, run in the caller's Run.
@@ -3455,6 +3631,30 @@ pub const Group = struct {
                 for (0..n) |i| args[n - 1 - i] = pop(frame);
                 defer for (args) |v| v.release();
                 // The Core holds an object's kind and whether it is disposed.
+                // A Function Value's arity and name are in its code.
+                if (std.mem.eql(u8, ops[0].text, "functionArity") or std.mem.eql(u8, ops[0].text, "functionName")) {
+                    m.builtin = ops[0].text;
+                    m.args = args;
+                    if (args[0].data != .function) return g.wrongKind("function", args[0]);
+                    const code = g.codeOf(args[0]) orelse return g.raise("function gone", &.{});
+                    const body = g.functionBody(code) orelse return g.raise("function gone", &.{});
+                    const r = if (std.mem.eql(u8, ops[0].text, "functionName"))
+                        (if (body.kind == .lambda) try nothing(gpa) else try model.text(gpa, body.name))
+                    else blk: {
+                        var required: i64 = 0;
+                        for (body.params) |p| {
+                            if (std.mem.indexOf(u8, p, " = ") == null) required += 1;
+                        }
+                        const low = try chunks.numberValue(gpa, required);
+                        defer low.release();
+                        const high = try chunks.numberValue(gpa, @intCast(body.params.len));
+                        defer high.release();
+                        break :blk try model.range(gpa, low, high);
+                    };
+                    m.result = r.retain();
+                    try g.push(frame, r);
+                    return .next;
+                }
                 const object_builtin = std.mem.eql(u8, ops[0].text, "isDisposed") or std.mem.eql(u8, ops[0].text, "objectKind");
                 if (object_builtin) {
                     m.builtin = ops[0].text;

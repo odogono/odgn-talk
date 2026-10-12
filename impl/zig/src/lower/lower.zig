@@ -47,8 +47,10 @@ pub const Body = struct {
     /// Each parameter as the disassembly shows it.
     params: []const []const u8,
     captures: u32 = 0,
-    /// The slot of the first capture.
+    /// The slot of the first capture, and each capture's name, in slot
+    /// order.
     capture_slot: u32 = 0,
+    capture_names: []const []const u8 = &.{},
     /// A Handler Clause's Queueing Policy.
     policy: Policy = .none,
     locals: u32,
@@ -608,6 +610,7 @@ const Frame = struct {
     fn finishSlots(f: *Frame) Allocator.Error!void {
         if (f.checker) |cb| {
             f.capture_names = cb.captures;
+            f.body.info.capture_names = cb.captures;
             f.body.info.capture_slot = @intCast(f.slots.items.len);
             for (cb.captures) |c| _ = try f.addSlot(c);
             f.body.info.captures = @intCast(cb.captures.len);
@@ -1298,6 +1301,7 @@ const Frame = struct {
         var e = try Frame.init(l, .event, message, null);
         const params = try e.parameters(ev.patterns);
         e.capture_names = captured.items;
+        e.body.info.capture_names = captured.items;
         e.body.info.capture_slot = @intCast(e.slots.items.len);
         for (captured.items) |name| _ = try e.addSlot(name);
         e.body.info.captures = @intCast(captured.items.len);
