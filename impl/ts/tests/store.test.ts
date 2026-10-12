@@ -496,8 +496,22 @@ test('Store contents encode as one JSON object in key order', () => {
     'a={x: [1, "two"], "$y": true}',
     'b=2.50 GBP',
   ]);
+  expect(encodeContents(decodeContents(json))).toBe(json);
   expect(() => decodeContents('[1]')).toThrow(HostError);
   expect(() => decodeContents('{"k":{"$object":["room","r"]}}')).toThrow();
+});
+
+test('Store contents refuse non-canonical member encodings', () => {
+  for (const source of [
+    '{"$dec":"3"}',
+    '{"$dec":"-9007199254740991"}',
+    '{"$map":[["a",1]]}',
+    '{"$map":[]}',
+  ]) {
+    expect(() => decodeContents(`{"$storeKey":${source}}`)).toThrow(
+      expect.objectContaining({ code: 'invalid value' }),
+    );
+  }
 });
 
 test('replacing a Store’s contents checks keys, kinds and quotas', () => {

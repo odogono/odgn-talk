@@ -392,6 +392,14 @@ test('malformed object recordings fail as Transcript errors, including errors sw
     original.replace(/% .*"type":"property-end".*\n/u, ''),
     original.replace('"operation":"get"', '"operation":"set"'),
     original.replace('"reply":{"value":1}', '"reply":{"value":{"1":1,"1":2}}'),
+    ...[
+      '{"$dec":"3"}',
+      '{"$dec":"-9007199254740991"}',
+      '{"$map":[["a",1]]}',
+      '{"$map":[]}',
+    ].map(value =>
+      original.replace('"reply":{"value":1}', `"reply":{"value":${value}}`),
+    ),
     original + '% {"type":"object","object":{"kind":"Malformed","id":"o"}}\n',
   ]) {
     expect(() => replayTranscript(parseTranscript(changed))).toThrow();

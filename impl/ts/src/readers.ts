@@ -555,7 +555,10 @@ const fromJson = (
         }
         if (tag === '$dec' && typeof data === 'string') {
           const v = dec(data);
-          if (v.toString() !== data) {
+          if (
+            v.toString() !== data ||
+            (!data.includes('.') && abs(v.asDecimal()!.toBigInt()) < 2n ** 53n)
+          ) {
             invalidValue('Non-canonical $dec');
           }
           assign(v);
@@ -637,6 +640,9 @@ const fromJson = (
           }
           return [pair[0], pair[1]!];
         });
+        if (!pairs.some(([key]) => key.startsWith('$'))) {
+          invalidValue('A $map without a $ key');
+        }
       }
       const entries: [string, Value][] = pairs.map(([key]) => [key, nothing]);
       tasks.push(() => assign(map(entries)));
