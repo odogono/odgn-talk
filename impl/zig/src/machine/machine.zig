@@ -152,6 +152,11 @@ pub const Run = struct {
     /// The body of the Handler Clause it was dispatched to, whose Queueing
     /// Policy it follows.
     clause_body: ?u32 = null,
+    /// Whether a Fallback clause took its message.
+    fallback: bool = false,
+    /// While it is dispatched, the pc in its clause body where the clause's
+    /// patterns and Guard have passed.
+    select_at: ?u32 = null,
     /// Whether it waits in its clause's queue, under `, queued`.
     parked: bool = false,
     /// The call a cancellation abandoned, which its last `seg` names.
@@ -761,32 +766,65 @@ pub const Group = struct {
             clause += 1;
             if (b.params.len != d.args.len) continue;
             run.clause = clause;
-            run.clause_body = @intCast(i);
-            const busy = g.clauseBusy(s, @intCast(i));
-            if (busy and b.policy == .replacing) try g.cancelClause(s, @intCast(i));
-            try g.pushFrame(run, @intCast(i), d.args);
-            if (b.during) |slot| if (d.during) |during| {
-                const f = &run.frames.items[run.frames.items.len - 1];
-                f.locals[slot].release();
-                f.locals[slot] = during.retain();
-            };
-            // Dispatch charges the clause at the body's first instruction.
-            run.fuel += 4;
-            if (busy and b.policy == .queued) {
-                run.parked = true;
-                run.suspended_at = "park";
-                outcome = .suspended;
+            if (try g.tryClause(s, run, @intCast(i), d.args, d.during)) |end| {
+                outcome = end;
                 break;
             }
-            if (busy and b.policy == .dropping) {
-                outcome = .dropped;
-                break;
+        } else if (!d.internal_error) {
+            // No named clause took it: the Fallback's clauses, with the
+            // message map, built without charge.
+            const message = try g.messageMap(d);
+            defer message.release();
+            for (s.unit.bodies, 0..) |b, i| {
+                if (b.kind != .fallback) continue;
+                run.fallback = true;
+                run.clause = b.clause orelse 1;
+                if (try g.tryClause(s, run, @intCast(i), &.{message}, null)) |end| {
+                    outcome = end;
+                    break;
+                }
             }
-            outcome = try g.execute(run, true);
-            if (outcome != .clause_failed) break;
-            outcome = .unhandled;
         }
         try g.endSegment(s, run, outcome);
+    }
+
+    /// Tries one clause for a Run being dispatched, charging it: null if
+    /// its patterns or Guard fail. Once they pass, its Queueing Policy
+    /// applies while another Run of the clause hasn't ended.
+    fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value) !?Outcome {
+        const b = s.unit.bodies[body];
+        run.clause_body = body;
+        try g.pushFrame(run, body, args);
+        if (b.during) |slot| if (during) |x| {
+            const f = &run.frames.items[run.frames.items.len - 1];
+            f.locals[slot].release();
+            f.locals[slot] = x.retain();
+        };
+        // Dispatch charges the clause at the body's first instruction.
+        run.fuel += 4;
+        run.select_at = b.first;
+        for (s.unit.unwind) |e| if (e.kind == .guard and e.first == b.first) {
+            run.select_at = e.last + 1;
+        };
+        var outcome = try g.execute(run, true);
+        if (outcome == .selected) {
+            if (g.clauseBusy(s, body)) switch (b.policy) {
+                .queued => {
+                    run.parked = true;
+                    run.suspended_at = "park";
+                    return .suspended;
+                },
+                .dropping => return .dropped,
+                .replacing => try g.cancelClause(s, body),
+                .none => {},
+            };
+            outcome = try g.execute(run, true);
+        }
+        if (outcome == .clause_failed) {
+            run.clause_body = null;
+            return null;
+        }
+        return outcome;
     }
 
     /// Resumes a ready Run with what settled its wait.
@@ -1338,7 +1376,8 @@ pub const Group = struct {
                 writeOrigin(out, d);
                 // An unhandled Run names its Handler only if the Script has
                 // one.
-                if (g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
+                if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
+                if (run.fallback) out.writeAll(" fallback=yes") catch {};
                 if (outcome != .unhandled and outcome != .clause_failed) out.print(" clause={d}", .{run.clause}) catch {};
             }
             const end: []const u8 = switch (outcome) {
@@ -1349,6 +1388,7 @@ pub const Group = struct {
                 .unhandled, .clause_failed => "unhandled",
                 .dropped => "dropped",
                 .cancelled => "cancel",
+                .selected => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
             if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
@@ -1373,12 +1413,13 @@ pub const Group = struct {
                 .unhandled, .clause_failed => "unhandled",
                 .dropped => "dropped",
                 .cancelled => "cancelled",
-                .suspended => unreachable,
+                .suspended, .selected => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
             // A `run` record names a Host Delivery, never a sender.
             if (d.from == null) out.print(" delivery=d{d}", .{d.id}) catch {};
-            if (g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
+            if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
+            if (run.fallback) out.writeAll(" fallback=yes") catch {};
             switch (outcome) {
                 .returned => |v| if (v.data != .nothing) {
                     out.writeAll(" value=") catch {};
@@ -1586,6 +1627,8 @@ pub const Group = struct {
         suspended,
         /// Its `, dropping` clause was busy.
         dropped,
+        /// Dispatch reached the end of its clause's patterns and Guard.
+        selected,
         cancelled,
     };
 
@@ -1596,6 +1639,10 @@ pub const Group = struct {
             _ = g.scratch.reset(.retain_capacity);
             const frame = &run.frames.items[run.frames.items.len - 1];
             const pc = frame.pc;
+            if (run.select_at) |at| if (run.frames.items.len == 1 and pc == at) {
+                run.select_at = null;
+                return .selected;
+            };
             const ins = run.script.unit.code[pc];
             frame.pc += 1;
             var charge: costs.Measures = .{};
