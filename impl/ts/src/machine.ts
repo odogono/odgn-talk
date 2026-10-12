@@ -23,7 +23,9 @@ import {
   limitDefaults,
   reservedErrorKeys,
 } from './generated/machine';
-import { Op } from './generated/opcodes';
+// Keep opcode names distinct from runtime helpers while allowing constant inlining.
+// eslint-disable-next-line import-x/no-namespace
+import * as Op from './generated/opcodes';
 import { builtins, grammar } from './generated/syntax';
 import {
   appendTo,
