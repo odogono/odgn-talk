@@ -5,6 +5,7 @@ bytes/value-encoding
 capabilities/calls
 capabilities/host-failures
 capabilities/load-checks
+capabilities/optional-args-join
 capabilities/standard-calendar
 capabilities/standard-calendar-errors
 capabilities/standard-calendar-validation
@@ -16,6 +17,8 @@ collecting/next-filter
 collecting/partial-error
 collecting/waiting-body
 collecting/zero-passes
+computed-sends/names
+computed-sends/unhandled
 dates/value-encoding
 disassembly/calls-and-lambdas
 disassembly/collecting
@@ -63,6 +66,7 @@ load-diagnostics/not-a-value
 load-diagnostics/not-constant
 load-diagnostics/not-in-a-guard
 load-diagnostics/not-in-a-join
+load-diagnostics/not-in-a-join-try
 load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
 load-diagnostics/not-in-a-timeout
@@ -76,9 +80,12 @@ load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
 quantities/value-encoding
 suspension/answers
+suspension/joins
 suspension/late-failure
+suspension/timeout-block-join
 suspension/wait-precision
 tell-block/equivalent
+tell-block/join
 tell-block/load-checks
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters

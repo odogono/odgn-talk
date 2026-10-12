@@ -226,9 +226,20 @@ default `MaxWait` for a call, in deadline order, and a timed-out call raises
 `timeout` and is abandoned. A resumed Run is charged its answer's terms over
 the result and any cost the answer brought. Persistent State counts each
 suspended or ready Run's frames, its pending call and what it will resume
-with. Joins, `wait for`, Timeout Blocks, `send … and wait`, `timer`, `store`,
-`sqlite` and `user`, Capability Scopes and Segment-bound effects, Lambdas and
-messages between Scripts come next. A Run past the default Fuel per Run ends
+with.
+
+Scripts send to each other: `send`, `send … and wait` and the computed-name
+and spread forms put the message at the back of the receiver's work, with a
+`send` record, and a waiting sender resumes with the reply or `send failed`.
+A Script named as a receiver is its name, and `me` with no owner is the
+Script itself. A Join starts its members where they stand and suspends once at
+its `end`: it resumes with every answer in start order, or with the first
+failure, `index` added, and an error leaving the Join abandons its pending
+members. A Timeout Block's deadline sits on the frame's stack, bounds every
+Suspension Point inside it, and raises `timeout` with `deadline: true`, at once
+when it has already passed. `wait for`, `timer`, `store`, `sqlite` and `user`,
+Capability Scopes and Segment-bound effects, Lambdas, Host Objects and the
+Message Path come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 

@@ -58,10 +58,19 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
     }
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[scripts]]")) continue;
+        if (case_setup.field(t, "limits")) |limits| for (limits.table) |l| {
+            // Limits the machine already meets with its defaults don't
+            // change these cases; the others wait for step 4.
+            for ([_][]const u8{ "maxWaitMs", "fuelPerRun", "mailboxDepth" }) |k| if (std.mem.eql(u8, l.key, k)) return "limits are not implemented";
+        };
         const grants = case_setup.field(t, "grants") orelse continue;
         for (grants.table) |g| {
             if (g.value.get("coordinator") != null) return "Segment Coordinators are not implemented";
-            if (case_setup.field(t, "limits") != null) return "limits are not implemented";
+            if (case_setup.field(t, "limits")) |limits| for (limits.table) |l| {
+                // Limits the machine already meets with its defaults don't
+                // change these cases; the others wait for step 4.
+                for ([_][]const u8{ "maxWaitMs", "fuelPerRun", "mailboxDepth" }) |k| if (std.mem.eql(u8, l.key, k)) return "limits are not implemented";
+            };
         }
     }
     return null;

@@ -264,7 +264,7 @@ typedef struct talk_operation {
     size_t name_len;
     const talk_shape *const *args; /* an Optional suffix may be left off */
     size_t args_len;
-    const talk_shape *result; /* NULL for fire-and-forget */
+    const talk_shape *result; /* NULL: none to check, as for fire-and-forget */
     talk_cost cost;
     talk_mode mode;
     int64_t max_pending_ms; /* suspending only; 0: the Script's MaxWait */
