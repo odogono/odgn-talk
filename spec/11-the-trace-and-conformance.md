@@ -1,7 +1,5 @@
 # 11. The Trace and conformance
 
-**Pending addition:** [Store Notification conformance](proposals/store-notifications.md#conformance) adds Core scenarios, a router kit and Session Transcripts. Notifications are ordinary `deliver` inputs, so no Trace record changes. None of these cases exists yet.
-
 _Draws on:_ [ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md), [ADR 0008](../docs/adr/0008-same-core-save-restore.md), [ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md), [ADR 0014](../docs/adr/0014-a-session-is-an-ordinary-host.md), [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0022](../docs/adr/0022-compound-units-convert-into-the-left-operands-units.md), [ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0029](../docs/adr/0029-text-literals-have-no-escapes-and-line-breaks-are-built-in-constants.md), [ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md), [#71](https://github.com/odogono/odgn-talk/issues/71), [#79](https://github.com/odogono/odgn-talk/issues/79), [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md), [ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md).
 
 Both Cores answer to the Spec and the Conformance Corpus, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)). This chapter gives the display form every value is written in, the ids the Core assigns, the Trace a Group writes, and the case kinds of the Corpus and how they are run. The formats are Data Files: the records and the `case.toml` keys are in [`corpus.toml`](data/corpus.toml), and the line grammars in [`trace.ebnf`](data/trace.ebnf).
@@ -764,3 +762,60 @@ The following scenarios are required by [the lifecycle contract](embedding/scope
 | Replay and save injection | Trace records determine lifecycle results; refused saves continue original Group; successful saves retain disabled state and Segment numbering |
 | Ordinary file writing | Fault closes handle but does not undo bytes already written |
 | Staged single-file publication | Close does not publish; successful Segment commits once; fault after close discards; abandoned unfinished file is not published |
+
+## Store Notification conformance scenarios
+
+Notifications are ordinary `deliver` Host Inputs; no Trace record, `trace.ebnf` or `corpus.toml` change is needed. First-blessing review of independently written or derived expectations is separate from execution agreement between the Cores.
+
+### Core scenarios
+
+These scenarios require Trace Cases under `corpus/capabilities/` with `store` Stubs, and embedding tests for the release hook and the message layer. Both Cores must pass each, with and without injected save/restore.
+
+| Scenario | Required observation |
+| --- | --- |
+| `watch` with two and three arguments, Nothing as `message`, `unwatch` | Supplied arguments are kept in the `call` record; the Host receives the effective message; both give Nothing |
+| Empty name; message `""`, `"all"`, `"_"`, `"put"`, `"move:"`, `"to:at:"`, `"9lives"` | `invalid watch` with the right `field`, name checked first; no call id, no Host call, no charge |
+| Wrong Shapes and argument counts | `wrong kind` at run time, `wrong argument count` at load |
+| `watch` beside another Store's writes in one Segment | No participant enlisted; no `segment participant conflict` |
+| `watch` then Limit Fault, rollback or `effect failed` | The call stays in the Trace as made; nothing about it rolls back |
+| Revoked and disabled Grants | `capability revoked` or `capability disabled` before validation, `disabled` first |
+| `GrantsAsUsed` | `watch` and `unwatch` are kept only when used |
+| Host failures | `watch limit` raises with `{limit}`; an undeclared code becomes `host error` |
+| Release on Stop, owner disposal and fatal effect uncertainty | `stop` for every kept Grant with a hook, in name order, after abandonment and rollback, before the `stop` report |
+| Release on Reload and Library replacement | `reload` only on success, before the replacement runs; none on rejection |
+| Release on revocation | `revoke` once when drained; none for a repeat or an unknown name |
+| Release on disablement | `disable` right after the abandonment's `effect failure` report |
+| No release | Extend, Save, Restore and rejected Reloads call no hook |
+| Hook misuse | A worker call from the hook is `reentrant call`; a throw or panic is ignored |
+| Message layer | `release` interim requests carry the initiating `ref`; final replies wait for `release-result` |
+| Fingerprint and manifest | The `store` Grant's declarations include `watch` and `unwatch`; the hook doesn't affect identity |
+
+### Router kit
+
+[`corpus/notify-kit/`](../corpus/notify-kit/README.md) sits beside [the store kit](../corpus/store-kit/README.md): language-neutral TOML sequences that drive a router, its Store and stand-in Groups; the corpus runners skip the kit. Each sequence sets limits and runs steps that register, unregister, commit with given changed keys, set a Group's mailbox to accept or refuse, report a Pump, release, detach, take a checkpoint, change a revision and restore. Each step states the Deliveries it makes, each with its Group, Script, message and payload, and any error. Both Cores' routers run the whole kit. It covers:
+
+| Scenario | Required observation |
+| --- | --- |
+| Net change | Set to the same value, delete of a missing key, set-then-restore in one commit and a no-op increment route nothing; a changed value routes once, with sorted unique keys |
+| Matching | Empty prefix, a prefix equal to a key, a non-matching prefix and NFC prefixes; a commit spanning two watches routes one Notification to each |
+| Own writes | The writing Script's own watch receives its commit |
+| Order of watches | Across Groups, Scripts, Grant aliases and watch names; replacement keeps the place, unwatch and re-watch moves it |
+| Replacement | Identical parameters keep pending work; different parameters discard it and route only under the new ones; an invalid or over-limit replacement leaves the old watch as it was |
+| Registration boundary | A commit before `watch` isn't routed; a commit after is; a Segment's own pending write after its `watch` is |
+| Mailbox refusal | A refused Notification is held; later commits queue behind it; retry after the Pump admits them in order |
+| Overload | Exceeding `pending` or `pendingSize` turns one watch resyncing, discarding only its own pending detail; already admitted Deliveries stay |
+| Resyncing | Later commits add nothing; marker admission returns the watch to ordinary; the next commit routes an ordinary Notification |
+| Fair retry | Rounds rotate their starting watch; one watch's refusal doesn't stop another's admission |
+| Other refusals | A refusal other than `MailboxFull` removes the watch |
+| Limits | Each of the four limits refuses `watch` with its `limit` word, in table order; the marker reservation counts from registration |
+| Release and detach | Each reason removes the owner's watches and pending work; admitted Deliveries stay; detach removes a Group's watches |
+| Checkpoint, unchanged source | Restore reinstates watches, pending work and retry position with no Delivery |
+| Checkpoint, changed source | One marker per restored watch on each changed Store, admitted at once in the order of watches |
+| Checkpoint, Grants | Unbound, revoked, disabled and re-bound-to-another-Store watches are dropped and listed |
+| Checkpoint, variables-only | No watches restored |
+| Checkpoint, damaged | Missing routing state and a mismatched digest are `invalid checkpoint`, and nothing is made |
+| Checkpoint refused | `effects pending` refuses the checkpoint |
+
+### Session Transcripts
+
+Transcripts under `corpus/sessions/` cover an ordinary Notification, a Handler of the writer's own change, an unchanged write, `unwatch`, removal by redefinition, `:store load` and `:store clear` routing, and `:save` and `:restore` with and without a Store change since the save. The cases are `store-notifications` ([chapter 12's example](12-sessions-and-tooling.md#session-store-notifications): an ordinary Notification, an unchanged write and a restore after a change), `store-notify-own-writes`, `store-notify-lifecycle` (`unwatch`, Extend and removal by redefinition) and `store-notify-host-changes` (`:store load`, `:store clear`, and restores with and without a change).

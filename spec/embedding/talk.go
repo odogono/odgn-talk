@@ -346,6 +346,8 @@ type GrantContext struct {
 	Now        time.Time
 	Reason     ReleaseReason
 }
+
+// ReleaseHook is synchronous and unmetered; panics cannot refuse release.
 type ReleaseHook func(GrantContext)
 
 // CapabilityOption is an Operation or a definition option.
@@ -515,9 +517,11 @@ func (c *Core) ConsoleCapability(impl ConsoleImpl, costs Costs) (*CapabilityDef,
 // {limit} or `store busy` {key}, and from Increment with the error Add returns
 // (chapter 7, ADR 0062).
 type StoreImpl interface {
- Watch(c *Call, name, prefix, message string) error
- Unwatch(c *Call, name string) error
- Release(GrantContext)
+	// Final at the call; message is effective, defaulting to storeChanged.
+	// Fail with ScriptError `watch limit` {limit} before changing a registration.
+	Watch(c *Call, name, prefix, message string) error
+	Unwatch(c *Call, name string) error
+	Release(GrantContext)
 	Begin(ctx SegmentContext) EffectResult
 	Commit(ctx SegmentContext) EffectResult
 	Rollback(ctx SegmentContext) EffectResult
@@ -1287,3 +1291,50 @@ type MessageDecl struct {
 // It is a pure function of the definitions, not of a live Group, and it never
 // includes Grant bindings.
 func ExportManifest(m ManifestSpec) ([]byte, error)
+
+// ---------------------------------------------------------------------------
+// Notification helper: github.com/odogono/odgn-talk/impl/go/notify
+// ---------------------------------------------------------------------------
+
+// The following companion declarations are in package notify. They are kept
+// in a separate package block because Go has no qualified declarations in a
+// package northtalk file. Chapters 7, 9 and 10 fix their shared behavior.
+/*
+package notify
+
+import talk "github.com/odogono/odgn-talk/impl/go"
+
+type WatchLimits struct {
+	Watches, WatchSize, Pending, PendingSize int64
+}
+type RouterOptions struct {
+	// Told after each admitted Notification; must not call the router.
+	Admitted func(*talk.Group)
+	Limits   func(store string) WatchLimits
+	// Read under the Store's synchronization.
+	Revision func(store string) string
+}
+
+// Entries are "<script>.<grant>.<watch>", in the order of watches.
+type RoutingResult struct{ Restored, Dropped, Resynced []string }
+type Router struct{}
+
+func New(o RouterOptions) *Router
+func (r *Router) Watch(c *talk.Call, name, prefix, message string) error
+func (r *Router) Unwatch(c *talk.Call, name string) error
+func (r *Router) Release(ctx talk.GrantContext)
+
+// Applies the commit under the Store's synchronization; an error routes nothing.
+func (r *Router) Commit(store string, apply func() ([]string, error)) error
+
+// After each Pump returns; true while the Group still has pending work.
+func (r *Router) Pumped(g *talk.Group) bool
+func (r *Router) Detach(g *talk.Group)
+
+// A checkpoint; returns effects pending as Group.Save does.
+func (r *Router) Save(g *talk.Group) ([]byte, error)
+func (r *Router) Restore(core *talk.Core, checkpoint []byte, o talk.RestoreOptions) (*talk.Group, talk.RestoreResult, RoutingResult, error)
+
+// Value Encoding comparison; Nothing also represents a missing key.
+func Changed(before, after talk.Value) bool
+*/

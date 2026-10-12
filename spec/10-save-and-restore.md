@@ -8,8 +8,6 @@ A Host can save a whole Group between Pumps and restore it later on the same Cor
 
 Catch dispatch can be saved at any instruction boundary, including ordinary catch tests, policy, pending transfer cleanup and action entry. The saved state preserves retained failure control and shared owner locals, without changing the save-format compatibility or live-effect refusal rules.
 
-**Pending addition:** [Store Notification checkpoints](proposals/store-notifications.md#checkpoints) pair a Group save with the Host's watch routing state and Store revisions, so that a full restore reinstates watches and a changed Store resyncs them. Neither Core's router exists yet; a save still holds no watches.
-
 **Save then restore is unobservable** ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)). A restored Group, given the same later Host Inputs, Clock readings and Fuel Slices, gives the same results and reports, and the same Trace apart from the save and restore records, as the Group that was never saved. It uses the same Fuel and faults at the same instruction. Resetting any counter would let a Script launder Fuel through a save.
 
 - **Same Core family only:** a save from the TS Core never restores on the Go Core, and the other way round. The format is each Core's own, and there is no stable cross-Core format ([ADR 0005](../docs/adr/0005-durability-is-a-deferred-extension.md)).
@@ -63,6 +61,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
 ### What a save leaves out
 
 - **Anything the Host holds:** native objects, Grant bindings, Host function state, Trace sinks and `OnReady`. Tooling-only debugger callbacks, pauses and breakpoints are not saved.
+- **Watches:** a Core save holds no watches or router-pending Notifications. A Host that offers `watch` uses [Store Notification checkpoints](#store-notification-checkpoints) to save that state beside the Group. Already admitted Notifications are ordinary saved Deliveries.
 - **Stores:** a `store` Grant's Store belongs to the Host, so restoring an older save can leave Script Variables and the Store disagreeing ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)). A save can't be taken while a Segment's Store writes are uncommitted, as for any live participant ([ADR 0049](../docs/adr/0049-live-host-effects-prevent-saving.md)).
 - **Futures:** a `Request`, `Call` or `Decide` the Host is waiting on has a delivery id in the save, but its future belongs to the old Group. After a restore, the Host learns the outcome from the `run end` or `decided` report with that delivery id.
 - **Other Groups:** a save covers exactly one Group. A Delivery already made into another Group, and messages already sent outside it, aren't part of it.
@@ -109,6 +108,42 @@ Each pending call is a suspending Operation call that hadn't been answered when 
 - **Never outside:** Scripts send only within their own Group, and a save covers the whole Group, so every partner is inside it.
 - **Deliveries from the Host:** a `Request`, `Call` or `Decide` in flight keeps its delivery id, and its Run reports as usual. Only the future is gone ([What a save leaves out](#what-a-save-leaves-out)).
 
+## Store Notification checkpoints
+
+The Core's save holds no watches ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)), and the Store's contents stay outside every save. A **checkpoint** is a Group save with the router's state beside it, taken and restored as one unit. A Host that offers `watch` saves and restores Groups through checkpoints.
+
+### Store revisions
+
+Each Store gives a **revision**: opaque text that the Store changes on every commit with changed keys and on nothing else. Two readings are equal only if no commit with changed keys happened between them. A durable Store keeps its revision with its contents. A Store that can't prove continuity, such as an in-memory Store that a new process creates, starts from a revision no earlier reading could have given. So comparing revisions detects every change, including changes made while no router was watching.
+
+### Taking a checkpoint
+
+Between Pumps, the router saves the Group with `Group.Save` and records, under each affected Store's synchronization:
+
+- **Each watch** the Group's Scripts hold: owner, name, the Store's name, prefix, effective message and place in the order of watches.
+- **Its pending work:** the pending ordinary Notifications in order, or the pending marker.
+- **The Group's retry position,** the watch the next retry round starts at.
+- **Each watched Store's revision** at the checkpoint.
+- **The SHA-256 of the Group save's bytes,** which ties the routing state to that save.
+
+If `Save` refuses with `effects pending`, the checkpoint is refused the same way and records nothing. A checkpoint records no Store contents.
+
+### Restoring a checkpoint
+
+The router restores a checkpoint by calling `Core.Restore` with the Host's options, then setting up the new Group's routing before it returns, and so before the first Pump. If any step fails, nothing is made and no watch is registered.
+
+1. **Reading:** a checkpoint without routing state, with routing state the router can't read, or whose recorded digest doesn't match its save, is the Host error `invalid checkpoint`. Restoring the save on its own would silently lose its watches, so the router never does that.
+2. **The Group:** `Core.Restore` runs as [chapter 10](10-save-and-restore.md#restoring) says, and its errors are returned unchanged.
+3. **Variables-only:** a variables-only restore registers no watches, as Reload removes them, and the Host starts its Scripts again as after a Reload.
+4. **Full:** each recorded watch is registered again, with its pending work, its place and the retry position, if its Script's named Grant is re-bound to a `store` Grant, through this router, whose binding names the recorded Store. A watch whose Grant is unbound, restored revoked or disabled, or bound to another Store is dropped. A Grant the restore doesn't re-bind is restored revoked ([chapter 10](10-save-and-restore.md#restoring)), so it is dropped as unbound; a Grant revoked or disabled before the checkpoint was released then, so the checkpoint holds none of its watches. The restored Group is a new Group, and takes its place among Groups when its first watch is registered. Nothing reruns Script code, and nothing is redelivered: every admitted Notification is already in the restored Group's mailboxes or input queue.
+5. **Source changes:** for each Store whose revision now differs from the recorded one, each restored watch on it becomes resyncing, replacing its pending work with one Reconciliation Marker, and the router attempts to admit those markers immediately, in the order of watches. The marker is a new Host Input, not a replay of the changes it covers.
+
+The result tells the Host which watches were restored, which were dropped and which were resynced.
+
+### Unobservable when nothing changed
+
+A checkpoint restored with the same Store revisions restores the same watches, pending work and retry position, and creates no marker and no Delivery. Given the same later inputs, the restored Group therefore receives exactly the Notifications the original would have, so [ADR 0008](../docs/adr/0008-same-core-save-restore.md)'s rule holds for routing too. A Store that changed between taking and restoring a checkpoint, including in another process or before an offline restore, costs each of its restored watches one marker.
+
 ## Variables-only restore
 
 A variables-only restore rebuilds each Script from its saved source and then each of its extensions in the order they were made, against the Core's current versions, the Libraries given and the Grants re-bound, and keeps only its Script Variables. It follows the Reload rule, [carrying variables over](#carrying-variables-over) for every Script at once.
@@ -134,7 +169,7 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 
 1. **Checking:** the new source is loaded against the Script's Grants, Libraries and well-known objects, and its initialiser runs, into new Script Variables. A LoadError leaves the Script unchanged.
 2. **Carrying:** with `ResetVariables`, the Script Variables are the new initialiser's values. With `CarryVariables`, they are [carried over](#carrying-variables-over) from the prospective post-rollback bindings: use an active Segment's base for variables it would restore when the old Run stops. Compute and validate this view without yet changing the old Run or calling the Host. A carry that would exceed the Persistent State cap is the Host error `state too large`, and leaves the Script unchanged.
-3. **Stopping:** only now, the Script is stopped as Stop Script is ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)), with reason `reload`. Its running, parked and suspended Runs are discarded with no `finally`, the messages in its mailbox are dropped, and their senders get `send failed`, reason `stopped`. Pending calls and live scopes are abandoned, and the current participant is rolled back before replacement. Disabled Grants remain disabled. A fatal lifecycle failure stops the Group and prevents replacement; completed external cleanup is not undone. The `stop` report lists what was discarded.
+3. **Stopping:** only now, the Script is stopped as Stop Script is ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)), with reason `reload`. Its running, parked and suspended Runs are discarded with no `finally`, the messages in its mailbox are dropped, and their senders get `send failed`, reason `stopped`. Pending calls and live scopes are abandoned, and the current participant is rolled back before replacement. Disabled Grants remain disabled. A fatal lifecycle failure stops the Group and prevents replacement; completed external cleanup is not undone. The Script's [Grant release hooks](09-embedding.md#the-grant-release-hook) remove its watches before replacement and the `stop` report. The `stop` report lists what was discarded.
 4. **Replacing:** the new code and Script Variables replace the old, all at once. Every Function Value whose Home Script is this Script becomes stale.
 
 - **Keeping the mailbox:** with `keepMailbox`, step 3 drops none of the mailbox's messages, and their senders go on waiting; the Script's Runs are still discarded. A message a Rewind put back is dispatched to the new code ([ADR 0068](../docs/adr/0068-a-run-in-its-first-segment-can-be-rewound-to-its-delivery.md)).
@@ -157,13 +192,13 @@ A Host changes a loaded Script's code in one of two ways ([ADR 0005](../docs/adr
 - **Only new names:** an Entry that declares a name the Script already has, including a Handler of the same name, is the Host error `name reused`, and the Host reloads instead. An Entry can't add Grants or well-known objects, which belong to loading.
 - **As a code unit:** the Entry is compiled as a new code unit of the Script, an extension, whose names resolve to the Script's existing ones as well as its own. Its initialiser runs for its new Script Variables and Constants. A LoadError leaves the Script unchanged.
 - **The cap:** before the extension applies, the Script Variables it adds and everything the Script already keeps must fit the Persistent State cap. Otherwise the Host error is `state too large`, and the Script is unchanged.
-- **Nothing stops:** Runs, the mailbox and pending calls carry on, and Function Values stay valid, since no existing code unit changes.
+- **Nothing stops:** Runs, watches, the mailbox and pending calls carry on, and Function Values stay valid, since no existing code unit changes.
 - **Code identity:** the extension's own code identity is computed as a Script's is, with kind `extension`, the Script's name, and the Libraries its `use` lines import. The extended Script's code identity is then the SHA-256 of the UTF-8 text of three lines, each ended by LF: the previous identity in lowercase hexadecimal, `extend`, and the extension's identity in lowercase hexadecimal ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)). So the Group Fingerprint changes, while Function Values made before stay valid.
 - **A Reload** replaces the Script and all its extensions with the one new source.
 
 ## Host errors
 
-These are the Host errors this chapter adds to [the catalogue](09-embedding.md#host-error-catalogue): `invalid save`, `save mismatch`, `unknown call`, `state too large` and `effects pending`. `reentrant call`, `clock backwards`, `name reused` and `not adoptable` are the ones already there.
+These are the Host errors this chapter adds to [the catalogue](09-embedding.md#host-error-catalogue): `invalid save`, `save mismatch`, `unknown call`, `state too large`, `effects pending` and `invalid checkpoint`. `reentrant call`, `clock backwards`, `name reused` and `not adoptable` are the ones already there.
 
 ## Outside parity
 

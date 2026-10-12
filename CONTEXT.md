@@ -117,7 +117,7 @@ One message the Host hands to a Script Group from outside, identified by a deliv
 _Avoid_: event (unqualified), request, dispatch
 
 **Notification**:
-A message about a change or occurrence in a Host-owned source, made available to interested Scripts through their Grants under the source-specific notification contract of [ADR 0061](docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), staged in [Store Notifications](spec/proposals/store-notifications.md). A Store change is one such Notification.
+A message about a change or occurrence in a Host-owned source, made available to interested Scripts through their Grants under the source-specific notification contract of [ADR 0061](docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), specified in [Store watch Operations](spec/07-libraries-and-the-standard-library.md#store-watch-operations). A Store change is one such Notification.
 _Avoid_: event (unqualified), broadcast (for a source-specific notification)
 
 **Subscription**:

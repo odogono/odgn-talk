@@ -34,9 +34,9 @@ The Spec states every rule of the language once, in its final form. [Chapter 0](
 
 Recovery Offers and two-phase catch search are specified in [chapter 4](04-expressions-and-statements.md#recovery-offers), with the machine and costs in [chapter 8](08-the-abstract-machine-and-the-cost-model.md#the-unwind-table), saved dispatch state in [chapter 10](10-save-and-restore.md#saving) and choice/entry records in [chapter 11](11-the-trace-and-conformance.md#recovery-choice-and-entry). [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md) records the decision.
 
-## Staged specifications
+## Store Notifications
 
-[Store Notifications](proposals/store-notifications.md) is the specified contract for Store `watch` and `unwatch` ([ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227)): Operation Declarations, routing, the Grant release hook, checkpoints, limits, the Session Host's rules and conformance cases. Both Cores support its Grant release hook (#618); Store watches, routers and Session Host support remain pending, and the Operation/error Data File entries are deferred to integration.
+Store `watch` and `unwatch` are specified in [chapter 7](07-libraries-and-the-standard-library.md#store-watch-operations), with the Grant release hook and router in [chapter 9](09-embedding.md#the-grant-release-hook), checkpoints in [chapter 10](10-save-and-restore.md#store-notification-checkpoints), conformance scenarios in [chapter 11](11-the-trace-and-conformance.md#store-notification-conformance-scenarios) and Session driving in [chapter 12](12-sessions-and-tooling.md#session-store-notifications). [ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md) records the design. Both Cores and Session Hosts implement the contract, and its Operation and Error Data Files are active.
 
 ## Data Files
 

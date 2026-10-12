@@ -1,6 +1,6 @@
 # The router kit
 
-Sequences that every notification router must follow ([Store Notifications](../../spec/proposals/store-notifications.md#router-kit), [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)). The router is the Host's, so Trace Cases can't hold it to the Spec. This kit does instead. It is language-neutral data, so every Core's router can reuse it.
+Sequences that every notification router must follow ([Store Notifications](../../spec/11-the-trace-and-conformance.md#router-kit), [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)). The router is the Host's, so Trace Cases can't hold it to the Spec. This kit does instead. It is language-neutral data, so every Core's router can reuse it.
 
 These aren't Trace Cases, and the corpus runners skip this directory.
 

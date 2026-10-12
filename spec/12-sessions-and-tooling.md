@@ -21,15 +21,43 @@ The normative [Session observation contract](session-observation.md) defines Dec
 
 ### The Session Store
 
-Both Session Hosts grant `watch` and `unwatch`, with the costs above and the finite limits in [Store Notifications](proposals/store-notifications.md#the-session-host) (#620): for each Session Store, 100 watches, 65,536 logical bytes of registration state, 1,000 pending Notifications and 1,048,576 logical bytes of pending work. They deliver Notifications, pump for them at the same Clock reading, route `:store load` and `:store clear`, and keep checkpoints for `:save` and `:restore`, as that section describes (#621). Full chapter integration remains #622.
-
 `store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 
 - **In memory:** each Session Store lives in the Session Host's memory, and starts empty, so a Transcript replays the same way wherever it runs. `:store load` is the only way contents come in from outside.
-- **Named by the binding:** `:grant <name> store [<store>]` grants the Store named `<store>`, or `default`. Two Grants of one name share one Store.
+- **Named by the binding:** `:grant <name> store [<store>]` grants all eight Operations, including `watch` and `unwatch`, on the Store named `<store>`, or `default`. Two Grants of one name share one Store.
 - **Quotas:** a total size of 1,048,576, 1,000 keys and a largest value of 65,536, each counted by logical size.
+- **Watch limits:** for each Session Store, `watches` 100, `watchSize` 65,536, `pending` 1,000 and `pendingSize` 1,048,576 ([chapter 7](07-libraries-and-the-standard-library.md#store-watch-limits)).
+- **Revisions:** a Session Store's revision counts its commits with changed keys from 0, within the Session Host's memory.
 - **Never busy:** Session Pumps have no Fuel Slice, so a Segment ends within its Pump, and `store busy` can't arise.
 - **Outside saves:** `:save` and `:restore` leave every Session Store as it is, as any Host's saves do ([chapter 10](10-save-and-restore.md#what-a-save-leaves-out)).
+
+#### Session Store Notifications
+
+After each Pump returns, the Session Host calls the router's `pumped`, before it prints the Pump's lines. After a Pump in which the router admitted a Notification, during the Pump or in that retry, it pumps again at the same Clock reading if Host Inputs are queued, and keeps doing so until a Pump admits none or leaves none queued. These Pumps belong to the Host call that caused the first, so their lines come with its lines, and under a real Clock they have no `@` line of their own. A Notification's Run is a background Run, so its output lines start with `[<run>] `. A Handler whose own write always changes a key it watches never lets the session settle, as a Handler that keeps sending to itself doesn't.
+
+The `sessions/store-notifications` Transcript records this example under a virtual Clock:
+
+```text
+> :grant scores store
+> :clock virtual 2026-09-30T10:00:00Z
+> on scoresChanged change, queued
+|   say the "keys" of change
+| end scoresChanged
+> ask scores to watch "all", "", "scoresChanged"
+> ask scores to set "alex", 3
+[session/r3] ["alex"]
+> ask scores to set "alex", 3
+> :save
+saved default
+> :store clear
+cleared default
+[session/r5] ["alex"]
+> :restore
+restored default
+[session/r5] []
+```
+
+The second `set` changes nothing, so it sends nothing. `:store clear` removes `alex`. The restore brings back the run id counter of the save, and the watch, which is resynced because the Store's revision changed after `:save`. Its marker's `keys` is `[]`.
 
 ### The console
 
@@ -79,6 +107,7 @@ The Session Host keeps the **session source**: the Session Script's declarations
   - `on m` replaces every clause of `m`, at the first one's place. So a Handler built at the prompt has one clause, and a Library can hold more.
   - `function f` and `constant c` replace the old declaration in its place.
   - `use` takes the names it reuses out of the earlier `use` lines, dropping any line left empty, and is added at the end.
+- **Watches:** successful redefinition reloads the Session Script and removes its watches. An Entry can register them again. Extending, by declaring new names, keeps them.
 - **Discarded Runs:** the Reload discards every Run, and the Session Host prints each one ([Output](#output)).
 - **A Reload that fails** leaves the session source and the Script as they were.
 - **`script variable x = e`** for an `x` the Script already has sets its initialiser in the session source, then runs `put e into x` as a statement Entry, with no Reload. With no initialiser, it runs `put nothing into x`.
@@ -109,7 +138,7 @@ After it pumps, while the Entry's Run hasn't ended, the Session Host:
 - **Following Runs:** public [Run accounting](09-embedding.md#run-accounting) identifies dispatch, ancestry, exact Fuel and terminal/discarded work. The Trace's `seg` and `call` observations still identify console callers and foreground suspension. The Session Host never inserts `Inspect()` merely to follow execution ([ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md), narrowed by [ADR 0065](../docs/adr/0065-run-accounting-is-returned-to-every-host.md)).
 - **Echo:** when an expression's Run completes, its value is printed in the display form, which tells `"5"` from `5`.
 - **In the background,** the Session Host pumps whenever the next deadline comes under a real Clock.
-- **Queued Host Inputs:** after the Pumps of an Entry, a Session Command, an answer or a deadline, if Host Inputs are queued, including ones its Host adapters queued during those Pumps (a property getter's `deliver`, say), the Session Host pumps once more, as a separate Host call. That Pump is never followed by another for the same reason, and what it leaves queued waits for the next Entry, Session Command, answer or deadline. So a getter whose message reads the getter again can't keep the session pumping. Store Notifications are pumped for before it, at the same Clock reading ([Store Notifications](proposals/store-notifications.md#the-session-host), pending integration in #622).
+- **Queued Host Inputs:** after the Pumps of an Entry, a Session Command, an answer or a deadline, if Host Inputs are queued, including ones its Host adapters queued during those Pumps (a property getter's `deliver`, say), the Session Host pumps once more, as a separate Host call. That Pump is never followed by another for the same reason, and what it leaves queued waits for the next Entry, Session Command, answer or deadline. So a getter whose message reads the getter again can't keep the session pumping. Store Notifications are pumped for before it, at the same Clock reading ([above](#session-store-notifications)). Notifications admitted in the extra Pump are pumped for too, within its Host call, but it is never followed by another Pump for other inputs.
 - **Answers:** the Session Host pumps after answering a `read`, and after a built-in Capability's suspending call is answered.
 - **Ctrl-C** is `:cancel` of the foreground Run. The Session Host makes Host calls only between Pumps, so a Run spinning in one Segment ends at its Fuel limit.
 
@@ -193,7 +222,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 - **`:runs`** prints one line per Run that hasn't ended, from `Inspect()` ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)): its id, its status (`ready`, `suspended`, `parked` or `preempted`) and its Handler, then, for a suspended one, the end reason it suspended at, `until <instant>` if it has a deadline, and the ids it waits for, each separated from the last by a space.
 - **`:mailbox`** prints one line per message waiting: its delivery id, or the call or Run that sent it, then its name and its arguments as a list.
 - **`:vars`** prints one line per Script Variable, in declaration order, as `<name> = <value>`.
-- **`:save` and `:restore`** wrap the same-core save ([chapter 10](10-save-and-restore.md)). A save is kept in the Host's memory with the Session Host's own state: the session source, the next `entry<n>`, the `:limits` override, the Clock and the queued Stubs. `:save` prints `saved <name>`. `:restore` replaces the session's Group with one restored with `RejectMismatch`, adopts every pending call, and prints `restored <name>`, then `! discarded <run>` for each Run the restore discarded. The restore uses the user Libraries the session has then, so one replaced since the save makes it refuse as `save mismatch`.
+- **`:save` and `:restore`** keep a [Store Notification checkpoint](10-save-and-restore.md#store-notification-checkpoints), rather than a bare Group save. A checkpoint is kept in the Host's memory with the Session Host's own state: the session source, the next `entry<n>`, the `:limits` override, the Clock and the queued Stubs. `:save` prints `saved <name>`. `:restore` restores the checkpoint through the router with `RejectMismatch`, detaches the Group it replaces from the router, adopts every pending call, and prints `restored <name>`, then `! discarded <run>` for each Run the restore discarded. A Session Store that changed since `:save` sends one marker to each restored watch on it, and the Session Host pumps for those markers as the Pump `:restore` causes. The restore uses the user Libraries the session has then, so one replaced since the save makes it refuse as `save mismatch`.
 - **`:library`:** `add` compiles the file and adds the Library, and `replace` replaces it, carrying Script Variables over ([chapter 7](07-libraries-and-the-standard-library.md#registering-identity-and-replacing)). A Transcript records it as `> :library add <name>` or `> :library replace <name>`, followed by the Library's source as `|` lines, instead of the path.
   - **Its source** is its lines, each ended by an LF, so a file whose last line has no line break is read as if it had one. Every user Library's version is `1`, and replacing one keeps it.
   - **Refused here:** `add` for a name the session has already added is refused as `name reused`, and `replace` for one it hasn't as `library mismatch`, without a Host Input. A Library that doesn't compile prints each of its diagnostics as `! <code> at <library>:<line>:<column>`.
@@ -202,6 +231,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
   - **`:store load`** reads a file holding one JSON object, whose members are keys and their values in [the Value Encoding](09-embedding.md#json-and-the-value-encoding), and replaces the Store's contents with them. It prints `loaded <n> keys`. A file that isn't such an object, a key that is empty, a value that doesn't decode or holds a Host Object, or contents past a quota, is refused as `bad arguments`, and the Store is unchanged. A Transcript records it as `> :store load [<store>]`, followed by the file's lines as `|` lines, instead of the path, as for `:library`.
   - **`:store save`** writes the Store's contents to the file as one JSON object, with its members in key order and no white space, and prints `wrote <file>`.
   - **`:store clear`** empties the Store and prints `cleared <store>`.
+  - **Routing:** `:store load` and `:store clear` are commits, routed by their net changes. The Session Host pumps after one that admits a Notification, as the Pump the command causes.
   - **Between Pumps:** each form runs between Pumps, when no Segment has uncommitted Store writes, and no form is a Host Input.
   - **In the Playground,** `<path>` names a slot that the page keeps in its own storage, such as `localStorage`, since the session's worker has no file system.
 - **`:export`** prints the session source, its `use` lines included. Given a directory, it writes the session source as `session.talk` and each user Library as `<name>.talk`, and prints `wrote <file>` for each, with the file's name in the directory.
