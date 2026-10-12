@@ -113,7 +113,32 @@ pub const Object = struct { name: []const u8, kind: []const u8 };
 
 pub const Mode = enum { immediate, suspending, fire_and_forget };
 
-pub const Operation = struct { name: []const u8, mode: Mode, required: usize, total: usize };
+pub const Operation = struct {
+    name: []const u8,
+    mode: Mode,
+    required: usize,
+    total: usize,
+    /// Whether the argument at an index takes a literal; null when the
+    /// Shapes aren't known.
+    accepts: ?Accepts = null,
+};
+
+/// A literal argument, as the loader sees it: its kind, a Quantity's Unit,
+/// or a map's keys.
+pub const Literal = union(enum) {
+    number,
+    text,
+    boolean,
+    nothing,
+    quantity: []const u8,
+    list,
+    map: []const []const u8,
+};
+
+pub const Accepts = struct {
+    context: *const anyopaque,
+    call: *const fn (context: *const anyopaque, index: usize, literal: Literal) bool,
+};
 
 pub const Grant = struct { name: []const u8, operations: []const Operation };
 
@@ -1248,7 +1273,12 @@ const Checker = struct {
         const o = for (g.operations) |o| {
             if (std.mem.eql(u8, o.name, c.text(op.operation))) break o;
         } else return c.report(.unknown_operation, op.operation);
-        if (op.args.len < o.required or op.args.len > o.total) try c.report(.wrong_argument_count, op.operation);
+        if (op.args.len < o.required or op.args.len > o.total) {
+            try c.report(.wrong_argument_count, op.operation);
+        } else if (o.accepts) |accepts| for (op.args, 0..) |arg, i| {
+            const lit = try c.literal(arg) orelse continue;
+            if (!accepts.call(accepts.context, i, lit)) try c.report(.wrong_argument, arg.pos);
+        };
         const waits = op.wait != null;
         const ok = if (line)
             waits == (o.mode == .suspending)
@@ -1257,6 +1287,32 @@ const Checker = struct {
         else
             o.mode == .fire_and_forget;
         if (!ok) try c.report(.wrong_mode, if (line) op.operation else keyword);
+    }
+
+    /// A literal argument's kind, or null for anything else: the loader
+    /// infers nothing beyond literals.
+    fn literal(c: *Checker, e: *const Expr) Allocator.Error!?Literal {
+        return switch (e.data) {
+            .number => .number,
+            .text => .text,
+            .quantity => |q| .{ .quantity = c.text(q.unit) },
+            .word => |w| switch (w) {
+                .true, .false => .boolean,
+                .nothing => .nothing,
+                else => null,
+            },
+            .group => |inner| c.literal(inner),
+            .list => .list,
+            .map => |entries| blk: {
+                const keys = try c.a.alloc([]const u8, entries.len);
+                for (entries, keys) |entry, *k| {
+                    const tok = c.tree.tokens[entry.key];
+                    k.* = try unicode.nfc(c.a, if (tok.kind == .text) c.literalText(entry.key) else c.text(entry.key));
+                }
+                break :blk .{ .map = keys };
+            },
+            else => null,
+        };
     }
 
     fn event(c: *Checker, s: *Scope, ev: ast.Event) Allocator.Error!void {
@@ -1356,8 +1412,9 @@ const Checker = struct {
     /// `set` writes a key of a Host Object: never a bare variable, and never
     /// a property the Host says is read-only.
     fn setTarget(c: *Checker, s: *Scope, keyword: Tok, target: *const Expr) Allocator.Error!void {
-        switch (target.data) {
-            .group => |g| try c.setTarget(s, keyword, g),
+        var e = target;
+        while (e.data == .group) e = e.data.group;
+        switch (e.data) {
             .name => {
                 try c.report(.not_a_property, keyword);
                 try c.expr(s, target, .normal);

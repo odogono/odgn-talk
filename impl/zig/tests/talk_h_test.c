@@ -56,7 +56,7 @@ static int group_test(void) {
     talk_group_options options = {"g", 1, record, NULL};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
-    talk_load_options load = {"adder", 5, source, strlen(source)};
+    talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false};
     talk_script *script = NULL;
     if (talk_load(group, &load, &script) != TALK_OK) return 1;
     int bad = 0;
@@ -81,11 +81,174 @@ static int group_test(void) {
     talk_value_release(result);
     talk_inspect(group);
     bad |= strstr(trace, "vars adder total=41\n") == NULL;
-    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26};
+    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false};
     talk_script *refused = NULL;
     bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
     bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
     talk_pending_release(pending);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* An immediate Operation's Do: the text, doubled, or a Script error for "". */
+static talk_call_end twice(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context;
+    const char *s = NULL, *grant = NULL;
+    size_t n = 0, grant_len = 0;
+    talk_call_grant_name(call, &grant, &grant_len);
+    if (len != 1 || !talk_value_as_text(args[0], &s, &n) || grant_len != 4 || memcmp(grant, "echo", 4) != 0) return TALK_CALL_BROKEN;
+    if (n == 0) {
+        *error = (talk_script_error){"empty", 5, "nothing to echo", 15, NULL};
+        return TALK_CALL_FAILED;
+    }
+    if (talk_call_charge(call, 3) != TALK_OK) return TALK_CALL_LIMITED;
+    char doubled[64];
+    memcpy(doubled, s, n);
+    memcpy(doubled + n, s, n);
+    return talk_text(doubled, 2 * n, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+/* A Capability defined, granted and called through talk.h alone. */
+static int capability_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const talk_shape *args[] = {talk_text_shape()};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    bad |= talk_grant_capability(grant) != def;
+    talk_load_grant grants[] = {{"echo", 4, grant}};
+    const char *source = "script variable said\non go s\n  try\n    ask echo to twice s\n    put it into said\n  catch e\n    put e's code into said\n  end try\nend go\n";
+    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    const char *inputs[] = {"ab", ""};
+    for (int i = 0; i < 2; i++) {
+        talk_value *text = NULL;
+        talk_text(inputs[i], strlen(inputs[i]), &text);
+        talk_value *message_args[] = {text};
+        talk_message message = {"go", 2, message_args, 1};
+        bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+        talk_value_release(text);
+        bad |= talk_pump(group, 1790000000 + i, 0, NULL, NULL) != TALK_OK;
+        talk_inspect(group);
+    }
+    bad |= strstr(trace, "call caller/r1.c1 op=echo.twice args=[\"ab\"] result=\"abab\" charged=3\n") == NULL;
+    bad |= strstr(trace, "vars caller said=\"abab\"\n") == NULL;
+    bad |= strstr(trace, "call caller/r2.c1 op=echo.twice args=[\"\"] error={code: \"empty\", message: \"nothing to echo\"}\n") == NULL;
+    bad |= strstr(trace, "vars caller said=\"empty\"\n") == NULL;
+    const char *wrong_source = "on go\n  ask echo to twice 5\nend go\n";
+    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false};
+    talk_script *refused = NULL;
+    bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
+    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* console's write: counts what it is shown. */
+static int shown = 0;
+static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)args; (void)error;
+    shown += (int)len;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+static talk_call_end unused(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)args; (void)len; (void)result; (void)error;
+    return TALK_CALL_BROKEN;
+}
+
+/* clock's now from the Pump's Clock, and say through console's write. */
+static int standard_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost clock_costs[] = {{"now", 3, {5, 0}}};
+    talk_costs costs = {clock_costs, 1};
+    talk_capability_def *clock = NULL, *console = NULL;
+    int bad = talk_clock_capability(core, &costs, &clock) != TALK_OK;
+    talk_costs missing = {NULL, 0};
+    talk_console_impl impl = {NULL, show, unused};
+    bad |= talk_console_capability(core, &impl, &missing, &console) != TALK_INVALID_VALUE;
+    talk_named_cost console_costs[] = {{"write", 5, {1, 0}}, {"read", 4, {1, 0}}};
+    talk_costs console_all = {console_costs, 2};
+    bad |= talk_console_capability(core, &impl, &console_all, &console) != TALK_OK;
+    talk_grant *clock_grant = NULL, *console_grant = NULL;
+    bad |= talk_capability_def_grant_all(clock, NULL, &clock_grant) != TALK_OK;
+    bad |= talk_capability_def_grant_all(console, NULL, &console_grant) != TALK_OK;
+    talk_load_grant grants[] = {{"clock", 5, clock_grant}, {"console", 7, console_grant}};
+    const char *source = "script variable at\non go\n  ask clock to now\n  put it into at\n  say at\nend go\n";
+    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= strstr(trace, "call timed/r1.c1 op=clock.now args=[] result=2026-09-21T14:13:20Z\n") == NULL;
+    bad |= shown != 1;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* A suspending Operation's Start: it keeps the call, to answer later. */
+static talk_call *started = NULL;
+static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)args; (void)len; (void)result; (void)error;
+    started = call;
+    return TALK_CALL_STARTED;
+}
+
+/* A Run suspends at ask … and wait, and resumes with the Host's answer. */
+static int suspension_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "feed", 4, ops, 1, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"feed", 4, grant}};
+    const char *source = "script variable got\non go\n  ask feed to fetch and wait\n  put it into got\nend go\n";
+    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= started == NULL;
+    bad |= strstr(trace, "end=ask-wait\n") == NULL;
+    bad |= strstr(trace, "pumped state=idle fuel=") == NULL || strstr(trace, " next=") == NULL;
+    talk_value *answer = NULL;
+    talk_int(42, &answer);
+    bad |= started == NULL || talk_call_answer_with_cost(started, answer, 3) != TALK_OK;
+    talk_value_release(answer);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "> answer waiter/r1.c1 value=42 fuel=3\n") == NULL;
+    bad |= strstr(trace, "vars waiter got=42\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
     return bad;
@@ -162,5 +325,8 @@ int main(void) {
     talk_value_release(copy); talk_value_release(value);
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
+    expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
+    expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
     return failures == 0 ? 0 : 1;
 }

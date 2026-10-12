@@ -1,3 +1,3 @@
 on t x
-  set (the foo of (x's length)) to 1
+  set x's length to 1
 end t

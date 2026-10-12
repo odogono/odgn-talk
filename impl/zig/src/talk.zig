@@ -9,6 +9,8 @@ const model = @import("value.zig");
 const display = @import("display.zig");
 const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
+const caps = machine.capabilities;
+const standard = @import("machine/standard.zig");
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -268,13 +270,19 @@ pub const HostErrorCode = enum(c_int) {
     state_too_large,
     effects_pending,
     effect_state_unknown,
+    err_limit,
     load_refused,
     out_of_memory,
 };
 
 // ---------------------------------------------------------------- Groups
 
-pub const Core = struct { gpa: std.mem.Allocator };
+pub const Core = struct {
+    gpa: std.mem.Allocator,
+    definitions: std.ArrayList(*caps.Capability) = .empty,
+    bridges: std.ArrayList(*Bridge) = .empty,
+    standard: std.ArrayList(*standard.Context) = .empty,
+};
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
 
@@ -285,11 +293,16 @@ pub const GroupOptions = extern struct {
     trace_context: ?*anyopaque,
 };
 
+pub const LoadGrant = extern struct { name: ?[*]const u8, name_len: usize, grant: *caps.Grant };
+
 pub const LoadOptions = extern struct {
     name: ?[*]const u8,
     name_len: usize,
     source: ?[*]const u8,
     source_len: usize,
+    grants: ?[*]const LoadGrant = null,
+    grants_len: usize = 0,
+    grants_as_used: bool = false,
 };
 
 pub const Message = extern struct {
@@ -340,7 +353,25 @@ export fn talk_new() ?*Core {
 }
 
 export fn talk_core_release(c: ?*Core) void {
-    if (c) |core| allocator.destroy(core);
+    const core = c orelse return;
+    const gpa = core.gpa;
+    for (core.definitions.items) |d| {
+        for (d.operations) |op| releaseOperation(gpa, op);
+        gpa.free(d.operations);
+        for (d.grants.items) |g| {
+            gpa.free(g.operations);
+            gpa.destroy(g);
+        }
+        d.grants.deinit(gpa);
+        gpa.free(d.name);
+        gpa.destroy(d);
+    }
+    core.definitions.deinit(gpa);
+    for (core.bridges.items) |b| gpa.destroy(b);
+    core.bridges.deinit(gpa);
+    for (core.standard.items) |x| gpa.destroy(x);
+    core.standard.deinit(gpa);
+    allocator.destroy(core);
 }
 
 export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostErrorCode {
@@ -374,7 +405,11 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const source = bytes(o.source, o.source_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(source)) return .invalid_value;
     for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) return .name_reused;
-    const loaded = g.group.load(name, source, .{}) catch |err| return status(err);
+    const given: []const LoadGrant = if (o.grants_len == 0) &.{} else (o.grants orelse return .invalid_value)[0..o.grants_len];
+    const named = g.core.gpa.alloc(machine.NamedGrant, given.len) catch return .out_of_memory;
+    defer g.core.gpa.free(named);
+    for (given, named) |x, *n| n.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .grant = x.grant };
+    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
         .loaded => {},
@@ -523,4 +558,449 @@ test "a Group loads, pumps and inspects through the exports" {
     try std.testing.expectEqual(HostErrorCode.ok, talk_pending_result(pending.?, &result_value));
     defer talk_value_release(result_value);
     try std.testing.expectEqualStrings("41!", result_value.?.data.text);
+}
+
+// ---------------------------------------------------------------- Shapes
+
+pub const Shape = caps.Shape;
+
+fn kindShape(comptime k: caps.Kind) *const Shape {
+    const holder = struct {
+        // A kind Shape is never released.
+        var shape: Shape = .{ .references = std.math.maxInt(usize) / 2, .allocator = allocator, .data = .{ .kind = k } };
+    };
+    return &holder.shape;
+}
+
+export fn talk_any_shape() *const Shape {
+    return kindShape(.any);
+}
+export fn talk_value_shape() *const Shape {
+    return kindShape(.value);
+}
+export fn talk_nothing_shape() *const Shape {
+    return kindShape(.nothing);
+}
+export fn talk_bool_shape() *const Shape {
+    return kindShape(.boolean);
+}
+export fn talk_number_shape() *const Shape {
+    return kindShape(.number);
+}
+export fn talk_text_shape() *const Shape {
+    return kindShape(.text);
+}
+export fn talk_bytes_shape() *const Shape {
+    return kindShape(.bytes);
+}
+export fn talk_instant_shape() *const Shape {
+    return kindShape(.instant);
+}
+export fn talk_range_shape() *const Shape {
+    return kindShape(.range);
+}
+export fn talk_civil_date_shape() *const Shape {
+    return kindShape(.civil_date);
+}
+export fn talk_pattern_shape() *const Shape {
+    return kindShape(.pattern);
+}
+export fn talk_function_shape() *const Shape {
+    return kindShape(.function);
+}
+
+pub const Field = extern struct { key: ?[*]const u8, key_len: usize, shape: *const Shape, optional: bool };
+
+fn retained(s: *const Shape) *Shape {
+    return @constCast(s).retain();
+}
+
+fn shapeResult(out: *?*Shape, r: anyerror!*Shape) HostErrorCode {
+    out.* = r catch |err| {
+        out.* = null;
+        return status(err);
+    };
+    return .ok;
+}
+
+export fn talk_quantity_of(unit: ?[*]const u8, len: usize, out: *?*Shape) HostErrorCode {
+    return shapeResult(out, Shape.quantityOf(allocator, bytes(unit, len) catch return .invalid_value));
+}
+export fn talk_quantity_kind(kind: ?[*]const u8, len: usize, out: *?*Shape) HostErrorCode {
+    return shapeResult(out, Shape.quantityKind(allocator, bytes(kind, len) catch return .invalid_value));
+}
+export fn talk_list_of(inner: *const Shape, out: *?*Shape) HostErrorCode {
+    const r = retained(inner);
+    return shapeResult(out, Shape.listOf(allocator, r) catch |err| {
+        r.release();
+        return status(err);
+    });
+}
+
+/// Copies C fields, retaining their Shapes.
+fn fieldsOf(given: []const Field) ![]caps.Field {
+    const out = try allocator.alloc(caps.Field, given.len);
+    var made: usize = 0;
+    errdefer {
+        for (out[0..made]) |f| {
+            allocator.free(f.key);
+            f.shape.release();
+        }
+        allocator.free(out);
+    }
+    for (given, out) |f, *x| {
+        const key = try allocator.dupe(u8, try bytes(f.key, f.key_len));
+        x.* = .{ .key = key, .shape = retained(f.shape), .optional = f.optional };
+        made += 1;
+    }
+    return out;
+}
+
+fn mapShape(fields: ?[*]const Field, len: usize, open: bool, out: *?*Shape) HostErrorCode {
+    out.* = null;
+    const given: []const Field = if (len == 0) &.{} else (fields orelse return .invalid_value)[0..len];
+    const copied = fieldsOf(given) catch |err| return status(err);
+    return shapeResult(out, Shape.map(allocator, copied, open) catch |err| {
+        for (copied) |f| {
+            allocator.free(f.key);
+            f.shape.release();
+        }
+        allocator.free(copied);
+        return status(err);
+    });
+}
+
+export fn talk_map_shape(fields: ?[*]const Field, len: usize, out: *?*Shape) HostErrorCode {
+    return mapShape(fields, len, false, out);
+}
+export fn talk_open_map(fields: ?[*]const Field, len: usize, out: *?*Shape) HostErrorCode {
+    return mapShape(fields, len, true, out);
+}
+export fn talk_one_of(shapes: ?[*]const *const Shape, len: usize, out: *?*Shape) HostErrorCode {
+    out.* = null;
+    const given: []const *const Shape = if (len == 0) &.{} else (shapes orelse return .invalid_value)[0..len];
+    const copied = allocator.alloc(*Shape, given.len) catch return .out_of_memory;
+    for (given, copied) |x, *c| c.* = retained(x);
+    return shapeResult(out, Shape.oneOf(allocator, copied) catch |err| {
+        for (copied) |c| c.release();
+        allocator.free(copied);
+        return status(err);
+    });
+}
+export fn talk_optional(inner: *const Shape, out: *?*Shape) HostErrorCode {
+    const r = retained(inner);
+    return shapeResult(out, Shape.optional(allocator, r) catch |err| {
+        r.release();
+        return status(err);
+    });
+}
+export fn talk_shape_release(s: ?*const Shape) void {
+    if (s) |shape| @constCast(shape).release();
+}
+
+// ---------------------------------------------------------------- Capabilities
+
+pub const Mode = enum(c_int) { immediate, suspending, fire_and_forget };
+
+pub const Cost = extern struct { fuel: i64, alloc: i64 };
+
+pub const ErrorDecl = extern struct { code: ?[*]const u8, code_len: usize, fields: ?[*]const Field, fields_len: usize };
+
+pub const Call = caps.Call;
+
+pub const ScriptError = extern struct { code: ?[*]const u8, code_len: usize, message: ?[*]const u8, message_len: usize, data: ?*Value };
+
+pub const CallEnd = enum(c_int) { answered, failed, limited, broken, started };
+
+pub const OperationFn = ?*const fn (context: ?*anyopaque, call: *Call, args: [*]const *Value, args_len: usize, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
+
+pub const Operation = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    args: ?[*]const *const Shape,
+    args_len: usize,
+    result: ?*const Shape,
+    cost: Cost,
+    mode: Mode,
+    max_pending_ms: i64,
+    errors: ?[*]const ErrorDecl,
+    errors_len: usize,
+    @"fn": OperationFn,
+    context: ?*anyopaque,
+};
+
+/// A C Host function and its context, behind the Core's Host function.
+pub const Bridge = struct { call: *const fn (?*anyopaque, *Call, [*]const *Value, usize, *?*Value, *ScriptError) callconv(.c) CallEnd, context: ?*anyopaque };
+
+fn bridged(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome {
+    const b: *Bridge = @ptrCast(@alignCast(context.?));
+    var value: ?*Value = null;
+    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+    switch (b.call(b.context, call, args.ptr, args.len, &value, &failure)) {
+        .answered => return if (value) |v| .{ .value = v } else .broken,
+        .started => return .started,
+        .limited => return .limited,
+        .broken => return .broken,
+        .failed => {
+            const code = bytes(failure.code, failure.code_len) catch return .broken;
+            const message = bytes(failure.message, failure.message_len) catch return .broken;
+            const owned_code = allocator.dupe(u8, code) catch return .broken;
+            const owned_message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, message) catch {
+                allocator.free(owned_code);
+                return .broken;
+            };
+            return .{ .failed = .{ .code = owned_code, .message = owned_message, .data = failure.data } };
+        },
+    }
+}
+
+fn releaseOperation(gpa: std.mem.Allocator, op: caps.Operation) void {
+    gpa.free(op.name);
+    for (op.args) |x| x.release();
+    gpa.free(op.args);
+    if (op.result) |r| r.release();
+    for (op.errors) |e| {
+        gpa.free(e.code);
+        for (e.fields) |f| {
+            gpa.free(f.key);
+            f.shape.release();
+        }
+        gpa.free(e.fields);
+    }
+    gpa.free(op.errors);
+}
+
+fn operationOf(c: *Core, o: Operation) !caps.Operation {
+    const gpa = c.gpa;
+    const name = try bytes(o.name, o.name_len);
+    for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
+    if (name.len == 0) return error.InvalidValue;
+    const call = o.@"fn" orelse return error.InvalidValue;
+    if (o.mode != .fire_and_forget and o.result == null) return error.InvalidValue;
+    if (o.cost.fuel < 0 or o.cost.alloc < 0) return error.InvalidValue;
+    const args_in: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
+    const errors_in: []const ErrorDecl = if (o.errors_len == 0) &.{} else (o.errors orelse return error.InvalidValue)[0..o.errors_len];
+    const bridge = try gpa.create(Bridge);
+    bridge.* = .{ .call = call, .context = o.context };
+    c.bridges.append(gpa, bridge) catch |err| {
+        gpa.destroy(bridge);
+        return err;
+    };
+    const args = try gpa.alloc(*Shape, args_in.len);
+    for (args_in, args) |x, *y| y.* = retained(x);
+    const decls = try gpa.alloc(caps.ErrorDecl, errors_in.len);
+    for (errors_in, decls) |e, *d| {
+        const fields: []const Field = if (e.fields_len == 0) &.{} else (e.fields orelse return error.InvalidValue)[0..e.fields_len];
+        d.* = .{ .code = try gpa.dupe(u8, try bytes(e.code, e.code_len)), .fields = try fieldsOf(fields) };
+    }
+    return .{
+        .name = try gpa.dupe(u8, name),
+        .args = args,
+        .result = if (o.result) |r| retained(r) else null,
+        .cost = .{ .fuel = @intCast(o.cost.fuel), .alloc = @intCast(o.cost.alloc) },
+        .mode = switch (o.mode) {
+            .immediate => .immediate,
+            .suspending => .suspending,
+            .fire_and_forget => .fire_and_forget,
+        },
+        .max_pending_ms = @intCast(@max(o.max_pending_ms, 0)),
+        .errors = decls,
+        .host = .{ .call = bridged, .context = bridge },
+    };
+}
+
+export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const gpa = c.gpa;
+    const n = bytes(name, len) catch return .invalid_value;
+    if (n.len == 0) return .invalid_value;
+    for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, n)) return .name_reused;
+    const given: []const Operation = if (ops_len == 0) &.{} else (ops orelse return .invalid_value)[0..ops_len];
+    const operations = gpa.alloc(caps.Operation, given.len) catch return .out_of_memory;
+    var made: usize = 0;
+    for (given, operations) |o, *x| {
+        x.* = operationOf(c, o) catch |err| {
+            for (operations[0..made]) |done| releaseOperation(gpa, done);
+            gpa.free(operations);
+            return status(err);
+        };
+        made += 1;
+    }
+    std.mem.sort(caps.Operation, operations, {}, struct {
+        fn less(_: void, x: caps.Operation, y: caps.Operation) bool {
+            return std.mem.order(u8, x.name, y.name) == .lt;
+        }
+    }.less);
+    for (operations[1..@max(operations.len, 1)], 0..) |op, i| if (std.mem.eql(u8, op.name, operations[i].name)) {
+        for (operations) |done| releaseOperation(gpa, done);
+        gpa.free(operations);
+        return .invalid_value;
+    };
+    const d = gpa.create(caps.Capability) catch return .out_of_memory;
+    d.* = .{ .name = gpa.dupe(u8, n) catch return .out_of_memory, .operations = operations };
+    c.definitions.append(gpa, d) catch return .out_of_memory;
+    out.* = d;
+    return .ok;
+}
+
+export fn talk_capability_def_name(d: *const caps.Capability, s: *[*]const u8, len: *usize) void {
+    s.* = d.name.ptr;
+    len.* = d.name.len;
+}
+
+/// A Grant, which its definition owns.
+fn grantOf(d: *caps.Capability, kept: []bool, binding: ?*anyopaque, out: *?*caps.Grant) HostErrorCode {
+    const g = allocator.create(caps.Grant) catch {
+        allocator.free(kept);
+        return .out_of_memory;
+    };
+    g.* = .{ .capability = d, .operations = kept, .binding = binding };
+    d.grants.append(allocator, g) catch {
+        allocator.free(kept);
+        allocator.destroy(g);
+        return .out_of_memory;
+    };
+    out.* = g;
+    return .ok;
+}
+
+export fn talk_capability_def_grant(d: *caps.Capability, ops: ?[*]const ?[*]const u8, lens: ?[*]const usize, len: usize, binding: ?*anyopaque, out: *?*caps.Grant) HostErrorCode {
+    out.* = null;
+    const kept = allocator.alloc(bool, d.operations.len) catch return .out_of_memory;
+    @memset(kept, false);
+    for (0..len) |i| {
+        const name = bytes((ops orelse return .invalid_value)[i], (lens orelse return .invalid_value)[i]) catch return .invalid_value;
+        const index = d.find(name) orelse {
+            allocator.free(kept);
+            return .invalid_value;
+        };
+        kept[index] = true;
+    }
+    return grantOf(d, kept, binding, out);
+}
+
+export fn talk_capability_def_grant_all(d: *caps.Capability, binding: ?*anyopaque, out: *?*caps.Grant) HostErrorCode {
+    out.* = null;
+    const kept = allocator.alloc(bool, d.operations.len) catch return .out_of_memory;
+    @memset(kept, true);
+    return grantOf(d, kept, binding, out);
+}
+
+export fn talk_grant_capability(g: *const caps.Grant) *caps.Capability {
+    return g.capability;
+}
+
+export fn talk_grant_binding(g: *const caps.Grant) ?*anyopaque {
+    return g.binding;
+}
+
+export fn talk_call_id(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.id.ptr;
+    len.* = c.id.len;
+}
+export fn talk_call_script_name(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.script.ptr;
+    len.* = c.script.len;
+}
+export fn talk_call_grant_name(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.grant.ptr;
+    len.* = c.grant.len;
+}
+export fn talk_call_binding(c: *const Call) ?*anyopaque {
+    return c.binding;
+}
+export fn talk_call_now(c: *const Call, seconds: *i64, nanos: *i32) void {
+    seconds.* = c.now.seconds;
+    nanos.* = c.now.nanos;
+}
+export fn talk_call_charge(c: *Call, fuel: i64) HostErrorCode {
+    if (fuel < 0) return .invalid_value;
+    return if (c.charge(@intCast(fuel))) .ok else .err_limit;
+}
+
+// ---------------------------------------------------------------- Standard Capabilities
+
+pub const NamedCost = extern struct { name: ?[*]const u8, name_len: usize, cost: Cost };
+pub const Costs = extern struct { entries: ?[*]const NamedCost, len: usize };
+pub const CalendarImpl = extern struct { context: ?*anyopaque, today: OperationFn, now: OperationFn, to_civil: OperationFn, to_instant: OperationFn, offset: OperationFn, zone: OperationFn };
+pub const LocaleImpl = extern struct { context: ?*anyopaque, compare: OperationFn, rank: OperationFn, upper: OperationFn, lower: OperationFn, number_symbols: OperationFn, month_names: OperationFn, day_names: OperationFn, tag: OperationFn };
+pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
+
+/// The largest cost component: 2^53 - 1.
+const max_cost = 9_007_199_254_740_991;
+
+/// Defines a Standard Capability from a cost per Operation and one C Host
+/// function per Operation, in `standard.operations` order.
+fn defineStandard(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const gpa = c.gpa;
+    const names = standard.operations(which);
+    for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, @tagName(which))) return .name_reused;
+    const given: []const NamedCost = if (costs) |cs| (if (cs.len == 0) &.{} else (cs.entries orelse return .invalid_value)[0..cs.len]) else &.{};
+    var per: [8]caps.Cost = undefined;
+    for (names, 0..) |name, i| {
+        const entry = for (given) |e| {
+            if (std.mem.eql(u8, bytes(e.name, e.name_len) catch return .invalid_value, name)) break e;
+        } else return .invalid_value;
+        if (entry.cost.fuel < 0 or entry.cost.alloc < 0 or entry.cost.fuel > max_cost or entry.cost.alloc > max_cost) return .invalid_value;
+        per[i] = .{ .fuel = @intCast(entry.cost.fuel), .alloc = @intCast(entry.cost.alloc) };
+    }
+    var impl: [8]?caps.HostFn = @splat(null);
+    for (fns, 0..) |f, i| {
+        const call = f orelse return .invalid_value;
+        const bridge = gpa.create(Bridge) catch return .out_of_memory;
+        bridge.* = .{ .call = call, .context = context };
+        c.bridges.append(gpa, bridge) catch {
+            gpa.destroy(bridge);
+            return .out_of_memory;
+        };
+        impl[i] = .{ .call = bridged, .context = bridge };
+    }
+    const d = standard.define(gpa, which, impl[0..names.len], per[0..names.len], &c.standard) catch return .out_of_memory;
+    c.definitions.append(gpa, d) catch return .out_of_memory;
+    out.* = d;
+    return .ok;
+}
+
+export fn talk_clock_capability(c: *Core, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandard(c, .clock, &.{}, null, costs, out);
+}
+
+export fn talk_calendar_capability(c: *Core, impl: *const CalendarImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: now, offset, toCivil, toInstant, today, zone.
+    return defineStandard(c, .calendar, &.{ impl.now, impl.offset, impl.to_civil, impl.to_instant, impl.today, impl.zone }, impl.context, costs, out);
+}
+
+export fn talk_locale_capability(c: *Core, impl: *const LocaleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: compare, dayNames, lower, monthNames, numberSymbols,
+    // rank, tag, upper.
+    return defineStandard(c, .locale, &.{ impl.compare, impl.day_names, impl.lower, impl.month_names, impl.number_symbols, impl.rank, impl.tag, impl.upper }, impl.context, costs, out);
+}
+
+export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandard(c, .console, &.{ impl.read, impl.write }, impl.context, costs, out);
+}
+
+// ---------------------------------------------------------------- answers
+
+fn settle(c: *Call, with: machine.Resume) HostErrorCode {
+    const g: *machine.Group = @ptrCast(@alignCast(c.group orelse return .unknown_call));
+    g.settle(c.id, with) catch return .out_of_memory;
+    return .ok;
+}
+
+export fn talk_call_answer(c: *Call, v: *Value) HostErrorCode {
+    return settle(c, .{ .answer = .{ .value = v.retain(), .fuel = 0 } });
+}
+
+export fn talk_call_answer_with_cost(c: *Call, v: *Value, fuel: i64) HostErrorCode {
+    if (fuel < 0) return .invalid_value;
+    return settle(c, .{ .answer = .{ .value = v.retain(), .fuel = @intCast(fuel) } });
+}
+
+export fn talk_call_fail(c: *Call, e: ?*const ScriptError) HostErrorCode {
+    const failure = e orelse return settle(c, .broken);
+    const code = allocator.dupe(u8, bytes(failure.code, failure.code_len) catch return .invalid_value) catch return .out_of_memory;
+    const message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, bytes(failure.message, failure.message_len) catch return .invalid_value) catch return .out_of_memory;
+    return settle(c, .{ .failed = .{ .code = code, .message = message, .data = if (failure.data) |d| d.retain() else null } });
 }

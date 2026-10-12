@@ -779,7 +779,9 @@ const Parser = struct {
         return p.list(*Expr, &out);
     }
 
-    /// A Container: only chunk and key levels on the path to a Name.
+    /// A Container: a Name, or a Chunk Expression or key path rooted in one.
+    /// Parentheses keep the path; a Built-in property anywhere on it is
+    /// `not a container` (ADR 0079).
     fn container(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
         if (!p.startsExpr(t)) return p.failAt(t);

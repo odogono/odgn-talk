@@ -1376,8 +1376,7 @@ const Frame = struct {
                 e = k.base;
             },
             .group => |g| e = g,
-            .name => return e,
-            else => unreachable,
+            else => return e,
         };
     }
 
@@ -1407,7 +1406,6 @@ const Frame = struct {
     fn chainDelimiter(target: *const Expr) ?*const Expr {
         return switch (target.data) {
             .chunk => |c| c.delimiter,
-            .group => |g| chainDelimiter(g),
             else => null,
         };
     }
@@ -1697,8 +1695,9 @@ const Frame = struct {
     }
 
     fn set(f: *Frame, first: Tok, target: *const Expr, value: *const Expr) Allocator.Error!void {
-        if (target.data == .group) return f.set(first, target.data.group, value);
-        const k = target.data.key;
+        var e = target;
+        while (e.data == .group) e = e.data.group;
+        const k = e.data.key;
         if (k.computed) |x| try f.expr(x);
         try f.expr(k.base);
         try f.expr(value);
@@ -2872,13 +2871,13 @@ test "ordinary Container keys, auxiliary property reads and Constant calls lower
     const unit = try lower(a, &parsed.tree, &checked, .{ .name = "t" });
     var out: std.Io.Writer.Allocating = .init(a);
     try disassemble(&unit, &out.writer);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "set-key \"length\"") != null);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "chunk-delete item") != null);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "property length") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "load-definition twice") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "call-value 1") != null);
-    try testing.expect(std.mem.indexOf(u8, out.written(), "property length") != null);
-    try testing.expect(std.mem.indexOf(u8, out.written(), "set-key \"length\"") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "set-key-computed") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "delete-key \"length\"") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "test-key \"items\"") != null);
-    try testing.expect(std.mem.indexOf(u8, out.written(), "chunk-delete item") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "chunk-set-delimited item") != null);
 }

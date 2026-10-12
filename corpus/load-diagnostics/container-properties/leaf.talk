@@ -1,4 +1,3 @@
-constant x = 1
-on t
-  put missing into the length of x
+on t x
+  put 1 into the length of x
 end t

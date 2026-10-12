@@ -1,6 +1,6 @@
 //! Unit slots and factors come only from units.toml's generated catalogue.
 const std = @import("std");
-const table = @import("generated/units.zig").units;
+pub const table = @import("generated/units.zig").units;
 const dec = @import("decimal/decimal.zig");
 const Decimal = dec.Decimal;
 /// Every refusal a Unit operation can report.

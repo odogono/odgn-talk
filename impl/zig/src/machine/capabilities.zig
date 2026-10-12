@@ -1,0 +1,641 @@
+//! Capabilities (chapter 9): Shapes, Operation Declarations, Capability
+//! definitions and Grants, and the checks the Core makes at a call: each
+//! argument against its Shape before the Host function runs, the result
+//! against the result Shape, and a `Fail` against the Operation's declared
+//! codes and the reserved keys (chapter 6, Errors from Capabilities).
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const model = @import("../value.zig");
+const units = @import("../units.zig");
+const check = @import("../check/check.zig");
+const Value = model.Value;
+
+pub const Mode = check.Mode;
+
+/// The kinds a kind-name Shape takes.
+pub const Kind = enum {
+    any,
+    value,
+    nothing,
+    boolean,
+    number,
+    text,
+    bytes,
+    instant,
+    range,
+    civil_date,
+    pattern,
+    function,
+
+    pub fn name(k: Kind) []const u8 {
+        return switch (k) {
+            .civil_date => "civil date",
+            inline else => |x| @tagName(x),
+        };
+    }
+
+    pub fn named(s: []const u8) ?Kind {
+        if (std.mem.eql(u8, s, "civil date")) return .civil_date;
+        if (std.mem.eql(u8, s, "civil_date")) return null;
+        return std.meta.stringToEnum(Kind, s);
+    }
+};
+
+pub const Field = struct { key: []const u8, shape: *Shape, optional: bool = false };
+
+/// A Shape, immutable once made and reference-counted, so a Host can share
+/// one between declarations.
+pub const Shape = struct {
+    references: usize = 1,
+    allocator: Allocator,
+    data: union(enum) {
+        kind: Kind,
+        quantity_of: struct { text: []const u8, unit: units.Unit },
+        quantity_kind: []const u8,
+        list: *Shape,
+        map: struct { fields: []Field, open: bool },
+        object: []const u8,
+        one_of: []*Shape,
+        optional: *Shape,
+    },
+
+    pub fn retain(s: *Shape) *Shape {
+        s.references += 1;
+        return s;
+    }
+
+    pub fn release(s: *Shape) void {
+        s.references -= 1;
+        if (s.references > 0) return;
+        const a = s.allocator;
+        switch (s.data) {
+            .kind => {},
+            .quantity_of => |q| a.free(q.text),
+            .quantity_kind, .object => |t| a.free(t),
+            .list, .optional => |inner| inner.release(),
+            .map => |m| {
+                for (m.fields) |f| {
+                    a.free(f.key);
+                    f.shape.release();
+                }
+                a.free(m.fields);
+            },
+            .one_of => |xs| {
+                for (xs) |x| x.release();
+                a.free(xs);
+            },
+        }
+        a.destroy(s);
+    }
+
+    fn make(a: Allocator, data: @FieldType(Shape, "data")) !*Shape {
+        const s = try a.create(Shape);
+        s.* = .{ .allocator = a, .data = data };
+        return s;
+    }
+
+    pub fn kind(a: Allocator, k: Kind) !*Shape {
+        return make(a, .{ .kind = k });
+    }
+
+    /// A Quantity in exactly the Unit `text` names.
+    pub fn quantityOf(a: Allocator, text: []const u8) !*Shape {
+        const unit = units.Unit.parse(text) catch return error.InvalidValue;
+        const copy = try a.dupe(u8, text);
+        errdefer a.free(copy);
+        return make(a, .{ .quantity_of = .{ .text = copy, .unit = unit } });
+    }
+
+    /// A Quantity of any Unit of the Unit Kind `kind`.
+    pub fn quantityKind(a: Allocator, kind_name: []const u8) !*Shape {
+        for (units.table.kind) |k| {
+            if (std.mem.eql(u8, k.name, kind_name)) break;
+        } else return error.InvalidValue;
+        const copy = try a.dupe(u8, kind_name);
+        errdefer a.free(copy);
+        return make(a, .{ .quantity_kind = copy });
+    }
+
+    /// Takes `inner`.
+    pub fn listOf(a: Allocator, inner: *Shape) !*Shape {
+        return make(a, .{ .list = inner });
+    }
+
+    /// Takes `inner`.
+    pub fn optional(a: Allocator, inner: *Shape) !*Shape {
+        return make(a, .{ .optional = inner });
+    }
+
+    /// Takes the fields, whose keys must be allocated with `a`.
+    pub fn map(a: Allocator, fields: []Field, open: bool) !*Shape {
+        return make(a, .{ .map = .{ .fields = fields, .open = open } });
+    }
+
+    /// Takes the Shapes, a slice allocated with `a`.
+    pub fn oneOf(a: Allocator, shapes: []*Shape) !*Shape {
+        return make(a, .{ .one_of = shapes });
+    }
+
+    /// What the Shape expects, as `wrong kind` writes it.
+    pub fn expected(s: *const Shape, a: Allocator) ![]const u8 {
+        return switch (s.data) {
+            .kind => |k| k.name(),
+            .quantity_of => |q| q.text,
+            .quantity_kind => |k| k,
+            .list => "list",
+            .map => "map",
+            .object => |k| k,
+            .one_of => |xs| blk: {
+                var out: std.ArrayList(u8) = .empty;
+                for (xs, 0..) |x, i| {
+                    if (i > 0) try out.appendSlice(a, " or ");
+                    try out.appendSlice(a, try x.expected(a));
+                }
+                break :blk out.items;
+            },
+            .optional => |inner| try std.fmt.allocPrint(a, "{s} or nothing", .{try inner.expected(a)}),
+        };
+    }
+
+    /// Whether an argument in this position may be left off: an outer
+    /// Optional.
+    pub fn omittable(s: *const Shape) bool {
+        return s.data == .optional;
+    }
+};
+
+/// The first node of a value that breaks a Shape.
+pub const Mismatch = union(enum) {
+    /// `wrong kind`: what was expected, what the node is, and its path.
+    wrong_kind: struct { expected: []const u8, got: []const u8, value: *Value, path: []const *Value },
+    /// `not encodable`: a Function Value where a data Shape takes it.
+    not_encodable: struct { path: []const *Value },
+};
+
+const Checker = struct {
+    a: Allocator,
+    gpa: Allocator,
+    path: std.ArrayList(*Value) = .empty,
+    /// Path values live in the scratch list until the caller copies them.
+    kept: std.ArrayList(*Value) = .empty,
+
+    fn got(c: *Checker, v: *const Value) ![]const u8 {
+        return switch (v.data) {
+            .quantity => |q| try q.unit.string(c.a, false),
+            .bool => "boolean",
+            .civil_date => "civil date",
+            else => @tagName(v.data),
+        };
+    }
+
+    fn wrong(c: *Checker, s: *const Shape, v: *Value) !Mismatch {
+        return .{ .wrong_kind = .{ .expected = try s.expected(c.a), .got = try c.got(v), .value = v, .path = try c.a.dupe(*Value, c.path.items) } };
+    }
+
+    fn missing(c: *Checker, s: *const Shape) !Mismatch {
+        const v = try model.scalar(c.gpa, .nothing);
+        try c.keep(v);
+        return .{ .wrong_kind = .{ .expected = try s.expected(c.a), .got = "nothing", .value = v, .path = try c.a.dupe(*Value, c.path.items) } };
+    }
+
+    fn keep(c: *Checker, v: *Value) !void {
+        try c.kept.append(c.a, v);
+    }
+
+    fn enter(c: *Checker, key: union(enum) { index: usize, key: []const u8 }) !void {
+        const v = switch (key) {
+            .index => |i| try model.scalar(c.gpa, .{ .number = model.Decimal.fromInt(@as(i64, @intCast(i))) }),
+            .key => |k| try model.text(c.gpa, k),
+        };
+        try c.keep(v);
+        try c.path.append(c.a, v);
+    }
+
+    fn leave(c: *Checker) void {
+        _ = c.path.pop();
+    }
+
+    /// A Function Value anywhere in `v`, for a data Shape.
+    fn function(c: *Checker, v: *Value) !?Mismatch {
+        switch (v.data) {
+            .function => return .{ .not_encodable = .{ .path = try c.a.dupe(*Value, c.path.items) } },
+            .list => |xs| for (xs, 1..) |x, i| {
+                try c.enter(.{ .index = i });
+                if (try c.function(x)) |m| return m;
+                c.leave();
+            },
+            .map => |pairs| for (pairs) |p| {
+                try c.enter(.{ .key = p.key });
+                if (try c.function(p.value)) |m| return m;
+                c.leave();
+            },
+            .range => |r| {
+                if (try c.function(r.from)) |m| return m;
+                if (try c.function(r.to)) |m| return m;
+            },
+            else => {},
+        }
+        return null;
+    }
+
+    fn shape(c: *Checker, s: *const Shape, v: *Value) anyerror!?Mismatch {
+        switch (s.data) {
+            .kind => |k| {
+                switch (k) {
+                    .value => return null,
+                    .function => return if (v.data == .function) null else try c.wrong(s, v),
+                    .any => return c.function(v),
+                    else => {},
+                }
+                if (v.data == .function) return try c.function(v);
+                const ok = switch (k) {
+                    .nothing => v.data == .nothing,
+                    .boolean => v.data == .bool,
+                    .number => v.data == .number,
+                    .text => v.data == .text,
+                    .bytes => v.data == .bytes,
+                    .instant => v.data == .instant,
+                    .range => v.data == .range,
+                    .civil_date => v.data == .civil_date,
+                    .pattern => v.data == .pattern,
+                    .any, .value, .function => unreachable,
+                };
+                return if (ok) null else try c.wrong(s, v);
+            },
+            .quantity_of => |q| {
+                if (v.data == .function) return try c.function(v);
+                if (v.data == .quantity and std.meta.eql(v.data.quantity.unit, q.unit)) return null;
+                return try c.wrong(s, v);
+            },
+            .quantity_kind => |name| {
+                if (v.data == .function) return try c.function(v);
+                if (v.data == .quantity and ofKind(v.data.quantity.unit, name)) return null;
+                return try c.wrong(s, v);
+            },
+            .object => {
+                if (v.data == .function) return try c.function(v);
+                if (v.data == .object and std.mem.eql(u8, v.data.object.kind, s.data.object)) return null;
+                return try c.wrong(s, v);
+            },
+            .list => |inner| {
+                if (v.data == .function) return try c.function(v);
+                if (v.data != .list) return try c.wrong(s, v);
+                for (v.data.list, 1..) |x, i| {
+                    try c.enter(.{ .index = i });
+                    if (try c.shape(inner, x)) |m| return m;
+                    c.leave();
+                }
+                return null;
+            },
+            .map => |m| {
+                if (v.data == .function) return try c.function(v);
+                if (v.data != .map) return try c.wrong(s, v);
+                for (m.fields) |f| {
+                    try c.enter(.{ .key = f.key });
+                    if (v.get(f.key)) |x| {
+                        if (try c.shape(f.shape, x)) |bad| return bad;
+                    } else if (!f.optional) return try c.missing(f.shape);
+                    c.leave();
+                }
+                if (m.open) {
+                    // An open map's other entries are data.
+                    for (v.data.map) |p| {
+                        if (field(m.fields, p.key) != null) continue;
+                        try c.enter(.{ .key = p.key });
+                        if (try c.function(p.value)) |bad| return bad;
+                        c.leave();
+                    }
+                    return null;
+                }
+                for (v.data.map) |p| {
+                    if (field(m.fields, p.key) != null) continue;
+                    try c.enter(.{ .key = p.key });
+                    if (p.value.data == .function) return try c.function(p.value);
+                    const nothing_shape: Shape = .{ .allocator = c.a, .data = .{ .kind = .nothing } };
+                    return try c.wrong(&nothing_shape, p.value);
+                }
+                return null;
+            },
+            .one_of => |xs| {
+                for (xs) |x| {
+                    const depth = c.path.items.len;
+                    if (try c.shape(x, v) == null) return null;
+                    c.path.shrinkRetainingCapacity(depth);
+                }
+                if (v.data == .function) return try c.function(v);
+                return try c.wrong(s, v);
+            },
+            .optional => |inner| {
+                if (v.data == .nothing) return null;
+                const depth = c.path.items.len;
+                const bad = try c.shape(inner, v) orelse return null;
+                // A mismatch at this node expects the Shape or Nothing.
+                if (bad == .wrong_kind and bad.wrong_kind.path.len == depth) return try c.wrong(s, v);
+                return bad;
+            },
+        }
+    }
+};
+
+fn field(fields: []const Field, key: []const u8) ?Field {
+    for (fields) |f| if (std.mem.eql(u8, f.key, key)) return f;
+    return null;
+}
+
+fn ofKind(unit: units.Unit, name: []const u8) bool {
+    var found = false;
+    for (unit.slots, units.table.kind) |s, k| {
+        if (s.exponent == 0) continue;
+        if (found or s.exponent != 1 or !std.mem.eql(u8, k.name, name)) return false;
+        found = true;
+    }
+    return found;
+}
+
+/// Checks `v` against `s`. The mismatch's strings and path live in `a`;
+/// its values are owned by `gpa` and released with `releaseKept`.
+pub const Checked = struct {
+    mismatch: ?Mismatch,
+    kept: []*Value,
+
+    pub fn release(c: Checked) void {
+        for (c.kept) |v| v.release();
+    }
+};
+
+pub fn checkValue(a: Allocator, gpa: Allocator, s: *const Shape, v: *Value) !Checked {
+    var c: Checker = .{ .a = a, .gpa = gpa };
+    const m = try c.shape(s, v);
+    return .{ .mismatch = m, .kept = c.kept.items };
+}
+
+// ---------------------------------------------------------------- declarations
+
+pub const Cost = struct { fuel: u64 = 0, alloc: u64 = 0 };
+
+pub const ErrorDecl = struct { code: []const u8, fields: []Field };
+
+/// What an Operation's Host function gives back.
+pub const Outcome = union(enum) {
+    /// A result, owned by the caller. A fire-and-forget call's is dropped.
+    value: *Value,
+    /// A Script error: its code, message and Data, which it owns.
+    failed: struct { code: []const u8, message: ?[]const u8, data: ?*Value },
+    /// A suspending call started; its answer comes later.
+    started,
+    /// `Charge` couldn't be covered, so the work wasn't done.
+    limited,
+    /// Any other failure, which the Script sees as `host error`.
+    broken,
+};
+
+/// A Host function: Do for an immediate Operation, Fire for a
+/// fire-and-forget one.
+pub const HostFn = struct {
+    call: *const fn (context: ?*anyopaque, c: *Call, args: []const *Value) Outcome,
+    context: ?*anyopaque = null,
+};
+
+pub const Operation = struct {
+    name: []const u8,
+    args: []*Shape,
+    /// Null for a fire-and-forget Operation.
+    result: ?*Shape,
+    cost: Cost = .{},
+    mode: Mode,
+    max_pending_ms: u64 = 0,
+    /// The declared codes; empty when the Operation lists none.
+    errors: []ErrorDecl = &.{},
+    /// Whether the list is enforced even when empty, as for a Standard
+    /// Capability, whose every undeclared failure is `host error`.
+    closed_errors: bool = false,
+    host: HostFn,
+    /// The Core's own checks after the Shapes, before the call is charged:
+    /// a Standard Capability's option words and Locale tags.
+    before: ?*const fn (a: Allocator, op: *const Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?Problem = null,
+    /// The Core's own checks of a result beyond its Shape; false makes the
+    /// call `host error`.
+    after: ?*const fn (op: *const Operation, args: []const *Value, result: *const Value) bool = null,
+
+    /// The arguments a call must supply: up to the outer Optional suffix.
+    pub fn required(op: Operation) usize {
+        var n = op.args.len;
+        while (n > 0 and op.args[n - 1].omittable()) n -= 1;
+        return n;
+    }
+};
+
+/// What the Core's own checks before a call raise.
+pub const Problem = union(enum) {
+    /// `out of domain`, with `function` the Operation's name.
+    out_of_domain: *Value,
+    /// `bad locale`, with the tag.
+    bad_locale: []const u8,
+};
+
+/// A Capability's definition: its Operations, ordered by name.
+pub const Capability = struct {
+    name: []const u8,
+    operations: []Operation,
+    /// The Grants made from it, which it owns.
+    grants: std.ArrayList(*Grant) = .empty,
+
+    pub fn find(c: *const Capability, name: []const u8) ?usize {
+        for (c.operations, 0..) |op, i| if (std.mem.eql(u8, op.name, name)) return i;
+        return null;
+    }
+};
+
+/// A reusable Grant: a set of a Capability's Operations and the Host's
+/// binding.
+pub const Grant = struct {
+    capability: *Capability,
+    /// Which Operations, by index into the Capability's.
+    operations: []bool,
+    binding: ?*anyopaque = null,
+};
+
+/// What an Operation's Host function receives.
+pub const Call = struct {
+    id: []const u8,
+    script: []const u8,
+    grant: []const u8,
+    binding: ?*anyopaque,
+    /// The Pump's Clock reading.
+    now: model.dates.Instant,
+    /// What `Charge` drew.
+    charged: u64 = 0,
+    /// The Fuel the Run has left after the declared cost; null when there
+    /// is no limit.
+    left: ?u64,
+    /// Whether the Operation is still starting, the only time `Charge` is
+    /// legal.
+    starting: bool = true,
+    /// For a suspending call, the Group its answer goes to.
+    group: ?*anyopaque = null,
+
+    /// Draws Fuel before the work; false when the Run can't cover it.
+    pub fn charge(c: *Call, fuel: u64) bool {
+        if (!c.starting) return false;
+        if (c.left) |left| if (c.charged + fuel > left) return false;
+        c.charged += fuel;
+        return true;
+    }
+};
+
+/// The reserved keys a `Fail`'s Data may not use (chapter 6).
+pub const reserved = [_][]const u8{ "code", "message", "at", "capability", "operation", "index", "during", "deadline" };
+
+const errors_table = @import("../generated/errors.zig");
+
+fn catalogued(code: []const u8) bool {
+    for (errors_table.errors.@"error") |e| if (std.mem.eql(u8, e.code, code)) return true;
+    return false;
+}
+
+/// Whether a `Fail` is well formed for its Operation: a map or Nothing for
+/// Data, no reserved key, no catalogue code, and a declared code when the
+/// Operation lists its codes.
+pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
+    if (data) |d| switch (d.data) {
+        .nothing => {},
+        .map => |pairs| for (pairs) |p| {
+            for (reserved) |r| if (std.mem.eql(u8, r, p.key)) return false;
+        },
+        else => return false,
+    };
+    if (op.errors.len == 0) return !op.closed_errors and !catalogued(code);
+    for (op.errors) |e| if (std.mem.eql(u8, e.code, code)) {
+        // A catalogue code only a Standard Capability may declare, and its
+        // fields are the catalogue's.
+        const entry = catalogueEntry(code) orelse return true;
+        if (!op.closed_errors) return false;
+        const pairs = if (data) |d| (if (d.data == .map) d.data.map else &.{}) else &.{};
+        for (entry.fields) |f| {
+            for (pairs) |p| {
+                if (std.mem.eql(u8, p.key, f)) break;
+            } else return false;
+        }
+        for (e.fields) |f| {
+            const v = for (pairs) |p| {
+                if (std.mem.eql(u8, p.key, f.key)) break p.value;
+            } else continue;
+            if (!kindOf(f.shape, v)) return false;
+        }
+        for (pairs) |p| {
+            const listed = for (entry.fields) |f| {
+                if (std.mem.eql(u8, p.key, f)) break true;
+            } else if (entry.optional) |opt| for (opt) |f| {
+                if (std.mem.eql(u8, p.key, f)) break true;
+            } else false else false;
+            if (!listed) return false;
+        }
+        return true;
+    };
+    return false;
+}
+
+/// Whether a value has a kind Shape's kind; any other Shape takes it.
+fn kindOf(s: *const Shape, v: *const Value) bool {
+    if (s.data != .kind) return true;
+    return switch (s.data.kind) {
+        .text => v.data == .text,
+        .civil_date => v.data == .civil_date,
+        .number => v.data == .number,
+        else => true,
+    };
+}
+
+fn catalogueEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
+    for (errors_table.errors.@"error") |e| if (std.mem.eql(u8, e.code, code)) return e;
+    return null;
+}
+
+fn acceptsLiteral(context: *const anyopaque, index: usize, literal: check.Literal) bool {
+    const op: *const Operation = @ptrCast(@alignCast(context));
+    if (index >= op.args.len) return true;
+    return shapeTakes(op.args[index], literal);
+}
+
+/// Whether a Shape takes a literal of this kind (chapter 9, Shapes: at load).
+fn shapeTakes(s: *const Shape, literal: check.Literal) bool {
+    return switch (s.data) {
+        .kind => |k| switch (k) {
+            .any, .value => true,
+            .nothing => literal == .nothing,
+            .boolean => literal == .boolean,
+            .number => literal == .number,
+            .text => literal == .text,
+            else => false,
+        },
+        .quantity_of => |q| literal == .quantity and blk: {
+            const u = units.Unit.parse(literal.quantity) catch break :blk false;
+            break :blk std.meta.eql(u, q.unit);
+        },
+        .quantity_kind => |name| literal == .quantity and blk: {
+            const u = units.Unit.parse(literal.quantity) catch break :blk false;
+            break :blk ofKind(u, name);
+        },
+        .list => literal == .list,
+        .map => |m| literal == .map and blk: {
+            if (m.open) break :blk true;
+            for (literal.map) |key| if (field(m.fields, key) == null) break :blk false;
+            for (m.fields) |f| {
+                if (f.optional) continue;
+                for (literal.map) |key| {
+                    if (std.mem.eql(u8, key, f.key)) break;
+                } else break :blk false;
+            }
+            break :blk true;
+        },
+        .object => false,
+        .one_of => |xs| for (xs) |x| {
+            if (shapeTakes(x, literal)) break true;
+        } else false,
+        .optional => |inner| literal == .nothing or shapeTakes(inner, literal),
+    };
+}
+
+/// The checker's view of a Grant's Operations.
+pub fn checkOperations(a: Allocator, g: *const Grant) ![]check.Operation {
+    var out: std.ArrayList(check.Operation) = .empty;
+    for (g.capability.operations, g.operations, 0..) |op, kept, i| {
+        if (!kept) continue;
+        try out.append(a, .{ .name = op.name, .mode = op.mode, .required = op.required(), .total = op.args.len, .accepts = .{ .context = &g.capability.operations[i], .call = acceptsLiteral } });
+    }
+    return out.items;
+}
+
+const testing = std.testing;
+
+test "Shapes name what they expect and find the first node that breaks them" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const gpa = testing.allocator;
+    const text = try Shape.kind(gpa, .text);
+    const tags = try Shape.listOf(gpa, text.retain());
+    const kg = try Shape.optional(gpa, try Shape.quantityOf(gpa, "kg"));
+    const fields = try gpa.alloc(Field, 3);
+    fields[0] = .{ .key = try gpa.dupe(u8, "name"), .shape = text };
+    fields[1] = .{ .key = try gpa.dupe(u8, "tags"), .shape = tags };
+    fields[2] = .{ .key = try gpa.dupe(u8, "weight"), .shape = kg, .optional = true };
+    const form = try Shape.map(gpa, fields, false);
+    defer form.release();
+    try testing.expectEqualStrings("kg or nothing", try kg.expected(a));
+
+    const v = try @import("../display.zig").parse(gpa, "{name: \"a\", tags: [\"x\", 3]}", .{});
+    defer v.release();
+    const r = try checkValue(a, gpa, form, v);
+    defer r.release();
+    const bad = r.mismatch.?.wrong_kind;
+    try testing.expectEqualStrings("text", bad.expected);
+    try testing.expectEqualStrings("number", bad.got);
+    try testing.expectEqual(@as(usize, 2), bad.path.len);
+
+    const ok = try @import("../display.zig").parse(gpa, "{name: \"a\", tags: [], weight: 2 kg}", .{});
+    defer ok.release();
+    const fine = try checkValue(a, gpa, form, ok);
+    defer fine.release();
+    try testing.expect(fine.mismatch == null);
+}

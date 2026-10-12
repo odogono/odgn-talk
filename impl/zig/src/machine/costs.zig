@@ -20,8 +20,15 @@ pub const Measures = struct {
     builtin: []const u8 = "",
     args: []const *Value = &.{},
     /// Allocation beyond the formula's: `bin-bits`'s later values, whose
-    /// sizes add to the first's.
+    /// sizes add to the first's, and an Operation's declared allocation.
     alloc_extra: u64 = 0,
+    /// Fuel beyond the formula's: what a Host function drew with `Charge`.
+    fuel_extra: u64 = 0,
+    /// An Operation's declared Fuel.
+    declared: u64 = 0,
+    /// Set when nothing is charged, as for a Capability argument that
+    /// breaks its Shape.
+    uncharged: bool = false,
 
     pub fn release(self: *Measures) void {
         if (self.input) |v| v.release();
@@ -51,7 +58,7 @@ pub fn charge(key: []const u8, m: *const Measures) Charge {
     var buf: [64]u8 = undefined;
     const full = if (m.builtin.len > 0) std.fmt.bufPrint(&buf, "builtin.{s}", .{m.builtin}) catch key else key;
     const rate = find(full) orelse return .{ .fuel = 0, .alloc = 0 };
-    return .{ .fuel = evaluate(rate.fuel, m), .alloc = evaluate(rate.alloc, m) + m.alloc_extra };
+    return .{ .fuel = evaluate(rate.fuel, m) + m.fuel_extra, .alloc = evaluate(rate.alloc, m) + m.alloc_extra };
 }
 
 fn evaluate(terms: []const rates.CostTerm, m: *const Measures) u64 {
@@ -71,6 +78,7 @@ fn evaluate(terms: []const rates.CostTerm, m: *const Measures) u64 {
             rates.measure_scanned => m.scanned,
             rates.measure_count => m.count,
             rates.measure_steps => m.steps,
+            rates.measure_declared => m.declared,
             else => if (subject) |v| measure(t.measure, v) else 0,
         };
         const n = @as(u64, @intCast(t.factor)) * measured;

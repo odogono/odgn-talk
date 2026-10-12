@@ -1,3 +1,5 @@
+// Every Built-in property in every Container statement (#670). The shared
+// fixtures are in broken.talk and corpus/load-diagnostics/container-properties/.
 import { expect, test } from 'bun:test';
 import grammar from '../../spec/data/grammar.toml';
 import { parse } from './parser';

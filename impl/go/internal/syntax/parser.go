@@ -669,12 +669,10 @@ func (p *parser) container() *Node {
 	for {
 		if root.Kind == "chunk" {
 			root = root.Children[1]
+		} else if root.Kind == "key" && builtinProperty(root) {
+			// Built-in properties are read-only on a Container's path (ADR 0079).
+			panic(&Error{Code: "not a container", Pos: t.Pos})
 		} else if root.Kind == "key" || root.Kind == "key-computed" {
-			// Quoted and computed keys remain writable; an unquoted Built-in
-			// property is read-only at every level on the root path (ADR 0079).
-			if root.Kind == "key" && slices.Contains(generated.Grammar.Properties, root.Text) && (len(root.Params) == 0 || root.Params[0].Token.Kind != Text) {
-				panic(&Error{Code: "not a container", Pos: t.Pos})
-			}
 			root = root.Children[len(root.Children)-1]
 		} else if root.Kind == "delimited" || root.Kind == "paren" {
 			root = root.Children[0]
@@ -686,6 +684,12 @@ func (p *parser) container() *Node {
 		panic(&Error{Code: "not a container", Pos: t.Pos})
 	}
 	return n
+}
+
+// builtinProperty reports whether a key node reads a Built-in property: an
+// unquoted Built-in property name.
+func builtinProperty(n *Node) bool {
+	return slices.Contains(generated.Grammar.Properties, n.Text) && (len(n.Params) == 0 || n.Params[0].Token.Kind != Text)
 }
 func (p *parser) branchBody() []*Node {
 	if p.accept("\n") {

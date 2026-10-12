@@ -22,8 +22,8 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [bits-not-whole-bytes](bits-not-whole-bytes/bad.talk) | `bits not whole bytes` at `2:10` | [Trace](bits-not-whole-bytes/case.trace) |
 | [cant-suspend-here](cant-suspend-here/bad.talk) | `can't suspend here` at `2:1` | [Trace](cant-suspend-here/case.trace) |
 | [cant-write](cant-write/bad.talk) | `can't write` at `3:12` | [Trace](cant-write/case.trace) |
-| [container-properties](container-properties/) | `not a container` at `3:20`, `2:10` and `2:7`, before load checking; ordinary keys and auxiliary property reads load and execute (ADR 0079; first blessing pending, #673 and [Go follow-up #681](https://github.com/odogono/odgn-talk/issues/681)) | [Trace](container-properties/case.trace) |
 | [capture-in-repetition](capture-in-repetition/bad.talk) | `capture in repetition` at `2:18` | [Trace](capture-in-repetition/case.trace) |
+| [container-properties](container-properties/leaf.talk) | `not a container` at `2:14` for a Built-in property ending the Container, [`2:10`](container-properties/intermediate.talk) for one on its path and [`2:7`](container-properties/possessive.talk) after `'s` in `set`; [quoted and computed keys and property reads](container-properties/keys.talk) load and run; [syntax precedence](container-properties/precedence.talk) at `3:20` and [expanded key/read coverage](container-properties/good.talk) also run (first blessing pending, #670 and [Go follow-up #681](https://github.com/odogono/odgn-talk/issues/681)) | [Trace](container-properties/case.trace) |
 | [default-order](default-order/bad.talk) | `default order` at `1:19` | [Trace](default-order/case.trace) |
 | [duplicate-key](duplicate-key/bad.talk) | `duplicate key` at `2:15` | [Trace](duplicate-key/case.trace) |
 | [duplicate-name](duplicate-name/bad.talk) | `duplicate name` at `2:9` | [Trace](duplicate-name/case.trace) |

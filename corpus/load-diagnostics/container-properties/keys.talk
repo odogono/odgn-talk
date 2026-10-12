@@ -1,0 +1,7 @@
+script variable m = {}
+script variable t = "a,b,c"
+on go
+  put 1 into the "length" of m
+  put "x" into item (the length of m) of t
+  put the length of t into the ("size") of m
+end go

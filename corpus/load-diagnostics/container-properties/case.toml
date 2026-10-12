@@ -1,4 +1,6 @@
-# Built-in properties are read-only throughout a Container path (ADR 0079).
+# Pins `not a container` for a Built-in property at the end of a Container,
+# on its path and after `'s`, and that quoted and computed keys and property
+# reads that select the target still load and run (chapter 2; ADR 0079; #670).
 kind = "trace"
 
 [versions]
@@ -16,6 +18,14 @@ source = "intermediate.talk"
 [[scripts]]
 name = "possessive"
 source = "possessive.talk"
+
+[[scripts]]
+name = "keys"
+source = "keys.talk"
+
+[[scripts]]
+name = "precedence"
+source = "precedence.talk"
 
 [[scripts]]
 name = "good"
