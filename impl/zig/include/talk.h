@@ -55,6 +55,8 @@ typedef enum talk_host_error_code {
     TALK_STATE_TOO_LARGE,
     TALK_EFFECTS_PENDING,
     TALK_EFFECT_STATE_UNKNOWN,
+    /* Call.Charge's refusal: the Run can't cover the charge. */
+    TALK_ERR_LIMIT,
     /* C only: a Load refused with diagnostics, which talk.go reports as a
      * LoadError. The Trace has a diag record for each. */
     TALK_LOAD_REFUSED,
@@ -169,6 +171,130 @@ void talk_value_release(talk_value *v);
 /* C only: frees an owned buffer and clears its fields. */
 void talk_owned_bytes_release(talk_owned_bytes *b);
 
+/* Shapes (chapter 9). A constructor's Shape is owned by the caller; a
+ * function that takes Shapes retains what it keeps. */
+typedef struct talk_shape talk_shape;
+
+/* The kind Shapes, which live as long as the process. */
+const talk_shape *talk_any_shape(void);
+const talk_shape *talk_value_shape(void);
+const talk_shape *talk_nothing_shape(void);
+const talk_shape *talk_bool_shape(void);
+const talk_shape *talk_number_shape(void);
+const talk_shape *talk_text_shape(void);
+const talk_shape *talk_bytes_shape(void);
+const talk_shape *talk_instant_shape(void);
+const talk_shape *talk_range_shape(void);
+const talk_shape *talk_civil_date_shape(void);
+const talk_shape *talk_pattern_shape(void);
+const talk_shape *talk_function_shape(void);
+
+typedef struct talk_field {
+    const char *key;
+    size_t key_len;
+    const talk_shape *shape;
+    bool optional;
+} talk_field;
+
+talk_host_error_code talk_quantity_of(const char *unit, size_t len, talk_shape **out);
+talk_host_error_code talk_quantity_kind(const char *kind, size_t len, talk_shape **out);
+talk_host_error_code talk_list_of(const talk_shape *s, talk_shape **out);
+talk_host_error_code talk_map_shape(const talk_field *fields, size_t len, talk_shape **out);
+talk_host_error_code talk_open_map(const talk_field *fields, size_t len, talk_shape **out);
+talk_host_error_code talk_one_of(const talk_shape *const *shapes, size_t len, talk_shape **out);
+talk_host_error_code talk_optional(const talk_shape *s, talk_shape **out);
+/* C only: ends the caller's reference to a Shape. */
+void talk_shape_release(const talk_shape *s);
+
+/* Capabilities and Operations (chapter 9). */
+typedef enum talk_mode {
+    TALK_IMMEDIATE,
+    TALK_SUSPENDING,
+    TALK_FIRE_AND_FORGET
+} talk_mode;
+
+typedef struct talk_cost {
+    int64_t fuel;
+    int64_t alloc;
+} talk_cost;
+
+typedef struct talk_error_decl {
+    const char *code;
+    size_t code_len;
+    const talk_field *fields;
+    size_t fields_len;
+} talk_error_decl;
+
+/* What an Operation's Host function receives. It lives until the function
+ * returns. */
+typedef struct talk_call talk_call;
+
+/* A Script error an Operation fails with. The Core takes data, a map or
+ * Nothing, or NULL for none. */
+typedef struct talk_script_error {
+    const char *code;
+    size_t code_len;
+    const char *message; /* NULL: no message */
+    size_t message_len;
+    talk_value *data;
+} talk_script_error;
+
+/* C only: how a Host function ended, which talk.go gives as its result and
+ * error. */
+typedef enum talk_call_end {
+    /* C only: *result holds the result, owned by the Core. */
+    TALK_CALL_ANSWERED,
+    /* C only: *error holds a Script error. */
+    TALK_CALL_FAILED,
+    /* C only: a Charge was refused, so the work wasn't done. */
+    TALK_CALL_LIMITED,
+    /* C only: any other failure, which the Script sees as host error. */
+    TALK_CALL_BROKEN
+} talk_call_end;
+
+/* C only: an immediate Operation's Do, or a fire-and-forget one's Fire. The
+ * arguments are borrowed. */
+typedef talk_call_end (*talk_operation_fn)(void *context, talk_call *call, talk_value *const *args, size_t args_len, talk_value **result, talk_script_error *error);
+
+typedef struct talk_operation {
+    const char *name;
+    size_t name_len;
+    const talk_shape *const *args; /* an Optional suffix may be left off */
+    size_t args_len;
+    const talk_shape *result; /* NULL for fire-and-forget */
+    talk_cost cost;
+    talk_mode mode;
+    int64_t max_pending_ms; /* suspending only; 0: the Script's MaxWait */
+    const talk_error_decl *errors;
+    size_t errors_len;
+    talk_operation_fn fn;
+    void *context;
+} talk_operation;
+
+/* A Capability's definition, owned by its Core. */
+typedef struct talk_capability_def talk_capability_def;
+/* A reusable Grant, owned by its Core. */
+typedef struct talk_grant talk_grant;
+
+void talk_capability_def_name(const talk_capability_def *d, const char **s, size_t *len);
+/* Grants the named Operations, refusing an unknown one. binding is the
+ * Host's own, which each Call gives back. */
+talk_host_error_code talk_capability_def_grant(talk_capability_def *d, const char *const *ops, const size_t *lens, size_t len, void *binding, talk_grant **out);
+talk_host_error_code talk_capability_def_grant_all(talk_capability_def *d, void *binding, talk_grant **out);
+talk_capability_def *talk_grant_capability(const talk_grant *g);
+void *talk_grant_binding(const talk_grant *g);
+
+/* The call's id, such as "pricing/r1.c1", borrowed from the call. */
+void talk_call_id(const talk_call *c, const char **s, size_t *len);
+void talk_call_script_name(const talk_call *c, const char **s, size_t *len);
+void talk_call_grant_name(const talk_call *c, const char **s, size_t *len);
+void *talk_call_binding(const talk_call *c);
+/* The Pump's Clock reading. */
+void talk_call_now(const talk_call *c, int64_t *seconds, int32_t *nanos);
+/* Draws Fuel before the work. TALK_ERR_LIMIT when the Run can't cover it:
+ * the function then returns TALK_CALL_LIMITED without doing the work. */
+talk_host_error_code talk_call_charge(talk_call *c, int64_t fuel);
+
 /* Groups (chapter 9). Worker calls come from the thread that pumps the Group.
  * A string a call takes is borrowed for the duration of the call. */
 
@@ -183,11 +309,21 @@ typedef struct talk_group_options {
     void *trace_context;
 } talk_group_options;
 
+/* C only: a Grant bound by the name the Script uses. */
+typedef struct talk_load_grant {
+    const char *name;
+    size_t name_len;
+    talk_grant *grant;
+} talk_load_grant;
+
 typedef struct talk_load_options {
     const char *name;
     size_t name_len;
     const char *source;
     size_t source_len;
+    const talk_load_grant *grants;
+    size_t grants_len;
+    bool grants_as_used;
 } talk_load_options;
 
 typedef struct talk_message {
@@ -222,6 +358,9 @@ talk_core *talk_new(void);
 /* C only: ends the Core. Its Groups must be released first. */
 void talk_core_release(talk_core *c);
 talk_host_error_code talk_new_group(talk_core *c, const talk_group_options *o, talk_group **out);
+/* Defines a Capability, once per process: its Operations, which the Core
+ * orders by name. The definition lives as long as the Core. */
+talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_capability_def **out);
 /* C only: ends the Group and every handle it gave out. */
 void talk_group_release(talk_group *g);
 /* Loads a Script. A refusal with diagnostics is TALK_LOAD_REFUSED. The Script

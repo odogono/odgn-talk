@@ -2,6 +2,9 @@
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
+capabilities/calls
+capabilities/host-failures
+capabilities/load-checks
 collecting/condition-target
 collecting/exit
 collecting/next-filter

@@ -20,6 +20,7 @@ const builtins = @import("builtins.zig");
 const binary = @import("binary.zig");
 const conversions = @import("convert.zig");
 const matcher = @import("matcher.zig");
+pub const capabilities = @import("capabilities.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
@@ -116,6 +117,8 @@ pub const Run = struct {
     clause: u32 = 0,
     /// The error being unwound, with the `finally` blocks still to run.
     unwinding: ?Unwinding = null,
+    /// Capability calls made, which number their ids.
+    calls: u32 = 0,
 };
 
 /// An accepted catch: its frame, where it goes on, and its dispatch
@@ -143,11 +146,30 @@ pub const Script = struct {
     definitions: []*Value,
     mailbox: std.ArrayList(Delivery) = .empty,
     runs: u64 = 0,
+    /// The Script's Grants, by the name it uses, with the Operations it
+    /// keeps.
+    grants: []ScriptGrant = &.{},
+
+    fn grant(s: *const Script, name: []const u8) ?ScriptGrant {
+        for (s.grants) |g| if (std.mem.eql(u8, g.name, name)) return g;
+        return null;
+    }
 };
+
+/// A Grant the Host binds at Load, by the name the Script uses.
+pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
+
+/// A Script's Grant: the Operations it keeps, by index into its
+/// Capability's.
+pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool };
 
 /// What a Script is loaded with.
 pub const LoadOptions = struct {
     context: check.Context = .{},
+    /// The Grants, which also give the checker its view of them.
+    grants: ?[]const NamedGrant = null,
+    /// Keep only the granted Operations the Script uses.
+    grants_as_used: bool = false,
 };
 
 pub const LoadResult = union(enum) {
@@ -176,6 +198,8 @@ pub const Group = struct {
     pending_error: ?*Value = null,
     /// Whether the Core raised it, so it gets a `message`.
     pending_core: bool = false,
+    /// The last Pump's Clock reading, which a Capability call reads.
+    clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 },
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
@@ -237,7 +261,13 @@ pub const Group = struct {
         };
         const t = try a.create(ast.Tree);
         t.* = tree;
-        const checked = try check.check(a, t, options.context);
+        var context = options.context;
+        if (options.grants) |named| {
+            const viewed = try a.alloc(check.Grant, named.len);
+            for (named, viewed) |n, *v| v.* = .{ .name = try a.dupe(u8, n.name), .operations = try capabilities.checkOperations(a, n.grant) };
+            context.grants = viewed;
+        }
+        const checked = try check.check(a, t, context);
         if (checked.diagnostics.len > 0) {
             for (checked.diagnostics) |d| {
                 const p = lines.position(d.offset);
@@ -247,7 +277,8 @@ pub const Group = struct {
             g.gpa.destroy(s);
             return .{ .refused = checked.diagnostics.len };
         }
-        s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = options.context, .values = g.gpa });
+        s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = context, .values = g.gpa });
+        if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, options.grants_as_used);
         s.variables = try g.gpa.alloc(*Value, s.unit.variables.len);
         for (s.variables) |*v| v.* = try nothing(g.gpa);
         s.definitions = try g.gpa.alloc(*Value, s.unit.definitions.len);
@@ -280,6 +311,7 @@ pub const Group = struct {
     /// A Pump: the queued inputs are written and drained, then each Script
     /// runs its mailbox.
     pub fn pump(g: *Group, clock: model.dates.Instant) !void {
+        g.clock = clock;
         for (g.inputs.items) |input| switch (input) {
             .deliver => |d| {
                 const w = g.trace;
@@ -508,7 +540,7 @@ pub const Group = struct {
                 },
                 else => |other| return other,
             };
-            if (charged) {
+            if (charged and !charge.uncharged) {
                 const key = costKey(ins, &charge);
                 const cost = costs.charge(key, &charge);
                 run.fuel += cost.fuel;
@@ -1267,6 +1299,7 @@ pub const Group = struct {
                 m.result = out.retain();
                 try g.push(frame, out);
             },
+            .ask, .tell => return g.operation(run, frame, ins, m),
             .get_key, .get_key_computed => {
                 const base = pop(frame);
                 defer base.release();
@@ -1820,6 +1853,177 @@ pub const Group = struct {
         };
     }
 
+    /// `ask` and `tell`: an immediate or fire-and-forget Capability call
+    /// (chapter 9, Capabilities). Each argument is checked against its Shape
+    /// first, and a mismatch is charged nothing. The declared cost is
+    /// charged before the Host function runs, and the call is recorded.
+    fn operation(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        const a = g.scratch.allocator();
+        const ops = ins.operands;
+        const grant_name = ops[0].text;
+        const op_name = ops[1].text;
+        const n: usize = @intCast(ops[2].int);
+        const args = try a.alloc(*Value, n);
+        var i = n;
+        while (i > 0) {
+            i -= 1;
+            args[i] = pop(frame);
+        }
+        defer for (args) |v| v.release();
+        const granted = run.script.grant(grant_name) orelse return g.raise("not implemented", &.{});
+        const index = granted.grant.capability.find(op_name) orelse return g.raise("not implemented", &.{});
+        const decl = granted.grant.capability.operations[index];
+        const where = [_]model.Pair{
+            .{ .key = "capability", .value = try model.text(gpa, grant_name) },
+            .{ .key = "operation", .value = try model.text(gpa, op_name) },
+        };
+        defer for (where) |p| p.value.release();
+
+        // Arguments, depth-first in order.
+        for (args, decl.args[0..n], 1..) |v, shape, position| {
+            const checked = try capabilities.checkValue(a, gpa, shape, v);
+            defer checked.release();
+            const bad = checked.mismatch orelse continue;
+            m.uncharged = true;
+            return g.raiseMismatch(bad, position, &where);
+        }
+
+        run.calls += 1;
+        const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
+        const left: ?u64 = if (run.fuel + decl.cost.fuel >= fuel_per_run) 0 else fuel_per_run - run.fuel - decl.cost.fuel;
+        var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left };
+        const outcome = decl.host.call(decl.host.context, &call, args);
+        call.starting = false;
+        m.declared = decl.cost.fuel;
+        m.fuel_extra = call.charged;
+        m.alloc_extra = decl.cost.alloc;
+        // The record: `call <id> op=<grant>.<op> args=[…]`, then the result
+        // or error, and `charged`.
+        const record = struct {
+            fn write(gr: *Group, call_id: []const u8, grant: []const u8, operation_name: []const u8, values: []const *Value, key: []const u8, shown: ?*const Value, charged: u64) void {
+                const w = gr.trace orelse return;
+                w.print("call {s} op={s}.{s} args=[", .{ call_id, grant, operation_name }) catch {};
+                for (values, 0..) |v, k| {
+                    if (k > 0) w.writeAll(", ") catch {};
+                    display.writeTrace(w, v) catch {};
+                }
+                w.writeAll("]") catch {};
+                if (shown) |v| {
+                    w.print(" {s}=", .{key}) catch {};
+                    display.writeTrace(w, v) catch {};
+                }
+                if (charged > 0) w.print(" charged={d}", .{charged}) catch {};
+                w.writeAll("\n") catch {};
+            }
+        }.write;
+        const empty = try model.map(gpa, &.{});
+        defer empty.release();
+        switch (outcome) {
+            .value => |v| {
+                if (decl.mode == .fire_and_forget) {
+                    v.release();
+                    record(g, id, grant_name, op_name, args, "", null, call.charged);
+                    return .next;
+                }
+                const ok = blk: {
+                    const result_shape = decl.result orelse break :blk true;
+                    const checked = try capabilities.checkValue(a, gpa, result_shape, v);
+                    defer checked.release();
+                    break :blk checked.mismatch == null;
+                };
+                if (!ok) {
+                    v.release();
+                    record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                    return g.hostError(id, grant_name, op_name, &where);
+                }
+                record(g, id, grant_name, op_name, args, "result", v, call.charged);
+                m.result = v.retain();
+                try g.push(frame, v);
+            },
+            .failed => |f| {
+                defer gpa.free(f.code);
+                defer if (f.message) |t| gpa.free(t);
+                defer if (f.data) |d| d.release();
+                var pairs: std.ArrayList(model.Pair) = .empty;
+                defer pairs.deinit(gpa);
+                const code = try model.text(gpa, f.code);
+                defer code.release();
+                try pairs.append(gpa, .{ .key = "code", .value = code });
+                const message: ?*Value = if (f.message) |t| try model.text(gpa, t) else null;
+                defer if (message) |t| t.release();
+                if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
+                if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
+                const shown = model.map(gpa, pairs.items) catch {
+                    record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                    return g.hostError(id, grant_name, op_name, &where);
+                };
+                defer shown.release();
+                record(g, id, grant_name, op_name, args, "error", shown, call.charged);
+                if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
+                if (f.data) |d| m.result = d.retain();
+                try pairs.appendSlice(gpa, &where);
+                g.pending_error = try model.map(gpa, pairs.items);
+                g.pending_core = false;
+                return error.Raised;
+            },
+            .broken => {
+                record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                return g.hostError(id, grant_name, op_name, &where);
+            },
+            .limited => {
+                record(g, id, grant_name, op_name, args, "", null, 0);
+                m.fuel_extra = fuel_per_run;
+            },
+        }
+        return .next;
+    }
+
+    /// A Host failure: a `call-failed` report, then `host error`.
+    fn hostError(g: *Group, id: []const u8, grant: []const u8, operation_name: []const u8, where: []const model.Pair) error{ Raised, OutOfMemory } {
+        g.write("call-failed {s} op={s}.{s}\n", .{ id, grant, operation_name });
+        return g.raise("host error", where);
+    }
+
+    /// `wrong kind` or `not encodable` for an argument that breaks its Shape.
+    fn raiseMismatch(g: *Group, bad: capabilities.Mismatch, position: usize, where: []const model.Pair) error{ Raised, OutOfMemory } {
+        const gpa = g.gpa;
+        switch (bad) {
+            .wrong_kind => |w| {
+                const expected = model.text(gpa, w.expected) catch return error.OutOfMemory;
+                defer expected.release();
+                const got = model.text(gpa, w.got) catch return error.OutOfMemory;
+                defer got.release();
+                const argument = chunks.numberValue(gpa, @intCast(position)) catch return error.OutOfMemory;
+                defer argument.release();
+                var fields: std.ArrayList(model.Pair) = .empty;
+                defer fields.deinit(gpa);
+                fields.appendSlice(gpa, &.{ .{ .key = "expected", .value = expected }, .{ .key = "got", .value = got }, .{ .key = "value", .value = w.value } }) catch return error.OutOfMemory;
+                fields.appendSlice(gpa, where) catch return error.OutOfMemory;
+                fields.append(gpa, .{ .key = "argument", .value = argument }) catch return error.OutOfMemory;
+                var path: ?*Value = null;
+                defer if (path) |p| p.release();
+                if (w.path.len > 0) {
+                    path = model.list(gpa, @constCast(w.path)) catch return error.OutOfMemory;
+                    fields.append(gpa, .{ .key = "path", .value = path.? }) catch return error.OutOfMemory;
+                }
+                return g.raise("wrong kind", fields.items);
+            },
+            .not_encodable => |e| {
+                const kind = model.text(gpa, "function") catch return error.OutOfMemory;
+                defer kind.release();
+                const items = gpa.alloc(*Value, e.path.len + 1) catch return error.OutOfMemory;
+                defer gpa.free(items);
+                items[0] = chunks.numberValue(gpa, @intCast(position)) catch return error.OutOfMemory;
+                defer items[0].release();
+                @memcpy(items[1..], e.path);
+                const path = model.list(gpa, items) catch return error.OutOfMemory;
+                defer path.release();
+                return g.raise("not encodable", &.{ .{ .key = "kind", .value = kind }, .{ .key = "path", .value = path } });
+            },
+        }
+    }
+
     /// The program of a needle: a Text Pattern's, or a text's as a literal.
     fn needle(g: *Group, a: Allocator, v: *const Value, fold: bool) !matcher.Program {
         return switch (v.data) {
@@ -1929,6 +2133,27 @@ const errors_table = @import("../generated/errors.zig");
 fn errorEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
     for (errors_table.errors.@"error") |e| if (std.mem.eql(u8, e.code, code)) return e;
     return null;
+}
+
+/// The Script's Grants. With `as_used`, each keeps only the Operations the
+/// code calls through it.
+fn keptGrants(a: Allocator, named: []const NamedGrant, unit: *const lower.Unit, as_used: bool) ![]ScriptGrant {
+    var out: std.ArrayList(ScriptGrant) = .empty;
+    for (named) |n| {
+        const kept = try a.dupe(bool, n.grant.operations);
+        if (as_used) {
+            for (kept, n.grant.capability.operations) |*k, op| {
+                if (!k.*) continue;
+                k.* = for (unit.code) |ins| switch (ins.op) {
+                    .ask, .tell, .ask_wait, .join_ask => if (std.mem.eql(u8, ins.operands[0].text, n.name) and std.mem.eql(u8, ins.operands[1].text, op.name)) break true,
+                    else => {},
+                } else false;
+            }
+            if (std.mem.indexOfScalar(bool, kept, true) == null) continue;
+        }
+        try out.append(a, .{ .name = try a.dupe(u8, n.name), .grant = n.grant, .kept = kept });
+    }
+    return out.items;
 }
 
 fn retainSlot(slot: Slot) Slot {

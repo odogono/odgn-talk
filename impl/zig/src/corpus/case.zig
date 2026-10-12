@@ -112,7 +112,7 @@ pub fn tables(a: Allocator, toml: []const u8) Error![]const Table {
     return out.items;
 }
 
-fn field(t: Table, key: []const u8) ?Value {
+pub fn field(t: Table, key: []const u8) ?Value {
     for (t.entries) |e| if (std.mem.eql(u8, e.key, key)) return e.value;
     return null;
 }
