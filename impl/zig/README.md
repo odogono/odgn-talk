@@ -333,6 +333,20 @@ A Host failure must name a declared code with the catalogue's fields:
 words, and the codes the Core raises itself are `host error` from the Host.
 Notifications, and so the router, aren't implemented yet.
 
+`sqlite` (`talk_sqlite_capability`) is optional
+([values at the boundary](src/machine/sqlite.zig)). Each Grant's binding is a
+`talk_sqlite_binding`, and maps to its database's coordinator, which the
+implementation gives; `change`, `begin`, `commit` and `rollback` are
+Segment-bound, and `begin` opens the scope `transaction` that `rollback`
+abandons. Before the call, uncharged, the Core checks `max` (`out of range`),
+then that `params` is a list or a map, then each value (`wrong kind` at
+argument 2, with its `path`). `query` and `change` then charge `max` times the
+per-row cost, `max` defaulting to the binding's cap, convert `params` to SQL
+values, and convert the rows back, raising `sql` for a column named twice and
+`unrepresentable` for a double it can't hold or text that isn't UTF-8. A
+malformed result is `host error`. `talk_store_coordinator`, for a Store kept
+in a database, comes later.
+
 Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
 heap, its Script goes on to its next work, and each Script's work is one
 queue of messages and ready Runs, in the order each became ready. A

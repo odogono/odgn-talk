@@ -414,6 +414,83 @@ typedef struct talk_locale_impl {
     talk_operation_fn compare, rank, upper, lower, number_symbols, month_names, day_names, tag;
 } talk_locale_impl;
 
+/* C only: a SQL value's storage class. */
+typedef enum talk_sql_kind {
+    /* C only: NULL. */
+    TALK_SQL_NULL,
+    /* C only: INTEGER, in integer. */
+    TALK_SQL_INTEGER,
+    /* C only: REAL, in real. */
+    TALK_SQL_REAL,
+    /* C only: TEXT, as UTF-8 in bytes. */
+    TALK_SQL_TEXT,
+    /* C only: BLOB, in bytes. */
+    TALK_SQL_BLOB
+} talk_sql_kind;
+
+/* A SQL value: NULL, an INTEGER, a REAL, or TEXT or a BLOB of len bytes. */
+typedef struct talk_sql_value {
+    talk_sql_kind kind;
+    int64_t integer;
+    double real;
+    const char *bytes;
+    size_t len;
+} talk_sql_value;
+
+/* A call's parameters, borrowed for the call: a list bound to ? and ?NNN,
+ * or when named, values bound to :name by names, written without the
+ * colon. */
+typedef struct talk_sql_params {
+    bool named;
+    const talk_sql_value *values;
+    const char *const *names;
+    const size_t *name_lens;
+    size_t len;
+} talk_sql_params;
+
+/* A result the implementation fills: its column names, and rows_len rows of
+ * columns_len values, row by row. changes is change's only. It stays valid
+ * until release_rows, or until the implementation's next call. */
+typedef struct talk_sql_rows {
+    const char *const *columns;
+    const size_t *column_lens;
+    size_t columns_len;
+    const talk_sql_value *values;
+    size_t rows_len;
+    int64_t changes;
+} talk_sql_rows;
+
+/* A sqlite Grant's binding, which the Grant borrows for its life: the
+ * Host's database, the tables it may use when has_tables, and its row cap,
+ * from 0 to 9007199254740991. */
+typedef struct talk_sqlite_binding {
+    const char *database;
+    size_t database_len;
+    const char *const *tables;
+    const size_t *table_lens;
+    size_t tables_len;
+    bool has_tables;
+    int64_t max_rows;
+} talk_sqlite_binding;
+
+/* C only: query or change. The Core has checked the Shapes and max,
+ * converted params and charged max times the per-row cost. Fill rows, or
+ * fail with a Script error: sql {reason}, constraint {kind}, sqlite busy,
+ * not read-only or too many rows {max}. */
+typedef talk_call_end (*talk_sql_fn)(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_sql_rows *rows, talk_script_error *error);
+
+/* sqlite's implementation. coordinator maps a database to its Segment
+ * Coordinator, the same one for the same database; begin, commit and
+ * rollback open, release and roll back a savepoint; release_rows, if not
+ * NULL, ends a result once the Core has converted it. */
+typedef struct talk_sqlite_impl {
+    void *context;
+    const talk_segment_lifecycle *(*coordinator)(void *context, const char *database, size_t len);
+    talk_sql_fn query, change;
+    talk_operation_fn begin, commit, rollback;
+    void (*release_rows)(void *context, talk_sql_rows *rows);
+} talk_sqlite_impl;
+
 /* store's implementation: a function for each Operation, and the Segment
  * Coordinator every Store maps to. */
 typedef struct talk_store_impl {
@@ -446,6 +523,12 @@ talk_host_error_code talk_console_capability(talk_core *c, const talk_console_im
  * store full {limit} or store busy {key}, and from increment with the error
  * + would raise (chapter 7). */
 talk_host_error_code talk_store_capability(talk_core *c, const talk_store_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* sqlite is optional (chapter 7). per_row is whole Fuel charged per row of
+ * max, from 0 to 9007199254740991. Each Grant's binding is a
+ * talk_sqlite_binding; a malformed one refuses the Grant. The Core converts
+ * values and rows by chapter 7's rules, raising sql for a column named twice
+ * and unrepresentable for a value it can't hold. */
+talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, int64_t per_row, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);

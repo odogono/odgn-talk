@@ -432,6 +432,62 @@ static int store_test(void) {
     return bad;
 }
 
+/* sqlite's query: one row, {n: <the number of parameters>}, and the max it
+ * was given. */
+static int64_t sql_max = -1;
+static const char *n_column[] = {"n"};
+static const size_t n_len[] = {1};
+static talk_sql_value one_row[1];
+static talk_call_end sql_query(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_sql_rows *rows, talk_script_error *error) {
+    (void)context; (void)call; (void)sql; (void)sql_len; (void)error;
+    sql_max = max;
+    one_row[0] = (talk_sql_value){TALK_SQL_INTEGER, (int64_t)params->len, 0, NULL, 0};
+    *rows = (talk_sql_rows){n_column, n_len, 1, one_row, 1, 0};
+    return TALK_CALL_ANSWERED;
+}
+
+static const talk_segment_lifecycle *database_coordinator(void *context, const char *database, size_t len) {
+    (void)context; (void)database; (void)len;
+    return &shared_lifecycle;
+}
+
+/* sqlite: a malformed binding refuses the Grant, max defaults to the row
+ * cap and is charged per row, and rows come back as maps. */
+static int sqlite_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost entries[] = {{"query", 5, {1, 0}}, {"change", 6, {1, 0}}, {"begin", 5, {1, 0}}, {"commit", 6, {1, 0}}, {"rollback", 8, {1, 0}}};
+    talk_costs costs = {entries, 5};
+    talk_sqlite_impl impl = {NULL, database_coordinator, sql_query, sql_query, unused, unused, unused, NULL};
+    talk_capability_def *def = NULL;
+    int bad = talk_sqlite_capability(core, &impl, &costs, -1, &def) != TALK_INVALID_VALUE;
+    bad |= talk_sqlite_capability(core, &impl, &costs, 2, &def) != TALK_OK;
+    talk_sqlite_binding too_many = {"app", 3, NULL, NULL, 0, false, -1};
+    talk_sqlite_binding app = {"app", 3, NULL, NULL, 0, false, 4};
+    talk_grant *refused = NULL, *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, &too_many, &refused) != TALK_INVALID_VALUE;
+    bad |= talk_capability_def_grant_all(def, &app, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"db", 2, grant}};
+    const char *source = "on go\n  ask db to query \"SELECT ?\", [1, true]\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= sql_max != 4;
+    bad |= strstr(trace, "result=[{n: 2}] charged=8\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* console's write: counts what it is shown. */
 static int shown = 0;
 static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -780,6 +836,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(sqlite_test() == 0, "sqlite refuses a malformed binding, charges max per row and gives rows as maps");
     expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");

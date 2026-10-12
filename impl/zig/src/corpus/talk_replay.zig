@@ -40,7 +40,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console", "store" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console", "store", "sqlite" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -51,7 +51,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
             const which = (case_setup.field(t, "capability") orelse return "a Standard Capability without a name").string;
             for (standard_made) |made| {
                 if (std.mem.eql(u8, made, which)) break;
-            } else return "Standard Capabilities other than clock, calendar, locale, console and store are not implemented";
+            } else return "Standard Capabilities other than clock, calendar, locale, console, store and sqlite are not implemented";
         }
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
@@ -109,7 +109,7 @@ fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c
     while (it.next()) |e| {
         var grant: ?*c.talk_grant = null;
         // A coordinated Grant needs a binding of its own.
-        var binding: ?*anyopaque = null;
+        var binding: ?*anyopaque = if (std.mem.eql(u8, e.key_ptr.*, "sqlite")) &effects.sqlite_binding else null;
         if (effects.coordinated.contains(e.key_ptr.*)) {
             binding = @ptrCast(@constCast((try a.dupeSentinel(u8, "", 0)).ptr));
             try effects.names.put(a, @intFromPtr(binding), null);
@@ -414,6 +414,8 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "compare", c.TALK_IMMEDIATE }, .{ "rank", c.TALK_IMMEDIATE }, .{ "upper", c.TALK_IMMEDIATE }, .{ "lower", c.TALK_IMMEDIATE }, .{ "numberSymbols", c.TALK_IMMEDIATE }, .{ "monthNames", c.TALK_IMMEDIATE }, .{ "dayNames", c.TALK_IMMEDIATE }, .{ "tag", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "console"))
             &.{ .{ "write", c.TALK_FIRE_AND_FORGET }, .{ "read", c.TALK_SUSPENDING } }
+        else if (std.mem.eql(u8, which, "sqlite"))
+            &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
             &.{ .{ "get", c.TALK_IMMEDIATE }, .{ "set", c.TALK_IMMEDIATE }, .{ "delete", c.TALK_IMMEDIATE }, .{ "keys", c.TALK_IMMEDIATE }, .{ "increment", c.TALK_IMMEDIATE }, .{ "swap", c.TALK_IMMEDIATE }, .{ "watch", c.TALK_IMMEDIATE }, .{ "unwatch", c.TALK_IMMEDIATE } }
         else
@@ -438,6 +440,11 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             // Its coordinator's hooks answer from `stub-effect` lines.
             const impl: c.talk_store_impl = .{ .context = hosts, .get = standardHost("store.get"), .set = standardHost("store.set"), .del = standardHost("store.delete"), .keys = standardHost("store.keys"), .increment = standardHost("store.increment"), .swap = standardHost("store.swap"), .watch = standardHost("store.watch"), .unwatch = standardHost("store.unwatch"), .coordinator = (try effects.lifecycle()).* };
             try check(c.talk_store_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "sqlite")) {
+            const context = try a.create(SqliteHost);
+            context.* = .{ .hosts = hosts, .effects = effects };
+            const impl: c.talk_sqlite_impl = .{ .context = context, .coordinator = databaseCoordinator, .query = sqlHost("sqlite.query"), .change = sqlHost("sqlite.change"), .begin = sqliteHost("sqlite.begin"), .commit = sqliteHost("sqlite.commit"), .rollback = sqliteHost("sqlite.rollback"), .release_rows = null };
+            try check(c.talk_sqlite_capability(core, &impl, &all_costs, number(case_setup.field(t, "perRow")), &def));
         } else return error.Unsupported;
         try defs.put(a, which, def);
     }
@@ -510,6 +517,9 @@ const Effects = struct {
     /// The coordinated Capabilities, whose Grants need a binding of their
     /// own.
     coordinated: std.StringHashMapUnmanaged(void) = .empty,
+    /// A `sqlite` binding for Grants the case gives none, such as a
+    /// Library's declarations.
+    sqlite_binding: c.talk_sqlite_binding = .{ .database = "", .database_len = 0, .tables = null, .table_lens = null, .tables_len = 0, .has_tables = false, .max_rows = 0 },
 
     fn lifecycle(e: *Effects) !*c.talk_segment_lifecycle {
         const l = try e.a.create(c.talk_segment_lifecycle);
@@ -543,6 +553,157 @@ fn coordinatorFor(context: ?*anyopaque, binding: ?*anyopaque) callconv(.c) [*c]c
     const l = e.lifecycle() catch return null;
     e.shared.put(e.a, n, l) catch return null;
     return l;
+}
+
+/// `sqlite`'s context: the Stubs for its Operations, and the case's Segment
+/// Coordinators for its databases.
+const SqliteHost = struct { hosts: *std.StringHashMapUnmanaged(*OperationHost), effects: *Effects };
+
+/// A `sqlite` database's coordinator: one per database.
+fn databaseCoordinator(context: ?*anyopaque, database: [*c]const u8, len: usize) callconv(.c) [*c]const c.talk_segment_lifecycle {
+    const e = @as(*SqliteHost, @ptrCast(@alignCast(context.?))).effects;
+    const key = std.fmt.allocPrint(e.a, "sqlite:{s}", .{database[0..len]}) catch return null;
+    if (e.shared.get(key)) |l| return l;
+    const l = e.lifecycle() catch return null;
+    e.shared.put(e.a, key, l) catch return null;
+    return l;
+}
+
+/// A display value as a SQL value: an integer with no fraction digits that
+/// fits 64 bits as `INTEGER`, any other number or `{real: "…"}` as `REAL`,
+/// text, Bytes and Nothing. Null for anything else.
+fn sqlValueOf(a: std.mem.Allocator, v: ?*c.talk_value) ?c.talk_sql_value {
+    var out = std.mem.zeroes(c.talk_sql_value);
+    switch (c.talk_value_kind(v)) {
+        c.TALK_KIND_NOTHING => out.kind = c.TALK_SQL_NULL,
+        c.TALK_KIND_NUMBER => {
+            var shown: c.talk_owned_bytes = .{};
+            if (c.talk_value_string(v, &shown) != c.TALK_OK) return null;
+            defer c.talk_owned_bytes_release(&shown);
+            const text = a.dupe(u8, shown.data[0..shown.len]) catch return null;
+            if (std.mem.indexOfScalar(u8, text, '.') == null) if (std.fmt.parseInt(i64, text, 10)) |i| {
+                out.kind = c.TALK_SQL_INTEGER;
+                out.integer = i;
+                return out;
+            } else |_| {};
+            out.kind = c.TALK_SQL_REAL;
+            out.real = std.fmt.parseFloat(f64, text) catch return null;
+        },
+        c.TALK_KIND_TEXT => {
+            var t: [*c]const u8 = null;
+            var n: usize = 0;
+            _ = c.talk_value_as_text(v, &t, &n);
+            out.kind = c.TALK_SQL_TEXT;
+            out.bytes = (a.dupe(u8, t[0..n]) catch return null).ptr;
+            out.len = n;
+        },
+        c.TALK_KIND_BYTES => {
+            var b: c.talk_owned_bytes = .{};
+            if (c.talk_value_as_bytes(v, &b) != c.TALK_OK) return null;
+            defer c.talk_owned_bytes_release(&b);
+            out.kind = c.TALK_SQL_BLOB;
+            out.bytes = (a.dupe(u8, b.data[0..b.len]) catch return null).ptr;
+            out.len = b.len;
+        },
+        c.TALK_KIND_MAP => {
+            // `{real: "NaN"}` and the like: a double spelled as text.
+            var real: ?*c.talk_value = null;
+            var pair: c.talk_pair = undefined;
+            if (!c.talk_value_entries(v, 0, &pair) or c.talk_value_entries(v, 1, &pair)) return null;
+            if (c.talk_value_get(v, "real", 4, &real) != c.TALK_OK or real == null) return null;
+            defer c.talk_value_release(real);
+            var t: [*c]const u8 = null;
+            var n: usize = 0;
+            if (!c.talk_value_as_text(real, &t, &n)) return null;
+            out.kind = c.TALK_SQL_REAL;
+            out.real = std.fmt.parseFloat(f64, t[0..n]) catch return null;
+        },
+        else => return null,
+    }
+    return out;
+}
+
+/// A Stub's `{columns, rows, changes}` as a result. False for a shape the
+/// C layout can't hold, which the Core sees as `host error`.
+fn sqlRowsOf(a: std.mem.Allocator, shown: []const u8, rows: *c.talk_sql_rows) bool {
+    const v = parsed(shown) orelse return false;
+    defer c.talk_value_release(v);
+    var columns: ?*c.talk_value = null;
+    var list: ?*c.talk_value = null;
+    if (c.talk_value_get(v, "columns", 7, &columns) != c.TALK_OK or columns == null) return false;
+    defer c.talk_value_release(columns);
+    if (c.talk_value_get(v, "rows", 4, &list) != c.TALK_OK or list == null) return false;
+    defer c.talk_value_release(list);
+    if (c.talk_value_kind(columns) != c.TALK_KIND_LIST or c.talk_value_kind(list) != c.TALK_KIND_LIST) return false;
+    const width = c.talk_value_len(columns);
+    const names = a.alloc([*c]const u8, width) catch return false;
+    const lens = a.alloc(usize, width) catch return false;
+    for (0..width) |i| {
+        var name: ?*c.talk_value = null;
+        if (c.talk_value_index(columns, i + 1, &name) != c.TALK_OK) return false;
+        defer c.talk_value_release(name);
+        var t: [*c]const u8 = null;
+        var n: usize = 0;
+        if (!c.talk_value_as_text(name, &t, &n)) return false;
+        names[i] = (a.dupe(u8, t[0..n]) catch return false).ptr;
+        lens[i] = n;
+    }
+    const height = c.talk_value_len(list);
+    const values = a.alloc(c.talk_sql_value, height * width) catch return false;
+    for (0..height) |r| {
+        var row: ?*c.talk_value = null;
+        if (c.talk_value_index(list, r + 1, &row) != c.TALK_OK) return false;
+        defer c.talk_value_release(row);
+        if (c.talk_value_kind(row) != c.TALK_KIND_LIST or c.talk_value_len(row) != width) return false;
+        for (0..width) |col| {
+            var x: ?*c.talk_value = null;
+            if (c.talk_value_index(row, col + 1, &x) != c.TALK_OK) return false;
+            defer c.talk_value_release(x);
+            values[r * width + col] = sqlValueOf(a, x) orelse return false;
+        }
+    }
+    var changes: i64 = 0;
+    var n: ?*c.talk_value = null;
+    if (c.talk_value_get(v, "changes", 7, &n) == c.TALK_OK and n != null) {
+        defer c.talk_value_release(n);
+        // A missing key reads as Nothing.
+        const d = sqlValueOf(a, n) orelse return false;
+        if (d.kind == c.TALK_SQL_INTEGER) changes = d.integer else if (d.kind != c.TALK_SQL_NULL) return false;
+    }
+    rows.* = .{ .columns = names.ptr, .column_lens = lens.ptr, .columns_len = width, .values = values.ptr, .rows_len = height, .changes = changes };
+    return true;
+}
+
+/// `query` or `change`: the next Stub for it, as rows or an error.
+fn sqlHost(comptime key: []const u8) c.talk_sql_fn {
+    return struct {
+        fn f(context: ?*anyopaque, call: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+            _ = call;
+            _ = sql;
+            _ = sql_len;
+            _ = params;
+            _ = max;
+            const hosts = @as(*SqliteHost, @ptrCast(@alignCast(context.?))).hosts;
+            const h = hosts.get(key) orelse return c.TALK_CALL_BROKEN;
+            if (h.next >= h.stubs.items.len) return c.TALK_CALL_BROKEN;
+            const stub = h.stubs.items[h.next];
+            h.next += 1;
+            if (stub.err) |shown| return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
+            const shown = stub.value orelse return c.TALK_CALL_BROKEN;
+            return if (sqlRowsOf(h.a, shown, rows)) c.TALK_CALL_ANSWERED else c.TALK_CALL_BROKEN;
+        }
+    }.f;
+}
+
+/// `sqlite`'s `begin`, `commit` or `rollback`: the next Stub for it.
+fn sqliteHost(comptime key: []const u8) c.talk_operation_fn {
+    return struct {
+        fn f(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+            const hosts = @as(*SqliteHost, @ptrCast(@alignCast(context.?))).hosts;
+            const h = hosts.get(key) orelse return c.TALK_CALL_BROKEN;
+            return host(h, call, args, len, result, err);
+        }
+    }.f;
 }
 
 fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call), effects: *Effects) !void {
@@ -642,6 +803,25 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
         const ops = g.value.get("ops") orelse return error.MalformedCase;
         // A text binding reaches the Host as NUL-terminated text.
         var binding: ?*anyopaque = if (g.value.get("binding")) |b| (if (b == .string) @ptrCast(@constCast((try a.dupeSentinel(u8, b.string, 0)).ptr)) else null) else null;
+        // A `sqlite` binding: `{database, tables, maxRows}`.
+        if (g.value.get("binding")) |b| if (b == .table) {
+            const database = (b.get("database") orelse return error.MalformedCase).string;
+            const sb = try a.create(c.talk_sqlite_binding);
+            sb.* = .{ .database = database.ptr, .database_len = database.len, .tables = null, .table_lens = null, .tables_len = 0, .has_tables = false, .max_rows = number(b.get("maxRows")) };
+            if (b.get("tables")) |tables| {
+                const names = try a.alloc([*c]const u8, tables.array.len);
+                const lens = try a.alloc(usize, tables.array.len);
+                for (tables.array, names, lens) |x, *n, *l| {
+                    n.* = x.string.ptr;
+                    l.* = x.string.len;
+                }
+                sb.tables = names.ptr;
+                sb.table_lens = lens.ptr;
+                sb.tables_len = names.len;
+                sb.has_tables = true;
+            }
+            binding = sb;
+        };
         // A coordinated Grant's binding is its own, so it names its
         // coordinator.
         if (effects.coordinated.contains(capability)) {

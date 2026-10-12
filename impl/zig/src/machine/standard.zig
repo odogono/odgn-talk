@@ -1,5 +1,5 @@
 //! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale`,
-//! `console` and `store`, with the declarations the chapter fixes. Each factory takes the
+//! `console`, `store` and `sqlite`, with the declarations the chapter fixes. Each factory takes the
 //! Host's implementation, one Host function per Operation, and a cost per
 //! Operation. The Core makes the chapter's own checks: option words and
 //! Locale tags before a call, which are charged nothing, and the result rules
@@ -10,11 +10,12 @@ const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const caps = @import("capabilities.zig");
 const grammar = @import("../generated/grammar.zig").grammar;
+const sqlite = @import("sqlite.zig");
 const Value = model.Value;
 const Shape = caps.Shape;
 
 /// The Standard Capabilities this Core defines so far.
-pub const Which = enum { clock, calendar, locale, console, store };
+pub const Which = enum { clock, calendar, locale, console, store, sqlite };
 
 /// Each one's Operations, in name order, as its declarations list them.
 pub fn operations(which: Which) []const []const u8 {
@@ -24,6 +25,7 @@ pub fn operations(which: Which) []const []const u8 {
         .locale => &.{ "compare", "dayNames", "lower", "monthNames", "numberSymbols", "rank", "tag", "upper" },
         .console => &.{ "read", "write" },
         .store => &.{ "delete", "get", "increment", "keys", "set", "swap", "unwatch", "watch" },
+        .sqlite => &.{ "begin", "change", "commit", "query", "rollback" },
     };
 }
 
@@ -172,6 +174,21 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
                 errors = &.{"invalid watch"};
             }
         },
+        .sqlite => if (eq(name, "query") or eq(name, "change")) {
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            try args.append(gpa, try Kinds.kind(gpa, .any));
+            try args.append(gpa, try Shape.optional(gpa, try Kinds.kind(gpa, .number)));
+            if (eq(name, "query")) {
+                result = try Shape.listOf(gpa, try Kinds.kind(gpa, .any));
+                errors = &.{ "sql", "not read-only", "too many rows", "unrepresentable", "out of range" };
+            } else {
+                result = try Kinds.kind(gpa, .any);
+                errors = &.{ "sql", "constraint", "sqlite busy", "too many rows", "unrepresentable", "out of range" };
+            }
+        } else {
+            result = try Kinds.kind(gpa, .nothing);
+            errors = if (eq(name, "begin")) &.{ "sqlite busy", "scope already open", "scope in join" } else &.{"scope not open"};
+        },
         .console => if (eq(name, "write")) {
             try args.append(gpa, try Kinds.kind(gpa, .value));
             mode = .fire_and_forget;
@@ -202,6 +219,14 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{ .{ "left", .text }, .{ "right", .text } }
         else if (std.mem.eql(u8, code, "overflow"))
             &.{.{ "operator", .text }}
+        else if (std.mem.eql(u8, code, "sql"))
+            &.{.{ "reason", .text }}
+        else if (std.mem.eql(u8, code, "constraint"))
+            &.{.{ "kind", .text }}
+        else if (std.mem.eql(u8, code, "too many rows"))
+            &.{.{ "max", .number }}
+        else if (std.mem.eql(u8, code, "unrepresentable"))
+            &.{.{ "column", .text }}
         else
             &.{};
         const out = try gpa.alloc(caps.Field, fields.len);
@@ -211,9 +236,13 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .{ .field = "limit", .words = &.{ "size", "keys", "value" } }
         else if (std.mem.eql(u8, code, "watch limit"))
             .{ .field = "limit", .words = &.{ "watches", "size", "pending" } }
+        else if (std.mem.eql(u8, code, "constraint"))
+            .{ .field = "kind", .words = &.{ "unique", "primary key", "not null", "check", "foreign key", "datatype", "trigger", "other" } }
         else
             null;
-        const core = std.mem.eql(u8, code, "invalid key") or std.mem.eql(u8, code, "invalid watch");
+        const core = for ([_][]const u8{ "invalid key", "invalid watch", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
+            if (std.mem.eql(u8, x, code)) break true;
+        } else false;
         d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
     }
     return .{
@@ -224,12 +253,20 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
         .max_pending_ms = max_pending,
         .errors = decls,
         .closed_errors = true,
-        .segment_bound = which == .store and storeWrite(name),
+        .segment_bound = (which == .store and storeWrite(name)) or (which == .sqlite and !eq(name, "query")),
+        // Owned, as every definition's scope names are.
+        .scope = if (which != .sqlite) .none else if (eq(name, "begin"))
+            .{ .opens = .{ .name = try gpa.dupe(u8, "transaction"), .abandon = try gpa.dupe(u8, "rollback") } }
+        else if (eq(name, "commit") or eq(name, "rollback"))
+            .{ .closes = try gpa.dupe(u8, "transaction") }
+        else
+            .none,
         .host = undefined,
         .before = switch (which) {
             .calendar => if (eq(name, "toInstant")) beforeToInstant else null,
             .locale => beforeLocale,
             .store => if (eq(name, "keys")) null else beforeStore,
+            .sqlite => if (eq(name, "query") or eq(name, "change")) beforeSqlite else null,
             else => null,
         },
         .after = switch (which) {
@@ -299,6 +336,11 @@ fn beforeToInstant(a: Allocator, op: *const caps.Operation, args: []const *Value
     if (!civil.data.civil_date.has_time) return .{ .out_of_domain = civil };
     if (args.len == 3 and args[1].data == .text and !isText(args[1], &disambiguations)) return .{ .out_of_domain = args[1] };
     return null;
+}
+
+fn beforeSqlite(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    _ = op;
+    return sqlite.check(a, args, binding);
 }
 
 /// `store`'s own checks: a nonempty key, or for the watch Operations a
@@ -453,7 +495,7 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
     const nothing = try fresh(gpa, made, try model.scalar(gpa, .nothing));
     switch (ctx.which) {
         .clock => {},
-        .console => try out.appendSlice(gpa, args),
+        .console, .sqlite => try out.appendSlice(gpa, args),
         .store => {
             // Each omitted default: get's and increment's Nothing, keys'
             // empty prefix, and watch's effective message.

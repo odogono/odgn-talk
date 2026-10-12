@@ -470,6 +470,11 @@ pub const Problem = union(enum) {
     bad_locale: []const u8,
     /// `invalid key`: a `store` key that is empty text.
     invalid_key,
+    /// `wrong kind` or `not encodable` at an argument, as a Shape check
+    /// raises it; the caller releases `keep`, a path value it made.
+    mismatch: struct { bad: Mismatch, position: usize, keep: ?*Value = null },
+    /// `out of range`, with the field and its value.
+    out_of_range: struct { field: []const u8, value: *Value },
     /// `invalid watch`, with the field that is wrong: `name` or `message`.
     invalid_watch: []const u8,
 };
