@@ -182,6 +182,10 @@ pub const Run = struct {
     /// The frame count at which running stops: 0, or while a pending
     /// `wait for`'s test body runs, the frames below it.
     base: usize = 0,
+    /// Its occupied Capability Scope slots, in opening order.
+    scopes: std.ArrayList(OpenScope) = .empty,
+    /// The Segments it has ended, so its current one is `.s<segments + 1>`.
+    segments: u32 = 0,
 };
 
 /// A Join's members, in start order.
@@ -333,8 +337,8 @@ pub const Script = struct {
         return null;
     }
 
-    fn grant(s: *const Script, name: []const u8) ?ScriptGrant {
-        for (s.grants) |g| if (std.mem.eql(u8, g.name, name)) return g;
+    fn grant(s: *const Script, name: []const u8) ?*ScriptGrant {
+        for (s.grants) |*g| if (std.mem.eql(u8, g.name, name)) return g;
         return null;
     }
 };
@@ -567,7 +571,13 @@ pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 
 /// A Script's Grant: the Operations it keeps, by index into its
 /// Capability's.
-pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool };
+/// A Script's named Grant. `disabled` is set when automatic abandonment
+/// through it fails, and refuses later calls with `capability disabled`.
+pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool, disabled: bool = false };
+
+/// An occupied Capability Scope slot: its named Grant, its scope and the
+/// index of its abandonment Operation.
+pub const OpenScope = struct { grant: *ScriptGrant, name: []const u8, abandon: usize };
 
 /// What a Script is loaded with.
 pub const LoadOptions = struct {
@@ -1042,6 +1052,7 @@ pub const Group = struct {
         if (run.resume_with) |r| g.releaseResume(r);
         g.abandonUnwinding(run);
         g.dropJoin(run);
+        run.scopes.deinit(g.gpa);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
         g.releaseDelivery(run.delivery);
@@ -1634,6 +1645,10 @@ pub const Group = struct {
                 for (list.data.list) |v| try args.append(gpa, v.retain());
             },
         }
+        if (waits and !member and run.scopes.items.len > 0) {
+            m.uncharged = true;
+            return g.refuseOpenScope(run);
+        }
         if (name_value) |v| {
             if (v.data != .text) return g.wrongKind("text", v);
             if (!messageName(v.data.text, args.items.len)) {
@@ -1780,6 +1795,10 @@ pub const Group = struct {
         const first = frame.stack.items.len - count;
         for (frame.stack.items[first..], popped) |slot, *v| v.* = slot.value;
         frame.stack.shrinkRetainingCapacity(first);
+        if (run.scopes.items.len > 0) {
+            m.uncharged = true;
+            return g.refuseOpenScope(run);
+        }
         // Each `from` names a Script, and each duration is exact.
         const now = nanos(g.clock);
         var deadline: i128 = never;
@@ -2023,7 +2042,62 @@ pub const Group = struct {
 
     /// Ends a Segment: writes `seg`, and either keeps the suspended Run or
     /// finishes it with its `run` record.
+    /// The current Segment's id, `<run>.s<N>`.
+    fn segmentId(g: *Group, run: *const Run) []const u8 {
+        return std.fmt.allocPrint(g.scratch.allocator(), "{s}.s{d}", .{ run.id, run.segments + 1 }) catch "";
+    }
+
+    /// Automatic abandonment as a Run ends: each occupied slot's
+    /// abandonment Operation, newest first, as a Host call that charges
+    /// nothing. A failure reports `effect-failure` and disables the Grant.
+    fn abandonScopes(g: *Group, run: *Run) void {
+        const a = g.scratch.allocator();
+        while (run.scopes.pop()) |slot| {
+            const capability = slot.grant.grant.capability;
+            const op = &capability.operations[slot.abandon];
+            run.calls += 1;
+            const id = std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls }) catch "";
+            const segment = g.segmentId(run);
+            var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true };
+            const outcome = op.host.call(op.host.context, &call, &.{});
+            const result: ?*Value = if (outcome == .value) outcome.value else null;
+            defer if (result) |v| v.release();
+            switch (outcome) {
+                .failed => |f| {
+                    g.gpa.free(f.code);
+                    if (f.message) |t| g.gpa.free(t);
+                    if (f.data) |d| d.release();
+                },
+                else => {},
+            }
+            const ok = result != null and !call.charge_refused;
+            if (g.trace) |w| {
+                w.print("call {s} op={s}.{s} args=[]", .{ id, slot.grant.name, op.name }) catch {};
+                if (ok) {
+                    w.writeAll(" result=") catch {};
+                    display.writeTrace(w, result.?) catch {};
+                } else w.writeAll(" error={}") catch {};
+                w.writeAll(" automatic=yes\n") catch {};
+                w.print("scope {s} grant={s} name={s} action={s}\n", .{ id, slot.grant.name, slot.name, if (ok) "abandoned" else "failed" }) catch {};
+                if (!ok) w.print("effect-failure {s} grant={s} segment={s} phase=abandon status=unknown scope={s}\n", .{ run.id, slot.grant.name, segment, slot.name }) catch {};
+            }
+            if (!ok) slot.grant.disabled = true;
+        }
+    }
+
+    /// `scope open` at a boundary that would suspend while a scope is open,
+    /// naming the newest.
+    fn refuseOpenScope(g: *Group, run: *const Run) error{ Raised, OutOfMemory } {
+        const newest = run.scopes.getLast();
+        const capability = model.text(g.gpa, newest.grant.name) catch return error.OutOfMemory;
+        defer capability.release();
+        const scope = model.text(g.gpa, newest.name) catch return error.OutOfMemory;
+        defer scope.release();
+        return g.raise("scope open", &.{ .{ .key = "capability", .value = capability }, .{ .key = "scope", .value = scope } });
+    }
+
     fn endSegment(g: *Group, s: *Script, run: *Run, outcome: Outcome) !void {
+        if (outcome != .suspended) g.abandonScopes(run);
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
@@ -2068,6 +2142,7 @@ pub const Group = struct {
             if (outcome == .cancelled and run.abandoned.len > 0) out.print("abandon {s}\n", .{run.abandoned}) catch {};
         }
         run.started = true;
+        run.segments += 1;
         if (outcome == .suspended) {
             run.segment_fuel = run.fuel;
             run.segment_alloc = run.alloc;
@@ -2394,6 +2469,7 @@ pub const Group = struct {
         }
         if (n < required or n > body.params.len) return g.raise("wrong arity", &.{});
         if (foreign) {
+            if (run.scopes.items.len > 0) return g.refuseOpenScope(run);
             // A message to the Home Script, whose reply ends the wait.
             const home = g.script(code.home) orelse return g.raise("function gone", &.{});
             run.calls += 1;
@@ -3442,6 +3518,10 @@ pub const Group = struct {
             },
             .timeout_end => frame.stack.pop().?.release(gpa),
             .join_start => {
+                if (run.scopes.items.len > 0) {
+                    m.uncharged = true;
+                    return g.refuseOpenScope(run);
+                }
                 const join = try gpa.create(Join);
                 join.* = .{};
                 run.join = join;
@@ -3508,6 +3588,10 @@ pub const Group = struct {
                     }
                     return g.wrongKind("quantity", d);
                 };
+                if (run.scopes.items.len > 0) {
+                    m.uncharged = true;
+                    return g.refuseOpenScope(run);
+                }
                 if (blockDeadline(frame)) |b| if (b.at <= nanos(g.clock)) {
                     m.uncharged = true;
                     return g.raiseDeadline(b, null);
@@ -4376,6 +4460,10 @@ pub const Group = struct {
             .{ .key = "operation", .value = try model.text(gpa, op_name) },
         };
         defer for (where) |p| p.value.release();
+        if (granted.disabled) {
+            m.uncharged = true;
+            return g.raise("capability disabled", &where);
+        }
 
         // Arguments, depth-first in order.
         for (args, decl.args[0..n], 1..) |v, shape, position| {
@@ -4406,11 +4494,30 @@ pub const Group = struct {
                 },
             }
         };
+        // The scope checks, charged nothing either.
+        if (decl.mode == .suspending and run.scopes.items.len > 0) {
+            m.uncharged = true;
+            return g.refuseOpenScope(run);
+        }
+        if (decl.scope.name()) |scope_name| {
+            const occupied = g.scopeSlot(run, granted, scope_name) != null;
+            const refusal: ?[]const u8 = switch (decl.scope) {
+                .opens => if (run.join != null) "scope in join" else if (occupied) "scope already open" else null,
+                .closes => if (occupied) null else "scope not open",
+                .none => unreachable,
+            };
+            if (refusal) |code| {
+                m.uncharged = true;
+                const scope = try model.text(gpa, scope_name);
+                defer scope.release();
+                return g.raise(code, &.{ where[0], where[1], .{ .key = "scope", .value = scope } });
+            }
+        }
 
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
         const left: ?u64 = if (run.fuel + decl.cost.fuel >= fuel_per_run) 0 else fuel_per_run - run.fuel - decl.cost.fuel;
-        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa };
+        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
         const suspending = decl.mode == .suspending;
@@ -4487,9 +4594,11 @@ pub const Group = struct {
                 if (!ok) {
                     v.release();
                     record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                    try g.acknowledge(run, granted, decl.scope, id);
                     return g.hostError(id, grant_name, op_name, &where);
                 }
                 record(g, id, grant_name, op_name, args, "result", v, call.charged);
+                try g.acknowledge(run, granted, decl.scope, id);
                 m.result = v.retain();
                 try g.push(frame, v);
             },
@@ -4531,6 +4640,32 @@ pub const Group = struct {
             },
         }
         return .next;
+    }
+
+    /// The slot a Run occupies through the named Grant for a scope, by
+    /// index.
+    fn scopeSlot(g: *Group, run: *const Run, granted: *const ScriptGrant, name: []const u8) ?usize {
+        _ = g;
+        for (run.scopes.items, 0..) |slot, i| if (slot.grant == granted and std.mem.eql(u8, slot.name, name)) return i;
+        return null;
+    }
+
+    /// A Host return acknowledges a lifecycle Operation's opening or
+    /// closing at once, before its result is converted, with a `scope`
+    /// record.
+    fn acknowledge(g: *Group, run: *Run, granted: *ScriptGrant, scope: capabilities.Scope, id: []const u8) !void {
+        const action = switch (scope) {
+            .none => return,
+            .opens => |o| blk: {
+                try run.scopes.append(g.gpa, .{ .grant = granted, .name = o.name, .abandon = granted.grant.capability.find(o.abandon).? });
+                break :blk "opened";
+            },
+            .closes => |n| blk: {
+                _ = run.scopes.orderedRemove(g.scopeSlot(run, granted, n).?);
+                break :blk "closed";
+            },
+        };
+        if (g.trace) |w| w.print("scope {s} grant={s} name={s} action={s}\n", .{ id, granted.name, scope.name().?, action }) catch {};
     }
 
     /// `the k of o` on a Host Object: its Kind's Get, with a `prop` record,
@@ -4835,6 +4970,11 @@ fn keptGrants(a: Allocator, named: []const NamedGrant, unit: *const lower.Unit, 
                     else => {},
                 } else needed(imports, n.name, op.name);
             }
+            // A kept opener keeps its abandonment Operation.
+            const ops = n.grant.capability.operations;
+            for (ops, 0..) |op, i| if (kept[i] and op.scope == .opens) {
+                kept[n.grant.capability.find(op.scope.opens.abandon).?] = true;
+            };
             if (std.mem.indexOfScalar(bool, kept, true) == null) continue;
         }
         try out.append(a, .{ .name = try a.dupe(u8, n.name), .grant = n.grant, .kept = kept });

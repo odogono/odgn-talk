@@ -396,6 +396,24 @@ pub const HostFn = struct {
     context: ?*anyopaque = null,
 };
 
+/// An Operation's place in a Capability Scope's lifecycle
+/// (embedding/scoped-effects.md): none, opening the named scope with its
+/// abandonment Operation, or closing it.
+pub const Scope = union(enum) {
+    none,
+    opens: struct { name: []const u8, abandon: []const u8 },
+    closes: []const u8,
+
+    /// The scope it opens or closes, or null.
+    pub fn name(s: Scope) ?[]const u8 {
+        return switch (s) {
+            .none => null,
+            .opens => |o| o.name,
+            .closes => |n| n,
+        };
+    }
+};
+
 pub const Operation = struct {
     name: []const u8,
     args: []*Shape,
@@ -409,6 +427,7 @@ pub const Operation = struct {
     /// Whether the list is enforced even when empty, as for a Standard
     /// Capability, whose every undeclared failure is `host error`.
     closed_errors: bool = false,
+    scope: Scope = .none,
     host: HostFn,
     /// The Core's own checks after the Shapes, before the call is charged:
     /// a Standard Capability's option words and Locale tags.
@@ -444,7 +463,43 @@ pub const Capability = struct {
         for (c.operations, 0..) |op, i| if (std.mem.eql(u8, op.name, name)) return i;
         return null;
     }
+
+    /// Whether the scope declarations hold together: each lifecycle
+    /// Operation is immediate and names an identifier word, and each
+    /// opener's abandonment Operation is one of this Capability's that
+    /// closes the same scope, takes no arguments and returns Nothing, the
+    /// same one for every opener of that scope.
+    pub fn validScopes(c: *const Capability) bool {
+        for (c.operations) |op| switch (op.scope) {
+            .none => {},
+            .closes => |n| if (op.mode != .immediate or !scopeWord(n)) return false,
+            .opens => |o| {
+                if (op.mode != .immediate or !scopeWord(o.name)) return false;
+                const target = c.operations[c.find(o.abandon) orelse return false];
+                if (target.scope != .closes or !std.mem.eql(u8, target.scope.closes, o.name)) return false;
+                if (target.args.len != 0) return false;
+                const result = target.result orelse return false;
+                if (result.data != .kind or result.data.kind != .nothing) return false;
+                for (c.operations) |other| if (other.scope == .opens and std.mem.eql(u8, other.scope.opens.name, o.name) and !std.mem.eql(u8, other.scope.opens.abandon, o.abandon)) return false;
+            },
+        };
+        return true;
+    }
+
+    /// Whether a Grant keeping `kept` keeps every kept opener's abandonment
+    /// Operation.
+    pub fn keepsAbandonment(c: *const Capability, kept: []const bool) bool {
+        for (c.operations, kept) |op, k| if (k and op.scope == .opens and !kept[c.find(op.scope.opens.abandon).?]) return false;
+        return true;
+    }
 };
+
+/// A scope name: a nonempty identifier word.
+fn scopeWord(s: []const u8) bool {
+    if (s.len == 0 or std.ascii.isDigit(s[0])) return false;
+    for (s) |ch| if (!std.ascii.isAlphanumeric(ch) and ch != '_') return false;
+    return true;
+}
 
 /// A reusable Grant: a set of a Capability's Operations and the Host's
 /// binding.
@@ -473,11 +528,25 @@ pub const Call = struct {
     starting: bool = true,
     /// For a suspending call, the Group its answer goes to.
     group: ?*anyopaque = null,
+    run: []const u8 = "",
+    /// The current Segment's id, `<run>.s<N>`.
+    segment: []const u8 = "",
+    /// The scope a lifecycle Operation opens or closes, or empty.
+    scope: []const u8 = "",
+    /// Whether the Core is abandoning a scope, when `Charge` is a Host
+    /// contract failure.
+    automatic: bool = false,
+    /// Whether an automatic call tried to charge.
+    charge_refused: bool = false,
     /// The Group's allocator, which owns a failure's code and message.
     gpa: std.mem.Allocator,
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {
+        if (c.automatic) {
+            c.charge_refused = true;
+            return false;
+        }
         if (!c.starting) return false;
         if (c.left) |left| if (c.charged + fuel > left) return false;
         c.charged += fuel;

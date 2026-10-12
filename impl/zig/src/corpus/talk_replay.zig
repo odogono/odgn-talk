@@ -35,9 +35,9 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 /// The Standard Capabilities talk.h makes so far.
 const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console" };
 
-/// Why talk.h can't make the case's Grants yet, or null: only immediate and
-/// fire-and-forget Operations the case declares itself, with no scopes,
-/// Segment-bound Operations or Coordinators, are.
+/// Why talk.h can't make the case's Grants yet, or null: only Operations the
+/// case declares itself, with no Segment-bound Operations or Coordinators,
+/// are.
 fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
     const all = case_setup.tables(a, setup) catch return "case.toml isn't read";
     for (all) |t| {
@@ -50,7 +50,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
         if (mode != .string) return "an Operation without a mode";
-        if (case_setup.field(t, "scope") != null or case_setup.field(t, "segmentBound") != null) return "Capability Scopes are not implemented";
+        if (case_setup.field(t, "segmentBound")) |b| if (b == .raw and std.mem.eql(u8, b.raw, "true")) return "Segment-bound Operations are not implemented";
         for ((case_setup.field(t, "args") orelse continue).array) |shape| if (!shapeSupported(shape)) return "object Shapes are not implemented";
     }
     for (all) |t| {
@@ -526,6 +526,23 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
             const h = try a.create(OperationHost);
             h.* = .{ .a = a, .calls = calls, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, name }), .mode = mode };
             try hosts.put(a, h.name, h);
+            const scope: ?*c.talk_scope_decl = if (case_setup.field(t, "scope")) |x| blk: {
+                const d = try a.create(c.talk_scope_decl);
+                d.* = std.mem.zeroes(c.talk_scope_decl);
+                if (x.get("opens")) |v| {
+                    d.opens = v.string.ptr;
+                    d.opens_len = v.string.len;
+                }
+                if (x.get("abandon")) |v| {
+                    d.abandon = v.string.ptr;
+                    d.abandon_len = v.string.len;
+                }
+                if (x.get("closes")) |v| {
+                    d.closes = v.string.ptr;
+                    d.closes_len = v.string.len;
+                }
+                break :blk d;
+            } else null;
             try ops.append(a, .{
                 .name = name.ptr,
                 .name_len = name.len,
@@ -539,6 +556,8 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 .errors_len = errors.items.len,
                 .@"fn" = host,
                 .context = h,
+                .scope = scope,
+                .segment_bound = false,
             });
         }
         var def: ?*c.talk_capability_def = null;

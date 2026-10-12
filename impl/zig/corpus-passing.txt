@@ -11,6 +11,12 @@ capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args
 capabilities/optional-args-join
+capabilities/scope-failed-close
+capabilities/scope-malformed-acquisition
+capabilities/scope-ordinary-error
+capabilities/scope-reverse-abandonment
+capabilities/scope-slots
+capabilities/scope-suspension-boundaries
 capabilities/standard-calendar
 capabilities/standard-calendar-errors
 capabilities/standard-calendar-validation

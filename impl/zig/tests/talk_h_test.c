@@ -120,7 +120,7 @@ static int capability_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -152,6 +152,96 @@ static int capability_test(void) {
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
     bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* A lifecycle Operation's Do: what each call saw, as "<scope> <run>
+ * <segment> <automatic>" lines. */
+static char lifecycle_seen[512];
+static talk_call_end lifecycle(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)args; (void)len; (void)error;
+    const char *scope = NULL, *run = NULL, *segment = NULL;
+    size_t scope_len = 0, run_len = 0, segment_len = 0;
+    talk_call_scope_name(call, &scope, &scope_len);
+    talk_call_run_id(call, &run, &run_len);
+    talk_call_segment_id(call, &segment, &segment_len);
+    size_t at = strlen(lifecycle_seen);
+    snprintf(lifecycle_seen + at, sizeof lifecycle_seen - at, "%.*s %.*s %.*s %s\n", (int)scope_len, scope, (int)run_len, run, (int)segment_len, segment, talk_call_automatic(call) ? "yes" : "no");
+    if (talk_call_automatic(call) && talk_call_charge(call, 1) == TALK_OK) return TALK_CALL_BROKEN;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+/* A Capability Scope: refused declarations and Grants, the call's
+ * ownership context, and abandonment as its Run ends. */
+static int scope_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    lifecycle_seen[0] = 0;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_scope_decl opens = {"file", 4, "close", 5, NULL, 0};
+    talk_scope_decl closes = {NULL, 0, NULL, 0, "file", 4};
+    talk_scope_decl opens_lock = {"file", 4, "unlock", 6, NULL, 0};
+    const talk_shape *one[] = {talk_text_shape()};
+    talk_capability_def *def = NULL;
+    int bad = 0;
+    /* An opener whose abandonment Operation is missing, takes arguments,
+     * closes another scope or disagrees with another opener's. */
+    talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false}};
+    bad |= talk_define_capability(core, "a", 1, missing, 1, &def) != TALK_INVALID_VALUE;
+    talk_operation with_args[] = {
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false},
+        {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false},
+    };
+    bad |= talk_define_capability(core, "b", 1, with_args, 2, &def) != TALK_INVALID_VALUE;
+    talk_operation disagreeing[] = {
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false},
+        {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false},
+        {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false},
+    };
+    bad |= talk_define_capability(core, "c", 1, disagreeing, 4, &def) != TALK_INVALID_VALUE;
+    /* A suspending lifecycle Operation, and a Segment-bound one with no
+     * Segment Coordinator. */
+    talk_operation suspending[] = {
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false},
+    };
+    bad |= talk_define_capability(core, "d", 1, suspending, 2, &def) != TALK_INVALID_VALUE;
+    talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true}};
+    bad |= talk_define_capability(core, "e", 1, bound, 1, &def) != TALK_INVALID_VALUE;
+
+    talk_operation ops[] = {
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false},
+    };
+    bad |= talk_define_capability(core, "files", 5, ops, 2, &def) != TALK_OK;
+    /* A Grant keeps an opener's abandonment Operation. */
+    talk_grant *grant = NULL;
+    const char *names[] = {"open"};
+    size_t lens[] = {4};
+    bad |= talk_capability_def_grant(def, names, lens, 1, NULL, &grant) != TALK_INVALID_VALUE;
+    const char *both[] = {"open", "close"};
+    size_t both_lens[] = {4, 5};
+    bad |= talk_capability_def_grant(def, both, both_lens, 2, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"out", 3, grant}};
+    const char *source = "on go\n  ask out to open\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    /* The opener, then the Core's abandonment, which can't charge. */
+    bad |= strcmp(lifecycle_seen, "file s/r1 s/r1.s1 no\nfile s/r1 s/r1.s1 yes\n") != 0;
+    bad |= strstr(trace, "scope s/r1.c1 grant=out name=file action=opened\n") == NULL;
+    bad |= strstr(trace, "call s/r1.c2 op=out.close args=[] error={} automatic=yes\nscope s/r1.c2 grant=out name=file action=failed\neffect-failure s/r1 grant=out segment=s/r1.s1 phase=abandon status=unknown scope=file\n") == NULL;
+    if (bad) fprintf(stderr, "%s%s", trace, lifecycle_seen);
     talk_group_release(group);
     talk_core_release(core);
     return bad;
@@ -225,7 +315,7 @@ static int suspension_test(void) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
-    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL}};
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "feed", 4, ops, 1, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -505,6 +595,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");

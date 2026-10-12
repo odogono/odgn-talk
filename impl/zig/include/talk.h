@@ -235,6 +235,20 @@ typedef struct talk_error_decl {
     size_t fields_len;
 } talk_error_decl;
 
+/* A lifecycle Operation's Capability Scope (embedding/scoped-effects.md):
+ * an opener sets opens and abandon, a closer sets closes, and the other
+ * names are NULL. Names are nonempty identifier words. The abandonment
+ * Operation is one of the same Capability's, closes the same scope, takes no
+ * arguments and returns Nothing. */
+typedef struct talk_scope_decl {
+    const char *opens;
+    size_t opens_len;
+    const char *abandon;
+    size_t abandon_len;
+    const char *closes;
+    size_t closes_len;
+} talk_scope_decl;
+
 /* What an Operation's Host function receives. It lives until the function
  * returns. */
 typedef struct talk_call talk_call;
@@ -282,6 +296,10 @@ typedef struct talk_operation {
     size_t errors_len;
     talk_operation_fn fn;
     void *context;
+    const talk_scope_decl *scope; /* NULL: none; immediate only */
+    /* Immediate only. talk_define_capability supplies no Segment
+     * Coordinator, so it refuses a Segment-bound Operation. */
+    bool segment_bound;
 } talk_operation;
 
 /* A Capability's definition, owned by its Core. */
@@ -290,8 +308,9 @@ typedef struct talk_capability_def talk_capability_def;
 typedef struct talk_grant talk_grant;
 
 void talk_capability_def_name(const talk_capability_def *d, const char **s, size_t *len);
-/* Grants the named Operations, refusing an unknown one. binding is the
- * Host's own, which each Call gives back. */
+/* Grants the named Operations, refusing an unknown one, or an opener of a
+ * Capability Scope without its abandonment Operation. binding is the Host's
+ * own, which each Call gives back. */
 talk_host_error_code talk_capability_def_grant(talk_capability_def *d, const char *const *ops, const size_t *lens, size_t len, void *binding, talk_grant **out);
 talk_host_error_code talk_capability_def_grant_all(talk_capability_def *d, void *binding, talk_grant **out);
 talk_capability_def *talk_grant_capability(const talk_grant *g);
@@ -355,6 +374,17 @@ void talk_call_grant_name(const talk_call *c, const char **s, size_t *len);
 void *talk_call_binding(const talk_call *c);
 /* The Pump's Clock reading. */
 void talk_call_now(const talk_call *c, int64_t *seconds, int32_t *nanos);
+/* The Run's id, such as "pricing/r1", and its current Segment's, such as
+ * "pricing/r1.s1", which together with the Grant name own a Capability
+ * Scope. */
+void talk_call_run_id(const talk_call *c, const char **s, size_t *len);
+void talk_call_segment_id(const talk_call *c, const char **s, size_t *len);
+/* The scope a lifecycle Operation opens or closes; empty for one without
+ * scope metadata. */
+void talk_call_scope_name(const talk_call *c, const char **s, size_t *len);
+/* True only when the Core abandons a scope its Run left open. Such a call
+ * may not charge, and only a normal return counts as success. */
+bool talk_call_automatic(const talk_call *c);
 /* Answer, AnswerWithCost and Fail settle a suspending call. Its talk_call
  * stays valid until its Group is released. Each queues a Host Input, which
  * the next Pump drains; one for a call that no longer waits is recorded and
