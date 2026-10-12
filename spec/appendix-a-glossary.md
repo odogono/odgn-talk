@@ -574,6 +574,14 @@ _Avoid_: immutability, copy-on-write (those are ways to implement it)
 The category every value belongs to, one of fourteen (`nothing`, `number`, `map`, `function`, `object`, …). It is what `is a` tests and `kindOf` gives. Not a Unit Kind or an Object Kind, which group Units and Host Objects.
 _Avoid_: type
 
+**Shape**:
+A description of the values accepted at a boundary or by an explicit check, constraining their Kind, contents, Unit, Unit Kind or Object Kind. A Shape describes acceptance, without transforming the value.
+_Avoid_: schema (for a Shape), type (for a Shape)
+
+**Mapping**:
+An ordered description of how selected input values are checked and transformed into a new map. Its rules combine Selection Paths, destination Value Paths and optional Shapes and transformation functions.
+_Avoid_: transforming Shape, changeset
+
 **Function Value**:
 A value that can be called: made by a Lambda or by naming a Script or Library function, and holding its Home Script, its code and the values it captured.
 _Avoid_: closure, callback, function object, lambda (that's the literal)
@@ -589,6 +597,10 @@ _Avoid_: slot, lvalue, reference
 **Value Path**:
 A list of keys and 1-based positions that locates a value inside nested maps and lists, e.g. `["orders", 1, "total"]`. An error's `path` field is one, and `lookup` follows one.
 _Avoid_: key path, keypath, path (unqualified; that's a Message Path)
+
+**Selection Path**:
+A sequence of map keys, list positions and optional wildcards that selects values from nested maps and lists. Each selected value has its own concrete Value Path.
+_Avoid_: Value Path (when selecting multiple values), JSON Pointer
 
 **Constant**:
 A named value fixed when its Script or Library loads, declared with `constant`. It can never be put into. Built-in Constants such as `pi` and `newline` are fixed by the language version instead.

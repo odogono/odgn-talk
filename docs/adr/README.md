@@ -81,3 +81,5 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0077: `user` is an optional Standard Capability that asks the person running a Script](0077-user-is-an-optional-standard-capability-that-asks-the-person-running-a-script.md)
 - [0078: The Zig third Core is built though the Message Layer meets its thresholds](0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)
 - [0079: Built-in properties are read-only in Containers](0079-built-in-properties-are-read-only-in-containers.md)
+- [0080: Scripts check Shapes through Built-ins](0080-scripts-check-shapes-through-built-ins.md)
+- [0081: Mappings compose Shapes with restricted transformations](0081-mappings-compose-shapes-with-restricted-transformations.md)
