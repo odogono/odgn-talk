@@ -21,7 +21,7 @@ func TestObjectReadOnlyLoadAndReloadChecks(t *testing.T) {
 		return k
 	}
 	writable, readonly := define(true), define(false)
-	for _, target := range []string{"the label of bulb", `the "label" of bulb`, `the ("label") of bulb`, `the (("label")) of bulb`, "bulb's label", "the label of (bulb)"} {
+	for _, target := range []string{"the label of bulb", `the "label" of bulb`, `the ("label") of bulb`, `the (("label")) of bulb`, "bulb's label", "the label of (bulb)", `(the "label" of (bulb))`, `((the ("label") of bulb))`} {
 		source := "on go\n set " + target + " to \"off\"\nend go"
 		for _, kind := range []*ObjectKind{writable, readonly, writable} {
 			g := core.NewGroup(GroupOptions{})

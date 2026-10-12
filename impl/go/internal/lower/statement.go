@@ -19,6 +19,9 @@ func (u *Unit) statement(n *syntax.Node) {
 		u.container(n)
 	case "set":
 		c := n.Children[0]
+		for c.Kind == "paren" {
+			c = c.Children[0]
+		}
 		if c.Kind == "key-computed" {
 			u.expression(c.Children[0])
 			u.expression(c.Children[1])

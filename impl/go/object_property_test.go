@@ -94,6 +94,48 @@ end later`})
 	}
 }
 
+func TestParenthesizedSetTargets(t *testing.T) {
+	for _, target := range []string{
+		`(the "length" of (bulb))`,
+		`((the "length" of bulb))`,
+		`(the ("length") of bulb)`,
+		`((the (k) of (bulb)))`,
+	} {
+		t.Run(target, func(t *testing.T) {
+			core := New()
+			gets, sets := 0, 0
+			var written Value
+			kind, err := core.DefineObjectKind(ObjectKindDef{Name: "item", Props: []Prop{{
+				Name: "length", Shape: NumberShape,
+				Get: func(*Object) (Value, error) { gets++; return Int(0), nil },
+				Set: func(_ *Object, v Value) error { sets++; written = v; return nil },
+			}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			g := core.NewGroup(GroupOptions{})
+			o, err := g.Object(kind, "item", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := g.Load(LoadOptions{Name: "s", Objects: map[string]*Object{"bulb": o}, Source: "on go k\n set " + target + " to 1\nend go"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.Deliver(Message{Name: "go", Args: []Value{mustPublicText("length")}}); err != nil {
+				t.Fatal(err)
+			}
+			result, err := g.Pump(time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC), PumpOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if end := joinEnd(t, result, "s"); end.Outcome != Completed || gets != 0 || sets != 1 || !written.Equal(Int(1)) {
+				t.Fatal(end, gets, sets, written)
+			}
+		})
+	}
+}
+
 func TestObjectPropertyFailures(t *testing.T) {
 	for _, test := range []struct {
 		name, code string

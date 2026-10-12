@@ -210,6 +210,8 @@ on t x
   put 1 into item (the length of x) of x
   put 1 into item 1 of x delimited by (the length of x)
   set the "length" of x to 1
+  set (the "length" of (x)) to 1
+  set ((the ("length") of x)) to 1
 end t
 -- case: `send it`: the message name can't be a Reserved Word
 -- expect: unexpected token at 2:8
