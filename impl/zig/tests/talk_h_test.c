@@ -36,6 +36,61 @@ static void expect_refused(const char *in, size_t len, const char *what) {
     expect(v == NULL, "a refusal builds no value");
 }
 
+/* Collects the Trace's lines, one per call. */
+static char trace[4096];
+static size_t trace_len = 0;
+static void record(void *context, const char *line, size_t len) {
+    (void)context;
+    if (trace_len + len + 1 < sizeof trace) {
+        memcpy(trace + trace_len, line, len);
+        trace_len += len;
+        trace[trace_len++] = '\n';
+    }
+}
+
+/* A Host's whole life with one Script: a Request, a Pump and its result. */
+static int group_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
+    talk_load_options load = {"adder", 5, source, strlen(source)};
+    talk_script *script = NULL;
+    if (talk_load(group, &load, &script) != TALK_OK) return 1;
+    int bad = 0;
+    talk_value *n = NULL;
+    talk_int(41, &n);
+    talk_value *args[] = {n};
+    talk_message message = {"bump", 4, args, 1};
+    talk_pending *pending = NULL;
+    talk_owned_bytes id = {0};
+    bad |= talk_script_request(script, &message, &id, &pending) != TALK_OK;
+    bad |= id.len != 2 || memcmp(id.data, "d1", 2) != 0;
+    talk_owned_bytes_release(&id);
+    talk_value_release(n);
+    talk_pump_result pumped = {0};
+    bad |= talk_pump(group, 1790000000, 0, NULL, &pumped) != TALK_OK;
+    bad |= pumped.state != TALK_IDLE || pumped.fuel_used <= 0;
+    talk_value *result = NULL;
+    const char *text = NULL;
+    size_t len = 0;
+    bad |= talk_pending_result(pending, &result) != TALK_OK;
+    bad |= !talk_value_as_text(result, &text, &len) || len != 3 || memcmp(text, "41!", 3) != 0;
+    talk_value_release(result);
+    talk_inspect(group);
+    bad |= strstr(trace, "vars adder total=41\n") == NULL;
+    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26};
+    talk_script *refused = NULL;
+    bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
+    bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
+    talk_pending_release(pending);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -106,5 +161,6 @@ int main(void) {
     expect(talk_value_index(value, 1, &copy) == TALK_OK && talk_value_kind(copy) == TALK_KIND_NOTHING, "missing item is Nothing");
     talk_value_release(copy); talk_value_release(value);
     talk_value_release(NULL);
+    expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     return failures == 0 ? 0 : 1;
 }

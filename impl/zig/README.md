@@ -15,7 +15,8 @@ It is under construction, step by step through
 [Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
 generated tables, Unicode text primitives, reference-counted values, native
 decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
-the front end's lexer, lossless parser, checker and lowering.
+the front end's lexer, lossless parser, checker and lowering, and the first
+part of the Abstract Machine, driven through `talk.h`.
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -49,10 +50,12 @@ tests and check commands.
   instructions, and the canonical disassembly.
 - `src/corpus/`: case discovery, metadata, encoding replay, Trace parsing,
   case setup and Disassembly Cases.
+- `src/machine/`: the Abstract Machine: Groups, Scripts, Runs and frames,
+  the run loop, Cost Model 0 charging, chunks and properties, the Built-ins it
+  has so far, and Trace writing.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
-`machine` and Trace writing join `src/` in the last part of step 1, and
-`session` and the REPL in step 6.
+`session` and the REPL join `src/` in step 6.
 
 ## Syntax
 
@@ -160,6 +163,30 @@ From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 the declaration is marked `C only`, and lists the `talk.go` names `talk.h`
 doesn't declare yet. Those fail only from step 6's conformance gate.
 
+## The machine
+
+`talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
+`talk_script_request`, `talk_pending_result`, `talk_pump` and `talk_inspect`
+drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at
+a time. Loading a Script parses, checks and lowers it, runs its initialiser
+uncharged and writes its `load` record with its code identity, or its `diag`
+records and `TALK_LOAD_REFUSED`. Grants, objects, Libraries, limits and Fuel
+Slices aren't reachable through `talk.h` yet.
+
+A Pump writes and drains the queued Deliveries and Requests, then runs each
+Script's mailbox: each Run tries its Handler's clauses in order, charging the
+`clause` rate at each clause's first instruction. Frames are on the heap, so
+the run loop never recurses on Script depth. Every instruction is charged by
+its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
+0 terms, with `scanned` reported by the operation itself, and Persistent State
+is measured over the Script Variables and the mailbox at a Segment's end.
+
+So far the machine runs straight-line code, branches, loops, functions, chunks
+and properties, keys, lists and maps, and a few Built-ins. A raised error ends
+its Run: `try`, the Unwind Table, Text Pattern matching, Lambdas, waits,
+messages between Scripts and Capabilities come next. A Run past the default
+Fuel per Run ends in a minimal `fault` until step 4 brings limits.
+
 ## Values and ownership
 
 `talk.h` implements Nothing, Bool, Text, Int, Uint, FromFloat, Dec, Quantity,
@@ -210,19 +237,22 @@ a `corpus/` prefix. `--list` prints each case's kind and whether it is
 supported or deferred, and a failure prints the first divergent line and the
 command that reproduces it. [The case setup reader](src/corpus/case.zig)
 builds each Script's Grants, with their modes and arities, from the case's
-Operation Declarations and Standard Capabilities. Trace execution, Transcript
-replay and encoding cases that register Host Objects are not supported.
+Operation Declarations and Standard Capabilities. Trace Cases replay through
+`talk.h` alone ([`talk_replay.zig`](src/corpus/talk_replay.zig)) when they need
+only loads, Deliveries and Requests to Scripts, Pumps and `vars`, and no
+Grants, objects or Libraries. Transcript replay and encoding cases that
+register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the
 Zig Core must pass in CI: a listed case that fails, disappears or is
-unsupported fails the gate, as does a supported case that fails. Unlike the Go
-gate, an unsupported case that isn't listed is skipped. A passing case that
-isn't listed prints `NEW PASS`, for adding to the list. Expected corpus bytes
-are never rewritten. The runner's `run` accepts a Trace replay callback, and
-hands it each case's `case.toml` as raw TOML;
+unsupported fails the gate. Unlike the Go gate, a case that isn't listed is
+reported and skipped when it is unsupported or doesn't pass yet, as the
+decisions on #625 say, since the machine grows case by case. A passing case
+that isn't listed prints `NEW PASS`, for adding to the list. Expected corpus
+bytes are never rewritten. The runner's replay backend says which cases it
+supports and replays each from its directory;
 [Trace parsing](src/corpus/trace.zig) uses generated record/key metadata,
-including filled input keys and optional ids, so machine execution can plug
-into the same comparison and passing-list gate.
+including filled input keys and optional ids, for the comparison.
 
 ## Regenerating tables
 

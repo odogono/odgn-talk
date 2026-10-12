@@ -11,7 +11,9 @@
  * error. A string the Core returns is UTF-8, not NUL-terminated, and lives as
  * long as the handle it came from.
  *
- * Values and their display/encoding are implemented. Group execution follows.
+ * Values and their display/encoding are implemented, and step 1 of Group
+ * execution: a Core, Groups, loading a Script without Grants, objects or
+ * Libraries, Deliveries and Requests to a Script, Pumps and inspection.
  */
 #ifndef TALK_H
 #define TALK_H
@@ -53,6 +55,9 @@ typedef enum talk_host_error_code {
     TALK_STATE_TOO_LARGE,
     TALK_EFFECTS_PENDING,
     TALK_EFFECT_STATE_UNKNOWN,
+    /* C only: a Load refused with diagnostics, which talk.go reports as a
+     * LoadError. The Trace has a diag record for each. */
+    TALK_LOAD_REFUSED,
     /* C only: the Core couldn't allocate, which Go would report by
      * panicking. Nothing the call would have built exists. */
     TALK_OUT_OF_MEMORY
@@ -163,6 +168,79 @@ void talk_value_retain(talk_value *v);
 void talk_value_release(talk_value *v);
 /* C only: frees an owned buffer and clears its fields. */
 void talk_owned_bytes_release(talk_owned_bytes *b);
+
+/* Groups (chapter 9). Worker calls come from the thread that pumps the Group.
+ * A string a call takes is borrowed for the duration of the call. */
+
+/* Receives the Trace one canonical line at a time, without its LF. The line
+ * lives until the callback returns. */
+typedef void (*talk_trace_sink)(void *context, const char *line, size_t len);
+
+typedef struct talk_group_options {
+    const char *name;
+    size_t name_len;
+    talk_trace_sink trace; /* NULL: no Trace is recorded */
+    void *trace_context;
+} talk_group_options;
+
+typedef struct talk_load_options {
+    const char *name;
+    size_t name_len;
+    const char *source;
+    size_t source_len;
+} talk_load_options;
+
+typedef struct talk_message {
+    const char *name;
+    size_t name_len;
+    talk_value *const *args; /* borrowed; the Core retains what it keeps */
+    size_t args_len;
+} talk_message;
+
+/* A Request's result, settled by a Pump. */
+typedef struct talk_pending talk_pending;
+
+typedef enum talk_group_state {
+    TALK_IDLE,
+    TALK_SLICED,
+    TALK_STOPPED,
+    TALK_REWOUND
+} talk_group_state;
+
+typedef struct talk_pump_options {
+    int64_t fuel_slice; /* 0: no slicing */
+    int64_t fuel_cap;   /* 0: no cap */
+} talk_pump_options;
+
+typedef struct talk_pump_result {
+    talk_group_state state;
+    int64_t fuel_used;
+} talk_pump_result;
+
+/* Makes a Core. NULL when it can't allocate. */
+talk_core *talk_new(void);
+/* C only: ends the Core. Its Groups must be released first. */
+void talk_core_release(talk_core *c);
+talk_host_error_code talk_new_group(talk_core *c, const talk_group_options *o, talk_group **out);
+/* C only: ends the Group and every handle it gave out. */
+void talk_group_release(talk_group *g);
+/* Loads a Script. A refusal with diagnostics is TALK_LOAD_REFUSED. The Script
+ * handle lives as long as its Group. */
+talk_host_error_code talk_load(talk_group *g, const talk_load_options *o, talk_script **out);
+/* Queues a Delivery to the Script. id, if not NULL, receives its delivery
+ * id, such as "d1", owned by the caller. */
+talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, talk_owned_bytes *id);
+/* Queues a Request; *out settles when a Pump ends its Run. */
+talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* The Request's result, an owned reference: Nothing until it settles. */
+talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
+/* C only: ends the caller's handle on a Request. */
+void talk_pending_release(talk_pending *p);
+/* Runs a Pump with one Clock reading. o may be NULL. */
+talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t nanos, const talk_pump_options *o, talk_pump_result *out);
+/* Inspects the Group. In step 1 it writes a vars record for each Script to
+ * the Trace, as the Host Input vars does. */
+void talk_inspect(talk_group *g);
 
 #ifdef __cplusplus
 }

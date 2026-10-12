@@ -8,9 +8,11 @@ pub const encoding = @import("encoding.zig");
 pub const syntax = @import("syntax/syntax.zig");
 pub const check = @import("check/check.zig");
 pub const lower = @import("lower/lower.zig");
+pub const machine = @import("machine/machine.zig");
 pub const corpus_trace = @import("corpus/trace.zig");
 pub const corpus_case = @import("corpus/case.zig");
 pub const corpus_disassembly = @import("corpus/disassembly.zig");
+pub const corpus_replay = @import("corpus/replay.zig");
 pub const talk = @import("talk.zig");
 
 /// Tables generated from the Spec's Data Files by tools/zig/generate.ts and
@@ -45,10 +47,13 @@ test {
     _ = syntax;
     _ = check;
     _ = lower;
+    _ = machine;
+    _ = @import("machine/chunks.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;
     _ = corpus_case;
     _ = corpus_disassembly;
+    _ = corpus_replay;
     _ = @import("dates.zig");
     _ = talk;
 }
