@@ -193,11 +193,15 @@ blocks run, innermost first. An uncaught error ends the Run and queues an
 `error` message to the Script's own mailbox, for its `on error` Handler. Core
 messages are left out of the Trace, since their wording is outside parity.
 
-`contains`, `begins with` and `ends with` with a text or Bytes needle run it as
-a literal program and count the matcher's `steps` ([literal](src/machine/literal.zig)).
-The full Text Pattern matcher, Lambdas, waits, messages between Scripts and
+Text Patterns run on chapter 8's Pike VM ([matcher](src/machine/matcher.zig)).
+A pattern value keeps its canonical source, so the matcher reads it back,
+compiles it and runs the program, counting `steps` by the Running rules: the
+threads in the list at each position. `make-pattern` splices values into a
+template and writes the result's canonical source. A text needle, or a Bytes
+needle in Bytes, runs as a literal program. A pattern's logical size compiles
+it to count its program. Lambdas, waits, messages between Scripts and
 Capabilities come next. A Run past the default Fuel per Run ends in a minimal
-`fault` until step 4 brings limits.
+`fault` until step 4 brings limits, including the Text Pattern size limit.
 
 ## Values and ownership
 

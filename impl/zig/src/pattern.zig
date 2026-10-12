@@ -1,6 +1,7 @@
-//! Reparse canonical Text Pattern sources for the Value Encoding. Step 1.2
-//! keeps the source; the front end adds compilation and matching. Resolved
-//! splices can contain only nested patterns or parenthesized display text.
+//! Reparse canonical Text Pattern sources for the Value Encoding, with a
+//! nesting guard for untrusted input. The machine compiles and matches them
+//! (machine/matcher.zig). Resolved splices can contain only nested patterns
+//! or parenthesized display text.
 const std = @import("std");
 const model = @import("value.zig");
 const display = @import("display.zig");
