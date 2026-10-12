@@ -97,6 +97,9 @@ describe('The Session Store', () => {
       'empty-key.json': '{"": 1}',
       'object.json': '{"k": {"$object": ["room", "r1"]}}',
       'nothing.json': '{"k": null}',
+      'decimal.json': '{"k":{"$dec":"3"}}',
+      'map.json': '{"k":{"$map":[["a",1]]}}',
+      'empty-map.json': '{"k":{"$map":[]}}',
     });
     expect(host.input(':store load scores.json')).toEqual(['loaded 2 keys']);
     expect(host.input(':store')).toEqual(['"a" = [1, "two"]', '"b" = 2.5 km']);
@@ -105,6 +108,9 @@ describe('The Session Store', () => {
       'empty-key.json',
       'object.json',
       'missing.json',
+      'decimal.json',
+      'map.json',
+      'empty-map.json',
     ]) {
       expect(host.input(`:store load ${file}`)).toEqual(['! bad arguments']);
     }

@@ -547,6 +547,30 @@ test('shared declarations reissue through each owning Script rebound Grant', () 
   expect(starts).toEqual(['a:a', 'b:b']);
 });
 
+test('restore refuses checksummed non-canonical Value Encodings', () => {
+  const group = newGroup({ name: 'g' });
+  group.load({ name: 's', source: 'script variable n = 3' });
+  const bytes = group.save();
+  expect(restore(bytes, options([])).group.inspect().scripts[0]!.vars).toEqual([
+    ['n', num(3)],
+  ]);
+  for (const source of ['{"$dec":"3"}', '{"$dec":"-9007199254740991"}']) {
+    const envelope = JSON.parse(new TextDecoder().decode(bytes));
+    const saved = JSON.parse(envelope.payload);
+    const node = saved.graph.nodes.find(
+      (n: { data: unknown; kind: string }) =>
+        n.kind === 'value' && n.data === '3',
+    );
+    expect(node).toBeDefined();
+    node.data = source;
+    envelope.payload = JSON.stringify(saved);
+    envelope.hash = sha256(envelope.payload);
+    expect(() =>
+      restore(new TextEncoder().encode(JSON.stringify(envelope)), options([])),
+    ).toThrow(expect.objectContaining({ code: 'invalid save' }));
+  }
+});
+
 test('checksummed malformed graphs and unsupported formats are invalid saves', () => {
   const bytes = newGroup({ name: 'g' }).save();
   for (const mutate of [

@@ -228,6 +228,72 @@ test('readers reject malformed, duplicate and unsupported values', () => {
   }
 });
 
+test('Value Encoding refuses numbers and maps in a non-canonical form at any depth', () => {
+  for (const source of [
+    '-0',
+    '1.0',
+    '1e2',
+    '9007199254740992',
+    '-9007199254740992',
+    '{"$dec":"01"}',
+    '{"$dec":"3"}',
+    '{"$dec":"0"}',
+    '{"$dec":"9007199254740991"}',
+    '{"$dec":"-9007199254740991"}',
+    '{"$map":[["a",1]]}',
+    '{"$map":[]}',
+  ]) {
+    for (const nested of [source, `[${source}]`, `{"value":${source}}`]) {
+      invalid(() => decodeValue(nested));
+    }
+  }
+});
+
+test('accepted canonical Value Encodings re-encode byte for byte', () => {
+  for (const source of [
+    'null',
+    'true',
+    'false',
+    '"é"',
+    '0',
+    '3',
+    '9007199254740991',
+    '-9007199254740991',
+    '{"$dec":"9007199254740992"}',
+    '{"$dec":"-9007199254740992"}',
+    '{"$dec":"3.0"}',
+    '{"$dec":"0.00"}',
+    '{"$dec":"0.125"}',
+    '{"$quantity":["2.50","GBP"]}',
+    '{"$bytes":"AA=="}',
+    '{"$instant":"2026-09-29T12:00:00.5Z"}',
+    '{"$date":"2026-09-29T12:00:00.5"}',
+    '{"$range":[1,3]}',
+    '[]',
+    '{}',
+    '{"2":2,"1":1}',
+    '{"$map":[["a",1],["$key",2]]}',
+    '[{"n":{"$dec":"3.0"}},{"$map":[["$key",[]]]}]',
+  ]) {
+    expect(encodeValue(decodeValue(source))).toBe(source);
+  }
+});
+
+test('Value Encoding permits JSON syntax variants and normalizes text to NFC', () => {
+  for (const [source, encoding] of [
+    [' \n { "$dec" : "3.0" } \t', '{"$dec":"3.0"}'],
+    [
+      String.raw`{"\u0024map":[["\u0024key","e\u0301"]]}`,
+      '{"$map":[["$key","é"]]}',
+    ],
+    // Bun escapes non-ASCII scalars in String.raw; the expected encoding is NFC.
+    // eslint-disable-next-line unicorn/prefer-string-raw
+    [String.raw`{"e\u0301":"a\/b\n"}`, '{"é":"a/b\\u000a"}'],
+  ]) {
+    expect(encodeValue(decodeValue(source!))).toBe(encoding!);
+  }
+});
+
 test('valid deeply nested values round-trip without a reader-only depth limit', () => {
   let value = nothing;
   for (let depth = 0; depth < 3000; depth++) {
