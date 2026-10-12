@@ -829,6 +829,8 @@ pub const Cost = extern struct { fuel: i64, alloc: i64 };
 
 pub const ErrorDecl = extern struct { code: ?[*]const u8, code_len: usize, fields: ?[*]const Field, fields_len: usize };
 
+pub const ScopeDecl = extern struct { opens: ?[*]const u8, opens_len: usize, abandon: ?[*]const u8, abandon_len: usize, closes: ?[*]const u8, closes_len: usize };
+
 pub const Call = caps.Call;
 
 pub const ScriptError = extern struct { code: ?[*]const u8, code_len: usize, message: ?[*]const u8, message_len: usize, data: ?*Value };
@@ -850,6 +852,8 @@ pub const Operation = extern struct {
     errors_len: usize,
     @"fn": OperationFn,
     context: ?*anyopaque,
+    scope: ?*const ScopeDecl,
+    segment_bound: bool,
 };
 
 /// A C Host function and its context, behind the Core's Host function.
@@ -879,6 +883,14 @@ fn bridged(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome
 
 fn releaseOperation(gpa: std.mem.Allocator, op: caps.Operation) void {
     gpa.free(op.name);
+    switch (op.scope) {
+        .none => {},
+        .opens => |o| {
+            gpa.free(o.name);
+            gpa.free(o.abandon);
+        },
+        .closes => |n| gpa.free(n),
+    }
     for (op.args) |x| x.release();
     gpa.free(op.args);
     if (op.result) |r| r.release();
@@ -900,6 +912,17 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     if (name.len == 0) return error.InvalidValue;
     const call = o.@"fn" orelse return error.InvalidValue;
     if (o.cost.fuel < 0 or o.cost.alloc < 0) return error.InvalidValue;
+    // A Segment-bound Operation needs a Segment Coordinator, which this
+    // definition doesn't supply.
+    if (o.segment_bound) return error.InvalidValue;
+    const scope: caps.Scope = if (o.scope) |d| blk: {
+        if (d.closes != null) {
+            if (d.opens != null or d.abandon != null) return error.InvalidValue;
+            break :blk .{ .closes = try bytes(d.closes, d.closes_len) };
+        }
+        if (d.opens == null or d.abandon == null) return error.InvalidValue;
+        break :blk .{ .opens = .{ .name = try bytes(d.opens, d.opens_len), .abandon = try bytes(d.abandon, d.abandon_len) } };
+    } else .none;
     const args_in: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
     const errors_in: []const ErrorDecl = if (o.errors_len == 0) &.{} else (o.errors orelse return error.InvalidValue)[0..o.errors_len];
     const bridge = try gpa.create(Bridge);
@@ -927,6 +950,11 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
         },
         .max_pending_ms = @intCast(@max(o.max_pending_ms, 0)),
         .errors = decls,
+        .scope = switch (scope) {
+            .none => .none,
+            .opens => |x| .{ .opens = .{ .name = try gpa.dupe(u8, x.name), .abandon = try gpa.dupe(u8, x.abandon) } },
+            .closes => |n| .{ .closes = try gpa.dupe(u8, n) },
+        },
         .host = .{ .call = bridged, .context = bridge },
     };
 }
@@ -958,6 +986,11 @@ export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: 
         gpa.free(operations);
         return .invalid_value;
     };
+    if (!(caps.Capability{ .name = n, .operations = operations }).validScopes()) {
+        for (operations) |done| releaseOperation(gpa, done);
+        gpa.free(operations);
+        return .invalid_value;
+    }
     const d = gpa.create(caps.Capability) catch return .out_of_memory;
     d.* = .{ .name = gpa.dupe(u8, n) catch return .out_of_memory, .operations = operations };
     c.definitions.append(gpa, d) catch return .out_of_memory;
@@ -998,6 +1031,10 @@ export fn talk_capability_def_grant(d: *caps.Capability, ops: ?[*]const ?[*]cons
         };
         kept[index] = true;
     }
+    if (!d.keepsAbandonment(kept)) {
+        allocator.free(kept);
+        return .invalid_value;
+    }
     return grantOf(d, kept, binding, out);
 }
 
@@ -1034,6 +1071,21 @@ export fn talk_call_binding(c: *const Call) ?*anyopaque {
 export fn talk_call_now(c: *const Call, seconds: *i64, nanos: *i32) void {
     seconds.* = c.now.seconds;
     nanos.* = c.now.nanos;
+}
+export fn talk_call_run_id(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.run.ptr;
+    len.* = c.run.len;
+}
+export fn talk_call_segment_id(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.segment.ptr;
+    len.* = c.segment.len;
+}
+export fn talk_call_scope_name(c: *const Call, s: *[*]const u8, len: *usize) void {
+    s.* = c.scope.ptr;
+    len.* = c.scope.len;
+}
+export fn talk_call_automatic(c: *const Call) bool {
+    return c.automatic;
 }
 export fn talk_call_charge(c: *Call, fuel: i64) HostErrorCode {
     if (fuel < 0) return .invalid_value;

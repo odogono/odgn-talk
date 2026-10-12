@@ -259,6 +259,19 @@ as `host error`, with a `call-failed` record. The loader checks each literal
 argument's kind against its Shape. The corpus runner answers calls from
 `stub` lines.
 
+An Operation may open or close a Capability Scope
+([the lifecycle contract](../../spec/embedding/scoped-effects.md)). A Run keeps
+its occupied slots, by named Grant and scope, in opening order. After the
+argument checks, a call that would open an occupied slot, close an empty one
+or open one inside a Join is refused, uncharged, and so is a suspending
+Operation, `wait`, `wait for`, a waiting send, a Join or another Script's
+Function Value while a scope is open. A Host return acknowledges the opening
+or closing with a `scope` record before its result is checked. When the Run
+ends, the Core calls each slot's abandonment Operation, newest first, with
+`automatic` set and nothing charged; a failure disables the Grant, so later
+calls raise `capability disabled`. Segment-bound Operations aren't implemented
+yet, so `talk_define_capability` refuses them.
+
 `clock`, `calendar`, `locale` and `console` come from factories with chapter
 7's fixed declarations ([standard](src/machine/standard.zig)). `clock.now`
 answers from the Pump's Clock. The Core makes the chapter's own checks:
