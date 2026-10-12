@@ -1,0 +1,26 @@
+# lookup: the map Library's `lookup` follows a Value Path through a
+# `decodeJson` result, giving its default at a missing key, a key holding
+# Nothing, a JSON null and a position out of range. A step at text or at a
+# Host Object raises `wrong kind` with the Value Path that reached it, and no
+# `prop` record shows the Host is never called, even once the object is
+# disposed (spec chapter 7, `map`; #578).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "state", shape = "text" }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"' }
+
+[[scripts]]
+name = "orders"
+source = "orders.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

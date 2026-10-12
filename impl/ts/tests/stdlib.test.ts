@@ -134,6 +134,36 @@ describe('the stdlib Libraries', () => {
       '[[["a", 1]], {a: 3, b: 2}]',
     ],
     ['mapValues({a: 1, b: 2}, given v: v + 1)', '{a: 2, b: 3}'],
+    ['lookup({a: {b: 1}}, ["a", "b"])', '1'],
+    [
+      '[lookup({}, ["a", "b"], 0), lookup({a: nothing}, ["a", "b"], 0), lookup(nothing, ["a"], 0), lookup({a: 1}, ["b"])]',
+      '[0, 0, 0, nothing]',
+    ],
+    [
+      '[lookup({a: [{b: 1}, {b: 2}]}, ["a", -1, "b"]), lookup({a: [1]}, ["a", 5], 0), lookup({a: [1]}, ["a", 0], 0)]',
+      '[2, 0, 0]',
+    ],
+    ['[lookup({a: 1}, []), lookup(nothing, [], 0)]', '[{a: 1}, 0]'],
+    [
+      'lookup({a: {b: "x"}}, ["a", "b", "c"], 0)',
+      'error {code: "wrong kind", expected: "map", got: "text", value: "x", path: ["a", "b"]}',
+    ],
+    [
+      'lookup({a: {b: 1}}, ["a", 1])',
+      'error {code: "wrong kind", expected: "list", got: "map", value: {b: 1}, path: ["a"]}',
+    ],
+    [
+      'lookup({}, "a")',
+      'error {code: "wrong kind", expected: "list", got: "text", value: "a"}',
+    ],
+    [
+      'lookup({}, ["a", 1.5])',
+      'error {code: "wrong kind", expected: "integer", got: "number", value: 1.5}',
+    ],
+    [
+      'lookup({}, ["a", true])',
+      'error {code: "wrong kind", expected: "text", got: "boolean", value: true}',
+    ],
     // bytes
     ['[toHex(<<0xDE, 0xAD>>), fromHex("DEad")]', '["dead", <<0xDE, 0xAD>>]'],
     [

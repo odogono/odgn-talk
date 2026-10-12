@@ -1439,6 +1439,15 @@ export const libraryExports = [
     }
   },
   {
+    "library": "map",
+    "name": "lookup",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 3
+    }
+  },
+  {
     "library": "bytes",
     "name": "toHex",
     "kind": "function",

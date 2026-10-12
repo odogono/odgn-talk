@@ -1,0 +1,22 @@
+# Unblessed: lookup follows Value Paths and raises at text and Host Objects (#578); first blessing awaits human review.
+# lookup: the first Delivery reads the order and probes the live bulb, the
+# second probes it once disposed. Neither probe makes a `prop` record.
+
+> load orders identity=4ae9446ff2c7ed89ac37fb2351b3cadfac5c8a92555fad23ed14cb3e49b2061b
+> deliver d1 to=orders message=go
+> pump clock=2026-09-30T09:00:00Z
+raise orders/r1 code="wrong kind" at=map:329 pos=109:3
+raise orders/r1 code="wrong kind" at=map:329 pos=109:3
+seg orders/r1 start delivery=d1 handler=go clause=1 fuel=15557 alloc=41319 state=1472 end=return
+run orders/r1 outcome=completed delivery=d1 handler=go fuel=15557 alloc=41319
+pumped state=idle fuel=15557
+> dispose object=<object light "bulb-1">
+> deliver d2 to=orders message=later
+> pump clock=2026-09-30T09:00:01Z
+raise orders/r2 code="wrong kind" at=map:329 pos=109:3
+seg orders/r2 start delivery=d2 handler=later clause=1 fuel=259 alloc=1359 state=2105 end=return
+run orders/r2 outcome=completed delivery=d2 handler=later fuel=259 alloc=1359
+pumped state=idle fuel=259
+
+> vars
+vars orders found=["Ann", "none", "unknown", "b2", "none", []] failed=[{code: "wrong kind", expected: "map", got: "text", value: "Ann", path: ["customer", "name"], at: {unit: "orders", handler: "go", line: 18, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, path: ["lamp"], at: {unit: "orders", handler: "probe", line: 31, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, path: ["lamp"], at: {unit: "orders", handler: "probe", line: 31, column: 9}}]

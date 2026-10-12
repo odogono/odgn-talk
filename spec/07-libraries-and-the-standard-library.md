@@ -487,6 +487,7 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 | `entries(m)` | The list of pairs `[key, value]` of `m`, in order |  |
 | `fromEntries(pairs)` | The map with the entries of the list of pairs `pairs`, where a later pair wins for a repeated key |  |
 | `mapValues(m, f)` | `m` with each value replaced by what `f` gives for it, keys and order kept |  |
+| `lookup(m, path, default = nothing)` | The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing |  |
 
 <!-- end -->
 
@@ -494,6 +495,13 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 - **Key lists:** `keys` in `without` and `pick` is a list of text. A key that isn't in `m` is ignored.
 - **`fromEntries(pairs)`:** each pair is a list of exactly two items, the first a text. A list of another length raises `out of domain` with `value` the pair. A repeated key keeps its first position and takes the last value.
 - **`mapValues(m, f)`** calls `f` with one argument, the value, in the map's order.
+- **`lookup(m, path, default)`** follows the Value Path `path` one step at a time. A text step reads that key of a map, and an integer step reads that item of a list, counted as in `item n of`, so `-1` is the last. It gives `default` as soon as it reaches Nothing, so a missing key, a key that holds Nothing, a position out of range and an `m` that is Nothing all give `default`. An empty `path` gives `m`. A text step at anything but a map, or an integer step at anything but a list, raises `wrong kind` with `expected` `"map"` or `"list"`, `value` the value it reached and `path` the steps that reached it. So text, a Range, Bytes and a Host Object are never stepped into, and `lookup` never calls the Host. `path` must be a list of texts and integers, checked before any step is taken.
+
+  ```talk
+  put decodeJson(body) into order
+  put lookup(order, ["customer", "address", "city"], "unknown") into city
+  put lookup(order, ["lines", -1, "sku"]) into lastSku
+  ```
 
 ## `bytes`
 

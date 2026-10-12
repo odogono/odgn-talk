@@ -113,7 +113,7 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 - **`the k of x` and `x's k`** read the Built-in property `k` if `k` is one (below), and otherwise the key `k`. `the "k" of x` always reads a key, and `the (e) of x` reads the key that `e` gives, which must be text, or `wrong kind` is raised.
 - **On a map,** a key gives its value, or Nothing if the map has no such key.
 - **On a Host Object,** `id` gives its Core-held id. Outside Guards, any other key reads the Host's property ([chapter 9](09-embedding.md)); a key its Object Kind doesn't define gives Nothing, as a map's missing key does, and reading it on a disposed object raises `object gone`. [Guards](#guards) use the pure key rules below and never call the Host.
-- **On anything else,** Nothing included, reading a key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`.
+- **On anything else,** Nothing included, reading a key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`. The `map` Library's `lookup(m, ["a", "b"], default)` gives `default` there instead ([chapter 7](07-libraries-and-the-standard-library.md#map)).
 
 The Built-in properties:
 
