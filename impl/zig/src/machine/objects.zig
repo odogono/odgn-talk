@@ -21,12 +21,13 @@ pub const Result = union(enum) {
 };
 
 pub const Get = struct {
-    call: *const fn (context: ?*anyopaque, o: *Object) Result,
+    /// `gpa` owns a failure's code and message.
+    call: *const fn (context: ?*anyopaque, gpa: Allocator, o: *Object) Result,
     context: ?*anyopaque = null,
 };
 
 pub const Set = struct {
-    call: *const fn (context: ?*anyopaque, o: *Object, v: *const Value) Result,
+    call: *const fn (context: ?*anyopaque, gpa: Allocator, o: *Object, v: *const Value) Result,
     context: ?*anyopaque = null,
 };
 

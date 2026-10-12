@@ -144,6 +144,8 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
         .options = options,
         .lines = try .init(arena, tree.source),
     };
+    // The pool's values outlive the arena, so a refusal releases them.
+    errdefer if (options.values != null) for (l.values.items) |c| if (c == .value) c.value.release();
     try l.run();
     return l.finish();
 }
@@ -207,11 +209,18 @@ const Lowerer = struct {
     }
 
     fn constantWith(l: *Lowerer, key: []const u8, shown: []const u8, v: ?*model.Value) Allocator.Error!u32 {
+        // It takes `v`, so a refusal releases it.
+        errdefer if (v) |x| if (l.options.values != null) x.release();
         const entry = try l.constant_index.getOrPut(l.a, key);
         if (!entry.found_existing) {
             entry.value_ptr.* = @intCast(l.constants.items.len);
             try l.constants.append(l.a, shown);
-            try l.values.append(l.a, try l.constantValue(key, shown, v));
+            const value = try l.constantValue(key, shown, v);
+            l.values.append(l.a, value) catch |e| {
+                // `v` itself is released above.
+                if (value == .value and v == null and l.options.values != null) value.value.release();
+                return e;
+            };
         } else if (v) |x| x.release();
         return entry.value_ptr.*;
     }
@@ -244,9 +253,14 @@ const Lowerer = struct {
         }
     }
 
+    /// Pools a value it takes.
     fn valueConstant(l: *Lowerer, v: *model.Value) Allocator.Error!u32 {
-        const shown = display.string(l.a, v) catch return error.OutOfMemory;
-        return l.constantWith(try l.print("v{s}", .{shown}), shown, v);
+        const key = blk: {
+            errdefer if (l.options.values != null) v.release();
+            const shown = display.string(l.a, v) catch return error.OutOfMemory;
+            break :blk .{ try l.print("v{s}", .{shown}), shown };
+        };
+        return l.constantWith(key[0], key[1], v);
     }
 
     fn object(l: *Lowerer, name: []const u8) Allocator.Error![]const u8 {
