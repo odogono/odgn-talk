@@ -907,7 +907,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	case "set":
-		target := n.Children[0]
+		target := unparen(n.Children[0])
 		if target.Kind != "key" && target.Kind != "key-computed" {
 			u.add("not a property", n.Pos())
 		} else {

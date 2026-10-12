@@ -56,6 +56,8 @@ for (const statement of [
   'put the length of x into x',
   'set the "length" of x to 1',
   'set the ("length") of x to 1',
+  'set (the "length" of (x)) to 1',
+  'set ((the ("length") of x)) to 1',
   'put 1 into (the "length" of x)',
 ]) {
   test(`allow property reads and ordinary keys: ${statement}`, () => {

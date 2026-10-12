@@ -110,6 +110,14 @@ received human first-blessing approval on 2026-10-09
 
 ## Seed blessing
 
+The `load-diagnostics/container-properties` Trace, introduced in #680 for #670,
+received human first-blessing approval on 2026-10-12 for #681. It pins direct,
+intermediate and possessive Built-in property refusals and valid key/property
+reads. TS and Go reproduce it in ordinary and Save/Restore replay; see the
+[approval record](../docs/reviews/container-properties/README.md). Current Go
+support, including parenthesized `set` targets, is described in the
+[Go implementation guide](../impl/go/README.md).
+
 The `sessions/named-functions` case (#450) pins named Function Values from
 Extend units in expression echoes, `:describe` value rows and final `vars`.
 Both Cores agree on the Transcript and on independent ordinary and save/restore

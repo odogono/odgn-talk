@@ -284,6 +284,11 @@ Host Object property Shapes are checked at runtime. Load and Reload use copied
 property declarations to reject writes to missing or read-only properties when
 the well-known binding and literal key are known. Quoted and parenthesized Text
 literals count as known keys; computed keys and local aliases defer to runtime.
+Parentheses around a `set` target preserve its literal or computed key and
+Object receiver. A bare variable remains `not a property` at `set`, including
+when parenthesized. Container paths reject Built-in properties with
+`not a container` at the target's first token; quoted/computed keys and property
+reads in key, index, delimiter and value expressions remain allowed.
 Compilation cache keys include setter availability, so identical source checked
 against one Object declaration cannot bypass another declaration’s checks.
 

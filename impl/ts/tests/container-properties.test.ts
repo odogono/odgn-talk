@@ -8,8 +8,8 @@ import {
   syntaxText,
 } from '../src';
 
-// Port the staged reference-parser coverage without promoting shared fixtures
-// before the Zig parser conforms (#673).
+// Exhaustive Container rejection coverage; shared fixtures were promoted in
+// #680 after the Go and Zig parsers conformed (#670, #673).
 const statements = [
   ['put 1 into ', ''],
   ['put 1 before ', ''],

@@ -1,4 +1,4 @@
-# Unblessed: `not a container` for Built-in property levels and its source positions (#670); first blessing awaits human review.
+# First blessing approved for #681 on 2026-10-12; see docs/reviews/container-properties/README.md.
 > load leaf identity=f61241ed67dd6f50b2a71915422541c60e1d56e2f28cabe792ec2db85b769e2a
 diag leaf code="not a container" pos=2:14
 > load intermediate identity=4e82e98586d6b1ba967a5441e263aa73ec7e9f79920e1429bfd64c8a7c7876b2
