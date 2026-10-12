@@ -72,6 +72,7 @@ load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/empty-timeout
 load-diagnostics/fallback-handler
+load-diagnostics/initialiser-failed
 load-diagnostics/invalid-raw-text-closing-margin
 load-diagnostics/invalid-text-closing-margin
 load-diagnostics/invalid-text-delimiter
@@ -95,6 +96,7 @@ load-diagnostics/not-in-a-timeout
 load-diagnostics/nothing-to-fold
 load-diagnostics/object-properties
 load-diagnostics/outside-a-loop
+load-diagnostics/pattern-too-large
 load-diagnostics/rest-not-last
 load-diagnostics/unknown-import
 load-diagnostics/unknown-kind

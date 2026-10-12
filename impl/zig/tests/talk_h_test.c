@@ -349,6 +349,9 @@ static int library_test(void) {
     bad |= talk_compile_library(core, &clash_src, NULL, 0, NULL, 0, &clash) != TALK_OK;
     talk_library_source broken_src = {"broken", 6, "1", 1, "function f\n  put 1 into 3\nend f\n", 30};
     bad |= talk_compile_library(core, &broken_src, NULL, 0, NULL, 0, &broken) != TALK_LOAD_REFUSED;
+    /* A Constant whose initialiser raises refuses the Library too. */
+    talk_library_source failing_src = {"failing", 7, "1", 1, "constant x = 1 / 0\n", 19};
+    bad |= talk_compile_library(core, &failing_src, NULL, 0, NULL, 0, &broken) != TALK_LOAD_REFUSED;
     /* Imports first, one per name, and never a stdlib name. */
     bad |= talk_add_library(group, top) != TALK_LIBRARY_MISMATCH;
     bad |= talk_add_library(group, base) != TALK_OK;
