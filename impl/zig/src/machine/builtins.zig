@@ -7,6 +7,7 @@ const unicode = @import("../unicode/unicode.zig");
 const stdlib = @import("../generated/stdlib.zig").stdlib;
 const costs = @import("costs.zig");
 const matcher = @import("matcher.zig");
+const transcendental = @import("../decimal/transcendental.zig");
 const Value = model.Value;
 
 /// An error a Built-in raises: its code and fields, owned.
@@ -108,6 +109,35 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
         return if (std.mem.eql(u8, name, "rangeStart")) x.data.range.from.retain() else x.data.range.to.retain();
     }
     if (exactName(name)) |mode| return exact(gpa, name, mode, args, raised);
+    if (std.meta.stringToEnum(transcendental.Function, name)) |f| {
+        const x = args[0];
+        if (x.data != .number) return wrongKind(raised, gpa, "number", x);
+        const r = transcendental.call(gpa, f, x.data.number) catch |e| return mathError(gpa, name, e, x, raised);
+        return model.scalar(gpa, .{ .number = r }) catch error.OutOfMemory;
+    }
+    if (std.mem.eql(u8, name, "sqrt") or std.mem.eql(u8, name, "power")) {
+        // sqrt(x) is x^0.5, so both are `power`'s, exact where it is.
+        const x = args[0];
+        if (x.data != .number) return wrongKind(raised, gpa, "number", x);
+        const y = if (args.len > 1) args[1] else null;
+        if (y) |v| if (v.data != .number) return wrongKind(raised, gpa, "number", v);
+        const exponent = if (y) |v| v.data.number else model.Decimal{ .coefficient = 5, .exponent = -1 };
+        if (y == null and x.data.number.negative) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, x);
+        const r = model.decimal.power(a, x.data.number, exponent) catch |e| return mathError(gpa, name, e, x, raised);
+        return model.scalar(gpa, .{ .number = r }) catch error.OutOfMemory;
+    }
+    if (std.mem.eql(u8, name, "atan2")) {
+        const y = args[0];
+        const x = args[1];
+        if (y.data != .number) return wrongKind(raised, gpa, "number", y);
+        if (x.data != .number) return wrongKind(raised, gpa, "number", x);
+        const r = transcendental.atan2(gpa, y.data.number, x.data.number) catch |e| switch (e) {
+            // `value` is 0 for atan2(0, 0).
+            error.OutOfDomain => return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, try numberValue(gpa, 0)),
+            else => return mathError(gpa, name, e, x, raised),
+        };
+        return model.scalar(gpa, .{ .number = r }) catch error.OutOfMemory;
+    }
     if (std.mem.eql(u8, name, "min") or std.mem.eql(u8, name, "max")) return extreme(gpa, name, args[0], raised, m);
     if (std.mem.eql(u8, name, "upper") or std.mem.eql(u8, name, "lower")) {
         const x = args[0];
@@ -123,6 +153,18 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
 }
 
 // ---------------------------------------------------------------- numbers
+
+/// A correctly rounded function's errors: `out of domain` with the
+/// argument, `overflow` naming the function, and `division by zero`.
+fn mathError(gpa: Allocator, name: []const u8, e: anyerror, x: *Value, raised: *Raised) Error {
+    return switch (e) {
+        error.OutOfDomain => fill(raised, gpa, "out of domain", &.{.{ "function", name }}, x),
+        error.Overflow => raise(raised, gpa, "overflow", &.{.{ "operator", name }}),
+        error.DivisionByZero => raise(raised, gpa, "division by zero", &.{}),
+        error.OutOfMemory => error.OutOfMemory,
+        else => wrongKind(raised, gpa, "number", x),
+    };
+}
 
 const Mode = enum { half_up, half_even, up, down, floor, ceiling };
 
