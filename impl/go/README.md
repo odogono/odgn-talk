@@ -1397,7 +1397,10 @@ growth and reply retention, immediate and suspending Operations across exports,
 charging, a Script error followed by more requests, save, fingerprint and
 independent instances. Fresh instances must hold no more than 16 MiB of linear
 memory after `hello`, a Group, a small Script and one Pump; the check records
-three instances and enforces this limit before hostile workloads. It also prints
+twelve instances and enforces this limit before hostile workloads. Standard
+Libraries start compilation in sorted name order, with dependencies compiled
+first, so Go map iteration does not change the cold compilation allocation peak.
+It also prints
 the artifact's SHA-256 and raw, gzip
 level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
 of the stripped module, including Go's runtime; they aren't compiled-module

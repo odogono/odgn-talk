@@ -84,7 +84,9 @@ def check_instance_memory(engine, module):
     # #585: compiling the stdlib on the first Group used to permanently grow
     # each fresh instance past 16 MiB, even for an empty Handler.
     measurements = []
-    for _ in range(3):
+    # Exercise independent Go map seeds: randomized stdlib compilation order
+    # could push some otherwise identical instances over the limit.
+    for _ in range(12):
         h = Host(engine, module)
         h.ok("hello", protocol=1)
         h.ok("new-group", group="g", name="g")

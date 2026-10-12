@@ -1,6 +1,8 @@
 package northtalk
 
 import (
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
@@ -43,7 +45,10 @@ func compileStandardLibraries() map[string]*Library {
 		libraries[name] = l
 		return l
 	}
-	for name := range generated.StandardLibraries {
+	// Map iteration changes the allocation peak of cold compilation. WASI
+	// linear memory cannot shrink, so keep the starting order stable while
+	// compile still visits each Library's dependencies before the Library.
+	for _, name := range slices.Sorted(maps.Keys(generated.StandardLibraries)) {
 		compile(name)
 	}
 	return libraries
