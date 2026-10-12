@@ -99,8 +99,8 @@ The hook controls execution and reads state; it does not edit Script Variables o
 `defineCapability(name, operations, lifecycle?, release?)` accepts an independent,
 synchronous release hook with `GrantContext`: Group instance, Script and named
 Grant, binding, last Clock reading and reason `stop`, `reload`, `revoke` or
-`disable`. This implements the first step of the staged
-[Store Notifications contract](../../spec/proposals/store-notifications.md#the-grant-release-hook)
+`disable`. This follows the
+[Grant release contract](../../spec/09-embedding.md#the-grant-release-hook)
 ([#618](https://github.com/odogono/odgn-talk/issues/618)). Stop, owner disposal
 and fatal effect uncertainty release kept Grants in code-point name order after
 abandonment and rollback, before the Stop report. Successful Reload and Library
@@ -125,7 +125,7 @@ exchange. The `store` factory forwards its implementation's release hook; see th
 ## The notification router
 
 `@odgn/northtalk/notify` supplies `createRouter({limits, revision})`, the
-staged [notification router](../../spec/proposals/store-notifications.md#the-router)
+[notification router](../../spec/09-embedding.md#the-notification-router)
 ([#619](https://github.com/odogono/odgn-talk/issues/619)). It holds watches by
 owner (Group, Script, named Grant) and name, routes each `commit(store, apply)`
 to matching watches as ordinary `Script.deliver` Deliveries, holds what

@@ -2,7 +2,7 @@
 
 Store change notifications ([#227](https://github.com/odogono/odgn-talk/issues/227)) establish a direction for reusable Host notification routing: Host-owned sources produce Notifications, and interested Scripts receive them as ordinary Deliveries. Subscriptions are scoped by the source named in a Grant binding, including when authorized Scripts belong to different Groups. We chose live Notifications with state reconciliation on loading rather than a durable event log; Script-authored publication remains deferred until a concrete use case justifies a general publish/subscribe Capability.
 
-This records the accepted architectural contract agreed during the design interview. The Store under [ADR 0050](0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and its `watch` and `unwatch` Operations are implemented in both Cores and Session Hosts (#620). The reusable routers provide registration, routing and companion checkpoint APIs (#619); Session notification driving and checkpoint integration remain #621. The staged [Store Notifications](../../spec/proposals/store-notifications.md) contract carries the detailed obligations until full chapter integration (#622). See the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) guides for current support.
+This records the accepted architectural contract agreed during the design interview. The Store under [ADR 0050](0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and its `watch` and `unwatch` Operations are implemented in both Cores and Session Hosts (#620). The reusable routers provide registration, routing and companion checkpoint APIs (#619). Both Session Hosts implement notification driving and checkpoint integration (#621). The [Store watch Operations](../../spec/07-libraries-and-the-standard-library.md#store-watch-operations), [embedding](../../spec/09-embedding.md#the-grant-release-hook), [checkpoint](../../spec/10-save-and-restore.md#store-notification-checkpoints) and [Session](../../spec/12-sessions-and-tooling.md#session-store-notifications) rules carry the detailed obligations. See the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) guides for current support.
 
 ## Considered Options
 
@@ -30,11 +30,11 @@ This records the accepted architectural contract agreed during the design interv
 
 Registration usage and ordinary payload:
 
-```text
+```talk
 ask store to watch "scores", "score/", "scoresChanged"
 ask store to unwatch "scores"
 
-{grant: "store", watch: "scores", prefix: "score/",
+return {grant: "store", watch: "scores", prefix: "score/",
  keys: ["score/alex"], resync: false}
 ```
 
@@ -75,4 +75,4 @@ ask store to unwatch "scores"
 
 ## Specification delivery
 
-[#227](https://github.com/odogono/odgn-talk/issues/227) supplies the follow-up scope to the Store in #226. The staged specification expresses this contract as Operation Declarations and Host obligations, declares registration and validation errors, defines lifecycle and checkpoint APIs, and supplies conformance and Host behavior scenarios. Its lifecycle contract covers disabled Grants as well as revoked Grants; its checkpoint contract defines how the Host detects source changes since a checkpoint. Both Cores provide the Grant release hook for effective-revocation cleanup ([#618](https://github.com/odogono/odgn-talk/issues/618)), reusable routers with subscription registries and companion checkpoint interfaces (#619), Store watch Operations (#620) and Session integration (#621). Full chapter integration remains #622. The implementation must preserve existing Deliveries, Handler policies, Segment participant semantics and same-core restore invariants; the generalized part is reusable Host routing, not a new Core transport or Script-facing publication Capability.
+[#227](https://github.com/odogono/odgn-talk/issues/227) supplies the follow-up scope to the Store in #226. The numbered chapters express this contract as Operation Declarations and Host obligations, declare registration and validation errors, define lifecycle and checkpoint APIs, and supply conformance and Host behavior scenarios. Its lifecycle contract covers disabled Grants as well as revoked Grants; its checkpoint contract defines how the Host detects source changes since a checkpoint. Both Cores provide the Grant release hook for effective-revocation cleanup ([#618](https://github.com/odogono/odgn-talk/issues/618)), reusable routers with subscription registries and companion checkpoint interfaces (#619), Store watch Operations (#620) and Session integration (#621). Chapter integration retires the staged proposal (#622). The implementation must preserve existing Deliveries, Handler policies, Segment participant semantics and same-core restore invariants; the generalized part is reusable Host routing, not a new Core transport or Script-facing publication Capability.

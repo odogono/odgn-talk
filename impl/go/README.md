@@ -673,8 +673,8 @@ rather than `[]Operation`. `GrantContext` identifies the Group instance, Script,
 named Grant, binding, last Clock reading and `ReleaseReason`: `ReleaseStop`,
 `ReleaseReload`, `ReleaseRevoke` or `ReleaseDisable`.
 
-This implements the first step of the staged
-[Store Notifications contract](../../spec/proposals/store-notifications.md#the-grant-release-hook)
+This follows the
+[Grant release contract](../../spec/09-embedding.md#the-grant-release-hook)
 ([#618](https://github.com/odogono/odgn-talk/issues/618)). Stop, owner disposal
 and fatal effect uncertainty release all kept Grants with hooks in code-point
 name order after abandonment and rollback, before the Stop report. Successful
@@ -697,7 +697,7 @@ so its transport tests are deferred. The `store` factory forwards its implementa
 ### The notification router
 
 Package [`notify`](notify/) supplies `notify.New(RouterOptions{Limits, Revision})`,
-the staged [notification router](../../spec/proposals/store-notifications.md#the-router)
+the [notification router](../../spec/09-embedding.md#the-notification-router)
 ([#619](https://github.com/odogono/odgn-talk/issues/619)). `Watch`, `Unwatch`
 and `Release` register and remove watches by owner (Group, Script, named Grant)
 and name. `Commit(store, apply)` applies a commit under the Store's mutex and

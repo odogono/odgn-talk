@@ -192,7 +192,7 @@ export type ScopeDecl =
   | { opens: string; abandon: string; closes?: never }
   | { closes: string; opens?: never; abandon?: never };
 
-/** The staged Grant release contract; see proposals/store-notifications.md. */
+/** The Grant release contract; see chapter 9, The Grant release hook. */
 export type ReleaseReason = "stop" | "reload" | "revoke" | "disable";
 export interface GrantContext<B> {
   readonly group: Group;
@@ -346,7 +346,8 @@ export interface TimerImpl {
  * for the database that keeps its Stores (ADR 0070).
  */
 export interface StoreImpl extends SegmentLifecycle<string> {
-  /** Final at the call; message is effective, defaulting to storeChanged. */
+  /** Final at the call; message is effective, defaulting to storeChanged.
+   * Throw ScriptError `watch limit` {limit} before changing any registration. */
   watch(call: Call<string>, name: string, prefix: string, message: string): void;
   unwatch(call: Call<string>, name: string): void;
   release(context: GrantContext<string>): void;
@@ -818,3 +819,41 @@ export interface ManifestSpec {
 }
 /** Deterministic JSON. A pure function of the definitions; never includes bindings. */
 export declare function exportManifest(m: ManifestSpec): string;
+
+// ---------------------------------------------------------------------------
+// Notification helper: @odgn/northtalk/notify (chapters 7, 9 and 10)
+// These declarations belong to the helper module, not the Core package root.
+// ---------------------------------------------------------------------------
+
+export interface WatchLimits {
+  watches: number;
+  watchSize: number;
+  pending: number;
+  pendingSize: number;
+}
+export interface RouterOptions {
+  /** Told after each admitted Notification; must not call the router. */
+  admitted?(group: Group): void;
+  limits(store: string): WatchLimits;
+  /** Read under the Store's synchronization. */
+  revision(store: string): string;
+}
+/** Entries are "<script>.<grant>.<watch>", in the order of watches. */
+export interface RoutingResult { restored: string[]; dropped: string[]; resynced: string[] }
+export interface NotificationRouter {
+  watch(call: Call<string>, name: string, prefix: string, message: string): void;
+  unwatch(call: Call<string>, name: string): void;
+  release(context: GrantContext<string>): void;
+  /** Applies the commit under the Store's synchronization; returns changed keys. */
+  commit(store: string, apply: () => readonly string[]): void;
+  /** After each Pump returns; true while the Group still has pending work. */
+  pumped(group: Group): boolean;
+  detach(group: Group): void;
+  /** A checkpoint; throws effects pending as Group.save does. */
+  save(group: Group): Uint8Array;
+  restore(core: Pick<Core, "restore">, checkpoint: Uint8Array, o: RestoreOptions):
+    { group: Group; result: RestoreResult; routing: RoutingResult };
+}
+export declare function createRouter(o: RouterOptions): NotificationRouter;
+/** Value Encoding comparison; a missing key and Nothing are one state. */
+export declare function changed(before?: Value, after?: Value): boolean;

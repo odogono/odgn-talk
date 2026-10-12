@@ -3,11 +3,10 @@
 Proposed expectations for [#621](https://github.com/odogono/odgn-talk/issues/621),
 which also implements [#623](https://github.com/odogono/odgn-talk/issues/623),
 on a checkout based on `b618244a` (2026-10-11). **Human approval is pending.**
-The authority is [The Session Host](../../../spec/proposals/store-notifications.md#the-session-host)
-in Store Notifications, with chapter 12's
+The authority is [The Session Host](../../../spec/12-sessions-and-tooling.md#session-store-notifications)
+in chapter 12, with its
 [Queued Host Inputs](../../../spec/12-sessions-and-tooling.md#the-foreground) rule.
-The numbered chapters remain the active specification until #622 integrates
-the contract.
+The contract was staged at that checkout and is now integrated into the numbered chapters (#622).
 
 ## The pumping rule
 

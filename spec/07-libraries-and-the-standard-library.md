@@ -797,8 +797,6 @@ The Standard Capabilities are `clock`, `calendar`, `locale`, `timer`, `console`,
 
 ### `store`
 
-Both Cores and Session Hosts offer `watch` and `unwatch` (#620). The bundled Store implementations route committed changes through the notification router. The staged [Store Notifications](proposals/store-notifications.md) contract defines their behavior; both Session Hosts deliver Notifications and keep checkpoints (#621), and full chapter integration remains #622.
-
 <!-- generated: stdlib.capability.store -->
 
 | Operation | Mode | Gives | Errors |
@@ -813,11 +811,6 @@ Both Cores and Session Hosts offer `watch` and `unwatch` (#620). The bundled Sto
 | `unwatch name` | immediate | Nothing; removes the Script's watch called `name` through this Grant, if there is one | `invalid watch` |
 
 <!-- end -->
-
-The catalogue also carries `watch` and `unwatch` (#620). Their Shapes,
-validation, default message, final-at-call effects and Host routing obligations
-are in the staged [Store Notifications](proposals/store-notifications.md#operations)
-contract until chapter integration (#622).
 
 `store` keeps data values under text keys, outside every Script, so they outlive a reload and are shared by every Script granted the same Store ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)). Its writes commit or roll back with the Segment that made them, as Script Variables do ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)). Like `timer`, the Spec states its semantics as obligations on the Host, and the Core takes no part in keeping the Store.
 
@@ -857,6 +850,171 @@ The six data Operations and the two watch Operations are immediate: a Segment-bo
 >   if it then tell log to write name & " won"
 > end claimPrize
 > ```
+
+#### Store watch Operations
+
+- **Watch:** a Script's registration, made by `watch` through one named Grant. A watch is a [Subscription](appendix-a-glossary.md). It is identified by its **owner**, the Group, Script and named Grant, and by its **name**, chosen by the Script. Its **parameters** are its prefix and message.
+- **Notification:** the Delivery a watch receives. An **ordinary Notification** names changed keys; a **Reconciliation Marker** asks for the watch's whole prefix to be refreshed.
+- **Router:** the Host component that holds watches, routes commits to them and admits Notifications into Groups. Its rules are normative for every Host that offers `watch`; [chapter 9](09-embedding.md#the-notification-router) declares the router each Core supplies.
+- **Pending work:** Notifications the router holds for a watch that no Group has admitted yet. A Notification is **admitted** when the recipient Group accepts its Delivery at the call. From then on it belongs to the Core like any other Delivery.
+
+The two watch Operations have these call rules:
+
+- **Shapes:** `watch` takes text, text and an Optional text, and `unwatch` one text. Both give `nothing`, and the Core checks the result kind; anything else becomes `host error`.
+- **Mode:** both are immediate and neither is Segment-bound. They never enlist a participant, so they don't conflict with another Store's writes in the same Segment. A Grant of only `get`, `keys`, `watch` and `unwatch` lets a Script observe a Store without being able to write to it.
+- **Final at the call:** a registration takes effect when the Host function returns. A later Limit Fault, rollback, `effect failed` or cancellation of the calling Run doesn't undo it.
+- **Arity:** `watch` takes two or three supplied arguments, and `unwatch` exactly one. Omitting or passing Nothing as `message` means `storeChanged`. The Trace and the Host function's supplied arguments keep the call as the Script wrote it. The `store` factory gives the implementation the effective message, as `calendar` resolves its default zone.
+
+#### Store watch validation
+
+After the Shape checks and before charging the call or running the Host function, the Core checks these, in order. A failure raises `invalid watch`, with `field` set to `name` or `message`. No call id is allocated and the Host isn't called, so an invalid replacement leaves an existing watch unchanged.
+
+1. **`name`,** for both Operations, is nonempty text.
+2. **The effective message,** for `watch`, is a plain Name ([chapter 1](01-lexical-structure.md#tokens)): not a Reserved Word, `_` or `all`, and not a Selector. A Notification carries exactly one argument, so a name containing `:` is refused even when it would be a one-part Selector.
+
+The prefix is any text, including empty text, which watches the whole Store. Values are NFC, so a prefix is compared as the `keys` Operation compares it, by code points.
+
+These checks are the Core's. Every other failure is the Host's: `watch limit` ([Limits](07-libraries-and-the-standard-library.md#store-watch-limits)) and, as for any declared Operation, `host error` for anything undeclared. `capability revoked` and `capability disabled` come before every one of these, as for any Operation.
+
+#### Store watch registrations
+
+- **Identity:** a watch belongs to its owner and name. Two named Grants bound to the same Store hold separate watches, even with the same name, and each Notification names the Grant it came through.
+- **`watch`, new name:** registers the watch with no pending work.
+- **`watch`, same parameters:** a watch whose prefix and effective message both equal the existing one's does nothing, and keeps the watch's pending work and its place in the order of watches.
+- **`watch`, different parameters:** replaces the watch. The router discards the old watch's pending work, routes nothing more under the old parameters, and keeps the watch's place in the order of watches. Notifications already admitted keep the old prefix in their payload, which still describes them.
+- **`unwatch`:** removes the watch and discards its pending work. Unwatching a name the owner hasn't registered does nothing.
+- **The registration boundary:** registration and commit routing share the Store's synchronization ([Routing](07-libraries-and-the-standard-library.md#store-notification-routing)), so each commit is either before a registration, and never routed to it, or after, and routed. A Segment's uncommitted writes commit after a `watch` made in that same Segment, so they are routed to the watch.
+- **Initial reconciliation:** a Script registers first and then reads the Store. Its reads may already include a commit that a Notification will also report, and several reads need not observe one Store version. No snapshot Operation is offered.
+
+#### Store Notification routing
+
+##### Commits and synchronization
+
+A **commit** is any change to a Store's committed contents: a Segment commit hook that returns `ok`, and every Host-originated change, such as a Session's `:store load` or `:store clear`, an import or an administrative write. A commit that fails, a rollback, and a Segment's uncommitted writes produce nothing.
+
+The Store applies a commit and the router routes it as one step under the Store's **synchronization**: a per-Store mutual exclusion that `watch`, `unwatch`, every commit, marker admission and checkpointing also take. A Host that runs several Groups on several threads, or reaches one Store from several processes, must provide it. Store commit order is the order commits take it.
+
+##### Net changes
+
+- **Changed keys:** a key changes when its committed value after the commit differs from its value before, compared by the bytes of [the Value Encoding](09-embedding.md#json-and-the-value-encoding). A missing key and a key holding Nothing are one state.
+- **Whole commits only:** intermediate writes inside one commit aren't seen. A key set and then restored, a delete of a missing key and a `set` of the value already there change nothing.
+- **No change, no work:** a commit with no changed keys routes nothing and doesn't change the Store's [revision](10-save-and-restore.md#store-revisions).
+
+##### Which watches
+
+For a commit with changed keys, each watch on that Store whose prefix is a code-point prefix of at least one changed key receives one ordinary Notification, holding each such key once. Every watch matches, including those of the Script whose Segment committed.
+
+The router visits matching watches in its **order of watches**: by Group, in the order the router first registered a watch from that Group, then by Script, in the Group's load order, then by named Grant and watch name, each in Unicode code-point order. A Group that comes to hold no watches loses its place, and takes a new one when it next registers. A replaced watch keeps its place; one removed and registered again goes to its new place. The router reads load order with `Group.ScriptNames`, which is safe inside a Pump and adds no Trace line ([chapter 9](09-embedding.md#threads-and-the-input-queue)).
+
+##### Payload
+
+A Notification is a Delivery addressed to the owning Script with `Script.Deliver`. It has the watch's effective message as its name, exactly one argument and no limit override. The argument is a map with these keys, in this order:
+
+| Key | Value |
+| --- | --- |
+| `grant` | the named Grant the watch was made through, as text |
+| `watch` | the watch's name |
+| `prefix` | the watch's prefix |
+| `keys` | an ordinary Notification's changed keys under the prefix, nonempty and in Unicode code-point order, as `store.keys` orders them; `[]` for a Reconciliation Marker |
+| `resync` | `false` for an ordinary Notification, `true` for a Reconciliation Marker |
+
+The payload never holds values, old or new, or the Grant's binding. Each Notification is recorded in the Trace as the ordinary `deliver` Host Input it is.
+
+##### Admission and pending work
+
+A watch is in one of two states: **ordinary**, with zero or more pending ordinary Notifications in commit order, or **resyncing**, with exactly one pending Reconciliation Marker.
+
+1. **Routing a commit to an ordinary watch with no pending work:** the router delivers the Notification at once. If the Group accepts it, it is admitted. If the Group refuses it as `MailboxFull`, the Notification becomes the watch's pending work, subject to step 3.
+2. **Routing a commit to an ordinary watch with pending work:** the Notification joins the end of its pending work, subject to step 3, so a later commit is never admitted before an earlier one.
+3. **Overload:** if holding the Notification would take the Store's pending work past the `pending` or `pendingSize` limit, the router discards the watch's pending ordinary Notifications and makes the watch resyncing instead. This sacrifices per-commit detail. It never fails, delays or reports the commit itself.
+4. **Routing a commit to a resyncing watch** adds nothing: its pending marker already covers the commit.
+5. **Any other refusal:** if a Delivery is refused for any reason other than `MailboxFull`, such as the Script no longer being in the Group, the router removes the watch and discards its pending work.
+
+Admission is never undone. A Notification already admitted is never rewritten, withdrawn or replaced by a marker, and stays subject to the Core's own rules, such as Stop and Reload dropping a mailbox.
+
+##### Retrying
+
+- **When:** after each Pump of a Group returns, the Host calls the router, and the router attempts to admit pending work for that Group's watches. Retrying needs no further Store write and no polling by a Script, and the Pump never discards pending work.
+- **Fair order:** a retry round visits the Group's watches with pending work in the order of watches, starting with the watch after the one that started the Group's previous round and wrapping around. For each watch it delivers pending Notifications oldest first, stopping at that watch's first refusal and moving on to the next watch.
+- **A marker's return:** admitting a Reconciliation Marker makes its watch ordinary again, under the Store's synchronization, so each commit is either covered by the marker or routed as an ordinary Notification after it.
+- **Progress:** pending work is admitted provided the Host goes on pumping the Group and the recipient eventually accepts a Delivery. The router tells the Host when a Group still has pending work, so a driver can schedule another Pump.
+
+##### What a Script can rely on
+
+- **Order:** within one watch, Notifications are admitted in Store commit order, and a marker is admitted after everything it replaced would have been. Nothing is promised between different watches, Stores or Groups, or about when a Group pumps.
+- **Admission, not handling:** the router guarantees admission, falling back to one marker under overload. It doesn't promise that a Handler runs or succeeds. There are no acknowledgements and no retries after admission. A Notification that reaches the end of the Message Path is `unhandled`, and an errored Handler is the Script's to deal with.
+- **Handlers:** `, queued` is recommended for a Handler of ordinary Notifications, so batches aren't dropped or replaced. A `wait for` that waits for one Notification and then waits again can miss the ones in between.
+- **Reacting to a marker:** a Handler refreshes the watch's entire prefix from current state, including removing keys it holds that no longer exist.
+- **Writing back:** a Handler that writes to a key it watches receives a Notification for its own write. It converges because a write that changes nothing routes nothing.
+
+#### Store watch lifetime
+
+A watch belongs to its owner, the loaded Script and named Grant, not to the Run that registered it. It outlives that Run, and cleanup never depends on a Script `finally` block or a Capability Scope. The `store` factory forwards the implementation's [Grant release hook](09-embedding.md#the-grant-release-hook) to the router.
+
+On release, the router removes every watch the owner holds and discards their pending work, and no later commit routes through them. Only a new `watch` registers again, which a revoked or disabled Grant refuses. Notifications already admitted aren't touched. Stop and a successful Reload drop the Script's mailbox under their own rules, and after a revocation or disablement any that remain are delivered and handled as usual.
+
+After a Reload, a Script has no watches. A Host that reloads Scripts sends the message its Scripts use to start up, such as `start` above, so they register again and reconcile. Extend keeps every watch, since no code is replaced and no Grant is released.
+
+##### Groups the Host discards
+
+When a Host stops using a Group, it tells the router to detach it, and the router removes every watch the Group's Scripts hold. A Group that is only saved and later restored is a different Group, with routing of its own ([Checkpoints](10-save-and-restore.md#store-notification-checkpoints)).
+
+#### Store watch limits
+
+Each Store's router state has four finite limits, which its Host sets:
+
+| Limit | Counts | Exceeded |
+| --- | --- | --- |
+| `watches` | the Store's watches, across every Script and Group | `watch limit` `{limit: "watches"}` at `watch` |
+| `watchSize` | the total size of the Store's watches: for each, the [logical sizes](08-the-abstract-machine-and-the-cost-model.md#logical-sizes) of its name, prefix and effective message as text | `watch limit` `{limit: "size"}` at `watch` |
+| `pending` | the Store's pending Notifications, with one reserved for every watch | `watch limit` `{limit: "pending"}` at `watch`; overload when routing |
+| `pendingSize` | the total logical size of their payload maps, with every watch's marker reserved | `watch limit` `{limit: "pending"}` at `watch`; overload when routing |
+
+- **The reservation:** every watch always counts one Reconciliation Marker toward `pending` and `pendingSize`, whether or not it has pending work. A resyncing watch's marker occupies that reservation, so a marker always fits and is never lost to a limit.
+- **Registering:** a `watch` checks all four limits with its own watch, and its reservation, in place of any it replaces. If a limit would be exceeded, the Host fails the call with `watch limit`, naming the first limit in the table's order, and the existing watch and its pending work are unchanged. Same-parameter `watch` and `unwatch` never fail on a limit.
+- **Pending ordinary Notifications** count in addition to the reservations, and overload is decided against both pending limits.
+- **Restoring** a checkpoint registers restored watches without checking these limits, so a restore never drops a watch for space. Later registrations are checked against the restored totals.
+
+#### Watching a Store
+
+A Script that keeps a view of shared Store data asks to hear when that data changes, instead of polling. Each successful commit that changes watched keys sends the Script one ordinary Delivery naming those keys. The Handler then reads current state.
+
+```talk
+script variable board = {}
+
+on start
+  ask scores to watch "board", "score/", "scoresChanged"
+  refresh()
+end start
+
+on scoresChanged change, queued
+  if the resync of change then
+    refresh()
+  else
+    repeat for each key in the "keys" of change
+      ask scores to get key
+      put it into the (key) of board
+    end repeat
+  end if
+end scoresChanged
+
+function refresh
+  put {} into board
+  ask scores to keys "score/"
+  repeat for each key in it
+    ask scores to get key
+    put it into the (key) of board
+  end repeat
+end refresh
+```
+
+A commit that sets `score/alex` to a new value delivers `scoresChanged` with one argument:
+
+```talk
+return {grant: "scores", watch: "board", prefix: "score/", keys: ["score/alex"], resync: false}
+```
+
+`start` registers before it reads, so no commit falls into a gap between the two. A Notification may describe a key whose value `refresh` already read: reconciliation is repeatable, and the Handler applies the same rule whoever wrote the key.
 
 ### `sqlite`
 

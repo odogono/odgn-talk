@@ -2,7 +2,7 @@
 
 Proposed expectations for [#620](https://github.com/odogono/odgn-talk/issues/620),
 on the checkout based on `1eb826ac` (2026-10-11). **Human approval is pending.**
-The authority is [Store Notifications](../../../spec/proposals/store-notifications.md),
+The authority is [Store watch Operations](../../../spec/07-libraries-and-the-standard-library.md#store-watch-operations),
 particularly Operations, Embedding declarations and Core scenarios. The
 numbered chapters remain the active specification until #622 integrates the
 complete contract.
