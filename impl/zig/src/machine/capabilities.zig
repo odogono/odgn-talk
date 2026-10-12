@@ -404,7 +404,16 @@ pub const Operation = struct {
     max_pending_ms: u64 = 0,
     /// The declared codes; empty when the Operation lists none.
     errors: []ErrorDecl = &.{},
+    /// Whether the list is enforced even when empty, as for a Standard
+    /// Capability, whose every undeclared failure is `host error`.
+    closed_errors: bool = false,
     host: HostFn,
+    /// The Core's own checks after the Shapes, before the call is charged:
+    /// a Standard Capability's option words and Locale tags.
+    before: ?*const fn (a: Allocator, op: *const Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?Problem = null,
+    /// The Core's own checks of a result beyond its Shape; false makes the
+    /// call `host error`.
+    after: ?*const fn (op: *const Operation, args: []const *Value, result: *const Value) bool = null,
 
     /// The arguments a call must supply: up to the outer Optional suffix.
     pub fn required(op: Operation) usize {
@@ -412,6 +421,14 @@ pub const Operation = struct {
         while (n > 0 and op.args[n - 1].omittable()) n -= 1;
         return n;
     }
+};
+
+/// What the Core's own checks before a call raise.
+pub const Problem = union(enum) {
+    /// `out of domain`, with `function` the Operation's name.
+    out_of_domain: *Value,
+    /// `bad locale`, with the tag.
+    bad_locale: []const u8,
 };
 
 /// A Capability's definition: its Operations, ordered by name.
@@ -483,10 +500,51 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
         },
         else => return false,
     };
-    if (catalogued(code)) return false;
-    if (op.errors.len == 0) return true;
-    for (op.errors) |e| if (std.mem.eql(u8, e.code, code)) return true;
+    if (op.errors.len == 0) return !op.closed_errors and !catalogued(code);
+    for (op.errors) |e| if (std.mem.eql(u8, e.code, code)) {
+        // A catalogue code only a Standard Capability may declare, and its
+        // fields are the catalogue's.
+        const entry = catalogueEntry(code) orelse return true;
+        if (!op.closed_errors) return false;
+        const pairs = if (data) |d| (if (d.data == .map) d.data.map else &.{}) else &.{};
+        for (entry.fields) |f| {
+            for (pairs) |p| {
+                if (std.mem.eql(u8, p.key, f)) break;
+            } else return false;
+        }
+        for (e.fields) |f| {
+            const v = for (pairs) |p| {
+                if (std.mem.eql(u8, p.key, f.key)) break p.value;
+            } else continue;
+            if (!kindOf(f.shape, v)) return false;
+        }
+        for (pairs) |p| {
+            const listed = for (entry.fields) |f| {
+                if (std.mem.eql(u8, p.key, f)) break true;
+            } else if (entry.optional) |opt| for (opt) |f| {
+                if (std.mem.eql(u8, p.key, f)) break true;
+            } else false else false;
+            if (!listed) return false;
+        }
+        return true;
+    };
     return false;
+}
+
+/// Whether a value has a kind Shape's kind; any other Shape takes it.
+fn kindOf(s: *const Shape, v: *const Value) bool {
+    if (s.data != .kind) return true;
+    return switch (s.data.kind) {
+        .text => v.data == .text,
+        .civil_date => v.data == .civil_date,
+        .number => v.data == .number,
+        else => true,
+    };
+}
+
+fn catalogueEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
+    for (errors_table.errors.@"error") |e| if (std.mem.eql(u8, e.code, code)) return e;
+    return null;
 }
 
 fn acceptsLiteral(context: *const anyopaque, index: usize, literal: check.Literal) bool {

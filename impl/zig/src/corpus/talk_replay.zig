@@ -35,13 +35,21 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
     return null;
 }
 
+/// The Standard Capabilities talk.h makes so far.
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console" };
+
 /// Why talk.h can't make the case's Grants yet, or null: only immediate and
 /// fire-and-forget Operations the case declares itself, with no scopes,
 /// Segment-bound Operations or Coordinators, are.
 fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
     const all = case_setup.tables(a, setup) catch return "case.toml isn't read";
     for (all) |t| {
-        if (std.mem.eql(u8, t.header, "[[standard]]")) return "Standard Capabilities are not implemented";
+        if (std.mem.eql(u8, t.header, "[[standard]]")) {
+            const which = (case_setup.field(t, "capability") orelse return "a Standard Capability without a name").string;
+            for (standard_made) |made| {
+                if (std.mem.eql(u8, made, which)) break;
+            } else return "Standard Capabilities other than clock, calendar, locale and console are not implemented";
+        }
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
         if (mode != .string or std.mem.eql(u8, mode.string, "suspending")) return "suspending Operations are not implemented";
@@ -197,6 +205,58 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
     return c.TALK_CALL_BROKEN;
 }
 
+/// A Standard Operation's Host function: the next Stub for `key`, from the
+/// runner's table of Operation hosts, its context.
+fn standardHost(comptime key: []const u8) c.talk_operation_fn {
+    return struct {
+        fn f(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+            const hosts: *std.StringHashMapUnmanaged(*OperationHost) = @ptrCast(@alignCast(context.?));
+            const h = hosts.get(key) orelse return c.TALK_CALL_BROKEN;
+            return host(h, call, args, len, result, err);
+        }
+    }.f;
+}
+
+/// Defines the case's Standard Capabilities from its `[[standard]]` tables.
+fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def)) !void {
+    for (all) |t| {
+        if (!std.mem.eql(u8, t.header, "[[standard]]")) continue;
+        const which = case_setup.field(t, "capability").?.string;
+        var costs: std.ArrayList(c.talk_named_cost) = .empty;
+        if (case_setup.field(t, "costs")) |table| for (table.table) |e| {
+            try costs.append(a, .{ .name = e.key.ptr, .name_len = e.key.len, .cost = .{ .fuel = number(e.value.get("fuel")), .alloc = number(e.value.get("alloc")) } });
+        };
+        const all_costs: c.talk_costs = .{ .entries = costs.items.ptr, .len = costs.items.len };
+        var def: ?*c.talk_capability_def = null;
+        const operations: []const struct { []const u8, c.talk_mode } = if (std.mem.eql(u8, which, "calendar"))
+            &.{ .{ "today", c.TALK_IMMEDIATE }, .{ "now", c.TALK_IMMEDIATE }, .{ "toCivil", c.TALK_IMMEDIATE }, .{ "toInstant", c.TALK_IMMEDIATE }, .{ "offset", c.TALK_IMMEDIATE }, .{ "zone", c.TALK_IMMEDIATE } }
+        else if (std.mem.eql(u8, which, "locale"))
+            &.{ .{ "compare", c.TALK_IMMEDIATE }, .{ "rank", c.TALK_IMMEDIATE }, .{ "upper", c.TALK_IMMEDIATE }, .{ "lower", c.TALK_IMMEDIATE }, .{ "numberSymbols", c.TALK_IMMEDIATE }, .{ "monthNames", c.TALK_IMMEDIATE }, .{ "dayNames", c.TALK_IMMEDIATE }, .{ "tag", c.TALK_IMMEDIATE } }
+        else if (std.mem.eql(u8, which, "console"))
+            &.{ .{ "write", c.TALK_FIRE_AND_FORGET }, .{ "read", c.TALK_SUSPENDING } }
+        else
+            &.{};
+        for (operations) |op| {
+            const h = try a.create(OperationHost);
+            h.* = .{ .a = a, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ which, op[0] }), .mode = op[1] };
+            try hosts.put(a, h.name, h);
+        }
+        if (std.mem.eql(u8, which, "clock")) {
+            try check(c.talk_clock_capability(core, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "calendar")) {
+            const impl: c.talk_calendar_impl = .{ .context = hosts, .today = standardHost("calendar.today"), .now = standardHost("calendar.now"), .to_civil = standardHost("calendar.toCivil"), .to_instant = standardHost("calendar.toInstant"), .offset = standardHost("calendar.offset"), .zone = standardHost("calendar.zone") };
+            try check(c.talk_calendar_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "locale")) {
+            const impl: c.talk_locale_impl = .{ .context = hosts, .compare = standardHost("locale.compare"), .rank = standardHost("locale.rank"), .upper = standardHost("locale.upper"), .lower = standardHost("locale.lower"), .number_symbols = standardHost("locale.numberSymbols"), .month_names = standardHost("locale.monthNames"), .day_names = standardHost("locale.dayNames"), .tag = standardHost("locale.tag") };
+            try check(c.talk_locale_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "console")) {
+            const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
+            try check(c.talk_console_capability(core, &impl, &all_costs, &def));
+        } else return error.Unsupported;
+        try defs.put(a, which, def);
+    }
+}
+
 /// A case.toml Shape as a talk.h Shape, owned by the caller.
 fn shapeOf(v: case_setup.Value) !?*c.talk_shape {
     switch (v) {
@@ -323,8 +383,10 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
         const def = defs.get(capability) orelse return error.UnknownCapability;
         var grant: ?*c.talk_grant = null;
         const ops = g.value.get("ops") orelse return error.MalformedCase;
+        // A text binding reaches the Host as NUL-terminated text.
+        const binding: ?*anyopaque = if (g.value.get("binding")) |b| (if (b == .string) @ptrCast(@constCast((try a.dupeSentinel(u8, b.string, 0)).ptr)) else null) else null;
         if (ops == .string) {
-            try check(c.talk_capability_def_grant_all(def, null, &grant));
+            try check(c.talk_capability_def_grant_all(def, binding, &grant));
         } else {
             var names: std.ArrayList([*c]const u8) = .empty;
             var lens: std.ArrayList(usize) = .empty;
@@ -332,7 +394,7 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
                 try names.append(a, o.string.ptr);
                 try lens.append(a, o.string.len);
             }
-            try check(c.talk_capability_def_grant(def, names.items.ptr, lens.items.ptr, names.items.len, null, &grant));
+            try check(c.talk_capability_def_grant(def, names.items.ptr, lens.items.ptr, names.items.len, binding, &grant));
         }
         try out.append(a, .{ .name = g.key.ptr, .name_len = g.key.len, .grant = grant });
     }
@@ -358,6 +420,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var hosts: std.StringHashMapUnmanaged(*OperationHost) = .empty;
     var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
     try defineCapabilities(a, core, all, &hosts, &defs);
+    try defineStandard(a, core, all, &hosts, &defs);
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;

@@ -10,6 +10,7 @@ const display = @import("display.zig");
 const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
+const standard = @import("machine/standard.zig");
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -280,6 +281,7 @@ pub const Core = struct {
     gpa: std.mem.Allocator,
     definitions: std.ArrayList(*caps.Capability) = .empty,
     bridges: std.ArrayList(*Bridge) = .empty,
+    standard: std.ArrayList(*standard.Context) = .empty,
 };
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
@@ -367,6 +369,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.definitions.deinit(gpa);
     for (core.bridges.items) |b| gpa.destroy(b);
     core.bridges.deinit(gpa);
+    for (core.standard.items) |x| gpa.destroy(x);
+    core.standard.deinit(gpa);
     allocator.destroy(core);
 }
 
@@ -912,4 +916,67 @@ export fn talk_call_now(c: *const Call, seconds: *i64, nanos: *i32) void {
 export fn talk_call_charge(c: *Call, fuel: i64) HostErrorCode {
     if (fuel < 0) return .invalid_value;
     return if (c.charge(@intCast(fuel))) .ok else .err_limit;
+}
+
+// ---------------------------------------------------------------- Standard Capabilities
+
+pub const NamedCost = extern struct { name: ?[*]const u8, name_len: usize, cost: Cost };
+pub const Costs = extern struct { entries: ?[*]const NamedCost, len: usize };
+pub const CalendarImpl = extern struct { context: ?*anyopaque, today: OperationFn, now: OperationFn, to_civil: OperationFn, to_instant: OperationFn, offset: OperationFn, zone: OperationFn };
+pub const LocaleImpl = extern struct { context: ?*anyopaque, compare: OperationFn, rank: OperationFn, upper: OperationFn, lower: OperationFn, number_symbols: OperationFn, month_names: OperationFn, day_names: OperationFn, tag: OperationFn };
+pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
+
+/// The largest cost component: 2^53 - 1.
+const max_cost = 9_007_199_254_740_991;
+
+/// Defines a Standard Capability from a cost per Operation and one C Host
+/// function per Operation, in `standard.operations` order.
+fn defineStandard(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const gpa = c.gpa;
+    const names = standard.operations(which);
+    for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, @tagName(which))) return .name_reused;
+    const given: []const NamedCost = if (costs) |cs| (if (cs.len == 0) &.{} else (cs.entries orelse return .invalid_value)[0..cs.len]) else &.{};
+    var per: [8]caps.Cost = undefined;
+    for (names, 0..) |name, i| {
+        const entry = for (given) |e| {
+            if (std.mem.eql(u8, bytes(e.name, e.name_len) catch return .invalid_value, name)) break e;
+        } else return .invalid_value;
+        if (entry.cost.fuel < 0 or entry.cost.alloc < 0 or entry.cost.fuel > max_cost or entry.cost.alloc > max_cost) return .invalid_value;
+        per[i] = .{ .fuel = @intCast(entry.cost.fuel), .alloc = @intCast(entry.cost.alloc) };
+    }
+    var impl: [8]?caps.HostFn = @splat(null);
+    for (fns, 0..) |f, i| {
+        const call = f orelse return .invalid_value;
+        const bridge = gpa.create(Bridge) catch return .out_of_memory;
+        bridge.* = .{ .call = call, .context = context };
+        c.bridges.append(gpa, bridge) catch {
+            gpa.destroy(bridge);
+            return .out_of_memory;
+        };
+        impl[i] = .{ .call = bridged, .context = bridge };
+    }
+    const d = standard.define(gpa, which, impl[0..names.len], per[0..names.len], &c.standard) catch return .out_of_memory;
+    c.definitions.append(gpa, d) catch return .out_of_memory;
+    out.* = d;
+    return .ok;
+}
+
+export fn talk_clock_capability(c: *Core, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandard(c, .clock, &.{}, null, costs, out);
+}
+
+export fn talk_calendar_capability(c: *Core, impl: *const CalendarImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: now, offset, toCivil, toInstant, today, zone.
+    return defineStandard(c, .calendar, &.{ impl.now, impl.offset, impl.to_civil, impl.to_instant, impl.today, impl.zone }, impl.context, costs, out);
+}
+
+export fn talk_locale_capability(c: *Core, impl: *const LocaleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: compare, dayNames, lower, monthNames, numberSymbols,
+    // rank, tag, upper.
+    return defineStandard(c, .locale, &.{ impl.compare, impl.day_names, impl.lower, impl.month_names, impl.number_symbols, impl.rank, impl.tag, impl.upper }, impl.context, costs, out);
+}
+
+export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandard(c, .console, &.{ impl.read, impl.write }, impl.context, costs, out);
 }

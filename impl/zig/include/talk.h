@@ -284,6 +284,57 @@ talk_host_error_code talk_capability_def_grant_all(talk_capability_def *d, void 
 talk_capability_def *talk_grant_capability(const talk_grant *g);
 void *talk_grant_binding(const talk_grant *g);
 
+/* Standard Capabilities (chapter 7). Each factory takes a cost for every
+ * Operation, by name, and the Host's implementation, one function per
+ * Operation, which receives the resolved arguments: omitted optional ones as
+ * Nothing, and a Locale's options map complete, in its documented key order.
+ * The Core makes the chapter's checks before and after each call. The
+ * definition lives as long as the Core. */
+
+/* C only: one Operation's cost in a talk_costs. */
+typedef struct talk_named_cost {
+    const char *name;
+    size_t name_len;
+    talk_cost cost;
+} talk_named_cost;
+
+typedef struct talk_costs {
+    const talk_named_cost *entries;
+    size_t len;
+} talk_costs;
+
+/* calendar: the Grant's binding is its default IANA zone, as NUL-terminated
+ * text, or NULL. Each function receives its Operation's arguments, then the
+ * zone, text or Nothing; to_instant receives the civil date, the resolved
+ * disambiguation and the zone. */
+typedef struct talk_calendar_impl {
+    void *context;
+    talk_operation_fn today, now, to_civil, to_instant, offset, zone;
+} talk_calendar_impl;
+
+/* locale: the Grant's binding is its default BCP 47 tag, as NUL-terminated
+ * text, or NULL for und. Each function receives its Operation's arguments,
+ * then the complete options map for compare, rank, month_names and
+ * day_names, then the tag, text or Nothing. */
+typedef struct talk_locale_impl {
+    void *context;
+    talk_operation_fn compare, rank, upper, lower, number_symbols, month_names, day_names, tag;
+} talk_locale_impl;
+
+/* console: write receives the value to show. read is suspending, and
+ * suspending calls aren't made yet. */
+typedef struct talk_console_impl {
+    void *context;
+    talk_operation_fn write, read;
+} talk_console_impl;
+
+/* clock: now is answered from the Pump's Clock, so there is nothing to
+ * implement. */
+talk_host_error_code talk_clock_capability(talk_core *c, const talk_costs *costs, talk_capability_def **out);
+talk_host_error_code talk_calendar_capability(talk_core *c, const talk_calendar_impl *impl, const talk_costs *costs, talk_capability_def **out);
+talk_host_error_code talk_locale_capability(talk_core *c, const talk_locale_impl *impl, const talk_costs *costs, talk_capability_def **out);
+talk_host_error_code talk_console_capability(talk_core *c, const talk_console_impl *impl, const talk_costs *costs, talk_capability_def **out);
+
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);
 void talk_call_script_name(const talk_call *c, const char **s, size_t *len);
