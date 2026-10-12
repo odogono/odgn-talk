@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker, evaluate, campaign, withWatchdog } from '../src/controller';
@@ -39,6 +39,45 @@ test('watchdog terminates a stalled operation and a healthy worker can still exe
     ).toEqual([]);
   } finally {
     healthy.close();
+  }
+});
+
+test('late output from a stopped worker cannot answer its replacement request', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'northtalk-fuzz-'));
+  const entrypoint = join(dir, 'worker.ts');
+  await writeFile(
+    entrypoint,
+    `import { createInterface } from 'node:readline';
+process.on('SIGTERM', () => setTimeout(() => process.exit(0), 300));
+for await (const line of createInterface({ input: process.stdin })) {
+  const request = JSON.parse(line);
+  if (request.type === 'capabilities') {
+    setTimeout(() => console.log(JSON.stringify({
+      version: 1, features: ['compute'], languageVersion: '1.0-rc.2', costModel: '0'
+    })), 200);
+  } else {
+    setTimeout(() => {
+      console.log(JSON.stringify({ findings: [] }));
+      process.exit(0);
+    }, 100);
+  }
+}
+`,
+  );
+  const worker = new Worker({ entrypoint });
+  const c = generate('1', { features: ['compute'], witness: true });
+  try {
+    await worker.supports(c, 2000);
+    await expect(worker.request({ type: 'run' }, 10)).rejects.toThrow(
+      'timeout',
+    );
+    expect(await worker.supports(c, 2000)).toMatchObject({
+      version: 1,
+      features: ['compute'],
+    });
+  } finally {
+    worker.close();
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
