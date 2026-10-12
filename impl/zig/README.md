@@ -269,8 +269,25 @@ Function Value while a scope is open. A Host return acknowledges the opening
 or closing with a `scope` record before its result is checked. When the Run
 ends, the Core calls each slot's abandonment Operation, newest first, with
 `automatic` set and nothing charged; a failure disables the Grant, so later
-calls raise `capability disabled`. Segment-bound Operations aren't implemented
-yet, so `talk_define_capability` refuses them.
+calls raise `capability disabled`.
+
+Segment-bound Operations come from `talk_define_segment_capability`, which
+makes each Grant its own Segment Coordinator, or
+`talk_define_coordinated_capability`, which maps each Grant's binding to one
+when the Grant is made; `talk_define_capability` refuses them. A Run's first
+Segment-bound call in a Segment enrolls its Grant and calls the coordinator's
+`begin`, after the call's checks and charges. Later calls through Grants
+mapped to the same coordinator enroll them with no hook, and any other is
+`segment participant conflict`, uncharged. When the Segment ends, after
+abandonment, the participant commits, unless the Segment faulted or was
+cancelled, or abandonment failed on a participating Grant, when it rolls back.
+A failed commit rolls back too, restores the Script Variables to the
+Segment's base, which a Script with Segment-bound Grants keeps at each
+Segment's start, and ends the Run `effect failed`. An `unknown` outcome or a
+failed rollback should stop the Group with `effect state unknown`; until
+Stop arrives in step 4, an `unknown` begin raises `host error` after a
+rollback attempt, an `unknown` commit ends the Run `effect failed` as a failed
+one does, and a failed rollback is reported but stops nothing.
 
 `clock`, `calendar`, `locale` and `console` come from factories with chapter
 7's fixed declarations ([standard](src/machine/standard.zig)). `clock.now`

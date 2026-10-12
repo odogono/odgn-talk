@@ -186,7 +186,23 @@ pub const Run = struct {
     scopes: std.ArrayList(OpenScope) = .empty,
     /// The Segments it has ended, so its current one is `.s<segments + 1>`.
     segments: u32 = 0,
+    /// Its Segment's participant, once a Segment-bound call enrolls one.
+    participant: ?Participant = null,
+    /// Its Script's Variables when its Segment began, which a failed commit
+    /// restores; only for a Script with Segment-bound Operations.
+    segment_base: ?[]*Value = null,
 };
+
+/// A Segment's participant: its Segment Coordinator and the Grants enrolled
+/// in it, in enrollment order.
+pub const Participant = struct {
+    coordinator: capabilities.Coordinator,
+    grants: std.ArrayList(*ScriptGrant) = .empty,
+};
+
+/// An effect failure that ends a Run `effect failed` (chapter 6, Effect
+/// failures).
+pub const EffectFailure = struct { grant: []const u8, phase: []const u8, status: []const u8, scope: ?[]const u8 = null };
 
 /// A Join's members, in start order.
 pub const Join = struct {
@@ -316,6 +332,9 @@ pub const Script = struct {
     work: std.ArrayList(Work) = .empty,
     /// Its Runs that are suspended or ready, which its state counts.
     live: std.ArrayList(*Run) = .empty,
+    /// Whether any of its Grants has Segment-bound Operations, so its Runs
+    /// keep a Segment base.
+    effects: bool = false,
     runs: u64 = 0,
     /// The Fuel and allocation of its Runs that have ended, and how many
     /// ended in a Limit Fault, for its Counters.
@@ -777,6 +796,9 @@ pub const Group = struct {
             return .{ .refused = oversized.len };
         }
         if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, s.imports, options.grants_as_used);
+        for (s.grants) |sg| if (sg.grant.coordinator != null) {
+            s.effects = true;
+        };
         s.objects = try a.alloc(NamedObject, options.objects.len);
         for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
         s.variables = try g.newValues(s.unit.variables.len, &.{}, &.{});
@@ -953,8 +975,21 @@ pub const Group = struct {
     pub fn deliverTo(g: *Group, to: *objects.Object, message: []const u8, args: []*Value, request: bool) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = try g.gpa.dupe(u8, ""), .delivery = .{ .id = id, .message = try g.gpa.dupe(u8, message), .args = try g.gpa.dupe(*Value, args), .request = request, .target = to, .at = to } } });
+        try g.queueDelivery("", .{ .id = id, .message = message, .args = args, .request = request, .target = to, .at = to });
         return id;
+    }
+
+    /// Queues a Delivery Input with its own copies of the names and the
+    /// argument list; a refusal leaves none of them behind.
+    fn queueDelivery(g: *Group, to: []const u8, d: Delivery) !void {
+        const script_name = try g.gpa.dupe(u8, to);
+        errdefer g.gpa.free(script_name);
+        var copy = d;
+        copy.message = try g.gpa.dupe(u8, d.message);
+        errdefer g.gpa.free(copy.message);
+        copy.args = try g.gpa.dupe(*Value, d.args);
+        errdefer g.gpa.free(copy.args);
+        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = script_name, .delivery = copy } });
     }
 
     pub fn script(g: *Group, name: []const u8) ?*Script {
@@ -966,13 +1001,15 @@ pub const Group = struct {
     pub fn deliver(g: *Group, to: []const u8, message: []const u8, args: []*Value, request: bool) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = try g.gpa.dupe(u8, to), .delivery = .{ .id = id, .message = try g.gpa.dupe(u8, message), .args = try g.gpa.dupe(*Value, args), .request = request } } });
+        try g.queueDelivery(to, .{ .id = id, .message = message, .args = args, .request = request });
         return id;
     }
 
     /// Queues an answer or failure for the suspending call `id`. Takes it.
     pub fn settle(g: *Group, id: []const u8, with: Resume) !void {
-        try g.inputs.append(g.gpa, .{ .settle = .{ .id = try g.gpa.dupe(u8, id), .with = with } });
+        const copy = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(copy);
+        try g.inputs.append(g.gpa, .{ .settle = .{ .id = copy, .with = with } });
     }
 
     fn releaseResume(g: *Group, with: Resume) void {
@@ -1053,6 +1090,8 @@ pub const Group = struct {
         g.abandonUnwinding(run);
         g.dropJoin(run);
         run.scopes.deinit(g.gpa);
+        if (run.participant) |*p| p.grants.deinit(g.gpa);
+        g.dropBase(run);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
         g.releaseDelivery(run.delivery);
@@ -1327,6 +1366,10 @@ pub const Group = struct {
             return e;
         };
         run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message };
+        g.takeBase(run) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
         // A Run that can't go on, as when the Group's allocator refuses,
         // is dropped whole.
         const outcome = g.dispatchRun(s, run, d) catch |e| {
@@ -1427,6 +1470,10 @@ pub const Group = struct {
         };
         run.segment_fuel = run.fuel;
         run.segment_alloc = run.alloc;
+        g.takeBase(run) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
         const outcome = g.resumed(run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -2042,6 +2089,98 @@ pub const Group = struct {
 
     /// Ends a Segment: writes `seg`, and either keeps the suspended Run or
     /// finishes it with its `run` record.
+    /// Keeps the Script's Variables as the new Segment's base, for a Script
+    /// with Segment-bound Operations.
+    fn takeBase(g: *Group, run: *Run) !void {
+        g.dropBase(run);
+        if (!run.script.effects) return;
+        const base = try g.gpa.dupe(*Value, run.script.variables);
+        for (base) |v| _ = v.retain();
+        run.segment_base = base;
+    }
+
+    fn dropBase(g: *Group, run: *Run) void {
+        const base = run.segment_base orelse return;
+        releaseAll(base, g.gpa);
+        run.segment_base = null;
+    }
+
+    /// Puts the Script's Variables back as they were when the Segment began.
+    fn restoreBase(g: *Group, run: *Run) void {
+        const base = run.segment_base orelse return;
+        for (run.script.variables, base) |*v, b| {
+            v.*.release();
+            v.* = b.retain();
+        }
+        _ = g;
+    }
+
+    /// Calls a participant hook, with an `effect` record. `begin` sees only
+    /// the first enrolled Grant.
+    fn hook(g: *Group, run: *Run, phase: capabilities.Phase) capabilities.EffectStatus {
+        const p = &run.participant.?;
+        const a = g.scratch.allocator();
+        const enrolled = if (phase == .begin) p.grants.items[0..1] else p.grants.items;
+        const grants = a.alloc(capabilities.SegmentGrant, enrolled.len) catch return .unknown;
+        for (enrolled, grants) |sg, *x| x.* = .{ .name = sg.name.ptr, .name_len = sg.name.len, .binding = sg.grant.binding };
+        const first = p.grants.items[0];
+        const segment = g.segmentId(run);
+        const context: capabilities.SegmentContext = .{ .group = g, .script = run.script.name, .run = run.id, .segment = segment, .grant = first.name, .binding = first.grant.binding, .now = g.clock, .grants = grants };
+        const status = p.coordinator.hook(p.coordinator.context, phase, &context);
+        g.write("effect {s} grant={s} phase={s} status={s}\n", .{ segment, first.name, @tagName(phase), @tagName(status) });
+        if (status != .ok) g.write("effect-failure {s} grant={s} segment={s} phase={s} status={s}\n", .{ run.id, first.name, segment, @tagName(phase), @tagName(status) });
+        return status;
+    }
+
+    /// Ends the participant, if there is one: a commit when `commit` is
+    /// set, else a rollback. A commit that fails is rolled back. Returns
+    /// the failure that ends the Run `effect failed`, if one does.
+    fn finalize(g: *Group, run: *Run, commit: bool) ?EffectFailure {
+        if (run.participant == null) return null;
+        defer {
+            run.participant.?.grants.deinit(g.gpa);
+            run.participant = null;
+        }
+        const first = run.participant.?.grants.items[0].name;
+        if (commit) {
+            const status = g.hook(run, .commit);
+            if (status == .ok) return null;
+            _ = g.hook(run, .rollback);
+            return .{ .grant = first, .phase = "commit", .status = @tagName(status) };
+        }
+        _ = g.hook(run, .rollback);
+        return null;
+    }
+
+    /// Enrolls the call's Grant in the Segment's participant before a
+    /// Segment-bound Operation runs, beginning one for the Segment's first.
+    /// A failed `begin` leaves none, and raises `host error`.
+    fn enroll(g: *Group, run: *Run, granted: *ScriptGrant, where: []const model.Pair) !void {
+        if (run.participant) |*p| {
+            if (std.mem.indexOfScalar(*ScriptGrant, p.grants.items, granted) == null) try p.grants.append(g.gpa, granted);
+            return;
+        }
+        run.participant = .{ .coordinator = granted.grant.coordinator.? };
+        try run.participant.?.grants.append(g.gpa, granted);
+        const status = g.hook(run, .begin);
+        if (status == .ok) return;
+        // An uncertain begin may have acquired something.
+        if (status == .unknown) _ = g.hook(run, .rollback);
+        run.participant.?.grants.deinit(g.gpa);
+        run.participant = null;
+        return g.raise("host error", where);
+    }
+
+    /// `segment participant conflict` for a Segment-bound call through a
+    /// Grant whose coordinator isn't the participant's.
+    fn participantConflict(g: *Group, run: *const Run, granted: *const ScriptGrant, where: []const model.Pair) error{ Raised, OutOfMemory }!void {
+        const p = run.participant orelse return;
+        if (p.coordinator.identity == granted.grant.coordinator.?.identity) return;
+        const participant = model.text(g.gpa, p.grants.items[0].name) catch return error.OutOfMemory;
+        defer participant.release();
+        return g.raise("segment participant conflict", &.{ where[0], where[1], .{ .key = "participant", .value = participant } });
+    }
+
     /// The current Segment's id, `<run>.s<N>`.
     fn segmentId(g: *Group, run: *const Run) []const u8 {
         return std.fmt.allocPrint(g.scratch.allocator(), "{s}.s{d}", .{ run.id, run.segments + 1 }) catch "";
@@ -2050,8 +2189,11 @@ pub const Group = struct {
     /// Automatic abandonment as a Run ends: each occupied slot's
     /// abandonment Operation, newest first, as a Host call that charges
     /// nothing. A failure reports `effect-failure` and disables the Grant.
-    fn abandonScopes(g: *Group, run: *Run) void {
+    /// Returns the first failure on a Grant in the Segment's participant,
+    /// which prevents its commit.
+    fn abandonScopes(g: *Group, run: *Run) ?EffectFailure {
         const a = g.scratch.allocator();
+        var prevented: ?EffectFailure = null;
         while (run.scopes.pop()) |slot| {
             const capability = slot.grant.grant.capability;
             const op = &capability.operations[slot.abandon];
@@ -2081,8 +2223,13 @@ pub const Group = struct {
                 w.print("scope {s} grant={s} name={s} action={s}\n", .{ id, slot.grant.name, slot.name, if (ok) "abandoned" else "failed" }) catch {};
                 if (!ok) w.print("effect-failure {s} grant={s} segment={s} phase=abandon status=unknown scope={s}\n", .{ run.id, slot.grant.name, segment, slot.name }) catch {};
             }
-            if (!ok) slot.grant.disabled = true;
+            if (!ok) {
+                slot.grant.disabled = true;
+                const participating = if (run.participant) |pt| std.mem.indexOfScalar(*ScriptGrant, pt.grants.items, slot.grant) != null else false;
+                if (participating and prevented == null) prevented = .{ .grant = slot.grant.name, .phase = "abandon", .status = "unknown", .scope = slot.name };
+            }
         }
+        return prevented;
     }
 
     /// `scope open` at a boundary that would suspend while a scope is open,
@@ -2096,8 +2243,23 @@ pub const Group = struct {
         return g.raise("scope open", &.{ .{ .key = "capability", .value = capability }, .{ .key = "scope", .value = scope } });
     }
 
-    fn endSegment(g: *Group, s: *Script, run: *Run, outcome: Outcome) !void {
-        if (outcome != .suspended) g.abandonScopes(run);
+    fn endSegment(g: *Group, s: *Script, run: *Run, ended: Outcome) !void {
+        var outcome = ended;
+        const segment = g.segmentId(run);
+        // Abandon leftover scopes, then commit the participant if they
+        // permit it, or roll it back.
+        var failure: ?EffectFailure = if (outcome != .suspended) g.abandonScopes(run) else null;
+        const commits = failure == null and outcome != .faulted and outcome != .cancelled;
+        if (g.finalize(run, commits)) |f| failure = f;
+        if (failure) |f| {
+            g.restoreBase(run);
+            if (outcome == .suspended) if (run.waiting) |p| if (p.call) |c| g.write("abandon {s}\n", .{c.id});
+            switch (outcome) {
+                .returned, .errored => |v| v.release(),
+                else => {},
+            }
+            outcome = .{ .effect_failed = f };
+        }
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
@@ -2130,6 +2292,7 @@ pub const Group = struct {
                 .dropped => "dropped",
                 .cancelled => "cancel",
                 .passed => "pass",
+                .effect_failed => "effect-failed",
                 .selected => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
@@ -2156,6 +2319,7 @@ pub const Group = struct {
                 .unhandled, .clause_failed => "unhandled",
                 .dropped => "dropped",
                 .cancelled => "cancelled",
+                .effect_failed => "effect-failed",
                 .suspended, .selected => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
@@ -2177,6 +2341,11 @@ pub const Group = struct {
                     display.writeTrace(out, e) catch {};
                 },
                 .faulted => out.writeAll(" limit=fuel") catch {},
+                .effect_failed => |f| {
+                    out.print(" effect={{grant: \"{s}\", segment: \"{s}\", phase: \"{s}\", status: \"{s}\"", .{ f.grant, segment, f.phase, f.status }) catch {};
+                    if (f.scope) |n| out.print(", scope: \"{s}\"", .{n}) catch {};
+                    out.writeAll("}") catch {};
+                },
                 else => {},
             }
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
@@ -2193,6 +2362,7 @@ pub const Group = struct {
             .unhandled, .clause_failed, .passed => try g.climb(s, d),
             .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
             .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
+            .effect_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } }),
             .errored => |e| {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
@@ -2576,6 +2746,9 @@ pub const Group = struct {
         /// It reached `pass`: the message goes on up the path.
         passed,
         cancelled,
+        /// Its participant's commit failed, or failed abandonment on a
+        /// participating Grant prevented it.
+        effect_failed: EffectFailure,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -4512,6 +4685,15 @@ pub const Group = struct {
                 defer scope.release();
                 return g.raise(code, &.{ where[0], where[1], .{ .key = "scope", .value = scope } });
             }
+        }
+        if (decl.segment_bound) {
+            m.uncharged = true;
+            try g.participantConflict(run, granted, &where);
+            m.uncharged = false;
+            // A failed begin leaves the call's declared cost spent.
+            m.declared = decl.cost.fuel;
+            m.alloc_extra = decl.cost.alloc;
+            try g.enroll(run, granted, &where);
         }
 
         run.calls += 1;

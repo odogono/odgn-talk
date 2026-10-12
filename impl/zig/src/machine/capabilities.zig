@@ -428,6 +428,9 @@ pub const Operation = struct {
     /// Capability, whose every undeclared failure is `host error`.
     closed_errors: bool = false,
     scope: Scope = .none,
+    /// Whether its effects join the Segment's participant, deferred to the
+    /// Segment's outcome.
+    segment_bound: bool = false,
     host: HostFn,
     /// The Core's own checks after the Shapes, before the call is charged:
     /// a Standard Capability's option words and Locale tags.
@@ -452,12 +455,58 @@ pub const Problem = union(enum) {
     bad_locale: []const u8,
 };
 
+/// A Segment Coordinator's hooks (embedding/scoped-effects.md).
+pub const Phase = enum { begin, commit, rollback };
+
+pub const EffectStatus = enum { ok, failed, unknown };
+
+/// A Grant enrolled in a Segment's participant, laid out as talk.h's
+/// `talk_segment_grant`.
+pub const SegmentGrant = extern struct { name: [*]const u8, name_len: usize, binding: ?*anyopaque };
+
+/// What a hook is told: whose Segment it is, the first enrolled Grant and
+/// every enrolled Grant, in enrollment order.
+pub const SegmentContext = struct {
+    group: ?*anyopaque,
+    script: []const u8,
+    run: []const u8,
+    segment: []const u8,
+    grant: []const u8,
+    binding: ?*anyopaque,
+    now: model.dates.Instant,
+    grants: []const SegmentGrant,
+};
+
+/// A Segment Coordinator: Grants with the same `identity` share a
+/// Segment's participant.
+pub const Coordinator = struct {
+    identity: usize,
+    hook: *const fn (context: ?*anyopaque, phase: Phase, s: *const SegmentContext) EffectStatus,
+    context: ?*anyopaque,
+};
+
+/// How a Capability with Segment-bound Operations maps a new Grant to its
+/// Coordinator; null refuses the Grant.
+pub const CoordinatorOf = struct {
+    call: *const fn (context: ?*anyopaque, g: *const Grant) ?Coordinator,
+    context: ?*anyopaque,
+};
+
 /// A Capability's definition: its Operations, ordered by name.
 pub const Capability = struct {
     name: []const u8,
     operations: []Operation,
     /// The Grants made from it, which it owns.
     grants: std.ArrayList(*Grant) = .empty,
+    /// For a Capability with Segment-bound Operations, how each Grant gets
+    /// its Segment Coordinator.
+    coordinator_of: ?CoordinatorOf = null,
+
+    /// Whether any of its Operations is Segment-bound.
+    pub fn segmentBound(c: *const Capability) bool {
+        for (c.operations) |op| if (op.segment_bound) return true;
+        return false;
+    }
 
     pub fn find(c: *const Capability, name: []const u8) ?usize {
         for (c.operations, 0..) |op, i| if (std.mem.eql(u8, op.name, name)) return i;
@@ -470,6 +519,13 @@ pub const Capability = struct {
     /// closes the same scope, takes no arguments and returns Nothing, the
     /// same one for every opener of that scope.
     pub fn validScopes(c: *const Capability) bool {
+        for (c.operations) |op| {
+            if (op.segment_bound and op.mode != .immediate) return false;
+            // Every lifecycle Operation of a scope agrees on being
+            // Segment-bound.
+            const name = op.scope.name() orelse continue;
+            for (c.operations) |other| if (other.scope.name()) |n| if (std.mem.eql(u8, n, name) and other.segment_bound != op.segment_bound) return false;
+        }
         for (c.operations) |op| switch (op.scope) {
             .none => {},
             .closes => |n| if (op.mode != .immediate or !scopeWord(n)) return false,
@@ -508,6 +564,8 @@ pub const Grant = struct {
     /// Which Operations, by index into the Capability's.
     operations: []bool,
     binding: ?*anyopaque = null,
+    /// Its Segment Coordinator, mapped once when it is made.
+    coordinator: ?Coordinator = null,
 };
 
 /// What an Operation's Host function receives.
