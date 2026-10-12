@@ -388,6 +388,68 @@ test "quantity arithmetic follows kind-order Base Unit factors" {
     try std.testing.expectEqual(std.math.Order.gt, try x.order(y));
     try std.testing.expect(!try x.equal(y));
 }
+test "equality never errors and ordering follows Value Semantics" {
+    const gpa = std.testing.allocator;
+    const display = @import("display.zig");
+    const equal = .{
+        .{ "1.0", "1", true },
+        .{ "1", "\"1\"", false },
+        .{ "5", "5 kg", false },
+        .{ "nothing", "\"\"", false },
+        .{ "5 kg", "5000 g", true },
+        .{ "1 L", "1000 mL", true },
+        .{ "5 kg", "5 m", false },
+        .{ "1 month", "30 days", false },
+        .{ "2026-09-27", "2026-09-27T00:00:00", false },
+        .{ "[1, 2]", "[1.00, 2]", true },
+        .{ "1..2", "1.0..2", true },
+    };
+    inline for (equal) |example| {
+        const x = try display.parse(gpa, example[0], .{});
+        defer x.release();
+        const y = try display.parse(gpa, example[1], .{});
+        defer y.release();
+        try std.testing.expectEqual(example[2], try x.equal(y));
+    }
+    const less = .{
+        .{ "1", "2" },
+        .{ "999 g", "1 kg" },
+        .{ "\"Zebra\"", "\"apple\"" },
+        .{ "\"ab\"", "\"abc\"" },
+        .{ "<<0x01, 0xFF>>", "<<0x02>>" },
+        .{ "<<0x01>>", "<<0x01, 0x00>>" },
+        .{ "1969-12-31T23:59:59.999999999Z", "1970-01-01T00:00:00Z" },
+        .{ "2026-09-26", "2026-09-27" },
+        .{ "2026-09-27T14:30:00", "2026-09-27T14:30:00.5" },
+        .{ "[1, \"b\"]", "[2, \"a\"]" },
+        .{ "[1, 2]", "[1, 2, 0]" },
+    };
+    inline for (less) |example| {
+        const x = try display.parse(gpa, example[0], .{});
+        defer x.release();
+        const y = try display.parse(gpa, example[1], .{});
+        defer y.release();
+        try std.testing.expectEqual(std.math.Order.lt, try x.order(y));
+        try std.testing.expectEqual(std.math.Order.gt, try y.order(x));
+    }
+    const unordered = .{
+        .{ "1", "\"1\"" },
+        .{ "5 kg", "5 m" },
+        .{ "2026-09-27", "2026-09-27T00:00:00" },
+        .{ "true", "false" },
+        .{ "nothing", "nothing" },
+        .{ "{a: 1}", "{a: 2}" },
+        .{ "1..2", "1..3" },
+        .{ "[1, \"a\"]", "[1, 2]" },
+    };
+    inline for (unordered) |example| {
+        const x = try display.parse(gpa, example[0], .{});
+        defer x.release();
+        const y = try display.parse(gpa, example[1], .{});
+        defer y.release();
+        try std.testing.expectError(error.CantCompare, x.order(y));
+    }
+}
 test "map copy-on-write and preserved insertion order" {
     const gpa = std.testing.allocator;
     const n = try scalar(gpa, .nothing);
