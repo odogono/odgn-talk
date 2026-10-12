@@ -1,39 +1,166 @@
 // Spec chapter 1; Unicode 18 UAX #15 / UAX #29 revision 49.
 // No platform normalization, segmentation, case mapping or Unicode regexes.
 import {
-  combining,
-  category,
-  whitespace,
-  decomposition,
-  composition,
-  grapheme,
-  indic as tables_indic,
-  pictographic,
-  folding,
-  uppercase,
-  caseIgnorable,
-  cased,
-  finalSigma,
-  lowercase,
+  caseIgnorable as packedCaseIgnorable,
+  cased as packedCased,
+  category as packedCategory,
+  combining as packedCombining,
+  compositionExclusions as packedCompositionExclusions,
+  decomposition as packedDecomposition,
+  finalSigma as packedFinalSigma,
+  folding as packedFolding,
+  grapheme as packedGrapheme,
+  indic as packedIndic,
+  lowercase as packedLowercase,
+  pictographic as packedPictographic,
+  uppercase as packedUppercase,
+  whitespace as packedWhitespace,
 } from './generated/unicode';
 import { invalidValue } from './errors';
 
-type Ranges<T> = readonly (readonly [number, number, T])[];
-const lookup = <T>(ranges: Ranges<T>, cp: number, fallback: T): T => {
+// The generator packs each table as unsigned varints of five bits per digit,
+// least significant first, with 32 marking a following digit.
+const unpack = (text: string): number[] => {
+  const numbers: number[] = [];
+  let value = 0,
+    scale = 1;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // Digits are A-Z, a-z, 0-9, + and /.
+    const digit =
+      c >= 97
+        ? c - 71
+        : c >= 65
+          ? c - 65
+          : c >= 48
+            ? c + 4
+            : c === 43
+              ? 62
+              : 63;
+    value += (digit & 31) * scale;
+    if (digit & 32) {
+      scale *= 32;
+    } else {
+      numbers.push(value);
+      value = 0;
+      scale = 1;
+    }
+  }
+  return numbers;
+};
+const unzigzag = (n: number) => (n & 1 ? -(n + 1) / 2 : n / 2);
+
+type Ranges<T> = {
+  ends: Uint32Array;
+  indexes: Uint8Array | undefined;
+  starts: Uint32Array;
+  values: readonly T[];
+};
+// Fields are packed column by column; see tools/unicode/generate.ts.
+const ranges = <T>(text: string, values: readonly T[]): Ranges<T> => {
+  const numbers = unpack(text);
+  const count = numbers[0]!;
+  const starts = new Uint32Array(count);
+  const ends = new Uint32Array(count);
+  const indexes = values.length > 1 ? new Uint8Array(count) : undefined;
+  let previous = -1;
+  for (let i = 0; i < count; i++) {
+    starts[i] = previous + 1 + numbers[1 + i]!;
+    previous = ends[i] = starts[i]! + numbers[1 + count + i]!;
+    if (indexes) {
+      indexes[i] = numbers[1 + 2 * count + i]!;
+    }
+  }
+  return { ends, indexes, starts, values };
+};
+const set = (text: string) => ranges(text, [1]);
+
+const lookup = <T>(table: Ranges<T>, cp: number, fallback: T): T => {
+  const { starts, ends } = table;
   let lo = 0,
-    hi = ranges.length - 1;
+    hi = starts.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
-    const [start, end, value] = ranges[mid]!;
-    if (cp < start) {
+    if (cp < starts[mid]!) {
       hi = mid - 1;
-    } else if (cp > end) {
+    } else if (cp > ends[mid]!) {
       lo = mid + 1;
     } else {
-      return value;
+      return table.values[table.indexes ? table.indexes[mid]! : 0]!;
     }
   }
   return fallback;
+};
+
+const mapping = (text: string, lists: boolean): Map<number, number[]> => {
+  const numbers = unpack(text);
+  const [count, fromPrevious] = numbers as [number, number];
+  const lengths = lists ? 2 + count : 0;
+  const firsts = 2 + (lists ? 2 : 1) * count;
+  let next = firsts + count;
+  const result = new Map<number, number[]>();
+  let key = -1,
+    first = 0,
+    other = 0;
+  for (let i = 0; i < count; i++) {
+    key += numbers[2 + i]! + 1;
+    first = (fromPrevious ? first : key) + unzigzag(numbers[firsts + i]!);
+    const values = [first];
+    for (let n = lists ? numbers[lengths + i]! : 1; n > 1; n--) {
+      other += unzigzag(numbers[next++]!);
+      values.push(other);
+    }
+    result.set(key, values);
+  }
+  return result;
+};
+
+const category = ranges(...packedCategory);
+const combining = ranges(...packedCombining);
+const grapheme = ranges(...packedGrapheme);
+const indicTable = ranges(...packedIndic);
+const pictographic = set(packedPictographic);
+const whitespace = set(packedWhitespace);
+const cased = set(packedCased);
+const caseIgnorable = set(packedCaseIgnorable);
+const decomposition = mapping(packedDecomposition, true);
+const folding = new Map(
+  Array.from(mapping(packedFolding, false), ([cp, [folded]]) => [cp, folded!]),
+);
+const uppercase = mapping(packedUppercase, true);
+const lowercase = mapping(packedLowercase, true);
+const finalSigma = mapping(packedFinalSigma, true);
+// Every two-part canonical decomposition composes unless it is excluded.
+const composition = new Map<number, number>();
+{
+  const excluded = new Set<number>();
+  let key = -1;
+  for (const gap of unpack(packedCompositionExclusions)) {
+    excluded.add((key += gap + 1));
+  }
+  for (const [cp, parts] of decomposition) {
+    if (parts.length === 2 && !excluded.has(cp)) {
+      composition.set(parts[0]! * 0x11_00_00 + parts[1]!, cp);
+    }
+  }
+}
+
+/** Decoded tables, for checking the packing against the generator. */
+export const unicodeTables = {
+  category,
+  combining,
+  grapheme,
+  indic: indicTable,
+  pictographic,
+  whitespace,
+  cased,
+  caseIgnorable,
+  decomposition,
+  composition,
+  folding,
+  uppercase,
+  lowercase,
+  finalSigma,
 };
 
 const surrogate = /[\uD800-\uDFFF]/;
@@ -92,7 +219,7 @@ const decompose = (cp: number, output: number[]): void => {
       output.push(TBASE + (index % TCOUNT));
     }
   } else {
-    const parts = decomposition[cp];
+    const parts = decomposition.get(cp);
     if (parts) {
       for (const part of parts) {
         decompose(part, output);
@@ -117,7 +244,7 @@ const compose = (a: number, b: number): number | undefined => {
   ) {
     return a + b - TBASE;
   }
-  return composition[a * 0x11_00_00 + b];
+  return composition.get(a * 0x11_00_00 + b);
 };
 
 // Below U+0300 nothing has a non-zero combining class, decomposes away under
@@ -190,7 +317,7 @@ export const characterBoundaries = (s: string): number[] => {
   for (const ch of s) {
     const cp = ch.codePointAt(0)!;
     const current = lookup(grapheme, cp, 'Other');
-    const indic = lookup(tables_indic, cp, 'None');
+    const indic = lookup(indicTable, cp, 'None');
     const pic = lookup(pictographic, cp, 0) === 1;
     let breaks = true;
     if (previous === 'CR' && current === 'LF') {
@@ -247,7 +374,7 @@ export const characterBoundaries = (s: string): number[] => {
 export const simpleFold = (s: string): string => {
   assertScalarText(s);
   return Array.from(s, ch =>
-    String.fromCodePoint(folding[ch.codePointAt(0)!] ?? ch.codePointAt(0)!),
+    String.fromCodePoint(folding.get(ch.codePointAt(0)!) ?? ch.codePointAt(0)!),
   ).join('');
 };
 
@@ -255,7 +382,7 @@ export const upper = (s: string): string => {
   assertScalarText(s);
   return normalizeNFC(
     Array.from(s, ch =>
-      fromPoints(uppercase[ch.codePointAt(0)!] ?? [ch.codePointAt(0)!]),
+      fromPoints(uppercase.get(ch.codePointAt(0)!) ?? [ch.codePointAt(0)!]),
     ).join(''),
   );
 };
@@ -276,8 +403,8 @@ export const lower = (s: string): string => {
   const output: string[] = [];
   for (let i = 0; i < cps.length; i++) {
     const cp = cps[i]!;
-    const sigma = context && !afterCased[i] ? finalSigma[cp] : undefined;
-    output.push(fromPoints(sigma ?? lowercase[cp] ?? [cp]));
+    const sigma = context && !afterCased[i] ? finalSigma.get(cp) : undefined;
+    output.push(fromPoints(sigma ?? lowercase.get(cp) ?? [cp]));
     if (!lookup(caseIgnorable, cp, 0)) {
       context = Boolean(lookup(cased, cp, 0));
     }

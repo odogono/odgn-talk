@@ -1,7 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { verifyFile } from '../../../tools/unicode/generate';
+import {
+  generateUnicodeData,
+  verifyFile,
+} from '../../../tools/unicode/generate';
 import unicode from '../../../spec/data/unicode.toml';
 import {
   assertScalarText,
@@ -13,6 +16,7 @@ import {
   generalCategory,
   isWhiteSpace,
   scalarCount,
+  unicodeTables,
 } from '../src/unicode';
 
 const dataRoot = resolve(import.meta.dir, '../../../.cache/unicode/18.0.0');
@@ -29,6 +33,47 @@ const hexText = (s: string) =>
 beforeAll(() => {
   for (const file of unicode.file) {
     verifyFile(file.path, readFileSync(resolve(dataRoot, file.path)));
+  }
+});
+
+test('packed tables decode to exactly the generated data', () => {
+  const data = generateUnicodeData(
+    new Map(
+      (unicode.file as { path: string }[]).map(file => [
+        file.path,
+        readFileSync(resolve(dataRoot, file.path), 'utf8'),
+      ]),
+    ),
+  );
+  const rangeTables = [
+    'category',
+    'combining',
+    'grapheme',
+    'indic',
+    'pictographic',
+    'whitespace',
+    'cased',
+    'caseIgnorable',
+  ] as const;
+  for (const name of rangeTables) {
+    const { starts, ends, indexes, values } = unicodeTables[name];
+    const decoded = Array.from(starts, (start, i) => [
+      start,
+      ends[i],
+      values[indexes ? indexes[i]! : 0],
+    ]);
+    expect(decoded, name).toEqual(data[name]);
+  }
+  const mappings = [
+    'decomposition',
+    'composition',
+    'folding',
+    'uppercase',
+    'lowercase',
+    'finalSigma',
+  ] as const;
+  for (const name of mappings) {
+    expect(Object.fromEntries(unicodeTables[name]), name).toEqual(data[name]);
   }
 });
 
