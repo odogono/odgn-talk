@@ -975,8 +975,21 @@ pub const Group = struct {
     pub fn deliverTo(g: *Group, to: *objects.Object, message: []const u8, args: []*Value, request: bool) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = try g.gpa.dupe(u8, ""), .delivery = .{ .id = id, .message = try g.gpa.dupe(u8, message), .args = try g.gpa.dupe(*Value, args), .request = request, .target = to, .at = to } } });
+        try g.queueDelivery("", .{ .id = id, .message = message, .args = args, .request = request, .target = to, .at = to });
         return id;
+    }
+
+    /// Queues a Delivery Input with its own copies of the names and the
+    /// argument list; a refusal leaves none of them behind.
+    fn queueDelivery(g: *Group, to: []const u8, d: Delivery) !void {
+        const script_name = try g.gpa.dupe(u8, to);
+        errdefer g.gpa.free(script_name);
+        var copy = d;
+        copy.message = try g.gpa.dupe(u8, d.message);
+        errdefer g.gpa.free(copy.message);
+        copy.args = try g.gpa.dupe(*Value, d.args);
+        errdefer g.gpa.free(copy.args);
+        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = script_name, .delivery = copy } });
     }
 
     pub fn script(g: *Group, name: []const u8) ?*Script {
@@ -988,13 +1001,15 @@ pub const Group = struct {
     pub fn deliver(g: *Group, to: []const u8, message: []const u8, args: []*Value, request: bool) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
-        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = try g.gpa.dupe(u8, to), .delivery = .{ .id = id, .message = try g.gpa.dupe(u8, message), .args = try g.gpa.dupe(*Value, args), .request = request } } });
+        try g.queueDelivery(to, .{ .id = id, .message = message, .args = args, .request = request });
         return id;
     }
 
     /// Queues an answer or failure for the suspending call `id`. Takes it.
     pub fn settle(g: *Group, id: []const u8, with: Resume) !void {
-        try g.inputs.append(g.gpa, .{ .settle = .{ .id = try g.gpa.dupe(u8, id), .with = with } });
+        const copy = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(copy);
+        try g.inputs.append(g.gpa, .{ .settle = .{ .id = copy, .with = with } });
     }
 
     fn releaseResume(g: *Group, with: Resume) void {
