@@ -328,6 +328,55 @@ static int object_test(void) {
     return bad;
 }
 
+static int library_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *base_source = "constant step = 10\nfunction bump n, by = step\n  return n + by\nend bump\n";
+    talk_library_source base_src = {"base", 4, "1", 1, base_source, strlen(base_source)};
+    talk_library *base = NULL, *top = NULL, *clash = NULL, *broken = NULL;
+    int bad = talk_compile_library(core, &base_src, NULL, 0, NULL, 0, &base) != TALK_OK;
+    /* A Library may import the stdlib's, which every Group holds. */
+    const char *top_source = "use bump from base\nuse padLeft from text\nfunction label n\n  return padLeft(bump(n) & \"\", 4, \"0\")\nend label\n";
+    talk_library_source top_src = {"top", 3, "1", 1, top_source, strlen(top_source)};
+    bad |= talk_compile_library(core, &top_src, &base, 1, NULL, 0, &top) != TALK_OK;
+    talk_library_source clash_src = {"text", 4, "1", 1, base_source, strlen(base_source)};
+    bad |= talk_compile_library(core, &clash_src, NULL, 0, NULL, 0, &clash) != TALK_OK;
+    talk_library_source broken_src = {"broken", 6, "1", 1, "function f\n  put 1 into 3\nend f\n", 30};
+    bad |= talk_compile_library(core, &broken_src, NULL, 0, NULL, 0, &broken) != TALK_LOAD_REFUSED;
+    /* Imports first, one per name, and never a stdlib name. */
+    bad |= talk_add_library(group, top) != TALK_LIBRARY_MISMATCH;
+    bad |= talk_add_library(group, base) != TALK_OK;
+    bad |= talk_add_library(group, base) != TALK_NAME_REUSED;
+    bad |= talk_add_library(group, clash) != TALK_RESERVED_NAME;
+    bad |= talk_add_library(group, top) != TALK_OK;
+    uint8_t id[32];
+    talk_library_identity(top, id);
+    const char *name = NULL;
+    size_t len = 0;
+    talk_library_name(top, &name, &len);
+    bad |= len != 3 || memcmp(name, "top", 3) != 0;
+    const char *source = "use label from top\nscript variable got\non go\n  put label(5) into got\nend go\n";
+    talk_load_options load = {"user", 4, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "refused code=\"library mismatch\"\n") == NULL;
+    bad |= strstr(trace, "refused code=\"reserved name\"\n") == NULL;
+    bad |= strstr(trace, "vars user got=\"0015\"\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -402,6 +451,7 @@ int main(void) {
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     return failures == 0 ? 0 : 1;
 }

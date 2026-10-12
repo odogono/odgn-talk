@@ -522,6 +522,33 @@ talk_host_error_code talk_dispose(talk_group *g, talk_object *o);
 talk_host_error_code talk_deliver(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id);
 talk_host_error_code talk_request(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
 
+/* Libraries (ADR 0020). A Library is compiled once per process and lives
+ * as long as the Core. The stdlib Libraries are always there. */
+typedef struct talk_library talk_library;
+typedef struct talk_library_source {
+    const char *name;
+    size_t name_len;
+    const char *version; /* the Host's own label */
+    size_t version_len;
+    const char *source;
+    size_t source_len;
+} talk_library_source;
+/* Compiles a Library. imports must hold every Library its `use` lines name,
+ * besides the stdlib's. declarations are talk.go's GrantDecls: Grants by the
+ * names the source uses, whose Operations' modes and Shapes its Capability
+ * calls are checked and lowered against; NULL gives none, enough only for a
+ * Library that makes no direct Capability call. A source that fails to
+ * parse or check is TALK_LOAD_REFUSED. */
+talk_host_error_code talk_compile_library(talk_core *c, const talk_library_source *src, talk_library *const *imports, size_t imports_len, const talk_load_grant *declarations, size_t declarations_len, talk_library **out);
+void talk_library_name(const talk_library *l, const char **s, size_t *len);
+void talk_library_version(const talk_library *l, const char **s, size_t *len);
+void talk_library_identity(const talk_library *l, uint8_t out[32]);
+/* Adds a compiled Library to the Group, writing its add-library record. A
+ * stdlib name is TALK_RESERVED_NAME, a name the Group holds
+ * TALK_NAME_REUSED, and an import the Group doesn't hold with the same
+ * identity TALK_LIBRARY_MISMATCH, each also a refused record. */
+talk_host_error_code talk_add_library(talk_group *g, talk_library *l);
+
 /* Inspects the Group. In step 1 it writes a vars record for each Script to
  * the Trace, as the Host Input vars does. */
 void talk_inspect(talk_group *g);

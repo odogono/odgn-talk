@@ -166,8 +166,8 @@ doesn't declare yet. Those fail only from step 6's conformance gate.
 `talk_script_counters` drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at
 a time. Loading a Script parses, checks and lowers it, runs its initialiser
 uncharged and writes its `load` record with its code identity, or its `diag`
-records and `TALK_LOAD_REFUSED`. Libraries, limits and Fuel Slices aren't
-reachable through `talk.h` yet.
+records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
+through `talk.h` yet.
 
 A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
@@ -276,6 +276,25 @@ so a message follows its object if it moves. A Run that ends `unhandled` or
 reaches `pass` sends the message on from the parent of the object whose
 Owning Script took it, and a Command Call with no Handler climbs from the
 parent of `me`. A message with no Owning Script left is reported `unhandled`.
+
+Libraries are compiled once per Core with `talk_compile_library`, against the
+Libraries they import and the Grant declarations their Capability calls are
+checked and lowered against. Their Constants are evaluated at compile time,
+since an initialiser may use only literals, Constants and Built-ins. A code
+identity covers each imported Library's identity, in the order the `use` lines
+first name them. `talk_add_library` writes the `add-library` record and refuses
+a stdlib name, a name the Group holds, or an import the Group doesn't hold.
+The seven stdlib Libraries, generated from `spec/stdlib/` into
+`src/generated/stdlib_sources.zig`, are compiled the first time a unit imports
+one, and every Group holds them. A Library's code runs in the caller's Run:
+each frame names the Library whose code it runs, so its constants, Unwind
+Table and positions are that unit's. `call-import` calls a Library function
+with its defaults, and a Command Call finds an imported Handler. An error raised
+in stdlib code looks like a Built-in's: its `at` names the call into the stdlib
+and the Core adds its `message`. Loading a Script checks the `needs` of every
+Library it imports against its Grants, at the `use` line, and `grantsAsUsed`
+keeps the Operations those `needs` call.
+
 `timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
 effects, Lambdas and Broadcasts come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
@@ -334,7 +353,8 @@ builds each Script's Grants, with their modes and arities, from the case's
 Operation Declarations and Standard Capabilities. Trace Cases replay through
 `talk.h` alone ([`talk_replay.zig`](src/corpus/talk_replay.zig)) when they need
 only loads, Deliveries and Requests, Pumps, `vars`, `counters`, Host Object
-inputs and the Grants it makes, and no Libraries. Transcript replay and
+inputs, the Grants it makes and its Libraries, compiled with its Operations as
+their Grant declarations. Transcript replay and
 encoding cases that register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the

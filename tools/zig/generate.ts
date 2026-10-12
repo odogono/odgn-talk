@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 // This emitter reads Spec Data Files only, never another Core.
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import machine from '../../spec/data/machine.toml';
 import costs from '../../spec/data/costs.toml';
@@ -16,6 +17,19 @@ import { writeOutput } from '../go/output';
 import { header, zigField, zigString, zigType } from './output';
 
 const generated = resolve(import.meta.dir, '../../impl/zig/src/generated');
+const stdlibSources = resolve(import.meta.dir, '../../spec/stdlib');
+
+/** The stdlib Libraries' sources, which every Group holds, in stdlib.toml's order. */
+const emitStdlibSources = async (): Promise<string> => {
+  let out = `${header('tools/zig/generate.ts from spec/stdlib')}\n`;
+  out += 'pub const Source = struct { name: []const u8, source: []const u8 };\n\n';
+  out += 'pub const sources = [_]Source{\n';
+  for (const name of stdlib.libraries as string[]) {
+    const source = await readFile(resolve(stdlibSources, `${name}.talk`), 'utf8');
+    out += `    .{ .name = ${zigString(name)}, .source = ${zigString(source)} },\n`;
+  }
+  return `${out}};\n`;
+};
 
 type Shape =
   | { kind: 'scalar'; type: 'bool' | 'i64' | 'Scalar' | 'text' }
@@ -247,6 +261,7 @@ export const generateZigCatalogues = async (check: boolean): Promise<void> => {
     );
   await write('rates', emitCostTerms(compileCostModel(costs)));
   await write('opcodes', emitOpcodes(machine.instruction));
+  await write('stdlib_sources', await emitStdlibSources());
   for (const [name, data] of Object.entries({
     machine,
     costs,

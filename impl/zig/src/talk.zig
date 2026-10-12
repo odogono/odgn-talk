@@ -28,6 +28,9 @@ fn status(err: anyerror) HostErrorCode {
         error.OutOfMemory => .out_of_memory,
         error.DuplicateObjectId => .duplicate_object_id,
         error.ParentCycle => .parent_cycle,
+        error.NameReused => .name_reused,
+        error.ReservedName => .reserved_name,
+        error.LibraryMismatch => .library_mismatch,
         else => .invalid_value,
     };
 }
@@ -289,6 +292,7 @@ pub const Core = struct {
     bridges: std.ArrayList(*Bridge) = .empty,
     standard: std.ArrayList(*standard.Context) = .empty,
     kinds: std.ArrayList(*objects.Kind) = .empty,
+    libraries: std.ArrayList(*machine.Library) = .empty,
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
 };
 
@@ -403,6 +407,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.kinds.deinit(gpa);
     for (core.prop_bridges.items) |b| gpa.destroy(b);
     core.prop_bridges.deinit(gpa);
+    for (core.libraries.items) |l| l.destroy();
+    core.libraries.deinit(gpa);
     allocator.destroy(core);
 }
 
@@ -1252,5 +1258,71 @@ export fn talk_request(g: *Group, to: *objects.Object, m: *const Message, id: ?*
     p.* = .{ .group = g, .id = n };
     g.pending.append(g.core.gpa, p) catch return .out_of_memory;
     out.* = p;
+    return .ok;
+}
+
+// ---------------------------------------------------------------- Libraries
+
+pub const LibrarySource = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    version: ?[*]const u8,
+    version_len: usize,
+    source: ?[*]const u8,
+    source_len: usize,
+};
+
+/// Compiles a Library once per process. imports must hold every Library
+/// its `use` lines name, besides the stdlib's; anything that fails to parse
+/// or check is TALK_LOAD_REFUSED. The Library lives as long as the Core.
+export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*]const *machine.Library, imports_len: usize, declarations: ?[*]const LoadGrant, declarations_len: usize, out: *?*machine.Library) HostErrorCode {
+    out.* = null;
+    const name = bytes(src.name, src.name_len) catch return .invalid_value;
+    const label = bytes(src.version, src.version_len) catch return .invalid_value;
+    const source = bytes(src.source, src.source_len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(source) or name.len == 0) return .invalid_value;
+    const given: []const *machine.Library = if (imports_len == 0) &.{} else (imports orelse return .invalid_value)[0..imports_len];
+    const declared: []const LoadGrant = if (declarations_len == 0) &.{} else (declarations orelse return .invalid_value)[0..declarations_len];
+    const named = c.gpa.alloc(machine.NamedGrant, declared.len) catch return .out_of_memory;
+    defer c.gpa.free(named);
+    for (declared, named) |x, *n| n.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .grant = x.grant };
+    const compiled = machine.compileLibrary(c.gpa, name, label, source, given, if (declarations == null) null else named) catch |err| return status(err);
+    switch (compiled) {
+        .refused => |diags| {
+            c.gpa.free(diags);
+            return .load_refused;
+        },
+        .library => |l| {
+            c.libraries.append(c.gpa, l) catch {
+                l.destroy();
+                return .out_of_memory;
+            };
+            out.* = l;
+            return .ok;
+        },
+    }
+}
+
+export fn talk_library_name(l: *const machine.Library, s: *[*]const u8, len: *usize) void {
+    s.* = l.name.ptr;
+    len.* = l.name.len;
+}
+
+export fn talk_library_version(l: *const machine.Library, s: *[*]const u8, len: *usize) void {
+    s.* = l.version.ptr;
+    len.* = l.version.len;
+}
+
+/// The Library's code identity, 32 bytes.
+export fn talk_library_identity(l: *const machine.Library, out: *[32]u8) void {
+    out.* = l.identity;
+}
+
+/// Adds a compiled Library to the Group, a Host Input with its `add-library`
+/// record. A stdlib name is TALK_RESERVED_NAME, a name the Group holds
+/// TALK_NAME_REUSED, and an import it doesn't hold TALK_LIBRARY_MISMATCH.
+export fn talk_add_library(g: *Group, l: *machine.Library) HostErrorCode {
+    defer g.flush();
+    g.group.addLibrary(l) catch |err| return status(err);
     return .ok;
 }
