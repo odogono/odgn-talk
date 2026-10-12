@@ -253,6 +253,8 @@ bun test impl/ts/tests/lexer.test.ts impl/ts/tests/parser.test.ts impl/ts/tests/
 
 The generator copies the syntax lists from `grammar.toml`, Unit spellings and Unit Kinds from `units.toml`, and the instruction set from `machine.toml` into browser-safe TS tables. The check reproduces those tables byte for byte and runs in CI, tests and builds. Core tests independently exercise authored first-error fixtures, every corpus Script, Standard Library, syntax sketch and `talk` documentation example. They also check every token/trivia span and exact source reconstruction. These parser checks do not establish execution, lowering or Trace conformance.
 
+Generated opcodes are individual constants, imported as a namespace by the interpreter so browser bundlers can inline their numeric values. Save/Restore and the Standard Capability factories remain available through the existing Core API. The [bundle size profile](https://github.com/odogono/odgn-talk/issues/663#issuecomment-6119798005) estimates that splitting those features could save 12–13 KB gzip; that saving alone does not justify changing the public API without evidence that Hosts commonly omit them.
+
 ## Semantic names and bindings
 
 ```ts
