@@ -1375,10 +1375,7 @@ const Frame = struct {
                 try out.insert(f.l.a, 0, .{ .expr = e });
                 e = k.base;
             },
-            .property => |p| {
-                try out.insert(f.l.a, 0, .{ .expr = e });
-                e = p.base;
-            },
+            .group => |g| e = g,
             else => return e,
         };
     }
@@ -1563,10 +1560,6 @@ const Frame = struct {
                     try f.emit(.get_key, &.{.{ .text = try f.keyText(k.key.?) }}, e.pos, "");
                 }
             },
-            .property => |p| {
-                try f.load(whole, e.pos);
-                try f.emit(.property, &.{.{ .text = try f.propertyName(p) }}, e.pos, "");
-            },
             else => unreachable,
         }
     }
@@ -1584,7 +1577,6 @@ const Frame = struct {
                 if (k.computed != null) try f.load(level.index.?, e.pos);
                 try f.load(whole, e.pos);
             },
-            .property => try f.load(whole, e.pos),
             else => unreachable,
         }
     }
@@ -1603,9 +1595,6 @@ const Frame = struct {
                     try f.emit(.set_key_computed, &.{}, e.pos, "");
                 } else try f.emit(.set_key, &.{.{ .text = try f.keyText(k.key.?) }}, e.pos, "");
             },
-            // A Built-in property has no write rule; it is written as a key
-            // so the lowering stays total.
-            .property => |p| try f.emit(.set_key, &.{.{ .text = try f.keyTextOf(try f.propertyName(p)) }}, e.pos, ""),
             else => unreachable,
         }
     }
@@ -1666,10 +1655,6 @@ const Frame = struct {
                     try f.emit(.delete_key_computed, &.{}, e.pos, "");
                 } else try f.emit(.delete_key, &.{.{ .text = try f.keyText(k.key.?) }}, e.pos, "");
             },
-            .property => |p| {
-                if (up.len > 0) try f.load(wholes.items[up.len], up[up.len - 1].expr.pos) else try f.rootLoad(root, first);
-                try f.emit(.delete_key, &.{.{ .text = try f.keyTextOf(try f.propertyName(p)) }}, e.pos, "");
-            },
             else => unreachable,
         }
         var k = up.len;
@@ -1705,16 +1690,14 @@ const Frame = struct {
                     try f.emit(.test_key, &.{ .{ .text = try f.keyText(k.key.?) }, .{ .label = skip } }, e.pos, "");
                 }
             },
-            .property => |p| {
-                try f.load(whole, e.pos);
-                try f.emit(.test_key, &.{ .{ .text = try f.keyTextOf(try f.propertyName(p)) }, .{ .label = skip } }, e.pos, "");
-            },
             else => unreachable,
         }
     }
 
     fn set(f: *Frame, first: Tok, target: *const Expr, value: *const Expr) Allocator.Error!void {
-        const k = target.data.key;
+        var e = target;
+        while (e.data == .group) e = e.data.group;
+        const k = e.data.key;
         if (k.computed) |x| try f.expr(x);
         try f.expr(k.base);
         try f.expr(value);
@@ -2865,15 +2848,16 @@ test "every corpus unit that checks clean lowers, with every label placed" {
     try testing.expect(lowered > 300);
 }
 
-test "Containers ending in a property and calls through a Constant lower" {
+test "parenthesized Containers and calls through a Constant lower" {
     var arena: std.heap.ArenaAllocator = .init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
     const source =
         \\constant twice = given x: x * 2
         \\on t x
-        \\  put 1 into the length of x
-        \\  delete item 1 of the items of x
+        \\  put 1 into (the "length" of x)
+        \\  delete item 1 of (x)
+        \\  put 2 into item (the length of x) of x
         \\  return twice(3)
         \\end t
     ;
@@ -2883,6 +2867,9 @@ test "Containers ending in a property and calls through a Constant lower" {
     const unit = try lower(a, &parsed.tree, &checked, .{ .name = "t" });
     var out: std.Io.Writer.Allocating = .init(a);
     try disassemble(&unit, &out.writer);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "set-key \"length\"") != null);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "chunk-delete item") != null);
+    try testing.expect(std.mem.indexOf(u8, out.written(), "property length") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "load-definition twice") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "call-value 1") != null);
 }

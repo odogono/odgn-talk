@@ -1,0 +1,15 @@
+# Unblessed: `not a container` for Built-in property levels and its source positions (#670); first blessing awaits human review.
+> load leaf identity=f61241ed67dd6f50b2a71915422541c60e1d56e2f28cabe792ec2db85b769e2a
+diag leaf code="not a container" pos=2:14
+> load intermediate identity=4e82e98586d6b1ba967a5441e263aa73ec7e9f79920e1429bfd64c8a7c7876b2
+diag intermediate code="not a container" pos=2:10
+> load possessive identity=459ad47253a4082b9cd71010051a3a09893cde2348a5714cf0df7922dbcad5cd
+diag possessive code="not a container" pos=2:7
+> load keys identity=cc418dcd99d4a9c4b987ea45074b2e5db1e3ddce1a06763c1186490a683331f6
+> deliver d1 to=keys message=go
+> pump clock=2026-10-12T09:00:00Z
+seg keys/r1 start delivery=d1 handler=go clause=1 fuel=59 alloc=97 state=127 end=return
+run keys/r1 outcome=completed delivery=d1 handler=go fuel=59 alloc=97
+pumped state=idle fuel=59
+> vars
+vars keys m={length: 1, size: 5} t="x,b,c"

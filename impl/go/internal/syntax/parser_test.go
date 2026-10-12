@@ -190,6 +190,61 @@ func TestNestedBinarySizeAndBuildExpressions(t *testing.T) {
 	}
 }
 
+func TestContainersNeverPassThroughBuiltInProperties(t *testing.T) {
+	statements := [][2]string{
+		{"put 1 into ", ""},
+		{"put 1 before ", ""},
+		{"put 1 after ", ""},
+		{"put ...[1] after ", ""},
+		{"set ", " to 1"},
+		{"add 1 to ", ""},
+		{"subtract 1 from ", ""},
+		{"multiply ", " by 2"},
+		{"divide ", " by 2"},
+		{"delete ", ""},
+		{"replace \"a\" in ", " with \"b\""},
+	}
+	reject := func(source string, col int) {
+		t.Helper()
+		_, err := Parse(source)
+		e, ok := err.(*Error)
+		if !ok || e.Code != "not a container" || e.Pos != (Position{Line: 2, Column: col}) {
+			t.Errorf("%q: %v", source, err)
+		}
+	}
+	for _, property := range generated.Grammar.Properties {
+		for _, s := range statements {
+			reject(fmt.Sprintf("on t x\n  %sthe %s of x%s\nend t\n", s[0], property, s[1]), 3+len(s[0]))
+		}
+	}
+	for _, target := range []string{
+		"item 1 of the items of x",
+		"x's length",
+		"(the length of x)",
+		"the length of the items of x",
+		"the items of x delimited by \",\"",
+		"the foo of item 1 of the items of x",
+	} {
+		reject("on t x\n  set "+target+" to 1\nend t\n", 7)
+	}
+	for _, statement := range []string{
+		"put 1 into the \"length\" of x",
+		"put 1 into the (\"length\") of x",
+		"put 1 into the (the length of x) of x",
+		"put 1 into item (the length of x) of x",
+		"put 1 into item 1 of x delimited by (the length of x)",
+		"put the length of x into x",
+		"set the \"length\" of x to 1",
+		"set the (\"length\") of x to 1",
+		"put 1 into (the \"length\" of x)",
+		"put 1 into item 1 of (x)",
+	} {
+		if _, err := Parse("on t x\n  " + statement + "\nend t\n"); err != nil {
+			t.Errorf("%s: %v", statement, err)
+		}
+	}
+}
+
 func TestRejectedFunctionGuardAndReciprocal(t *testing.T) {
 	for _, tc := range []struct {
 		source, code string

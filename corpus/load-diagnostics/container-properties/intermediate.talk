@@ -1,0 +1,3 @@
+on t x
+  delete item 1 of the items of x
+end t

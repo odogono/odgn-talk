@@ -23,6 +23,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [cant-suspend-here](cant-suspend-here/bad.talk) | `can't suspend here` at `2:1` | [Trace](cant-suspend-here/case.trace) |
 | [cant-write](cant-write/bad.talk) | `can't write` at `3:12` | [Trace](cant-write/case.trace) |
 | [capture-in-repetition](capture-in-repetition/bad.talk) | `capture in repetition` at `2:18` | [Trace](capture-in-repetition/case.trace) |
+| [container-properties](container-properties/leaf.talk) | `not a container` at `2:14` for a Built-in property ending the Container, [`2:10`](container-properties/intermediate.talk) for one on its path and [`2:7`](container-properties/possessive.talk) after `'s` in `set`; [quoted and computed keys and property reads](container-properties/keys.talk) load and run (first blessing pending, #670) | [Trace](container-properties/case.trace) |
 | [default-order](default-order/bad.talk) | `default order` at `1:19` | [Trace](default-order/case.trace) |
 | [duplicate-key](duplicate-key/bad.talk) | `duplicate key` at `2:15` | [Trace](duplicate-key/case.trace) |
 | [duplicate-name](duplicate-name/bad.talk) | `duplicate name` at `2:9` | [Trace](duplicate-name/case.trace) |

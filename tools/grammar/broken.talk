@@ -170,6 +170,47 @@ end t
 on t
   put 1 into 3
 end t
+-- case: a Built-in property is read-only, so it can't end a Container (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the length of x
+end t
+-- case: nor can a Container pass through one
+-- expect: not a container at 2:10
+on t x
+  delete item 1 of the items of x
+end t
+-- case: `'s` reads a Built-in property too, even in `set`
+-- expect: not a container at 2:7
+on t x
+  set x's length to 1
+end t
+-- case: parentheses don't hide a Built-in property level
+-- expect: not a container at 2:7
+on t x
+  set (the length of x) to 1
+end t
+-- case: nor does `delimited by`
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the items of x delimited by ";" with "b"
+end t
+-- case: the syntax error comes before the Constant root's `can't write`
+-- expect: not a container at 3:20
+constant x = 1
+on t
+  put missing into the length of x
+end t
+-- case: a quoted or computed key is a key, and property reads may select it
+-- expect: parses
+on t x
+  put 1 into the "length" of x
+  put 1 into the ("length") of x
+  put 1 into (the "length" of x)
+  put 1 into item (the length of x) of x
+  put 1 into item 1 of x delimited by (the length of x)
+  set the "length" of x to 1
+end t
 -- case: `send it`: the message name can't be a Reserved Word
 -- expect: unexpected token at 2:8
 on t
