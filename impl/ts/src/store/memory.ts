@@ -1,6 +1,12 @@
 // The in-memory Store backend: each Store starts empty and lives as long as
 // the process (chapter 12, The Session Store).
-import { Stores, type StoreBackend, type StoreQuotas } from './engine';
+import type { RouterOptions } from '../notify/router';
+import {
+  sessionWatchLimits,
+  Stores,
+  type StoreBackend,
+  type StoreQuotas,
+} from './engine';
 
 /** A backend that keeps nothing outside the engine's own copy. */
 export const memoryBackend = (): StoreBackend => ({
@@ -8,6 +14,11 @@ export const memoryBackend = (): StoreBackend => ({
   save: () => {},
 });
 
-/** Stores kept only in memory, each starting empty. */
-export const memoryStores = (quotas: StoreQuotas): Stores =>
-  new Stores(memoryBackend(), quotas);
+/**
+ * Stores kept only in memory, each starting empty. `admitted` is told after
+ * each Notification a Group admits.
+ */
+export const memoryStores = (
+  quotas: StoreQuotas,
+  admitted?: RouterOptions['admitted'],
+): Stores => new Stores(memoryBackend(), quotas, sessionWatchLimits, admitted);

@@ -1,0 +1,55 @@
+# Unblessed: a Notification Handler writing back to a key it watches (#621); first blessing awaits human review.
+> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
+> extend session source="on scoresChanged change, queued" & newline & "  repeat for each key in the " & quote & "keys" & quote & " of change" & newline & "    ask scores to get key" & newline & "    say key & " & quote & " = " & quote & " & it" & newline & "    if it is not round(it) then ask scores to set key, round(it)" & newline & "  end repeat" & newline & "end scoresChanged" identity=4cb403d445191284be4695855fb0f8c77755e7134808bcf71bc620c571641926
+> extend session source="on entry1" & newline & "ask scores to watch " & quote & "rounding" & quote & ", " & quote & "score/" & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry1" & newline identity=6105c81194a5486b10dfc7636dd939cdb9e5cc6fbb24018f14d4b91fec94d704
+> request d1 to=session message=entry1
+> pump clock=2026-09-30T10:00:00Z
+call session/r1.c1 op=scores.watch args=["rounding", "score/", "scoresChanged"] result=nothing
+seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=26 alloc=8 state=0 end=return
+run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=26 alloc=8
+pumped state=idle fuel=26
+> extend session source="on entry2" & newline & "ask scores to set " & quote & "score/alex" & quote & ", 2.6" & newline & "end entry2" & newline identity=5d9fe513660af8e2562d9c0de26de5e24672f511e81840b1293b4b944ad50e64
+> request d2 to=session message=entry2
+> pump clock=2026-09-30T10:00:00Z
+effect session/r2.s1 grant=scores phase=begin status=ok
+call session/r2.c1 op=scores.set args=["score/alex", 2.6] result=nothing
+effect session/r2.s1 grant=scores phase=commit status=ok
+seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=25 alloc=8 state=0 end=return
+run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=25 alloc=8
+pumped state=idle fuel=25
+> deliver d3 to=session message=scoresChanged args=[{grant: "scores", watch: "rounding", prefix: "score/", keys: ["score/alex"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r3.c1 op=scores.get args=["score/alex"] result=2.6
+call session/r3.c2 op=console.write args=["score/alex = 2.6"]
+effect session/r3.s1 grant=scores phase=begin status=ok
+call session/r3.c3 op=scores.set args=["score/alex", 3] result=nothing
+effect session/r3.s1 grant=scores phase=commit status=ok
+seg session/r3 start delivery=d3 handler=scoresChanged clause=1 fuel=91 alloc=141 state=0 end=return
+run session/r3 outcome=completed delivery=d3 handler=scoresChanged fuel=91 alloc=141
+pumped state=idle fuel=91
+> deliver d4 to=session message=scoresChanged args=[{grant: "scores", watch: "rounding", prefix: "score/", keys: ["score/alex"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r4.c1 op=scores.get args=["score/alex"] result=3
+call session/r4.c2 op=console.write args=["score/alex = 3"]
+seg session/r4 start delivery=d4 handler=scoresChanged clause=1 fuel=67 alloc=115 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=scoresChanged fuel=67 alloc=115
+pumped state=idle fuel=67
+> extend session source="on entry3" & newline & "ask scores to set " & quote & "score/alex" & quote & ", 4" & newline & "end entry3" & newline identity=e778ea58ed849b9c80eeafa26f400c569d64a3601d09385e86582634197b3560
+> request d5 to=session message=entry3
+> pump clock=2026-09-30T10:00:00Z
+effect session/r5.s1 grant=scores phase=begin status=ok
+call session/r5.c1 op=scores.set args=["score/alex", 4] result=nothing
+effect session/r5.s1 grant=scores phase=commit status=ok
+seg session/r5 start delivery=d5 handler=entry3 clause=1 fuel=25 alloc=8 state=0 end=return
+run session/r5 outcome=completed delivery=d5 handler=entry3 fuel=25 alloc=8
+pumped state=idle fuel=25
+> deliver d6 to=session message=scoresChanged args=[{grant: "scores", watch: "rounding", prefix: "score/", keys: ["score/alex"], resync: false}]
+> pump clock=2026-09-30T10:00:00Z
+call session/r6.c1 op=scores.get args=["score/alex"] result=4
+call session/r6.c2 op=console.write args=["score/alex = 4"]
+seg session/r6 start delivery=d6 handler=scoresChanged clause=1 fuel=67 alloc=115 state=0 end=return
+run session/r6 outcome=completed delivery=d6 handler=scoresChanged fuel=67 alloc=115
+pumped state=idle fuel=67
+> vars
+vars session
+# Unblessed: a Notification Handler writing back to a key it watches (#621); first blessing awaits human review.

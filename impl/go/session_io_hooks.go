@@ -43,6 +43,12 @@ func init() {
 			c.AnswerWithCost(value.(Value), fuel)
 		}
 	}
+	sessionio.Queued = func(raw any) bool {
+		g := raw.(*Group)
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return len(g.inputs) > 0
+	}
 	sessionio.CancelDelivery = func(raw any, id string) {
 		g := raw.(*Group)
 		g.mu.Lock()

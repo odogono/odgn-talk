@@ -1,0 +1,55 @@
+# Unblessed: :store load and :store clear routing, and checkpoints (#621); first blessing awaits human review.
+# A load is routed by its net changes under each watch's prefix, and one that
+# changes no watched key sends nothing. Clearing an empty Store changes
+# nothing. A :restore with no Store change since :save brings the watches
+# back with no marker; one after another Store changed resyncs only the watch
+# on that Store.
+> :grant scores store
+> :grant other store other
+> :clock virtual 2026-09-30T10:00:00Z
+> on changed change, queued
+|   say change
+| end changed
+> ask scores to watch "scores", "score/", "changed"
+> ask other to watch "everything", "", "changed"
+> :store load
+| {"score/ann":1,"score/bob":2,"note":"x"}
+loaded 3 keys
+[session/r3] {grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann", "score/bob"], resync: false}
+> :store load
+| {"score/ann":1,"score/bob":3,"note":"y"}
+loaded 3 keys
+[session/r4] {grant: "scores", watch: "scores", prefix: "score/", keys: ["score/bob"], resync: false}
+> :store load
+| {"score/ann":1,"score/bob":3,"note":"z"}
+loaded 3 keys
+> :store load other
+| {"a":1}
+loaded 1 keys
+[session/r5] {grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}
+> :store clear other
+cleared other
+[session/r6] {grant: "other", watch: "everything", prefix: "", keys: ["a"], resync: false}
+> :store clear other
+cleared other
+> :save
+saved default
+> :restore
+restored default
+> ask scores to set "score/ann", 5
+[session/r8] {grant: "scores", watch: "scores", prefix: "score/", keys: ["score/ann"], resync: false}
+> :save before
+saved before
+> :store load other
+| {"b":2}
+loaded 1 keys
+[session/r9] {grant: "other", watch: "everything", prefix: "", keys: ["b"], resync: false}
+> :restore before
+restored before
+[session/r9] {grant: "other", watch: "everything", prefix: "", keys: [], resync: true}
+> :store
+"note" = "z"
+"score/ann" = 5
+"score/bob" = 3
+> :store other
+"b" = 2

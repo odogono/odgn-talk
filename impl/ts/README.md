@@ -151,8 +151,14 @@ to the Session limits; `new Stores(backend, quotas, watchLimits)` overrides
 them. Web Storage notifications remain local to one engine; sharing its
 contents between tabs is unsupported. The Session Store accepts watching
 with costs 4/2 and limits 100 watches, 65,536 watch bytes, 1,000 pending
-Notifications and 1,048,576 pending bytes. Session re-pumping, retry/detach
-and checkpoint integration remain [#621](https://github.com/odogono/odgn-talk/issues/621).
+Notifications and 1,048,576 pending bytes. `createRouter`'s optional
+`admitted(group)` is told after each Notification a Group admits, and
+`memoryStores(quotas, admitted)` passes it on. The Session Host uses it to pump
+again at the same Clock reading while Notifications are queued, retries with
+`pumped` after every Pump, keeps checkpoints for `:save`/`:restore` and
+detaches a Group it replaces. A Host call that leaves other Host Inputs
+queued gets one more Pump of its own; see
+`tests/session-pumping.test.ts` and the `sessions/store-notif*` Transcripts.
 
 ## Capability Scopes
 

@@ -63,7 +63,7 @@ func (h *Host) AnswerPrompt(answer talk.Value) []string {
 		delete(h.prompts, id)
 		h.record(Item{Kind: "answer", Call: id, Text: answer.String()})
 		p.call.Answer(answer)
-		return h.printed(h.pump())
+		return h.finished(h.pump())
 	}
 	return nil
 }

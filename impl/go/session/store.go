@@ -47,10 +47,11 @@ func (h *Host) store(rest string) []string {
 		if err != nil {
 			return refusal("bad arguments")
 		}
+		h.notified = false
 		if err := h.stores.Replace(name, entries); err != nil {
 			return refusal("bad arguments")
 		}
-		return []string{"loaded " + strconv.Itoa(len(h.stores.Entries(name))) + " keys"}
+		return append([]string{"loaded " + strconv.Itoa(len(h.stores.Entries(name))) + " keys"}, h.notifiedPump()...)
 	}
 	if inline {
 		return refusal("bad arguments")
@@ -79,10 +80,11 @@ func (h *Host) store(rest string) []string {
 		if len(words) == 2 {
 			name = words[1]
 		}
+		h.notified = false
 		if err := h.stores.Clear(name); err != nil {
 			return refusal("bad arguments")
 		}
-		return []string{"cleared " + name}
+		return append([]string{"cleared " + name}, h.notifiedPump()...)
 	default:
 		if len(words) > 1 {
 			return refusal("bad arguments")

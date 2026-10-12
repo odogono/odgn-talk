@@ -320,6 +320,10 @@ sessions/real-clock
 sessions/refusals
 sessions/save-restore
 sessions/store-bindings
+sessions/store-notifications
+sessions/store-notify-host-changes
+sessions/store-notify-lifecycle
+sessions/store-notify-own-writes
 sessions/user-prompts
 sessions/virtual-clock
 stdlib/calls

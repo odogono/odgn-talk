@@ -1,0 +1,5 @@
+kind = "transcript"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"

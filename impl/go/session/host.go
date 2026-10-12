@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/store"
 )
@@ -77,8 +78,11 @@ type library struct {
 	added    string
 	compiled *talk.Library
 }
+
+// saved is what `:save` keeps: a checkpoint of the Group and its watches,
+// and the Session Host's own state.
 type saved struct {
-	bytes                        []byte
+	checkpoint                   []byte
 	declarations                 []declaration
 	implicit                     map[string]bool
 	placements                   map[string]placement
@@ -139,13 +143,16 @@ type Host struct {
 	recording                    *string
 	observation                  observation
 	measuring                    bool // the next Entry's Run is a Fuel Measurement
+	notified                     bool // the router admitted a Notification since the last Pump began
 }
 
 func New(env Environment) *Host {
 	if env.Now == nil {
 		env.Now = time.Now
 	}
-	return &Host{env: env, bindings: map[string]string{}, stores: store.New(store.SessionQuotas()), core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, inspections: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, prompts: map[string]*prompt{}, notes: map[string]string{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
+	h := &Host{env: env, bindings: map[string]string{}, core: talk.New(), implicit: map[string]bool{}, placements: map[string]placement{}, expressions: map[string]bool{}, inspections: map[string]bool{}, segments: map[string]segment{}, writes: map[string]talk.Value{}, reads: map[string]*talk.Call{}, prompts: map[string]*prompt{}, notes: map[string]string{}, pending: map[string]*talk.Call{}, granted: map[string]string{}, grants: map[string]*talk.Grant{}, stubs: map[string][]stub{}, libraries: map[string]library{}, saves: map[string]saved{}, limits: map[string]int64{}, units: 1, waiting: Waiting{Kind: "prompt"}, observation: newObservation()}
+	h.stores = store.NewNotifying(store.SessionQuotas(), store.SessionWatchLimits(), func(*talk.Group) { h.notified = true })
+	return h
 }
 func (h *Host) Source() string          { return sourceOf(h.declarations) }
 func (h *Host) Started() bool           { return h.group != nil }
@@ -174,6 +181,17 @@ func (h *Host) printed(out []string) []string {
 	}
 	return out
 }
+
+// finished ends a Host call, then pumps once more, as a Host call of its
+// own, if Host Inputs are still queued. That Pump never causes another, so
+// what it leaves waits for the next Host call (chapter 12, The foreground).
+func (h *Host) finished(out []string) []string {
+	out = h.printed(out)
+	if h.group == nil || !sessionio.Queued(h.group) {
+		return out
+	}
+	return append(out, h.printed(h.pump())...)
+}
 func (h *Host) Input(source string) []string {
 	s := strings.TrimRight(source, "\n")
 	if name, _ := split(s); name == ":help" || name == ":quit" {
@@ -196,7 +214,7 @@ func (h *Host) Input(source string) []string {
 			_, out = h.run(s, kind == "expression", node)
 		}
 	}
-	return h.printed(out)
+	return h.finished(out)
 }
 func (h *Host) Read(line string) []string {
 	for _, id := range h.readOrder {
@@ -209,7 +227,7 @@ func (h *Host) Read(line string) []string {
 				return []string{"! invalid value"}
 			}
 			c.Answer(v)
-			return h.printed(h.pump())
+			return h.finished(h.pump())
 		}
 	}
 	return nil
@@ -218,7 +236,7 @@ func (h *Host) Tick() []string {
 	if h.group == nil {
 		return nil
 	}
-	return h.printed(h.pump())
+	return h.finished(h.pump())
 }
 func (h *Host) start() {
 	if h.group != nil {

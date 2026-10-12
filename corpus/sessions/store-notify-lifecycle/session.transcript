@@ -1,0 +1,31 @@
+# Unblessed: Session watches through unwatch, Extend and Reload (#621); first blessing awaits human review.
+# One commit reaches both matching watches. unwatch removes one, and
+# unwatching it again does nothing. Declaring a new name extends the Script
+# and keeps the watch; redefining the Handler reloads it, which removes every
+# watch, until an Entry registers again.
+> :grant scores store
+> :clock virtual 2026-09-30T10:00:00Z
+> on scoresChanged change, queued
+|   say the "watch" of change
+| end scoresChanged
+> ask scores to watch "all", "", "scoresChanged"
+> ask scores to watch "names", "name/", "scoresChanged"
+> ask scores to set "name/ann", 1
+[session/r4] all
+[session/r5] names
+> ask scores to unwatch "names"
+> ask scores to set "name/ann", 2
+[session/r8] all
+> ask scores to unwatch "names"
+> function double n
+|   return n * 2
+| end double
+> ask scores to set "name/ann", 3
+[session/r11] all
+> on scoresChanged change, queued
+|   say "changed " & the "watch" of change
+| end scoresChanged
+> ask scores to set "name/ann", 4
+> ask scores to watch "all", "", "scoresChanged"
+> ask scores to set "name/ann", 5
+[session/r15] changed all

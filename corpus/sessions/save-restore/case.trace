@@ -33,8 +33,10 @@ run session/r6 outcome=completed delivery=d4 handler=entry4 fuel=10 alloc=0
 pumped state=idle fuel=10 next=2026-09-30T10:00:05Z
 > extend session source="function late" & newline & "  return 0" & newline & "end late" identity=a08a4fc0959410641376936d6b38d7280748dd194cad73b48b204d8109145bd7
 > restore from=s1 fingerprint=3d26ed3eca4a95aa860ad4916abe957cdfaebd4b41c28cf0d97e9042b329c9d8 mode=full pending=[session/r3.c1]
-> extend session source="on entry4" & newline & "return n" & newline & "end entry4" & newline identity=4943a4bc08f0ecec5824a6cc5c1c6ffcbf7fbf7429ed38b6a6b48266cbab6747
 > settle session/r3.c1 how=adopt
+> pump clock=2026-09-30T10:00:00Z
+pumped state=idle fuel=0 next=2026-09-30T10:00:05Z
+> extend session source="on entry4" & newline & "return n" & newline & "end entry4" & newline identity=4943a4bc08f0ecec5824a6cc5c1c6ffcbf7fbf7429ed38b6a6b48266cbab6747
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:00Z
 seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=7 alloc=0 state=416 end=return

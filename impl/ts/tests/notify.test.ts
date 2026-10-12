@@ -21,8 +21,8 @@ const roomy: WatchLimits = {
   pending: 1000,
   pendingSize: 1_048_576,
 };
-const setup = (revision = () => 'r0') => {
-  const router = createRouter({ limits: () => roomy, revision });
+const setup = (revision = () => 'r0', admitted?: (group: Group) => void) => {
+  const router = createRouter({ admitted, limits: () => roomy, revision });
   const def = defineCapability<string>(
     'store',
     {
@@ -118,6 +118,27 @@ test('a commit delivers to real Scripts in load order, and a full mailbox is ret
   group.pump(now);
   expect(seen(group, 'b')).toBe('[["k"], ["j"]]');
   expect(seen(group, 'a')).toBe('[["k"], ["j"]]');
+});
+
+test('admitted is told of each Notification a Group admits, and not of one a full mailbox refuses', () => {
+  const told: Group[] = [];
+  const { router, def } = setup(undefined, group => told.push(group));
+  const group = newGroup({ name: 'g' });
+  group.load({
+    name: 'a',
+    source: watcher('"w", "", "changed"'),
+    grants: { scores: def.grant('all', 'default') },
+    limits: { mailboxDepth: 1 },
+  });
+  group.script('a')!.deliver({ name: 'start' });
+  group.pump(now);
+  router.commit('default', () => ['k']);
+  expect(told).toEqual([group]);
+  router.commit('default', () => ['j']);
+  expect(told).toEqual([group]);
+  group.pump(now);
+  router.pumped(group);
+  expect(told).toEqual([group, group]);
 });
 
 test("Stop releases a Script's watches through the release hook", () => {

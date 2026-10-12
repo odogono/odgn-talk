@@ -29,6 +29,8 @@ export type WatchLimits = {
 };
 
 export type RouterOptions = {
+  /** Told after each Notification a Group admits; it mustn't call the router. */
+  admitted?(group: Group): void;
   limits(store: string): WatchLimits;
   /** The Store's current revision; read under its synchronization. */
   revision(store: string): string;
@@ -234,6 +236,7 @@ export const createRouter = (o: RouterOptions): NotificationRouter => {
     }
     try {
       script.deliver({ name: w.message, args: [payload] });
+      o.admitted?.(w.group);
       return 'admitted';
     } catch (error) {
       // Matched by name, as replay.ts matches it, so a MailboxFull from any

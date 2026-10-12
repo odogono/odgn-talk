@@ -17,13 +17,18 @@ func cloneStubs(stubs map[string][]stub) map[string][]stub {
 	return out
 }
 func (h *Host) save(name string) []string {
-	bytes, err := h.group.Save()
+	checkpoint, err := h.stores.Router.Save(h.group)
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
-	h.saves[name] = saved{bytes: bytes, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), inspections: maps.Clone(h.inspections), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units, observation: h.observation.clone()}
+	h.saves[name] = saved{checkpoint: checkpoint, declarations: slices.Clone(h.declarations), implicit: maps.Clone(h.implicit), placements: maps.Clone(h.placements), expressions: maps.Clone(h.expressions), inspections: maps.Clone(h.inspections), segments: maps.Clone(h.segments), stubs: cloneStubs(h.stubs), latest: h.latest, limits: maps.Clone(h.limits), virtual: h.virtual, virtualOn: h.virtualOn, hasClock: h.hasClock, lastClock: h.lastClock, deadline: h.deadline, lastEntry: h.lastEntry, units: h.units, observation: h.observation.clone()}
 	return []string{"saved " + name}
 }
+
+// restore replaces the session's Group with one restored with
+// RejectMismatch, through the router, which registers its watches again;
+// every pending call is adopted. A Session Store changed since the save
+// sends each watch on it a marker, which the Session Host pumps for.
 func (h *Host) restore(name string) []string {
 	saved, ok := h.saves[name]
 	if !ok {
@@ -34,10 +39,12 @@ func (h *Host) restore(name string) []string {
 	for _, name := range h.libraryOrder {
 		libraries = append(libraries, h.libraries[name].compiled)
 	}
-	group, result, err := h.core.Restore(saved.bytes, talk.RestoreOptions{Name: "session", Trace: h, Libraries: libraries, Grants: func(script, name string) *talk.Grant { return h.grants[name] }, Resolve: func(kind, id string) (any, bool) { return h.objectSession.resolve(kind, id, h.env.ResolveObject) }})
+	h.notified = false
+	group, result, _, err := h.stores.Router.Restore(h.core, saved.checkpoint, talk.RestoreOptions{Name: "session", Trace: h, Libraries: libraries, Grants: func(script, name string) *talk.Grant { return h.grants[name] }, Resolve: func(kind, id string) (any, bool) { return h.objectSession.resolve(kind, id, h.env.ResolveObject) }})
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
+	h.stores.Router.Detach(h.group)
 	h.group = group
 	h.objectSession.restored()
 	h.objectSession.attach(group)
@@ -93,7 +100,7 @@ func (h *Host) restore(name string) []string {
 			out = append(out, "fuel abandoned "+textForm(fmt.Sprintf("entry%d", m.entry)))
 		}
 	}
-	return out
+	return append(out, h.notifiedPump()...)
 }
 func (h *Host) library(rest string) []string {
 	head, body, recorded := strings.Cut(rest, "\n")

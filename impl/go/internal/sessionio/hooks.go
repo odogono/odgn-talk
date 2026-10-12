@@ -9,5 +9,8 @@ var Attach func(group any, expose func(any))
 var Decode func(bytes []byte, object func(string, string) (any, bool), function func(string) (any, bool)) (any, error)
 var Reply func(group any, id string, value any, failure any, fuel int64)
 var CancelDelivery func(group any, id string)
+
+// Queued reports whether Host Inputs wait for the Group's next Pump.
+var Queued func(group any) bool
 var ObjectShape func(name string) any
 var Shape func(shape any) any

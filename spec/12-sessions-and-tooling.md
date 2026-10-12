@@ -21,7 +21,7 @@ The normative [Session observation contract](session-observation.md) defines Dec
 
 ### The Session Store
 
-Both Session Hosts grant `watch` and `unwatch`, with the costs above and the finite limits in [Store Notifications](proposals/store-notifications.md#the-session-host) (#620): for each Session Store, 100 watches, 65,536 logical bytes of registration state, 1,000 pending Notifications and 1,048,576 logical bytes of pending work. Notification re-pumping, background output and companion checkpoints for `:save` and `:restore` remain #621; full chapter integration remains #622.
+Both Session Hosts grant `watch` and `unwatch`, with the costs above and the finite limits in [Store Notifications](proposals/store-notifications.md#the-session-host) (#620): for each Session Store, 100 watches, 65,536 logical bytes of registration state, 1,000 pending Notifications and 1,048,576 logical bytes of pending work. They deliver Notifications, pump for them at the same Clock reading, route `:store load` and `:store clear`, and keep checkpoints for `:save` and `:restore`, as that section describes (#621). Full chapter integration remains #622.
 
 `store` is a Standard Capability ([chapter 7](07-libraries-and-the-standard-library.md#store)), and every REPL and Playground builds it in ([ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md)).
 
@@ -109,7 +109,7 @@ After it pumps, while the Entry's Run hasn't ended, the Session Host:
 - **Following Runs:** public [Run accounting](09-embedding.md#run-accounting) identifies dispatch, ancestry, exact Fuel and terminal/discarded work. The Trace's `seg` and `call` observations still identify console callers and foreground suspension. The Session Host never inserts `Inspect()` merely to follow execution ([ADR 0045](../docs/adr/0045-the-session-host-follows-its-runs-through-the-trace.md), narrowed by [ADR 0065](../docs/adr/0065-run-accounting-is-returned-to-every-host.md)).
 - **Echo:** when an expression's Run completes, its value is printed in the display form, which tells `"5"` from `5`.
 - **In the background,** the Session Host pumps whenever the next deadline comes under a real Clock.
-- **Queued Host Inputs:** after the Pumps of an Entry, a Session Command, an answer or a deadline, if Host Inputs are queued, including ones its Host adapters queued during those Pumps (a property getter's `deliver`, say), the Session Host pumps once more, as a separate Host call. That Pump is never followed by another for the same reason, and what it leaves queued waits for the next Entry, Session Command, answer or deadline. So a getter whose message reads the getter again can't keep the session pumping.
+- **Queued Host Inputs:** after the Pumps of an Entry, a Session Command, an answer or a deadline, if Host Inputs are queued, including ones its Host adapters queued during those Pumps (a property getter's `deliver`, say), the Session Host pumps once more, as a separate Host call. That Pump is never followed by another for the same reason, and what it leaves queued waits for the next Entry, Session Command, answer or deadline. So a getter whose message reads the getter again can't keep the session pumping. Store Notifications are pumped for before it, at the same Clock reading ([Store Notifications](proposals/store-notifications.md#the-session-host), pending integration in #622).
 - **Answers:** the Session Host pumps after answering a `read`, and after a built-in Capability's suspending call is answered.
 - **Ctrl-C** is `:cancel` of the foreground Run. The Session Host makes Host calls only between Pumps, so a Run spinning in one Segment ends at its Fuel limit.
 
@@ -141,7 +141,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 
 | Command | Written | Does | Notes |
 | --- | --- | --- | --- |
-| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>` | before the session starts |
+| `:grant` | `:grant <name> <capability> [<binding>]` | Grants the session a Capability the REPL or Playground Host has built in, or a mock one, under `<name>`, with a `calendar` Grant's default zone, a `locale` Grant's default tag or a `store` Grant's Store name as `<binding>`; a `store` Grant has all eight Operations, `watch` and `unwatch` included | before the session starts |
 | `:mock` | `:mock <capability>.<operation> <mode>` | Defines a mock Operation, with up to eight arguments and any result, costing nothing, and grants its Capability under its own name; `<mode>` is `immediate`, `suspending` or `fire-and-forget` | before the session starts |
 | `:stub` | `:stub <capability>.<operation> <value> \| :stub <capability>.<operation> fail <error>` | Queues the result of the next call of a mock immediate Operation, or an error map to fail it with |  |
 | `:answer` | `:answer <call> <value>` | Answers a pending call of a mock suspending Operation |  |
@@ -156,7 +156,7 @@ A Session Command is a `:`-prefixed instruction to the session itself, not part 
 | `:save` | `:save [<name>]` | Saves the session under `<name>`, or `default`, in the Host's memory |  |
 | `:restore` | `:restore [<name>]` | Restores the session saved under `<name>`, or `default` |  |
 | `:library` | `:library add <name> <path> \| :library replace <name> <path>` | Adds a user Library from a file, or replaces one, carrying Script Variables over |  |
-| `:store` | `:store [<store>] \| :store load <path> [<store>] \| :store save <path> [<store>] \| :store clear [<store>]` | Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store |  |
+| `:store` | `:store [<store>] \| :store load <path> [<store>] \| :store save <path> [<store>] \| :store clear [<store>]` | Shows a Session Store's contents, by default the `default` Store, loads them from a file, saves them to one, or empties the Store; a load or a clear is a commit, routed to the Store's watches |  |
 | `:export` | `:export [<directory>]` | Shows the Session Script's source, or writes it and each user Library to a directory as `.talk` files |  |
 | `:describe` | `:describe <target>` | Shows a named declaration and its documentation without executing it |  |
 | `:inspect` | `:inspect <expression>` | Evaluates once and describes the result, reading Host Object properties in a second ordinary Run |  |
@@ -238,7 +238,7 @@ OutputLine     ::= [^>|<@~%#'#xA] [^#xA]*
 - **`> `** starts the first line of an Entry, or a Session Command.
 - **`| `** starts each further line of an Entry, or a line of the source that `:library` or `:fix` records. A `|` alone is an empty one.
 - **`< `** starts a line the user typed for `console`'s `read`, and a `<` alone is an empty one.
-- **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. The Pumps that one causes in turn, an `:inspect` reader's and the [Pump for queued Host Inputs](#the-foreground), take the readings that follow. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
+- **`@ `** gives a real Clock reading, and comes before every Pump under a real Clock. The first `@` after an Entry, a Session Command, or a `<` or `~` line is the reading of the Pump that line causes. The Pumps that one causes in turn, an `:inspect` reader's and the [Pump for queued Host Inputs](#the-foreground), take the readings that follow. The Pumps for Store Notifications reuse the reading before them and have no `@` line. Any other `@` is a Pump the Session Host made at a deadline, and replay makes it there. A virtual Clock needs no `@` lines, since it moves only at `:clock` commands.
 - **`~ `** gives the answer a built-in Capability returned for a call, as its value or as `fail` and an error map: its `code`, its `message` and its other fields, or `{}` for a failure that isn't a Script error, which the Script sees as `host error`. It comes where the answer arrived: after the line that caused an immediate call, or where a suspending call's answer came, which causes a Pump.
 - **`% `** introduces the compact JSON [object crossing envelope](session-observation.md#object-crossings-in-session-transcripts), including declarations, initial bindings, property callbacks, external Host actions and resolver outcomes.
 - **`#`** starts a comment, which a REPL never writes.

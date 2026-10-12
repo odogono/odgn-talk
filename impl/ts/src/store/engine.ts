@@ -18,6 +18,7 @@ import {
   changed,
   createRouter,
   type NotificationRouter,
+  type RouterOptions,
   type WatchLimits,
 } from '../notify/router';
 import { decodeValueMembers } from '../readers';
@@ -134,8 +135,10 @@ export class Stores implements StoreImpl {
     private readonly backend: StoreBackend,
     readonly quotas: StoreQuotas,
     watchLimits: WatchLimits = sessionWatchLimits,
+    admitted?: RouterOptions['admitted'],
   ) {
     this.router = createRouter({
+      admitted,
       limits: () => watchLimits,
       revision: store => (this.revisions.get(store) ?? 0n).toString(),
     });

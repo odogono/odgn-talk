@@ -30,6 +30,7 @@ import {
 import {
   observeRuns,
   observeValues,
+  queuedInputs,
   restore,
   type Group,
   type Inspection,
@@ -61,6 +62,7 @@ import {
   consoleCapability,
   type CalendarImpl,
 } from '../standard-capabilities';
+import type { NotificationRouter } from '../notify/router';
 import { storeCapability } from '../store-capability';
 import { userCapability, type UserImpl } from '../user-capability';
 import {
@@ -69,6 +71,7 @@ import {
   memoryStores,
   sessionQuotas,
   StoreContentsError,
+  type Stores,
 } from '../store/index';
 import type { SyntaxNode } from '../syntax';
 import { readDisplay } from '../readers';
@@ -253,9 +256,10 @@ const OVERRIDABLE = [
 ] as const;
 const NAME_TEXT = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 
-// What `:save` keeps: the Group's save, and the Session Host's own state.
+// What `:save` keeps: a checkpoint of the Group and its watches, and the
+// Session Host's own state.
 type Saved = {
-  bytes: Uint8Array;
+  checkpoint: Uint8Array;
   deadline: bigint | undefined;
   declarations: Declaration[];
   expressions: Set<string>;
@@ -374,13 +378,19 @@ export class SessionHost {
   private readonly saves = new Map<string, Saved>();
   // Every Session Store, by name: in memory, starting empty, and outside
   // every save (chapter 12, The Session Store).
-  private readonly stores = memoryStores(sessionQuotas);
+  private readonly stores: Stores;
+  // Whether the router has admitted a Notification since the last Pump began.
+  private notified = false;
+  private readonly admitted = () => {
+    this.notified = true;
+  };
   private observation = new Observation();
   // The next Entry's Run is a Fuel Measurement.
   private measuring = false;
 
   private readonly extensions: ReadonlyMap<string, CapabilityDef<unknown>>;
   constructor(private readonly env: SessionEnvironment) {
+    this.stores = memoryStores(sessionQuotas, this.admitted);
     const definitions = env.capabilities?.() ?? [];
     this.extensions = new Map(definitions.map(def => [def.name, def]));
     if (
@@ -506,7 +516,7 @@ export class SessionHost {
     if (controller.isPaused) {
       return [];
     }
-    return this.printed(this.pumped(result));
+    return this.finished([...this.pumped(result), ...this.notifications()]);
   }
 
   /**
@@ -622,7 +632,7 @@ export class SessionHost {
     this.recording = source.replace(/\n+$/, '');
     const out = this.entry(source);
     this.recorded();
-    return this.printed(out);
+    return this.finished(out);
   }
 
   // The Entry or Session Command, as its Transcript records it, until the
@@ -649,6 +659,22 @@ export class SessionHost {
       this.record({ k: 'output', text });
     }
     return out;
+  }
+
+  // Ends a Host call, then pumps once more, as a Host call of its own, if
+  // Host Inputs are still queued. That Pump never causes another, so what
+  // it leaves waits for the next Host call (chapter 12, The foreground).
+  private finished(lines: string[]): string[] {
+    const out = this.printed(lines);
+    if (
+      !this.group ||
+      this.state.k === 'paused' ||
+      !this.group[queuedInputs]()
+    ) {
+      return out;
+    }
+    this.callStart = this.recordedItems.length;
+    return [...out, ...this.printed(this.pump())];
   }
 
   private entry(source: string): string[] {
@@ -694,7 +720,7 @@ export class SessionHost {
     this.reads.delete(pending[0]);
     this.record({ k: 'read', line });
     pending[1].call.answer(text(line));
-    return this.printed(this.pump());
+    return this.finished(this.pump());
   }
 
   /**
@@ -713,7 +739,7 @@ export class SessionHost {
     this.prompts.delete(pending[0]);
     this.record({ k: 'answer', call: pending[0], answer: answer.toString() });
     pending[1].call.answer(answer);
-    return this.printed(this.pump());
+    return this.finished(this.pump());
   }
 
   /** `Inspect()`, which is the Host Input `vars`; null before the session starts. */
@@ -740,7 +766,7 @@ export class SessionHost {
       return [];
     }
     this.callStart = this.recordedItems.length;
-    return this.printed(this.pump());
+    return this.finished(this.pump());
   }
 
   // ------------------------------------------------------------- starting
@@ -1408,7 +1434,7 @@ export class SessionHost {
       this.unrecorded = false;
       const landed = controller.resume();
       this.rewound = landed.state === 'rewound';
-      out = this.pumped(landed);
+      out = [...this.pumped(landed), ...this.notifications()];
     } else {
       out = this.pump();
     }
@@ -1549,9 +1575,9 @@ export class SessionHost {
   // ------------------------------------------------------------- saving
 
   private save(name: string): string[] {
-    const bytes = this.group!.save();
+    const checkpoint = this.stores.router.save(this.group!);
     this.saves.set(name, {
-      bytes,
+      checkpoint,
       declarations: [...this.declarations],
       implicit: new Set(this.implicit),
       lastEntry: this.lastEntry,
@@ -1571,17 +1597,20 @@ export class SessionHost {
     return [`saved ${name}`];
   }
 
-  // The session's Group is replaced by one restored with RejectMismatch, and
-  // every pending call is adopted.
+  // The session's Group is replaced by one restored with RejectMismatch,
+  // through the router, which registers its watches again; every pending
+  // call is adopted. A Session Store changed since the save sends each
+  // watch on it a marker, which the Session Host pumps for.
   private restore(name: string): string[] {
     const saved = this.saves.get(name);
     if (!saved) {
       return refuse('no such save');
     }
     this.recorded();
-    let restored: ReturnType<typeof restore>;
+    let restored: ReturnType<NotificationRouter['restore']>;
+    this.notified = false;
     try {
-      restored = restore(saved.bytes, {
+      restored = this.stores.router.restore({ restore }, saved.checkpoint, {
         name: NAME,
         trace: line => this.env.trace?.(line),
         libraries: [...this.libraries.values()].map(l => l.library),
@@ -1598,6 +1627,7 @@ export class SessionHost {
     }
     const { group, result } = restored;
     group[observeRuns](e => this.events.push(e));
+    this.stores.router.detach(this.group!);
     this.group = group;
     this.objectSession!.restored();
     this.objectSession!.attach(group);
@@ -1656,6 +1686,7 @@ export class SessionHost {
       `restored ${name}`,
       ...result.discardedRuns.map(run => `! discarded ${run}`),
       ...abandoned.map(entry => `fuel abandoned ${text(entry).toString()}`),
+      ...this.notifiedPump(),
     ];
   }
 
@@ -1772,8 +1803,12 @@ export class SessionHost {
         this.recording = `:store load${w[2] ? ` ${w[2]}` : ''}\n${contents.replace(/\n$/u, '')}`;
       }
       try {
+        this.notified = false;
         this.stores.replace(name, decodeContents(contents));
-        return [`loaded ${this.stores.entries(name).length} keys`];
+        return [
+          `loaded ${this.stores.entries(name).length} keys`,
+          ...this.notifiedPump(),
+        ];
       } catch (error) {
         if (error instanceof HostError || error instanceof StoreContentsError) {
           return refuse('bad arguments');
@@ -1799,8 +1834,9 @@ export class SessionHost {
         refuse('bad arguments');
       }
       const name = w[1] ?? 'default';
+      this.notified = false;
       this.stores.clear(name);
-      return [`cleared ${name}`];
+      return [`cleared ${name}`, ...this.notifiedPump()];
     }
     if (w.length > 1) {
       refuse('bad arguments');
@@ -2079,6 +2115,8 @@ export class SessionHost {
 
   // ------------------------------------------------------------- pumping
 
+  // A Pump at the Clock's next reading, and the Pumps for the Notifications
+  // it leaves queued.
   private pump(): string[] {
     this.recorded();
     const reading = this.virtual ?? this.env.now();
@@ -2090,7 +2128,12 @@ export class SessionHost {
         ? this.lastClock
         : reading;
     this.lastClock = now;
+    return [...this.pumpAt(now), ...this.notifications()];
+  }
+
+  private pumpAt(now: bigint): string[] {
     this.events = [];
+    this.notified = false;
     const result = this.group!.pump(now);
     this.rewound = result.state === 'rewound';
     if (this.controller?.isPaused) {
@@ -2100,8 +2143,31 @@ export class SessionHost {
     return this.pumped(result);
   }
 
-  // A completed Pump's lines.
+  // After a Pump that leaves a Notification queued, the Session Host pumps
+  // again at the same Clock reading, until a Pump leaves none (Store
+  // Notifications, The Session Host). A Handler whose own write always
+  // changes a key it watches never lets the session settle.
+  private notifications(): string[] {
+    const out: string[] = [];
+    while (
+      this.notified &&
+      this.state.k !== 'paused' &&
+      this.group![queuedInputs]()
+    ) {
+      out.push(...this.pumpAt(this.lastClock!));
+    }
+    return out;
+  }
+
+  // A Host change to a Session Store that queued a Notification is pumped for.
+  private notifiedPump(): string[] {
+    return this.notified && this.group ? this.pump() : [];
+  }
+
+  // A completed Pump's lines. The router first retries the Notifications it
+  // holds for the Group.
   private pumped(result: PumpResult): string[] {
+    this.stores.router.pumped(this.group!);
     this.deadline = result.nextDeadline;
     this.objectSession?.reports(result.reports);
     const out = this.print(result.reports);
