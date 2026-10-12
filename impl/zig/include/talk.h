@@ -11,9 +11,10 @@
  * error. A string the Core returns is UTF-8, not NUL-terminated, and lives as
  * long as the handle it came from.
  *
- * Values and their display/encoding are implemented, and step 1 of Group
- * execution: a Core, Groups, loading a Script without Grants, objects or
- * Libraries, Deliveries and Requests to a Script, Pumps and inspection.
+ * Values and their display/encoding are implemented, and Group execution so
+ * far: a Core, Groups, Capabilities and Grants, Host Objects, loading a
+ * Script without Libraries, Deliveries and Requests to a Script or an
+ * object, Pumps, counters and inspection.
  */
 #ifndef TALK_H
 #define TALK_H
@@ -371,6 +372,40 @@ typedef struct talk_group_options {
     void *trace_context;
 } talk_group_options;
 
+/* Host Objects (ADRs 0012, 0016). A property's Get and Set run inside the
+ * Run, like an immediate Operation, and are charged the same way. Get
+ * answers with TALK_CALL_ANSWERED and *result, an owned reference; Set with
+ * TALK_CALL_ANSWERED. TALK_CALL_FAILED or TALK_CALL_BROKEN is host error.
+ * A NULL set makes the property read-only. */
+typedef struct talk_object talk_object;
+typedef struct talk_object_kind talk_object_kind;
+/* C only: Prop.Get. */
+typedef talk_call_end (*talk_prop_get_fn)(void *context, talk_object *o, talk_value **result, talk_script_error *error);
+/* C only: Prop.Set. */
+typedef talk_call_end (*talk_prop_set_fn)(void *context, talk_object *o, const talk_value *v, talk_script_error *error);
+typedef struct talk_prop {
+    const char *name;
+    size_t name_len;
+    const talk_shape *shape;
+    talk_prop_get_fn get;
+    talk_prop_set_fn set; /* NULL: read-only */
+    void *context;
+    talk_cost get_cost;
+    talk_cost set_cost;
+} talk_prop;
+typedef struct talk_object_kind_def {
+    const char *name;
+    size_t name_len;
+    const talk_prop *props;
+    size_t props_len;
+    /* For the Host Manifest only; talk_set_parent doesn't check it. */
+    const char *const *parent_kinds;
+    const size_t *parent_kinds_lens;
+    size_t parent_kinds_len;
+} talk_object_kind_def;
+/* Defines an Object Kind, once per process. It lives as long as the Core. */
+talk_host_error_code talk_define_object_kind(talk_core *c, const talk_object_kind_def *k, talk_object_kind **out);
+
 /* C only: a Grant bound by the name the Script uses. */
 typedef struct talk_load_grant {
     const char *name;
@@ -386,7 +421,17 @@ typedef struct talk_load_options {
     const talk_load_grant *grants;
     size_t grants_len;
     bool grants_as_used;
+    talk_object *owner; /* NULL: the Script owns no object */
+    const struct talk_load_object *objects;
+    size_t objects_len;
 } talk_load_options;
+
+/* C only: a well-known object bound to a name at load. */
+typedef struct talk_load_object {
+    const char *name;
+    size_t name_len;
+    talk_object *object;
+} talk_load_object;
 
 typedef struct talk_message {
     const char *name;
@@ -453,6 +498,30 @@ talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out
 void talk_pending_release(talk_pending *p);
 /* Runs a Pump with one Clock reading. o may be NULL. */
 talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t nanos, const talk_pump_options *o, talk_pump_result *out);
+/* Makes the Group's handle for a Host-owned thing, the first time it
+ * crosses into the Group. A reused id within the kind is
+ * TALK_DUPLICATE_OBJECT_ID. The handle lives as long as the Group. */
+talk_host_error_code talk_group_object(talk_group *g, const talk_object_kind *kind, const char *id, size_t id_len, void *native, talk_object **out);
+/* The handle with this Object Kind name and id, disposed or not; false if
+ * the Group never made one. */
+bool talk_object_by_id(talk_group *g, const char *kind, size_t kind_len, const char *id, size_t id_len, talk_object **out);
+void talk_object_id(const talk_object *o, const char **s, size_t *len);
+void *talk_object_native(const talk_object *o);
+/* The object as a Script value, an owned reference. */
+talk_host_error_code talk_object_value(const talk_object *o, talk_value **out);
+/* The handle an object value is. Unlike talk.go's, it takes the Group,
+ * since a value doesn't hold one. */
+bool talk_value_as_object(talk_group *g, const talk_value *v, talk_object **out);
+/* SetParent and Dispose are queued as Host Inputs. A cycle is
+ * TALK_PARENT_CYCLE, and a disposed child TALK_INVALID_VALUE, at the call;
+ * a parent of NULL ends the chain. */
+talk_host_error_code talk_set_parent(talk_group *g, talk_object *o, talk_object *parent);
+talk_host_error_code talk_dispose(talk_group *g, talk_object *o);
+/* A Delivery or Request to a Host Object: it goes to the object's Owning
+ * Script, or its nearest ancestor's, when the queue is drained. */
+talk_host_error_code talk_deliver(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id);
+talk_host_error_code talk_request(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+
 /* Inspects the Group. In step 1 it writes a vars record for each Script to
  * the Trace, as the Host Input vars does. */
 void talk_inspect(talk_group *g);

@@ -6,14 +6,13 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail", "set-parent", "dispose" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
     const s = case_setup.read(a, setup) catch return "case.toml isn't read";
     for (s.units) |u| {
         if (u.library) return "Libraries are not implemented";
-        if (u.objects.len > 0) return "Host Objects are not implemented";
     }
     if (grantsUnsupported(a, setup)) |why| return why;
     var lines = std.mem.splitScalar(u8, trace, '\n');
@@ -27,9 +26,10 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         if (std.mem.indexOf(u8, input, " limits=") != null or std.mem.indexOf(u8, input, " fuel-slice=") != null or std.mem.indexOf(u8, input, " fuel-cap=") != null) return "limits are not implemented";
         if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
+            if (std.mem.startsWith(u8, to, "<object ")) continue;
             for (s.units) |u| {
                 if (std.mem.eql(u8, u.name, to)) break;
-            } else return "Deliveries to objects are not implemented";
+            } else return "a Delivery to a Script the case doesn't load";
         }
     }
     return null;
@@ -92,6 +92,108 @@ fn shapeSupported(v: case_setup.Value) bool {
         },
         else => false,
     };
+}
+
+/// The case's Host Objects: their property values, which each Get reads
+/// and each Set writes, by object and property.
+const ObjectStore = struct {
+    a: std.mem.Allocator,
+    values: std.AutoHashMapUnmanaged(usize, std.StringHashMapUnmanaged(?*c.talk_value)) = .empty,
+    /// Every handle, by `<kind>/<id>`.
+    handles: std.StringHashMapUnmanaged(*c.talk_object) = .empty,
+
+    fn deinit(store: *ObjectStore) void {
+        var it = store.values.valueIterator();
+        while (it.next()) |props| {
+            var vs = props.valueIterator();
+            while (vs.next()) |v| c.talk_value_release(v.*);
+        }
+    }
+
+    /// The handle `<object kind "id">` names.
+    fn named(store: *ObjectStore, shown: []const u8) ?*c.talk_object {
+        const rest = shown["<object ".len..];
+        const sp = std.mem.indexOfScalar(u8, rest, ' ') orelse return null;
+        const q = std.mem.lastIndexOfScalar(u8, rest, '"') orelse return null;
+        var buf: [256]u8 = undefined;
+        const key = std.fmt.bufPrint(&buf, "{s}/{s}", .{ rest[0..sp], rest[sp + 2 .. q] }) catch return null;
+        return store.handles.get(key);
+    }
+};
+
+const PropHost = struct { store: *ObjectStore, name: []const u8 };
+
+fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    _ = err;
+    const h: *PropHost = @ptrCast(@alignCast(context.?));
+    const props = h.store.values.getPtr(@intFromPtr(o.?)) orelse return c.TALK_CALL_BROKEN;
+    const v = props.get(h.name) orelse return c.TALK_CALL_BROKEN;
+    c.talk_value_retain(v);
+    result.* = v;
+    return c.TALK_CALL_ANSWERED;
+}
+
+fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    _ = err;
+    const h: *PropHost = @ptrCast(@alignCast(context.?));
+    const props = h.store.values.getPtr(@intFromPtr(o.?)) orelse return c.TALK_CALL_BROKEN;
+    c.talk_value_retain(@constCast(v));
+    const old = props.fetchPut(h.store.a, h.name, @constCast(v)) catch return c.TALK_CALL_BROKEN;
+    if (old) |x| c.talk_value_release(x.value);
+    return c.TALK_CALL_ANSWERED;
+}
+
+/// Defines the case's Object Kinds from `[[objectKinds]]` and makes its
+/// objects from `[[objects]]`, with their initial property values.
+fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_group, all: []const case_setup.Table, store: *ObjectStore) !void {
+    var kinds: std.StringHashMapUnmanaged(?*c.talk_object_kind) = .empty;
+    for (all) |t| {
+        if (!std.mem.eql(u8, t.header, "[[objectKinds]]")) continue;
+        const name = case_setup.field(t, "name").?.string;
+        var props: std.ArrayList(c.talk_prop) = .empty;
+        if (case_setup.field(t, "props")) |list| for (list.array) |p| {
+            const prop_name = p.get("name").?.string;
+            const prop_host = try a.create(PropHost);
+            prop_host.* = .{ .store = store, .name = prop_name };
+            const read_only = if (p.get("readOnly")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
+            const get_cost = p.get("getCost");
+            const set_cost = p.get("setCost");
+            try props.append(a, .{
+                .name = prop_name.ptr,
+                .name_len = prop_name.len,
+                .shape = try shapeOf(p.get("shape").?),
+                .get = propGet,
+                .set = if (read_only) null else propSet,
+                .context = prop_host,
+                .get_cost = .{ .fuel = number(if (get_cost) |x| x.get("fuel") else null), .alloc = number(if (get_cost) |x| x.get("alloc") else null) },
+                .set_cost = .{ .fuel = number(if (set_cost) |x| x.get("fuel") else null), .alloc = number(if (set_cost) |x| x.get("alloc") else null) },
+            });
+        };
+        defer for (props.items) |p| c.talk_shape_release(p.shape);
+        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.items.ptr, .props_len = props.items.len };
+        var kind: ?*c.talk_object_kind = null;
+        try check(c.talk_define_object_kind(core, &def, &kind));
+        try kinds.put(a, name, kind);
+    }
+    for (all) |t| {
+        if (!std.mem.eql(u8, t.header, "[[objects]]")) continue;
+        const kind = case_setup.field(t, "kind").?.string;
+        const id = case_setup.field(t, "id").?.string;
+        var o: ?*c.talk_object = null;
+        try check(c.talk_group_object(group, kinds.get(kind) orelse return error.MalformedCase, id.ptr, id.len, null, &o));
+        try store.handles.put(a, try std.fmt.allocPrint(a, "{s}/{s}", .{ kind, id }), o.?);
+        var props: std.StringHashMapUnmanaged(?*c.talk_value) = .empty;
+        if (case_setup.field(t, "props")) |given| for (given.table) |e| {
+            try props.put(a, e.key, parsed(e.value.string) orelse return error.MalformedCase);
+        };
+        try store.values.put(a, @intFromPtr(o.?), props);
+    }
+}
+
+/// The handle a case's `{ kind, id }` table names.
+fn objectNamed(store: *ObjectStore, a: std.mem.Allocator, v: case_setup.Value) !*c.talk_object {
+    const key = try std.fmt.allocPrint(a, "{s}/{s}", .{ v.get("kind").?.string, v.get("id").?.string });
+    return store.handles.get(key) orelse error.MalformedCase;
 }
 
 /// The value of `key=` in a Host Input, up to the next ` key=` or the end.
@@ -444,6 +546,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
     try defineCapabilities(a, core, all, &hosts, &defs, &calls);
     try defineStandard(a, core, all, &hosts, &defs, &calls);
+    var store: ObjectStore = .{ .a = a };
+    defer store.deinit();
+    try defineObjects(a, core, group, all, &store);
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;
@@ -462,14 +567,30 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             } else return error.UnknownScript;
             const grants = try grantsOf(a, table, &defs);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
-            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used };
+            const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(&store, a, x) else null;
+            var bound: std.ArrayList(c.talk_load_object) = .empty;
+            if (case_setup.field(table, "objects")) |given| for (given.table) |e| {
+                try bound.append(a, .{ .name = e.key.ptr, .name_len = e.key.len, .object = try objectNamed(&store, a, e.value) });
+            };
+            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len };
             var loaded: ?*c.talk_script = null;
             const code = c.talk_load(group, &load, &loaded);
             if (code == c.TALK_LOAD_REFUSED) continue;
             try check(code);
             try scripts.put(a, script, loaded.?);
+        } else if (std.mem.eql(u8, name, "set-parent")) {
+            const o = store.named(field(input, "object").?) orelse return error.MalformedCase;
+            const shown = field(input, "parent").?;
+            const parent: ?*c.talk_object = if (std.mem.eql(u8, shown, "nothing")) null else store.named(shown) orelse return error.MalformedCase;
+            // A refusal at the call is in the Trace as a `refused` record.
+            const code = c.talk_set_parent(group, o, parent);
+            if (code != c.TALK_PARENT_CYCLE and code != c.TALK_INVALID_VALUE) try check(code);
+        } else if (std.mem.eql(u8, name, "dispose")) {
+            try check(c.talk_dispose(group, store.named(field(input, "object").?) orelse return error.MalformedCase));
         } else if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request")) {
-            const to = scripts.get(field(input, "to").?) orelse return error.UnknownScript;
+            const to_shown = field(input, "to").?;
+            const to_object: ?*c.talk_object = if (std.mem.startsWith(u8, to_shown, "<object ")) store.named(to_shown) orelse return error.MalformedCase else null;
+            const to = if (to_object != null) null else scripts.get(to_shown) orelse return error.UnknownScript;
             const message = field(input, "message").?;
             var args: std.ArrayList(?*c.talk_value) = .empty;
             defer for (args.items) |v| c.talk_value_release(v);
@@ -484,12 +605,12 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                 }
             }
             const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len };
-            if (std.mem.eql(u8, name, "deliver")) {
+            var pending: ?*c.talk_pending = null;
+            if (to_object) |o| {
+                if (std.mem.eql(u8, name, "deliver")) try check(c.talk_deliver(group, o, &m, null)) else try check(c.talk_request(group, o, &m, null, &pending));
+            } else if (std.mem.eql(u8, name, "deliver")) {
                 try check(c.talk_script_deliver(to, &m, null));
-            } else {
-                var pending: ?*c.talk_pending = null;
-                try check(c.talk_script_request(to, &m, null, &pending));
-            }
+            } else try check(c.talk_script_request(to, &m, null, &pending));
         } else if (std.mem.eql(u8, name, "pump")) {
             const clock = field(input, "clock").?;
             var instant: ?*c.talk_value = null;

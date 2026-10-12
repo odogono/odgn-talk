@@ -56,7 +56,7 @@ static int group_test(void) {
     talk_group_options options = {"g", 1, record, NULL};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
-    talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false};
+    talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
     talk_script *script = NULL;
     if (talk_load(group, &load, &script) != TALK_OK) return 1;
     int bad = 0;
@@ -81,7 +81,7 @@ static int group_test(void) {
     talk_value_release(result);
     talk_inspect(group);
     bad |= strstr(trace, "vars adder total=41\n") == NULL;
-    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false};
+    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false, NULL, NULL, 0};
     talk_script *refused = NULL;
     bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
     bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
@@ -127,7 +127,7 @@ static int capability_test(void) {
     bad |= talk_grant_capability(grant) != def;
     talk_load_grant grants[] = {{"echo", 4, grant}};
     const char *source = "script variable said\non go s\n  try\n    ask echo to twice s\n    put it into said\n  catch e\n    put e's code into said\n  end try\nend go\n";
-    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false};
+    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     const char *inputs[] = {"ab", ""};
@@ -146,7 +146,7 @@ static int capability_test(void) {
     bad |= strstr(trace, "call caller/r2.c1 op=echo.twice args=[\"\"] error={code: \"empty\", message: \"nothing to echo\"}\n") == NULL;
     bad |= strstr(trace, "vars caller said=\"empty\"\n") == NULL;
     const char *wrong_source = "on go\n  ask echo to twice 5\nend go\n";
-    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false};
+    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0};
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
     bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
@@ -193,7 +193,7 @@ static int standard_test(void) {
     bad |= talk_capability_def_grant_all(console, NULL, &console_grant) != TALK_OK;
     talk_load_grant grants[] = {{"clock", 5, clock_grant}, {"console", 7, console_grant}};
     const char *source = "script variable at\non go\n  ask clock to now\n  put it into at\n  say at\nend go\n";
-    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false};
+    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false, NULL, NULL, 0};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     talk_message message = {"go", 2, NULL, 0};
@@ -231,7 +231,7 @@ static int suspension_test(void) {
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"feed", 4, grant}};
     const char *source = "script variable got\non go\n  ask feed to fetch and wait\n  put it into got\nend go\n";
-    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false};
+    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     talk_message message = {"go", 2, NULL, 0};
@@ -258,6 +258,73 @@ static int suspension_test(void) {
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
+    return bad;
+}
+
+static talk_value *lamp_state = NULL;
+static talk_call_end get_state(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    talk_value_retain(lamp_state);
+    *result = lamp_state;
+    return TALK_CALL_ANSWERED;
+}
+static talk_call_end set_state(void *context, talk_object *o, const talk_value *v, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    talk_value_release(lamp_state);
+    talk_value_retain((talk_value *)v);
+    lamp_state = (talk_value *)v;
+    return TALK_CALL_ANSWERED;
+}
+
+static int object_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_text("off", 3, &lamp_state);
+    talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, set_state, NULL, {2, 0}, {5, 0}}};
+    talk_object_kind_def lamp_def = {"lamp", 4, props, 1, NULL, NULL, 0};
+    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0};
+    talk_object_kind *lamp = NULL, *room = NULL;
+    int bad = talk_define_object_kind(core, &lamp_def, &lamp) != TALK_OK;
+    bad |= talk_define_object_kind(core, &room_def, &room) != TALK_OK;
+    talk_object *light = NULL, *hall = NULL, *again = NULL, *found = NULL;
+    bad |= talk_group_object(group, lamp, "l1", 2, NULL, &light) != TALK_OK;
+    bad |= talk_group_object(group, room, "hall", 4, NULL, &hall) != TALK_OK;
+    bad |= talk_group_object(group, lamp, "l1", 2, NULL, &again) != TALK_DUPLICATE_OBJECT_ID;
+    bad |= !talk_object_by_id(group, "room", 4, "hall", 4, &found) || found != hall;
+    talk_value *shown = NULL;
+    bad |= talk_object_value(light, &shown) != TALK_OK || !talk_value_as_object(group, shown, &found) || found != light;
+    talk_value_release(shown);
+    /* The light's messages climb to the hall's Owning Script. */
+    bad |= talk_set_parent(group, light, hall) != TALK_OK;
+    const char *source = "on toggle\n  set the state of light to \"on\"\n  return [the id of the target, the state of light]\nend toggle\n";
+    talk_load_object bound[] = {{"light", 5, light}};
+    talk_load_options load = {"hall", 4, source, strlen(source), NULL, 0, false, hall, bound, 1};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"toggle", 6, NULL, 0};
+    talk_pending *pending = NULL;
+    bad |= talk_request(group, light, &message, NULL, &pending) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_value *answer = NULL;
+    talk_owned_bytes text = {0};
+    bad |= talk_pending_result(pending, &answer) != TALK_OK || talk_value_string(answer, &text) != TALK_OK;
+    const char *want = "[\"l1\", \"on\"]";
+    bad |= text.len != strlen(want) || memcmp(text.data, want, text.len) != 0;
+    talk_owned_bytes_release(&text);
+    talk_value_release(answer);
+    bad |= strstr(trace, "prop hall/r1 object=<object lamp \"l1\"> name=state op=set value=\"on\"\n") == NULL;
+    /* With the light's parent drained, the reverse is a cycle at the call. */
+    bad |= talk_set_parent(group, hall, light) != TALK_PARENT_CYCLE;
+    bad |= strstr(trace, "refused code=\"parent cycle\"\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    talk_value_release(lamp_state);
     return bad;
 }
 
@@ -335,5 +402,6 @@ int main(void) {
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     return failures == 0 ? 0 : 1;
 }

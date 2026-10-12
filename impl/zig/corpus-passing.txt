@@ -1,4 +1,5 @@
 # Cases protected by the Zig Core's incremental conformance gate.
+builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
@@ -39,6 +40,7 @@ errors/fail-error-map
 errors/items-delimiter
 errors/queued-error-before-parked-run
 fallback/forwarding
+fallback/message-path
 fallback/no-match
 fallback/policies
 limits/wait-deadline
@@ -78,6 +80,7 @@ load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
 load-diagnostics/not-in-a-timeout
 load-diagnostics/nothing-to-fold
+load-diagnostics/object-properties
 load-diagnostics/outside-a-loop
 load-diagnostics/rest-not-last
 load-diagnostics/unknown-import
@@ -85,6 +88,12 @@ load-diagnostics/unknown-kind
 load-diagnostics/unknown-name
 load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
+objects/guard-keys
+objects/message-path
+objects/properties
+objects/queued-parent-refusals
+objects/sends
+objects/wait-target
 quantities/value-encoding
 suspension/answers
 suspension/joins

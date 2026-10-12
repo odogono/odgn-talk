@@ -105,8 +105,15 @@ pub const Context = struct {
     grants: ?[]const Grant = null,
     /// The Libraries the Group holds, besides the stdlib's.
     libraries: []const Library = &.{},
+    /// The Object Kind of the object the Script owns, which `me` is.
+    owner: ?[]const u8 = null,
     /// Whether `key` of an Object Kind can be set; null when it isn't known.
-    writable: ?*const fn (kind: []const u8, key: []const u8) ?bool = null,
+    writable: ?Writable = null,
+};
+
+pub const Writable = struct {
+    context: *const anyopaque,
+    call: *const fn (context: *const anyopaque, kind: []const u8, key: []const u8) ?bool,
 };
 
 pub const Object = struct { name: []const u8, kind: []const u8 };
@@ -1424,8 +1431,8 @@ const Checker = struct {
                 try c.expr(s, target, .normal);
                 const kind = c.knownKind(s, k.base) orelse return;
                 const key = c.literalKey(k.key, k.computed) orelse return;
-                const check_fn = c.context.writable orelse return;
-                if (check_fn(kind, key) != true) try c.report(.cant_write, keyword);
+                const writable = c.context.writable orelse return;
+                if (writable.call(writable.context, kind, key) != true) try c.report(.cant_write, keyword);
             },
             else => try c.expr(s, target, .normal),
         }
@@ -1446,6 +1453,7 @@ const Checker = struct {
     fn knownKind(c: *Checker, s: *Scope, base: *const Expr) ?[]const u8 {
         var e = base;
         while (e.data == .group) e = e.data.group;
+        if (e.data == .word and e.data.word == .me) return c.context.owner;
         if (e.data != .name) return null;
         const name = c.text(e.data.name);
         if (s.locals.contains(name)) return null;
