@@ -38,6 +38,9 @@ disassembly/whose
 errors/fail-error-map
 errors/items-delimiter
 errors/queued-error-before-parked-run
+fallback/forwarding
+fallback/no-match
+fallback/policies
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/argument-labels

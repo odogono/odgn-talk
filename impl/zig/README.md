@@ -173,9 +173,11 @@ A Pump writes and drains the queued Deliveries and Requests, then runs each
 Script's mailbox: each Run tries its Handler's clauses in order, charging the
 `clause` rate at each clause's first instruction. A Command Call to a Handler
 of the Script, with or without `and wait`, tries its clauses the same way in a
-new frame, and raises `no match` at the call when none takes it. A clause's
-Queueing Policy applies once dispatch picks it, while a Run of the clause
-hasn't ended. `, queued` parks the new Run after its `clause` charge, and the
+new frame, and raises `no match` at the call when none takes it. A message no
+named clause takes goes to the Fallback's clauses with its `{name, args}` map,
+built without charge, unless it is an `error` message; its Run's records add
+`fallback=yes`. A clause's Queueing Policy applies once its patterns and Guard
+have passed, while a Run of the clause hasn't ended. `, queued` parks the new Run after its `clause` charge, and the
 first parked Run becomes ready when the clause's Run ends, behind any `error`
 message. `, dropping` ends the new Run `dropped`. `, replacing` cancels the
 earlier Runs: what each waits on is abandoned at once, and in its own turn it
