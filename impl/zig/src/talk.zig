@@ -710,7 +710,7 @@ pub const Call = caps.Call;
 
 pub const ScriptError = extern struct { code: ?[*]const u8, code_len: usize, message: ?[*]const u8, message_len: usize, data: ?*Value };
 
-pub const CallEnd = enum(c_int) { answered, failed, limited, broken };
+pub const CallEnd = enum(c_int) { answered, failed, limited, broken, started };
 
 pub const OperationFn = ?*const fn (context: ?*anyopaque, call: *Call, args: [*]const *Value, args_len: usize, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
 
@@ -738,6 +738,7 @@ fn bridged(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome
     var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
     switch (b.call(b.context, call, args.ptr, args.len, &value, &failure)) {
         .answered => return if (value) |v| .{ .value = v } else .broken,
+        .started => return .started,
         .limited => return .limited,
         .broken => return .broken,
         .failed => {
@@ -775,8 +776,7 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
     if (name.len == 0) return error.InvalidValue;
     const call = o.@"fn" orelse return error.InvalidValue;
-    if (o.mode == .suspending) return error.InvalidValue;
-    if (o.mode == .immediate and o.result == null) return error.InvalidValue;
+    if (o.mode != .fire_and_forget and o.result == null) return error.InvalidValue;
     if (o.cost.fuel < 0 or o.cost.alloc < 0) return error.InvalidValue;
     const args_in: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
     const errors_in: []const ErrorDecl = if (o.errors_len == 0) &.{} else (o.errors orelse return error.InvalidValue)[0..o.errors_len];
@@ -979,4 +979,28 @@ export fn talk_locale_capability(c: *Core, impl: *const LocaleImpl, costs: ?*con
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     return defineStandard(c, .console, &.{ impl.read, impl.write }, impl.context, costs, out);
+}
+
+// ---------------------------------------------------------------- answers
+
+fn settle(c: *Call, with: machine.Resume) HostErrorCode {
+    const g: *machine.Group = @ptrCast(@alignCast(c.group orelse return .unknown_call));
+    g.settle(c.id, with) catch return .out_of_memory;
+    return .ok;
+}
+
+export fn talk_call_answer(c: *Call, v: *Value) HostErrorCode {
+    return settle(c, .{ .answer = .{ .value = v.retain(), .fuel = 0 } });
+}
+
+export fn talk_call_answer_with_cost(c: *Call, v: *Value, fuel: i64) HostErrorCode {
+    if (fuel < 0) return .invalid_value;
+    return settle(c, .{ .answer = .{ .value = v.retain(), .fuel = @intCast(fuel) } });
+}
+
+export fn talk_call_fail(c: *Call, e: ?*const ScriptError) HostErrorCode {
+    const failure = e orelse return settle(c, .broken);
+    const code = allocator.dupe(u8, bytes(failure.code, failure.code_len) catch return .invalid_value) catch return .out_of_memory;
+    const message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, bytes(failure.message, failure.message_len) catch return .invalid_value) catch return .out_of_memory;
+    return settle(c, .{ .failed = .{ .code = code, .message = message, .data = if (failure.data) |d| d.retain() else null } });
 }

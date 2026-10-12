@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "stub" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "stub", "answer", "fail" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -52,7 +52,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
         }
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
-        if (mode != .string or std.mem.eql(u8, mode.string, "suspending")) return "suspending Operations are not implemented";
+        if (mode != .string) return "an Operation without a mode";
         if (case_setup.field(t, "scope") != null or case_setup.field(t, "segmentBound") != null) return "Capability Scopes are not implemented";
         for ((case_setup.field(t, "args") orelse continue).array) |shape| if (!shapeSupported(shape)) return "object Shapes are not implemented";
     }
@@ -140,6 +140,8 @@ const Stub = struct { value: ?[]const u8 = null, err: ?[]const u8 = null, charge
 const OperationHost = struct {
     /// Holds what the Host function gives the Core, until the case ends.
     a: std.mem.Allocator,
+    /// The suspending calls started, by id, for `answer` and `fail`.
+    calls: *std.StringHashMapUnmanaged(?*c.talk_call),
     name: []const u8,
     mode: c.talk_mode,
     stubs: std.ArrayList(Stub) = .empty,
@@ -159,41 +161,16 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
     const stub: Stub = if (h.next < h.stubs.items.len) blk: {
         h.next += 1;
         break :blk h.stubs.items[h.next - 1];
-    } else if (h.mode == c.TALK_FIRE_AND_FORGET) .{} else return c.TALK_CALL_BROKEN;
+    } else if (h.mode != c.TALK_IMMEDIATE) .{} else return c.TALK_CALL_BROKEN;
     if (stub.charge) |n| if (n > 0 and c.talk_call_charge(call, n) != c.TALK_OK) return c.TALK_CALL_LIMITED;
-    if (stub.err) |shown| {
-        const e = parsed(shown) orelse return c.TALK_CALL_BROKEN;
-        defer c.talk_value_release(e);
-        var code_value: ?*c.talk_value = null;
-        if (c.talk_value_get(e, "code", 4, &code_value) != c.TALK_OK or code_value == null) return c.TALK_CALL_BROKEN;
-        defer c.talk_value_release(code_value);
-        var code: [*c]const u8 = null;
-        var code_len: usize = 0;
-        if (!c.talk_value_as_text(code_value, &code, &code_len)) return c.TALK_CALL_BROKEN;
-        // The Data: every entry but code and message.
-        var pairs: std.ArrayList(c.talk_pair) = .empty;
-        var message: ?[]const u8 = null;
-        var i: usize = 0;
-        var pair: c.talk_pair = undefined;
-        while (c.talk_value_entries(e, i, &pair)) : (i += 1) {
-            const key = pair.key[0..pair.key_len];
-            if (std.mem.eql(u8, key, "code")) continue;
-            if (std.mem.eql(u8, key, "message")) {
-                var t: [*c]const u8 = null;
-                var n: usize = 0;
-                if (c.talk_value_as_text(pair.value, &t, &n)) message = t[0..n];
-                continue;
-            }
-            pairs.append(h.a, pair) catch return c.TALK_CALL_BROKEN;
-        }
-        var data: ?*c.talk_value = null;
-        if (pairs.items.len > 0 and c.talk_map(pairs.items.ptr, pairs.items.len, &data) != c.TALK_OK) return c.TALK_CALL_BROKEN;
-        // The strings belong to the error value, so they are copied.
-        const owned_code = h.a.dupe(u8, code[0..code_len]) catch return c.TALK_CALL_BROKEN;
-        const owned_message = if (message) |m| h.a.dupe(u8, m) catch return c.TALK_CALL_BROKEN else null;
-        err.* = .{ .code = owned_code.ptr, .code_len = owned_code.len, .message = if (owned_message) |m| m.ptr else null, .message_len = if (owned_message) |m| m.len else 0, .data = data };
-        return c.TALK_CALL_FAILED;
+    if (h.mode == c.TALK_SUSPENDING and stub.err == null) {
+        var id: [*c]const u8 = null;
+        var id_len: usize = 0;
+        c.talk_call_id(call, &id, &id_len);
+        h.calls.put(h.a, id[0..id_len], call) catch return c.TALK_CALL_BROKEN;
+        return c.TALK_CALL_STARTED;
     }
+    if (stub.err) |shown| return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
     if (stub.value) |shown| {
         result.* = parsed(shown) orelse return c.TALK_CALL_BROKEN;
         return c.TALK_CALL_ANSWERED;
@@ -203,6 +180,42 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
         return c.TALK_CALL_ANSWERED;
     }
     return c.TALK_CALL_BROKEN;
+}
+
+/// A shown error map as a Script error: its code, message and the rest as
+/// Data. False for `{}` or anything else that isn't a Script error.
+fn scriptError(a: std.mem.Allocator, shown: []const u8, err: *c.talk_script_error) bool {
+    const e = parsed(shown) orelse return false;
+    defer c.talk_value_release(e);
+    var code_value: ?*c.talk_value = null;
+    if (c.talk_value_get(e, "code", 4, &code_value) != c.TALK_OK or code_value == null) return false;
+    defer c.talk_value_release(code_value);
+    var code: [*c]const u8 = null;
+    var code_len: usize = 0;
+    if (!c.talk_value_as_text(code_value, &code, &code_len)) return false;
+    // The Data: every entry but code and message.
+    var pairs: std.ArrayList(c.talk_pair) = .empty;
+    var message: ?[]const u8 = null;
+    var i: usize = 0;
+    var pair: c.talk_pair = undefined;
+    while (c.talk_value_entries(e, i, &pair)) : (i += 1) {
+        const key = pair.key[0..pair.key_len];
+        if (std.mem.eql(u8, key, "code")) continue;
+        if (std.mem.eql(u8, key, "message")) {
+            var t: [*c]const u8 = null;
+            var n: usize = 0;
+            if (c.talk_value_as_text(pair.value, &t, &n)) message = t[0..n];
+            continue;
+        }
+        pairs.append(a, pair) catch return false;
+    }
+    var data: ?*c.talk_value = null;
+    if (pairs.items.len > 0 and c.talk_map(pairs.items.ptr, pairs.items.len, &data) != c.TALK_OK) return false;
+    // The strings belong to the error value, so they are copied.
+    const owned_code = a.dupe(u8, code[0..code_len]) catch return false;
+    const owned_message = if (message) |m| a.dupe(u8, m) catch return false else null;
+    err.* = .{ .code = owned_code.ptr, .code_len = owned_code.len, .message = if (owned_message) |m| m.ptr else null, .message_len = if (owned_message) |m| m.len else 0, .data = data };
+    return true;
 }
 
 /// A Standard Operation's Host function: the next Stub for `key`, from the
@@ -218,7 +231,7 @@ fn standardHost(comptime key: []const u8) c.talk_operation_fn {
 }
 
 /// Defines the case's Standard Capabilities from its `[[standard]]` tables.
-fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def)) !void {
+fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call)) !void {
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[standard]]")) continue;
         const which = case_setup.field(t, "capability").?.string;
@@ -238,7 +251,7 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{};
         for (operations) |op| {
             const h = try a.create(OperationHost);
-            h.* = .{ .a = a, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ which, op[0] }), .mode = op[1] };
+            h.* = .{ .a = a, .calls = calls, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ which, op[0] }), .mode = op[1] };
             try hosts.put(a, h.name, h);
         }
         if (std.mem.eql(u8, which, "clock")) {
@@ -313,7 +326,7 @@ fn number(v: ?case_setup.Value) i64 {
 
 /// Defines the case's Capabilities from its `[[operations]]` tables, with
 /// one OperationHost each, keyed `<capability>.<operation>`.
-fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def)) !void {
+fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call)) !void {
     var names: std.ArrayList([]const u8) = .empty;
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
@@ -346,7 +359,7 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 try errors.append(a, .{ .code = code.ptr, .code_len = code.len, .fields = fields.items.ptr, .fields_len = fields.items.len });
             };
             const h = try a.create(OperationHost);
-            h.* = .{ .a = a, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, name }), .mode = mode };
+            h.* = .{ .a = a, .calls = calls, .name = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, name }), .mode = mode };
             try hosts.put(a, h.name, h);
             try ops.append(a, .{
                 .name = name.ptr,
@@ -418,9 +431,10 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var scripts: std.StringHashMapUnmanaged(*c.talk_script) = .empty;
     const all = try case_setup.tables(a, setup);
     var hosts: std.StringHashMapUnmanaged(*OperationHost) = .empty;
+    var calls: std.StringHashMapUnmanaged(?*c.talk_call) = .empty;
     var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
-    try defineCapabilities(a, core, all, &hosts, &defs);
-    try defineStandard(a, core, all, &hosts, &defs);
+    try defineCapabilities(a, core, all, &hosts, &defs, &calls);
+    try defineStandard(a, core, all, &hosts, &defs, &calls);
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;
@@ -478,6 +492,24 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_pump(group, seconds, nanos, null, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
+        } else if (std.mem.eql(u8, name, "answer") or std.mem.eql(u8, name, "fail")) {
+            // The Host settles a suspending call it started.
+            const rest = input[name_end + 1 ..];
+            const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
+            const call = calls.get(id) orelse return error.UnknownCall;
+            if (std.mem.eql(u8, name, "answer")) {
+                const v = parsed(field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
+                defer c.talk_value_release(v);
+                if (field(input, "fuel")) |n| {
+                    try check(c.talk_call_answer_with_cost(call, v, try std.fmt.parseInt(i64, n, 10)));
+                } else try check(c.talk_call_answer(call, v));
+            } else {
+                var e: c.talk_script_error = undefined;
+                if (scriptError(a, field(input, "error") orelse return error.MalformedCase, &e)) {
+                    defer if (e.data) |d| c.talk_value_release(d);
+                    try check(c.talk_call_fail(call, &e));
+                } else try check(c.talk_call_fail(call, null));
+            }
         } else if (std.mem.eql(u8, name, "stub")) {
             // The runner's own input: queued for its Operation, and written
             // to the Trace where the case has it.

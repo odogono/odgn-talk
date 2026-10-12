@@ -249,11 +249,14 @@ typedef enum talk_call_end {
     /* C only: a Charge was refused, so the work wasn't done. */
     TALK_CALL_LIMITED,
     /* C only: any other failure, which the Script sees as host error. */
-    TALK_CALL_BROKEN
+    TALK_CALL_BROKEN,
+    /* C only: a suspending call started; answer it later through the call. */
+    TALK_CALL_STARTED
 } talk_call_end;
 
-/* C only: an immediate Operation's Do, or a fire-and-forget one's Fire. The
- * arguments are borrowed. */
+/* C only: an immediate Operation's Do, a suspending one's Start, or a
+ * fire-and-forget one's Fire. The arguments are borrowed. Start returns
+ * TALK_CALL_STARTED, or fails as Do does. */
 typedef talk_call_end (*talk_operation_fn)(void *context, talk_call *call, talk_value *const *args, size_t args_len, talk_value **result, talk_script_error *error);
 
 typedef struct talk_operation {
@@ -342,6 +345,14 @@ void talk_call_grant_name(const talk_call *c, const char **s, size_t *len);
 void *talk_call_binding(const talk_call *c);
 /* The Pump's Clock reading. */
 void talk_call_now(const talk_call *c, int64_t *seconds, int32_t *nanos);
+/* Answer, AnswerWithCost and Fail settle a suspending call. Its talk_call
+ * stays valid until its Group is released. Each queues a Host Input, which
+ * the next Pump drains; one for a call that no longer waits is recorded and
+ * ignored. The Core retains v and the error's data. A NULL error is a
+ * failure that isn't a Script error. */
+talk_host_error_code talk_call_answer(talk_call *c, talk_value *v);
+talk_host_error_code talk_call_answer_with_cost(talk_call *c, talk_value *v, int64_t fuel);
+talk_host_error_code talk_call_fail(talk_call *c, const talk_script_error *e);
 /* Draws Fuel before the work. TALK_ERR_LIMIT when the Run can't cover it:
  * the function then returns TALK_CALL_LIMITED without doing the work. */
 talk_host_error_code talk_call_charge(talk_call *c, int64_t fuel);

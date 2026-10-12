@@ -207,6 +207,53 @@ static int standard_test(void) {
     return bad;
 }
 
+/* A suspending Operation's Start: it keeps the call, to answer later. */
+static talk_call *started = NULL;
+static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)args; (void)len; (void)result; (void)error;
+    started = call;
+    return TALK_CALL_STARTED;
+}
+
+/* A Run suspends at ask … and wait, and resumes with the Host's answer. */
+static int suspension_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "feed", 4, ops, 1, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"feed", 4, grant}};
+    const char *source = "script variable got\non go\n  ask feed to fetch and wait\n  put it into got\nend go\n";
+    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= started == NULL;
+    bad |= strstr(trace, "end=ask-wait\n") == NULL;
+    bad |= strstr(trace, "pumped state=idle fuel=") == NULL || strstr(trace, " next=") == NULL;
+    talk_value *answer = NULL;
+    talk_int(42, &answer);
+    bad |= started == NULL || talk_call_answer_with_cost(started, answer, 3) != TALK_OK;
+    talk_value_release(answer);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "> answer waiter/r1.c1 value=42 fuel=3\n") == NULL;
+    bad |= strstr(trace, "vars waiter got=42\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -280,5 +327,6 @@ int main(void) {
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
+    expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
     return failures == 0 ? 0 : 1;
 }

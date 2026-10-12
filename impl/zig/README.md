@@ -219,10 +219,24 @@ answers from the Pump's Clock. The Core makes the chapter's own checks:
 `toInstant`'s date-time and disambiguation and a Locale's option words and
 BCP 47 tag before the call, charged nothing, and each result's rules after it,
 whose failure is `host error`. A Host function receives the resolved
-arguments, with a Locale's options map complete. Suspending Operations,
-`timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
-effects, Lambdas, waits and messages between Scripts come next. A Run past the default Fuel per Run ends in a minimal `fault` until
-step 4 brings limits, including the Text Pattern size limit.
+arguments, with a Locale's options map complete.
+
+Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
+heap, its Script goes on to its next work, and each Script's work is one
+queue of messages and ready Runs, in the order each became ready. A
+suspending call's `talk_call` outlives the call, and `talk_call_answer`,
+`talk_call_answer_with_cost` and `talk_call_fail` queue Host Inputs that the
+next Pump drains; an answer for a call that no longer waits becomes a
+`late-answer` note. Each Pump then fires due deadlines, `maxPending` or the
+default `MaxWait` for a call, in deadline order, and a timed-out call raises
+`timeout` and is abandoned. A resumed Run is charged its answer's terms over
+the result and any cost the answer brought. Persistent State counts each
+suspended or ready Run's frames, its pending call and what it will resume
+with. Joins, `wait for`, Timeout Blocks, `send … and wait`, `timer`, `store`,
+`sqlite` and `user`, Capability Scopes and Segment-bound effects, Lambdas and
+messages between Scripts come next. A Run past the default Fuel per Run ends
+in a minimal `fault` until step 4 brings limits, including the Text Pattern
+size limit.
 
 ## Values and ownership
 
