@@ -228,6 +228,9 @@ func Add(a, b Value) (Value, error)
 
 // EncodeValue writes the Value Encoding deterministically. A Function Value
 // can't be encoded. DecodeValue asks resolve for each {"$object": [kind, id]}.
+// DecodeValue accepts only the forms EncodeValue writes, otherwise returning
+// invalid value. JSON white space and string escapes are syntax, and text is
+// normalised to NFC, as described in chapter 9's canonical decoding rule.
 func EncodeValue(v Value) ([]byte, error)
 func DecodeValue(b []byte, resolve func(kind, id string) (*Object, bool)) (Value, error)
 

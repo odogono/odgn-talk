@@ -100,6 +100,24 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
   - **Function Values** can't be encoded for storage, since a Host-held handle isn't durable. Only [the message layer](#the-message-layer) carries them.
 - **Scripts can't reach** the Value Encoding, and the Conformance Corpus uses the display form instead ([ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)).
 
+#### Canonical decoding examples
+
+Each input in the left column is refused as `invalid value`. The right column shows the form the encoder writes for that value; the decoder never substitutes it for the refused input.
+
+| Refused input | Encoder form |
+| --- | --- |
+| `{"$dec":"01"}` or `{"$dec":"3"}` | `1` or `3`, respectively |
+| `1.0` | `{"$dec":"1.0"}` (the fraction digit is retained) |
+| `-0` or `1e2` | `0` or `100`, respectively |
+| `{"$quantity":["3","days"]}` | `{"$quantity":["3","day"]}` |
+| `{"$instant":"1970-01-01T01:00:00+01:00"}` | `{"$instant":"1970-01-01T00:00:00Z"}` |
+| `{"$instant":"1970-01-01T00:00:00.500Z"}` | `{"$instant":"1970-01-01T00:00:00.5Z"}` |
+| `{"$date":"2026-09-27T00:00:00.0"}` | `{"$date":"2026-09-27T00:00:00"}` |
+| `{"$map":[["a",1]]}` or `{"$map":[]}` | `{"a":1}` or `{}`, respectively |
+| `{"$bytes":"AB=="}` | `{"$bytes":"AA=="}` (unused padding bits are zero) |
+
+JSON syntax and NFC normalisation are exceptions to byte identity: ` { "a" : "\u0065\u0301" } ` is accepted and encodes as `{"a":"é"}`. Map insertion order is retained. These decoding rules apply recursively to values inside lists, maps and tag payloads, and do not change the plain JSON mapping. Value Encoding cases in the Corpus test the encoder; each Core's unit tests carry the decoding refusals ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md)).
+
 ## Shapes
 
 An Operation Declaration gives a Shape for each argument and for its result. Shapes cover every kind, Quantities by Unit or by Unit Kind, lists of a Shape, closed and open maps, Host Objects of a kind, a choice (`OneOf`) and an optional value.
