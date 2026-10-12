@@ -5059,6 +5059,12 @@ pub const Group = struct {
                     defer locale.release();
                     return g.raise("bad locale", &.{.{ .key = "locale", .value = locale }});
                 },
+                .invalid_key => return g.raise("invalid key", &.{}),
+                .invalid_watch => |which| {
+                    const field = try model.text(gpa, which);
+                    defer field.release();
+                    return g.raise("invalid watch", &.{.{ .key = "field", .value = field }});
+                },
             }
         };
         // The scope checks, charged nothing either.

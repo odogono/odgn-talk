@@ -1,5 +1,5 @@
-//! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale` and
-//! `console`, with the declarations the chapter fixes. Each factory takes the
+//! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale`,
+//! `console` and `store`, with the declarations the chapter fixes. Each factory takes the
 //! Host's implementation, one Host function per Operation, and a cost per
 //! Operation. The Core makes the chapter's own checks: option words and
 //! Locale tags before a call, which are charged nothing, and the result rules
@@ -9,11 +9,12 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const caps = @import("capabilities.zig");
+const grammar = @import("../generated/grammar.zig").grammar;
 const Value = model.Value;
 const Shape = caps.Shape;
 
 /// The Standard Capabilities this Core defines so far.
-pub const Which = enum { clock, calendar, locale, console };
+pub const Which = enum { clock, calendar, locale, console, store };
 
 /// Each one's Operations, in name order, as its declarations list them.
 pub fn operations(which: Which) []const []const u8 {
@@ -22,7 +23,15 @@ pub fn operations(which: Which) []const []const u8 {
         .calendar => &.{ "now", "offset", "toCivil", "toInstant", "today", "zone" },
         .locale => &.{ "compare", "dayNames", "lower", "monthNames", "numberSymbols", "rank", "tag", "upper" },
         .console => &.{ "read", "write" },
+        .store => &.{ "delete", "get", "increment", "keys", "set", "swap", "unwatch", "watch" },
     };
+}
+
+/// `store`'s Segment-bound Operations, which write when the Segment
+/// commits.
+fn storeWrite(name: []const u8) bool {
+    for ([_][]const u8{ "set", "delete", "increment", "swap" }) |w| if (std.mem.eql(u8, w, name)) return true;
+    return false;
 }
 
 /// The context of one Standard Operation's Host function: which it is, and
@@ -115,6 +124,54 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             }
             try args.append(gpa, try Kinds.optionalText(gpa));
         },
+        .store => {
+            const any = struct {
+                fn f(g: Allocator) !*Shape {
+                    return Shape.kind(g, .any);
+                }
+            }.f;
+            const text = try Kinds.kind(gpa, .text);
+            try args.append(gpa, text);
+            if (eq(name, "get")) {
+                try args.append(gpa, try Shape.optional(gpa, try any(gpa)));
+                result = try any(gpa);
+                errors = &.{"invalid key"};
+            } else if (eq(name, "set")) {
+                try args.append(gpa, try any(gpa));
+                result = try Kinds.kind(gpa, .nothing);
+                errors = &.{ "invalid key", "can't store", "store full", "store busy" };
+            } else if (eq(name, "delete")) {
+                result = try Kinds.kind(gpa, .nothing);
+                errors = &.{ "invalid key", "store busy" };
+            } else if (eq(name, "keys")) {
+                // Its one argument is an Optional prefix.
+                args.items[0] = try Shape.optional(gpa, text);
+                result = try Shape.listOf(gpa, try Kinds.kind(gpa, .text));
+            } else if (eq(name, "increment")) {
+                const by = try gpa.alloc(*Shape, 2);
+                by[0] = try Kinds.kind(gpa, .number);
+                by[1] = try Kinds.kind(gpa, .quantity);
+                try args.append(gpa, try Shape.optional(gpa, try Shape.oneOf(gpa, by)));
+                const gives = try gpa.alloc(*Shape, 2);
+                gives[0] = try Kinds.kind(gpa, .number);
+                gives[1] = try Kinds.kind(gpa, .quantity);
+                result = try Shape.oneOf(gpa, gives);
+                errors = &.{ "invalid key", "wrong kind", "incompatible units", "overflow", "store full", "store busy" };
+            } else if (eq(name, "swap")) {
+                try args.append(gpa, try any(gpa));
+                try args.append(gpa, try any(gpa));
+                result = try Kinds.kind(gpa, .boolean);
+                errors = &.{ "invalid key", "can't store", "store full", "store busy" };
+            } else if (eq(name, "watch")) {
+                try args.append(gpa, try Kinds.kind(gpa, .text));
+                try args.append(gpa, try Kinds.optionalText(gpa));
+                result = try Kinds.kind(gpa, .nothing);
+                errors = &.{ "invalid watch", "watch limit" };
+            } else {
+                result = try Kinds.kind(gpa, .nothing);
+                errors = &.{"invalid watch"};
+            }
+        },
         .console => if (eq(name, "write")) {
             try args.append(gpa, try Kinds.kind(gpa, .value));
             mode = .fire_and_forget;
@@ -129,11 +186,35 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
         // The catalogue's fields, with the kinds the chapter gives them.
         const fields: []const struct { []const u8, caps.Kind } = if (std.mem.eql(u8, code, "unknown zone"))
             &.{.{ "zone", .text }}
+        else if (std.mem.eql(u8, code, "ambiguous time"))
+            &.{ .{ "civil", .civil_date }, .{ "zone", .text } }
+        else if (std.mem.eql(u8, code, "can't store"))
+            &.{.{ "kind", .text }}
+        else if (std.mem.eql(u8, code, "store full") or std.mem.eql(u8, code, "watch limit"))
+            &.{.{ "limit", .text }}
+        else if (std.mem.eql(u8, code, "store busy"))
+            &.{.{ "key", .text }}
+        else if (std.mem.eql(u8, code, "invalid watch"))
+            &.{.{ "field", .text }}
+        else if (std.mem.eql(u8, code, "wrong kind"))
+            &.{ .{ "expected", .text }, .{ "got", .text }, .{ "value", .value } }
+        else if (std.mem.eql(u8, code, "incompatible units"))
+            &.{ .{ "left", .text }, .{ "right", .text } }
+        else if (std.mem.eql(u8, code, "overflow"))
+            &.{.{ "operator", .text }}
         else
-            &.{ .{ "civil", .civil_date }, .{ "zone", .text } };
+            &.{};
         const out = try gpa.alloc(caps.Field, fields.len);
         for (fields, out) |f, *x| x.* = .{ .key = try gpa.dupe(u8, f[0]), .shape = try Shape.kind(gpa, f[1]) };
-        d.* = .{ .code = try gpa.dupe(u8, code), .fields = out };
+        // The limits each quota error may name (chapter 6).
+        const choice: ?caps.Choice = if (std.mem.eql(u8, code, "store full"))
+            .{ .field = "limit", .words = &.{ "size", "keys", "value" } }
+        else if (std.mem.eql(u8, code, "watch limit"))
+            .{ .field = "limit", .words = &.{ "watches", "size", "pending" } }
+        else
+            null;
+        const core = std.mem.eql(u8, code, "invalid key") or std.mem.eql(u8, code, "invalid watch");
+        d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
     }
     return .{
         .name = try gpa.dupe(u8, name),
@@ -143,10 +224,12 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
         .max_pending_ms = max_pending,
         .errors = decls,
         .closed_errors = true,
+        .segment_bound = which == .store and storeWrite(name),
         .host = undefined,
         .before = switch (which) {
             .calendar => if (eq(name, "toInstant")) beforeToInstant else null,
             .locale => beforeLocale,
+            .store => if (eq(name, "keys")) null else beforeStore,
             else => null,
         },
         .after = switch (which) {
@@ -161,7 +244,9 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
 /// its Operations, in `operations` order, and `costs` a cost for each; the
 /// contexts the Operations need are appended to `contexts`, which the
 /// caller frees with the definition.
-pub fn define(gpa: Allocator, which: Which, impl: []const ?caps.HostFn, costs: []const caps.Cost, contexts: *std.ArrayList(*Context)) !*caps.Capability {
+/// A Capability with Segment-bound Operations, `store`, also takes how its
+/// Grants map to Segment Coordinators.
+pub fn define(gpa: Allocator, which: Which, impl: []const ?caps.HostFn, costs: []const caps.Cost, contexts: *std.ArrayList(*Context), coordinator_of: ?caps.CoordinatorOf) !*caps.Capability {
     const ops = operations(which);
     const out = try gpa.alloc(caps.Operation, ops.len);
     for (ops, out, 0..) |name, *op, i| {
@@ -173,7 +258,7 @@ pub fn define(gpa: Allocator, which: Which, impl: []const ?caps.HostFn, costs: [
         op.host = .{ .call = resolved, .context = context };
     }
     const c = try gpa.create(caps.Capability);
-    c.* = .{ .name = try gpa.dupe(u8, @tagName(which)), .operations = out };
+    c.* = .{ .name = try gpa.dupe(u8, @tagName(which)), .operations = out, .coordinator_of = coordinator_of };
     return c;
 }
 
@@ -214,6 +299,35 @@ fn beforeToInstant(a: Allocator, op: *const caps.Operation, args: []const *Value
     if (!civil.data.civil_date.has_time) return .{ .out_of_domain = civil };
     if (args.len == 3 and args[1].data == .text and !isText(args[1], &disambiguations)) return .{ .out_of_domain = args[1] };
     return null;
+}
+
+/// `store`'s own checks: a nonempty key, or for the watch Operations a
+/// nonempty name and a plain Name as the effective message.
+fn beforeStore(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    _ = a;
+    _ = binding;
+    const watching = std.mem.eql(u8, op.name, "watch") or std.mem.eql(u8, op.name, "unwatch");
+    if (!watching) return if (args[0].data.text.len == 0) .invalid_key else null;
+    if (args[0].data.text.len == 0) return .{ .invalid_watch = "name" };
+    if (std.mem.eql(u8, op.name, "watch") and !plainName(effectiveMessage(args))) return .{ .invalid_watch = "message" };
+    return null;
+}
+
+/// `watch`'s message, `storeChanged` when omitted or Nothing.
+fn effectiveMessage(args: []const *Value) []const u8 {
+    if (args.len > 2 and args[2].data == .text) return args[2].data.text;
+    return "storeChanged";
+}
+
+/// A plain Name: an identifier word that isn't a Reserved Word, `_` or
+/// `all`, and so no Selector.
+fn plainName(w: []const u8) bool {
+    if (w.len == 0) return false;
+    if (!(std.ascii.isAlphabetic(w[0]) or w[0] == '_' or w[0] >= 0x80)) return false;
+    for (w) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c >= 0x80)) return false;
+    if (std.mem.eql(u8, w, "all") or std.mem.eql(u8, w, "_")) return false;
+    for (grammar.reserved) |r| if (std.mem.eql(u8, r, w)) return false;
+    return true;
 }
 
 fn beforeLocale(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
@@ -340,6 +454,21 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
     switch (ctx.which) {
         .clock => {},
         .console => try out.appendSlice(gpa, args),
+        .store => {
+            // Each omitted default: get's and increment's Nothing, keys'
+            // empty prefix, and watch's effective message.
+            const name = ctx.name;
+            try out.appendSlice(gpa, args);
+            if ((std.mem.eql(u8, name, "get") or std.mem.eql(u8, name, "increment")) and args.len == 1) try out.append(gpa, nothing);
+            if (std.mem.eql(u8, name, "keys") and (args.len == 0 or args[0].data == .nothing)) {
+                const all = try fresh(gpa, made, try model.text(gpa, ""));
+                if (args.len == 0) try out.append(gpa, all) else out.items[0] = all;
+            }
+            if (std.mem.eql(u8, name, "watch")) {
+                const message = try fresh(gpa, made, try model.text(gpa, effectiveMessage(args)));
+                if (args.len > 2) out.items[2] = message else try out.append(gpa, message);
+            }
+        },
         .calendar => {
             const name = ctx.name;
             const zone_at: usize = if (std.mem.eql(u8, name, "toInstant")) 1 else if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "offset")) 1 else 0;

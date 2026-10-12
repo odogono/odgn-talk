@@ -40,7 +40,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console", "store" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -51,7 +51,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
             const which = (case_setup.field(t, "capability") orelse return "a Standard Capability without a name").string;
             for (standard_made) |made| {
                 if (std.mem.eql(u8, made, which)) break;
-            } else return "Standard Capabilities other than clock, calendar, locale and console are not implemented";
+            } else return "Standard Capabilities other than clock, calendar, locale, console and store are not implemented";
         }
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
@@ -398,7 +398,7 @@ fn standardHost(comptime key: []const u8) c.talk_operation_fn {
 }
 
 /// Defines the case's Standard Capabilities from its `[[standard]]` tables.
-fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call)) !void {
+fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call), effects: *Effects) !void {
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[standard]]")) continue;
         const which = case_setup.field(t, "capability").?.string;
@@ -414,6 +414,8 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "compare", c.TALK_IMMEDIATE }, .{ "rank", c.TALK_IMMEDIATE }, .{ "upper", c.TALK_IMMEDIATE }, .{ "lower", c.TALK_IMMEDIATE }, .{ "numberSymbols", c.TALK_IMMEDIATE }, .{ "monthNames", c.TALK_IMMEDIATE }, .{ "dayNames", c.TALK_IMMEDIATE }, .{ "tag", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "console"))
             &.{ .{ "write", c.TALK_FIRE_AND_FORGET }, .{ "read", c.TALK_SUSPENDING } }
+        else if (std.mem.eql(u8, which, "store"))
+            &.{ .{ "get", c.TALK_IMMEDIATE }, .{ "set", c.TALK_IMMEDIATE }, .{ "delete", c.TALK_IMMEDIATE }, .{ "keys", c.TALK_IMMEDIATE }, .{ "increment", c.TALK_IMMEDIATE }, .{ "swap", c.TALK_IMMEDIATE }, .{ "watch", c.TALK_IMMEDIATE }, .{ "unwatch", c.TALK_IMMEDIATE } }
         else
             &.{};
         for (operations) |op| {
@@ -432,6 +434,10 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
             try check(c.talk_console_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "store")) {
+            // Its coordinator's hooks answer from `stub-effect` lines.
+            const impl: c.talk_store_impl = .{ .context = hosts, .get = standardHost("store.get"), .set = standardHost("store.set"), .del = standardHost("store.delete"), .keys = standardHost("store.keys"), .increment = standardHost("store.increment"), .swap = standardHost("store.swap"), .watch = standardHost("store.watch"), .unwatch = standardHost("store.unwatch"), .coordinator = (try effects.lifecycle()).* };
+            try check(c.talk_store_capability(core, &impl, &all_costs, &def));
         } else return error.Unsupported;
         try defs.put(a, which, def);
     }
@@ -679,7 +685,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
     var effects: Effects = .{ .a = a };
     try defineCapabilities(a, core, all, &hosts, &defs, &calls, &effects);
-    try defineStandard(a, core, all, &hosts, &defs, &calls);
+    try defineStandard(a, core, all, &hosts, &defs, &calls, &effects);
     var store: ObjectStore = .{ .a = a };
     defer store.deinit();
     try defineObjects(a, core, group, all, &store);

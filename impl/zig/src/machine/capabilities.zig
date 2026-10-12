@@ -26,6 +26,9 @@ pub const Kind = enum {
     civil_date,
     pattern,
     function,
+    /// Any Quantity, as `store`'s `increment` takes; only the Core's own
+    /// declarations use it.
+    quantity,
 
     pub fn name(k: Kind) []const u8 {
         return switch (k) {
@@ -36,7 +39,7 @@ pub const Kind = enum {
 
     pub fn named(s: []const u8) ?Kind {
         if (std.mem.eql(u8, s, "civil date")) return .civil_date;
-        if (std.mem.eql(u8, s, "civil_date")) return null;
+        if (std.mem.eql(u8, s, "civil_date") or std.mem.eql(u8, s, "quantity")) return null;
         return std.meta.stringToEnum(Kind, s);
     }
 };
@@ -258,6 +261,7 @@ const Checker = struct {
                     .range => v.data == .range,
                     .civil_date => v.data == .civil_date,
                     .pattern => v.data == .pattern,
+                    .quantity => v.data == .quantity,
                     .any, .value, .function => unreachable,
                 };
                 return if (ok) null else try c.wrong(s, v);
@@ -373,7 +377,18 @@ pub fn checkValue(a: Allocator, gpa: Allocator, s: *const Shape, v: *Value) !Che
 
 pub const Cost = struct { fuel: u64 = 0, alloc: u64 = 0 };
 
-pub const ErrorDecl = struct { code: []const u8, fields: []Field };
+pub const ErrorDecl = struct {
+    code: []const u8,
+    fields: []Field,
+    /// A field whose text must be one of the chapter's words, such as
+    /// `store full`'s `limit`.
+    choice: ?Choice = null,
+    /// A code the Core raises itself, such as `invalid key`, which a Host
+    /// may not fail with.
+    core: bool = false,
+};
+
+pub const Choice = struct { field: []const u8, words: []const []const u8 };
 
 /// What an Operation's Host function gives back.
 pub const Outcome = union(enum) {
@@ -453,6 +468,10 @@ pub const Problem = union(enum) {
     out_of_domain: *Value,
     /// `bad locale`, with the tag.
     bad_locale: []const u8,
+    /// `invalid key`: a `store` key that is empty text.
+    invalid_key,
+    /// `invalid watch`, with the field that is wrong: `name` or `message`.
+    invalid_watch: []const u8,
 };
 
 /// A Segment Coordinator's hooks (embedding/scoped-effects.md).
@@ -635,6 +654,7 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
     };
     if (op.errors.len == 0) return !op.closed_errors and !catalogued(code);
     for (op.errors) |e| if (std.mem.eql(u8, e.code, code)) {
+        if (e.core) return false;
         // A catalogue code only a Standard Capability may declare, and its
         // fields are the catalogue's.
         const entry = catalogueEntry(code) orelse return true;
@@ -650,6 +670,15 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
                 if (std.mem.eql(u8, p.key, f.key)) break p.value;
             } else continue;
             if (!kindOf(f.shape, v)) return false;
+        }
+        if (e.choice) |choice| {
+            const v = for (pairs) |p| {
+                if (std.mem.eql(u8, p.key, choice.field)) break p.value;
+            } else return false;
+            if (v.data != .text) return false;
+            for (choice.words) |w| {
+                if (std.mem.eql(u8, w, v.data.text)) break;
+            } else return false;
         }
         for (pairs) |p| {
             const listed = for (entry.fields) |f| {
@@ -695,6 +724,7 @@ fn shapeTakes(s: *const Shape, literal: check.Literal) bool {
             .boolean => literal == .boolean,
             .number => literal == .number,
             .text => literal == .text,
+            .quantity => literal == .quantity,
             else => false,
         },
         .quantity_of => |q| literal == .quantity and blk: {

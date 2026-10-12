@@ -42,6 +42,14 @@ capabilities/standard-console
 capabilities/standard-locale
 capabilities/standard-locale-ranks
 capabilities/standard-locale-validation
+capabilities/standard-store
+capabilities/standard-store-coordinator
+capabilities/standard-store-errors
+capabilities/standard-store-validation
+capabilities/standard-store-watch
+capabilities/standard-store-watch-counts
+capabilities/standard-store-watch-errors
+capabilities/standard-store-watch-validation
 collecting/condition-target
 collecting/exit
 collecting/next-filter

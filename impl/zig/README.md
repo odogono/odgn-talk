@@ -321,6 +321,18 @@ BCP 47 tag before the call, charged nothing, and each result's rules after it,
 whose failure is `host error`. A Host function receives the resolved
 arguments, with a Locale's options map complete.
 
+`store` (`talk_store_capability`) declares its eight Operations, with `set`,
+`delete`, `increment` and `swap` Segment-bound, and maps every binding to the
+one Segment Coordinator its implementation gives. The Core refuses an empty
+key with `invalid key`, and a `watch` or `unwatch` with an empty name or a
+message that isn't a plain Name with `invalid watch`, before the call is
+charged. The implementation hears `get`'s and `increment`'s omitted
+arguments as Nothing, `keys`' as empty text, and `watch`'s effective message.
+A Host failure must name a declared code with the catalogue's fields:
+`store full`'s and `watch limit`'s `limit` must be one of the chapter's
+words, and the codes the Core raises itself are `host error` from the Host.
+Notifications, and so the router, aren't implemented yet.
+
 Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
 heap, its Script goes on to its next work, and each Script's work is one
 queue of messages and ready Runs, in the order each became ready. A

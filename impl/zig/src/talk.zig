@@ -312,6 +312,7 @@ pub const Core = struct {
     libraries: std.ArrayList(*machine.Library) = .empty,
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
     mappings: std.ArrayList(*Mapping) = .empty,
+    lifecycles: std.ArrayList(*SegmentLifecycle) = .empty,
 };
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
@@ -494,6 +495,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.prop_bridges.deinit(gpa);
     for (core.mappings.items) |m| gpa.destroy(m);
     core.mappings.deinit(gpa);
+    for (core.lifecycles.items) |l| gpa.destroy(l);
+    core.lifecycles.deinit(gpa);
     for (core.libraries.items) |l| l.destroy();
     core.libraries.deinit(gpa);
     allocator.destroy(core);
@@ -1321,6 +1324,10 @@ const max_cost = 9_007_199_254_740_991;
 /// Defines a Standard Capability from a cost per Operation and one C Host
 /// function per Operation, in `standard.operations` order.
 fn defineStandard(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandardWith(c, which, fns, context, costs, null, out);
+}
+
+fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const gpa = c.gpa;
     const names = standard.operations(which);
@@ -1345,7 +1352,7 @@ fn defineStandard(c: *Core, which: standard.Which, fns: []const OperationFn, con
         };
         impl[i] = .{ .call = bridged, .context = bridge };
     }
-    const d = standard.define(gpa, which, impl[0..names.len], per[0..names.len], &c.standard) catch return .out_of_memory;
+    const d = standard.define(gpa, which, impl[0..names.len], per[0..names.len], &c.standard, coordinator_of) catch return .out_of_memory;
     c.definitions.append(gpa, d) catch return .out_of_memory;
     out.* = d;
     return .ok;
@@ -1368,6 +1375,41 @@ export fn talk_locale_capability(c: *Core, impl: *const LocaleImpl, costs: ?*con
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     return defineStandard(c, .console, &.{ impl.read, impl.write }, impl.context, costs, out);
+}
+
+pub const StoreImpl = extern struct {
+    context: ?*anyopaque,
+    get: OperationFn,
+    set: OperationFn,
+    del: OperationFn,
+    keys: OperationFn,
+    increment: OperationFn,
+    swap: OperationFn,
+    watch: OperationFn,
+    unwatch: OperationFn,
+    coordinator: SegmentLifecycle,
+};
+
+/// Every `store` binding maps to the implementation's one coordinator.
+fn storeCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    _ = g;
+    return .{ .identity = @intFromPtr(context.?), .hook = segmentHook, .context = context };
+}
+
+export fn talk_store_capability(c: *Core, impl: *const StoreImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const hooks = impl.coordinator;
+    if (hooks.begin == null or hooks.commit == null or hooks.rollback == null) return .invalid_value;
+    // The Core keeps its own copy of the coordinator, whose address is its
+    // identity.
+    const lifecycle = c.gpa.create(SegmentLifecycle) catch return .out_of_memory;
+    lifecycle.* = hooks;
+    c.lifecycles.append(c.gpa, lifecycle) catch {
+        c.gpa.destroy(lifecycle);
+        return .out_of_memory;
+    };
+    // In name order: delete, get, increment, keys, set, swap, unwatch, watch.
+    return defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
 }
 
 // ---------------------------------------------------------------- answers
