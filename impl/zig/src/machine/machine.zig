@@ -22,6 +22,7 @@ const conversions = @import("convert.zig");
 const matcher = @import("matcher.zig");
 const units = @import("../units.zig");
 pub const capabilities = @import("capabilities.zig");
+pub const objects = @import("objects.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
@@ -119,6 +120,13 @@ pub const Delivery = struct {
     internal_error: bool = false,
     /// A `send … and wait`, whose sender waits on the call `from`.
     waits: bool = false,
+    /// The Host Object it was delivered to, which stays `the target` all
+    /// the way up the path; null for a message to a Script.
+    target: ?*objects.Object = null,
+    /// For a message on an object's path, the object whose path it reads
+    /// when it reaches the head of a mailbox: its Target, or after a climb,
+    /// the parent of the object whose Owning Script passed it on.
+    at: ?*objects.Object = null,
 };
 
 pub const Run = struct {
@@ -303,12 +311,24 @@ pub const Script = struct {
     /// The Script's Grants, by the name it uses, with the Operations it
     /// keeps.
     grants: []ScriptGrant = &.{},
+    /// The object it is the Owning Script of, which is `me`.
+    owner: ?*objects.Object = null,
+    /// Its well-known objects, by name.
+    objects: []NamedObject = &.{},
+
+    fn object(s: *const Script, name: []const u8) ?*objects.Object {
+        for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
+        return null;
+    }
 
     fn grant(s: *const Script, name: []const u8) ?ScriptGrant {
         for (s.grants) |g| if (std.mem.eql(u8, g.name, name)) return g;
         return null;
     }
 };
+
+/// A well-known object the Host binds at Load, by name.
+pub const NamedObject = struct { name: []const u8, object: *objects.Object };
 
 /// A Grant the Host binds at Load, by the name the Script uses.
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
@@ -324,6 +344,10 @@ pub const LoadOptions = struct {
     grants: ?[]const NamedGrant = null,
     /// Keep only the granted Operations the Script uses.
     grants_as_used: bool = false,
+    /// The object the Script becomes the Owning Script of.
+    owner: ?*objects.Object = null,
+    /// Its well-known objects, which also give the checker their kinds.
+    objects: []const NamedObject = &.{},
 };
 
 pub const LoadResult = union(enum) {
@@ -333,7 +357,10 @@ pub const LoadResult = union(enum) {
 };
 
 const Input = union(enum) {
+    /// A Delivery to a Script, or with an empty name, to its Target.
     deliver: struct { script: []const u8, delivery: Delivery },
+    set_parent: struct { object: *objects.Object, parent: ?*objects.Object },
+    dispose: *objects.Object,
     /// An answer or failure for a suspending call, by its id.
     settle: struct { id: []const u8, with: Resume },
 };
@@ -363,6 +390,8 @@ pub const Group = struct {
     calls: std.ArrayList(*capabilities.Call) = .empty,
     /// The call ids of `send … and wait`, which waits and records name.
     ids: std.ArrayList([]u8) = .empty,
+    /// The Host Objects the Group has handles for, in the order made.
+    objects: std.ArrayList(*objects.Object) = .empty,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
@@ -379,8 +408,11 @@ pub const Group = struct {
                 g.gpa.free(x.id);
                 g.releaseResume(x.with);
             },
+            .set_parent, .dispose => {},
         };
         g.inputs.deinit(g.gpa);
+        for (g.objects.items) |o| o.destroy(g.gpa);
+        g.objects.deinit(g.gpa);
         for (g.calls.items) |c| {
             g.gpa.free(c.id);
             g.gpa.destroy(c);
@@ -443,6 +475,13 @@ pub const Group = struct {
         const t = try a.create(ast.Tree);
         t.* = tree;
         var context = options.context;
+        const views = try a.alloc(check.Object, options.objects.len);
+        for (options.objects, views) |o, *v| v.* = .{ .name = try a.dupe(u8, o.name), .kind = o.object.kind.name };
+        context.objects = views;
+        if (options.owner) |o| context.owner = o.kind.name;
+        const kinds = try a.create(KindsView);
+        kinds.* = .{ .objects = options.objects, .owner = options.owner };
+        context.writable = .{ .context = kinds, .call = KindsView.writable };
         if (options.grants) |named| {
             const viewed = try a.alloc(check.Grant, named.len);
             for (named, viewed) |n, *v| v.* = .{ .name = try a.dupe(u8, n.name), .operations = try capabilities.checkOperations(a, n.grant) };
@@ -460,6 +499,13 @@ pub const Group = struct {
         }
         s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = context, .values = g.gpa });
         if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, options.grants_as_used);
+        s.objects = try a.alloc(NamedObject, options.objects.len);
+        for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
+        if (options.owner) |o| {
+            s.owner = o;
+            if (o.owner_of) |old| g.gpa.free(old);
+            o.owner_of = try g.gpa.dupe(u8, s.name);
+        }
         s.variables = try g.gpa.alloc(*Value, s.unit.variables.len);
         for (s.variables) |*v| v.* = try nothing(g.gpa);
         s.definitions = try g.gpa.alloc(*Value, s.unit.definitions.len);
@@ -474,6 +520,72 @@ pub const Group = struct {
             else => {},
         }
         return .{ .loaded = s };
+    }
+
+    /// The Object Kinds the checker sees through a Script's objects.
+    const KindsView = struct {
+        objects: []const NamedObject,
+        owner: ?*objects.Object,
+
+        fn writable(context: *const anyopaque, kind: []const u8, key: []const u8) ?bool {
+            const v: *const KindsView = @ptrCast(@alignCast(context));
+            if (v.owner) |o| if (std.mem.eql(u8, o.kind.name, kind)) return o.kind.writable(key);
+            for (v.objects) |o| if (std.mem.eql(u8, o.object.kind.name, kind)) return o.object.kind.writable(key);
+            return null;
+        }
+    };
+
+    /// Makes a handle for a Host-owned thing; a duplicate id within its
+    /// kind is refused.
+    pub fn object(g: *Group, kind: *const objects.Kind, id: []const u8, native: ?*anyopaque) !*objects.Object {
+        if (g.objectById(kind.name, id) != null) return error.DuplicateObjectId;
+        const o = try objects.Object.make(g.gpa, kind, id, native);
+        errdefer o.destroy(g.gpa);
+        try g.objects.append(g.gpa, o);
+        return o;
+    }
+
+    pub fn objectById(g: *Group, kind: []const u8, id: []const u8) ?*objects.Object {
+        for (g.objects.items) |o| if (std.mem.eql(u8, o.kind.name, kind) and std.mem.eql(u8, o.id, id)) return o;
+        return null;
+    }
+
+    /// The handle a Script value is, if it is one of this Group's objects.
+    pub fn objectOf(g: *Group, v: *const Value) ?*objects.Object {
+        if (v.data != .object) return null;
+        for (g.objects.items) |o| if (@intFromPtr(o) == v.data.object.identity) return o;
+        return null;
+    }
+
+    /// Queues `SetParent`. A cycle or a disposed child is refused at the
+    /// call, against the parents as they stand, with the input and a
+    /// `refused` record; it is checked again when drained.
+    pub fn setParent(g: *Group, o: *objects.Object, parent: ?*objects.Object) !void {
+        const input: Input = .{ .set_parent = .{ .object = o, .parent = parent } };
+        if (parentRefusal(o, parent)) |code| {
+            g.writeInput(input);
+            g.write("refused code=\"{s}\"\n", .{code});
+            return if (std.mem.eql(u8, code, "parent cycle")) error.ParentCycle else error.InvalidValue;
+        }
+        try g.inputs.append(g.gpa, input);
+    }
+
+    fn parentRefusal(o: *const objects.Object, parent: ?*const objects.Object) ?[]const u8 {
+        if (o.disposed) return "invalid value";
+        if (o.wouldCycle(parent)) return "parent cycle";
+        return null;
+    }
+
+    pub fn dispose(g: *Group, o: *objects.Object) !void {
+        try g.inputs.append(g.gpa, .{ .dispose = o });
+    }
+
+    /// Queues a Delivery to a Host Object, routed when it is drained.
+    pub fn deliverTo(g: *Group, to: *objects.Object, message: []const u8, args: []*Value, request: bool) !u64 {
+        g.deliveries += 1;
+        const id = g.deliveries;
+        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = try g.gpa.dupe(u8, ""), .delivery = .{ .id = id, .message = try g.gpa.dupe(u8, message), .args = try g.gpa.dupe(*Value, args), .request = request, .target = to, .at = to } } });
+        return id;
     }
 
     pub fn script(g: *Group, name: []const u8) ?*Script {
@@ -553,7 +665,9 @@ pub const Group = struct {
         const out = g.trace orelse return;
         switch (input) {
             .deliver => |d| {
-                out.print("> {s} d{d} to={s} message={s}", .{ if (d.delivery.request) "request" else "deliver", d.delivery.id, d.script, d.delivery.message }) catch {};
+                out.print("> {s} d{d} to=", .{ if (d.delivery.request) "request" else "deliver", d.delivery.id }) catch {};
+                if (d.delivery.target) |o| display.writeTrace(out, o.value) catch {} else out.writeAll(d.script) catch {};
+                out.print(" message={s}", .{d.delivery.message}) catch {};
                 if (d.delivery.args.len > 0) {
                     out.writeAll(" args=[") catch {};
                     for (d.delivery.args, 0..) |v, i| {
@@ -577,6 +691,16 @@ pub const Group = struct {
                 },
                 else => out.print("> fail {s} error={{}}", .{x.id}) catch {},
             },
+            .set_parent => |x| {
+                out.writeAll("> set-parent object=") catch {};
+                display.writeTrace(out, x.object.value) catch {};
+                out.writeAll(" parent=") catch {};
+                if (x.parent) |p| display.writeTrace(out, p.value) catch {} else out.writeAll("nothing") catch {};
+            },
+            .dispose => |o| {
+                out.writeAll("> dispose object=") catch {};
+                display.writeTrace(out, o.value) catch {};
+            },
         }
         out.writeAll("\n") catch {};
     }
@@ -592,12 +716,23 @@ pub const Group = struct {
         for (g.inputs.items) |input| switch (input) {
             .deliver => |d| {
                 defer g.gpa.free(d.script);
+                if (d.delivery.target != null) {
+                    try g.route(d.delivery);
+                    continue;
+                }
                 const s = g.script(d.script) orelse {
                     g.releaseDelivery(d.delivery);
                     continue;
                 };
                 try s.work.append(g.gpa, .{ .message = d.delivery });
             },
+            .set_parent => |x| {
+                // Checked again against what earlier inputs left.
+                if (parentRefusal(x.object, x.parent)) |code| {
+                    g.write("refused code=\"{s}\"\n", .{code});
+                } else x.object.parent = x.parent;
+            },
+            .dispose => |o| o.disposed = true,
             .settle => |x| {
                 defer g.gpa.free(x.id);
                 const index = for (g.pending.items, 0..) |p, i| {
@@ -636,6 +771,19 @@ pub const Group = struct {
                 busy = true;
                 switch (s.work.orderedRemove(0)) {
                     .message => |d| {
+                        // The path is walked when the message reaches the
+                        // head of the mailbox: it may have moved.
+                        if (d.at) |at| {
+                            const owner = at.owned() orelse {
+                                try g.unhandled(d);
+                                continue;
+                            };
+                            const to = g.script(owner.owner_of.?).?;
+                            if (to != s) {
+                                try to.work.append(g.gpa, .{ .message = d });
+                                continue;
+                            }
+                        }
                         try g.observe(s, d);
                         try g.startRun(s, d);
                     },
@@ -1000,10 +1148,12 @@ pub const Group = struct {
             else => false,
         };
         const waits = member or switch (ins.op) {
-            .send_wait, .send_named_wait, .send_spread_wait => true,
+            .send_wait, .send_named_wait, .send_spread_wait, .send_up_wait => true,
             else => false,
         };
-        const receiver = pop(frame);
+        // A Command Call with no Handler has no receiver: it climbs.
+        const up = ins.op == .send_up or ins.op == .send_up_wait;
+        const receiver = if (up) try nothing(gpa) else pop(frame);
         defer receiver.release();
         var args: std.ArrayList(*Value) = .empty;
         defer {
@@ -1014,7 +1164,7 @@ pub const Group = struct {
         defer if (name_value) |v| v.release();
         var name: []const u8 = undefined;
         switch (ins.op) {
-            .send, .send_wait, .join_send => {
+            .send, .send_wait, .join_send, .send_up, .send_up_wait => {
                 const n: usize = @intCast(ops[1].int);
                 try args.resize(gpa, n);
                 var i = n;
@@ -1055,16 +1205,50 @@ pub const Group = struct {
             m.uncharged = true;
             return g.raiseDeadline(b, null);
         };
-        // The receiver: `me`, with no object, is the Script itself.
-        const to: *Script = switch (receiver.data) {
-            .nothing => run.script,
-            .text => |t| g.script(t) orelse return g.raise("object gone", &.{.{ .key = "object", .value = receiver }}),
-            else => return g.raise("not implemented", &.{}),
-        };
+        // The receiver: `me`, with no object, is the Script itself; a Host
+        // Object's message goes to its nearest Owning Script; a climb goes
+        // on from the parent of the Script's owner.
+        var target: ?*objects.Object = null;
+        var at: ?*objects.Object = null;
+        var to: ?*Script = null;
+        if (up) {
+            target = run.script.owner;
+            at = if (target) |o| o.parent else null;
+            if (at) |x| if (x.owned()) |owner| {
+                to = g.script(owner.owner_of.?);
+            };
+        } else switch (receiver.data) {
+            .nothing => to = run.script,
+            .text => |t| to = g.script(t) orelse return g.raise("object gone", &.{.{ .key = "object", .value = receiver }}),
+            .object => {
+                const o = g.objectOf(receiver) orelse return g.raise("object gone", &.{.{ .key = "object", .value = receiver }});
+                if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = receiver }});
+                target = o;
+                at = o;
+                if (o.owned()) |owner| to = g.script(owner.owner_of.?);
+            },
+            else => return g.wrongKind("object", receiver),
+        }
         var size: u64 = 32;
         for (args.items) |v| size += costs.size(v);
         m.fuel_extra = (size + 31) / 32;
         m.alloc_extra = size;
+        // No Owning Script on its path: `unhandled`, and nothing is sent.
+        const dest = to orelse {
+            if (g.trace) |out| {
+                out.print("unhandled message={s}", .{name}) catch {};
+                writeArgs(out, args.items);
+                if (target) |o| {
+                    out.writeAll(" target=") catch {};
+                    display.writeTrace(out, o.value) catch {};
+                }
+                out.writeAll("\n") catch {};
+            }
+            if (!waits) return .next;
+            const reason = try model.text(gpa, "unhandled");
+            defer reason.release();
+            return g.raise("send failed", &.{.{ .key = "reason", .value = reason }});
+        };
         const from: []const u8 = if (waits) blk: {
             run.calls += 1;
             const id = try std.fmt.allocPrint(gpa, "{s}.c{d}", .{ run.id, run.calls });
@@ -1072,14 +1256,16 @@ pub const Group = struct {
             break :blk id;
         } else run.id;
         if (g.trace) |out| {
-            out.print("send {s} to={s} message={s}", .{ from, to.name, name }) catch {};
+            out.print("send {s} to=", .{from}) catch {};
+            if (!up and target != null) display.writeTrace(out, target.?.value) catch {} else out.writeAll(dest.name) catch {};
+            out.print(" message={s}", .{name}) catch {};
             writeArgs(out, args.items);
             if (waits) out.writeAll(if (member) " wait=join" else " wait=yes") catch {};
             out.writeAll("\n") catch {};
         }
         const owned = try gpa.dupe(*Value, args.items);
         args.clearRetainingCapacity();
-        try to.work.append(gpa, .{ .message = .{ .id = 0, .message = try gpa.dupe(u8, name), .args = owned, .request = false, .from = try gpa.dupe(u8, from), .waits = waits } });
+        try dest.work.append(gpa, .{ .message = .{ .id = 0, .message = try gpa.dupe(u8, name), .args = owned, .request = false, .from = try gpa.dupe(u8, from), .waits = waits, .target = target, .at = at } });
         if (!waits) return .next;
         if (member) {
             try g.startMember(run, .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
@@ -1153,7 +1339,7 @@ pub const Group = struct {
         for (entry.branches, 1..) |b, number| switch (b) {
             .when => |w| {
                 if (w.from) {
-                    if (popped[at].data != .text) return g.wrongKind("object", popped[at]);
+                    if (popped[at].data != .text and popped[at].data != .object) return g.wrongKind("object", popped[at]);
                 }
                 at += @as(usize, @intFromBool(w.from)) + w.captures;
             },
@@ -1239,12 +1425,16 @@ pub const Group = struct {
             if (!std.mem.eql(u8, w.message, d.message)) continue;
             const arity = if (w.body) |body| unit.bodies[body].params.len else 0;
             if (arity != d.args.len) continue;
-            // `from` a Script: that Script sent it.
-            if (held.when.from) |from| {
+            // `from` an object: the message's Target is that object.
+            if (held.when.from) |from| if (from.data == .object) {
+                const target = d.target orelse run.script.owner orelse continue;
+                if (target.value.data.object.identity != from.data.object.identity) continue;
+            } else {
+                // `from` a Script: that Script sent it.
                 const sender = d.from orelse continue;
                 const end = std.mem.indexOfScalar(u8, sender, '/') orelse sender.len;
                 if (!std.mem.eql(u8, sender[0..end], from.data.text)) continue;
-            }
+            };
             if (w.body) |body| {
                 const values = try g.eventTest(run, body, d.args, held.when.captures) orelse continue;
                 defer values.release();
@@ -1388,6 +1578,7 @@ pub const Group = struct {
                 .unhandled, .clause_failed => "unhandled",
                 .dropped => "dropped",
                 .cancelled => "cancel",
+                .passed => "pass",
                 .selected => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
@@ -1407,7 +1598,7 @@ pub const Group = struct {
         }
         if (g.trace) |out| {
             const word: []const u8 = switch (outcome) {
-                .returned => "completed",
+                .returned, .passed => "completed",
                 .errored => "errored",
                 .faulted => "limit-fault",
                 .unhandled, .clause_failed => "unhandled",
@@ -1433,15 +1624,6 @@ pub const Group = struct {
                 else => {},
             }
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
-            // A message no Handler took climbs past a Script with no owner:
-            // the `unhandled` report.
-            if (outcome == .unhandled or outcome == .clause_failed) {
-                out.writeAll("unhandled") catch {};
-                if (d.from == null) out.print(" d{d}", .{d.id}) catch {};
-                out.print(" message={s}", .{d.message}) catch {};
-                writeArgs(out, d.args);
-                out.writeAll("\n") catch {};
-            }
         }
         s.fuel_total += run.fuel;
         s.alloc_total += run.alloc;
@@ -1451,7 +1633,8 @@ pub const Group = struct {
                 try g.reply(d, .{ .reply = v });
             } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
             .faulted => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } }),
-            .unhandled, .clause_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } }),
+            // A message no clause took, or one passed, climbs the path.
+            .unhandled, .clause_failed, .passed => try g.climb(s, d),
             .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
             .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
             .errored => |e| {
@@ -1476,6 +1659,56 @@ pub const Group = struct {
             break;
         };
         g.destroyRun(run);
+    }
+
+    /// Routes a Delivery to an object to its nearest Owning Script, or
+    /// reports it `unhandled`. Takes it.
+    fn route(g: *Group, d: Delivery) !void {
+        const owner = d.at.?.owned() orelse return g.unhandled(d);
+        try g.script(owner.owner_of.?).?.work.append(g.gpa, .{ .message = d });
+    }
+
+    /// The end of a message's path: the `unhandled` report, and `send
+    /// failed` for a sender that waits. Takes it.
+    fn unhandled(g: *Group, d: Delivery) !void {
+        if (g.trace) |out| {
+            out.writeAll("unhandled") catch {};
+            if (d.from == null and d.id > 0) out.print(" d{d}", .{d.id}) catch {};
+            out.print(" message={s}", .{d.message}) catch {};
+            writeArgs(out, d.args);
+            if (d.target) |o| {
+                out.writeAll(" target=") catch {};
+                display.writeTrace(out, o.value) catch {};
+            }
+            out.writeAll("\n") catch {};
+        }
+        if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
+        g.releaseDelivery(d);
+    }
+
+    /// A message no Run of `s` ended goes on from the parent of the object
+    /// whose Owning Script received it, behind the messages already in the
+    /// next Owning Script's mailbox. Copies it.
+    fn climb(g: *Group, s: *Script, d: Delivery) !void {
+        const handled = if (d.at) |at| at.owned() else s.owner;
+        const copy = try g.copyDelivery(d);
+        if (d.internal_error) return g.unhandled(copy);
+        const parent = (handled orelse return g.unhandled(copy)).parent orelse return g.unhandled(copy);
+        var moved = copy;
+        moved.at = parent;
+        try g.route(moved);
+    }
+
+    fn copyDelivery(g: *Group, d: Delivery) !Delivery {
+        const gpa = g.gpa;
+        const args = try gpa.dupe(*Value, d.args);
+        for (args) |v| _ = v.retain();
+        var out = d;
+        out.args = args;
+        out.message = try gpa.dupe(u8, d.message);
+        out.from = if (d.from) |x| try gpa.dupe(u8, x) else null;
+        out.during = if (d.during) |x| x.retain() else null;
+        return out;
     }
 
     /// Whether a Run of the clause hasn't ended.
@@ -1561,11 +1794,14 @@ pub const Group = struct {
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
             total += 48;
         };
-        // A pending `wait for`'s captured values; a named Script is not a
-        // value.
+        // A pending `wait for`'s `from` objects and captured values; a named
+        // Script is not a value.
         if (run.waiting) |p| if (p.event) |e| for (e.branches) |b| switch (b) {
-            .when => |x| for (x.captures) |v| {
-                total += costs.size(v);
+            .when => |x| {
+                if (x.from) |v| if (v.data == .object) {
+                    total += costs.size(v);
+                };
+                for (x.captures) |v| total += costs.size(v);
             },
             .after => {},
         };
@@ -1629,6 +1865,8 @@ pub const Group = struct {
         dropped,
         /// Dispatch reached the end of its clause's patterns and Guard.
         selected,
+        /// It reached `pass`: the message goes on up the path.
+        passed,
         cancelled,
     };
 
@@ -1723,6 +1961,10 @@ pub const Group = struct {
                     }
                 },
                 .suspended => return .suspended,
+                .passed => {
+                    while (run.frames.items.len > 0) g.popFrame(run);
+                    return .passed;
+                },
                 .catch_accept, .catch_next => unreachable,
             }
         }
@@ -1982,7 +2224,7 @@ pub const Group = struct {
                         f.pc = guard.target;
                     }
                 },
-                .returned, .clause_failed, .end_cleanup, .suspended => unreachable,
+                .returned, .clause_failed, .end_cleanup, .suspended, .passed => unreachable,
             }
         };
         // The owner keeps its own stack until acceptance moves it on.
@@ -2079,6 +2321,8 @@ pub const Group = struct {
         guard_value: *Value,
         /// It suspended at a Suspension Point.
         suspended,
+        /// It reached `pass`.
+        passed,
     };
 
     fn push(g: *Group, frame: *Frame, v: *Value) !void {
@@ -2159,7 +2403,16 @@ pub const Group = struct {
                 run.script.definitions[i].release();
                 run.script.definitions[i] = pop(frame);
             },
-            .me, .target => try g.push(frame, try nothing(gpa)),
+            // `me` is the owner; `the target` the object the message was
+            // delivered to, or for a message to a Script, its owner.
+            .me => try g.push(frame, if (run.script.owner) |o| o.value.retain() else try nothing(gpa)),
+            .target => {
+                const o = run.delivery.target orelse run.script.owner;
+                try g.push(frame, if (o) |x| x.value.retain() else try nothing(gpa));
+            },
+            .pass => return .passed,
+            .send_up, .send_up_wait => return g.send(run, frame, ins, m),
+            .set_property, .set_property_computed => return g.setProperty(run, frame, ins, m),
             .jump => frame.pc = @intCast(ops[0].int),
             .branch_false, .branch_true => {
                 const v = pop(frame);
@@ -2505,7 +2758,7 @@ pub const Group = struct {
             .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .join_send, .join_send_named, .join_send_spread => return g.send(run, frame, ins, m),
             // A Script named as a receiver is its name; Host Objects come
             // later.
-            .load_object => try g.push(frame, try model.text(gpa, ops[0].text)),
+            .load_object => try g.push(frame, if (run.script.object(ops[0].text)) |o| o.value.retain() else try model.text(gpa, ops[0].text)),
 
             .wait_for, .wait_for_any => return g.waitFor(run, frame, ins, m),
             .wait => {
@@ -2538,6 +2791,15 @@ pub const Group = struct {
                     key_value = pop(frame);
                     if (key_value.?.data != .text) return g.wrongKind("text", key_value.?);
                     key = key_value.?.data.text;
+                }
+                if (base.data == .object) {
+                    // `id` is the Core's; in a Guard, nothing else reads.
+                    if (std.mem.eql(u8, key, "id")) {
+                        const id = try model.text(gpa, base.data.object.id);
+                        try g.push(frame, id);
+                        return .next;
+                    }
+                    if (g.guardEntry(run, frame.pc - 1) == null) if (g.objectOf(base)) |o| return g.getProperty(run, frame, o, key, m);
                 }
                 if (base.data != .map) return g.wrongKind("map", base);
                 const v = base.get(key) orelse try nothing(gpa);
@@ -2854,6 +3116,23 @@ pub const Group = struct {
                 const args = try a.alloc(*Value, n);
                 for (0..n) |i| args[n - 1 - i] = pop(frame);
                 defer for (args) |v| v.release();
+                // The Core holds an object's kind and whether it is disposed.
+                const object_builtin = std.mem.eql(u8, ops[0].text, "isDisposed") or std.mem.eql(u8, ops[0].text, "objectKind");
+                if (object_builtin) {
+                    m.builtin = ops[0].text;
+                    m.args = args;
+                    if (args[0].data != .object) return g.wrongKind("object", args[0]);
+                    const o = g.objectOf(args[0]);
+                    const r = if (std.mem.eql(u8, ops[0].text, "isDisposed"))
+                        try boolean(gpa, if (o) |x| x.disposed else false)
+                    else
+                        try model.text(gpa, args[0].data.object.kind);
+                    m.builtin = ops[0].text;
+                    m.args = args;
+                    m.result = r.retain();
+                    try g.push(frame, r);
+                    return .next;
+                }
                 var raised: builtins.Raised = .{};
                 const r = builtins.call(a, gpa, ops[0].text, args, &raised, m) catch |e| switch (e) {
                     error.Raised => return g.raiseBuiltin(raised),
@@ -3269,6 +3548,136 @@ pub const Group = struct {
             },
         }
         return .next;
+    }
+
+    /// `the k of o` on a Host Object: its Kind's Get, with a `prop` record,
+    /// charged as an immediate Operation's result is. A key the kind
+    /// doesn't define reads as Nothing.
+    fn getProperty(g: *Group, run: *Run, frame: *Frame, o: *objects.Object, key: []const u8, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = o.value }});
+        const prop = o.kind.prop(key) orelse {
+            try g.push(frame, try nothing(gpa));
+            return .next;
+        };
+        const outcome = prop.get.call(prop.get.context, o);
+        m.fuel_extra = prop.get_cost.fuel;
+        m.alloc_extra = prop.get_cost.alloc;
+        switch (outcome) {
+            .value => |v| {
+                const checked = try capabilities.checkValue(g.scratch.allocator(), gpa, prop.shape, v);
+                defer checked.release();
+                if (checked.mismatch != null) {
+                    v.release();
+                    g.propRecord(run, o, key, "get", "error", null);
+                    return g.propError(o, key);
+                }
+                g.propRecord(run, o, key, "get", "value", v);
+                // The value's conversion, as a Capability result's.
+                const size = costs.size(v);
+                m.fuel_extra += (size + 31) / 32;
+                m.alloc_extra += size;
+                try g.push(frame, v);
+                return .next;
+            },
+            else => {
+                g.releasePropResult(outcome);
+                g.propRecord(run, o, key, "get", "error", null);
+                return g.propError(o, key);
+            },
+        }
+    }
+
+    /// `set the k of o to e`: the value is checked against the property's
+    /// Shape before its Kind's Set runs.
+    fn setProperty(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        const value = pop(frame);
+        defer value.release();
+        const base = pop(frame);
+        defer base.release();
+        var key_value: ?*Value = null;
+        defer if (key_value) |k| k.release();
+        var key: []const u8 = undefined;
+        if (ins.op == .set_property) key = try keyOperand(g.scratch.allocator(), ins.operands[0].text) else {
+            key_value = pop(frame);
+            if (key_value.?.data != .text) return g.wrongKind("text", key_value.?);
+            key = key_value.?.data.text;
+        }
+        const o = g.objectOf(base) orelse return g.wrongKind("object", base);
+        // A disposed object or a read-only property pays only the
+        // instruction's rate; a value that breaks the Shape, nothing.
+        if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = o.value }});
+        const prop = o.kind.prop(key) orelse return g.raise("read only", &.{});
+        const set = prop.set orelse return g.raise("read only", &.{});
+        const checked = try capabilities.checkValue(g.scratch.allocator(), gpa, prop.shape, value);
+        defer checked.release();
+        if (checked.mismatch) |bad| {
+            m.uncharged = true;
+            return g.raiseMismatchAt(bad);
+        }
+        m.input = value.retain();
+        const outcome = set.call(set.context, o, value);
+        m.fuel_extra = prop.set_cost.fuel;
+        m.alloc_extra = prop.set_cost.alloc;
+        switch (outcome) {
+            .done, .value => {
+                g.releasePropResult(outcome);
+                g.propRecord(run, o, key, "set", "value", value);
+                return .next;
+            },
+            else => {
+                g.releasePropResult(outcome);
+                g.propRecord(run, o, key, "set", "error", null);
+                return g.propError(o, key);
+            },
+        }
+    }
+
+    fn releasePropResult(g: *Group, r: objects.Result) void {
+        switch (r) {
+            .value => |v| v.release(),
+            .failed => |f| {
+                g.gpa.free(f.code);
+                if (f.message) |t| g.gpa.free(t);
+                if (f.data) |d| d.release();
+            },
+            else => {},
+        }
+    }
+
+    /// `prop <run> object= name= op= value=|error=`.
+    fn propRecord(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, what: []const u8, v: ?*const Value) void {
+        const out = g.trace orelse return;
+        out.print("prop {s} object=", .{run.id}) catch {};
+        display.writeTrace(out, o.value) catch {};
+        out.print(" name={s} op={s} {s}=", .{ key, op, what }) catch {};
+        if (v) |x| display.writeTrace(out, x) catch {} else out.writeAll("{}") catch {};
+        out.writeAll("\n") catch {};
+    }
+
+    /// A property's failure raises as an Operation's does, with
+    /// `capability` the Object Kind and `operation` the property.
+    fn propError(g: *Group, o: *objects.Object, key: []const u8) error{ Raised, OutOfMemory } {
+        const capability = model.text(g.gpa, o.kind.name) catch return error.OutOfMemory;
+        defer capability.release();
+        const operation_name = model.text(g.gpa, key) catch return error.OutOfMemory;
+        defer operation_name.release();
+        return g.raise("host error", &.{ .{ .key = "capability", .value = capability }, .{ .key = "operation", .value = operation_name } });
+    }
+
+    /// `wrong kind` for a value that breaks a property's Shape.
+    fn raiseMismatchAt(g: *Group, bad: capabilities.Mismatch) error{ Raised, OutOfMemory } {
+        return switch (bad) {
+            .wrong_kind => |w| blk: {
+                const expected = model.text(g.gpa, w.expected) catch return error.OutOfMemory;
+                defer expected.release();
+                const got = model.text(g.gpa, w.got) catch return error.OutOfMemory;
+                defer got.release();
+                break :blk g.raise("wrong kind", &.{ .{ .key = "expected", .value = expected }, .{ .key = "got", .value = got }, .{ .key = "value", .value = w.value } });
+            },
+            else => g.raise("wrong kind", &.{}),
+        };
     }
 
     /// A Host failure: a `call-failed` report, then `host error`.

@@ -11,6 +11,7 @@ const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
 const standard = @import("machine/standard.zig");
+const objects = machine.objects;
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -23,7 +24,12 @@ fn bytes(s: ?[*]const u8, len: usize) error{InvalidValue}![]const u8 {
     return if (len == 0) "" else (s orelse return error.InvalidValue)[0..len];
 }
 fn status(err: anyerror) HostErrorCode {
-    return if (err == error.OutOfMemory) .out_of_memory else .invalid_value;
+    return switch (err) {
+        error.OutOfMemory => .out_of_memory,
+        error.DuplicateObjectId => .duplicate_object_id,
+        error.ParentCycle => .parent_cycle,
+        else => .invalid_value,
+    };
 }
 fn result(out: *?*Value, r: anyerror!*Value) HostErrorCode {
     out.* = r catch |err| {
@@ -282,6 +288,8 @@ pub const Core = struct {
     definitions: std.ArrayList(*caps.Capability) = .empty,
     bridges: std.ArrayList(*Bridge) = .empty,
     standard: std.ArrayList(*standard.Context) = .empty,
+    kinds: std.ArrayList(*objects.Kind) = .empty,
+    prop_bridges: std.ArrayList(*PropBridge) = .empty,
 };
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
@@ -303,7 +311,12 @@ pub const LoadOptions = extern struct {
     grants: ?[*]const LoadGrant = null,
     grants_len: usize = 0,
     grants_as_used: bool = false,
+    owner: ?*objects.Object = null,
+    objects: ?[*]const LoadObject = null,
+    objects_len: usize = 0,
 };
+
+pub const LoadObject = extern struct { name: ?[*]const u8, name_len: usize, object: *objects.Object };
 
 pub const Message = extern struct {
     name: ?[*]const u8,
@@ -327,6 +340,11 @@ pub const Group = struct {
     context: ?*anyopaque,
     scripts: std.ArrayList(*Script) = .empty,
     pending: std.ArrayList(*Pending) = .empty,
+
+    fn owns(g: *Group, o: *const objects.Object) bool {
+        for (g.group.objects.items) |x| if (x == o) return true;
+        return false;
+    }
 
     /// Sends each complete Trace line to the sink.
     fn flush(g: *Group) void {
@@ -371,6 +389,20 @@ export fn talk_core_release(c: ?*Core) void {
     core.bridges.deinit(gpa);
     for (core.standard.items) |x| gpa.destroy(x);
     core.standard.deinit(gpa);
+    for (core.kinds.items) |k| {
+        for (k.props) |p| {
+            gpa.free(p.name);
+            p.shape.release();
+        }
+        gpa.free(k.props);
+        for (k.parent_kinds) |x| gpa.free(x);
+        gpa.free(k.parent_kinds);
+        gpa.free(k.name);
+        gpa.destroy(k);
+    }
+    core.kinds.deinit(gpa);
+    for (core.prop_bridges.items) |b| gpa.destroy(b);
+    core.prop_bridges.deinit(gpa);
     allocator.destroy(core);
 }
 
@@ -409,7 +441,15 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const named = g.core.gpa.alloc(machine.NamedGrant, given.len) catch return .out_of_memory;
     defer g.core.gpa.free(named);
     for (given, named) |x, *n| n.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .grant = x.grant };
-    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used }) catch |err| return status(err);
+    const objects_in: []const LoadObject = if (o.objects_len == 0) &.{} else (o.objects orelse return .invalid_value)[0..o.objects_len];
+    const bound = g.core.gpa.alloc(machine.NamedObject, objects_in.len) catch return .out_of_memory;
+    defer g.core.gpa.free(bound);
+    for (objects_in, bound) |x, *b| {
+        if (!g.owns(x.object)) return .wrong_group;
+        b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
+    }
+    if (o.owner) |owner| if (!g.owns(owner)) return .wrong_group;
+    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
         .loaded => {},
@@ -1013,4 +1053,204 @@ export fn talk_call_fail(c: *Call, e: ?*const ScriptError) HostErrorCode {
     const code = allocator.dupe(u8, bytes(failure.code, failure.code_len) catch return .invalid_value) catch return .out_of_memory;
     const message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, bytes(failure.message, failure.message_len) catch return .invalid_value) catch return .out_of_memory;
     return settle(c, .{ .failed = .{ .code = code, .message = message, .data = if (failure.data) |d| d.retain() else null } });
+}
+
+// ---------------------------------------------------------------- Host Objects
+
+pub const PropGetFn = ?*const fn (context: ?*anyopaque, o: *objects.Object, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
+pub const PropSetFn = ?*const fn (context: ?*anyopaque, o: *objects.Object, v: *const Value, err: *ScriptError) callconv(.c) CallEnd;
+
+pub const Prop = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    shape: ?*const Shape,
+    get: PropGetFn,
+    set: PropSetFn,
+    context: ?*anyopaque,
+    get_cost: Cost,
+    set_cost: Cost,
+};
+
+pub const ObjectKindDef = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    props: ?[*]const Prop,
+    props_len: usize,
+    parent_kinds: ?[*]const ?[*]const u8,
+    parent_kinds_lens: ?[*]const usize,
+    parent_kinds_len: usize,
+};
+
+/// A C property's Get and Set and their context, behind the Core's.
+pub const PropBridge = struct { get: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd, set: PropSetFn, context: ?*anyopaque };
+
+fn propResult(end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
+    switch (end) {
+        .answered => return if (value) |v| .{ .value = v } else .done,
+        .failed => {
+            const code = bytes(failure.code, failure.code_len) catch return .broken;
+            const message = bytes(failure.message, failure.message_len) catch return .broken;
+            const owned_code = allocator.dupe(u8, code) catch return .broken;
+            const owned_message: ?[]const u8 = if (failure.message == null) null else allocator.dupe(u8, message) catch {
+                allocator.free(owned_code);
+                return .broken;
+            };
+            return .{ .failed = .{ .code = owned_code, .message = owned_message, .data = failure.data } };
+        },
+        else => {
+            if (value) |v| v.release();
+            return .broken;
+        },
+    }
+}
+
+fn propGet(context: ?*anyopaque, o: *objects.Object) objects.Result {
+    const b: *PropBridge = @ptrCast(@alignCast(context.?));
+    var value: ?*Value = null;
+    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+    const end = b.get(b.context, o, &value, &failure);
+    const r = propResult(end, value, failure);
+    return if (r == .done) .broken else r;
+}
+
+fn propSet(context: ?*anyopaque, o: *objects.Object, v: *const Value) objects.Result {
+    const b: *PropBridge = @ptrCast(@alignCast(context.?));
+    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+    const end = b.set.?(b.context, o, v, &failure);
+    return switch (propResult(end, null, failure)) {
+        .value => |x| blk: {
+            x.release();
+            break :blk .done;
+        },
+        else => |r| r,
+    };
+}
+
+/// Defines an Object Kind, once per process: its properties, each with a
+/// Shape, a Get and an optional Set.
+export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*objects.Kind) HostErrorCode {
+    out.* = null;
+    const gpa = c.gpa;
+    const name = bytes(def.name, def.name_len) catch return .invalid_value;
+    if (name.len == 0) return .invalid_value;
+    for (c.kinds.items) |k| if (std.mem.eql(u8, k.name, name)) return .name_reused;
+    const given: []const Prop = if (def.props_len == 0) &.{} else (def.props orelse return .invalid_value)[0..def.props_len];
+    for (given) |p| {
+        _ = bytes(p.name, p.name_len) catch return .invalid_value;
+        if (p.shape == null or p.get == null or p.get_cost.fuel < 0 or p.get_cost.alloc < 0 or p.set_cost.fuel < 0 or p.set_cost.alloc < 0) return .invalid_value;
+    }
+    const parents_in: []const ?[*]const u8 = if (def.parent_kinds_len == 0) &.{} else (def.parent_kinds orelse return .invalid_value)[0..def.parent_kinds_len];
+    const lens: []const usize = if (def.parent_kinds_len == 0) &.{} else (def.parent_kinds_lens orelse return .invalid_value)[0..def.parent_kinds_len];
+    const k = gpa.create(objects.Kind) catch return .out_of_memory;
+    k.* = .{ .name = gpa.dupe(u8, name) catch return .out_of_memory, .props = gpa.alloc(objects.Prop, given.len) catch return .out_of_memory };
+    const parents = gpa.alloc([]const u8, parents_in.len) catch return .out_of_memory;
+    for (parents_in, lens, parents) |x, len, *y| y.* = gpa.dupe(u8, bytes(x, len) catch "") catch return .out_of_memory;
+    k.parent_kinds = parents;
+    for (given, k.props) |p, *x| {
+        const b = gpa.create(PropBridge) catch return .out_of_memory;
+        b.* = .{ .get = p.get.?, .set = p.set, .context = p.context };
+        c.prop_bridges.append(gpa, b) catch return .out_of_memory;
+        x.* = .{
+            .name = gpa.dupe(u8, bytes(p.name, p.name_len) catch unreachable) catch return .out_of_memory,
+            .shape = retained(p.shape.?),
+            .get = .{ .call = propGet, .context = b },
+            .set = if (p.set != null) .{ .call = propSet, .context = b } else null,
+            .get_cost = .{ .fuel = @intCast(p.get_cost.fuel), .alloc = @intCast(p.get_cost.alloc) },
+            .set_cost = .{ .fuel = @intCast(p.set_cost.fuel), .alloc = @intCast(p.set_cost.alloc) },
+        };
+    }
+    c.kinds.append(gpa, k) catch return .out_of_memory;
+    out.* = k;
+    return .ok;
+}
+
+/// Makes the Group's handle for a Host-owned thing; a duplicate id within
+/// its kind is TALK_DUPLICATE_OBJECT_ID.
+export fn talk_group_object(g: *Group, kind: *const objects.Kind, id: ?[*]const u8, id_len: usize, native: ?*anyopaque, out: *?*objects.Object) HostErrorCode {
+    out.* = null;
+    const text = bytes(id, id_len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(text)) return .invalid_value;
+    out.* = g.group.object(kind, text, native) catch |err| return status(err);
+    return .ok;
+}
+
+/// The handle with this Object Kind name and id, disposed or not.
+export fn talk_object_by_id(g: *Group, kind: ?[*]const u8, kind_len: usize, id: ?[*]const u8, id_len: usize, out: *?*objects.Object) bool {
+    out.* = g.group.objectById(bytes(kind, kind_len) catch return false, bytes(id, id_len) catch return false);
+    return out.* != null;
+}
+
+export fn talk_object_id(o: *const objects.Object, s: *[*]const u8, len: *usize) void {
+    s.* = o.id.ptr;
+    len.* = o.id.len;
+}
+
+export fn talk_object_native(o: *const objects.Object) ?*anyopaque {
+    return o.native;
+}
+
+/// The object as a Script value, an owned reference.
+export fn talk_object_value(o: *const objects.Object, out: *?*Value) HostErrorCode {
+    out.* = o.value.retain();
+    return .ok;
+}
+
+/// The handle a value of kind object is, within the Group that made it.
+export fn talk_value_as_object(g: *Group, v: *const Value, out: *?*objects.Object) bool {
+    out.* = g.group.objectOf(v);
+    return out.* != null;
+}
+
+/// Queues SetParent; a cycle is TALK_PARENT_CYCLE and a disposed child
+/// TALK_INVALID_VALUE at the call. A NULL parent ends the chain.
+export fn talk_set_parent(g: *Group, o: *objects.Object, parent: ?*objects.Object) HostErrorCode {
+    if (!g.owns(o)) return .wrong_group;
+    if (parent) |p| if (!g.owns(p)) return .wrong_group;
+    defer g.flush();
+    g.group.setParent(o, parent) catch |err| return status(err);
+    return .ok;
+}
+
+export fn talk_dispose(g: *Group, o: *objects.Object) HostErrorCode {
+    if (!g.owns(o)) return .wrong_group;
+    g.group.dispose(o) catch |err| return status(err);
+    return .ok;
+}
+
+fn queueTo(g: *Group, to: *objects.Object, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
+    if (!g.owns(to)) return .wrong_group;
+    const name = bytes(m.name, m.name_len) catch return .invalid_value;
+    const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
+    for (owned, args) |*x, v| x.* = v.retain();
+    defer g.core.gpa.free(owned);
+    const n = g.group.deliverTo(to, name, owned, request) catch {
+        for (owned) |v| v.release();
+        return .out_of_memory;
+    };
+    n_out.* = n;
+    if (id) |b| {
+        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        b.* = .{ .data = text.ptr, .len = text.len };
+    }
+    return .ok;
+}
+
+/// Queues a Delivery to a Host Object, routed to its nearest Owning Script
+/// when the queue is drained.
+export fn talk_deliver(g: *Group, to: *objects.Object, m: *const Message, id: ?*Buffer) HostErrorCode {
+    var n: u64 = 0;
+    return queueTo(g, to, m, false, id, &n);
+}
+
+export fn talk_request(g: *Group, to: *objects.Object, m: *const Message, id: ?*Buffer, out: *?*Pending) HostErrorCode {
+    out.* = null;
+    var n: u64 = 0;
+    const code = queueTo(g, to, m, true, id, &n);
+    if (code != .ok) return code;
+    const p = g.core.gpa.create(Pending) catch return .out_of_memory;
+    p.* = .{ .group = g, .id = n };
+    g.pending.append(g.core.gpa, p) catch return .out_of_memory;
+    out.* = p;
+    return .ok;
 }

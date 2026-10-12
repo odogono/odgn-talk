@@ -193,11 +193,19 @@ test "ids marked optional in the catalogue may be absent, others may not" {
 /// catalogue's filled fields to appear in actual but not expected. The
 /// display reader's resolver is immaterial to equality of canonical bytes;
 /// callers with object/function crossings can provide it when validating.
+fn anyObject(context: ?*anyopaque, kind: []const u8, object_id: []const u8) model.Error!*model.Value {
+    const a: *const std.mem.Allocator = @ptrCast(@alignCast(context.?));
+    return model.object(a.*, kind, object_id, 0);
+}
+
 pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !bool {
     if (std.mem.eql(u8, expected, actual) and !std.mem.startsWith(u8, actual, "> ")) return true;
-    const x = (try parse(a, expected, .{})) orelse return false;
+    // Host Objects are compared by their display form, kind and id.
+    var gpa = a;
+    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject };
+    const x = (try parse(a, expected, objects)) orelse return false;
     defer x.deinit(a);
-    const y = (try parseMode(a, actual, .{}, false)) orelse return false;
+    const y = (try parseMode(a, actual, objects, false)) orelse return false;
     defer y.deinit(a);
     if (x.input != y.input or !std.mem.eql(u8, x.name, y.name) or x.ids.len != y.ids.len) return false;
     for (x.ids, y.ids) |left, right| if (!std.mem.eql(u8, left, right)) return false;

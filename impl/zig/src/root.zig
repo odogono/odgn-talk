@@ -54,6 +54,7 @@ test {
     _ = @import("machine/matcher.zig");
     _ = @import("machine/capabilities.zig");
     _ = @import("machine/standard.zig");
+    _ = @import("machine/objects.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;
     _ = corpus_case;
