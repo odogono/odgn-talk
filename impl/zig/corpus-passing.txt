@@ -2,6 +2,7 @@
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
+cancellation/queueing-policies
 capabilities/calls
 capabilities/host-failures
 capabilities/load-checks
@@ -36,6 +37,7 @@ disassembly/timeout-block
 disassembly/whose
 errors/fail-error-map
 errors/items-delimiter
+errors/queued-error-before-parked-run
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/argument-labels
@@ -84,6 +86,8 @@ quantities/value-encoding
 suspension/answers
 suspension/joins
 suspension/late-failure
+suspension/script-joins
+suspension/send-wait-replacement
 suspension/timeout-block-join
 suspension/timeout-block-waits
 suspension/wait-for

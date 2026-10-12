@@ -49,6 +49,8 @@ pub const Body = struct {
     captures: u32 = 0,
     /// The slot of the first capture.
     capture_slot: u32 = 0,
+    /// A Handler Clause's Queueing Policy.
+    policy: Policy = .none,
     locals: u32,
     /// For an `on error` clause with `, during name`: that name's slot.
     during: ?u32 = null,
@@ -56,6 +58,8 @@ pub const Body = struct {
     first: u32,
     last: u32,
 };
+
+pub const Policy = enum { none, queued, dropping, replacing };
 
 pub const Unwind = struct {
     first: u32,
@@ -391,6 +395,9 @@ const Lowerer = struct {
         if (!counter.found_existing) counter.value_ptr.* = 0;
         counter.value_ptr.* += 1;
         f.body.info.clause = counter.value_ptr.*;
+        for (h.suffixes) |t| if (std.meta.stringToEnum(Policy, l.text(t))) |p| {
+            f.body.info.policy = p;
+        };
         f.handler = h;
         const params = try f.parameters(h.params);
         try f.finishSlots();
