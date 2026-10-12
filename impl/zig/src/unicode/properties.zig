@@ -66,6 +66,21 @@ pub fn isCaseIgnorable(scalar: u21) bool {
     return has(&tables.case_ignorable, scalar);
 }
 
+/// The full default uppercase mapping of `scalar`, or null for itself.
+pub fn uppercase(scalar: u21) ?[]const u21 {
+    return mapping(&tables.uppercase, scalar);
+}
+
+/// The full default lowercase mapping of `scalar`, or null for itself.
+pub fn lowercase(scalar: u21) ?[]const u21 {
+    return mapping(&tables.lowercase, scalar);
+}
+
+/// The lowercase of `scalar` where Final_Sigma holds, or null.
+pub fn finalSigma(scalar: u21) ?[]const u21 {
+    return mapping(&tables.final_sigma, scalar);
+}
+
 /// The scalars a sorted mapping table gives `scalar`, or null.
 pub fn mapping(table: []const tables.Mapping, scalar: u21) ?[]const u21 {
     var low: usize = 0;
