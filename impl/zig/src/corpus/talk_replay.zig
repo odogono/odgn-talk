@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail", "set-parent", "dispose", "add-library" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "answer", "fail", "set-parent", "dispose", "add-library" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -21,6 +21,13 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
             if (std.mem.eql(u8, known, name)) break;
         } else return "a Host Input talk.h doesn't make yet";
         if (std.mem.indexOf(u8, input, " limits=") != null or std.mem.indexOf(u8, input, " fuel-slice=") != null or std.mem.indexOf(u8, input, " fuel-cap=") != null) return "limits are not implemented";
+        // An uncertain effect outcome stops the Group, which comes with
+        // Stop in step 4.
+        if (std.mem.eql(u8, name, "stub-effect")) {
+            const status = field(input, "status") orelse return "a stub-effect without a status";
+            const phase = field(input, "phase") orelse return "a stub-effect without a phase";
+            if (std.mem.eql(u8, status, "unknown") or (std.mem.eql(u8, phase, "rollback") and !std.mem.eql(u8, status, "ok"))) return "stopping a Group is not implemented";
+        }
         if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
             if (std.mem.startsWith(u8, to, "<object ")) continue;
@@ -36,8 +43,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
-/// case declares itself, with no Segment-bound Operations or Coordinators,
-/// are.
+/// case declares itself and the Standard Capabilities made so far are.
 fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
     const all = case_setup.tables(a, setup) catch return "case.toml isn't read";
     for (all) |t| {
@@ -50,7 +56,6 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
         if (mode != .string) return "an Operation without a mode";
-        if (case_setup.field(t, "segmentBound")) |b| if (b == .raw and std.mem.eql(u8, b.raw, "true")) return "Segment-bound Operations are not implemented";
         for ((case_setup.field(t, "args") orelse continue).array) |shape| if (!shapeSupported(shape)) return "object Shapes are not implemented";
     }
     for (all) |t| {
@@ -60,15 +65,6 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
             // change these cases; the others wait for step 4.
             for ([_][]const u8{ "maxWaitMs", "fuelPerRun", "mailboxDepth" }) |k| if (std.mem.eql(u8, l.key, k)) return "limits are not implemented";
         };
-        const grants = case_setup.field(t, "grants") orelse continue;
-        for (grants.table) |g| {
-            if (g.value.get("coordinator") != null) return "Segment Coordinators are not implemented";
-            if (case_setup.field(t, "limits")) |limits| for (limits.table) |l| {
-                // Limits the machine already meets with its defaults don't
-                // change these cases; the others wait for step 4.
-                for ([_][]const u8{ "maxWaitMs", "fuelPerRun", "mailboxDepth" }) |k| if (std.mem.eql(u8, l.key, k)) return "limits are not implemented";
-            };
-        }
     }
     return null;
 }
@@ -106,13 +102,19 @@ fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
 }
 
 /// Compiles the case's Libraries, each once those it imports are compiled.
-fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library)) !void {
+fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects, out: *std.StringHashMapUnmanaged(*c.talk_library)) !void {
     // The Grant declarations: each Capability the case defines, by its name.
     var declarations: std.ArrayList(c.talk_load_grant) = .empty;
     var it = defs.iterator();
     while (it.next()) |e| {
         var grant: ?*c.talk_grant = null;
-        try check(c.talk_capability_def_grant_all(e.value_ptr.*, null, &grant));
+        // A coordinated Grant needs a binding of its own.
+        var binding: ?*anyopaque = null;
+        if (effects.coordinated.contains(e.key_ptr.*)) {
+            binding = @ptrCast(@constCast((try a.dupeSentinel(u8, "", 0)).ptr));
+            try effects.names.put(a, @intFromPtr(binding), null);
+        }
+        try check(c.talk_capability_def_grant_all(e.value_ptr.*, binding, &grant));
         try declarations.append(a, .{ .name = e.key_ptr.ptr, .name_len = e.key_ptr.len, .grant = grant });
     }
     var left: std.ArrayList(case_setup.Table) = .empty;
@@ -491,7 +493,53 @@ fn number(v: ?case_setup.Value) i64 {
 
 /// Defines the case's Capabilities from its `[[operations]]` tables, with
 /// one OperationHost each, keyed `<capability>.<operation>`.
-fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call)) !void {
+/// The case's Segment Coordinators: each Grant's coordinator name, by its
+/// binding, one lifecycle per name and one for each Grant without one, and
+/// the hook results `stub-effect` queues, by `<script>.<grant>.<phase>`.
+const Effects = struct {
+    a: std.mem.Allocator,
+    names: std.AutoHashMapUnmanaged(usize, ?[]const u8) = .empty,
+    shared: std.StringHashMapUnmanaged(*c.talk_segment_lifecycle) = .empty,
+    stubs: std.StringHashMapUnmanaged(std.ArrayList(c.talk_effect_status)) = .empty,
+    /// The coordinated Capabilities, whose Grants need a binding of their
+    /// own.
+    coordinated: std.StringHashMapUnmanaged(void) = .empty,
+
+    fn lifecycle(e: *Effects) !*c.talk_segment_lifecycle {
+        const l = try e.a.create(c.talk_segment_lifecycle);
+        l.* = .{ .begin = hookFor(0), .commit = hookFor(1), .rollback = hookFor(2), .context = e };
+        return l;
+    }
+};
+
+/// The hook for a phase, by its index: the next Stub for the first enrolled
+/// Grant. A hook without one is `unknown`.
+fn hookFor(comptime phase: comptime_int) c.talk_segment_hook {
+    return struct {
+        fn f(context: ?*anyopaque, sc: [*c]const c.talk_segment_context) callconv(.c) c.talk_effect_result {
+            const e: *Effects = @ptrCast(@alignCast(context.?));
+            const x = sc.*;
+            var buf: [256]u8 = undefined;
+            const key = std.fmt.bufPrint(&buf, "{s}.{s}.{s}", .{ x.script_name[0..x.script_name_len], x.grant_name[0..x.grant_name_len], ([_][]const u8{ "begin", "commit", "rollback" })[phase] }) catch return .{ .status = c.TALK_EFFECT_UNKNOWN };
+            const queue = e.stubs.getPtr(key) orelse return .{ .status = c.TALK_EFFECT_UNKNOWN };
+            if (queue.items.len == 0) return .{ .status = c.TALK_EFFECT_UNKNOWN };
+            return .{ .status = queue.orderedRemove(0) };
+        }
+    }.f;
+}
+
+/// A Grant's coordinator: the one its name shares, or its own.
+fn coordinatorFor(context: ?*anyopaque, binding: ?*anyopaque) callconv(.c) [*c]const c.talk_segment_lifecycle {
+    const e: *Effects = @ptrCast(@alignCast(context.?));
+    const name = e.names.get(@intFromPtr(binding)) orelse return null;
+    const n = name orelse return e.lifecycle() catch null;
+    if (e.shared.get(n)) |l| return l;
+    const l = e.lifecycle() catch return null;
+    e.shared.put(e.a, n, l) catch return null;
+    return l;
+}
+
+fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_setup.Table, hosts: *std.StringHashMapUnmanaged(*OperationHost), defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), calls: *std.StringHashMapUnmanaged(?*c.talk_call), effects: *Effects) !void {
     var names: std.ArrayList([]const u8) = .empty;
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
@@ -502,6 +550,7 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
     }
     for (names.items) |capability| {
         var ops: std.ArrayList(c.talk_operation) = .empty;
+        var bound = false;
         for (all) |t| {
             if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
             if (!std.mem.eql(u8, case_setup.field(t, "capability").?.string, capability)) continue;
@@ -543,6 +592,8 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 }
                 break :blk d;
             } else null;
+            const segment_bound = if (case_setup.field(t, "segmentBound")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false;
+            bound = bound or segment_bound;
             try ops.append(a, .{
                 .name = name.ptr,
                 .name_len = name.len,
@@ -557,11 +608,14 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 .@"fn" = host,
                 .context = h,
                 .scope = scope,
-                .segment_bound = false,
+                .segment_bound = segment_bound,
             });
         }
         var def: ?*c.talk_capability_def = null;
-        try check(c.talk_define_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, &def));
+        if (bound) {
+            try effects.coordinated.put(a, capability, {});
+            try check(c.talk_define_coordinated_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, coordinatorFor, effects, &def));
+        } else try check(c.talk_define_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, &def));
         for (ops.items) |op| {
             for (op.args[0..op.args_len]) |x| c.talk_shape_release(x);
             if (op.result) |r| c.talk_shape_release(r);
@@ -572,7 +626,7 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
 }
 
 /// A Script's Grants, from its `grants` table.
-fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def)) ![]c.talk_load_grant {
+fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects) ![]c.talk_load_grant {
     var out: std.ArrayList(c.talk_load_grant) = .empty;
     const grants = case_setup.field(t, "grants") orelse return out.items;
     for (grants.table) |g| {
@@ -581,7 +635,13 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
         var grant: ?*c.talk_grant = null;
         const ops = g.value.get("ops") orelse return error.MalformedCase;
         // A text binding reaches the Host as NUL-terminated text.
-        const binding: ?*anyopaque = if (g.value.get("binding")) |b| (if (b == .string) @ptrCast(@constCast((try a.dupeSentinel(u8, b.string, 0)).ptr)) else null) else null;
+        var binding: ?*anyopaque = if (g.value.get("binding")) |b| (if (b == .string) @ptrCast(@constCast((try a.dupeSentinel(u8, b.string, 0)).ptr)) else null) else null;
+        // A coordinated Grant's binding is its own, so it names its
+        // coordinator.
+        if (effects.coordinated.contains(capability)) {
+            if (binding == null) binding = @ptrCast(@constCast((try a.dupeSentinel(u8, "", 0)).ptr));
+            try effects.names.put(a, @intFromPtr(binding), if (g.value.get("coordinator")) |x| x.string else null);
+        }
         if (ops == .string) {
             try check(c.talk_capability_def_grant_all(def, binding, &grant));
         } else {
@@ -617,13 +677,14 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var hosts: std.StringHashMapUnmanaged(*OperationHost) = .empty;
     var calls: std.StringHashMapUnmanaged(?*c.talk_call) = .empty;
     var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
-    try defineCapabilities(a, core, all, &hosts, &defs, &calls);
+    var effects: Effects = .{ .a = a };
+    try defineCapabilities(a, core, all, &hosts, &defs, &calls, &effects);
     try defineStandard(a, core, all, &hosts, &defs, &calls);
     var store: ObjectStore = .{ .a = a };
     defer store.deinit();
     try defineObjects(a, core, group, all, &store);
     var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
-    try compileLibraries(a, io, dir, core, all, &defs, &libraries);
+    try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries);
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;
@@ -640,7 +701,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             const table = for (all) |t| {
                 if (std.mem.eql(u8, t.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(t, "name").?.string, script)) break t;
             } else return error.UnknownScript;
-            const grants = try grantsOf(a, table, &defs);
+            const grants = try grantsOf(a, table, &defs, &effects);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
             const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(&store, a, x) else null;
             var bound: std.ArrayList(c.talk_load_object) = .empty;
@@ -732,6 +793,20 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             const op = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
             const h = hosts.get(op) orelse return error.UnknownOperation;
             try h.stubs.append(a, .{ .value = field(input, "value"), .err = field(input, "error"), .charge = if (field(input, "charge")) |n| try std.fmt.parseInt(i64, n, 10) else null });
+            try sink.out.appendSlice(gpa, line);
+            try sink.out.append(gpa, '\n');
+        } else if (std.mem.eql(u8, name, "stub-effect")) {
+            // A hook result for the participant whose first enrolled Grant
+            // is `<script>.<grant>`, written to the Trace where the case has
+            // it.
+            const rest = input[name_end + 1 ..];
+            const who = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
+            const key = try std.fmt.allocPrint(a, "{s}.{s}", .{ who, field(input, "phase") orelse return error.MalformedCase });
+            const status_text = field(input, "status") orelse return error.MalformedCase;
+            const status: c.talk_effect_status = if (std.mem.eql(u8, status_text, "ok")) c.TALK_EFFECT_OK else if (std.mem.eql(u8, status_text, "failed")) c.TALK_EFFECT_FAILED else c.TALK_EFFECT_UNKNOWN;
+            const queue = try effects.stubs.getOrPut(a, key);
+            if (!queue.found_existing) queue.value_ptr.* = .empty;
+            try queue.value_ptr.append(a, status);
             try sink.out.appendSlice(gpa, line);
             try sink.out.append(gpa, '\n');
         } else return error.Unsupported;

@@ -311,6 +311,7 @@ pub const Core = struct {
     kinds: std.ArrayList(*objects.Kind) = .empty,
     libraries: std.ArrayList(*machine.Library) = .empty,
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
+    mappings: std.ArrayList(*Mapping) = .empty,
 };
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
@@ -461,6 +462,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.kinds.deinit(gpa);
     for (core.prop_bridges.items) |b| gpa.destroy(b);
     core.prop_bridges.deinit(gpa);
+    for (core.mappings.items) |m| gpa.destroy(m);
+    core.mappings.deinit(gpa);
     for (core.libraries.items) |l| l.destroy();
     core.libraries.deinit(gpa);
     allocator.destroy(core);
@@ -912,9 +915,6 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     if (name.len == 0) return error.InvalidValue;
     const call = o.@"fn" orelse return error.InvalidValue;
     if (o.cost.fuel < 0 or o.cost.alloc < 0) return error.InvalidValue;
-    // A Segment-bound Operation needs a Segment Coordinator, which this
-    // definition doesn't supply.
-    if (o.segment_bound) return error.InvalidValue;
     const scope: caps.Scope = if (o.scope) |d| blk: {
         if (d.closes != null) {
             if (d.opens != null or d.abandon != null) return error.InvalidValue;
@@ -955,11 +955,105 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
             .opens => |x| .{ .opens = .{ .name = try gpa.dupe(u8, x.name), .abandon = try gpa.dupe(u8, x.abandon) } },
             .closes => |n| .{ .closes = try gpa.dupe(u8, n) },
         },
+        .segment_bound = o.segment_bound,
         .host = .{ .call = bridged, .context = bridge },
     };
 }
 
 export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, out: *?*caps.Capability) HostErrorCode {
+    return defineCapability(c, name, len, ops, ops_len, null, out);
+}
+
+export fn talk_define_segment_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, lifecycle: ?*const SegmentLifecycle, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const l = lifecycle orelse return .invalid_value;
+    if (l.begin == null or l.commit == null or l.rollback == null) return .invalid_value;
+    return defineCapability(c, name, len, ops, ops_len, .{ .call = ownCoordinator, .context = @constCast(l) }, out);
+}
+
+export fn talk_define_coordinated_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, coordinator: ?CoordinatorFn, context: ?*anyopaque, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const f = coordinator orelse return .invalid_value;
+    const m = c.gpa.create(Mapping) catch return .out_of_memory;
+    m.* = .{ .call = f, .context = context };
+    c.mappings.append(c.gpa, m) catch {
+        c.gpa.destroy(m);
+        return .out_of_memory;
+    };
+    return defineCapability(c, name, len, ops, ops_len, .{ .call = mappedCoordinator, .context = m }, out);
+}
+
+/// Non-exhaustive: a malformed status from the Host is `unknown`.
+pub const EffectStatus = enum(c_int) { ok, failed, unknown, _ };
+pub const EffectResult = extern struct { status: EffectStatus, detail: ?[*]const u8, detail_len: usize };
+pub const SegmentContext = extern struct {
+    group: ?*Group,
+    script_name: [*]const u8,
+    script_name_len: usize,
+    run_id: [*]const u8,
+    run_id_len: usize,
+    grant_name: [*]const u8,
+    grant_name_len: usize,
+    segment_id: [*]const u8,
+    segment_id_len: usize,
+    binding: ?*anyopaque,
+    now_seconds: i64,
+    now_nanos: i32,
+    grants: [*]const caps.SegmentGrant,
+    grants_len: usize,
+};
+pub const SegmentHook = *const fn (context: ?*anyopaque, s: *const SegmentContext) callconv(.c) EffectResult;
+pub const SegmentLifecycle = extern struct { begin: ?SegmentHook, commit: ?SegmentHook, rollback: ?SegmentHook, context: ?*anyopaque };
+pub const CoordinatorFn = *const fn (context: ?*anyopaque, binding: ?*anyopaque) callconv(.c) ?*const SegmentLifecycle;
+
+/// A coordinated Capability's mapping from a binding to its coordinator.
+pub const Mapping = struct { call: CoordinatorFn, context: ?*anyopaque };
+
+/// Each Grant is its own coordinator, with the Capability's hooks.
+fn ownCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    return .{ .identity = @intFromPtr(g), .hook = segmentHook, .context = context };
+}
+
+/// The Host maps the Grant's binding to a coordinator, compared by address.
+fn mappedCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    const m: *const Mapping = @ptrCast(@alignCast(context.?));
+    const l = m.call(m.context, g.binding) orelse return null;
+    if (l.begin == null or l.commit == null or l.rollback == null) return null;
+    return .{ .identity = @intFromPtr(l), .hook = segmentHook, .context = @constCast(l) };
+}
+
+fn segmentHook(context: ?*anyopaque, phase: caps.Phase, s: *const caps.SegmentContext) caps.EffectStatus {
+    const l: *const SegmentLifecycle = @ptrCast(@alignCast(context.?));
+    const hook = switch (phase) {
+        .begin => l.begin,
+        .commit => l.commit,
+        .rollback => l.rollback,
+    }.?;
+    const machine_group: ?*machine.Group = @ptrCast(@alignCast(s.group));
+    const ctx: SegmentContext = .{
+        .group = if (machine_group) |mg| @fieldParentPtr("group", mg) else null,
+        .script_name = s.script.ptr,
+        .script_name_len = s.script.len,
+        .run_id = s.run.ptr,
+        .run_id_len = s.run.len,
+        .grant_name = s.grant.ptr,
+        .grant_name_len = s.grant.len,
+        .segment_id = s.segment.ptr,
+        .segment_id_len = s.segment.len,
+        .binding = s.binding,
+        .now_seconds = s.now.seconds,
+        .now_nanos = s.now.nanos,
+        .grants = s.grants.ptr,
+        .grants_len = s.grants.len,
+    };
+    return switch (hook(l.context, &ctx).status) {
+        .ok => .ok,
+        .failed => .failed,
+        .unknown, _ => .unknown,
+    };
+}
+
+fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const gpa = c.gpa;
     const n = bytes(name, len) catch return .invalid_value;
@@ -986,13 +1080,15 @@ export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: 
         gpa.free(operations);
         return .invalid_value;
     };
-    if (!(caps.Capability{ .name = n, .operations = operations }).validScopes()) {
+    const shape: caps.Capability = .{ .name = n, .operations = operations };
+    // Segment-bound Operations need Segment Coordinators.
+    if (!shape.validScopes() or shape.segmentBound() != (coordinator_of != null)) {
         for (operations) |done| releaseOperation(gpa, done);
         gpa.free(operations);
         return .invalid_value;
     }
     const d = gpa.create(caps.Capability) catch return .out_of_memory;
-    d.* = .{ .name = gpa.dupe(u8, n) catch return .out_of_memory, .operations = operations };
+    d.* = .{ .name = gpa.dupe(u8, n) catch return .out_of_memory, .operations = operations, .coordinator_of = coordinator_of };
     c.definitions.append(gpa, d) catch return .out_of_memory;
     out.* = d;
     return .ok;
@@ -1010,6 +1106,11 @@ fn grantOf(d: *caps.Capability, kept: []bool, binding: ?*anyopaque, out: *?*caps
         return .out_of_memory;
     };
     g.* = .{ .capability = d, .operations = kept, .binding = binding };
+    if (d.coordinator_of) |of| g.coordinator = of.call(of.context, g) orelse {
+        allocator.free(kept);
+        allocator.destroy(g);
+        return .invalid_value;
+    };
     d.grants.append(allocator, g) catch {
         allocator.free(kept);
         allocator.destroy(g);

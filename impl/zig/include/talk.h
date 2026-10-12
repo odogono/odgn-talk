@@ -297,10 +297,71 @@ typedef struct talk_operation {
     talk_operation_fn fn;
     void *context;
     const talk_scope_decl *scope; /* NULL: none; immediate only */
-    /* Immediate only. talk_define_capability supplies no Segment
-     * Coordinator, so it refuses a Segment-bound Operation. */
+    /* Immediate only, and only through talk_define_segment_capability or
+     * talk_define_coordinated_capability, which supply Segment
+     * Coordinators. */
     bool segment_bound;
 } talk_operation;
+
+/* A Segment Coordinator's hooks report one of these
+ * (embedding/scoped-effects.md). failed is a definite outcome: no
+ * acquisition for begin, no commit for commit, an unsuccessful rollback for
+ * rollback. unknown is a Host contract failure. */
+typedef enum talk_effect_status {
+    TALK_EFFECT_OK,
+    TALK_EFFECT_FAILED,
+    TALK_EFFECT_UNKNOWN
+} talk_effect_status;
+
+typedef struct talk_effect_result {
+    talk_effect_status status;
+    const char *detail; /* Host-only, outside parity; may be NULL */
+    size_t detail_len;
+} talk_effect_result;
+
+/* A Grant enrolled in a Segment's participant. */
+typedef struct talk_segment_grant {
+    const char *grant_name;
+    size_t grant_name_len;
+    void *binding;
+} talk_segment_grant;
+
+/* What a hook is told, borrowed for the call: whose Segment it is, the last
+ * Clock reading, the first enrolled Grant, and every enrolled Grant in
+ * enrollment order, of which begin sees only the first. */
+typedef struct talk_segment_context {
+    talk_group *group;
+    const char *script_name;
+    size_t script_name_len;
+    const char *run_id;
+    size_t run_id_len;
+    const char *grant_name;
+    size_t grant_name_len;
+    const char *segment_id;
+    size_t segment_id_len;
+    void *binding;
+    int64_t now_seconds;
+    int32_t now_nanos;
+    const talk_segment_grant *grants;
+    size_t grants_len;
+} talk_segment_context;
+
+/* C only: a synchronous lifecycle hook. It may not make worker calls. */
+typedef talk_effect_result (*talk_segment_hook)(void *context, const talk_segment_context *s);
+
+/* A Segment Coordinator: its three hooks and their context. The Core
+ * compares coordinators by the address of this struct, which must outlive
+ * every Grant mapped to it. */
+typedef struct talk_segment_lifecycle {
+    talk_segment_hook begin;
+    talk_segment_hook commit;
+    talk_segment_hook rollback;
+    void *context;
+} talk_segment_lifecycle;
+
+/* C only: maps a new Grant's binding to its Segment Coordinator, once, when
+ * the Grant is made. NULL refuses the Grant. */
+typedef const talk_segment_lifecycle *(*talk_coordinator_fn)(void *context, void *binding);
 
 /* A Capability's definition, owned by its Core. */
 typedef struct talk_capability_def talk_capability_def;
@@ -533,6 +594,12 @@ void talk_group_memory(const talk_group *g, talk_memory *out);
 /* Defines a Capability, once per process: its Operations, which the Core
  * orders by name. The definition lives as long as the Core. */
 talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_capability_def **out);
+/* talk_define_capability with Segment-bound Operations. The first makes each
+ * Grant its own Segment Coordinator, with lifecycle's hooks, which must
+ * outlive the Core. The second maps each Grant's binding to one, so Grants
+ * mapped to the same coordinator share a Segment's participant. */
+talk_host_error_code talk_define_segment_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_segment_lifecycle *lifecycle, talk_capability_def **out);
+talk_host_error_code talk_define_coordinated_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_coordinator_fn coordinator, void *context, talk_capability_def **out);
 /* C only: ends the Group and every handle it gave out. */
 void talk_group_release(talk_group *g);
 /* Loads a Script. A refusal with diagnostics is TALK_LOAD_REFUSED. The Script

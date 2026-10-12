@@ -247,6 +247,83 @@ static int scope_test(void) {
     return bad;
 }
 
+/* A Segment Coordinator's hooks: what each saw, as "<phase> <first grant>
+ * <segment> <enrolled>" lines, and the status commit reports. */
+static char effects_seen[512];
+static talk_effect_status commit_status = TALK_EFFECT_OK;
+static talk_effect_result saw(const char *phase, const talk_segment_context *s) {
+    size_t at = strlen(effects_seen);
+    snprintf(effects_seen + at, sizeof effects_seen - at, "%s %.*s %.*s %zu\n", phase, (int)s->grant_name_len, s->grant_name, (int)s->segment_id_len, s->segment_id, s->grants_len);
+    return (talk_effect_result){TALK_EFFECT_OK, NULL, 0};
+}
+static talk_effect_result begin_hook(void *context, const talk_segment_context *s) { (void)context; return saw("begin", s); }
+static talk_effect_result commit_hook(void *context, const talk_segment_context *s) {
+    (void)context;
+    talk_effect_result r = saw("commit", s);
+    r.status = commit_status;
+    return r;
+}
+static talk_effect_result rollback_hook(void *context, const talk_segment_context *s) { (void)context; return saw("rollback", s); }
+static const talk_segment_lifecycle shared_lifecycle = {begin_hook, commit_hook, rollback_hook, NULL};
+
+/* Maps a binding of "shared" to the shared coordinator, and refuses any
+ * other. */
+static const talk_segment_lifecycle *coordinator_of(void *context, void *binding) {
+    (void)context;
+    return binding != NULL && strcmp(binding, "shared") == 0 ? &shared_lifecycle : NULL;
+}
+
+/* Segment-bound Operations: Grants sharing a coordinator join one
+ * participant, which commits as the Segment ends, and a failed commit
+ * restores the Script Variables. */
+static int segment_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    effects_seen[0] = 0;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true}};
+    talk_capability_def *def = NULL;
+    int bad = 0;
+    /* A coordinator without all three hooks, and a suspending Segment-bound
+     * Operation. */
+    talk_segment_lifecycle partial = {begin_hook, commit_hook, NULL, NULL};
+    bad |= talk_define_segment_capability(core, "a", 1, ops, 1, &partial, &def) != TALK_INVALID_VALUE;
+    talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true}};
+    bad |= talk_define_segment_capability(core, "b", 1, suspending, 1, &shared_lifecycle, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_coordinated_capability(core, "db", 2, ops, 1, coordinator_of, NULL, &def) != TALK_OK;
+    talk_grant *refused = NULL, *one = NULL, *two = NULL;
+    bad |= talk_capability_def_grant_all(def, "other", &refused) != TALK_INVALID_VALUE;
+    bad |= talk_capability_def_grant_all(def, "shared", &one) != TALK_OK;
+    bad |= talk_capability_def_grant_all(def, "shared", &two) != TALK_OK;
+    talk_load_grant grants[] = {{"a", 1, one}, {"b", 1, two}};
+    const char *source = "script variable n = 0\non go\n  ask a to write\n  ask b to write\n  add 1 to n\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    /* One begin for the first Grant; the commit sees both. */
+    bad |= strcmp(effects_seen, "begin a s/r1.s1 1\ncommit a s/r1.s1 2\n") != 0;
+    commit_status = TALK_EFFECT_FAILED;
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    commit_status = TALK_EFFECT_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "run s/r2 outcome=effect-failed delivery=d2 handler=go effect={grant: \"a\", segment: \"s/r2.s1\", phase: \"commit\", status: \"failed\"}") == NULL;
+    bad |= strstr(effects_seen, "commit a s/r2.s1 2\nrollback a s/r2.s1 2\n") == NULL;
+    /* The second Run's add was rolled back. */
+    bad |= strstr(trace, "vars s n=1\n") == NULL;
+    if (bad) fprintf(stderr, "%s%s", trace, effects_seen);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* console's write: counts what it is shown. */
 static int shown = 0;
 static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -595,6 +672,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
