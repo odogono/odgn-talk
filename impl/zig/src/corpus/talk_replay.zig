@@ -6,14 +6,11 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail", "set-parent", "dispose" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "answer", "fail", "set-parent", "dispose", "add-library" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
     const s = case_setup.read(a, setup) catch return "case.toml isn't read";
-    for (s.units) |u| {
-        if (u.library) return "Libraries are not implemented";
-    }
     if (grantsUnsupported(a, setup)) |why| return why;
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
@@ -92,6 +89,63 @@ fn shapeSupported(v: case_setup.Value) bool {
         },
         else => false,
     };
+}
+
+/// The Library names a source's `use` lines import.
+fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    var lines = std.mem.splitScalar(u8, source, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t\r");
+        if (!std.mem.startsWith(u8, line, "use ")) continue;
+        const from = std.mem.indexOf(u8, line, " from ") orelse continue;
+        const rest = line[from + 6 ..];
+        try out.append(a, rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len]);
+    }
+    return out.items;
+}
+
+/// Compiles the case's Libraries, each once those it imports are compiled.
+fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library)) !void {
+    // The Grant declarations: each Capability the case defines, by its name.
+    var declarations: std.ArrayList(c.talk_load_grant) = .empty;
+    var it = defs.iterator();
+    while (it.next()) |e| {
+        var grant: ?*c.talk_grant = null;
+        try check(c.talk_capability_def_grant_all(e.value_ptr.*, null, &grant));
+        try declarations.append(a, .{ .name = e.key_ptr.ptr, .name_len = e.key_ptr.len, .grant = grant });
+    }
+    var left: std.ArrayList(case_setup.Table) = .empty;
+    for (all) |t| if (std.mem.eql(u8, t.header, "[[libraries]]")) try left.append(a, t);
+    while (left.items.len > 0) {
+        var progressed = false;
+        var i: usize = 0;
+        while (i < left.items.len) {
+            const t = left.items[i];
+            const source = try dir.readFileAlloc(io, case_setup.field(t, "source").?.string, a, .unlimited);
+            var imports: std.ArrayList(?*c.talk_library) = .empty;
+            const ready = for (try usedLibraries(a, source)) |name| {
+                const named = for (left.items) |x| {
+                    if (std.mem.eql(u8, case_setup.field(x, "name").?.string, name)) break true;
+                } else false;
+                if (named) break false;
+                if (out.get(name)) |l| try imports.append(a, l);
+            } else true;
+            if (!ready) {
+                i += 1;
+                continue;
+            }
+            const name = case_setup.field(t, "name").?.string;
+            const label = if (case_setup.field(t, "version")) |v| v.string else "";
+            const src: c.talk_library_source = .{ .name = name.ptr, .name_len = name.len, .version = label.ptr, .version_len = label.len, .source = source.ptr, .source_len = source.len };
+            var l: ?*c.talk_library = null;
+            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l));
+            try out.put(a, name, l.?);
+            _ = left.orderedRemove(i);
+            progressed = true;
+        }
+        if (!progressed) return error.MalformedCase;
+    }
 }
 
 /// The case's Host Objects: their property values, which each Get reads
@@ -549,6 +603,8 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var store: ObjectStore = .{ .a = a };
     defer store.deinit();
     try defineObjects(a, core, group, all, &store);
+    var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
+    try compileLibraries(a, io, dir, core, all, &defs, &libraries);
     var lines = std.mem.splitScalar(u8, trace, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;
@@ -578,6 +634,12 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (code == c.TALK_LOAD_REFUSED) continue;
             try check(code);
             try scripts.put(a, script, loaded.?);
+        } else if (std.mem.eql(u8, name, "add-library")) {
+            const rest = input[name_end + 1 ..];
+            const library = libraries.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len]) orelse return error.MalformedCase;
+            // A refusal is in the Trace as a `refused` record.
+            const code = c.talk_add_library(group, library);
+            if (code != c.TALK_RESERVED_NAME and code != c.TALK_NAME_REUSED and code != c.TALK_LIBRARY_MISMATCH) try check(code);
         } else if (std.mem.eql(u8, name, "set-parent")) {
             const o = store.named(field(input, "object").?) orelse return error.MalformedCase;
             const shown = field(input, "parent").?;

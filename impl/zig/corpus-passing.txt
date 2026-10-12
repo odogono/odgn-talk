@@ -7,10 +7,12 @@ cancellation/queueing-policies
 capabilities/calls
 capabilities/host-failures
 capabilities/load-checks
+capabilities/optional-args
 capabilities/optional-args-join
 capabilities/standard-calendar
 capabilities/standard-calendar-errors
 capabilities/standard-calendar-validation
+capabilities/standard-clock
 capabilities/standard-locale
 capabilities/standard-locale-validation
 collecting/condition-target
@@ -43,6 +45,9 @@ fallback/forwarding
 fallback/message-path
 fallback/no-match
 fallback/policies
+libraries/needs-suspending
+libraries/needs-transitive
+libraries/registration
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/argument-labels
@@ -95,6 +100,7 @@ objects/queued-parent-refusals
 objects/sends
 objects/wait-target
 quantities/value-encoding
+stdlib/lookup
 suspension/answers
 suspension/joins
 suspension/late-failure
@@ -107,6 +113,7 @@ suspension/wait-observation
 suspension/wait-precision
 tell-block/equivalent
 tell-block/join
+tell-block/library
 tell-block/load-checks
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters
@@ -134,5 +141,8 @@ text-patterns/replace-all-empty-matches
 text-patterns/splice-wrong-kind
 whose/keys
 whose/maps
+whose/no-match
 whose/not-in-a-whose
 whose/ordinals
+whose/text-chunks
+whose/wrong-kind

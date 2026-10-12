@@ -199,8 +199,46 @@ pub const Body = struct {
     may_suspend: bool,
 };
 
+/// A Capability call a unit makes, for a Library's `needs` (chapter 7,
+/// Grants and `needs`): the Grant name as written, the Operation, its form
+/// and its arguments.
+pub const Need = struct {
+    grant: []const u8,
+    operation: []const u8,
+    ask: bool,
+    line: bool,
+    waits: bool,
+    args: usize,
+    literals: []const ?Literal,
+};
+
+/// What a Script's Grants make of one of its Libraries' calls, as the
+/// checker would of the Script's own: null when it is fine.
+pub fn needProblem(n: Need, grants: []const Grant) ?Code {
+    const g = for (grants) |g| {
+        if (std.mem.eql(u8, g.name, n.grant)) break g;
+    } else return .missing_grant;
+    const o = for (g.operations) |o| {
+        if (std.mem.eql(u8, o.name, n.operation)) break o;
+    } else return .missing_grant;
+    if (n.args < o.required or n.args > o.total) return .wrong_argument_count;
+    if (o.accepts) |accepts| for (n.literals, 0..) |lit, i| {
+        const l = lit orelse continue;
+        if (!accepts.call(accepts.context, i, l)) return .wrong_argument;
+    };
+    const ok = if (n.line)
+        n.waits == (o.mode == .suspending)
+    else if (n.ask)
+        (o.mode == .immediate and !n.waits) or (o.mode == .suspending and n.waits)
+    else
+        o.mode == .fire_and_forget;
+    return if (ok) null else .wrong_mode;
+}
+
 pub const Result = struct {
     diagnostics: []const Diagnostic,
+    /// Every Capability call, in source order.
+    needs: []const Need = &.{},
     /// Every Name operand, call name and Container root, by token.
     refs: std.AutoHashMapUnmanaged(Tok, Ref),
     bodies: []const Body,
@@ -224,7 +262,7 @@ pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocato
         if (out.items.len > 0 and out.items[out.items.len - 1].code == d.code and out.items[out.items.len - 1].offset == d.offset) continue;
         try out.append(arena, d);
     }
-    return .{ .diagnostics = out.items, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends };
+    return .{ .diagnostics = out.items, .needs = c.needs.items, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends };
 }
 
 /// What a checked Library exports: every top-level definition that isn't
@@ -386,6 +424,7 @@ const Checker = struct {
     tree: *const ast.Tree,
     context: Context,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
+    needs: std.ArrayList(Need) = .empty,
     refs: std.AutoHashMapUnmanaged(Tok, Ref) = .empty,
     bodies: std.ArrayList(Body) = .empty,
     suspends: std.StringHashMapUnmanaged(bool) = .empty,
@@ -1216,6 +1255,7 @@ const Checker = struct {
         }
         if (std.mem.eql(u8, sel, "say")) {
             // `say x` is `tell console to write x`.
+            try c.needs.append(c.a, .{ .grant = "console", .operation = "write", .ask = false, .line = false, .waits = waits, .args = cmd.args.len, .literals = &.{} });
             if (c.context.grants != null) {
                 const console = c.grant("console");
                 const write = if (console) |g| for (g.operations) |o| {
@@ -1273,9 +1313,20 @@ const Checker = struct {
 
     /// Checks a Capability call against the Grant, when the Grants are known.
     fn capability(c: *Checker, keyword: Tok, op: ast.Operation, ask: bool, line: bool) Allocator.Error!void {
-        if (c.context.grants == null) return;
         const target = op.target orelse return;
         if (target.data != .name) return;
+        const literals = try c.a.alloc(?Literal, op.args.len);
+        for (op.args, literals) |arg, *l| l.* = try c.literal(arg);
+        var need: Need = .{ .grant = c.text(target.data.name), .operation = c.text(op.operation), .ask = ask, .line = line, .waits = op.wait != null, .args = op.args.len, .literals = literals };
+        // A `tell` block's line is lowered by its declared mode, so a
+        // Library's need is the form it was compiled to.
+        if (line) if (c.grant(need.grant)) |g| for (g.operations) |o| if (std.mem.eql(u8, o.name, need.operation)) {
+            need.line = false;
+            need.ask = o.mode != .fire_and_forget;
+            need.waits = o.mode == .suspending;
+        };
+        try c.needs.append(c.a, need);
+        if (c.context.grants == null) return;
         const g = c.grant(c.text(target.data.name)) orelse return c.report(.unknown_operation, target.data.name);
         const o = for (g.operations) |o| {
             if (std.mem.eql(u8, o.name, c.text(op.operation))) break o;
