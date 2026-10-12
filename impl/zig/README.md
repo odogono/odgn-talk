@@ -242,7 +242,10 @@ compiles it and runs the program, counting `steps` by the Running rules: the
 threads in the list at each position. `make-pattern` splices values into a
 template and writes the result's canonical source. A text needle, or a Bytes
 needle in Bytes, runs as a literal program. A pattern's logical size compiles
-it to count its program.
+it to count its program. Patterns made at run time can nest without bound, and
+a program can be a long chain of splits, so reading, splicing, writing,
+compiling and matching keep their pending work on explicit stacks and never
+recurse on a pattern or its subject.
 
 A Host defines Capabilities and Grants through `talk.h`
 ([capabilities](src/machine/capabilities.zig)), and binds Grants at Load, by
