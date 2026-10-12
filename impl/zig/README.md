@@ -83,9 +83,13 @@ and Decimal accessors. Number text is checked before arithmetic, including
 linear rejection of oversized inputs. Arithmetic uses native Zig integers
 and arbitrary-precision rational intermediates, with one half-even rounding
 and the operator's ideal exponent. Addition, subtraction, multiplication,
-division, `div`, `mod` and integer powers are available internally. Powers
-take an integer exponent that fits a signed 32 bits; noninteger powers are not
-supported.
+division, `div`, `mod` and `^` are available internally, and `^` is also
+`power(x, y)`. An integer exponent of any size gives the exact power, rounded
+once; any other exponent gives the correctly rounded result with trailing
+zeros dropped. Noninteger powers bound e^(y ln x) in fixed point and add
+precision until both bounds round alike, after exact results and ties are
+found directly. Results that overflow or round to zero are settled from their
+magnitude, so huge exponents stay cheap.
 
 Each returned value owns one reference. Constructors copy byte input and
 retain child values; text and map keys become NFC. Map keys preserve insertion
