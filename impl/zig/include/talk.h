@@ -414,6 +414,14 @@ typedef struct talk_locale_impl {
     talk_operation_fn compare, rank, upper, lower, number_symbols, month_names, day_names, tag;
 } talk_locale_impl;
 
+/* store's implementation: a function for each Operation, and the Segment
+ * Coordinator every Store maps to. */
+typedef struct talk_store_impl {
+    void *context;
+    talk_operation_fn get, set, del, keys, increment, swap, watch, unwatch;
+    talk_segment_lifecycle coordinator;
+} talk_store_impl;
+
 /* console: write receives the value to show. read is suspending, and
  * suspending calls aren't made yet. */
 typedef struct talk_console_impl {
@@ -427,6 +435,17 @@ talk_host_error_code talk_clock_capability(talk_core *c, const talk_costs *costs
 talk_host_error_code talk_calendar_capability(talk_core *c, const talk_calendar_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_locale_capability(talk_core *c, const talk_locale_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_console_capability(talk_core *c, const talk_console_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* store: the Grant's binding is the Store's name, as NUL-terminated text.
+ * The Core has checked the Shapes, refused an empty key with invalid key and
+ * an invalid watch with invalid watch. Each function receives its
+ * Operation's arguments with the defaults resolved: get and increment
+ * Nothing for an omitted default or by, keys empty text for an omitted
+ * prefix, and watch the effective message, storeChanged when omitted or
+ * Nothing. set, del, increment and swap are Segment-bound, and every binding
+ * maps to coordinator, which the Core copies. Fail with can't store {kind},
+ * store full {limit} or store busy {key}, and from increment with the error
+ * + would raise (chapter 7). */
+talk_host_error_code talk_store_capability(talk_core *c, const talk_store_impl *impl, const talk_costs *costs, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);

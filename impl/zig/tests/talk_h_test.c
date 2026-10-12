@@ -387,6 +387,51 @@ static int decision_test(void) {
     return bad;
 }
 
+static talk_call_end unused(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error);
+
+/* store's get: the key and the resolved default, which it gives back. */
+static talk_call_end store_get(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)error;
+    if (len != 2) return TALK_CALL_BROKEN;
+    talk_value_retain(args[1]);
+    *result = args[1];
+    return TALK_CALL_ANSWERED;
+}
+
+/* store: a factory without its coordinator's hooks is refused, and get
+ * hears its omitted default as Nothing. */
+static int store_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost entries[] = {{"get", 3, {1, 0}}, {"set", 3, {1, 0}}, {"delete", 6, {1, 0}}, {"keys", 4, {1, 0}}, {"increment", 9, {1, 0}}, {"swap", 4, {1, 0}}, {"watch", 5, {1, 0}}, {"unwatch", 7, {1, 0}}};
+    talk_costs costs = {entries, 8};
+    talk_store_impl impl = {NULL, store_get, unused, unused, unused, unused, unused, unused, unused, {NULL, NULL, NULL, NULL}};
+    talk_capability_def *def = NULL;
+    int bad = talk_store_capability(core, &impl, &costs, &def) != TALK_INVALID_VALUE;
+    impl.coordinator = (talk_segment_lifecycle){begin_hook, commit_hook, rollback_hook, NULL};
+    bad |= talk_store_capability(core, &impl, &costs, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, "scores", &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"st", 2, grant}};
+    const char *source = "on go\n  ask st to get \"k\"\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= strstr(trace, "call s/r1.c1 op=st.get args=[\"k\"] result=nothing\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* console's write: counts what it is shown. */
 static int shown = 0;
 static talk_call_end show(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -735,6 +780,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
