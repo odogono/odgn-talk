@@ -381,6 +381,8 @@ pub const Outcome = union(enum) {
     value: *Value,
     /// A Script error: its code, message and Data, which it owns.
     failed: struct { code: []const u8, message: ?[]const u8, data: ?*Value },
+    /// A suspending call started; its answer comes later.
+    started,
     /// `Charge` couldn't be covered, so the work wasn't done.
     limited,
     /// Any other failure, which the Script sees as `host error`.
@@ -469,6 +471,8 @@ pub const Call = struct {
     /// Whether the Operation is still starting, the only time `Charge` is
     /// legal.
     starting: bool = true,
+    /// For a suspending call, the Group its answer goes to.
+    group: ?*anyopaque = null,
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {

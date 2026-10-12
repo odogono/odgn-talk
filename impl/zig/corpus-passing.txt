@@ -14,6 +14,7 @@ collecting/condition-target
 collecting/exit
 collecting/next-filter
 collecting/partial-error
+collecting/waiting-body
 collecting/zero-passes
 dates/value-encoding
 disassembly/calls-and-lambdas
@@ -29,7 +30,10 @@ disassembly/recovery-offers
 disassembly/tell-block
 disassembly/timeout-block
 disassembly/whose
+errors/fail-error-map
 errors/items-delimiter
+limits/wait-deadline
+limits/wait-zero-next-pump
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here
@@ -70,6 +74,11 @@ load-diagnostics/unknown-name
 load-diagnostics/unterminated-interpolation
 load-diagnostics/wrong-argument-count
 quantities/value-encoding
+suspension/answers
+suspension/late-failure
+suspension/wait-precision
+tell-block/equivalent
+tell-block/load-checks
 text-model/chunk-read-out-of-range
 text-model/chunk-reads-whole-characters
 text-model/chunk-write-out-of-range
