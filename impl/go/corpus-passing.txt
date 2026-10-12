@@ -329,6 +329,7 @@ sessions/user-prompts
 sessions/virtual-clock
 stdlib/calls
 stdlib/errors-name-the-call
+stdlib/lookup
 stdlib/template-migration
 suspension/answers
 suspension/argument-labels

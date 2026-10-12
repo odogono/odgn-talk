@@ -584,6 +584,10 @@ _Avoid_: owner, origin, owning script (that's for Host Objects)
 Somewhere a value can be put: a variable, or a chain of chunks and keys rooted in one, with no Built-in property along that path. Putting into a Container rebinds its root variable.
 _Avoid_: slot, lvalue, reference
 
+**Value Path**:
+A list of keys and 1-based positions that locates a value inside nested maps and lists, e.g. `["orders", 1, "total"]`. An error's `path` field is one, and `lookup` follows one.
+_Avoid_: key path, keypath, path (unqualified; that's a Message Path)
+
 **Constant**:
 A named value fixed when its Script or Library loads, declared with `constant`. It can never be put into. Built-in Constants such as `pi` and `newline` are fixed by the language version instead.
 _Avoid_: static, final, script variable (a Script Variable can change)

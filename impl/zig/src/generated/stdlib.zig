@@ -724,6 +724,12 @@ pub const stdlib: StdlibTable = .{
             .gives = "`m` with each value replaced by what `f` gives for it, keys and order kept",
         },
         .{
+            .library = "map",
+            .name = "lookup",
+            .call = "lookup(m, path, default = nothing)",
+            .gives = "The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing",
+        },
+        .{
             .library = "bytes",
             .name = "toHex",
             .call = "toHex(b)",

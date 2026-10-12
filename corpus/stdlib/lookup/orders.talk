@@ -1,0 +1,35 @@
+-- orders.talk: the lookup case's Script.
+
+use lookup from map
+use decodeJson from json
+
+script variable found = []
+script variable failed = []
+
+on go
+  put decodeJson("""{"customer": {"name": "Ann", "phone": null}, "lines": [{"sku": "a1"}, {"sku": "b2"}]}""") into order
+  put lookup(order, ["customer", "name"]) after found
+  put lookup(order, ["customer", "phone"], "none") after found
+  put lookup(order, ["customer", "address", "city"], "unknown") after found
+  put lookup(order, ["lines", -1, "sku"]) after found
+  put lookup(order, ["lines", 3, "sku"], "none") after found
+  put lookup(decodeJson("null"), ["lines"], []) after found
+  try
+    put lookup(order, ["customer", "name", "first"]) into x
+  catch e
+    put e after failed
+  end try
+  probe()
+end go
+
+on later
+  probe()
+end later
+
+on probe
+  try
+    put lookup({lamp: bulb}, ["lamp", "state"]) into x
+  catch e
+    put e after failed
+  end try
+end probe

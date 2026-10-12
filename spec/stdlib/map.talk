@@ -71,6 +71,30 @@ function mapValues m, f
   return mapped
 end mapValues
 
+--| The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing
+function lookup m, path, default = nothing
+  needList(path)
+  repeat for each step in path
+    if step is a number then needInteger(step)
+    if step is not a number then needText(step)
+  end repeat
+  put m into v
+  put [] into taken
+  repeat for each step in path
+    if v is nothing then return default
+    if step is a text then
+      if v is not a map then wrongKindAt("map", v, taken)
+      put the (step) of v into v
+    else
+      if v is not a list then wrongKindAt("list", v, taken)
+      put item step of v into v
+    end if
+    put step after taken
+  end repeat
+  if v is nothing then return default
+  return v
+end lookup
+
 -- A list of texts, as `without` and `pick` take.
 private function needKeys keys
   needList(keys)
@@ -78,6 +102,12 @@ private function needKeys keys
     needText(k)
   end repeat
 end needKeys
+
+-- `wrong kind` for the value `lookup` reached at the Value Path `path`.
+private function wrongKindAt expected, v, path
+  put kindOf(v) into got
+  throw {code: "wrong kind", expected: expected, got: got, value: v, path: path}
+end wrongKindAt
 
 -- The helpers below are the same in every stdlib Library. They raise the
 -- catalogue errors of chapter 6. The Core adds each one's `message` and
