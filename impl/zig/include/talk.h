@@ -567,6 +567,58 @@ typedef struct talk_message {
 /* A Request's result, settled by a Pump. */
 typedef struct talk_pending talk_pending;
 
+/* A Decision's Verdict (chapter 9, Decisions). */
+typedef enum talk_verdict {
+    TALK_ALLOWED,
+    TALK_VETOED,   /* some Run reached `veto` */
+    TALK_UNDECIDED /* a deciding Run failed, was cancelled, dropped or stopped before sealing; the Host chooses */
+} talk_verdict;
+
+/* How a Run ended. */
+typedef enum talk_outcome {
+    TALK_COMPLETED,
+    TALK_ERRORED,
+    TALK_LIMIT_FAULT,
+    TALK_CANCELLED,
+    TALK_UNHANDLED_OUTCOME,
+    TALK_DROPPED,
+    TALK_EFFECT_FAILURE_OUTCOME
+} talk_outcome;
+
+typedef struct talk_veto {
+    const char *script;
+    size_t script_len;
+    const char *run;
+    size_t run_len;
+    talk_value *reason; /* borrowed; Nothing for a bare `veto` */
+} talk_veto;
+
+typedef struct talk_undecided_by {
+    const char *script;
+    size_t script_len;
+    const char *run; /* empty for a Delivery that never started */
+    size_t run_len;
+    talk_outcome outcome;
+} talk_undecided_by;
+
+/* A Decision's sealed Verdict, with its vetoes and undecided recipients in
+ * recipient order. */
+typedef struct talk_decided {
+    const char *delivery; /* empty for a Broadcast Decision */
+    size_t delivery_len;
+    const char *broadcast; /* empty unless it was a Broadcast Decision */
+    size_t broadcast_len;
+    talk_verdict verdict;
+    const talk_veto *vetoes;
+    size_t vetoes_len;
+    const talk_undecided_by *undecided;
+    size_t undecided_len;
+} talk_decided;
+
+/* A Decision's future, settled when a Pump seals its Verdict, often before
+ * the deciding Run ends. It lives as long as its Group. */
+typedef struct talk_deciding talk_deciding;
+
 typedef enum talk_group_state {
     TALK_IDLE,
     TALK_SLICED,
@@ -610,6 +662,8 @@ talk_host_error_code talk_load(talk_group *g, const talk_load_options *o, talk_s
 talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, talk_owned_bytes *id);
 /* Queues a Request; *out settles when a Pump ends its Run. */
 talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* Queues a Decision to the Script; *out settles when a Pump seals it. */
+talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
 /* A Script's Counters: its lifetime work since load, live Runs included,
  * and its current Persistent State and mailbox. */
 typedef struct talk_counters {
@@ -628,6 +682,9 @@ void talk_script_counters(talk_script *s, talk_counters *out);
 talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
 /* C only: ends the caller's handle on a Request. */
 void talk_pending_release(talk_pending *p);
+bool talk_deciding_done(const talk_deciding *d);
+/* The Verdict, borrowed from the Group, or NULL until a Pump seals it. */
+const talk_decided *talk_deciding_decided(talk_deciding *d);
 /* Runs a Pump with one Clock reading. o may be NULL. */
 talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t nanos, const talk_pump_options *o, talk_pump_result *out);
 /* Makes the Group's handle for a Host-owned thing, the first time it
@@ -653,6 +710,10 @@ talk_host_error_code talk_dispose(talk_group *g, talk_object *o);
  * Script, or its nearest ancestor's, when the queue is drained. */
 talk_host_error_code talk_deliver(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id);
 talk_host_error_code talk_request(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* A Decision to a Host Object: it routes like talk_deliver, and the first
+ * `, deciding` clause it reaches holds its Verdict until the end of that
+ * Run's first Segment. */
+talk_host_error_code talk_decide(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
 
 /* Libraries (ADR 0020). A Library is compiled once per process and lives
  * as long as the Core. The stdlib Libraries are always there. */

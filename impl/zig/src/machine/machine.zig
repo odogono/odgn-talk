@@ -134,6 +134,24 @@ pub const Delivery = struct {
     /// A foreign Function Value call: the Function Value its Run calls,
     /// with the arguments, in place of a Handler.
     function: ?*Value = null,
+    /// A Decision whose Verdict is still open: it travels with the message
+    /// until a clause takes it, a `wait for` takes it, or its path ends.
+    decision: bool = false,
+};
+
+/// A Decision's Verdict (chapter 5, Decisions).
+pub const Verdict = enum { allowed, vetoed, undecided };
+
+/// A sealed Decision, which the Host reads by its delivery id: who vetoed
+/// it and why, or who left it undecided and how.
+pub const Decided = struct {
+    verdict: Verdict,
+    script: []const u8 = "",
+    run: []const u8 = "",
+    /// A veto's reason.
+    reason: ?*Value = null,
+    /// How an undecided Run ended.
+    outcome: []const u8 = "",
 };
 
 pub const Run = struct {
@@ -186,6 +204,9 @@ pub const Run = struct {
     scopes: std.ArrayList(OpenScope) = .empty,
     /// The Segments it has ended, so its current one is `.s<segments + 1>`.
     segments: u32 = 0,
+    /// Whether it holds its Decision's open Verdict, from a `, deciding`
+    /// clause's selection to the end of its first Segment.
+    verdict: bool = false,
     /// Its Segment's participant, once a Segment-bound call enrolls one.
     participant: ?Participant = null,
     /// Its Script's Variables when its Segment began, which a failed commit
@@ -638,6 +659,8 @@ pub const Group = struct {
     pump_fuel: u64 = 0,
     /// Request results by delivery id, for the Host.
     results: std.AutoHashMapUnmanaged(u64, *Value) = .empty,
+    /// Sealed Decisions by delivery id, for the Host.
+    decided: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
     /// The error an instruction raised, until the run loop takes it.
     pending_error: ?*Value = null,
     /// Whether the Core raised it, so it gets a `message`.
@@ -702,6 +725,13 @@ pub const Group = struct {
         var it = g.results.valueIterator();
         while (it.next()) |v| v.*.release();
         g.results.deinit(g.gpa);
+        var decided = g.decided.valueIterator();
+        while (decided.next()) |x| {
+            g.gpa.free(x.script);
+            g.gpa.free(x.run);
+            if (x.reason) |v| v.release();
+        }
+        g.decided.deinit(g.gpa);
         g.scratch.deinit();
     }
 
@@ -1005,6 +1035,29 @@ pub const Group = struct {
         return id;
     }
 
+    /// Writes a Delivery, Request or Decision the Host call refused, with
+    /// no id, then its `refused` record.
+    pub fn refuseDelivery(g: *Group, to: []const u8, d: Delivery, code: []const u8) void {
+        g.writeInput(.{ .deliver = .{ .script = to, .delivery = d } });
+        g.write("refused code=\"{s}\"\n", .{code});
+    }
+
+    /// Queues a Decision to the Script `to`. Takes the arguments.
+    pub fn decide(g: *Group, to: []const u8, message: []const u8, args: []*Value) !u64 {
+        g.deliveries += 1;
+        const id = g.deliveries;
+        try g.queueDelivery(to, .{ .id = id, .message = message, .args = args, .request = false, .decision = true });
+        return id;
+    }
+
+    /// Queues a Decision to a Host Object, routed when it is drained.
+    pub fn decideTo(g: *Group, to: *objects.Object, message: []const u8, args: []*Value) !u64 {
+        g.deliveries += 1;
+        const id = g.deliveries;
+        try g.queueDelivery("", .{ .id = id, .message = message, .args = args, .request = false, .decision = true, .target = to, .at = to });
+        return id;
+    }
+
     /// Queues an answer or failure for the suspending call `id`. Takes it.
     pub fn settle(g: *Group, id: []const u8, with: Resume) !void {
         const copy = try g.gpa.dupe(u8, id);
@@ -1104,7 +1157,10 @@ pub const Group = struct {
         const out = g.trace orelse return;
         switch (input) {
             .deliver => |d| {
-                out.print("> {s} d{d} to=", .{ if (d.delivery.request) "request" else "deliver", d.delivery.id }) catch {};
+                out.print("> {s}", .{if (d.delivery.decision) "decide" else if (d.delivery.request) "request" else "deliver"}) catch {};
+                // A refused Delivery never had an id.
+                if (d.delivery.id > 0) out.print(" d{d}", .{d.delivery.id}) catch {};
+                out.writeAll(" to=") catch {};
                 if (d.delivery.target) |o| display.writeTrace(out, o.value) catch {} else out.writeAll(d.script) catch {};
                 out.print(" message={s}", .{d.delivery.message}) catch {};
                 if (d.delivery.args.len > 0) {
@@ -1235,8 +1291,13 @@ pub const Group = struct {
                                 continue;
                             }
                         }
-                        try g.observe(s, d);
-                        try g.startRun(s, d);
+                        // A `wait for` that takes a Decision allows it.
+                        var taken = d;
+                        if (try g.observe(s, d) and d.decision) {
+                            taken.decision = false;
+                            try g.seal(d.id, .{ .verdict = .allowed });
+                        }
+                        try g.startRun(s, taken);
                     },
                     .run => |r| try g.resumeRun(s, r),
                 }
@@ -1426,6 +1487,14 @@ pub const Group = struct {
     /// Tries one clause for a Run being dispatched, charging it: null if
     /// its patterns or Guard fail. Once they pass, its Queueing Policy
     /// applies while another Run of the clause hasn't ended.
+    /// A selected clause takes its Run's Decision: a `, deciding` clause
+    /// holds the Verdict, and any other allows it at dispatch.
+    fn takeVerdict(g: *Group, run: *Run, deciding: bool) !void {
+        if (!run.delivery.decision) return;
+        run.delivery.decision = false;
+        if (deciding) run.verdict = true else try g.seal(run.delivery.id, .{ .verdict = .allowed });
+    }
+
     fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value) !?Outcome {
         const b = s.unit.bodies[body];
         run.clause_body = body;
@@ -1445,6 +1514,7 @@ pub const Group = struct {
         if (outcome == .selected) {
             if (g.clauseBusy(s, body)) switch (b.policy) {
                 .queued => {
+                    try g.takeVerdict(run, b.deciding);
                     run.parked = true;
                     run.suspended_at = "park";
                     return .suspended;
@@ -1453,6 +1523,7 @@ pub const Group = struct {
                 .replacing => try g.cancelClause(s, body),
                 .none => {},
             };
+            try g.takeVerdict(run, b.deciding);
             outcome = try g.execute(run, true);
         }
         if (outcome == .clause_failed) {
@@ -1912,11 +1983,13 @@ pub const Group = struct {
     /// Observation before dispatch: every pending `wait for` in the Script
     /// that the message matches makes its Run ready, in the order the waits
     /// began.
-    fn observe(g: *Group, s: *Script, d: Delivery) !void {
+    /// Readies each `wait for` the message satisfies; true if any took it.
+    fn observe(g: *Group, s: *Script, d: Delivery) !bool {
         var waits: std.ArrayList(*Pending) = .empty;
         defer waits.deinit(g.gpa);
         for (g.pending.items) |p| if (p.event != null and p.run.script == s) try waits.append(g.gpa, p);
-        if (waits.items.len == 0) return;
+        if (waits.items.len == 0) return false;
+        var taken = false;
         const message = try g.messageMap(d);
         defer message.release();
         for (waits.items) |p| {
@@ -1930,7 +2003,39 @@ pub const Group = struct {
                 .after => 0,
             };
             try g.ready(p, .{ .event = .{ .message = message.retain(), .branch = branch, .binds = binds } });
+            taken = true;
         }
+        return taken;
+    }
+
+    /// Seals a Decision with its `decided` record, keeping it for the Host.
+    /// `script` and `run` are copied.
+    fn seal(g: *Group, id: u64, decided: Decided) !void {
+        if (g.trace) |w| {
+            w.print("decided d{d} verdict={s}", .{ id, @tagName(decided.verdict) }) catch {};
+            switch (decided.verdict) {
+                .allowed => {},
+                .vetoed => {
+                    w.print(" vetoes=[{{script: \"{s}\", run: \"{s}\", reason: ", .{ decided.script, decided.run }) catch {};
+                    display.writeTrace(w, decided.reason.?) catch {};
+                    w.writeAll("}]") catch {};
+                },
+                .undecided => {
+                    w.print(" undecided=[{{script: \"{s}\"", .{decided.script}) catch {};
+                    if (decided.run.len > 0) w.print(", run: \"{s}\"", .{decided.run}) catch {};
+                    w.print(", outcome: \"{s}\"}}]", .{decided.outcome}) catch {};
+                },
+            }
+            w.writeAll("\n") catch {};
+        }
+        var kept = decided;
+        kept.script = try g.gpa.dupe(u8, decided.script);
+        errdefer g.gpa.free(kept.script);
+        kept.run = try g.gpa.dupe(u8, decided.run);
+        errdefer g.gpa.free(kept.run);
+        if (decided.reason) |v| kept.reason = v.retain();
+        errdefer if (kept.reason) |v| v.release();
+        try g.decided.put(g.gpa, id, kept);
     }
 
     fn eventEntry(g: *Group, p: *const Pending) lower.Event {
@@ -2255,10 +2360,15 @@ pub const Group = struct {
             g.restoreBase(run);
             if (outcome == .suspended) if (run.waiting) |p| if (p.call) |c| g.write("abandon {s}\n", .{c.id});
             switch (outcome) {
-                .returned, .errored => |v| v.release(),
+                .returned, .errored, .vetoed => |v| v.release(),
                 else => {},
             }
             outcome = .{ .effect_failed = f };
+        }
+        // `pass` hands an open Verdict up the Message Path with the message.
+        if (run.verdict and outcome == .passed) {
+            run.verdict = false;
+            run.delivery.decision = true;
         }
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
@@ -2293,9 +2403,14 @@ pub const Group = struct {
                 .cancelled => "cancel",
                 .passed => "pass",
                 .effect_failed => "effect-failed",
+                .vetoed => "veto",
                 .selected => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
+            if (outcome == .vetoed and outcome.vetoed.data != .nothing) {
+                out.writeAll(" value=") catch {};
+                display.writeTrace(out, outcome.vetoed) catch {};
+            }
             if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
                 const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(p.deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(p.deadline, std.time.ns_per_s)) };
                 const text = model.dates.string(g.scratch.allocator(), model.dates.fields(at), true) catch "";
@@ -2304,6 +2419,19 @@ pub const Group = struct {
             out.writeAll("\n") catch {};
             if (outcome == .cancelled and run.abandoned.len > 0) out.print("abandon {s}\n", .{run.abandoned}) catch {};
         }
+        // The end of the first Segment seals a held Verdict: `veto` vetoes
+        // it, and suspending or ending without one allows it.
+        if (run.verdict) switch (outcome) {
+            .returned, .suspended => {
+                run.verdict = false;
+                try g.seal(d.id, .{ .verdict = .allowed });
+            },
+            .vetoed => |reason| {
+                run.verdict = false;
+                try g.seal(d.id, .{ .verdict = .vetoed, .script = s.name, .run = run.id, .reason = reason });
+            },
+            else => {},
+        };
         run.started = true;
         run.segments += 1;
         if (outcome == .suspended) {
@@ -2313,7 +2441,7 @@ pub const Group = struct {
         }
         if (g.trace) |out| {
             const word: []const u8 = switch (outcome) {
-                .returned, .passed => "completed",
+                .returned, .passed, .vetoed => "completed",
                 .errored => "errored",
                 .faulted => "limit-fault",
                 .unhandled, .clause_failed => "unhandled",
@@ -2350,6 +2478,22 @@ pub const Group = struct {
             }
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
         }
+        // A Run that ends before sealing its Verdict, or a dropped
+        // Decision, leaves it undecided.
+        if (run.verdict or (outcome == .dropped and d.decision)) {
+            const how: []const u8 = switch (outcome) {
+                .errored => "errored",
+                .faulted => "limit fault",
+                .cancelled => "cancelled",
+                .effect_failed => "effect failed",
+                .dropped => "dropped",
+                else => "",
+            };
+            if (how.len > 0) {
+                run.verdict = false;
+                try g.seal(d.id, .{ .verdict = .undecided, .script = s.name, .run = run.id, .outcome = how });
+            }
+        }
         s.fuel_total += run.fuel;
         s.alloc_total += run.alloc;
         if (outcome == .faulted) s.faults += 1;
@@ -2363,6 +2507,14 @@ pub const Group = struct {
             .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
             .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
             .effect_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } }),
+            // `veto` ends the Run with result Nothing.
+            .vetoed => |reason| {
+                reason.release();
+                const v = try nothing(g.gpa);
+                if (d.waits) {
+                    try g.reply(d, .{ .reply = v });
+                } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release();
+            },
             .errored => |e| {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
@@ -2434,6 +2586,11 @@ pub const Group = struct {
             out.writeAll("\n") catch {};
         }
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
+        // A Decision that reaches the end of its path is allowed.
+        if (d.decision) g.seal(d.id, .{ .verdict = .allowed }) catch |e| {
+            g.releaseDelivery(d);
+            return e;
+        };
         g.releaseDelivery(d);
     }
 
@@ -2749,6 +2906,8 @@ pub const Group = struct {
         /// Its participant's commit failed, or failed abandonment on a
         /// participating Grant prevented it.
         effect_failed: EffectFailure,
+        /// It reached `veto`, with its reason.
+        vetoed: *Value,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -2854,6 +3013,10 @@ pub const Group = struct {
                 .passed => {
                     while (run.frames.items.len > 0) g.popFrame(run);
                     return .passed;
+                },
+                .vetoed => |v| {
+                    while (run.frames.items.len > 0) g.popFrame(run);
+                    return .{ .vetoed = v };
                 },
                 .catch_accept, .catch_next => unreachable,
             }
@@ -3150,7 +3313,7 @@ pub const Group = struct {
                         f.pc = guard.target;
                     }
                 },
-                .returned, .clause_failed, .end_cleanup, .suspended, .passed => unreachable,
+                .returned, .clause_failed, .end_cleanup, .suspended, .passed, .vetoed => unreachable,
             }
         };
         // The owner keeps its own stack until acceptance moves it on.
@@ -3249,6 +3412,8 @@ pub const Group = struct {
         suspended,
         /// It reached `pass`.
         passed,
+        /// It reached `veto`, with its reason.
+        vetoed: *Value,
     };
 
     /// Pushes a value the frame takes; refused, the value is released.
@@ -3341,6 +3506,11 @@ pub const Group = struct {
                 try g.push(frame, if (o) |x| x.value.retain() else try nothing(gpa));
             },
             .pass => return .passed,
+            .veto => {
+                // A Run that holds no open Verdict just ends.
+                if (!run.verdict) g.write("note {s} kind=no-verdict\n", .{run.id});
+                return .{ .vetoed = pop(frame) };
+            },
             .send_up, .send_up_wait => return g.send(run, frame, ins, m),
             .set_property, .set_property_computed => return g.setProperty(run, frame, ins, m),
             .jump => frame.pc = @intCast(ops[0].int),
@@ -5377,6 +5547,14 @@ fn labelWord(w: []const u8) bool {
 
 /// Whether a computed message name is a Name for any count, or a Selector
 /// with one part per argument (chapter 5, Sending).
+/// Whether a Host may send a message by this name with `count` arguments:
+/// one with a `:` must be a Selector of two or more parts, one argument per
+/// part (chapter 9, Selectors).
+pub fn hostMessageName(name: []const u8, count: usize) bool {
+    if (std.mem.indexOfScalar(u8, name, ':') == null) return true;
+    return count >= 2 and messageName(name, count);
+}
+
 fn messageName(name: []const u8, count: usize) bool {
     if (std.mem.indexOfScalar(u8, name, ':') == null) return nameWord(name);
     if (name[name.len - 1] != ':') return false;
@@ -5385,8 +5563,7 @@ fn messageName(name: []const u8, count: usize) bool {
     while (it.next()) |part| {
         // A label after the first part may be a Reserved Word the labels
         // allow, such as `to`, but never an excluded one.
-        const label = parts > 0 and labelWord(part);
-        if (!label and !nameWord(part)) return false;
+        if (!(if (parts > 0) labelWord(part) else nameWord(part))) return false;
         parts += 1;
     }
     return parts == count;

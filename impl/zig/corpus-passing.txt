@@ -15,6 +15,8 @@ capabilities/effect-coordinator-abandon-failed
 capabilities/effect-coordinator-commit-failed
 capabilities/effect-coordinator-conflict
 capabilities/effect-coordinator-shared
+capabilities/effect-decision-failed
+capabilities/effect-decision-ok
 capabilities/effect-operation-error
 capabilities/effect-ordinary-error
 capabilities/effect-participant-conflict
@@ -52,6 +54,12 @@ computed-sends/unhandled
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
+decisions/allow-at-the-first-suspension-point
+decisions/dispatch-and-waits
+decisions/pass-up-the-message-path
+decisions/undecided-on-an-error
+decisions/undecided-when-dropped
+decisions/veto-ends-the-decision
 disassembly/calls-and-lambdas
 disassembly/collecting
 disassembly/containers
@@ -129,6 +137,7 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+objects/argument-labels
 objects/guard-keys
 objects/message-path
 objects/properties

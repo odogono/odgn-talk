@@ -53,6 +53,8 @@ pub const Body = struct {
     capture_names: []const []const u8 = &.{},
     /// A Handler Clause's Queueing Policy.
     policy: Policy = .none,
+    /// Whether the clause is `, deciding`, so it holds a Decision's Verdict.
+    deciding: bool = false,
     locals: u32,
     /// For an `on error` clause with `, during name`: that name's slot.
     during: ?u32 = null,
@@ -411,9 +413,10 @@ const Lowerer = struct {
         if (!counter.found_existing) counter.value_ptr.* = 0;
         counter.value_ptr.* += 1;
         f.body.info.clause = counter.value_ptr.*;
-        for (h.suffixes) |t| if (std.meta.stringToEnum(Policy, l.text(t))) |p| {
-            f.body.info.policy = p;
-        };
+        for (h.suffixes) |t| {
+            if (std.meta.stringToEnum(Policy, l.text(t))) |p| f.body.info.policy = p;
+            if (std.mem.eql(u8, l.text(t), "deciding")) f.body.info.deciding = true;
+        }
         f.handler = h;
         const params = try f.parameters(h.params);
         try f.finishSlots();
