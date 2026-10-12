@@ -6,6 +6,7 @@ const model = @import("../value.zig");
 const unicode = @import("../unicode/unicode.zig");
 const stdlib = @import("../generated/stdlib.zig").stdlib;
 const costs = @import("costs.zig");
+const matcher = @import("matcher.zig");
 const Value = model.Value;
 
 /// An error a Built-in raises: its code and fields, owned.
@@ -64,8 +65,19 @@ pub fn constant(gpa: Allocator, name: []const u8) !*Value {
 
 /// Calls a Built-in function.
 pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised, m: *costs.Measures) Error!*Value {
-    _ = a;
     m.args = args;
+    if (std.mem.eql(u8, name, "offset")) {
+        // The leftmost match's start, from a search run to its end.
+        const needle, const s = .{ args[0], args[1] };
+        const program = switch (needle.data) {
+            .pattern => matcher.programOf(a, needle, false) catch return error.OutOfMemory,
+            .text => |t| try matcher.literalProgram(a, (try matcher.Subject.ofText(a, t)).units, false),
+            else => return wrongKind(raised, gpa, "pattern", needle),
+        };
+        if (s.data != .text) return wrongKind(raised, gpa, "text", s);
+        const found = try matcher.run(a, program, try matcher.Subject.ofText(a, s.data.text), 0, .search, false, &m.steps);
+        return model.scalar(gpa, .{ .number = model.Decimal.fromInt(@as(i64, if (found) |f| @intCast(f.start + 1) else 0)) }) catch error.OutOfMemory;
+    }
     if (std.mem.eql(u8, name, "fromCodePoint")) {
         const x = args[0];
         if (x.data != .number) return wrongKind(raised, gpa, "number", x);

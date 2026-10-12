@@ -5,6 +5,7 @@ const std = @import("std");
 const model = @import("../value.zig");
 const unicode = @import("../unicode/unicode.zig");
 const rates = @import("../generated/rates.zig");
+const matcher = @import("matcher.zig");
 const Value = model.Value;
 
 /// What one instruction's formulas measure. The values are owned references.
@@ -89,6 +90,7 @@ fn measure(which: u8, v: *const Value) u64 {
         rates.measure_bytes => if (v.data == .bytes) v.data.bytes.len else 0,
         rates.measure_items => items(v),
         rates.measure_entries => if (v.data == .map) v.data.map.len else 0,
+        rates.measure_program => if (v.data == .pattern) matcher.programSize(v) else 0,
         rates.measure_digits => switch (v.data) {
             .number => |n| digits(n.coefficient),
             .quantity => |q| digits(q.number.coefficient),
@@ -125,7 +127,7 @@ fn items(v: *const Value) u64 {
     };
 }
 
-fn contents(v: *const Value) u64 {
+pub fn contents(v: *const Value) u64 {
     var total: u64 = 0;
     switch (v.data) {
         .list => |l| for (l) |x| {
@@ -153,7 +155,7 @@ pub fn size(v: *const Value) u64 {
         .map => |m| 16 + 8 * m.len + contents(v),
         .range => 16 + contents(v),
         .instant, .civil_date, .object => 16,
-        .pattern => 16,
+        .pattern => 16 + 8 * matcher.programSize(v),
         .function => |f| 32 + 8 * f.captures.data.list.len + contents(f.captures),
     };
 }

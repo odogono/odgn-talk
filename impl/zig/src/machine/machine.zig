@@ -19,7 +19,7 @@ const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
 const binary = @import("binary.zig");
 const conversions = @import("convert.zig");
-const literal = @import("literal.zig");
+const matcher = @import("matcher.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
@@ -32,6 +32,7 @@ pub const Slot = union(enum) {
     value: *Value,
     iterator: *Iterator,
     reader: *binary.Reader,
+    replacement: *Replacement,
 
     fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
@@ -48,8 +49,32 @@ pub const Slot = union(enum) {
                 r.subject.release();
                 gpa.destroy(r);
             },
+            .replacement => |r| {
+                r.references -= 1;
+                if (r.references > 0) return;
+                r.text.release();
+                r.matches.release();
+                gpa.free(r.spans);
+                r.pieces.deinit(gpa);
+                gpa.destroy(r);
+            },
         }
     }
+};
+
+/// `replace`'s state (chapter 8): the text, its Matches, the next one, and
+/// the pieces so far.
+pub const Replacement = struct {
+    references: usize = 1,
+    text: *Value,
+    /// The list of Matches.
+    matches: *Value,
+    /// Each Match's byte offsets in the text.
+    spans: [][2]usize,
+    next: usize = 0,
+    /// Where the text not yet copied starts, in bytes.
+    position: usize = 0,
+    pieces: std.ArrayList(u8) = .empty,
 };
 
 /// A list or range snapshot and a position, or a count left.
@@ -1103,20 +1128,144 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                const kind: literal.Kind = switch (ins.op) {
+                const kind: matcher.Kind = switch (ins.op) {
                     .contains => .search,
                     .begins_with => .prefix,
                     else => .suffix,
                 };
-                const r = if (x.data == .bytes and y.data == .bytes)
-                    try literal.run(a, try literal.bytes(a, x.data.bytes), try literal.bytes(a, y.data.bytes), kind)
-                else blk: {
+                const fold = ops.len == 1;
+                const subject, const program = if (x.data == .bytes and y.data == .bytes) .{
+                    try matcher.Subject.ofBytes(a, x.data.bytes),
+                    try matcher.literalProgram(a, (try matcher.Subject.ofBytes(a, y.data.bytes)).units, false),
+                } else blk: {
                     if (x.data != .text) return g.wrongKind("text", x);
-                    if (y.data != .text) return g.wrongKind("text", y);
-                    break :blk try literal.run(a, try characters(a, x.data.text), try characters(a, y.data.text), kind);
+                    break :blk .{ try matcher.Subject.ofText(a, x.data.text), try g.needle(a, y, fold) };
                 };
-                m.steps = r.steps;
-                try g.push(frame, try boolean(gpa, r.found));
+                const found = try matcher.run(a, program, subject, 0, kind, true, &m.steps);
+                try g.push(frame, try boolean(gpa, found != null));
+            },
+            .matches => {
+                const y = pop(frame);
+                defer y.release();
+                const x = pop(frame);
+                defer x.release();
+                if (x.data != .text) return g.wrongKind("text", x);
+                const program = try g.needle(a, y, ops.len == 1);
+                const found = try matcher.run(a, program, try matcher.Subject.ofText(a, x.data.text), 0, .whole, true, &m.steps);
+                try g.push(frame, try boolean(gpa, found != null));
+            },
+            .match_whole, .match_search => {
+                const p = pop(frame);
+                defer p.release();
+                const v = pop(frame);
+                defer v.release();
+                const label: u32 = @intCast(ops[ops.len - 1].int);
+                if (v.data != .text or (p.data != .pattern and p.data != .text)) {
+                    frame.pc = label;
+                    return .next;
+                }
+                const program = try g.needle(a, p, ops.len == 2);
+                const subject = try matcher.Subject.ofText(a, v.data.text);
+                const kind: matcher.Kind = if (ins.op == .match_whole) .whole else .search;
+                const found = try matcher.run(a, program, subject, 0, kind, false, &m.steps) orelse {
+                    frame.pc = label;
+                    return .next;
+                };
+                var bad: ?matcher.Unconverted = null;
+                const captures = matcher.capturesMap(a, gpa, program, subject, v.data.text, found, &bad) catch |err| return g.unconverted(err, bad);
+                m.result = captures.retain();
+                try g.push(frame, captures);
+            },
+            .match_all => {
+                const t = pop(frame);
+                defer t.release();
+                const p = pop(frame);
+                defer p.release();
+                if (t.data != .text) return g.wrongKind("text", t);
+                const program = try g.needle(a, p, false);
+                const subject = try matcher.Subject.ofText(a, t.data.text);
+                const list = try g.matchList(a, program, subject, t.data.text, false, &m.steps, null);
+                m.result = list.retain();
+                try g.push(frame, list);
+            },
+            .make_pattern => {
+                const n: usize = @intCast(ops[1].int);
+                const values = try a.alloc(*Value, n);
+                var i = n;
+                while (i > 0) {
+                    i -= 1;
+                    values[i] = pop(frame);
+                }
+                defer for (values) |v| v.release();
+                const template = unit.values[@intCast(ops[0].int)].pattern;
+                var problem: ?matcher.Problem = null;
+                const elements = matcher.splice(a, template, values, &problem) catch |err| switch (err) {
+                    error.Raised => switch (problem.?) {
+                        .wrong_kind => |v| return g.wrongKind("pattern", v),
+                        .clash => |v| {
+                            const to = model.text(gpa, "pattern") catch return error.OutOfMemory;
+                            defer to.release();
+                            return g.raise("can't convert", &.{ .{ .key = "value", .value = v }, .{ .key = "to", .value = to } });
+                        },
+                    },
+                    else => return error.OutOfMemory,
+                };
+                const source = matcher.write(a, elements) catch return error.OutOfMemory;
+                const r = model.scalar(gpa, .{ .pattern = try gpa.dupe(u8, source) }) catch return error.OutOfMemory;
+                m.result = r.retain();
+                try g.push(frame, r);
+            },
+            .replace_start => {
+                const t = pop(frame);
+                const p = pop(frame);
+                defer p.release();
+                if (t.data != .text) {
+                    defer t.release();
+                    return g.wrongKind("text", t);
+                }
+                const program = g.needle(a, p, false) catch |err| {
+                    t.release();
+                    return err;
+                };
+                const subject = try matcher.Subject.ofText(a, t.data.text);
+                var spans: std.ArrayList([2]usize) = .empty;
+                const list = g.matchList(a, program, subject, t.data.text, ops[0].int == 1, &m.steps, &spans) catch |err| {
+                    t.release();
+                    return err;
+                };
+                const r = try gpa.create(Replacement);
+                r.* = .{ .text = t, .matches = list, .spans = try gpa.dupe([2]usize, spans.items) };
+                // A replacement holds its text and each Match.
+                m.alloc_extra = 32 + costs.size(t) + costs.contents(list);
+                try frame.stack.append(gpa, .{ .replacement = r });
+            },
+            .replace_next => {
+                const r = frame.stack.items[frame.stack.items.len - 1].replacement;
+                const items = r.matches.data.list;
+                if (r.next >= items.len) {
+                    frame.pc = @intCast(ops[0].int);
+                    return .next;
+                }
+                r.next += 1;
+                try g.push(frame, items[r.next - 1].retain());
+            },
+            .replace_put => {
+                const v = pop(frame);
+                defer v.release();
+                const r = frame.stack.items[frame.stack.items.len - 1].replacement;
+                const span = r.spans[r.next - 1];
+                try r.pieces.appendSlice(gpa, r.text.data.text[r.position..span[0]]);
+                try r.pieces.appendSlice(gpa, try chunks.textForm(a, v));
+                r.position = span[1];
+            },
+            .replace_end => {
+                const slot = frame.stack.pop().?;
+                defer slot.release(gpa);
+                const r = slot.replacement;
+                const joined = try std.mem.concat(a, u8, &.{ r.pieces.items, r.text.data.text[r.position..] });
+                const out = model.text(gpa, joined) catch return error.OutOfMemory;
+                m.result = out.retain();
+                try g.push(frame, out);
             },
             .get_key, .get_key_computed => {
                 const base = pop(frame);
@@ -1671,6 +1820,40 @@ pub const Group = struct {
         };
     }
 
+    /// The program of a needle: a Text Pattern's, or a text's as a literal.
+    fn needle(g: *Group, a: Allocator, v: *const Value, fold: bool) !matcher.Program {
+        return switch (v.data) {
+            .pattern => matcher.programOf(a, v, fold) catch return error.OutOfMemory,
+            .text => |t| matcher.literalProgram(a, (try matcher.Subject.ofText(a, t)).units, fold),
+            else => g.wrongKind("pattern", v),
+        };
+    }
+
+    /// The Match Search's Matches as a list, and their byte spans.
+    fn matchList(g: *Group, a: Allocator, program: matcher.Program, subject: matcher.Subject, text: []const u8, first: bool, steps: *u64, spans: ?*std.ArrayList([2]usize)) !*Value {
+        const found = try matcher.matchSearch(a, program, subject, first, steps);
+        const items = try a.alloc(*Value, found.len);
+        var made: usize = 0;
+        defer for (items[0..made]) |v| v.release();
+        for (found) |f| {
+            var bad: ?matcher.Unconverted = null;
+            items[made] = matcher.matchMap(a, g.gpa, program, subject, text, f, &bad) catch |err| return g.unconverted(err, bad);
+            made += 1;
+            if (spans) |s| try s.append(a, .{ subject.offsets[f.start], subject.offsets[f.end] });
+        }
+        return model.list(g.gpa, items) catch error.OutOfMemory;
+    }
+
+    /// A Capture whose text isn't a number raises `can't convert`.
+    fn unconverted(g: *Group, err: anyerror, bad: ?matcher.Unconverted) error{ Raised, OutOfMemory } {
+        if (err != error.Raised) return error.OutOfMemory;
+        const v = model.text(g.gpa, bad.?.text) catch return error.OutOfMemory;
+        defer v.release();
+        const to = model.text(g.gpa, "number") catch return error.OutOfMemory;
+        defer to.release();
+        return g.raise("can't convert", &.{ .{ .key = "value", .value = v }, .{ .key = "to", .value = to } });
+    }
+
     fn wrongKind(g: *Group, expected: []const u8, got: *const Value) error{ Raised, OutOfMemory } {
         const e = model.text(g.gpa, expected) catch return error.OutOfMemory;
         defer e.release();
@@ -1694,6 +1877,13 @@ pub const Group = struct {
         return switch (unit.values[i]) {
             .value => |v| v.retain(),
             .builtin => |name| builtins.constant(g.gpa, name),
+            .pattern => |source| blk: {
+                const copy = try g.gpa.dupe(u8, source);
+                break :blk model.scalar(g.gpa, .{ .pattern = copy }) catch {
+                    g.gpa.free(copy);
+                    return error.OutOfMemory;
+                };
+            },
             else => g.raise("not implemented", &.{}),
         };
     }
@@ -1734,18 +1924,6 @@ fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
     return 0;
 }
 
-/// Text split into its Characters.
-fn characters(a: Allocator, text: []const u8) ![]const []const u8 {
-    var out: std.ArrayList([]const u8) = .empty;
-    var i: usize = 0;
-    while (i < text.len) {
-        const end = unicode.grapheme.end(text, i);
-        try out.append(a, text[i..end]);
-        i = end;
-    }
-    return out.items;
-}
-
 const errors_table = @import("../generated/errors.zig");
 
 fn errorEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
@@ -1763,6 +1941,10 @@ fn retainSlot(slot: Slot) Slot {
         .reader => |r| blk: {
             r.references += 1;
             break :blk .{ .reader = r };
+        },
+        .replacement => |r| blk: {
+            r.references += 1;
+            break :blk .{ .replacement = r };
         },
     };
 }
