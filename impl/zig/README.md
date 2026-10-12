@@ -237,9 +237,16 @@ its `end`: it resumes with every answer in start order, or with the first
 failure, `index` added, and an error leaving the Join abandons its pending
 members. A Timeout Block's deadline sits on the frame's stack, bounds every
 Suspension Point inside it, and raises `timeout` with `deadline: true`, at once
-when it has already passed. `wait for`, `timer`, `store`, `sqlite` and `user`,
-Capability Scopes and Segment-bound effects, Lambdas, Host Objects and the
-Message Path come next. A Run past the default Fuel per Run ends
+when it has already passed.
+
+A `wait for` holds the values its branches popped and suspends. Before a
+Script dispatches a message, every pending `wait for` in it runs its test
+bodies on the waiting Run, which pays for them, in the order the waits began.
+A match binds the names its test gives and leaves the message in `it`, and
+the message still goes to the Handler Clauses. A timeout or an `after` branch
+resumes the Run with Nothing, and a Timeout Block bounds them all. `timer`,
+`store`, `sqlite` and `user`, Capability Scopes and Segment-bound effects,
+Lambdas, Host Objects and the Message Path come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 
