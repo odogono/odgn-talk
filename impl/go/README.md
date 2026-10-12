@@ -342,9 +342,16 @@ Constructors reject invalid input with `HostError{Code: InvalidValue}`.
 error outside years 0001–9999; `Instant` returns the refusal instead.
 
 `Value.String` uses chapter 11's display form. `EncodeValue` preserves supported
-kinds and numeric exponents. `DecodeValue` rejects malformed UTF-8, lone
-surrogates, duplicate NFC keys and noncanonical Base64, re-parses Text Patterns
-and resolves Object tags through its resolver. Plain JSON refuses non-JSON
+kinds and numeric exponents. `DecodeValue` accepts only the canonical numbers,
+tags and payloads the encoder writes, refusing other forms as `invalid value`.
+This includes the choice between a JSON integer below 2⁵³ in magnitude and
+`$dec`, normal-form Units, UTC Instants with the shortest fraction, Civil Dates,
+Text Pattern source, padded Base64 and `$map` only for maps with a `$` key.
+JSON white space and string escapes are syntax, and text is normalised to NFC.
+Malformed UTF-8, lone surrogates and duplicate NFC keys are refused. Text
+Patterns are re-parsed and Object tags resolved through the Host's resolver.
+The same decoding rules apply to Message Layer inputs, Session object actions
+and Store file members; outer Store keys remain literal. Plain JSON refuses non-JSON
 kinds with `not encodable`, including `kind` and the first depth-first `path`.
 Function Values have Home identity, capture equality and accessors, and are
 refused by storage encoding. Group-scoped Host Objects can be registered and

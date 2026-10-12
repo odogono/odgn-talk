@@ -34,6 +34,10 @@ func encode(v Value, plain bool) ([]byte, error) {
 func EncodeJSON(v Value) ([]byte, error)  { return encode(v, true) }
 func EncodeValue(v Value) ([]byte, error) { return encode(v, false) }
 func DecodeJSON(b []byte) (Value, error)  { return hostValue(corevalue.Decode(b, false, nil)) }
+
+// DecodeValue accepts only the numbers, tags and payloads EncodeValue writes.
+// JSON whitespace and string escapes are allowed, and text is normalised to
+// NFC. Noncanonical forms are refused with InvalidValue.
 func DecodeValue(b []byte, resolve func(kind, id string) (*Object, bool)) (Value, error) {
 	var resolver func(string, string) (corevalue.Value, error)
 	if resolve != nil {
