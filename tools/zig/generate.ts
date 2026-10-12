@@ -5,6 +5,7 @@ import machine from '../../spec/data/machine.toml';
 import costs from '../../spec/data/costs.toml';
 import errors from '../../spec/data/errors.toml';
 import diagnostics from '../../spec/data/diagnostics.toml';
+import grammar from '../../spec/data/grammar.toml';
 import limits from '../../spec/data/limits.toml';
 import units from '../../spec/data/units.toml';
 import version from '../../spec/data/version.toml';
@@ -250,6 +251,7 @@ export const generateZigCatalogues = async (check: boolean): Promise<void> => {
     costs,
     errors,
     diagnostics,
+    grammar,
     limits,
     units,
     version,

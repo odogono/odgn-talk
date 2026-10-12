@@ -14,7 +14,8 @@ design decisions that bind it are recorded on
 It is under construction, step by step through
 [Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
 generated tables, Unicode text primitives, reference-counted values, native
-decimal arithmetic, the display form, the Value Encoding and a corpus runner.
+decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
+the front end's lexer and lossless parser.
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -40,11 +41,34 @@ tests and check commands.
   copy-on-write containers, catalogue Units and Gregorian dates.
 - `src/display.zig`, `src/encoding.zig`, `src/pattern.zig`: the display reader
   and writer, lossless Value Encoding and canonical Pattern source reader.
+- `src/syntax/`: the modal lexer of chapter 1 and the predictive parser of
+  chapter 2, which builds a lossless syntax tree.
 - `src/corpus/`: case discovery, metadata, encoding replay and Trace parsing.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
-`syntax`, `check`, `lower`, `machine` and Trace writing join
-`src/` in the later parts of step 1, and `session` and the REPL in step 6.
+`check`, `lower`, `machine` and Trace writing join `src/` in the later parts
+of step 1, and `session` and the REPL in step 6.
+
+## Syntax
+
+The parser drives the lexer: it names the mode of every token it asks for,
+reads at most two tokens ahead for the decisions `grammar.toml` lists, and
+stops at the first syntax error with its code and position. A lexical error
+comes back as an `invalid` token, so a parser that has peeked past the token
+it fails at still reports that one. Fenced text is scanned whole when its
+opener is lexed, holes and nested literals included, and each literal is
+remembered by its offset, so nested interpolation stays linear. Margins,
+escapes and line breaks are decoded then; NFC is left to the value.
+
+Every token, line breaks and the end of the source included, is kept in
+source order, and a backtick literal with holes is split into pieces around
+its holes' tokens. `Tree.reconstruct` rebuilds the source byte for byte from
+them. The tree's shape is the Zig Core's own.
+
+Source nesting is bounded at 128 recursive parser regions, and an expression
+tree at 128 levels, so hostile source ends in `source nesting too deep`, never
+a stack overflow. Like the Go Core's limit, that code is an implementation
+limit outside the Spec's catalogue.
 
 ## Building and testing
 
@@ -159,6 +183,7 @@ bun run zig:generate        # the catalogues
 bun run unicode:generate    # the Unicode table, for every Core
 ```
 
+The catalogues include `grammar.toml`'s word lists, which the parser reads.
 `bun run check` holds both to their sources and fails on a stale table. The
 emitters write `zig fmt`'s canonical form themselves, so the check needs no Zig
 toolchain; CI's `zig fmt --check` holds them to it.
