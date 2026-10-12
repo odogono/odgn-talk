@@ -143,6 +143,9 @@ export declare function encodeJson(v: Value): string;
 /** The `+` rules, outside any Run and uncharged. Throws the ScriptError `+` would raise. */
 export declare function add(a: Value, b: Value): Value;
 export declare function encodeValue(v: Value): string; // a Function Value throws
+/** Accepts only the forms encodeValue writes; otherwise throws invalid value.
+ * JSON white space and string escapes are syntax, and text is normalised to NFC
+ * as described in chapter 9's canonical decoding rule. */
 export declare function decodeValue(
   s: string,
   resolve: (kind: string, id: string) => HostObject | undefined,
