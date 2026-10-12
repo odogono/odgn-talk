@@ -22,8 +22,15 @@ pub fn build(b: *std.Build) void {
     core.addAnonymousImport("talk.h", .{ .root_source_file = b.path("include/talk.h") });
 
     if (target.result.os.tag == .wasi) {
-        // A WASI reactor: no `_start`, and the `talk_*` exports kept.
+        // A WASI reactor: no `_start`, and the `talk_*` exports kept. It
+        // ships without debug sections, as the Go reactor's `-s -w` does.
+        core.strip = true;
         const module = b.addExecutable(.{ .name = "talk", .root_module = core });
+        // The stack lives in linear memory, where Zig's default 16 MiB would
+        // be most of an instance. Nothing recurses past the depth guards
+        // (128 levels of source and of Value nesting), which the WASI check
+        // in tools/wasi/zig.py exercises at this size.
+        module.stack_size = 1 << 20;
         module.entry = .disabled;
         module.rdynamic = true;
         b.installArtifact(module);

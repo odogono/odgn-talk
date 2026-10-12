@@ -8,6 +8,7 @@ on:
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
+      - 'tools/wasi/zig.py'
       - '.github/workflows/zig.yml'
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
+      - 'tools/wasi/zig.py'
       - '.github/workflows/zig.yml'
 
 jobs:
@@ -52,4 +54,24 @@ jobs:
       - run: zig build -Dtarget=wasm32-wasi
         working-directory: impl/zig
       - run: zig build corpus -- --check-passing
+        working-directory: impl/zig
+
+  # Runs the wasm32-wasi build in wasmtime through talk.h, and holds its
+  # memory per instance and payload to #532's thresholds (ADR 0078).
+  wasi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build and check the WASI module
+        timeout-minutes: 10
+        run: |
+          zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+          python -m pip install wasmtime==49.0.0 brotli==1.2.0
+          python ../../tools/wasi/zig.py ../../.cache/zig-wasi/bin/talk.wasm
         working-directory: impl/zig

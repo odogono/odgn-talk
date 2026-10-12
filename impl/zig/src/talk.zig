@@ -256,6 +256,22 @@ export fn talk_value_retain(v: *Value) void {
 export fn talk_value_release(v: ?*Value) void {
     if (v) |value| value.release();
 }
+/// The alignment of `talk_alloc`'s memory, enough for any talk.h struct.
+const host_alignment: std.mem.Alignment = .@"16";
+
+/// C only: memory in the Core's address space, for a Host in another, such
+/// as a WASM runtime, to pass structs and text through.
+export fn talk_alloc(size: usize) ?[*]u8 {
+    const memory = allocator.alignedAlloc(u8, host_alignment, @max(size, 1)) catch return null;
+    return memory.ptr;
+}
+
+export fn talk_free(p: ?[*]u8, size: usize) void {
+    const ptr = p orelse return;
+    const memory: []align(16) u8 = @alignCast(ptr[0..@max(size, 1)]);
+    allocator.free(memory);
+}
+
 export fn talk_owned_bytes_release(b: *Buffer) void {
     if (b.data) |p| allocator.free(p[0..b.len]);
     b.* = .{};

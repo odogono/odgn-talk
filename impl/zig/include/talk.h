@@ -174,6 +174,12 @@ void talk_value_retain(talk_value *v);
 void talk_value_release(talk_value *v);
 /* C only: frees an owned buffer and clears its fields. */
 void talk_owned_bytes_release(talk_owned_bytes *b);
+/* C only: memory in the Core's address space, aligned to 16, for a Host in
+ * another, such as a WASM runtime, to pass structs and text through; NULL
+ * when it can't allocate. talk_free takes back the same size. */
+void *talk_alloc(size_t size);
+/* C only: takes back talk_alloc's memory. */
+void talk_free(void *p, size_t size);
 
 /* Shapes (chapter 9). A constructor's Shape is owned by the caller; a
  * function that takes Shapes retains what it keeps. */
