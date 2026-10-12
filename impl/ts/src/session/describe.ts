@@ -5,6 +5,7 @@
 import type { Token } from '../lexer';
 import { checkSource } from '../checker';
 import { declarationDocs } from '../documentation';
+import { builtinDocs } from '../generated/builtin-docs';
 import { builtins } from '../generated/syntax';
 import { stdlibSources } from '../generated/stdlib';
 import { parseSource } from '../parser';
@@ -189,7 +190,7 @@ export const sessionDeclared = (names: Names, name: string): Declared[] => {
 };
 
 export const builtinDeclared = (name: string): Declared[] => {
-  const b = builtins.find(b => b.name === name);
+  const b = Object.hasOwn(builtinDocs, name) ? builtinDocs[name] : undefined;
   return b
     ? [
         {

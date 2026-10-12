@@ -1,6 +1,5 @@
 import {
   grammar,
-  builtins,
   units,
   Lexer,
   parseSource,
@@ -13,6 +12,7 @@ import {
   type SyntaxNode,
   type Token,
 } from '@odgn/northtalk';
+import { builtinDocs } from '@odgn/northtalk/session';
 import { formatSource } from '../format';
 import {
   bindingKey,
@@ -777,7 +777,9 @@ export const hover = (
     binding?.kind === 'builtin function' ||
     binding?.kind === 'builtin constant'
   ) {
-    const builtin = builtins.find(b => b.name === binding.name);
+    const builtin = Object.hasOwn(builtinDocs, binding.name)
+      ? builtinDocs[binding.name]
+      : undefined;
     display ??= `${binding.kind} ${binding.name}`;
     docs = builtin ? [builtin.gives] : [];
   } else if (defining) {
