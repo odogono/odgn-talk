@@ -1,0 +1,32 @@
+script variable result = nothing
+
+on go
+  put {"length": 0} into record
+  put 1 into (the "length" of (record))
+  put 2 into the ("length") of record
+  put 3 into the (item 1 of the keys of record) of record
+  put "a;b" into row
+  put "z" into item (the length of [1, 2]) of row delimited by (item 1 of the keys of {";": true})
+  put [record, row, the length of row] into result
+end go
+
+-- These auxiliary reads and key targets must also pass load checking.
+on valid x
+  put 1 into the "length" of x
+  put 1 into the ("length") of x
+  put 1 into the (the length of x) of x
+  put 1 into item (the length of x) of x
+  put 1 into item 1 of x delimited by (the length of x)
+  put the length of x into x
+  set the "length" of x to 1
+  set the ("length") of x to 1
+  set (the "length" of (x)) to 1
+  put 1 into (the "length" of x)
+  put 1 into (x)
+  put 1 into item 1 of (x)
+  put 1 into the foo of x
+  put 1 into x's foo
+  set the (x's length) of x to the length of x
+  delete item (x's length) of x delimited by (the length of x)
+  replace (the length of x) in the foo of x with (the length of x)
+end valid

@@ -1,0 +1,4 @@
+constant x = 1
+on t
+  put missing into the length of x
+end t

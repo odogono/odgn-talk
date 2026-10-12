@@ -1,6 +1,3 @@
-// Staged for #670: keep these cases outside shared Core fixtures until TS and
-// Zig reject property targets. Then promote the negatives to broken.talk and
-// corpus/load-diagnostics/container-properties/; retain this parser coverage.
 import { expect, test } from 'bun:test';
 import grammar from '../../spec/data/grammar.toml';
 import { parse } from './parser';

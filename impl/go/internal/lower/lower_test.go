@@ -117,6 +117,7 @@ func TestCanonicalDisplayAndParenthesizedContainer(t *testing.T) {
 		want   []string
 	}{
 		{"on t\nput 1 into (x)\nput 2 into item 1 of (x)\nend", []string{"store 1 ; x", "load 1 ; x"}},
+		{"on t x\nset (the \"length\" of (x)) to 1\nset (the (\"length\") of x) to 2\nend", []string{"load 1 ; x", "set-property \"length\"", "set-property-computed"}},
 		{"on t\nreturn [\"C:\\new\", \"a\tb\", 1.0 days, 2 m*kg, < <digit>>, <digit lazily ignoring case ignoring case>, <0x04 digits>, <\"a & b\">]\nend", []string{`"C:\new"`, `"a" & tab & "b"`, "1.0 day", "2 kg*m", "< <digit>>", "<digit ignoring case lazily>", "<4 digits>", `<"a & b">`}},
 	} {
 		tree, err := syntax.Parse(tc.source)

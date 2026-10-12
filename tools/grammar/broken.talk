@@ -893,3 +893,1368 @@ end t
 on t
   put line does of s into x
 end t
+-- case: Built-in property Container: put 1 into the length of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the length of x
+end t
+-- case: Built-in property Container: put 1 before the length of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the length of x
+end t
+-- case: Built-in property Container: put 1 after the length of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the length of x
+end t
+-- case: Built-in property Container: put ...[1] after the length of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the length of x
+end t
+-- case: Built-in property Container: put ...[1] before the length of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the length of x
+end t
+-- case: Built-in property Container: set the length of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the length of x to 1
+end t
+-- case: Built-in property Container: add 1 to the length of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the length of x
+end t
+-- case: Built-in property Container: subtract 1 from the length of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the length of x
+end t
+-- case: Built-in property Container: multiply the length of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the length of x by 2
+end t
+-- case: Built-in property Container: divide the length of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the length of x by 2
+end t
+-- case: Built-in property Container: delete the length of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the length of x
+end t
+-- case: Built-in property Container: replace "a" in the length of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the length of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the length of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the length of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the keys of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the keys of x
+end t
+-- case: Built-in property Container: put 1 before the keys of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the keys of x
+end t
+-- case: Built-in property Container: put 1 after the keys of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the keys of x
+end t
+-- case: Built-in property Container: put ...[1] after the keys of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the keys of x
+end t
+-- case: Built-in property Container: put ...[1] before the keys of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the keys of x
+end t
+-- case: Built-in property Container: set the keys of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the keys of x to 1
+end t
+-- case: Built-in property Container: add 1 to the keys of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the keys of x
+end t
+-- case: Built-in property Container: subtract 1 from the keys of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the keys of x
+end t
+-- case: Built-in property Container: multiply the keys of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the keys of x by 2
+end t
+-- case: Built-in property Container: divide the keys of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the keys of x by 2
+end t
+-- case: Built-in property Container: delete the keys of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the keys of x
+end t
+-- case: Built-in property Container: replace "a" in the keys of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the keys of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the keys of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the keys of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the values of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the values of x
+end t
+-- case: Built-in property Container: put 1 before the values of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the values of x
+end t
+-- case: Built-in property Container: put 1 after the values of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the values of x
+end t
+-- case: Built-in property Container: put ...[1] after the values of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the values of x
+end t
+-- case: Built-in property Container: put ...[1] before the values of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the values of x
+end t
+-- case: Built-in property Container: set the values of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the values of x to 1
+end t
+-- case: Built-in property Container: add 1 to the values of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the values of x
+end t
+-- case: Built-in property Container: subtract 1 from the values of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the values of x
+end t
+-- case: Built-in property Container: multiply the values of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the values of x by 2
+end t
+-- case: Built-in property Container: divide the values of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the values of x by 2
+end t
+-- case: Built-in property Container: delete the values of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the values of x
+end t
+-- case: Built-in property Container: replace "a" in the values of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the values of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the values of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the values of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the items of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the items of x
+end t
+-- case: Built-in property Container: put 1 before the items of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the items of x
+end t
+-- case: Built-in property Container: put 1 after the items of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the items of x
+end t
+-- case: Built-in property Container: put ...[1] after the items of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the items of x
+end t
+-- case: Built-in property Container: put ...[1] before the items of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the items of x
+end t
+-- case: Built-in property Container: set the items of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the items of x to 1
+end t
+-- case: Built-in property Container: add 1 to the items of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the items of x
+end t
+-- case: Built-in property Container: subtract 1 from the items of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the items of x
+end t
+-- case: Built-in property Container: multiply the items of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the items of x by 2
+end t
+-- case: Built-in property Container: divide the items of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the items of x by 2
+end t
+-- case: Built-in property Container: delete the items of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the items of x
+end t
+-- case: Built-in property Container: replace "a" in the items of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the items of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the items of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the items of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the lines of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the lines of x
+end t
+-- case: Built-in property Container: put 1 before the lines of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the lines of x
+end t
+-- case: Built-in property Container: put 1 after the lines of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the lines of x
+end t
+-- case: Built-in property Container: put ...[1] after the lines of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the lines of x
+end t
+-- case: Built-in property Container: put ...[1] before the lines of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the lines of x
+end t
+-- case: Built-in property Container: set the lines of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the lines of x to 1
+end t
+-- case: Built-in property Container: add 1 to the lines of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the lines of x
+end t
+-- case: Built-in property Container: subtract 1 from the lines of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the lines of x
+end t
+-- case: Built-in property Container: multiply the lines of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the lines of x by 2
+end t
+-- case: Built-in property Container: divide the lines of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the lines of x by 2
+end t
+-- case: Built-in property Container: delete the lines of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the lines of x
+end t
+-- case: Built-in property Container: replace "a" in the lines of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the lines of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the lines of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the lines of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the words of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the words of x
+end t
+-- case: Built-in property Container: put 1 before the words of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the words of x
+end t
+-- case: Built-in property Container: put 1 after the words of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the words of x
+end t
+-- case: Built-in property Container: put ...[1] after the words of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the words of x
+end t
+-- case: Built-in property Container: put ...[1] before the words of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the words of x
+end t
+-- case: Built-in property Container: set the words of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the words of x to 1
+end t
+-- case: Built-in property Container: add 1 to the words of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the words of x
+end t
+-- case: Built-in property Container: subtract 1 from the words of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the words of x
+end t
+-- case: Built-in property Container: multiply the words of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the words of x by 2
+end t
+-- case: Built-in property Container: divide the words of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the words of x by 2
+end t
+-- case: Built-in property Container: delete the words of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the words of x
+end t
+-- case: Built-in property Container: replace "a" in the words of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the words of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the words of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the words of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the characters of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the characters of x
+end t
+-- case: Built-in property Container: put 1 before the characters of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the characters of x
+end t
+-- case: Built-in property Container: put 1 after the characters of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the characters of x
+end t
+-- case: Built-in property Container: put ...[1] after the characters of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the characters of x
+end t
+-- case: Built-in property Container: put ...[1] before the characters of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the characters of x
+end t
+-- case: Built-in property Container: set the characters of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the characters of x to 1
+end t
+-- case: Built-in property Container: add 1 to the characters of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the characters of x
+end t
+-- case: Built-in property Container: subtract 1 from the characters of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the characters of x
+end t
+-- case: Built-in property Container: multiply the characters of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the characters of x by 2
+end t
+-- case: Built-in property Container: divide the characters of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the characters of x by 2
+end t
+-- case: Built-in property Container: delete the characters of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the characters of x
+end t
+-- case: Built-in property Container: replace "a" in the characters of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the characters of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the characters of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the characters of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the bytes of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the bytes of x
+end t
+-- case: Built-in property Container: put 1 before the bytes of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the bytes of x
+end t
+-- case: Built-in property Container: put 1 after the bytes of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the bytes of x
+end t
+-- case: Built-in property Container: put ...[1] after the bytes of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the bytes of x
+end t
+-- case: Built-in property Container: put ...[1] before the bytes of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the bytes of x
+end t
+-- case: Built-in property Container: set the bytes of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the bytes of x to 1
+end t
+-- case: Built-in property Container: add 1 to the bytes of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the bytes of x
+end t
+-- case: Built-in property Container: subtract 1 from the bytes of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the bytes of x
+end t
+-- case: Built-in property Container: multiply the bytes of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the bytes of x by 2
+end t
+-- case: Built-in property Container: divide the bytes of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the bytes of x by 2
+end t
+-- case: Built-in property Container: delete the bytes of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the bytes of x
+end t
+-- case: Built-in property Container: replace "a" in the bytes of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the bytes of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the bytes of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the bytes of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the code points of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the code points of x
+end t
+-- case: Built-in property Container: put 1 before the code points of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the code points of x
+end t
+-- case: Built-in property Container: put 1 after the code points of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the code points of x
+end t
+-- case: Built-in property Container: put ...[1] after the code points of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the code points of x
+end t
+-- case: Built-in property Container: put ...[1] before the code points of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the code points of x
+end t
+-- case: Built-in property Container: set the code points of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the code points of x to 1
+end t
+-- case: Built-in property Container: add 1 to the code points of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the code points of x
+end t
+-- case: Built-in property Container: subtract 1 from the code points of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the code points of x
+end t
+-- case: Built-in property Container: multiply the code points of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the code points of x by 2
+end t
+-- case: Built-in property Container: divide the code points of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the code points of x by 2
+end t
+-- case: Built-in property Container: delete the code points of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the code points of x
+end t
+-- case: Built-in property Container: replace "a" in the code points of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the code points of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the code points of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the code points of x with "b"
+end t
+-- case: Built-in property Container: put 1 into item 1 of the items of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into item 1 of the items of x
+end t
+-- case: Built-in property Container: put 1 before item 1 of the items of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before item 1 of the items of x
+end t
+-- case: Built-in property Container: put 1 after item 1 of the items of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after item 1 of the items of x
+end t
+-- case: Built-in property Container: put ...[1] after item 1 of the items of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after item 1 of the items of x
+end t
+-- case: Built-in property Container: put ...[1] before item 1 of the items of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before item 1 of the items of x
+end t
+-- case: Built-in property Container: set item 1 of the items of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set item 1 of the items of x to 1
+end t
+-- case: Built-in property Container: add 1 to item 1 of the items of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to item 1 of the items of x
+end t
+-- case: Built-in property Container: subtract 1 from item 1 of the items of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from item 1 of the items of x
+end t
+-- case: Built-in property Container: multiply item 1 of the items of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply item 1 of the items of x by 2
+end t
+-- case: Built-in property Container: divide item 1 of the items of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide item 1 of the items of x by 2
+end t
+-- case: Built-in property Container: delete item 1 of the items of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete item 1 of the items of x
+end t
+-- case: Built-in property Container: replace "a" in item 1 of the items of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in item 1 of the items of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in item 1 of the items of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in item 1 of the items of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the first item of the items of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the first item of the items of x
+end t
+-- case: Built-in property Container: put 1 before the first item of the items of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the first item of the items of x
+end t
+-- case: Built-in property Container: put 1 after the first item of the items of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the first item of the items of x
+end t
+-- case: Built-in property Container: put ...[1] after the first item of the items of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the first item of the items of x
+end t
+-- case: Built-in property Container: put ...[1] before the first item of the items of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the first item of the items of x
+end t
+-- case: Built-in property Container: set the first item of the items of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the first item of the items of x to 1
+end t
+-- case: Built-in property Container: add 1 to the first item of the items of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the first item of the items of x
+end t
+-- case: Built-in property Container: subtract 1 from the first item of the items of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the first item of the items of x
+end t
+-- case: Built-in property Container: multiply the first item of the items of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the first item of the items of x by 2
+end t
+-- case: Built-in property Container: divide the first item of the items of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the first item of the items of x by 2
+end t
+-- case: Built-in property Container: delete the first item of the items of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the first item of the items of x
+end t
+-- case: Built-in property Container: replace "a" in the first item of the items of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the first item of the items of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the first item of the items of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the first item of the items of x with "b"
+end t
+-- case: Built-in property Container: put 1 into x's length (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into x's length
+end t
+-- case: Built-in property Container: put 1 before x's length (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before x's length
+end t
+-- case: Built-in property Container: put 1 after x's length (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after x's length
+end t
+-- case: Built-in property Container: put ...[1] after x's length (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after x's length
+end t
+-- case: Built-in property Container: put ...[1] before x's length (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before x's length
+end t
+-- case: Built-in property Container: set x's length to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set x's length to 1
+end t
+-- case: Built-in property Container: add 1 to x's length (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to x's length
+end t
+-- case: Built-in property Container: subtract 1 from x's length (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from x's length
+end t
+-- case: Built-in property Container: multiply x's length by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply x's length by 2
+end t
+-- case: Built-in property Container: divide x's length by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide x's length by 2
+end t
+-- case: Built-in property Container: delete x's length (#670)
+-- expect: not a container at 2:10
+on t x
+  delete x's length
+end t
+-- case: Built-in property Container: replace "a" in x's length with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in x's length with "b"
+end t
+-- case: Built-in property Container: replace first "a" in x's length with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in x's length with "b"
+end t
+-- case: Built-in property Container: put 1 into (the length of x) (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into (the length of x)
+end t
+-- case: Built-in property Container: put 1 before (the length of x) (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before (the length of x)
+end t
+-- case: Built-in property Container: put 1 after (the length of x) (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after (the length of x)
+end t
+-- case: Built-in property Container: put ...[1] after (the length of x) (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after (the length of x)
+end t
+-- case: Built-in property Container: put ...[1] before (the length of x) (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before (the length of x)
+end t
+-- case: Built-in property Container: set (the length of x) to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set (the length of x) to 1
+end t
+-- case: Built-in property Container: add 1 to (the length of x) (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to (the length of x)
+end t
+-- case: Built-in property Container: subtract 1 from (the length of x) (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from (the length of x)
+end t
+-- case: Built-in property Container: multiply (the length of x) by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply (the length of x) by 2
+end t
+-- case: Built-in property Container: divide (the length of x) by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide (the length of x) by 2
+end t
+-- case: Built-in property Container: delete (the length of x) (#670)
+-- expect: not a container at 2:10
+on t x
+  delete (the length of x)
+end t
+-- case: Built-in property Container: replace "a" in (the length of x) with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in (the length of x) with "b"
+end t
+-- case: Built-in property Container: replace first "a" in (the length of x) with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in (the length of x) with "b"
+end t
+-- case: Built-in property Container: put 1 into the length of (x) (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the length of (x)
+end t
+-- case: Built-in property Container: put 1 before the length of (x) (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the length of (x)
+end t
+-- case: Built-in property Container: put 1 after the length of (x) (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the length of (x)
+end t
+-- case: Built-in property Container: put ...[1] after the length of (x) (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the length of (x)
+end t
+-- case: Built-in property Container: put ...[1] before the length of (x) (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the length of (x)
+end t
+-- case: Built-in property Container: set the length of (x) to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the length of (x) to 1
+end t
+-- case: Built-in property Container: add 1 to the length of (x) (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the length of (x)
+end t
+-- case: Built-in property Container: subtract 1 from the length of (x) (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the length of (x)
+end t
+-- case: Built-in property Container: multiply the length of (x) by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the length of (x) by 2
+end t
+-- case: Built-in property Container: divide the length of (x) by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the length of (x) by 2
+end t
+-- case: Built-in property Container: delete the length of (x) (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the length of (x)
+end t
+-- case: Built-in property Container: replace "a" in the length of (x) with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the length of (x) with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the length of (x) with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the length of (x) with "b"
+end t
+-- case: Built-in property Container: put 1 into the foo of (x's length) (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the foo of (x's length)
+end t
+-- case: Built-in property Container: put 1 before the foo of (x's length) (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the foo of (x's length)
+end t
+-- case: Built-in property Container: put 1 after the foo of (x's length) (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the foo of (x's length)
+end t
+-- case: Built-in property Container: put ...[1] after the foo of (x's length) (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the foo of (x's length)
+end t
+-- case: Built-in property Container: put ...[1] before the foo of (x's length) (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the foo of (x's length)
+end t
+-- case: Built-in property Container: set the foo of (x's length) to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the foo of (x's length) to 1
+end t
+-- case: Built-in property Container: add 1 to the foo of (x's length) (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the foo of (x's length)
+end t
+-- case: Built-in property Container: subtract 1 from the foo of (x's length) (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the foo of (x's length)
+end t
+-- case: Built-in property Container: multiply the foo of (x's length) by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the foo of (x's length) by 2
+end t
+-- case: Built-in property Container: divide the foo of (x's length) by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the foo of (x's length) by 2
+end t
+-- case: Built-in property Container: delete the foo of (x's length) (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the foo of (x's length)
+end t
+-- case: Built-in property Container: replace "a" in the foo of (x's length) with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the foo of (x's length) with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the foo of (x's length) with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the foo of (x's length) with "b"
+end t
+-- case: Built-in property Container: put 1 into the length of the items of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the length of the items of x
+end t
+-- case: Built-in property Container: put 1 before the length of the items of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the length of the items of x
+end t
+-- case: Built-in property Container: put 1 after the length of the items of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the length of the items of x
+end t
+-- case: Built-in property Container: put ...[1] after the length of the items of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the length of the items of x
+end t
+-- case: Built-in property Container: put ...[1] before the length of the items of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the length of the items of x
+end t
+-- case: Built-in property Container: set the length of the items of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the length of the items of x to 1
+end t
+-- case: Built-in property Container: add 1 to the length of the items of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the length of the items of x
+end t
+-- case: Built-in property Container: subtract 1 from the length of the items of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the length of the items of x
+end t
+-- case: Built-in property Container: multiply the length of the items of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the length of the items of x by 2
+end t
+-- case: Built-in property Container: divide the length of the items of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the length of the items of x by 2
+end t
+-- case: Built-in property Container: delete the length of the items of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the length of the items of x
+end t
+-- case: Built-in property Container: replace "a" in the length of the items of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the length of the items of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the length of the items of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the length of the items of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: put 1 before the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: put 1 after the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: put ...[1] after the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: put ...[1] before the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: set the foo of item 1 of the items of x to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the foo of item 1 of the items of x to 1
+end t
+-- case: Built-in property Container: add 1 to the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: subtract 1 from the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: multiply the foo of item 1 of the items of x by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the foo of item 1 of the items of x by 2
+end t
+-- case: Built-in property Container: divide the foo of item 1 of the items of x by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the foo of item 1 of the items of x by 2
+end t
+-- case: Built-in property Container: delete the foo of item 1 of the items of x (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the foo of item 1 of the items of x
+end t
+-- case: Built-in property Container: replace "a" in the foo of item 1 of the items of x with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the foo of item 1 of the items of x with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the foo of item 1 of the items of x with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the foo of item 1 of the items of x with "b"
+end t
+-- case: Built-in property Container: put 1 into the items of x delimited by "," (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into the items of x delimited by ","
+end t
+-- case: Built-in property Container: put 1 before the items of x delimited by "," (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before the items of x delimited by ","
+end t
+-- case: Built-in property Container: put 1 after the items of x delimited by "," (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after the items of x delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] after the items of x delimited by "," (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after the items of x delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] before the items of x delimited by "," (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before the items of x delimited by ","
+end t
+-- case: Built-in property Container: set the items of x delimited by "," to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set the items of x delimited by "," to 1
+end t
+-- case: Built-in property Container: add 1 to the items of x delimited by "," (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to the items of x delimited by ","
+end t
+-- case: Built-in property Container: subtract 1 from the items of x delimited by "," (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from the items of x delimited by ","
+end t
+-- case: Built-in property Container: multiply the items of x delimited by "," by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply the items of x delimited by "," by 2
+end t
+-- case: Built-in property Container: divide the items of x delimited by "," by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide the items of x delimited by "," by 2
+end t
+-- case: Built-in property Container: delete the items of x delimited by "," (#670)
+-- expect: not a container at 2:10
+on t x
+  delete the items of x delimited by ","
+end t
+-- case: Built-in property Container: replace "a" in the items of x delimited by "," with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in the items of x delimited by "," with "b"
+end t
+-- case: Built-in property Container: replace first "a" in the items of x delimited by "," with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in the items of x delimited by "," with "b"
+end t
+-- case: Built-in property Container: put 1 into x's items delimited by "," (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into x's items delimited by ","
+end t
+-- case: Built-in property Container: put 1 before x's items delimited by "," (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before x's items delimited by ","
+end t
+-- case: Built-in property Container: put 1 after x's items delimited by "," (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after x's items delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] after x's items delimited by "," (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after x's items delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] before x's items delimited by "," (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before x's items delimited by ","
+end t
+-- case: Built-in property Container: set x's items delimited by "," to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set x's items delimited by "," to 1
+end t
+-- case: Built-in property Container: add 1 to x's items delimited by "," (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to x's items delimited by ","
+end t
+-- case: Built-in property Container: subtract 1 from x's items delimited by "," (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from x's items delimited by ","
+end t
+-- case: Built-in property Container: multiply x's items delimited by "," by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply x's items delimited by "," by 2
+end t
+-- case: Built-in property Container: divide x's items delimited by "," by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide x's items delimited by "," by 2
+end t
+-- case: Built-in property Container: delete x's items delimited by "," (#670)
+-- expect: not a container at 2:10
+on t x
+  delete x's items delimited by ","
+end t
+-- case: Built-in property Container: replace "a" in x's items delimited by "," with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in x's items delimited by "," with "b"
+end t
+-- case: Built-in property Container: replace first "a" in x's items delimited by "," with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in x's items delimited by "," with "b"
+end t
+-- case: Built-in property Container: put 1 into item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: put 1 before item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: put 1 after item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] after item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: put ...[1] before item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: set item 1 of the items of x delimited by "," to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set item 1 of the items of x delimited by "," to 1
+end t
+-- case: Built-in property Container: add 1 to item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: subtract 1 from item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: multiply item 1 of the items of x delimited by "," by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply item 1 of the items of x delimited by "," by 2
+end t
+-- case: Built-in property Container: divide item 1 of the items of x delimited by "," by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide item 1 of the items of x delimited by "," by 2
+end t
+-- case: Built-in property Container: delete item 1 of the items of x delimited by "," (#670)
+-- expect: not a container at 2:10
+on t x
+  delete item 1 of the items of x delimited by ","
+end t
+-- case: Built-in property Container: replace "a" in item 1 of the items of x delimited by "," with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in item 1 of the items of x delimited by "," with "b"
+end t
+-- case: Built-in property Container: replace first "a" in item 1 of the items of x delimited by "," with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in item 1 of the items of x delimited by "," with "b"
+end t
+-- case: Built-in property Container: put 1 into (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:14
+on t x
+  put 1 into (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: put 1 before (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:16
+on t x
+  put 1 before (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: put 1 after (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:15
+on t x
+  put 1 after (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: put ...[1] after (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:20
+on t x
+  put ...[1] after (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: put ...[1] before (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:21
+on t x
+  put ...[1] before (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: set (the items of x delimited by ",") to 1 (#670)
+-- expect: not a container at 2:7
+on t x
+  set (the items of x delimited by ",") to 1
+end t
+-- case: Built-in property Container: add 1 to (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:12
+on t x
+  add 1 to (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: subtract 1 from (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:19
+on t x
+  subtract 1 from (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: multiply (the items of x delimited by ",") by 2 (#670)
+-- expect: not a container at 2:12
+on t x
+  multiply (the items of x delimited by ",") by 2
+end t
+-- case: Built-in property Container: divide (the items of x delimited by ",") by 2 (#670)
+-- expect: not a container at 2:10
+on t x
+  divide (the items of x delimited by ",") by 2
+end t
+-- case: Built-in property Container: delete (the items of x delimited by ",") (#670)
+-- expect: not a container at 2:10
+on t x
+  delete (the items of x delimited by ",")
+end t
+-- case: Built-in property Container: replace "a" in (the items of x delimited by ",") with "b" (#670)
+-- expect: not a container at 2:18
+on t x
+  replace "a" in (the items of x delimited by ",") with "b"
+end t
+-- case: Built-in property Container: replace first "a" in (the items of x delimited by ",") with "b" (#670)
+-- expect: not a container at 2:24
+on t x
+  replace first "a" in (the items of x delimited by ",") with "b"
+end t

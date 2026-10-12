@@ -78,6 +78,11 @@ tree at 128 levels, so hostile source ends in `source nesting too deep`, never
 a stack overflow. Like the Go Core's limit, that code is an implementation
 limit outside the Spec's catalogue.
 
+Containers reject Built-in properties anywhere on the path to the root variable,
+including in `set`, with `not a container` at the target's first token.
+Parentheses preserve the path. Quoted/computed keys and property reads in key,
+index, delimiter and value expressions remain allowed.
+
 ## Checking
 
 `check.check` takes a parsed unit and a `Context`: whether it is a Library,
@@ -119,12 +124,6 @@ Every inlined copy of a `finally` block, and the exit after it, is cut out of
 the spans of the `try`s it leaves, so an entry split by copies becomes one
 entry per span. The Operation modes that pick `ask`, `ask-wait`, `join-ask`
 or `tell` come from the Context's Grants.
-
-A Container written through a Built-in property, such as `put 1 into the
-length of x`, still parses and is written as a key of that name. This
-placeholder diverges from chapter 2's required `not a container` syntax
-rejection; parser enforcement and its removal are tracked in
-[#673](https://github.com/odogono/odgn-talk/issues/673).
 
 ## Building and testing
 

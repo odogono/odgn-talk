@@ -8,8 +8,7 @@ import {
   syntaxText,
 } from '../src';
 
-// Port the staged reference-parser coverage without promoting shared fixtures
-// before the Zig parser conforms (#673).
+// Keep the full property/statement/path matrix beside the shared fixtures.
 const statements = [
   ['put 1 into ', ''],
   ['put 1 before ', ''],

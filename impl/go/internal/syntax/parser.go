@@ -670,6 +670,11 @@ func (p *parser) container() *Node {
 		if root.Kind == "chunk" {
 			root = root.Children[1]
 		} else if root.Kind == "key" || root.Kind == "key-computed" {
+			// Quoted and computed keys remain writable; an unquoted Built-in
+			// property is read-only at every level on the root path (ADR 0079).
+			if root.Kind == "key" && slices.Contains(generated.Grammar.Properties, root.Text) && (len(root.Params) == 0 || root.Params[0].Token.Kind != Text) {
+				panic(&Error{Code: "not a container", Pos: t.Pos})
+			}
 			root = root.Children[len(root.Children)-1]
 		} else if root.Kind == "delimited" || root.Kind == "paren" {
 			root = root.Children[0]

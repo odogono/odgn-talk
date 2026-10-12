@@ -38,6 +38,7 @@ func TestLoadDiagnostics(t *testing.T) {
 		{"on t\nexit repeat\nend", "outside a loop", 2, 1},
 		{"constant x = 1\non t\nput 2 into x\nend", "can't write", 3, 12},
 		{"on t x\nset x to 1\nend", "not a property", 2, 1},
+		{"on t x\nset (x) to 1\nend", "not a property", 2, 1},
 		{"script variable x = 1\nconstant y = x", "not constant", 2, 14},
 		{"function f a = 1, b\nend", "default order", 1, 19},
 		{"on t x\nreturn x is a number ignoring case\nend", "nothing to fold", 2, 22},

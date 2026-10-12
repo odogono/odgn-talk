@@ -1,0 +1,22 @@
+# Built-in properties are read-only throughout a Container path (ADR 0079).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "leaf"
+source = "leaf.talk"
+
+[[scripts]]
+name = "intermediate"
+source = "intermediate.talk"
+
+[[scripts]]
+name = "possessive"
+source = "possessive.talk"
+
+[[scripts]]
+name = "good"
+source = "good.talk"

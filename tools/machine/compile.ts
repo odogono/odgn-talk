@@ -1346,6 +1346,10 @@ export class BodyCompiler {
     const levels: Node[] = [];
     let e: Node = c;
     while (e.k !== 'Name') {
+      if (e.k === 'Group') {
+        e = e.e;
+        continue;
+      }
       levels.unshift(e);
       e = e.k === 'Key' || e.k === 'Property' ? e.base : e.of;
       if (!e) {
@@ -1534,11 +1538,11 @@ export class BodyCompiler {
       this.emit('store', [v]);
     };
     if (s.prep === 'into') {
-      const { levels } = this.levels(s.target);
+      const { root, levels } = this.levels(s.target);
       if (!levels.length) {
         this.expr(s.value);
         this.at(s.target);
-        this.store(s.target.name, s.target);
+        this.store(root.name, root);
         return;
       }
       this.update(s.target, () => this.emit('load', [v]), before);
@@ -1657,7 +1661,10 @@ export class BodyCompiler {
   }
 
   setStatement(s: Node) {
-    const t = s.target;
+    let t = s.target;
+    while (t.k === 'Group') {
+      t = t.e;
+    }
     if (t.k !== 'Key') {
       this.fail(t, "`set` writes a Host Object's property");
     }

@@ -664,7 +664,7 @@ const Checker = struct {
         while (true) e = switch (e.data) {
             .chunk => |ch| ch.of,
             .key => |k| k.base,
-            .property => |p| p.base,
+            .group => |g| g,
             .name => |t| {
                 if (c.rootBinds(s, c.text(t))) try c.bind(s, t, false);
                 return;
@@ -1335,10 +1335,7 @@ const Checker = struct {
                     if (k.computed) |k2| try c.expr(s, k2, .normal);
                     e = k.base;
                 },
-                .property => |p| {
-                    if (p.delimiter) |d| try c.expr(s, d, .normal);
-                    e = p.base;
-                },
+                .group => |g| e = g,
                 .name => |t| {
                     const name = c.text(t);
                     const r = try c.resolve(s, t) orelse Ref.local;
@@ -1360,6 +1357,7 @@ const Checker = struct {
     /// a property the Host says is read-only.
     fn setTarget(c: *Checker, s: *Scope, keyword: Tok, target: *const Expr) Allocator.Error!void {
         switch (target.data) {
+            .group => |g| try c.setTarget(s, keyword, g),
             .name => {
                 try c.report(.not_a_property, keyword);
                 try c.expr(s, target, .normal);
@@ -2064,6 +2062,26 @@ fn expectDiagnostics(source: []const u8, context: Context, expected: []const u8)
     const got = try diagnose(testing.allocator, source, context);
     defer testing.allocator.free(got);
     try testing.expectEqualStrings(expected, got);
+}
+
+test "property Container syntax rejection precedes load checking" {
+    try expectDiagnostics(
+        \\constant x = 1
+        \\on t
+        \\  put missing into the length of x
+        \\end t
+    , .{}, "not a container at 3:20\n");
+}
+
+test "parenthesized Containers bind and check their roots" {
+    try expectDiagnostics("on t\n  put 1 into (x)\n  return x\nend t\n", .{}, "");
+    try expectDiagnostics("constant x = 1\non t\n  put 1 into (x)\nend t\n", .{}, "can't write at 3:15\n");
+    try expectDiagnostics("on t x\n  set (x) to 1\nend t\n", .{}, "not a property at 2:3\n");
+    try expectDiagnostics(
+        "on t x\n  set (the \"length\" of (x)) to the length of x\n  delete item (x's length) of (x) delimited by (the length of x)\nend t\n",
+        .{},
+        "",
+    );
 }
 
 test "names resolve, and unknown ones are reported" {

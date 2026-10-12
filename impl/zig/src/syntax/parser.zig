@@ -779,7 +779,7 @@ const Parser = struct {
         return p.list(*Expr, &out);
     }
 
-    /// A Container: a Name, or a Chunk Expression or key path rooted in one.
+    /// A Container: only chunk and key levels on the path to a Name.
     fn container(p: *Parser) Error!*Expr {
         const t = try p.peek(.operand);
         if (!p.startsExpr(t)) return p.failAt(t);
@@ -790,7 +790,7 @@ const Parser = struct {
                 .name => break,
                 .chunk => |c| c.of,
                 .key => |k| k.base,
-                .property => |pr| pr.base,
+                .group => |g| g,
                 else => return p.failCode(.not_a_container, t.start),
             };
         }
@@ -2327,6 +2327,89 @@ test "first syntax errors" {
     try expectOutcome("constant x = `${1 2}`\n", "unexpected token at 1:19");
     try expectOutcome("put 1 into x\n", "unexpected token at 1:1");
     try expectOutcome("on t\n  put 5 s^-1 into x\nend t\n", "bad unit at 2:9");
+}
+
+test "Built-in properties are rejected at every Container path level" {
+    const statements = [_][2][]const u8{
+        .{ "put 1 into ", "" },
+        .{ "put 1 before ", "" },
+        .{ "put 1 after ", "" },
+        .{ "put ...[1] after ", "" },
+        .{ "put ...[1] before ", "" },
+        .{ "set ", " to 1" },
+        .{ "add 1 to ", "" },
+        .{ "subtract 1 from ", "" },
+        .{ "multiply ", " by 2" },
+        .{ "divide ", " by 2" },
+        .{ "delete ", "" },
+        .{ "replace \"a\" in ", " with \"b\"" },
+        .{ "replace first \"a\" in ", " with \"b\"" },
+    };
+    const paths = [_][]const u8{
+        "the {s} of x",
+        "item 1 of the {s} of x",
+        "the first item of the {s} of x",
+        "x's {s}",
+        "(the {s} of x)",
+        "the {s} of (x)",
+        "the foo of (x's {s})",
+        "the {s} of the items of x",
+        "the foo of item 1 of the {s} of x",
+    };
+    for (grammar.properties) |property| {
+        inline for (paths) |path| {
+            const target = try std.fmt.allocPrint(testing.allocator, path, .{property});
+            defer testing.allocator.free(target);
+            for (statements) |statement| {
+                const source = try std.fmt.allocPrint(testing.allocator, "on t x\n  {s}{s}{s}\nend t\n", .{ statement[0], target, statement[1] });
+                defer testing.allocator.free(source);
+                const expected = try std.fmt.allocPrint(testing.allocator, "not a container at 2:{d}", .{3 + statement[0].len});
+                defer testing.allocator.free(expected);
+                try expectOutcome(source, expected);
+            }
+        }
+    }
+    for ([_][]const u8{
+        "the items of x delimited by \",\"",
+        "x's items delimited by \",\"",
+        "item 1 of the items of x delimited by \",\"",
+        "(the items of x delimited by \",\")",
+    }) |target| {
+        for (statements) |statement| {
+            const source = try std.fmt.allocPrint(testing.allocator, "on t x\n  {s}{s}{s}\nend t\n", .{ statement[0], target, statement[1] });
+            defer testing.allocator.free(source);
+            const expected = try std.fmt.allocPrint(testing.allocator, "not a container at 2:{d}", .{3 + statement[0].len});
+            defer testing.allocator.free(expected);
+            try expectOutcome(source, expected);
+        }
+    }
+    try expectOutcome("on t x\r\n\tput \"😀\" into (the foo of (x's length))\r\nend t", "not a container at 2:15");
+}
+
+test "ordinary Container keys and auxiliary property reads parse losslessly" {
+    for ([_][]const u8{
+        "put 1 into the \"length\" of x",
+        "put 1 into the (\"length\") of x",
+        "put 1 into the (the length of x) of x",
+        "put 1 into item (the length of x) of x",
+        "put 1 into item 1 of x delimited by (the length of x)",
+        "put the length of x into x",
+        "set the \"length\" of x to 1",
+        "set the (\"length\") of x to 1",
+        "set (the \"length\" of (x)) to 1",
+        "put 1 into (the \"length\" of x)",
+        "put 1 into (x)",
+        "put 1 into item 1 of (x)",
+        "put 1 into the foo of x",
+        "put 1 into x's foo",
+        "set the (x's length) of x to the length of x",
+        "delete item (x's length) of x delimited by (the length of x)",
+        "replace (the length of x) in the foo of x with (the length of x)",
+    }) |statement| {
+        const source = try std.fmt.allocPrint(testing.allocator, "on t x\n  {s}\nend t\n", .{statement});
+        defer testing.allocator.free(source);
+        try expectOutcome(source, "parses");
+    }
 }
 
 test "deep nesting is a load error, not a stack overflow" {

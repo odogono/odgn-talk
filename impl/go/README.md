@@ -48,6 +48,11 @@ The diagnostic and bound are Go implementation limits, outside the Spec's
 shared diagnostic catalogue; the Spec does not currently set a source nesting
 bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
 
+Container parsing rejects Built-in properties anywhere on the path to the root,
+including in `set`, with `not a container` at the target's first token.
+Parentheses preserve the path. Quoted/computed keys and property reads in key,
+index, delimiter and value expressions remain allowed.
+
 ## Layout
 
 - The root package implements the available declarations of the

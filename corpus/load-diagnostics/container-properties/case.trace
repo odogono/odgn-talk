@@ -1,0 +1,18 @@
+# Unblessed: candidate output for ADR 0079 (#670, #673); first blessing awaits human review.
+# Each rejected load stops at its Container's first token; the leaf syntax
+# error takes precedence over an unknown value and a Constant root.
+> load leaf identity=bd8c08d0843b2aebeb5aa4420ba46c70eb25b333c43173038c232cb77bb51edb
+diag leaf code="not a container" pos=3:20
+> load intermediate identity=4e82e98586d6b1ba967a5441e263aa73ec7e9f79920e1429bfd64c8a7c7876b2
+diag intermediate code="not a container" pos=2:10
+> load possessive identity=79bcba5322e53bc7b2245285aba828d7b6acc7b4ee74bbc7d32183b2921cc1a0
+diag possessive code="not a container" pos=2:7
+> vars
+> load good identity=bef56ea78d529e7a68af6196596857817c81efad02d2f65adde3e7f235b48065
+> deliver d1 to=good message=go
+> pump clock=2026-10-12T09:00:00Z
+seg good/r1 start delivery=d1 handler=go clause=1 fuel=121 alloc=559 state=137 end=return
+run good/r1 outcome=completed delivery=d1 handler=go fuel=121 alloc=559
+pumped state=idle fuel=121
+> vars
+vars good result=[{length: 3}, "a;z", 3]
