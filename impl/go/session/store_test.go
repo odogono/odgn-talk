@@ -76,9 +76,11 @@ func TestSessionStoreFilesAndAtomicRefusals(t *testing.T) {
 		"array.json":  "[1]", "empty.json": `{ "": 1 }`, "object.json": `{"k":{"$object":["room","r1"]}}`,
 		"nothing.json": `{"k":null}`, "duplicate.json": `{"k":1,"k":2}`,
 		"unicode.json": `{"\ud800":1}`, "tag.json": `{"$map":7}`, "nested.json": `{"k":{"$map":[["$x",2]]}}`,
+		"decimal.json": `{"k":{"$dec":"3"}}`, "number.json": `{"k":1.0}`,
+		"unit.json": `{"k":{"$quantity":["3","days"]}}`, "map.json": `{"k":{"$map":[]}}`,
 	})
 	input(t, h, ":store load scores.json", "loaded 2 keys")
-	for _, file := range []string{"array.json", "empty.json", "object.json", "missing.json", "duplicate.json", "unicode.json"} {
+	for _, file := range []string{"array.json", "empty.json", "object.json", "missing.json", "duplicate.json", "unicode.json", "decimal.json", "number.json", "unit.json", "map.json"} {
 		input(t, h, ":store load "+file, "! bad arguments")
 	}
 	input(t, h, ":store", `"a" = [1, "two"]`, `"b" = 2.5 km`)

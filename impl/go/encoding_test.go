@@ -24,6 +24,81 @@ func TestValueEncodingRoundTrips(t *testing.T) {
 		if e != nil || !again.Equal(tt.v) || again.String() != tt.v.String() {
 			t.Fatalf("round trip %s: %s %v", tt.v, again, e)
 		}
+		reencoded, e := EncodeValue(again)
+		if e != nil || string(reencoded) != string(b) {
+			t.Fatalf("re-encoding %s: got %s %v", b, reencoded, e)
+		}
+	}
+}
+
+func TestDecodeValueRefusesNoncanonicalForms(t *testing.T) {
+	for _, s := range []string{
+		`{"$dec":"01"}`, `{"$dec":"3"}`, `{"$dec":"-9007199254740991"}`,
+		`{"$dec":"0"}`, `{"$dec":"-0.0"}`, `{"$dec":" 3.0 "}`, `{"$dec":"0x20000000000000"}`,
+		`1.0`, `-0`, `1e2`, `9007199254740992`, `-9007199254740992`,
+		`{"$quantity":["3","days"]}`, `{"$quantity":["1","m/m"]}`,
+		`{"$quantity":["01","kg"]}`,
+		`{"$instant":"1970-01-01T01:00:00+01:00"}`,
+		`{"$instant":"1970-01-01T00:00:00.500Z"}`,
+		`{"$instant":"1970-01-01T00:00:00.0Z"}`,
+		`{"$date":"2026-09-27T00:00:00.0"}`,
+		`{"$date":"2026-09-27T14:30:00.500"}`, `{"$date":" 2026-09-27 "}`,
+		`{"$map":[["a",1]]}`, `{"$map":[]}`,
+		`{"$pattern":"< \"a\" >"}`,
+	} {
+		t.Run(s, func(t *testing.T) {
+			for _, input := range []string{s, `[{"nested":` + s + `}]`} {
+				_, err := DecodeValue([]byte(input), nil)
+				var hostErr *HostError
+				if !errors.As(err, &hostErr) || hostErr.Code != InvalidValue {
+					t.Errorf("DecodeValue(%s): want invalid value, got %v", input, err)
+				}
+			}
+		})
+	}
+}
+
+func TestDecodeValueCanonicalForms(t *testing.T) {
+	for _, s := range []string{
+		`0`, `9007199254740991`, `-9007199254740991`,
+		`{"$dec":"9007199254740992"}`, `{"$dec":"-9007199254740992"}`,
+		`{"$dec":"0.00"}`, `{"$dec":"3.0"}`, `{"$dec":"-2.50"}`,
+		`{"$quantity":["3","day"]}`, `{"$quantity":["2.50","kg*m/s^2"]}`,
+		`{"$instant":"1970-01-01T00:00:00Z"}`, `{"$instant":"1970-01-01T00:00:00.5Z"}`,
+		`{"$date":"2026-09-27"}`, `{"$date":"2026-09-27T00:00:00"}`,
+		`{"$date":"2026-09-27T14:30:00.5"}`, `{"$pattern":"<\"a\">"}`,
+		`{"$bytes":"+/8="}`, `{"$range":[{"$dec":"1.0"},2]}`,
+		`{}`, `{"a":1}`, `{"$map":[["a",1],["$ref",{"$dec":"3.0"}]]}`,
+	} {
+		t.Run(s, func(t *testing.T) {
+			for _, input := range []string{s, `[{"nested":` + s + `}]`} {
+				v, err := DecodeValue([]byte(input), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				encoded, err := EncodeValue(v)
+				if err != nil || string(encoded) != input {
+					t.Fatalf("re-encoding %s: got %s %v", input, encoded, err)
+				}
+			}
+		})
+	}
+}
+
+func TestDecodeValueAllowsJSONSyntaxAndNFC(t *testing.T) {
+	for _, tt := range []struct{ input, want string }{
+		{` { "\u0024dec" : "3\u002e0" } `, `{"$dec":"3.0"}`},
+		{` [ "e\u0301", "\/\n", { "e\u0301" : 1 } ] `, "[\"é\",\"/\\u000a\",{\"é\":1}]"},
+		{` { "$pattern" : "<\"e\u0301\">" } `, `{"$pattern":"<\"é\">"}`},
+	} {
+		v, err := DecodeValue([]byte(tt.input), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := EncodeValue(v)
+		if err != nil || string(encoded) != tt.want {
+			t.Fatalf("re-encoding %s: got %s %v; want %s", tt.input, encoded, err, tt.want)
+		}
 	}
 }
 func TestDecodeRefusesMalformedInputs(t *testing.T) {

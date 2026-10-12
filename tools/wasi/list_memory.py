@@ -108,7 +108,9 @@ def exercise(host, limits, workload, item):
     started = time.monotonic()
     for pumps in range(1, 10_001):
         now += datetime.timedelta(seconds=1)
-        reply = host.send("pump", group="g", now=now.isoformat(), fuelSlice=1_000_000)
+        reply = host.send(
+            "pump", group="g", now=now.strftime("%Y-%m-%dT%H:%M:%SZ"), fuelSlice=1_000_000
+        )
         assert "ok" in reply, reply
         if any(r["kind"] == "run end" for r in reply["ok"]["reports"]):
             end = run_end(reply)
@@ -120,7 +122,7 @@ def exercise(host, limits, workload, item):
     # Fault rollback keeps the last committed Script Variable window intact.
     assert host.ok("hello", protocol=1) == hello
     host.ok("request", group="g", to={"script": "s"}, message={"name": "healthy"})
-    healthy = run_end(host.send("pump", group="g", now=now.isoformat()))
+    healthy = run_end(host.send("pump", group="g", now=now.strftime("%Y-%m-%dT%H:%M:%SZ")))
     assert healthy["outcome"] == "completed", healthy
     if workload == "local":
         assert healthy["result"] == 42, healthy

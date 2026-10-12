@@ -60,8 +60,7 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 		out.WriteString(strconv.FormatBool(v.Bool))
 	case Number:
 		n := v.Number().String()
-		integer, integerError := v.Number().Int64()
-		if plain || v.Number().Exponent() == 0 && integerError == nil && integer > -9007199254740992 && integer < 9007199254740992 {
+		if plain || jsonNumber(v.Number()) {
 			out.WriteString(n)
 		} else {
 			tag("$dec", n)
@@ -159,6 +158,14 @@ func encode(out *strings.Builder, v Value, plain bool, path []Value) error {
 	}
 	return nil
 }
+
+// jsonNumber is the Value Encoding's untagged number form: no fraction
+// digits and a magnitude strictly below 2^53.
+func jsonNumber(n decimal.Number) bool {
+	integer, err := n.Int64()
+	return n.Exponent() == 0 && err == nil && integer > -9007199254740992 && integer < 9007199254740992
+}
+
 func appendPath(path []Value, v Value) []Value {
 	next := make([]Value, len(path)+1)
 	copy(next, path)
@@ -328,9 +335,13 @@ func (r *jsonReader) value() (Value, error) {
 		for r.at < len(r.text) && strings.ContainsRune("0123456789eE.+-", rune(r.text[r.at])) {
 			r.at++
 		}
-		n, e := decimal.ParseJSON(r.text[start:r.at])
+		text := r.text[start:r.at]
+		n, e := decimal.ParseJSON(text)
 		if e != nil {
 			return Value{}, r.error()
+		}
+		if r.tagged && (n.String() != text || !jsonNumber(n)) {
+			return Value{}, fmt.Errorf("noncanonical Value Encoding number")
 		}
 		return Fields{Kind: Number, Number: n}.Value(), nil
 	}
@@ -427,6 +438,9 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if e != nil {
 			return Value{}, e
 		}
+		if n.String() != v.Text() || jsonNumber(n) {
+			return bad()
+		}
 		return Fields{Kind: Number, Number: n}.Value(), nil
 	case "$bytes":
 		if v.Kind != Text {
@@ -445,7 +459,14 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if e != nil {
 			return Value{}, e
 		}
-		return NewQuantity(n, v.Items()[1].Text())
+		q, e := NewQuantity(n, v.Items()[1].Text())
+		if e != nil {
+			return Value{}, e
+		}
+		if q.Kind != Quantity || n.String() != v.Items()[0].Text() || q.Unit().String() != v.Items()[1].Text() {
+			return bad()
+		}
+		return q, nil
 	case "$range":
 		if v.Kind != List || len(v.Items()) != 2 {
 			return bad()
@@ -455,22 +476,41 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParseCivil(v.Text())
+		d, e := ParseCivil(v.Text())
+		if e != nil {
+			return Value{}, e
+		}
+		if d.Display() != v.Text() {
+			return bad()
+		}
+		return d, nil
 	case "$instant":
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParseInstant(v.Text())
+		i, e := ParseInstant(v.Text())
+		if e != nil {
+			return Value{}, e
+		}
+		if i.Display() != v.Text() {
+			return bad()
+		}
+		return i, nil
 	case "$map":
 		if v.Kind != List {
 			return bad()
 		}
 		pairs := make([]Pair, len(v.Items()))
+		hasDollarKey := false
 		for i, item := range v.Items() {
 			if item.Kind != List || len(item.Items()) != 2 || item.Items()[0].Kind != Text {
 				return bad()
 			}
 			pairs[i] = Pair{item.Items()[0].Text(), item.Items()[1]}
+			hasDollarKey = hasDollarKey || strings.HasPrefix(pairs[i].Key, "$")
+		}
+		if !hasDollarKey {
+			return bad()
 		}
 		return NewMap(pairs)
 	case "$object":
@@ -489,7 +529,14 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		if v.Kind != Text {
 			return bad()
 		}
-		return ParsePattern(v.Text())
+		pattern, e := ParsePattern(v.Text())
+		if e != nil {
+			return Value{}, e
+		}
+		if pattern.Text() != v.Text() {
+			return bad()
+		}
+		return pattern, nil
 	}
 	return bad()
 }

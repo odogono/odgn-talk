@@ -107,6 +107,31 @@ func TestHelloNamesTheCore(t *testing.T) {
 	}
 }
 
+func TestValueInputsRefuseNoncanonicalForms(t *testing.T) {
+	h := newHost(t)
+	h.setup(`[]`, "on go n\nreturn n\nend go", "")
+	for _, s := range []string{
+		`{"$dec":"3"}`, `1.0`, `-0`, `1e2`,
+		`{"$quantity":["3","days"]}`, `{"$instant":"1970-01-01T00:00:00.500Z"}`,
+		`{"$date":"2026-09-27T00:00:00.0"}`, `{"$map":[]}`,
+	} {
+		for _, tt := range []struct{ message, fields string }{
+			{"add", `"a":` + s + `,"b":1`},
+			{"request", `"group":"g","to":{"script":"s"},"message":{"name":"go","args":[` + s + `]}`},
+		} {
+			refusal := must(t, h.send(tt.message, tt.fields), "err")
+			if refusal["kind"] != "host error" || refusal["code"] != "invalid value" {
+				t.Fatalf("%s accepted %s: %s", tt.message, s, show(refusal))
+			}
+		}
+	}
+	h.ok("request", `"group":"g","to":{"script":"s"},"message":{"name":"go","args":[{"$dec":"3.0"}]}`)
+	end := onlyReport(t, h.ok("pump", `"group":"g",`+now))
+	if show(end["result"]) != `{"$dec":"3.0"}` {
+		t.Fatal(show(end))
+	}
+}
+
 func TestImmediateOperationIsAnInterimOp(t *testing.T) {
 	h := newHost(t)
 	h.setup(`[{"name":"double","mode":"immediate","args":["number"],"result":"number","cost":{"fuel":7}}]`,
