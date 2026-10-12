@@ -1281,10 +1281,13 @@ class Parser {
       }
       const e = (yield this.chunkLevel()) as Node;
       let root: Node | undefined = e;
-      while (root && root.k !== 'Name') {
-        root = root.of ?? root.base;
+      while (
+        root &&
+        ['Chunk', 'OrdinalChunk', 'Key', 'Group'].includes(root.k)
+      ) {
+        root = root.k === 'Group' ? (root.e as Node) : (root.of ?? root.base);
       }
-      if (!root) {
+      if (!root || root.k !== 'Name') {
         throw new ParseError(
           t,
           'not a container',

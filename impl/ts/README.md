@@ -273,6 +273,8 @@ if (!parsed.error) checkSyntax(parsed.tree); // check an existing lossless tree
 
 `checkSource` parses once and returns either the first syntax error, with no semantic tree or load diagnostics, or the semantic tree and ordered diagnostics. `checkSyntax` accepts an existing `SyntaxNode` without reconstructing or reparsing source. Both are front-end APIs, not additions to the embedding interface. `ok` means the implemented semantic checks succeeded; later load checks and compilation are still required.
 
+Container parsing rejects Built-in properties anywhere on the path to the root variable, including in `set`, with `not a container` at the target's first token. Parentheses preserve that path. Quoted/computed keys and property reads in key, index, delimiter and value expressions remain allowed.
+
 On a recovered tree, `checkSyntax` treats `Error` regions as opaque and omits constructs with malformed operands or heads. Blocks keep their other statements, so parsed declarations, scopes, bindings and load diagnostics remain available to tooling. The lossless syntax tree is unchanged. These diagnostics are recovery output; `ok` only describes the retained semantic checks and does not mean the original source is valid. Consult the recovering parser's `error` as well.
 
 The typed semantic tree retains grammar productions and operator/literal tokens for later lowering, omits trivia and empty productions, and replaces declaration, binding and reference tokens with `SemanticName` nodes. Every node has a half-open UTF-16 source span and a 1-based scalar start position. Name nodes identify their role and resolved `Binding`; body nodes identify their scope. Scopes expose parameters, locals (including `it`), and Lambda captures in first-use order. Local bindings record their Nothing initialization. The input lossless tree remains unchanged. Conversion and traversal use explicit work stacks, including for deeply nested expressions.
@@ -348,7 +350,7 @@ The lowering follows chapter 8 rule by rule over the semantic tree's bindings, s
 
 `disassemble` writes chapter 8's canonical text, with LF line ends and a final newline: one space between fields, numbered `constant`, `local`, `variable` and `body` operands with their notes, display-form keys, every other operand by name, and the event table's branch format. Each instruction's position follows chapter 8's source map, including its positions for the instructions that rules emit beyond the constructs the map lists. Those rules, the `initialiser` body name, the bare `...` lowering and the release of `repeat for each`'s temp were settled in chapter 8 with this slice.
 
-Some constructs check without error but chapter 8 doesn't settle their lowering, so `compileSource` throws `LoweringError` at them: a bit field whose width isn't an integer literal, a Container rooted in a well-known object, and a Container level that is a Built-in property. A `delete` of a delimited `item` evaluates `delimited by` twice, as chapter 8's rule is written.
+Some constructs check without error but chapter 8 doesn't settle their lowering, so `compileSource` throws `LoweringError` at them: a bit field whose width isn't an integer literal and a Container rooted in a well-known object. A `delete` of a delimited `item` evaluates `delimited by` twice, as chapter 8's rule is written.
 
 ```sh
 bun test impl/ts/tests/lowering.test.ts
