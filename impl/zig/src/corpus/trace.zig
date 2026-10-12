@@ -151,9 +151,15 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
     errdefer a.free(owned_ids);
     return .{ .input = input, .name = name, .ids = owned_ids, .fields = try fields.toOwnedSlice(a) };
 }
-/// Step 1.4 supplies replay through this seam. The runner owns comparison;
-/// the backend owns Group construction, Host Inputs and Trace generation.
-pub const Replay = *const fn (a: std.mem.Allocator, setup: []const u8, trace: []const u8) anyerror![]u8;
+/// A replay backend. The runner owns comparison; the backend owns Group
+/// construction, Host Inputs and Trace generation, and says which cases it
+/// can replay.
+pub const Replay = struct {
+    /// Why the backend can't replay a case, or null when it can.
+    supports: *const fn (a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8,
+    /// Replays a case from its directory, returning the Trace written.
+    run: *const fn (gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8) anyerror![]u8,
+};
 
 test "filled input keys and values followed by Trace keys" {
     const a = std.testing.allocator;

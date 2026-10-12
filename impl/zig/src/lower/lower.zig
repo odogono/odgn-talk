@@ -83,7 +83,9 @@ pub const Event = struct { branches: []const Branch, timeout: bool };
 pub const Unit = struct {
     name: []const u8,
     library: bool,
+    /// Each constant in the display form, and what the machine holds for it.
     constants: []const []const u8,
+    values: []const Constant,
     definitions: []const []const u8,
     variables: []const []const u8,
     objects: []const []const u8,
@@ -96,12 +98,30 @@ pub const Unit = struct {
 
 pub const Mode = check.Mode;
 
+/// What a constant is to the machine: a value, or one of the constants that
+/// aren't Script values (chapter 11, In a disassembly).
+pub const Constant = union(enum) {
+    value: *model.Value,
+    /// A Built-in Constant, by name.
+    builtin: []const u8,
+    /// A map literal's keys.
+    keys: []const []const u8,
+    /// A Text Pattern's canonical source, or a template's with `(1)`, `(2)`.
+    pattern: []const u8,
+    /// A run of bit fields' widths.
+    widths: []const u32,
+};
+
 pub const Options = struct {
     /// The unit's name: its Script's or Library's.
     name: []const u8,
     /// The context the unit was checked in. Its Grants give each
     /// Operation's mode, which picks `ask`, `ask-wait` or `tell`.
     context: check.Context = .{},
+    /// What the constant pool's values are made with, so they can outlive
+    /// the lowering; the arena when null. The caller then releases each
+    /// `Constant.value` once.
+    values: ?Allocator = null,
 };
 
 /// Lowers a checked unit with no diagnostics. Everything is allocated in
@@ -137,6 +157,7 @@ const Lowerer = struct {
     options: Options,
     lines: lexer.Lines,
     constants: std.ArrayList([]const u8) = .empty,
+    values: std.ArrayList(Constant) = .empty,
     constant_index: std.StringHashMapUnmanaged(u32) = .empty,
     definitions: std.ArrayList([]const u8) = .empty,
     variables: std.ArrayList([]const u8) = .empty,
@@ -159,25 +180,63 @@ const Lowerer = struct {
         return l.tree.text(t);
     }
 
+    /// The allocator of the constant pool's values.
+    fn va(l: *Lowerer) Allocator {
+        return l.options.values orelse l.a;
+    }
+
     fn print(l: *Lowerer, comptime fmt: []const u8, args: anytype) Allocator.Error![]const u8 {
         return std.fmt.allocPrint(l.a, fmt, args);
     }
 
     /// A constant's pool index, adding it on first use. `key` tells apart
-    /// constants that display alike, such as the text `"` and `quote`.
+    /// constants that display alike, such as the text `"` and `quote`, and
+    /// its first letter says what the machine holds for it.
     fn constant(l: *Lowerer, key: []const u8, shown: []const u8) Allocator.Error!u32 {
+        return l.constantWith(key, shown, null);
+    }
+
+    fn constantWith(l: *Lowerer, key: []const u8, shown: []const u8, v: ?*model.Value) Allocator.Error!u32 {
         const entry = try l.constant_index.getOrPut(l.a, key);
         if (!entry.found_existing) {
             entry.value_ptr.* = @intCast(l.constants.items.len);
             try l.constants.append(l.a, shown);
-        }
+            try l.values.append(l.a, try l.constantValue(key, shown, v));
+        } else if (v) |x| x.release();
         return entry.value_ptr.*;
     }
 
+    fn constantValue(l: *Lowerer, key: []const u8, shown: []const u8, v: ?*model.Value) Allocator.Error!Constant {
+        const oom = error.OutOfMemory;
+        if (v) |x| return .{ .value = x };
+        if (std.mem.eql(u8, key, "nothing")) return .{ .value = model.scalar(l.va(), .nothing) catch return oom };
+        if (std.mem.eql(u8, key, "true")) return .{ .value = model.scalar(l.va(), .{ .bool = true }) catch return oom };
+        if (std.mem.eql(u8, key, "false")) return .{ .value = model.scalar(l.va(), .{ .bool = false }) catch return oom };
+        if (std.mem.eql(u8, key, "bytes")) return .{ .value = model.bytes(l.va(), "") catch return oom };
+        switch (key[0]) {
+            'n' => return .{ .value = model.scalar(l.va(), .{ .number = model.Decimal.parse(shown) catch unreachable }) catch return oom },
+            'b' => return .{ .builtin = shown },
+            'p' => return .{ .pattern = shown },
+            'k' => {
+                // A key list, written as a list of texts.
+                const list = display.parse(l.a, shown, .{}) catch return oom;
+                const keys = try l.a.alloc([]const u8, list.data.list.len);
+                for (list.data.list, keys) |item, *k| k.* = item.data.text;
+                return .{ .keys = keys };
+            },
+            'w' => {
+                var widths: std.ArrayList(u32) = .empty;
+                var it = std.mem.tokenizeAny(u8, shown, "[], ");
+                while (it.next()) |w| try widths.append(l.a, std.fmt.parseInt(u32, w, 10) catch unreachable);
+                return .{ .widths = widths.items };
+            },
+            else => unreachable,
+        }
+    }
+
     fn valueConstant(l: *Lowerer, v: *model.Value) Allocator.Error!u32 {
-        defer v.release();
         const shown = display.string(l.a, v) catch return error.OutOfMemory;
-        return l.constant(try l.print("v{s}", .{shown}), shown);
+        return l.constantWith(try l.print("v{s}", .{shown}), shown, v);
     }
 
     fn object(l: *Lowerer, name: []const u8) Allocator.Error![]const u8 {
@@ -431,6 +490,7 @@ const Lowerer = struct {
             .name = l.options.name,
             .library = l.options.context.library,
             .constants = l.constants.items,
+            .values = l.values.items,
             .definitions = l.definitions.items,
             .variables = l.variables.items,
             .objects = l.objects.items,
@@ -1886,7 +1946,7 @@ const Frame = struct {
     // ------------------------------------------------------------ expressions
 
     fn textConstant(f: *Frame, raw: []const u8) Allocator.Error!u32 {
-        const v = model.text(f.l.a, raw) catch return error.OutOfMemory;
+        const v = model.text(f.l.va(), raw) catch return error.OutOfMemory;
         return f.l.valueConstant(v);
     }
 
@@ -1902,8 +1962,8 @@ const Frame = struct {
             .number => {
                 var n = parseNumber(l, l.text(lit.value));
                 if (lit.minus != null) n = n.negate();
-                if (lit.unit) |u| return l.valueConstant(model.quantity(l.a, n, l.text(u)) catch return error.OutOfMemory);
-                return l.valueConstant(model.scalar(l.a, .{ .number = n }) catch return error.OutOfMemory);
+                if (lit.unit) |u| return l.valueConstant(model.quantity(l.va(), n, l.text(u)) catch return error.OutOfMemory);
+                return l.valueConstant(model.scalar(l.va(), .{ .number = n }) catch return error.OutOfMemory);
             },
             else => {
                 const w = l.text(lit.value);
@@ -1977,7 +2037,7 @@ const Frame = struct {
         const at = e.pos;
         switch (e.data) {
             .number => |t| try f.constAt(try f.numberConstant(try canonicalNumber(l, l.text(t))), t),
-            .quantity => |q| try f.constAt(try l.valueConstant(model.quantity(l.a, parseNumber(l, l.text(q.number)), l.text(q.unit)) catch return error.OutOfMemory), q.number),
+            .quantity => |q| try f.constAt(try l.valueConstant(model.quantity(l.va(), parseNumber(l, l.text(q.number)), l.text(q.unit)) catch return error.OutOfMemory), q.number),
             .text => |t| try f.constAt(try f.textConstant(literalText(l, t)), t),
             .template => |tm| {
                 const tok = l.tree.tokens[tm.open];

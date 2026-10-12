@@ -8,6 +8,7 @@ const builtin = @import("builtin");
 const model = @import("value.zig");
 const display = @import("display.zig");
 const encoding = @import("encoding.zig");
+const machine = @import("machine/machine.zig");
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -267,8 +268,188 @@ pub const HostErrorCode = enum(c_int) {
     state_too_large,
     effects_pending,
     effect_state_unknown,
+    load_refused,
     out_of_memory,
 };
+
+// ---------------------------------------------------------------- Groups
+
+pub const Core = struct { gpa: std.mem.Allocator };
+
+pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
+
+pub const GroupOptions = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    trace: TraceSink,
+    trace_context: ?*anyopaque,
+};
+
+pub const LoadOptions = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    source: ?[*]const u8,
+    source_len: usize,
+};
+
+pub const Message = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    args: ?[*]const *Value,
+    args_len: usize,
+};
+
+pub const GroupState = enum(c_int) { idle, sliced, stopped, rewound };
+
+pub const PumpOptions = extern struct { fuel_slice: i64, fuel_cap: i64 };
+
+pub const PumpResult = extern struct { state: GroupState, fuel_used: i64 };
+
+/// A Group and the writer its Trace goes through on its way to the sink.
+pub const Group = struct {
+    core: *Core,
+    group: machine.Group,
+    out: std.Io.Writer.Allocating,
+    sink: TraceSink,
+    context: ?*anyopaque,
+    scripts: std.ArrayList(*Script) = .empty,
+    pending: std.ArrayList(*Pending) = .empty,
+
+    /// Sends each complete Trace line to the sink.
+    fn flush(g: *Group) void {
+        const written = g.out.written();
+        var start: usize = 0;
+        while (std.mem.indexOfScalarPos(u8, written, start, '\n')) |end| {
+            if (g.sink) |sink| sink(g.context, written[start..].ptr, end - start);
+            start = end + 1;
+        }
+        const rest = written[start..];
+        std.mem.copyForwards(u8, g.out.writer.buffer[0..rest.len], rest);
+        g.out.writer.end = rest.len;
+    }
+};
+
+pub const Script = struct { group: *Group, name: []const u8 };
+
+pub const Pending = struct { group: *Group, id: u64 };
+
+export fn talk_new() ?*Core {
+    const c = allocator.create(Core) catch return null;
+    c.* = .{ .gpa = allocator };
+    return c;
+}
+
+export fn talk_core_release(c: ?*Core) void {
+    if (c) |core| allocator.destroy(core);
+}
+
+export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostErrorCode {
+    out.* = null;
+    const g = c.gpa.create(Group) catch return .out_of_memory;
+    g.* = .{ .core = c, .group = undefined, .out = .init(c.gpa), .sink = o.trace, .context = o.trace_context };
+    g.group = .init(c.gpa, if (o.trace != null) &g.out.writer else null);
+    out.* = g;
+    return .ok;
+}
+
+export fn talk_group_release(g: ?*Group) void {
+    const group = g orelse return;
+    const gpa = group.core.gpa;
+    group.group.deinit();
+    group.out.deinit();
+    for (group.scripts.items) |s| {
+        gpa.free(s.name);
+        gpa.destroy(s);
+    }
+    group.scripts.deinit(gpa);
+    for (group.pending.items) |p| gpa.destroy(p);
+    group.pending.deinit(gpa);
+    gpa.destroy(group);
+}
+
+export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorCode {
+    out.* = null;
+    defer g.flush();
+    const name = bytes(o.name, o.name_len) catch return .invalid_value;
+    const source = bytes(o.source, o.source_len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(source)) return .invalid_value;
+    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) return .name_reused;
+    const loaded = g.group.load(name, source, .{}) catch |err| return status(err);
+    switch (loaded) {
+        .refused => return .load_refused,
+        .loaded => {},
+    }
+    const s = g.core.gpa.create(Script) catch return .out_of_memory;
+    s.* = .{ .group = g, .name = g.core.gpa.dupe(u8, name) catch return .out_of_memory };
+    g.scripts.append(g.core.gpa, s) catch return .out_of_memory;
+    out.* = s;
+    return .ok;
+}
+
+/// Queues a Delivery or Request: its delivery number, or the refusal.
+fn queue(s: *Script, m: *const Message, request: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
+    const g = s.group;
+    const name = bytes(m.name, m.name_len) catch return .invalid_value;
+    const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
+    for (owned, args) |*x, v| x.* = v.retain();
+    defer g.core.gpa.free(owned);
+    const n = g.group.deliver(s.name, name, owned, request) catch {
+        for (owned) |v| v.release();
+        return .out_of_memory;
+    };
+    n_out.* = n;
+    if (id) |b| {
+        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        b.* = .{ .data = text.ptr, .len = text.len };
+    }
+    return .ok;
+}
+
+export fn talk_script_deliver(s: *Script, m: *const Message, id: ?*Buffer) HostErrorCode {
+    var n: u64 = 0;
+    return queue(s, m, false, id, &n);
+}
+
+export fn talk_script_request(s: *Script, m: *const Message, id: ?*Buffer, out: *?*Pending) HostErrorCode {
+    out.* = null;
+    var n: u64 = 0;
+    const code = queue(s, m, true, id, &n);
+    if (code != .ok) return code;
+    const p = s.group.core.gpa.create(Pending) catch return .out_of_memory;
+    p.* = .{ .group = s.group, .id = n };
+    s.group.pending.append(s.group.core.gpa, p) catch return .out_of_memory;
+    out.* = p;
+    return .ok;
+}
+
+export fn talk_pending_result(p: *const Pending, out: *?*Value) HostErrorCode {
+    if (p.group.group.results.get(p.id)) |v| {
+        out.* = v.retain();
+        return .ok;
+    }
+    return result(out, model.scalar(allocator, .nothing));
+}
+
+export fn talk_pending_release(p: ?*Pending) void {
+    _ = p;
+    // A Request's handle lives with its Group, which frees it.
+}
+
+export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+    _ = o;
+    defer g.flush();
+    const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
+    model.dates.validateInstant(clock) catch return .invalid_value;
+    g.group.pump(clock) catch |err| return status(err);
+    if (out) |r| r.* = .{ .state = .idle, .fuel_used = @intCast(g.group.pump_fuel) };
+    return .ok;
+}
+
+export fn talk_inspect(g: *Group) void {
+    g.group.vars();
+    g.flush();
+}
 
 /// Whether `E`'s tags, spelled `prefix` ++ TAG, are the enumerators of
 /// talk.h's `typedef enum name`, in order and with nothing else.
@@ -313,4 +494,33 @@ test "the Host's text is refused unless UTF-8, and normalised" {
 test "the enums match talk.h's" {
     try expectHeaderEnum(HostErrorCode, "talk_host_error_code", "TALK_");
     try expectHeaderEnum(Kind, "talk_kind", "TALK_KIND_");
+    try expectHeaderEnum(GroupState, "talk_group_state", "TALK_");
+}
+
+test "a Group loads, pumps and inspects through the exports" {
+    const core = talk_new().?;
+    defer talk_core_release(core);
+    var group: ?*Group = null;
+    const options: GroupOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &options, &group));
+    defer talk_group_release(group);
+    const source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
+    const load: LoadOptions = .{ .name = "adder", .name_len = 5, .source = source.ptr, .source_len = source.len };
+    var script: ?*Script = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_load(group.?, &load, &script));
+    var n: ?*Value = null;
+    _ = talk_int(41, &n);
+    defer talk_value_release(n);
+    const args = [_]*Value{n.?};
+    const message: Message = .{ .name = "bump", .name_len = 4, .args = &args, .args_len = 1 };
+    var pending: ?*Pending = null;
+    var id: Buffer = .{};
+    try std.testing.expectEqual(HostErrorCode.ok, talk_script_request(script.?, &message, &id, &pending));
+    talk_owned_bytes_release(&id);
+    var pumped: PumpResult = undefined;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, 1790000000, 0, null, &pumped));
+    var result_value: ?*Value = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pending_result(pending.?, &result_value));
+    defer talk_value_release(result_value);
+    try std.testing.expectEqualStrings("41!", result_value.?.data.text);
 }

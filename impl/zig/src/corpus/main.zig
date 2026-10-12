@@ -9,6 +9,7 @@ const cost_model_version = northtalk.generated.costs.costs.version;
 const schema = northtalk.generated.corpus.corpus;
 const trace = northtalk.corpus_trace;
 const model = northtalk.value;
+const talk_replay = @import("talk_replay.zig");
 const Kind = enum { trace, disassembly, transcript, encoding };
 const Metadata = struct { kind: Kind, objects: bool };
 /// What a malformed case.toml names, for its message.
@@ -106,10 +107,16 @@ fn describe(w: *std.Io.Writer, err: MetadataError, problem: Problem) !void {
 }
 /// Null when the runner can execute a case, or why it can't, in the Go
 /// runner's words.
-fn unsupported(meta: Metadata, replay: ?trace.Replay) ?[]const u8 {
+fn unsupported(case: Case, replay: ?trace.Replay) ?[]const u8 {
+    const meta = case.meta;
     return switch (meta.kind) {
         .encoding => if (meta.objects) "Host Object registration is not implemented" else null,
-        .trace => if (replay != null) null else "trace execution is not implemented",
+        .trace => blk: {
+            const r = replay orelse break :blk "trace execution is not implemented";
+            var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+            defer arena.deinit();
+            break :blk r.supports(arena.allocator(), case.setup, case.trace);
+        },
         .disassembly => null,
         inline else => |kind| @tagName(kind) ++ " execution is not implemented",
     };
@@ -188,7 +195,11 @@ fn encodingCase(init: std.process.Init, detail: *std.Io.Writer, name: []const u8
 fn traceCase(init: std.process.Init, detail: *std.Io.Writer, name: []const u8, path: []const u8, setup: []const u8, replay: trace.Replay) !usize {
     const expected = try read(init, path);
     defer init.gpa.free(expected);
-    const actual = try replay(init.gpa, setup, expected);
+    const case_dir = try std.fmt.allocPrint(init.gpa, "../../corpus/{s}", .{name});
+    defer init.gpa.free(case_dir);
+    var dir = try std.Io.Dir.cwd().openDir(init.io, case_dir, .{});
+    defer dir.close(init.io);
+    const actual = try replay.run(init.gpa, init.io, dir, setup, expected);
     defer init.gpa.free(actual);
     var want = std.mem.splitScalar(u8, expected, '\n');
     var got = std.mem.splitScalar(u8, actual, '\n');
@@ -209,7 +220,7 @@ fn nextRecord(lines: *std.mem.SplitIterator(u8, .scalar)) ?[]const u8 {
     return null;
 }
 /// One discovered case: its name under corpus/, its case.toml and metadata.
-const Case = struct { name: []const u8, setup: []u8, meta: Metadata };
+const Case = struct { name: []const u8, setup: []u8, meta: Metadata, trace: []u8 = &.{} };
 const Runner = struct {
     init: std.process.Init,
     out: *std.Io.Writer,
@@ -302,7 +313,10 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     }
     var cases: std.ArrayList(Case) = .empty;
     defer {
-        for (cases.items) |case| gpa.free(case.setup);
+        for (cases.items) |case| {
+            gpa.free(case.setup);
+            gpa.free(case.trace);
+        }
         cases.deinit(gpa);
     }
     for (names.items) |name| {
@@ -317,14 +331,19 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
             try e.writeByte('\n');
             return 1;
         };
-        cases.append(gpa, .{ .name = name, .setup = setup, .meta = meta }) catch |err| {
+        const trace_text: []u8 = if (meta.kind == .trace) blk: {
+            const trace_path = try std.fmt.allocPrint(gpa, "../../corpus/{s}/case.trace", .{name});
+            defer gpa.free(trace_path);
+            break :blk read(init, trace_path) catch try gpa.alloc(u8, 0);
+        } else try gpa.alloc(u8, 0);
+        cases.append(gpa, .{ .name = name, .setup = setup, .meta = meta, .trace = trace_text }) catch |err| {
             gpa.free(setup);
             return err;
         };
     }
     if (list_only) {
         for (cases.items) |case| {
-            if (unsupported(case.meta, replay)) |reason| {
+            if (unsupported(case, replay)) |reason| {
                 try w.print("{s} ({t}; deferred: {s})\n", .{ case.name, case.meta.kind, reason });
             } else try w.print("{s} ({t}; supported)\n", .{ case.name, case.meta.kind });
         }
@@ -334,7 +353,7 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     if (check) return checkPassing(runner, cases.items, e);
     var failures: usize = 0;
     for (cases.items) |case| {
-        if (unsupported(case.meta, replay)) |reason| {
+        if (unsupported(case, replay)) |reason| {
             try w.print("SKIP {s} ({s})\n", .{ case.name, reason });
             if (paths.items.len > 0) failures += 1;
             continue;
@@ -352,7 +371,8 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
 }
 /// The CI gate, over the whole corpus. Every listed case must pass, and a
 /// listed case that no longer exists fails. Unlike the Go gate, a case the
-/// Zig Core can't run yet is skipped unless it is listed.
+/// Zig Core can't run yet, or doesn't pass yet, is reported and skipped
+/// unless it is listed.
 fn checkPassing(runner: Runner, cases: []const Case, e: *std.Io.Writer) !u8 {
     const gpa = runner.init.gpa;
     const w = runner.out;
@@ -372,18 +392,28 @@ fn checkPassing(runner: Runner, cases: []const Case, e: *std.Io.Writer) !u8 {
     var failed = false;
     for (cases) |case| {
         const must = required.swapRemove(case.name);
-        if (unsupported(case.meta, runner.replay)) |reason| {
+        if (unsupported(case, runner.replay)) |reason| {
             if (must) {
                 try w.print("FAIL {s} ({s})\n", .{ case.name, reason });
                 failed = true;
             } else try w.print("SKIP {s} ({s})\n", .{ case.name, reason });
             continue;
         }
-        if (try runner.execute(case)) |n| {
-            if (must) {
+        if (must) {
+            if (try runner.execute(case)) |n| {
                 try w.print("PASS {s} ({d} lines)\n", .{ case.name, n });
-            } else try w.print("NEW PASS {s} ({d} lines; add to corpus-passing.txt)\n", .{ case.name, n });
-        } else failed = true;
+            } else failed = true;
+            continue;
+        }
+        // An unlisted case is reported, never failed: the Zig Core's
+        // machine grows case by case.
+        var quiet: std.Io.Writer.Allocating = .init(runner.init.gpa);
+        defer quiet.deinit();
+        var unlisted = runner;
+        unlisted.out = &quiet.writer;
+        if (try unlisted.execute(case)) |n| {
+            try w.print("NEW PASS {s} ({d} lines; add to corpus-passing.txt)\n", .{ case.name, n });
+        } else try w.print("SKIP {s} (not passing yet)\n", .{case.name});
     }
     for (required.keys()) |name| {
         try w.print("FAIL {s} (listed case does not exist)\n", .{name});
@@ -397,7 +427,7 @@ fn checkPassing(runner: Runner, cases: []const Case, e: *std.Io.Writer) !u8 {
     return 0;
 }
 pub fn main(init: std.process.Init) !u8 {
-    return run(init, null);
+    return run(init, .{ .supports = talk_replay.supports, .run = talk_replay.replay });
 }
 
 test "metadata for every case kind and selectors" {
@@ -415,7 +445,7 @@ test "case.toml tables and keys are held to the setup catalogue for their kind" 
     var problem: Problem = .{};
     const objects = try metadata("kind = \"encoding\"\n" ++ versions ++ "[[objects]]\nkind = \"item\"\nid = \"a\"\n", &problem);
     try std.testing.expect(objects.objects);
-    try std.testing.expectEqualStrings("Host Object registration is not implemented", unsupported(objects, null).?);
+    try std.testing.expectEqualStrings("Host Object registration is not implemented", unsupported(.{ .name = "x", .setup = @constCast(""), .meta = objects }, null).?);
     try std.testing.expectError(error.UnexpectedKey, metadata("kind = \"encoding\"\n" ++ versions ++ "[[objects]]\nprops = {}\n", &problem));
     try std.testing.expectEqualStrings("props", problem.key);
     try std.testing.expectEqual(Kind.encoding, problem.kind);
