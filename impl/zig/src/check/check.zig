@@ -160,6 +160,8 @@ pub const Body = struct {
     /// The body's locals other than its parameters, in the order their first
     /// binding sites appear.
     locals: []const []const u8,
+    /// Each local's first binding site, parallel to `locals`.
+    binding: []const Tok = &.{},
     /// A Lambda's captures, in the order its code first names them.
     captures: []const []const u8,
     may_suspend: bool,
@@ -248,8 +250,8 @@ fn builtin(name: []const u8) ?struct { index: u32, constant: bool } {
 
 /// A stdlib or Group Library's exports, with each stdlib function's arity
 /// read from its `call` in stdlib.toml.
-fn libraryExport(c: *Checker, library: []const u8, name: []const u8) ?Export {
-    for (c.context.libraries) |l| {
+pub fn libraryExport(context: Context, library: []const u8, name: []const u8) ?Export {
+    for (context.libraries) |l| {
         if (!std.mem.eql(u8, l.name, library)) continue;
         for (l.exports) |e| if (std.mem.eql(u8, e.name, name)) return e;
         return null;
@@ -272,8 +274,8 @@ fn libraryExport(c: *Checker, library: []const u8, name: []const u8) ?Export {
     return null;
 }
 
-fn hasLibrary(c: *Checker, library: []const u8) bool {
-    for (c.context.libraries) |l| if (std.mem.eql(u8, l.name, library)) return true;
+pub fn hasLibrary(context: Context, library: []const u8) bool {
+    for (context.libraries) |l| if (std.mem.eql(u8, l.name, library)) return true;
     return among(library, stdlib.libraries);
 }
 
@@ -319,6 +321,7 @@ const Scope = struct {
     /// Locals by name: parameters and binding sites.
     locals: std.StringHashMapUnmanaged(void) = .empty,
     order: std.ArrayList([]const u8) = .empty,
+    order_tokens: std.ArrayList(Tok) = .empty,
     /// The names a binding site in this body binds through a pattern, as
     /// opposed to a Container root: a Lambda's own locals.
     captures: std.ArrayList([]const u8) = .empty,
@@ -442,11 +445,11 @@ const Checker = struct {
                 },
                 .use => |u| {
                     const library = c.text(u.library);
-                    const known = hasLibrary(c, library);
+                    const known = hasLibrary(c.context, library);
                     if (!known) try c.report(.unknown_import, u.library);
                     for (u.names) |n| {
                         const name = c.text(n);
-                        const ex = if (known) libraryExport(c, library, name) else null;
+                        const ex = if (known) libraryExport(c.context, library, name) else null;
                         if (known and ex == null) try c.report(.unknown_import, n);
                         const local = if (u.rename) |r| r else n;
                         const entry = try c.imports.getOrPut(c.a, c.text(local));
@@ -529,6 +532,7 @@ const Checker = struct {
     fn finishBody(c: *Checker, s: *Scope) Allocator.Error!void {
         const b = &c.bodies.items[s.body];
         b.locals = s.order.items;
+        b.binding = s.order_tokens.items;
         b.captures = s.captures.items;
         try c.scopes.append(c.a, s);
     }
@@ -625,7 +629,10 @@ const Checker = struct {
         if (c.functions.get(name)) |f| try c.report(.name_clash, later(t, c.tree.declarations[f.decl].data.function.name));
         if (c.imports.get(name)) |im| try c.report(.name_clash, later(t, im.name));
         const entry = try s.locals.getOrPut(c.a, name);
-        if (!entry.found_existing) try s.order.append(c.a, name);
+        if (!entry.found_existing) {
+            try s.order.append(c.a, name);
+            try s.order_tokens.append(c.a, t);
+        }
     }
 
     fn laterThanDeclaration(c: *Checker, t: Tok, name: []const u8) Tok {
@@ -1177,6 +1184,13 @@ const Checker = struct {
         }
         if (std.mem.eql(u8, sel, "say")) {
             // `say x` is `tell console to write x`.
+            if (c.context.grants != null) {
+                const console = c.grant("console");
+                const write = if (console) |g| for (g.operations) |o| {
+                    if (std.mem.eql(u8, o.name, "write")) break true;
+                } else false else false;
+                if (!write) try c.report(.unknown_operation, cmd.name);
+            }
             if (cmd.args.len != 1) try c.report(.wrong_argument_count, cmd.name);
             if (waits) try c.report(.needless_and_wait, cmd.name);
             return;
@@ -1204,9 +1218,10 @@ const Checker = struct {
     }
 
     fn grantTarget(c: *Checker, s: *Scope, e: *const Expr) Allocator.Error!void {
-        // The name after `ask` or `tell` is a Grant, not a value.
-        if (e.data == .name) return;
-        try c.expr(s, e, .normal);
+        _ = s;
+        // The name after `ask` or `tell` is a Grant, not a value, and nothing
+        // else names one.
+        if (e.data != .name) try c.report(.unknown_operation, e.pos);
     }
 
     fn grant(c: *Checker, name: []const u8) ?Grant {
@@ -1216,6 +1231,7 @@ const Checker = struct {
     }
 
     fn lineSuspends(c: *Checker, op: ast.Operation) bool {
+        if (op.target != null and op.target.?.data != .name) return true;
         const target = op.target orelse return true;
         if (target.data != .name) return true;
         const g = c.grant(c.text(target.data.name)) orelse return true;
@@ -2123,59 +2139,9 @@ test "Capability calls against the Script's Grants" {
         \\  tell feed to log 1, 2
         \\  ask other to x
         \\  ask feed to absent
+        \\  say 1
         \\end t
-    , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\n");
-}
-
-/// One unit of a corpus case: a Script or a Library, its source file and its
-/// well-known objects, read from case.toml's `[[scripts]]` and
-/// `[[libraries]]` tables.
-const CaseUnit = struct {
-    name: []const u8,
-    source: []const u8,
-    library: bool,
-    objects: []const Object,
-};
-
-fn quoted(line: []const u8, key: []const u8) ?[]const u8 {
-    const prefix_end = std.mem.indexOf(u8, line, " = \"") orelse return null;
-    if (!std.mem.eql(u8, std.mem.trim(u8, line[0..prefix_end], " "), key)) return null;
-    const rest = line[prefix_end + 4 ..];
-    return rest[0..std.mem.indexOfScalar(u8, rest, '"').?];
-}
-
-fn caseUnits(a: Allocator, toml: []const u8) ![]const CaseUnit {
-    var units: std.ArrayList(CaseUnit) = .empty;
-    var current: ?*CaseUnit = null;
-    var lines = std.mem.splitScalar(u8, toml, '\n');
-    while (lines.next()) |line| {
-        if (std.mem.startsWith(u8, line, "[")) {
-            current = null;
-            const library = std.mem.eql(u8, line, "[[libraries]]");
-            if (library or std.mem.eql(u8, line, "[[scripts]]")) {
-                try units.append(a, .{ .name = "", .source = "", .library = library, .objects = &.{} });
-                current = &units.items[units.items.len - 1];
-            }
-            continue;
-        }
-        const u = current orelse continue;
-        if (quoted(line, "name")) |v| u.name = v;
-        if (quoted(line, "source")) |v| u.source = v;
-        if (std.mem.startsWith(u8, line, "objects = {")) {
-            var objects: std.ArrayList(Object) = .empty;
-            var rest = line["objects = {".len..];
-            while (std.mem.indexOf(u8, rest, " = { kind = \"")) |i| {
-                var j = i;
-                while (j > 0 and lexer.isWordChar(rest[j - 1])) j -= 1;
-                const after = rest[i + " = { kind = \"".len ..];
-                const end = std.mem.indexOfScalar(u8, after, '"').?;
-                try objects.append(a, .{ .name = rest[j..i], .kind = after[0..end] });
-                rest = after[end..];
-            }
-            u.objects = objects.items;
-        }
-    }
-    return units.items;
+    , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
 }
 
 /// The diagnostics a case's Trace expects of one unit, as `diagnose` writes
@@ -2229,19 +2195,19 @@ test "every corpus unit gives the diagnostics its case expects" {
     var units: usize = 0;
     while (try walker.next(io)) |entry| if (entry.kind == .file and std.mem.eql(u8, entry.basename, "case.toml")) {
         const case = std.fs.path.dirname(entry.path) orelse continue;
-        // Cases whose diagnostics need a Grant's Operations, a Text Pattern
-        // program, a run, or a Library replaced at Reload: the runner's.
+        // Cases whose diagnostics need an Operation's Shapes, a Text Pattern
+        // program, a run, a Library's calls held to its importer's Grants, or
+        // a Grant revoked before a Reload: the runner's.
         if (among(case, &.{
-            "load-diagnostics/object-properties",  "load-diagnostics/not-in-a-join-try",       "load-diagnostics/needless-and-wait",
-            "load-diagnostics/pattern-too-large",  "load-diagnostics/initialiser-failed",      "tell-block/load-checks",
-            "tell-block/library",                  "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",
-            "capabilities/revoke-in-flight",       "capabilities/standard-store-watch-counts", "capabilities/load-checks",
-            "capabilities/effect-replace-library", "libraries/caller-capabilities",            "libraries/needs-transitive",
-            "reload/replacement-transitive",       "examples/tenants-globex",
+            "load-diagnostics/object-properties",       "load-diagnostics/pattern-too-large", "load-diagnostics/initialiser-failed",
+            "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",   "capabilities/effect-replace-library",
+            "capabilities/load-checks",                 "capabilities/revoke-in-flight",      "libraries/caller-capabilities",
+            "libraries/needs-transitive",               "reload/replacement-transitive",      "tell-block/library",
+            "examples/tenants-globex",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";
-        const all = try caseUnits(a, toml);
+        const all = (try @import("../corpus/case.zig").read(a, toml)).units;
         // Libraries first, until each sees the exports of those it imports.
         var libraries: std.ArrayList(Library) = .empty;
         for (all) |u| if (u.library) try libraries.append(a, .{ .name = u.name, .exports = &.{} });
@@ -2258,7 +2224,7 @@ test "every corpus unit gives the diagnostics its case expects" {
         for (all) |u| {
             if (u.source.len == 0) continue;
             const source = try dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/{s}", .{ case, u.source }), a, .unlimited);
-            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .libraries = libraries.items }, null);
+            const got = try checkUnit(a, source, .{ .library = u.library, .objects = u.objects, .grants = if (u.library) null else u.grants, .libraries = libraries.items }, null);
             const expected = try expectedDiagnostics(a, trace, u.name);
             units += 1;
             if (!std.mem.eql(u8, got, expected)) {
