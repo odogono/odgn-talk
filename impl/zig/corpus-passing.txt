@@ -55,6 +55,8 @@ dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
 decisions/allow-at-the-first-suspension-point
+decisions/broadcast-decision-reports-every-veto
+decisions/broadcast-outcomes
 decisions/dispatch-and-waits
 decisions/pass-up-the-message-path
 decisions/undecided-on-an-error
@@ -76,6 +78,7 @@ disassembly/whose
 errors/fail-error-map
 errors/items-delimiter
 errors/queued-error-before-parked-run
+fallback/exclusions
 fallback/forwarding
 fallback/message-path
 fallback/no-match
@@ -152,6 +155,7 @@ stdlib/errors-name-the-call
 stdlib/lookup
 stdlib/template-migration
 suspension/answers
+suspension/argument-labels
 suspension/joins
 suspension/late-failure
 suspension/script-joins

@@ -714,6 +714,15 @@ talk_host_error_code talk_request(talk_group *g, talk_object *to, const talk_mes
  * `, deciding` clause it reaches holds its Verdict until the end of that
  * Run's first Segment. */
 talk_host_error_code talk_decide(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
+/* A Broadcast reaches only the Scripts that want the message when the queue
+ * is drained: those with a Handler for it, or a `wait for` pending on it.
+ * Each recipient gets its own delivery id under the broadcast id, such as
+ * "b1", which id receives. A Broadcast never climbs and never reaches a
+ * Fallback. */
+talk_host_error_code talk_broadcast(talk_group *g, const talk_message *m, talk_owned_bytes *id);
+/* A Broadcast Decision: *out settles once every recipient has sealed, and
+ * at once when there are none. */
+talk_host_error_code talk_decide_broadcast(talk_group *g, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
 
 /* Libraries (ADR 0020). A Library is compiled once per process and lives
  * as long as the Core. The stdlib Libraries are always there. */

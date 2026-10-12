@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "answer", "fail", "set-parent", "dispose", "add-library" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -758,6 +758,25 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             else
                 c.talk_script_request(to, &m, null, &pending);
             // A refusal at the call is in the Trace, as a `refused` record.
+            if (code != c.TALK_INVALID_VALUE) try check(code);
+        } else if (std.mem.eql(u8, name, "broadcast") or std.mem.eql(u8, name, "decide-broadcast")) {
+            // The Core writes the recipients, when the queue is drained.
+            const message = field(input, "message").?;
+            var args: std.ArrayList(?*c.talk_value) = .empty;
+            defer for (args.items) |v| c.talk_value_release(v);
+            if (field(input, "args")) |shown| {
+                var list: ?*c.talk_value = null;
+                try check(c.talk_parse_display(shown.ptr, shown.len, &list));
+                defer c.talk_value_release(list);
+                for (0..c.talk_value_len(list)) |i| {
+                    var item: ?*c.talk_value = null;
+                    try check(c.talk_value_index(list, i + 1, &item));
+                    try args.append(a, item);
+                }
+            }
+            const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len };
+            var deciding: ?*c.talk_deciding = null;
+            const code = if (std.mem.eql(u8, name, "broadcast")) c.talk_broadcast(group, &m, null) else c.talk_decide_broadcast(group, &m, null, &deciding);
             if (code != c.TALK_INVALID_VALUE) try check(code);
         } else if (std.mem.eql(u8, name, "pump")) {
             const clock = field(input, "clock").?;
