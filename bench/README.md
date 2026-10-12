@@ -30,6 +30,9 @@ three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/i
 The [Go Save and Restore optimization measurements](results/2026-10-10-go-save-restore.md)
 record before/after timings and allocations for [#504](https://github.com/odogono/odgn-talk/issues/504).
 
+The [TS packed Unicode tables measurements](results/2026-10-12-ts-unicode-tables.md)
+record three paired before/after runs for [#399](https://github.com/odogono/odgn-talk/issues/399).
+
 ## Workloads
 
 The categories are `core`, `numbers`, `text`, `collections`, `messaging`, `host`, `lifecycle` and `macro`.
