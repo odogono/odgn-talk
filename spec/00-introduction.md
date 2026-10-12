@@ -60,7 +60,7 @@ Language `1.0-rc.2` breaks compatibility with earlier prereleases: reusable text
 
 ## Generated regions
 
-A region written as `<!-- generated: name -->` … `<!-- end -->` is filled from the Data Files, or from [`CONTEXT.md`](../CONTEXT.md) for Appendix A, so it is never edited by hand. The generator lives in [`tools/spec/`](../tools/spec/generate.ts).
+A region written as `<!-- generated: name -->` … `<!-- end -->` is filled from the Data Files, or from [`GLOSSARY.md`](../GLOSSARY.md) for Appendix A, so it is never edited by hand. The generator lives in [`tools/spec/`](../tools/spec/generate.ts).
 
 - `bun run spec:gen` validates each Data File against its schema in [`spec/data/schema/`](data/schema/), runs the checks between Data Files, checks every relative link and literal `bun run` script reference in the repo's Markdown files, and rewrites every region.
 - `bun run spec:check` runs the same checks, and fails if any region is out of date instead of rewriting it. CI runs it on every pull request.

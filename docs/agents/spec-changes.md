@@ -13,7 +13,8 @@ the [build guide](../../impl/go/README.md#build-and-test).
 | Errors, diagnostics, limits, units or Built-ins | `bun run spec:gen`, `bun run syntax:generate`, `bun run go:generate` | Check the relevant Core behavior, error fields and resource costs; changing generated catalogues does not implement a new behavior. |
 | Normative Standard Library source (`spec/stdlib/`) | `bun run syntax:generate`, `bun run go:generate`; also `bun run spec:gen` if catalogue declarations changed | Run affected Library cases on both Cores and check errors, positions and costs. |
 | Unicode pins (`unicode.toml`) | `bun run spec:gen`, `bun run unicode:generate` | The generator verifies pinned downloads and writes both Cores' tables. Run both Unicode suites with the verified cache. |
-| Embedding declarations, Trace or Session formats | `bun run spec:gen`; `bun run go:generate` when `corpus.toml` changes | Check API comparisons, both replay backends and affected Session/Trace cases. Follow the [Data File index](../../spec/README.md#data-files) for the normative source. |
+| Embedding declarations, Trace or Session formats | `bun run spec:gen`; `bun run go:generate` when `corpus.toml` changes; `bun run lints:generate` when `session.toml` changes | Check API comparisons, both replay backends and affected Session/Trace cases. Follow the [Data File index](../../spec/README.md#data-files) for the normative source. |
+| Host error codes (`host-errors.toml`) | `bun run spec:gen` | The code unions are written by hand: add the code to `HostErrorCode` in [talk.ts](../../spec/embedding/talk.ts) and [talk.go](../../spec/embedding/talk.go), then to [errors.ts](../../impl/ts/src/errors.ts) and [core.go](../../impl/go/core.go). |
 
 Read the corresponding [TS/tooling](../../impl/ts/NAVIGATION.md) and
 [Go](../../impl/go/NAVIGATION.md) rows for implementation files and focused tests.

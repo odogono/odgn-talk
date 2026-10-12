@@ -1,6 +1,6 @@
 # Appendix A: Glossary
 
-> **Note.** This appendix is informative, and generated from [`CONTEXT.md`](../CONTEXT.md), which is its source. Edit `CONTEXT.md`, then run `bun run spec:gen`. The chapters hold the rules, and a term here only says what the chapters mean by it.
+> **Note.** This appendix is informative, and generated from [`GLOSSARY.md`](../GLOSSARY.md), which is its source. Edit `GLOSSARY.md`, then run `bun run spec:gen`. The chapters hold the rules, and a term here only says what the chapters mean by it.
 
 <!-- generated: glossary -->
 

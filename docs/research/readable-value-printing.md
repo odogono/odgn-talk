@@ -267,7 +267,7 @@ Hosts and re-blessed Transcripts. Defer it until the tooling form has been used.
 
 ## Proposed contract
 
-**Name:** source form. If adopted, add it to `CONTEXT.md`: "The display form with
+**Name:** source form. If adopted, add it to `GLOSSARY.md`: "The display form with
 the substitutions that make it valid source. Tooling uses it, and nothing about
 it is normative." _Avoid_: repr, readable form, literal form.
 
