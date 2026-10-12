@@ -74,9 +74,15 @@ export class Worker {
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', chunk => {
+      if (this.child !== child) {
+        return;
+      }
       this.stderr = (this.stderr + chunk).slice(-65_536);
     });
     child.stdout.on('data', chunk => {
+      if (this.child !== child) {
+        return;
+      }
       this.buffer += chunk;
       if (Buffer.byteLength(this.buffer) > 8 * 1024 * 1024) {
         this.fail(new Error('Worker output limit'));
