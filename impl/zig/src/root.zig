@@ -52,6 +52,7 @@ test {
     _ = @import("machine/binary.zig");
     _ = @import("machine/convert.zig");
     _ = @import("machine/matcher.zig");
+    _ = @import("machine/capabilities.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;
     _ = corpus_case;

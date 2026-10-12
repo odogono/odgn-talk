@@ -199,9 +199,22 @@ compiles it and runs the program, counting `steps` by the Running rules: the
 threads in the list at each position. `make-pattern` splices values into a
 template and writes the result's canonical source. A text needle, or a Bytes
 needle in Bytes, runs as a literal program. A pattern's logical size compiles
-it to count its program. Lambdas, waits, messages between Scripts and
-Capabilities come next. A Run past the default Fuel per Run ends in a minimal
-`fault` until step 4 brings limits, including the Text Pattern size limit.
+it to count its program.
+
+A Host defines Capabilities and Grants through `talk.h`
+([capabilities](src/machine/capabilities.zig)), and binds Grants at Load, by
+the name the Script uses. `ask` and `tell` call immediate and fire-and-forget
+Operations: each argument is checked against its Shape first, with nothing
+charged for a mismatch, then the declared cost and any `Charge` are charged,
+the Host function runs, and its result is checked against the result Shape.
+A `Fail` raises its code with its Data as fields, unless it misuses a
+catalogue code, a reserved key or an undeclared code, which the Script sees
+as `host error`, with a `call-failed` record. The loader checks each literal
+argument's kind against its Shape. The corpus runner answers calls from
+`stub` lines. Suspending Operations, Standard Capabilities, Capability Scopes
+and Segment-bound effects, Lambdas, waits and messages between Scripts come
+next. A Run past the default Fuel per Run ends in a minimal `fault` until
+step 4 brings limits, including the Text Pattern size limit.
 
 ## Values and ownership
 
