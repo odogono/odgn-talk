@@ -171,6 +171,7 @@ fallback/forwarding
 fallback/message-path
 fallback/no-match
 fallback/policies
+functions/capability-callbacks
 functions/foreign-calls
 functions/host-calls
 functions/host-cancellation

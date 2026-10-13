@@ -829,9 +829,173 @@ typedef struct talk_pump_options {
     int64_t fuel_cap;   /* 0: no cap */
 } talk_pump_options;
 
+/* C only: an id the Group holds. */
+typedef struct talk_id { const char *data; size_t len; } talk_id;
+
+/* Where a Run raised its error or faulted. */
+typedef struct talk_location {
+    const char *unit; /* Script or Library */
+    size_t unit_len;
+    int64_t line;
+    int64_t col;
+    const char *handler;
+    size_t handler_len;
+    int64_t pc; /* instruction index (ADR 0010) */
+} talk_location;
+
+/* How a cancelled Run's cleanup failed: an error's code, or a limit. */
+typedef struct talk_cleanup_failure {
+    const char *code; /* empty when a limit ended cleanup */
+    size_t code_len;
+    const char *limit; /* "cleanup", "alloc", "persistent", "depth", "pattern", "join", or empty for an error */
+    size_t limit_len;
+} talk_cleanup_failure;
+
+/* A lifecycle failure, reported without raising a Script error. */
+typedef struct talk_effect_failure {
+    const char *script;
+    size_t script_len;
+    const char *run;
+    size_t run_len;
+    const char *grant;
+    size_t grant_len;
+    const char *segment;
+    size_t segment_len;
+    const char *phase; /* "abandon", "begin", "commit" or "rollback" */
+    size_t phase_len;
+    talk_effect_status status; /* failed or unknown */
+    const char *scope; /* abandonment only; empty otherwise */
+    size_t scope_len;
+    const char *detail; /* Host-only; outside parity */
+    size_t detail_len;
+} talk_effect_failure;
+
+typedef struct talk_run_end {
+    const char *script;
+    size_t script_len;
+    const char *run; /* empty for a Delivery cancelled before it started */
+    size_t run_len;
+    const char *delivery; /* empty for a Run started by another Script's send */
+    size_t delivery_len;
+    const char *broadcast; /* empty unless the Delivery was a Broadcast's */
+    size_t broadcast_len;
+    const char *handler;
+    size_t handler_len;
+    bool fallback; /* a Fallback Handler clause ran it; handler is then the message's Selector */
+    talk_outcome outcome;
+    const talk_effect_failure *effect; /* TALK_EFFECT_FAILURE_OUTCOME; NULL otherwise */
+    const talk_cleanup_failure *cleanup_failed; /* TALK_CANCELLED, only when its cleanup failed */
+    talk_value *result; /* TALK_COMPLETED; borrowed */
+    const talk_script_error *error; /* TALK_ERRORED; its data is the error map, borrowed */
+    const char *limit; /* TALK_LIMIT_FAULT: "fuel", "alloc", "persistent", "depth", "pattern", "join" */
+    size_t limit_len;
+    talk_location at;
+    int64_t fuel;
+    int64_t alloc;
+} talk_run_end;
+
+typedef struct talk_stop {
+    const char *script;
+    size_t script_len;
+    const char *reason; /* the Host's reason, or "owner disposed" */
+    size_t reason_len;
+    const talk_id *discarded_runs;
+    size_t discarded_runs_len;
+    const talk_id *dropped_messages;
+    size_t dropped_messages_len;
+    const talk_id *pending_calls; /* abandoned */
+    size_t pending_calls_len;
+} talk_stop;
+
+/* A message that reached the end of its Message Path, or a Delivery to an
+ * object with no Owning Script on its path. A Broadcast is never reported
+ * as unhandled. */
+typedef struct talk_unhandled {
+    const char *delivery; /* empty for a message a Run sent */
+    size_t delivery_len;
+    const char *message;
+    size_t message_len;
+    talk_value *const *args; /* borrowed */
+    size_t args_len;
+    talk_object *target; /* NULL for a message addressed to a Script */
+} talk_unhandled;
+
+typedef struct talk_operation_ref {
+    const char *capability;
+    size_t capability_len;
+    const char *operation;
+    size_t operation_len;
+} talk_operation_ref;
+
+/* The Host-side detail of a call the Script saw as `host error`. */
+typedef struct talk_call_failed {
+    const char *script;
+    size_t script_len;
+    const char *call;
+    size_t call_len;
+    talk_operation_ref operation;
+    const char *detail;
+    size_t detail_len;
+} talk_call_failed;
+
+/* A queued Host Input a Pump refused as it drained it. */
+typedef struct talk_host_error {
+    talk_host_error_code code;
+    const char *detail; /* wording: not covered by parity */
+    size_t detail_len;
+} talk_host_error;
+
+/* C only: which of talk.go's Report types a talk_report holds. */
+typedef enum talk_report_kind {
+    /* C only */
+    TALK_REPORT_RUN_END,
+    /* C only */
+    TALK_REPORT_STOP,
+    /* C only */
+    TALK_REPORT_UNHANDLED,
+    /* C only */
+    TALK_REPORT_CALL_FAILED,
+    /* C only */
+    TALK_REPORT_EFFECT_FAILURE,
+    /* C only */
+    TALK_REPORT_DECIDED,
+    /* C only */
+    TALK_REPORT_HOST_ERROR
+} talk_report_kind;
+
+/* One report, in the order they happened (ADR 0015). Every pointer in it
+ * borrows from the talk_reports that holds it. */
+typedef struct talk_report {
+    talk_report_kind kind;
+    union {
+        talk_run_end run_end;
+        talk_stop stop;
+        talk_unhandled unhandled;
+        talk_call_failed call_failed;
+        talk_effect_failure effect_failure;
+        talk_decided decided;
+        talk_host_error host_error;
+    } as;
+} talk_report;
+
+/* C only: the reports a worker call returns, which the caller owns and ends
+ * with talk_reports_release, before its Group's. */
+typedef struct talk_reports talk_reports;
+
+/* C only: the reports, borrowed from r. r may be NULL, which holds none. */
+size_t talk_reports_items(const talk_reports *r, const talk_report **out);
+/* C only */
+void talk_reports_release(talk_reports *r);
+
 typedef struct talk_pump_result {
     talk_group_state state;
+    /* C only: whether anything waits on time, and then the earliest
+     * deadline, talk.go's NextDeadline. */
+    bool has_next_deadline;
+    int64_t next_deadline_seconds;
+    int32_t next_deadline_nanos;
     int64_t fuel_used;
+    talk_reports *reports; /* owned by the caller */
 } talk_pump_result;
 
 /* Makes a Core. NULL when it can't allocate. */
@@ -899,9 +1063,10 @@ typedef struct talk_reload_options {
  * the Persistent State cap TALK_STATE_TOO_LARGE, each leaving the Script
  * unchanged. Then the Script is stopped with reason "reload", and the new code
  * replaces it and every extension. A stop that stops the Group prevents the
- * replacement, TALK_EFFECT_STATE_UNKNOWN. The stop report is in the Trace. o
- * may be NULL. */
-talk_host_error_code talk_script_reload(talk_script *s, const char *source, size_t len, talk_carry_over carry, const talk_reload_options *o);
+ * replacement, TALK_EFFECT_STATE_UNKNOWN. o may be NULL. The reports, the
+ * stop's among them, go to *reports, which the caller releases; reports may
+ * be NULL, which drops them. */
+talk_host_error_code talk_script_reload(talk_script *s, const char *source, size_t len, talk_carry_over carry, const talk_reload_options *o, talk_reports **reports);
 /* Extend is extend Script, a worker call and a Host Input: the Entry becomes
  * a new code unit of the Script, and nothing stops. A name the Script has is
  * TALK_NAME_REUSED, a LoadError TALK_LOAD_REFUSED, and Script Variables over
@@ -1011,8 +1176,8 @@ talk_host_error_code talk_add_library(talk_group *g, talk_library *l);
  * them, its extensions too. If any fails to check, nothing changes:
  * TALK_LOAD_REFUSED, its diagnostics in the Trace. A name the Group doesn't
  * hold is TALK_INVALID_VALUE. The recompiled Libraries live as long as the
- * Core. */
-talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry);
+ * Core. Its reports go to *reports, as talk_script_reload's do. */
+talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry, talk_reports **reports);
 
 /* Save and restore (chapter 10). A save restores only on the Zig Core.
  * Save is a worker call between Pumps: the save's bytes, which the caller
@@ -1083,8 +1248,6 @@ bool talk_restore_result_variables_only(const talk_restore_result *r);
 size_t talk_restore_result_pending(const talk_restore_result *r, const talk_pending_call **out);
 /* C only: the Host Objects that didn't resolve; *out borrows from r. */
 size_t talk_restore_result_disposed(const talk_restore_result *r, const talk_object_ref **out);
-/* C only: an id the Group holds. */
-typedef struct talk_id { const char *data; size_t len; } talk_id;
 /* C only: what a variables-only restore discarded: which 0 the Runs, 1 the
  * dropped Deliveries, 2 the abandoned calls; *out borrows from the Group. */
 size_t talk_restore_result_ids(const talk_restore_result *r, int which, const talk_id **out);

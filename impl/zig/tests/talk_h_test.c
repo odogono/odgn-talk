@@ -74,7 +74,19 @@ static int group_test(void) {
     talk_value_release(n);
     talk_pump_result pumped = {0};
     bad |= talk_pump(group, 1790000000, 0, NULL, &pumped) != TALK_OK;
-    bad |= pumped.state != TALK_IDLE || pumped.fuel_used <= 0;
+    bad |= pumped.state != TALK_IDLE || pumped.fuel_used <= 0 || pumped.has_next_deadline;
+    /* The Run's end is reported with its result. */
+    const talk_report *reports = NULL;
+    bad |= talk_reports_items(pumped.reports, &reports) != 1;
+    if (!bad) {
+        const talk_run_end *end = &reports[0].as.run_end;
+        const char *shown = NULL;
+        size_t shown_len = 0;
+        bad |= reports[0].kind != TALK_REPORT_RUN_END || end->outcome != TALK_COMPLETED;
+        bad |= end->run_len != 8 || memcmp(end->run, "adder/r1", 8) != 0 || end->delivery_len != 2 || memcmp(end->delivery, "d1", 2) != 0;
+        bad |= !talk_value_as_text(end->result, &shown, &shown_len) || shown_len != 3 || memcmp(shown, "41!", 3) != 0;
+    }
+    talk_reports_release(pumped.reports);
     talk_value *result = NULL;
     const char *text = NULL;
     size_t len = 0;
@@ -655,14 +667,16 @@ static int slice_test(void) {
     talk_pump_options negative = {-1, 0};
     bad |= talk_pump(group, 1790000000, 0, &negative, NULL) != TALK_INVALID_VALUE;
     talk_pump_options sliced = {20, 0};
-    talk_pump_result result = {TALK_IDLE, 0};
+    talk_pump_result result = {0};
     bad |= talk_pump(group, 1790000000, 0, &sliced, &result) != TALK_OK;
     bad |= result.state != TALK_SLICED || result.fuel_used < 20;
     bad |= strstr(trace, "> pump clock=2026-09-21T14:13:20Z fuel-slice=20\n") == NULL;
     bad |= strstr(trace, "preempt s/r1 start delivery=d1 handler=count clause=1 by=slice fuel=") == NULL;
     bad |= strstr(trace, "pumped state=sliced fuel=") == NULL;
+    talk_reports_release(result.reports);
     bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
     bad |= result.state != TALK_IDLE;
+    talk_reports_release(result.reports);
     talk_inspect(group);
     bad |= strstr(trace, "seg s/r1 continue fuel=") == NULL || strstr(trace, "vars s n=5\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
@@ -722,9 +736,18 @@ static int stop_test(void) {
     bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= talk_script_stop(script, "done", 4) != TALK_OK;
-    talk_pump_result result = {TALK_IDLE, 0};
+    talk_pump_result result = {0};
     bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
     bad |= result.state != TALK_STOPPED;
+    /* The Stop is reported, with the Run it discarded. */
+    const talk_report *reports = NULL;
+    bad |= talk_reports_items(result.reports, &reports) != 1;
+    if (!bad) {
+        const talk_stop *stop = &reports[0].as.stop;
+        bad |= reports[0].kind != TALK_REPORT_STOP || stop->reason_len != 4 || memcmp(stop->reason, "done", 4) != 0;
+        bad |= stop->discarded_runs_len != 1 || stop->discarded_runs[0].len != 4 || memcmp(stop->discarded_runs[0].data, "s/r1", 4) != 0;
+    }
+    talk_reports_release(result.reports);
     bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     talk_inspect(group);
@@ -762,8 +785,8 @@ static int reload_test(void) {
     bad |= talk_script_deliver(script, &twice, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     const char *next = "script variable n = 0\nscript variable m = 5\n";
-    bad |= talk_script_reload(script, next, strlen(next), TALK_CARRY_VARIABLES, NULL) != TALK_OK;
-    bad |= talk_script_reload(script, "on", 2, TALK_RESET_VARIABLES, NULL) != TALK_LOAD_REFUSED;
+    bad |= talk_script_reload(script, next, strlen(next), TALK_CARRY_VARIABLES, NULL, NULL) != TALK_OK;
+    bad |= talk_script_reload(script, "on", 2, TALK_RESET_VARIABLES, NULL, NULL) != TALK_LOAD_REFUSED;
     talk_library_source lib_src = {"lib", 3, "1", 1, "constant k = 1\n", 15};
     talk_library *lib = NULL, *replaced = NULL;
     bad |= talk_compile_library(core, &lib_src, NULL, 0, NULL, 0, &lib) != TALK_OK;
@@ -774,7 +797,7 @@ static int reload_test(void) {
     bad |= talk_load(group, &user_load, &t) != TALK_OK;
     talk_library_source next_src = {"lib", 3, "2", 1, "constant k = 2\n", 15};
     bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced) != TALK_OK;
-    bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES) != TALK_OK;
+    bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES, NULL) != TALK_OK;
     talk_inspect(group);
     bad |= strstr(trace, "refused code=\"name reused\"\n") == NULL;
     bad |= strstr(trace, "stopped s reason=\"reload\"\n") == NULL;

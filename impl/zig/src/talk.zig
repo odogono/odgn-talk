@@ -457,7 +457,14 @@ pub const GroupState = enum(c_int) { idle, sliced, stopped, rewound };
 
 pub const PumpOptions = extern struct { fuel_slice: i64, fuel_cap: i64 };
 
-pub const PumpResult = extern struct { state: GroupState, fuel_used: i64 };
+pub const PumpResult = extern struct {
+    state: GroupState,
+    has_next_deadline: bool = false,
+    next_deadline_seconds: i64 = 0,
+    next_deadline_nanos: i32 = 0,
+    fuel_used: i64,
+    reports: ?*Reports = null,
+};
 
 /// A Group and the writer its Trace goes through on its way to the sink.
 pub const Group = struct {
@@ -512,6 +519,276 @@ pub const Decided = extern struct {
     undecided: [*]const UndecidedBy,
     undecided_len: usize,
 };
+
+// ---------------------------------------------------------------- reports
+
+pub const Location = extern struct { unit: [*]const u8 = "", unit_len: usize = 0, line: i64 = 0, col: i64 = 0, handler: [*]const u8 = "", handler_len: usize = 0, pc: i64 = 0 };
+pub const CleanupFailure = extern struct { code: [*]const u8, code_len: usize, limit: [*]const u8, limit_len: usize };
+pub const EffectFailure = extern struct {
+    script: [*]const u8,
+    script_len: usize,
+    run: [*]const u8,
+    run_len: usize,
+    grant: [*]const u8,
+    grant_len: usize,
+    segment: [*]const u8,
+    segment_len: usize,
+    phase: [*]const u8,
+    phase_len: usize,
+    status: EffectStatus,
+    scope: [*]const u8,
+    scope_len: usize,
+    detail: [*]const u8 = "",
+    detail_len: usize = 0,
+};
+pub const RunEnd = extern struct {
+    script: [*]const u8,
+    script_len: usize,
+    run: [*]const u8,
+    run_len: usize,
+    delivery: [*]const u8,
+    delivery_len: usize,
+    broadcast: [*]const u8,
+    broadcast_len: usize,
+    handler: [*]const u8,
+    handler_len: usize,
+    fallback: bool,
+    outcome: Outcome,
+    effect: ?*const EffectFailure,
+    cleanup_failed: ?*const CleanupFailure,
+    result: ?*Value,
+    @"error": ?*const ScriptError,
+    limit: [*]const u8,
+    limit_len: usize,
+    at: Location,
+    fuel: i64,
+    alloc: i64,
+};
+pub const Stop = extern struct {
+    script: [*]const u8,
+    script_len: usize,
+    reason: [*]const u8,
+    reason_len: usize,
+    discarded_runs: [*]const Id,
+    discarded_runs_len: usize,
+    dropped_messages: [*]const Id,
+    dropped_messages_len: usize,
+    pending_calls: [*]const Id,
+    pending_calls_len: usize,
+};
+pub const Unhandled = extern struct {
+    delivery: [*]const u8,
+    delivery_len: usize,
+    message: [*]const u8,
+    message_len: usize,
+    args: [*]const *Value,
+    args_len: usize,
+    target: ?*objects.Object,
+};
+pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
+pub const CallFailed = extern struct { script: [*]const u8, script_len: usize, call: [*]const u8, call_len: usize, operation: OperationRef, detail: [*]const u8, detail_len: usize };
+pub const HostError = extern struct { code: HostErrorCode, detail: [*]const u8, detail_len: usize };
+pub const ReportKind = enum(c_int) { run_end, stop, unhandled, call_failed, effect_failure, decided, host_error };
+pub const Report = extern struct {
+    kind: ReportKind,
+    as: extern union {
+        run_end: RunEnd,
+        stop: Stop,
+        unhandled: Unhandled,
+        call_failed: CallFailed,
+        effect_failure: EffectFailure,
+        decided: Decided,
+        host_error: HostError,
+    },
+};
+
+/// The reports a worker call hands its caller: the machine's, which own
+/// their text and values, and talk.h's view of them.
+pub const Reports = struct {
+    held: machine.report.Reports,
+    items: []Report,
+};
+
+/// Takes the reports the Group has collected, as talk.h's view; null when
+/// there are none, or the view can't be built.
+fn takeReports(g: *Group) ?*Reports {
+    if (g.group.reports.list.items.len == 0) return null;
+    var held = g.group.reports.take();
+    const out = held.arena.allocator().create(Reports) catch {
+        held.deinit();
+        return null;
+    };
+    out.* = .{ .held = held, .items = &.{} };
+    out.items = viewReports(&out.held) catch {
+        var dropped = out.held;
+        dropped.deinit();
+        return null;
+    };
+    return out;
+}
+
+fn viewReports(held: *machine.report.Reports) ![]Report {
+    const a = held.arena.allocator();
+    const out = try a.alloc(Report, held.list.items.len);
+    for (held.list.items, out) |r, *o| o.* = switch (r) {
+        .run_end => |x| .{ .kind = .run_end, .as = .{ .run_end = .{
+            .script = x.script.ptr,
+            .script_len = x.script.len,
+            .run = x.run.ptr,
+            .run_len = x.run.len,
+            .delivery = x.delivery.ptr,
+            .delivery_len = x.delivery.len,
+            .broadcast = x.broadcast.ptr,
+            .broadcast_len = x.broadcast.len,
+            .handler = x.handler.ptr,
+            .handler_len = x.handler.len,
+            .fallback = x.fallback,
+            .outcome = switch (x.outcome) {
+                .completed => .completed,
+                .errored => .errored,
+                .limit_fault => .limit_fault,
+                .cancelled => .cancelled,
+                .unhandled => .unhandled_outcome,
+                .dropped => .dropped,
+                .effect_failure => .effect_failure_outcome,
+            },
+            .effect = if (x.effect) |f| try one(a, effectView(f)) else null,
+            .cleanup_failed = if (x.cleanup_failed) |f| try one(a, CleanupFailure{ .code = f.code.ptr, .code_len = f.code.len, .limit = f.limit.ptr, .limit_len = f.limit.len }) else null,
+            .result = x.result,
+            .@"error" = if (x.err) |e| try one(a, errorView(e)) else null,
+            .limit = x.limit.ptr,
+            .limit_len = x.limit.len,
+            .at = .{ .unit = x.at.unit.ptr, .unit_len = x.at.unit.len, .line = x.at.line, .col = x.at.column, .handler = x.at.handler.ptr, .handler_len = x.at.handler.len, .pc = x.at.pc },
+            .fuel = @intCast(x.fuel),
+            .alloc = @intCast(x.alloc),
+        } } },
+        .stop => |x| .{ .kind = .stop, .as = .{ .stop = .{
+            .script = x.script.ptr,
+            .script_len = x.script.len,
+            .reason = x.reason.ptr,
+            .reason_len = x.reason.len,
+            .discarded_runs = (try idList(a, x.discarded_runs)).ptr,
+            .discarded_runs_len = x.discarded_runs.len,
+            .dropped_messages = (try idList(a, x.dropped_messages)).ptr,
+            .dropped_messages_len = x.dropped_messages.len,
+            .pending_calls = (try idList(a, x.pending_calls)).ptr,
+            .pending_calls_len = x.pending_calls.len,
+        } } },
+        .unhandled => |x| .{ .kind = .unhandled, .as = .{ .unhandled = .{ .delivery = x.delivery.ptr, .delivery_len = x.delivery.len, .message = x.message.ptr, .message_len = x.message.len, .args = x.args.ptr, .args_len = x.args.len, .target = x.target } } },
+        .call_failed => |x| .{ .kind = .call_failed, .as = .{ .call_failed = .{
+            .script = x.script.ptr,
+            .script_len = x.script.len,
+            .call = x.call.ptr,
+            .call_len = x.call.len,
+            .operation = .{ .capability = x.capability.ptr, .capability_len = x.capability.len, .operation = x.operation.ptr, .operation_len = x.operation.len },
+            .detail = x.detail.ptr,
+            .detail_len = x.detail.len,
+        } } },
+        .effect_failure => |x| .{ .kind = .effect_failure, .as = .{ .effect_failure = effectView(x) } },
+        .decided => |x| blk: {
+            const vetoes = try a.alloc(Veto, x.vetoes.len);
+            for (x.vetoes, vetoes) |m, *v| v.* = .{ .script = m.script.ptr, .script_len = m.script.len, .run = m.run.ptr, .run_len = m.run.len, .reason = m.reason };
+            const undecided = try a.alloc(UndecidedBy, x.undecided.len);
+            for (x.undecided, undecided) |m, *u| u.* = .{ .script = m.script.ptr, .script_len = m.script.len, .run = m.run.ptr, .run_len = m.run.len, .outcome = switch (m.outcome) {
+                .completed => .completed,
+                .errored => .errored,
+                .limit_fault => .limit_fault,
+                .cancelled => .cancelled,
+                .unhandled => .unhandled_outcome,
+                .dropped => .dropped,
+                .effect_failure => .effect_failure_outcome,
+            } };
+            break :blk .{ .kind = .decided, .as = .{ .decided = .{
+                .delivery = x.delivery.ptr,
+                .delivery_len = x.delivery.len,
+                .broadcast = x.broadcast.ptr,
+                .broadcast_len = x.broadcast.len,
+                .verdict = switch (x.verdict) {
+                    .allowed => .allowed,
+                    .vetoed => .vetoed,
+                    .undecided => .undecided,
+                },
+                .vetoes = vetoes.ptr,
+                .vetoes_len = vetoes.len,
+                .undecided = undecided.ptr,
+                .undecided_len = undecided.len,
+            } } };
+        },
+        .host_error => |x| .{ .kind = .host_error, .as = .{ .host_error = .{ .code = hostErrorCode(x.code), .detail = x.detail.ptr, .detail_len = x.detail.len } } },
+    };
+    return out;
+}
+
+fn one(a: std.mem.Allocator, x: anytype) !*const @TypeOf(x) {
+    const p = try a.create(@TypeOf(x));
+    p.* = x;
+    return p;
+}
+
+fn idList(a: std.mem.Allocator, xs: []const []const u8) ![]Id {
+    const out = try a.alloc(Id, xs.len);
+    for (xs, out) |x, *o| o.* = .{ .data = x.ptr, .len = x.len };
+    return out;
+}
+
+fn effectView(f: machine.report.EffectFailure) EffectFailure {
+    return .{
+        .script = f.script.ptr,
+        .script_len = f.script.len,
+        .run = f.run.ptr,
+        .run_len = f.run.len,
+        .grant = f.grant.ptr,
+        .grant_len = f.grant.len,
+        .segment = f.segment.ptr,
+        .segment_len = f.segment.len,
+        .phase = f.phase.ptr,
+        .phase_len = f.phase.len,
+        .status = if (std.mem.eql(u8, f.status, "failed")) .failed else .unknown,
+        .scope = f.scope.ptr,
+        .scope_len = f.scope.len,
+    };
+}
+
+/// A Script error as talk.h gives it: its code and message, and the error
+/// map as its data.
+fn errorView(e: *Value) ScriptError {
+    const code: []const u8 = if (e.get("code")) |c| if (c.data == .text) c.data.text else "" else "";
+    const message: ?[]const u8 = if (e.get("message")) |m| if (m.data == .text) m.data.text else null else null;
+    return .{ .code = code.ptr, .code_len = code.len, .message = if (message) |m| m.ptr else null, .message_len = if (message) |m| m.len else 0, .data = e };
+}
+
+fn hostErrorCode(code: []const u8) HostErrorCode {
+    inline for (@typeInfo(HostErrorCode).@"enum".field_names) |name| {
+        const spaced = comptime blk: {
+            var b = name[0..name.len].*;
+            std.mem.replaceScalar(u8, &b, '_', ' ');
+            break :blk b;
+        };
+        if (std.mem.eql(u8, code, &spaced)) return @field(HostErrorCode, name);
+    }
+    return .invalid_value;
+}
+
+/// Hands the reports a worker call made to `out`, or drops them.
+fn giveReports(g: *Group, out: ?*?*Reports) void {
+    const taken = takeReports(g);
+    if (out) |o| o.* = taken else talk_reports_release(taken);
+}
+
+export fn talk_reports_items(r: ?*const Reports, out: *[*]const Report) usize {
+    const x = r orelse {
+        out.* = &.{};
+        return 0;
+    };
+    out.* = x.items.ptr;
+    return x.items.len;
+}
+
+export fn talk_reports_release(r: ?*Reports) void {
+    const x = r orelse return;
+    var held = x.held;
+    held.deinit();
+}
 
 /// A Decision's future: its Group and delivery id, and the view of its
 /// Verdict, made the first time the Host reads it once sealed.
@@ -836,16 +1113,28 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
         return .clock_backwards;
     };
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
-    if (out) |r| r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
+    const reports = takeReports(g);
+    const r = out orelse {
+        talk_reports_release(reports);
+        return .ok;
+    };
+    r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel), .reports = reports };
+    if (g.group.next()) |deadline| {
+        r.has_next_deadline = true;
+        r.next_deadline_seconds = @intCast(@divFloor(deadline, std.time.ns_per_s));
+        r.next_deadline_nanos = @intCast(@mod(deadline, std.time.ns_per_s));
+    }
     return .ok;
 }
 
 /// Replaces a Library the Group holds, a worker call: the Libraries that
 /// import it are recompiled, and the Core owns them; the Scripts that import
 /// any of them are stop-and-reloaded. A refusal changes nothing.
-export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver) HostErrorCode {
+export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver, reports: ?*?*Reports) HostErrorCode {
+    if (reports) |r| r.* = null;
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
+    defer giveReports(g, reports);
     const c = g.core;
     // Room for every Library it could recompile, so that once the Group
     // uses them the Core can own them.
@@ -1198,6 +1487,7 @@ test "the enums match talk.h's" {
     try expectHeaderEnum(Outcome, "talk_outcome", "TALK_");
     try expectHeaderEnum(EffectStatus, "talk_effect_status", "TALK_EFFECT_");
     try expectHeaderEnum(ReleaseReason, "talk_release_reason", "TALK_RELEASE_");
+    try expectHeaderEnum(ReportKind, "talk_report_kind", "TALK_REPORT_");
 }
 
 test "a Group loads, pumps and inspects through the exports" {
@@ -2229,10 +2519,12 @@ pub const ReloadOptions = extern struct { keep_mailbox: bool };
 
 /// Stop-and-reload, a worker call: refused with the Script unchanged, or
 /// stopped and replaced, its `stopped` report in the Trace.
-export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry: CarryOver, o: ?*const ReloadOptions) HostErrorCode {
+export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry: CarryOver, o: ?*const ReloadOptions, reports: ?*?*Reports) HostErrorCode {
+    if (reports) |r| r.* = null;
     const g = s.group;
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
+    defer giveReports(g, reports);
     const src = bytes(source, len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(src)) return .invalid_value;
     const script = g.group.script(s.name) orelse return .invalid_value;

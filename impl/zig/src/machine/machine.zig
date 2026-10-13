@@ -26,6 +26,7 @@ pub const fingerprint = @import("fingerprint.zig");
 pub const snapshot = @import("snapshot.zig");
 pub const verify = @import("verify.zig");
 pub const objects = @import("objects.zig");
+pub const report = @import("reports.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
@@ -229,6 +230,13 @@ pub const Run = struct {
     /// Where its last error was raised, which an initialiser's
     /// `initialiser failed` diagnostic names.
     raised_at: ?lower.Position = null,
+    /// Where its last error was raised, or it faulted, for its `run end`
+    /// report.
+    end_at: report.Location = .{},
+    /// How a limit or an error ended its cleanup, once cancelled: the
+    /// limit, or the error's code, which it holds.
+    cleanup_limit: []const u8 = "",
+    cleanup_code: ?*Value = null,
     /// The Join it is in, from `join-start` to its closing `end`.
     join: ?*Join = null,
     /// The body of the Handler Clause it was dispatched to, whose Queueing
@@ -1139,9 +1147,11 @@ pub const Group = struct {
     /// Text a restore rebuilt that the Group's parts borrow, and the
     /// placeholder Capabilities of Grants it couldn't re-bind.
     keep: std.heap.ArenaAllocator,
+    /// The reports not yet returned to the Host.
+    reports: report.Reports,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
-        return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa) };
+        return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa), .reports = .init(gpa) };
     }
 
     pub fn deinit(g: *Group) void {
@@ -1190,6 +1200,13 @@ pub const Group = struct {
         g.deferred.deinit(g.gpa);
         g.scratch.deinit();
         g.keep.deinit();
+        g.reports.deinit();
+    }
+
+    /// Adds a report. Reports are observations: one the Group can't keep is
+    /// left out, and execution goes on.
+    pub fn addReport(g: *Group, r: report.Report) void {
+        g.reports.add(r) catch {};
     }
 
     /// Releases queued Host Inputs never drained.
@@ -2184,6 +2201,7 @@ pub const Group = struct {
                     }
                     out.writeAll(" fuel=0 alloc=0\n") catch {};
                 }
+                g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.print("d{d}", .{id}) catch "", .outcome = .cancelled } });
                 if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
                 g.releaseDelivery(d);
                 return;
@@ -2533,6 +2551,7 @@ pub const Group = struct {
         run.scopes.deinit(g.gpa);
         if (run.participant) |*p| p.grants.deinit(g.gpa);
         g.dropBase(run);
+        if (run.cleanup_code) |c| c.release();
         run.abandoned.deinit(g.gpa);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
@@ -2712,6 +2731,7 @@ pub const Group = struct {
                 // Checked again against what earlier inputs left.
                 if (parentRefusal(x.object, x.parent)) |code| {
                     g.write("refused code=\"{s}\"\n", .{code});
+                    g.addReport(.{ .host_error = .{ .code = code } });
                 } else x.object.parent = x.parent;
             },
             .dispose => |o| {
@@ -2913,7 +2933,7 @@ pub const Group = struct {
     }
 
     /// The earliest deadline still pending.
-    fn next(g: *Group) ?i128 {
+    pub fn next(g: *Group) ?i128 {
         var best: ?i128 = null;
         for (g.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
             // A preempted Run's Join hasn't reached its end, so its members'
@@ -4012,10 +4032,37 @@ pub const Group = struct {
             }
             w.writeAll("\n") catch {};
         }
+        g.reportDecided(id, is_broadcast, decided) catch {};
         (if (is_broadcast) &g.decided_broadcasts else &g.decided).put(g.gpa, id, decided) catch |e| {
             g.releaseDecided(decided);
             return e;
         };
+    }
+
+    fn reportDecided(g: *Group, id: u64, is_broadcast: bool, decided: Decided) !void {
+        const r = &g.reports;
+        const a = r.arena.allocator();
+        const vetoes = try a.alloc(report.Veto, decided.vetoes.len);
+        for (decided.vetoes, vetoes) |m, *x| x.* = .{ .script = try r.text(m.script), .run = try r.text(m.run), .reason = try r.value(m.reason.?) };
+        const undecided = try a.alloc(report.UndecidedBy, decided.undecided.len);
+        for (decided.undecided, undecided) |m, *x| x.* = .{ .script = try r.text(m.script), .run = try r.text(m.run), .outcome = undecidedOutcome(m.outcome) };
+        try r.add(.{ .decided = .{
+            .delivery = if (is_broadcast) "" else try r.print("d{d}", .{id}),
+            .broadcast = if (is_broadcast) try r.print("b{d}", .{id}) else "",
+            .verdict = switch (decided.verdict) {
+                .allowed => .allowed,
+                .vetoed => .vetoed,
+                .undecided => .undecided,
+            },
+            .vetoes = vetoes,
+            .undecided = undecided,
+        } });
+    }
+
+    fn undecidedOutcome(how: []const u8) report.Outcome {
+        const words = [_]struct { []const u8, report.Outcome }{ .{ "errored", .errored }, .{ "limit fault", .limit_fault }, .{ "cancelled", .cancelled }, .{ "effect failed", .effect_failure }, .{ "dropped", .dropped } };
+        for (words) |w| if (std.mem.eql(u8, w[0], how)) return w[1];
+        return .cancelled;
     }
 
     fn eventEntry(g: *Group, p: *const Pending) lower.Event {
@@ -4224,8 +4271,16 @@ pub const Group = struct {
         const context: capabilities.SegmentContext = .{ .group = g, .script = run.script.name, .run = run.id, .segment = segment, .grant = first.name, .binding = first.grant.binding, .now = g.clock, .grants = grants };
         const status = p.coordinator.hook(p.coordinator.context, phase, &context);
         g.write("effect {s} grant={s} phase={s} status={s}\n", .{ segment, first.name, @tagName(phase), @tagName(status) });
-        if (status != .ok) g.write("effect-failure {s} grant={s} segment={s} phase={s} status={s}\n", .{ run.id, first.name, segment, @tagName(phase), @tagName(status) });
+        if (status != .ok) {
+            g.write("effect-failure {s} grant={s} segment={s} phase={s} status={s}\n", .{ run.id, first.name, segment, @tagName(phase), @tagName(status) });
+            g.reportEffectFailure(run, first.name, segment, @tagName(phase), @tagName(status), "");
+        }
         return status;
+    }
+
+    fn reportEffectFailure(g: *Group, run: *const Run, grant: []const u8, segment: []const u8, phase: []const u8, status: []const u8, scope: []const u8) void {
+        const r = &g.reports;
+        g.addReport(.{ .effect_failure = .{ .script = r.text(run.script.name) catch "", .run = r.text(run.id) catch "", .grant = r.text(grant) catch "", .segment = r.text(segment) catch "", .phase = phase, .status = status, .scope = r.text(scope) catch "" } });
     }
 
     /// Ends the participant, if there is one: a commit when `commit` is
@@ -4329,6 +4384,7 @@ pub const Group = struct {
                 w.print("scope {s} grant={s} name={s} action={s}\n", .{ id, slot.grant.name, slot.name, if (ok) "abandoned" else "failed" }) catch {};
                 if (!ok) w.print("effect-failure {s} grant={s} segment={s} phase=abandon status=unknown scope={s}\n", .{ run.id, slot.grant.name, segment, slot.name }) catch {};
             }
+            if (!ok) g.reportEffectFailure(run, slot.grant.name, segment, "abandon", "unknown", slot.name);
             if (!ok) {
                 slot.grant.disabled = true;
                 g.releaseGrant(run.script, slot.grant, .disable);
@@ -4348,6 +4404,50 @@ pub const Group = struct {
         const scope = model.text(g.gpa, newest.name) catch return error.OutOfMemory;
         defer scope.release();
         return g.raise("scope open", &.{ .{ .key = "capability", .value = capability }, .{ .key = "scope", .value = scope } });
+    }
+
+    /// The `run end` report of a Run that ended.
+    fn reportRunEnd(g: *Group, s: *const Script, run: *const Run, outcome: Outcome, segment: []const u8) !void {
+        const r = &g.reports;
+        const d = run.delivery;
+        var end: report.RunEnd = .{ .script = try r.text(s.name), .run = try r.text(run.id), .outcome = .completed, .fallback = run.fallback, .fuel = run.fuel, .alloc = run.alloc };
+        if (d.from == null) end.delivery = try r.print("d{d}", .{d.id});
+        if (d.broadcast > 0) end.broadcast = try r.print("b{d}", .{d.broadcast});
+        if (run.fallback or g.hasHandler(s, run.handler)) end.handler = try r.text(run.handler);
+        const at: report.Location = .{ .unit = try r.text(run.end_at.unit), .line = run.end_at.line, .column = run.end_at.column, .handler = try r.text(run.end_at.handler), .pc = run.end_at.pc };
+        switch (outcome) {
+            .returned => |v| end.result = try r.value(v),
+            .passed, .vetoed => {
+                const none = try nothing(g.gpa);
+                defer none.release();
+                end.result = try r.value(none);
+            },
+            .errored => |e| {
+                end.outcome = .errored;
+                end.err = try r.value(e);
+                end.at = at;
+            },
+            .faulted => |l| {
+                end.outcome = .limit_fault;
+                end.limit = @tagName(l);
+                end.at = at;
+            },
+            .unhandled, .clause_failed => end.outcome = .unhandled,
+            .dropped => end.outcome = .dropped,
+            .cancelled => {
+                end.outcome = .cancelled;
+                if (run.cleanup_code != null or run.cleanup_limit.len > 0) end.cleanup_failed = .{
+                    .code = if (run.cleanup_code) |c| try r.text(c.data.text) else "",
+                    .limit = run.cleanup_limit,
+                };
+            },
+            .effect_failed => |f| {
+                end.outcome = .effect_failure;
+                end.effect = .{ .script = end.script, .run = end.run, .grant = try r.text(f.grant), .segment = try r.text(segment), .phase = try r.text(f.phase), .status = try r.text(f.status), .scope = if (f.scope) |n| try r.text(n) else "" };
+            },
+            .suspended, .selected, .preempted, .stopped, .rewound => unreachable,
+        }
+        try r.add(.{ .run_end = end });
     }
 
     fn endSegment(g: *Group, s: *Script, run: *Run, ended: Outcome) !void {
@@ -4514,6 +4614,7 @@ pub const Group = struct {
             }
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
         }
+        g.reportRunEnd(s, run, outcome, segment) catch {};
         // A Run that ends before sealing its Verdict, or a dropped
         // Decision, leaves it undecided.
         if (run.verdict or (d.decision and (outcome == .dropped or outcome == .faulted))) {
@@ -4622,6 +4723,10 @@ pub const Group = struct {
         }.less);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);
+        var discarded_ids: std.ArrayList([]const u8) = .empty;
+        defer discarded_ids.deinit(g.gpa);
+        var dropped_ids: std.ArrayList(u64) = .empty;
+        defer dropped_ids.deinit(g.gpa);
         // The pending calls the discarded Runs abandon, in call id order.
         var abandoned: std.ArrayList([]const u8) = .empty;
         defer abandoned.deinit(g.gpa);
@@ -4640,6 +4745,7 @@ pub const Group = struct {
             if (r == running or r.continuing) g.restoreBase(r);
             if (discarded.items.len > 0) try discarded.appendSlice(g.gpa, ", ");
             try discarded.appendSlice(g.gpa, r.id);
+            try discarded_ids.append(g.gpa, r.id);
             const d = r.delivery;
             if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
             s.fuel_total += r.fuel;
@@ -4651,6 +4757,7 @@ pub const Group = struct {
             .message => |d| if (d.from == null and d.id > 0) {
                 if (dropped.items.len > 0) try dropped.appendSlice(g.gpa, ", ");
                 try dropped.print(g.gpa, "d{d}", .{d.id});
+                try dropped_ids.append(g.gpa, d.id);
             },
             .run => {},
         };
@@ -4684,6 +4791,7 @@ pub const Group = struct {
             if (abandoned.items.len > 0) out.writeAll("]") catch {};
             out.writeAll("\n") catch {};
         }
+        g.reportStop(s.name, why, discarded_ids.items, dropped_ids.items, abandoned.items) catch {};
         // The open Decisions settle undecided, `cancelled`, after the
         // `stopped` record.
         for (runs.items) |r| if (r.verdict or r.delivery.decision) {
@@ -4709,6 +4817,18 @@ pub const Group = struct {
         if (fatal) for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
     }
 
+    fn reportStop(g: *Group, script_name: []const u8, reason: []const u8, discarded: []const []const u8, dropped: []const u64, pending: []const []const u8) !void {
+        const r = &g.reports;
+        const a = r.arena.allocator();
+        const runs = try a.alloc([]const u8, discarded.len);
+        for (discarded, runs) |id, *x| x.* = try r.text(id);
+        const messages = try a.alloc([]const u8, dropped.len);
+        for (dropped, messages) |id, *x| x.* = try r.print("d{d}", .{id});
+        const calls = try a.alloc([]const u8, pending.len);
+        for (pending, calls) |id, *x| x.* = try r.text(id);
+        try r.add(.{ .stop = .{ .script = try r.text(script_name), .reason = try r.text(reason), .discarded_runs = runs, .dropped_messages = messages, .pending_calls = calls } });
+    }
+
     /// A message a stopped Script won't run: its sender gets `send failed`,
     /// reason `stopped`, and its Decision settles undecided, `cancelled`.
     fn settleDropped(g: *Group, s: *Script, d: Delivery) !void {
@@ -4725,6 +4845,7 @@ pub const Group = struct {
             writeText(out, reason);
             out.print(" dropped=[d{d}]\n", .{d.id}) catch {};
         };
+        if (d.from == null and d.id > 0) g.reportStop(s.name, reason, &.{}, &.{d.id}, &.{}) catch {};
         try g.settleDropped(s, d);
     }
 
@@ -4783,10 +4904,21 @@ pub const Group = struct {
             }
             out.writeAll("\n") catch {};
         }
+        g.reportUnhandled(d) catch {};
         defer g.releaseDelivery(d);
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
         // A Decision that reaches the end of its path is allowed.
         if (d.decision) try g.takePart(d, .allowed);
+    }
+
+    fn reportUnhandled(g: *Group, d: Delivery) !void {
+        const r = &g.reports;
+        try r.add(.{ .unhandled = .{
+            .delivery = if (d.from == null and d.id > 0) try r.print("d{d}", .{d.id}) else "",
+            .message = try r.text(d.message),
+            .args = try r.valueList(d.args),
+            .target = d.target,
+        } });
     }
 
     /// A message no Run of `s` ended goes on from the parent of the object
@@ -5438,6 +5570,8 @@ pub const Group = struct {
 
     fn writeRaise(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
         run.raised_at = ins.position;
+        const handler = if (err.get("at")) |at| if (at.get("handler")) |h| if (h.data == .text) h.data.text else "" else "" else "";
+        run.end_at = .{ .unit = topName(run), .line = ins.position.line, .column = ins.position.column, .handler = handler, .pc = pc };
         // An initialiser's error is the unit's load diagnostic, not a
         // `raise` record.
         if (run.id.len == 0) return;
@@ -5584,6 +5718,7 @@ pub const Group = struct {
                 // An error ending a cancelled Run's cleanup keeps its
                 // writes; the rest of the cleanup doesn't run.
                 if (u.then == .cancel) {
+                    if (run.cleanup_code == null) run.cleanup_code = err.get("code").?.retain();
                     if (g.trace) |w| {
                         w.print("cleanup-failed {s} code=", .{run.id}) catch {};
                         display.writeTrace(w, err.get("code").?) catch {};
@@ -6042,10 +6177,12 @@ pub const Group = struct {
         if (run.cleanup_from != null) {
             // The Fuel a cleanup runs out of is its Cleanup Budget.
             g.write("cleanup-failed {s} limit={s}\n", .{ run.id, @tagName(if (limit == .fuel) .cleanup else limit) });
+            run.cleanup_limit = @tagName(if (limit == .fuel) .cleanup else limit);
             g.restoreBase(run);
             run.cleanup_limited = true;
             return g.cleanupFailed(run);
         }
+        run.end_at = .{ .unit = unit, .line = ins.position.line, .column = ins.position.column, .handler = run.handler, .pc = pc };
         if (g.trace) |w| {
             w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
             if (run.segment_base) |base| {
@@ -7953,6 +8090,9 @@ pub const Group = struct {
     /// A Host failure: a `call-failed` report, then `host error`.
     fn hostError(g: *Group, id: []const u8, grant: []const u8, operation_name: []const u8, where: []const model.Pair) error{ Raised, OutOfMemory } {
         g.write("call-failed {s} op={s}.{s}\n", .{ id, grant, operation_name });
+        const r = &g.reports;
+        const script_name = id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse 0];
+        g.addReport(.{ .call_failed = .{ .script = r.text(script_name) catch "", .call = r.text(id) catch "", .capability = r.text(grant) catch "", .operation = r.text(operation_name) catch "" } });
         return g.raise("host error", where);
     }
 
