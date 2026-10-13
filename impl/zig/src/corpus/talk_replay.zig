@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "reload", "extend", "replace-library" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -86,9 +86,8 @@ fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
 }
 
 /// Compiles the case's Libraries, each once those it imports are compiled.
-fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects, out: *std.StringHashMapUnmanaged(*c.talk_library)) !void {
+fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects, out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_load_grant)) !void {
     // The Grant declarations: each Capability the case defines, by its name.
-    var declarations: std.ArrayList(c.talk_load_grant) = .empty;
     var it = defs.iterator();
     while (it.next()) |e| {
         var grant: ?*c.talk_grant = null;
@@ -937,8 +936,10 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var store: ObjectStore = .{ .a = a };
     defer store.deinit();
     try defineObjects(a, core, group, all, &store);
+    // The version of each Library the runner compiled last, by name.
     var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
-    try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries);
+    var declarations: std.ArrayList(c.talk_load_grant) = .empty;
+    try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries, &declarations);
     for ((try hostOrder(a, trace)).items) |line| {
         const input = line[2..];
         const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse input.len;
@@ -980,6 +981,39 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             // A refusal is in the Trace as a `refused` record.
             const code = c.talk_add_library(group, library);
             if (code != c.TALK_RESERVED_NAME and code != c.TALK_NAME_REUSED and code != c.TALK_LIBRARY_MISMATCH) try check(code);
+        } else if (std.mem.eql(u8, name, "reload") or std.mem.eql(u8, name, "extend")) {
+            // The source travels in the Trace, its scalars as written.
+            const rest = input[name_end + 1 ..];
+            const script = scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+            const source = try northtalk.display.readSource(a, field(input, "source") orelse return error.MalformedCase);
+            // A refusal is in the Trace, as `diag` or `refused` records.
+            if (std.mem.eql(u8, name, "extend")) {
+                const code = c.talk_script_extend(script, source.ptr, source.len);
+                if (code != c.TALK_LOAD_REFUSED and code != c.TALK_NAME_REUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
+            } else {
+                const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
+                const o: c.talk_reload_options = .{ .keep_mailbox = std.mem.eql(u8, field(input, "mailbox") orelse "", "keep") };
+                const code = c.talk_script_reload(script, source.ptr, source.len, carry, &o);
+                if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE and code != c.TALK_EFFECT_STATE_UNKNOWN) try check(code);
+            }
+        } else if (std.mem.eql(u8, name, "replace-library")) {
+            const rest = input[name_end + 1 ..];
+            const library = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase];
+            const replaced = libraries.get(library) orelse return error.MalformedCase;
+            const source = try northtalk.display.readSource(a, field(input, "source") orelse return error.MalformedCase);
+            var imports: std.ArrayList(?*c.talk_library) = .empty;
+            for (try usedLibraries(a, source)) |n| if (libraries.get(n)) |l| try imports.append(a, l);
+            var label: [*c]const u8 = null;
+            var label_len: usize = 0;
+            c.talk_library_version(replaced, &label, &label_len);
+            const src: c.talk_library_source = .{ .name = library.ptr, .name_len = library.len, .version = label, .version_len = label_len, .source = source.ptr, .source_len = source.len };
+            var l: ?*c.talk_library = null;
+            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l));
+            const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
+            const code = c.talk_replace_library(group, l, carry);
+            if (code == c.TALK_OK) {
+                try libraries.put(a, library, l.?);
+            } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
         } else if (std.mem.eql(u8, name, "set-parent")) {
             const o = store.named(field(input, "object").?) orelse return error.MalformedCase;
             const shown = field(input, "parent").?;

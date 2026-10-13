@@ -48,6 +48,25 @@ fn key(w: *std.Io.Writer, s: []const u8) !void {
     if (s.len > 0 and (s[0] == '"' or hidden(utf8.decode(s, 0)))) try w.writeAll("\"\" & ");
     try text(w, s);
 }
+/// Writes source text as display-form text, its scalars exactly as given,
+/// as a Trace's `source` field does.
+pub fn writeSource(w: *std.Io.Writer, s: []const u8) Error!void {
+    return text(w, s);
+}
+
+/// Reads a Trace's `source` field: display-form text whose scalars are kept
+/// exactly as written, without NFC.
+pub fn readSource(a: std.mem.Allocator, input: []const u8) model.Error![]u8 {
+    if (!utf8.validate(input)) return error.InvalidValue;
+    var r: Reader = .{ .allocator = a, .input = input };
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(a);
+    try r.textPiece(&out);
+    while (r.take(" & ")) try r.textPiece(&out);
+    if (r.pos != input.len) return error.InvalidValue;
+    return out.toOwnedSlice(a);
+}
+
 /// Writes `v`'s one-line display form. A Function writes its stored source.
 pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
     return writeWith(w, v, false);

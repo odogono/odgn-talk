@@ -1,4 +1,5 @@
 # Cases protected by the Zig Core's incremental conformance gate.
+builtins/function-values
 builtins/kind-of
 builtins/object-kind
 bytes/build-and-match
@@ -36,16 +37,20 @@ capabilities/effect-operation-error
 capabilities/effect-ordinary-error
 capabilities/effect-participant-conflict
 capabilities/effect-pass
+capabilities/effect-reload-carry
+capabilities/effect-replace-library
 capabilities/effect-rollback-failed
 capabilities/effect-segment-roundtrip
 capabilities/effect-suspension-commit-failed
 capabilities/effect-unrelated-abandon-failed
+capabilities/grants-as-used
 capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args
 capabilities/optional-args-fuel
 capabilities/optional-args-join
 capabilities/ordinary-grants
+capabilities/revoke-in-flight
 capabilities/scope-cancel-run
 capabilities/scope-close-conversion
 capabilities/scope-conversion-fault
@@ -144,6 +149,8 @@ errors/items-delimiter
 errors/lambda-capture-parity
 errors/queued-error-before-parked-run
 examples/orders-pricing
+examples/tenants-acme
+examples/tenants-globex
 examples/webhooks
 fallback/exclusions
 fallback/forwarding
@@ -253,12 +260,19 @@ recovery-offers/basic
 recovery-offers/boundaries
 recovery-offers/costs
 recovery-offers/nested
+reload/decomposed-source
+reload/extend-units
+reload/extension-state-cap
+reload/function-staleness
+reload/reload-carry-and-discard
+reload/replacement-transitive
 stdlib/calls
 stdlib/errors-name-the-call
 stdlib/lookup
 stdlib/template-migration
 suspension/answers
 suspension/argument-labels
+suspension/capability-resumption
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/join-closing-position
@@ -304,6 +318,7 @@ text-patterns/lazily-prefers-fewer
 text-patterns/lazily-stays-on-its-element
 text-patterns/matching-fuel-exhaustion
 text-patterns/or-is-leftmost-first
+text-patterns/pattern-size-literal-limit
 text-patterns/pattern-size-made-at-run-time
 text-patterns/replace-all-empty-matches
 text-patterns/splice-wrong-kind

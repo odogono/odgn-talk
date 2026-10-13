@@ -878,6 +878,29 @@ talk_host_error_code talk_script_cancel_run(talk_script *s, const char *id, size
  * its mailbox is dropped, and a later Delivery to it is dropped when it is
  * drained. A repeat keeps the first reason. */
 talk_host_error_code talk_script_stop(talk_script *s, const char *reason, size_t len);
+/* Whether a Reload or a Library replacement carries Script Variables over by
+ * name, or starts them from the new initialiser. */
+typedef enum talk_carry_over {
+    TALK_RESET_VARIABLES,
+    TALK_CARRY_VARIABLES
+} talk_carry_over;
+typedef struct talk_reload_options {
+    bool keep_mailbox; /* keep the mailbox's messages rather than drop them */
+} talk_reload_options;
+/* Reload is stop-and-reload, a worker call and a Host Input. The new source
+ * is checked against the Script's Grants, Libraries and well-known objects,
+ * and its initialiser run; a LoadError is TALK_LOAD_REFUSED, and a carry over
+ * the Persistent State cap TALK_STATE_TOO_LARGE, each leaving the Script
+ * unchanged. Then the Script is stopped with reason "reload", and the new code
+ * replaces it and every extension. A stop that stops the Group prevents the
+ * replacement, TALK_EFFECT_STATE_UNKNOWN. The stop report is in the Trace. o
+ * may be NULL. */
+talk_host_error_code talk_script_reload(talk_script *s, const char *source, size_t len, talk_carry_over carry, const talk_reload_options *o);
+/* Extend is extend Script, a worker call and a Host Input: the Entry becomes
+ * a new code unit of the Script, and nothing stops. A name the Script has is
+ * TALK_NAME_REUSED, a LoadError TALK_LOAD_REFUSED, and Script Variables over
+ * the Persistent State cap TALK_STATE_TOO_LARGE, each leaving it unchanged. */
+talk_host_error_code talk_script_extend(talk_script *s, const char *source, size_t len);
 /* C only: queues cancelling a Request or Decision, by its delivery id, such
  * as "d1", which talk.go does through its context: its Run is cancelled, or,
  * still in a mailbox, it is removed and reported cancelled with no Run. */
@@ -968,6 +991,14 @@ void talk_library_identity(const talk_library *l, uint8_t out[32]);
  * TALK_NAME_REUSED, and an import the Group doesn't hold with the same
  * identity TALK_LIBRARY_MISMATCH, each also a refused record. */
 talk_host_error_code talk_add_library(talk_group *g, talk_library *l);
+/* Replaces the Library the Group holds by l's name with l, a worker call and
+ * one Host Input. The Core recompiles every Library that imports it, from
+ * the source it holds, and stop-and-reloads every Script that imports any of
+ * them, its extensions too. If any fails to check, nothing changes:
+ * TALK_LOAD_REFUSED, its diagnostics in the Trace. A name the Group doesn't
+ * hold is TALK_INVALID_VALUE. The recompiled Libraries live as long as the
+ * Core. */
+talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry);
 
 /* Inspects the Group. In step 1 it writes a vars record for each Script to
  * the Trace, as the Host Input vars does. */

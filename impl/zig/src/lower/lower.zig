@@ -286,6 +286,17 @@ const Lowerer = struct {
 
     fn run(l: *Lowerer) Allocator.Error!void {
         const decls = l.tree.declarations;
+        // An extension's inherited names: the Script's Variables first, and
+        // its Constants as the first definitions, each linked from the unit
+        // that declares it (chapter 8, Code units).
+        for (l.options.context.inherited) |x| {
+            if (x.variable) {
+                try l.variables.append(l.a, x.name);
+                continue;
+            }
+            try l.imports.put(l.a, x.name, .{ .library = x.unit, .name = x.export_.name, .kind = x.export_.kind });
+            if (x.export_.kind == .constant) try l.definitions.append(l.a, try l.print("{s}:{s}", .{ x.unit, x.export_.name }));
+        }
         // Imports, by local name.
         for (decls) |d| if (d.data == .use) {
             const u = d.data.use;

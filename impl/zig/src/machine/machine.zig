@@ -194,7 +194,7 @@ pub const Run = struct {
     clause_fuel: u64 = 0,
     /// Preempted in a clause's patterns or Guard: the clause, and whether it
     /// is a Fallback's, from which dispatch goes on.
-    preempted_in: ?struct { body: u32, fallback: bool } = null,
+    preempted_in: ?struct { library: ?*Library, body: u32, fallback: bool } = null,
     /// Whether its next Stretch continues it after a preemption.
     continuing: bool = false,
     /// Named clauses dispatch has counted so far.
@@ -231,6 +231,8 @@ pub const Run = struct {
     /// The body of the Handler Clause it was dispatched to, whose Queueing
     /// Policy it follows.
     clause_body: ?u32 = null,
+    /// The unit that body is in: an extension, or null for its Script's own.
+    clause_unit: ?*Library = null,
     /// Whether a Fallback clause took its message.
     fallback: bool = false,
     /// While it is dispatched, the pc in its clause body where the clause's
@@ -280,6 +282,9 @@ pub const Member = struct {
     waited: Waited,
     /// How it settled, once it has.
     with: ?Resume = null,
+    /// Whether another member's failure failed the Join first, so it no
+    /// longer waits and a later answer for it is late.
+    cut: bool = false,
 };
 
 /// What a ready Run waited on, which its resume names.
@@ -351,6 +356,9 @@ pub const Pending = struct {
 /// A pending `wait for` (chapter 8, The event table): its entry, and what
 /// each branch popped.
 pub const EventWait = struct {
+    /// Its entry in the event table of the unit it is in: an extension's,
+    /// or null for its Script's own.
+    library: ?*Library = null,
     entry: u32,
     branches: []EventBranch,
     /// Whether it is the block form, which pushes the branch's number.
@@ -425,9 +433,22 @@ pub const Unwinding = struct {
 pub const Script = struct {
     name: []const u8,
     identity: [32]u8,
-    /// The arena that owns the source, tree and code unit.
+    /// The arena that owns its name, Grants and objects.
     arena: std.heap.ArenaAllocator,
+    /// The arena that owns its source, tree and code unit, which a Reload
+    /// replaces.
+    code: std.heap.ArenaAllocator,
+    source: []const u8 = "",
     unit: lower.Unit,
+    /// Its extensions, in the order made, each a code unit of its own
+    /// (chapter 10, Extend Script). It owns them.
+    extensions: std.ArrayList(*Library) = .empty,
+    /// Its code's generation, which a Reload replaces: a Function Value made
+    /// under an older one is stale.
+    generation: u64 = 0,
+    /// The names its units declare or import, in the order declared, as an
+    /// extension inherits them; in `code`.
+    names: std.ArrayList(check.Inherited) = .empty,
     variables: []*Value,
     definitions: []*Value,
     /// Its work, in the order each became ready.
@@ -470,7 +491,96 @@ pub const Script = struct {
         for (s.grants) |*g| if (std.mem.eql(u8, g.name, name)) return g;
         return null;
     }
+
+    /// Every Script Variable's name, in its variables table's order: the
+    /// newest unit's table, since an extension's starts with the Script's.
+    fn variableNames(s: *const Script) []const []const u8 {
+        if (s.extensions.items.len > 0) return s.extensions.items[s.extensions.items.len - 1].unit.variables;
+        return s.unit.variables;
+    }
+
+    /// The unit holding the Handler or Fallback `name`, null for the
+    /// Script's own: none, or its first.
+    fn handlerUnit(s: *const Script, name: []const u8, kind: lower.BodyKind) ?Place {
+        for (s.unit.bodies) |b| if (b.kind == kind and std.mem.eql(u8, b.name, name)) return .{ .library = null };
+        for (s.extensions.items) |x| for (x.unit.bodies) |b| if (b.kind == kind and std.mem.eql(u8, b.name, name)) return .{ .library = x };
+        return null;
+    }
+
+    /// One of its units: its own for null, or an extension.
+    fn unitIn(s: *const Script, library: ?*Library) *const lower.Unit {
+        return if (library) |l| &l.unit else &s.unit;
+    }
+
+    /// Whether one of its units declares or imports the name.
+    fn hasName(s: *const Script, name: []const u8) bool {
+        for (s.variableNames()) |n| if (std.mem.eql(u8, n, name)) return true;
+        for (s.names.items) |n| if (std.mem.eql(u8, n.name, name)) return true;
+        return false;
+    }
+
+    /// An extension's definition's value: `@<unit>:<name>`, a Constant of
+    /// one of the Script's units, or an imported Library's.
+    fn inheritedDefinition(s: *const Script, d: []const u8, imports: []const *Library) !?*Value {
+        const colon = std.mem.indexOfScalar(u8, d, ':') orelse return null;
+        if (d[0] != '@') return importedDefinition(imports, d);
+        const unit = d[1..colon];
+        const name = d[colon + 1 ..];
+        const from: struct { names: []const []const u8, values: []*Value } = if (std.mem.eql(u8, unit, s.name)) .{ .names = s.unit.definitions, .values = s.definitions } else for (s.extensions.items) |x| {
+            if (std.mem.eql(u8, x.name, unit)) break .{ .names = x.unit.definitions, .values = x.definitions };
+        } else return null;
+        for (from.names, from.values) |n, v| if (std.mem.eql(u8, n, name)) return v.retain();
+        return null;
+    }
 };
+
+/// Whether any of `imports` is one of `old` that `next` replaces.
+fn changed(imports: []const *Library, old: []const *Library, given: []const *Library) bool {
+    for (imports) |im| if (std.mem.indexOfScalar(*Library, old, im)) |j| if (given[j] != old[j]) return true;
+    return false;
+}
+
+/// Call id order: Script name first, then the numeric Run counter, then the
+/// numeric call counter, as in `shop/r2.c10`.
+fn callOrder(x: []const u8, y: []const u8) bool {
+    const Parts = struct {
+        script: []const u8,
+        run: u64,
+        call: u64,
+        fn of(id: []const u8) @This() {
+            const slash = std.mem.lastIndexOfScalar(u8, id, '/') orelse return .{ .script = id, .run = 0, .call = 0 };
+            const dot = std.mem.lastIndexOfScalar(u8, id, '.') orelse id.len;
+            const run = std.fmt.parseInt(u64, id[slash + 2 .. @max(dot, slash + 2)], 10) catch 0;
+            const call = if (dot + 2 <= id.len) std.fmt.parseInt(u64, id[dot + 2 ..], 10) catch 0 else 0;
+            return .{ .script = id[0..slash], .run = run, .call = call };
+        }
+    };
+    const a = Parts.of(x);
+    const b = Parts.of(y);
+    switch (std.mem.order(u8, a.script, b.script)) {
+        .lt => return true,
+        .gt => return false,
+        .eq => {},
+    }
+    if (a.run != b.run) return a.run < b.run;
+    return a.call < b.call;
+}
+
+/// An extended Script's code identity (chapter 10, Extend Script).
+fn extendedIdentity(previous: [32]u8, extension: [32]u8) [32]u8 {
+    var h = std.crypto.hash.sha2.Sha256.init(.{});
+    h.update(&std.fmt.bytesToHex(previous, .lower));
+    h.update("\nextend\n");
+    h.update(&std.fmt.bytesToHex(extension, .lower));
+    h.update("\n");
+    var out: [32]u8 = undefined;
+    h.final(&out);
+    return out;
+}
+
+/// Where code is: a Library's or extension's unit, or for null its Run's
+/// Script's own.
+pub const Place = struct { library: ?*Library };
 
 /// A compiled Library (chapter 7): its code unit, its Constants, which are
 /// pure and so shared by every Group that holds it, and the Libraries it
@@ -490,6 +600,12 @@ pub const Library = struct {
     /// Every Capability call it makes, through its imports too.
     needs: []const check.Need,
     stdlib: bool = false,
+    /// The Grant declarations it was compiled against, which recompiling it
+    /// for a replaced import uses again; null for none.
+    declarations: ?[]const NamedGrant = null,
+    /// For a Script's extension, its number since the Script's last Load or
+    /// Reload, which names it `<script>+<n>`; 0 for a Library.
+    extension: u32 = 0,
 
     pub fn destroy(l: *Library) void {
         for (l.definitions) |v| v.release();
@@ -586,13 +702,18 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         .exports = try check.exports(a, t, &checked),
         .needs = needs.items,
     };
+    if (declarations) |named| {
+        const kept = try a.alloc(NamedGrant, named.len);
+        for (named, kept) |n, *k| k.* = .{ .name = try a.dupe(u8, n.name), .grant = n.grant };
+        l.declarations = kept;
+    }
     // Its Constants and defaults: its initialiser, which may use only
     // literals, Constants and Built-ins, run once.
     l.definitions = try gpa.alloc(*Value, unit.definitions.len);
-    for (l.definitions, unit.definitions) |*v, d| v.* = try importedDefinition(gpa, imports, d) orelse try nothing(gpa);
+    for (l.definitions, unit.definitions) |*v, d| v.* = try importedDefinition(imports, d) orelse try nothing(gpa);
     var group: Group = .init(gpa, null);
     defer group.deinit();
-    var host: Script = .{ .name = own_name, .identity = l.identity, .arena = .init(gpa), .unit = unit, .variables = &.{}, .definitions = l.definitions };
+    var host: Script = .{ .name = own_name, .identity = l.identity, .arena = .init(gpa), .code = .init(gpa), .unit = unit, .variables = &.{}, .definitions = l.definitions };
     var run: Run = .{ .id = "", .script = &host, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
     defer run.frames.deinit(gpa);
     try group.pushFrame(&run, 0, &.{});
@@ -629,8 +750,7 @@ fn resolveImports(a: Allocator, t: *const ast.Tree, given: []const *Library) ![]
 }
 
 /// An imported Constant's value, for a definition named `<library>:<name>`.
-fn importedDefinition(gpa: Allocator, imports: []const *Library, d: []const u8) !?*Value {
-    _ = gpa;
+fn importedDefinition(imports: []const *Library, d: []const u8) !?*Value {
     const colon = std.mem.indexOfScalar(u8, d, ':') orelse return null;
     for (imports) |l| if (std.mem.eql(u8, l.name, d[0..colon])) {
         for (l.unit.definitions, l.definitions) |n, v| if (std.mem.eql(u8, n, d[colon + 1 ..])) return v.retain();
@@ -668,6 +788,14 @@ pub const FunctionCode = struct {
     home: []const u8,
     library: ?*Library,
     body: u32,
+    /// Its Home Script's code generation when it was made.
+    generation: u64,
+    /// What `functionName` and `functionArity` read, which a stale value
+    /// still answers: its name, empty for a Lambda, and its parameters
+    /// without defaults and in all.
+    name: []const u8 = "",
+    required: usize = 0,
+    total: usize = 0,
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
@@ -927,6 +1055,8 @@ pub const Group = struct {
     libraries: std.ArrayList(*Library) = .empty,
     /// The code of each Function Value made, by identity.
     functions: std.ArrayList(*FunctionCode) = .empty,
+    /// The code generations given out, so that each is new.
+    generations: u64 = 0,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
@@ -961,6 +1091,7 @@ pub const Group = struct {
         g.libraries.deinit(g.gpa);
         for (g.functions.items) |f| {
             g.gpa.free(f.home);
+            g.gpa.free(f.name);
             g.gpa.destroy(f);
         }
         g.functions.deinit(g.gpa);
@@ -1002,7 +1133,7 @@ pub const Group = struct {
     /// initialiser. Writes the `load` record and any `diag` records.
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
         const s = try g.gpa.create(Script);
-        s.* = .{ .name = undefined, .identity = codeIdentity(name, source, .script, &.{}), .arena = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
+        s.* = .{ .name = undefined, .identity = undefined, .arena = .init(g.gpa), .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
         // Until it joins the Group, a refusal leaves nothing of it behind.
         var lowered = false;
         var joined = false;
@@ -1010,49 +1141,116 @@ pub const Group = struct {
             if (lowered) for (s.unit.values) |v| if (v == .value) v.value.release();
             releaseAll(s.variables, g.gpa);
             releaseAll(s.definitions, g.gpa);
+            s.code.deinit();
             s.arena.deinit();
             g.gpa.destroy(s);
         };
         const a = s.arena.allocator();
+        const ca = s.code.allocator();
         s.name = try a.dupe(u8, name);
-        const src = try a.dupe(u8, source);
-        var lines: lexer.Lines = try .init(a, src);
-        const parsed = try parser.parse(a, src);
-        // A Script's identity covers the Libraries it imports that the
-        // Group holds; one that doesn't parse names none.
-        if (parsed == .tree) {
-            s.imports = try resolveImports(a, &parsed.tree, g.libraries.items);
-            s.identity = codeIdentity(name, source, .script, s.imports);
-        }
+        s.source = try ca.dupe(u8, source);
+        var parsed = try g.parseCode(ca, s.source);
+        s.imports = parsed.imports;
+        s.identity = codeIdentity(name, source, .script, s.imports);
         g.write("> load {s} identity={x}\n", .{ name, s.identity });
-        const tree = switch (parsed) {
+        var context = try g.codeContext(ca, options.context, options.objects, options.owner);
+        if (options.grants) |named| {
+            const viewed = try ca.alloc(check.Grant, named.len);
+            for (named, viewed) |n, *v| v.* = .{ .name = try ca.dupe(u8, n.name), .operations = try capabilities.checkOperations(ca, n.grant) };
+            context.grants = viewed;
+        }
+        var refused: usize = 0;
+        const code = try g.lowerCode(ca, name, s.name, &parsed, context, s.limits.pattern_size, &refused) orelse {
+            s.code.deinit();
+            s.arena.deinit();
+            g.gpa.destroy(s);
+            return .{ .refused = refused };
+        };
+        s.unit = code.unit;
+        lowered = true;
+        try s.names.appendSlice(ca, code.names);
+        if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, s.imports, options.grants_as_used);
+        for (s.grants) |sg| if (sg.grant.coordinator != null) {
+            s.effects = true;
+        };
+        s.objects = try a.alloc(NamedObject, options.objects.len);
+        for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
+        s.variables = try g.newValues(s.unit.variables.len, &.{}, &.{});
+        s.definitions = try g.newValues(s.unit.definitions.len, s.unit.definitions, s.imports);
+        g.generations += 1;
+        s.generation = g.generations;
+        const owner_of: ?[]u8 = if (options.owner != null) try g.gpa.dupe(u8, s.name) else null;
+        g.scripts.append(g.gpa, s) catch |e| {
+            if (owner_of) |x| g.gpa.free(x);
+            return e;
+        };
+        joined = true;
+        if (options.owner) |o| {
+            s.owner = o;
+            if (o.owner_of) |old| g.gpa.free(old);
+            o.owner_of = owner_of;
+        }
+        // An initialiser that raises takes the Script out of the Group.
+        if (!try g.initialise(s, null, name)) {
+            _ = g.scripts.pop();
+            if (s.owner) |o| if (o.owner_of) |x| {
+                g.gpa.free(x);
+                o.owner_of = null;
+            };
+            g.destroyScript(s);
+            return .{ .refused = 1 };
+        }
+        return .{ .loaded = s };
+    }
+
+    /// A Script's or extension's source, parsed in `a`: its tree or its
+    /// syntax error, and the Libraries its `use` lines import that the Group
+    /// holds, which its identity covers. One that doesn't parse names none.
+    const Parsed = struct { lines: lexer.Lines, result: parser.Result, imports: []*Library };
+
+    fn parseCode(g: *Group, a: Allocator, source: []const u8) !Parsed {
+        const lines: lexer.Lines = try .init(a, source);
+        const result = try parser.parse(a, source);
+        const imports: []*Library = if (result == .tree) try resolveImports(a, &result.tree, g.libraries.items) else &.{};
+        return .{ .lines = lines, .result = result, .imports = imports };
+    }
+
+    /// What a Script's code is checked against, from `base`: its well-known
+    /// objects and owner, and the Libraries the Group holds.
+    fn codeContext(g: *Group, a: Allocator, base: check.Context, bound: []const NamedObject, owner: ?*objects.Object) !check.Context {
+        var context = base;
+        var held: std.ArrayList(check.Library) = .empty;
+        for (g.libraries.items) |l| try held.append(a, .{ .name = l.name, .exports = l.exports });
+        context.libraries = held.items;
+        const views = try a.alloc(check.Object, bound.len);
+        for (bound, views) |o, *v| v.* = .{ .name = try a.dupe(u8, o.name), .kind = o.object.kind.name };
+        context.objects = views;
+        if (owner) |o| context.owner = o.kind.name;
+        const kinds = try a.create(KindsView);
+        kinds.* = .{ .objects = bound, .owner = owner };
+        context.writable = .{ .context = kinds, .call = KindsView.writable };
+        return context;
+    }
+
+    /// A lowered unit, and the names it declares or imports, as an
+    /// extension inherits them.
+    const Lowered = struct { unit: lower.Unit, names: []const check.Inherited };
+
+    /// Checks and lowers parsed code in `a`, writing its `diag` records
+    /// under `label`: null when refused, with how many in `refused`.
+    fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *const Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
+        var lines = parsed.lines;
+        const tree = switch (parsed.result) {
             .failure => |d| {
                 const p = lines.position(d.offset);
-                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ name, d.code.spelling(), p.line, p.column });
-                s.arena.deinit();
-                g.gpa.destroy(s);
-                return .{ .refused = 1 };
+                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
+                refused.* = 1;
+                return null;
             },
             .tree => |t| t,
         };
         const t = try a.create(ast.Tree);
         t.* = tree;
-        var context = options.context;
-        var held: std.ArrayList(check.Library) = .empty;
-        for (g.libraries.items) |l| try held.append(a, .{ .name = l.name, .exports = l.exports });
-        context.libraries = held.items;
-        const views = try a.alloc(check.Object, options.objects.len);
-        for (options.objects, views) |o, *v| v.* = .{ .name = try a.dupe(u8, o.name), .kind = o.object.kind.name };
-        context.objects = views;
-        if (options.owner) |o| context.owner = o.kind.name;
-        const kinds = try a.create(KindsView);
-        kinds.* = .{ .objects = options.objects, .owner = options.owner };
-        context.writable = .{ .context = kinds, .call = KindsView.writable };
-        if (options.grants) |named| {
-            const viewed = try a.alloc(check.Grant, named.len);
-            for (named, viewed) |n, *v| v.* = .{ .name = try a.dupe(u8, n.name), .operations = try capabilities.checkOperations(a, n.grant) };
-            context.grants = viewed;
-        }
         const checked = try check.check(a, t, context);
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
         try diagnostics.appendSlice(a, checked.diagnostics);
@@ -1065,70 +1263,483 @@ pub const Group = struct {
         if (diagnostics.items.len > 0) {
             for (diagnostics.items) |d| {
                 const p = lines.position(d.offset);
-                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ name, d.code.spelling(), p.line, p.column });
+                g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
             }
-            s.arena.deinit();
-            g.gpa.destroy(s);
-            return .{ .refused = diagnostics.items.len };
+            refused.* = diagnostics.items.len;
+            return null;
         }
-        s.unit = try lower.lower(a, t, &checked, .{ .name = s.name, .context = context, .values = g.gpa });
-        lowered = true;
+        const unit = try lower.lower(a, t, &checked, .{ .name = unit_name, .context = context, .values = g.gpa });
         // A Text Pattern literal over the Script's `patternSize` is a load
         // error, at its opening `<`.
-        const oversized = try oversizedPatterns(a, &s.unit, s.limits.pattern_size);
+        const oversized = try oversizedPatterns(a, &unit, pattern_size);
         if (oversized.len > 0) {
-            for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ name, p.line, p.column });
-            for (s.unit.values) |v| if (v == .value) v.value.release();
-            s.arena.deinit();
-            g.gpa.destroy(s);
-            return .{ .refused = oversized.len };
+            for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ label, p.line, p.column });
+            for (unit.values) |v| if (v == .value) v.value.release();
+            refused.* = oversized.len;
+            return null;
         }
-        if (options.grants) |named| s.grants = try keptGrants(a, named, &s.unit, s.imports, options.grants_as_used);
-        for (s.grants) |sg| if (sg.grant.coordinator != null) {
-            s.effects = true;
+        // What it declares, linked from `@<unit>`, and what its `use` lines
+        // import, linked from their Libraries.
+        var names: std.ArrayList(check.Inherited) = .empty;
+        const link = try std.fmt.allocPrint(a, "@{s}", .{unit_name});
+        for (try check.exports(a, t, &checked)) |e| try names.append(a, .{ .name = e.name, .unit = link, .export_ = e });
+        for (t.declarations) |d| if (d.data == .use) {
+            const u = d.data.use;
+            const library = t.text(u.library);
+            for (u.names) |n| {
+                const ex = check.libraryExport(context, library, t.text(n)) orelse continue;
+                try names.append(a, .{ .name = t.text(u.rename orelse n), .unit = library, .export_ = ex });
+            }
         };
-        s.objects = try a.alloc(NamedObject, options.objects.len);
-        for (options.objects, s.objects) |o, *x| x.* = .{ .name = try a.dupe(u8, o.name), .object = o.object };
-        s.variables = try g.newValues(s.unit.variables.len, &.{}, &.{});
-        s.definitions = try g.newValues(s.unit.definitions.len, s.unit.definitions, s.imports);
-        const owner_of: ?[]u8 = if (options.owner != null) try g.gpa.dupe(u8, s.name) else null;
-        g.scripts.append(g.gpa, s) catch |e| {
-            if (owner_of) |x| g.gpa.free(x);
-            return e;
-        };
-        joined = true;
-        if (options.owner) |o| {
-            s.owner = o;
-            if (o.owner_of) |old| g.gpa.free(old);
-            o.owner_of = owner_of;
-        }
-        // The initialiser runs once, uncharged.
+        return .{ .unit = unit, .names = names.items };
+    }
+
+    /// Runs a unit's initialiser once, uncharged: false, with its
+    /// `initialiser failed` diagnostic under `label`, when it raises.
+    fn initialise(g: *Group, s: *Script, library: ?*Library, label: []const u8) !bool {
+        // It runs between Pumps, so no Fuel Slice or Fuel cap preempts it.
+        const slice = g.slice;
+        const cap = g.cap;
+        g.slice = 0;
+        g.cap = 0;
         var run: Run = .{ .id = "", .script = s, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
         defer {
+            g.slice = slice;
+            g.cap = cap;
             g.abandonUnwinding(&run);
             while (run.frames.items.len > 0) g.popFrame(&run);
             run.frames.deinit(g.gpa);
         }
-        try g.pushFrame(&run, 0, &.{});
+        try g.pushFrameIn(&run, library, 0, &.{});
         switch (try g.execute(&run, false)) {
             .returned => |v| v.release(),
             .errored => |v| {
-                // `initialiser failed`, at the raising instruction: the
-                // Script leaves the Group.
+                // `initialiser failed`, at the raising instruction.
                 v.release();
                 const at = run.raised_at orelse lower.Position{ .line = 1, .column = 1 };
-                g.write("diag {s} code=\"initialiser failed\" pos={d}:{d}\n", .{ name, at.line, at.column });
-                _ = g.scripts.pop();
-                if (s.owner) |o| if (o.owner_of) |x| {
-                    g.gpa.free(x);
-                    o.owner_of = null;
-                };
-                g.destroyScript(s);
-                return .{ .refused = 1 };
+                g.write("diag {s} code=\"initialiser failed\" pos={d}:{d}\n", .{ label, at.line, at.column });
+                return false;
             },
             else => {},
         }
-        return .{ .loaded = s };
+        return true;
+    }
+
+    /// The Grants an extension or a Reload is checked against: the
+    /// Script's unrevoked ones, each with only the Operations it keeps
+    /// (chapter 9, Revoking).
+    fn keptView(a: Allocator, grants: []const ScriptGrant) ![]check.Grant {
+        var out: std.ArrayList(check.Grant) = .empty;
+        for (grants) |sg| {
+            if (sg.revoked) continue;
+            const v = try out.addOne(a);
+            var ops: std.ArrayList(check.Operation) = .empty;
+            const all = try capabilities.checkOperations(a, sg.grant);
+            var at: usize = 0;
+            for (sg.grant.operations, sg.kept) |offered, kept| {
+                if (!offered) continue;
+                if (kept) try ops.append(a, all[at]);
+                at += 1;
+            }
+            v.* = .{ .name = sg.name, .operations = ops.items };
+        }
+        return out.items;
+    }
+
+    /// Releases a Script's code: its unit's constants, its extensions and
+    /// the arena that holds them.
+    fn dropCode(g: *Group, s: *Script) void {
+        for (s.extensions.items) |x| x.destroy();
+        s.extensions.deinit(g.gpa);
+        for (s.unit.values) |v| if (v == .value) v.value.release();
+        s.code.deinit();
+    }
+
+    pub const ExtendResult = enum { extended, refused, name_reused, state_too_large };
+
+    /// Extend Script (chapter 10): compiles an Entry as a new code unit of
+    /// the Script, whose names resolve to the Script's as well as its own,
+    /// and runs its initialiser. A LoadError, a name the Script already has,
+    /// or a Persistent State over its cap leaves the Script unchanged.
+    pub fn extend(g: *Group, s: *Script, source: []const u8) !ExtendResult {
+        return g.addExtension(s, source, true);
+    }
+
+    /// Adds an extension to `s`; with `input`, as the Host Input `extend`,
+    /// writing its record and refusing a reused name or a Persistent State
+    /// over the cap, or else rebuilding a Script whose cap is checked later.
+    fn addExtension(g: *Group, s: *Script, source: []const u8, input: bool) !ExtendResult {
+        const number: u32 = @intCast(s.extensions.items.len + 1);
+        const l = try g.gpa.create(Library);
+        l.* = .{ .gpa = g.gpa, .arena = .init(g.gpa), .name = "", .version = "", .source = "", .identity = undefined, .unit = undefined, .definitions = &.{}, .imports = &.{}, .exports = &.{}, .needs = &.{}, .extension = number };
+        var kept = false;
+        var lowered = false;
+        defer if (!kept) {
+            if (lowered) for (l.unit.values) |v| if (v == .value) v.value.release();
+            releaseAll(l.definitions, g.gpa);
+            var arena = l.arena;
+            g.gpa.destroy(l);
+            arena.deinit();
+        };
+        const a = l.arena.allocator();
+        l.name = try std.fmt.allocPrint(a, "{s}+{d}", .{ s.name, number });
+        l.source = try a.dupe(u8, source);
+        const parsed = try g.parseCode(a, l.source);
+        l.identity = codeIdentity(s.name, source, .extension, parsed.imports);
+        const identity = extendedIdentity(s.identity, l.identity);
+        if (input) if (g.trace) |out| {
+            out.print("> extend {s} source=", .{s.name}) catch {};
+            display.writeSource(out, source) catch {};
+            out.print(" identity={x}\n", .{identity}) catch {};
+        };
+        // Only new names: one the Script has, a Handler's included, is
+        // refused before checking.
+        if (input and parsed.result == .tree) {
+            const t = &parsed.result.tree;
+            for (t.declarations) |d| {
+                const reused = switch (d.data) {
+                    .script_variable => |v| s.hasName(t.text(v.name)),
+                    .constant => |k| s.hasName(t.text(k.name)),
+                    .function => |f| s.hasName(t.text(f.name)),
+                    .handler => |h| if (h.fallback) s.handlerUnit("any message", .fallback) != null else s.hasName(t.text(h.name)),
+                    .use => |u| for (u.names) |n| {
+                        if (s.hasName(t.text(u.rename orelse n))) break true;
+                    } else false,
+                };
+                if (reused) {
+                    g.write("refused code=\"name reused\"\n", .{});
+                    return .name_reused;
+                }
+            }
+        }
+        var inherited: std.ArrayList(check.Inherited) = .empty;
+        for (s.variableNames()) |n| try inherited.append(a, .{ .name = n, .variable = true });
+        try inherited.appendSlice(a, s.names.items);
+        var context = try g.codeContext(a, .{}, s.objects, s.owner);
+        context.grants = try keptView(a, s.grants);
+        context.inherited = inherited.items;
+        var refused: usize = 0;
+        const code = try g.lowerCode(a, l.name, l.name, &parsed, context, s.limits.pattern_size, &refused) orelse return .refused;
+        l.unit = code.unit;
+        lowered = true;
+        // It links the Libraries the Script's units import, besides its own.
+        var imports: std.ArrayList(*Library) = .empty;
+        try imports.appendSlice(a, parsed.imports);
+        for (s.imports) |x| {
+            if (std.mem.indexOfScalar(*Library, imports.items, x) == null) try imports.append(a, x);
+        }
+        for (s.extensions.items) |x| for (x.imports) |y| {
+            if (std.mem.indexOfScalar(*Library, imports.items, y) == null) try imports.append(a, y);
+        };
+        l.imports = imports.items;
+        l.definitions = try g.gpa.alloc(*Value, l.unit.definitions.len);
+        var made: usize = 0;
+        errdefer {
+            for (l.definitions[0..made]) |v| v.release();
+            g.gpa.free(l.definitions);
+            l.definitions = &.{};
+        }
+        for (l.definitions, l.unit.definitions) |*v, name| {
+            v.* = try s.inheritedDefinition(name, l.imports) orelse try nothing(g.gpa);
+            made += 1;
+        }
+        // Its Script Variables join the Script's, Nothing until its
+        // initialiser runs; a refusal takes them out again.
+        const old = s.variables;
+        const grown = try g.gpa.alloc(*Value, l.unit.variables.len);
+        var filled: usize = 0;
+        errdefer {
+            for (grown[0..filled]) |v| v.release();
+            g.gpa.free(grown);
+        }
+        for (grown, 0..) |*v, i| {
+            v.* = if (i < old.len) old[i].retain() else try nothing(g.gpa);
+            filled += 1;
+        }
+        s.variables = grown;
+        const ok = blk: {
+            errdefer s.variables = old;
+            if (!try g.initialise(s, l, l.name)) break :blk ExtendResult.refused;
+            if (input and g.persistentState(s) > s.limits.persistent_state) {
+                g.write("refused code=\"state too large\"\n", .{});
+                break :blk ExtendResult.state_too_large;
+            }
+            break :blk ExtendResult.extended;
+        };
+        if (ok != .extended) {
+            s.variables = old;
+            releaseAll(grown, g.gpa);
+            return ok;
+        }
+        releaseAll(old, g.gpa);
+        try s.names.ensureUnusedCapacity(s.code.allocator(), code.names.len);
+        try s.extensions.append(g.gpa, l);
+        s.names.appendSliceAssumeCapacity(code.names);
+        s.identity = identity;
+        kept = true;
+        return .extended;
+    }
+
+    pub const ReloadResult = enum { reloaded, refused, state_too_large, stopped };
+
+    /// Stop-and-reload (chapter 10, Reload): checks the new source and runs
+    /// its initialiser, carries Script Variables over if asked, then stops
+    /// the Script with reason `reload` and replaces its code and every
+    /// extension at once. A refusal leaves the Script unchanged.
+    pub fn reload(g: *Group, s: *Script, source: []const u8, carry: bool, keep_mailbox: bool) !ReloadResult {
+        const fresh = try g.newCode(s);
+        defer g.dropFresh(fresh);
+        const ca = fresh.code.allocator();
+        fresh.source = try ca.dupe(u8, source);
+        var parsed = try g.parseCode(ca, fresh.source);
+        fresh.imports = parsed.imports;
+        fresh.identity = codeIdentity(s.name, source, .script, fresh.imports);
+        if (g.trace) |out| {
+            out.print("> reload {s} carry={s}", .{ s.name, if (carry) "yes" else "no" }) catch {};
+            if (keep_mailbox) out.writeAll(" mailbox=keep") catch {};
+            out.writeAll(" source=") catch {};
+            display.writeSource(out, source) catch {};
+            out.print(" identity={x}\n", .{fresh.identity}) catch {};
+        }
+        if (!try g.buildCode(s, fresh, &parsed, &.{})) return .refused;
+        if (carry) try g.carryOver(s, fresh);
+        if (g.carriedState(s, fresh, keep_mailbox) > s.limits.persistent_state) {
+            g.write("refused code=\"state too large\"\n", .{});
+            return .state_too_large;
+        }
+        if (!try g.replaceCode(s, fresh, keep_mailbox)) return .stopped;
+        return .reloaded;
+    }
+
+    /// A detached Script for building new code for `s`: its name, Grants,
+    /// objects and limits, and a new generation.
+    fn newCode(g: *Group, s: *Script) !*Script {
+        const fresh = try g.gpa.create(Script);
+        g.generations += 1;
+        fresh.* = .{ .name = s.name, .identity = undefined, .arena = undefined, .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .grants = s.grants, .owner = s.owner, .objects = s.objects, .limits = s.limits, .effects = s.effects, .generation = g.generations };
+        fresh.unit.values = &.{};
+        return fresh;
+    }
+
+    /// Releases a detached Script and whatever code it still holds.
+    fn dropFresh(g: *Group, fresh: *Script) void {
+        releaseAll(fresh.variables, g.gpa);
+        releaseAll(fresh.definitions, g.gpa);
+        g.dropCode(fresh);
+        g.gpa.destroy(fresh);
+    }
+
+    /// Checks and lowers a detached Script's source, against the Script's
+    /// kept Grants, objects and owner, runs its initialiser, and adds each
+    /// of `extensions` in order: false, its diagnostics written, if any
+    /// refuses.
+    fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *const Parsed, extensions: []const []const u8) !bool {
+        const ca = fresh.code.allocator();
+        var context = try g.codeContext(ca, .{}, s.objects, s.owner);
+        context.grants = try keptView(ca, s.grants);
+        var refused: usize = 0;
+        const code = try g.lowerCode(ca, s.name, s.name, parsed, context, s.limits.pattern_size, &refused) orelse return false;
+        fresh.unit = code.unit;
+        try fresh.names.appendSlice(ca, code.names);
+        fresh.variables = try g.newValues(fresh.unit.variables.len, &.{}, &.{});
+        fresh.definitions = try g.newValues(fresh.unit.definitions.len, fresh.unit.definitions, fresh.imports);
+        if (!try g.initialise(fresh, null, s.name)) return false;
+        for (extensions) |x| if (try g.addExtension(fresh, x, false) != .extended) return false;
+        return true;
+    }
+
+    /// Carries each Script Variable both codes declare over by name, from
+    /// the Script's prospective post-rollback view: a Run stopped in the
+    /// middle of its Segment gives back its Segment's base.
+    fn carryOver(g: *Group, s: *Script, fresh: *Script) !void {
+        const view = try g.gpa.dupe(*Value, s.variables);
+        defer g.gpa.free(view);
+        var runs: std.ArrayList(*Run) = .empty;
+        defer runs.deinit(g.gpa);
+        try runs.appendSlice(g.gpa, s.live.items);
+        std.mem.sort(*Run, runs.items, {}, struct {
+            fn less(_: void, x: *Run, y: *Run) bool {
+                return runNumber(x.id) < runNumber(y.id);
+            }
+        }.less);
+        for (runs.items) |r| if (r.continuing) if (r.segment_base) |base| {
+            @memcpy(view[0..base.len], base);
+        };
+        for (fresh.variableNames(), fresh.variables) |name, *v| {
+            for (s.variableNames(), view) |old, x| if (std.mem.eql(u8, old, name)) {
+                v.*.release();
+                v.* = x.retain();
+                break;
+            };
+        }
+    }
+
+    /// The Persistent State the Script would keep with the new code's
+    /// Script Variables, and its mailbox if it keeps it.
+    fn carriedState(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) u64 {
+        _ = g;
+        var total: u64 = 0;
+        for (fresh.variables) |v| total += costs.size(v);
+        if (keep_mailbox) for (s.work.items) |w| switch (w) {
+            .message => |d| {
+                var contents: u64 = 0;
+                for (d.args) |v| contents += costs.size(v);
+                if (d.function) |f| contents += costs.size(f);
+                total += 32 + contents;
+            },
+            .run => {},
+        };
+        return total;
+    }
+
+    /// Stops the Script with reason `reload` and puts the new code and
+    /// Script Variables in place of the old, all at once: false if the stop
+    /// stopped the Group, which prevents replacing it.
+    fn replaceCode(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) !bool {
+        // Reload isn't sticky: a stopped Script is stopped again, and then
+        // takes new messages.
+        if (s.stopped) |reason| {
+            g.gpa.free(reason);
+            s.stopped = null;
+        }
+        try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload });
+        if (s.stopped) |reason| {
+            g.gpa.free(reason);
+            s.stopped = null;
+        }
+        if (g.fatal) return false;
+        // The revoked Grants the new code was checked without go.
+        var kept: usize = 0;
+        for (s.grants) |sg| if (!sg.revoked) {
+            s.grants[kept] = sg;
+            kept += 1;
+        };
+        s.grants = s.grants[0..kept];
+        releaseAll(s.variables, g.gpa);
+        releaseAll(s.definitions, g.gpa);
+        g.dropCode(s);
+        s.code = fresh.code;
+        s.source = fresh.source;
+        s.unit = fresh.unit;
+        s.imports = fresh.imports;
+        s.extensions = fresh.extensions;
+        s.names = fresh.names;
+        s.variables = fresh.variables;
+        s.definitions = fresh.definitions;
+        s.identity = fresh.identity;
+        s.generation = fresh.generation;
+        // The detached Script holds nothing now.
+        fresh.code = .init(g.gpa);
+        fresh.unit.values = &.{};
+        fresh.extensions = .empty;
+        fresh.variables = &.{};
+        fresh.definitions = &.{};
+        return true;
+    }
+
+    pub const ReplaceResult = union(enum) {
+        /// The Libraries recompiled for it, which the caller owns.
+        replaced: []*Library,
+        refused,
+        unknown_library,
+        state_too_large,
+    };
+
+    /// Replaces a Library the Group holds (chapter 7): recompiles every
+    /// Library that imports it, directly or through another, from the source
+    /// the Group holds, then stop-and-reloads every Script that imports any
+    /// of them, its extensions too, in load order, as one Host Input. If any
+    /// fails, nothing changes. `compiler` makes the recompiled Libraries,
+    /// which outlive the Group.
+    pub fn replaceLibrary(g: *Group, l: *Library, carry: bool, compiler: Allocator) !ReplaceResult {
+        if (g.trace) |out| {
+            out.print("> replace-library {s} carry={s} source=", .{ l.name, if (carry) "yes" else "no" }) catch {};
+            display.writeSource(out, l.source) catch {};
+            out.print(" identity={x}\n", .{l.identity}) catch {};
+        }
+        const at = for (g.libraries.items, 0..) |x, i| {
+            if (std.mem.eql(u8, x.name, l.name)) break i;
+        } else return .unknown_library;
+        // The Group's Libraries with the replacements in place.
+        const given = try g.gpa.dupe(*Library, g.libraries.items);
+        defer g.gpa.free(given);
+        const old = try g.gpa.dupe(*Library, g.libraries.items);
+        defer g.gpa.free(old);
+        given[at] = l;
+        var made: std.ArrayList(*Library) = .empty;
+        errdefer {
+            for (made.items) |x| x.destroy();
+            made.deinit(g.gpa);
+        }
+        // Libraries are held only after what they import, so one pass in
+        // order recompiles each dependant after its imports.
+        var failed = false;
+        for (old, 0..) |x, i| {
+            if (i == at) continue;
+            if (!changed(x.imports, old, given)) continue;
+            const compiled = try compileLibrary(compiler, x.name, x.version, x.source, given, x.declarations);
+            switch (compiled) {
+                .library => |y| {
+                    try made.append(g.gpa, y);
+                    given[i] = y;
+                },
+                .refused => |diags| {
+                    defer compiler.free(diags);
+                    for (diags) |d| g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ x.name, d.code, d.line, d.column });
+                    failed = true;
+                },
+            }
+        }
+        if (failed) {
+            for (made.items) |x| x.destroy();
+            made.deinit(g.gpa);
+            return .refused;
+        }
+        // Each importing Script is rebuilt against them, its extensions too.
+        var rebuilt: std.ArrayList(struct { script: *Script, fresh: *Script }) = .empty;
+        defer {
+            for (rebuilt.items) |x| g.dropFresh(x.fresh);
+            rebuilt.deinit(g.gpa);
+        }
+        const outcome: ?ReplaceResult = blk: {
+            @memcpy(g.libraries.items, given);
+            defer @memcpy(g.libraries.items, old);
+            for (g.scripts.items) |s| {
+                const uses = changed(s.imports, old, given) or for (s.extensions.items) |x| {
+                    if (changed(x.imports, old, given)) break true;
+                } else false;
+                if (!uses) continue;
+                const fresh = try g.newCode(s);
+                rebuilt.append(g.gpa, .{ .script = s, .fresh = fresh }) catch |e| {
+                    g.dropFresh(fresh);
+                    return e;
+                };
+                const ca = fresh.code.allocator();
+                fresh.source = try ca.dupe(u8, s.source);
+                var parsed = try g.parseCode(ca, fresh.source);
+                fresh.imports = parsed.imports;
+                const sources = try ca.alloc([]const u8, s.extensions.items.len);
+                for (s.extensions.items, sources) |x, *src| src.* = try ca.dupe(u8, x.source);
+                if (!try g.buildCode(s, fresh, &parsed, sources)) break :blk .refused;
+                fresh.identity = codeIdentity(s.name, s.source, .script, fresh.imports);
+                for (fresh.extensions.items) |x| fresh.identity = extendedIdentity(fresh.identity, x.identity);
+                if (carry) try g.carryOver(s, fresh);
+                if (g.carriedState(s, fresh, false) > s.limits.persistent_state) {
+                    g.write("refused code=\"state too large\"\n", .{});
+                    break :blk .state_too_large;
+                }
+            }
+            break :blk null;
+        };
+        if (outcome) |o| {
+            for (made.items) |x| x.destroy();
+            made.deinit(g.gpa);
+            return o;
+        }
+        @memcpy(g.libraries.items, given);
+        // A stop that stops the Group leaves the rest stopped with it.
+        for (rebuilt.items) |x| if (!try g.replaceCode(x.script, x.fresh, false)) break;
+        return .{ .replaced = try made.toOwnedSlice(g.gpa) };
     }
 
     /// `n` Script values: Nothing, or for a definition named
@@ -1141,7 +1752,7 @@ pub const Group = struct {
             g.gpa.free(out);
         }
         for (out, 0..) |*v, i| {
-            v.* = (if (i < names.len) try importedDefinition(g.gpa, imports, names[i]) else null) orelse try nothing(g.gpa);
+            v.* = (if (i < names.len) try importedDefinition(imports, names[i]) else null) orelse try nothing(g.gpa);
             made += 1;
         }
         return out;
@@ -1456,11 +2067,11 @@ pub const Group = struct {
     /// Whether a Script wants a Broadcast's message: it has a Handler for
     /// it, or a `wait for` pending on it. A Fallback doesn't count.
     fn wants(g: *Group, s: *const Script, message: []const u8) bool {
-        for (s.unit.bodies) |b| if (b.kind == .handler and std.mem.eql(u8, b.name, message)) return true;
+        if (s.handlerUnit(message, .handler) != null) return true;
         for (g.pending.items) |p| {
             const event = p.event orelse continue;
             if (p.run.script != s) continue;
-            for (s.unit.events[event.entry].branches) |b| switch (b) {
+            for (s.unitIn(event.library).events[event.entry].branches) |b| switch (b) {
                 .when => |w| if (std.mem.eql(u8, w.message, message)) return true,
                 .after => {},
             };
@@ -1571,7 +2182,7 @@ pub const Group = struct {
         for (s.live.items) |r| g.destroyRun(r);
         s.live.deinit(g.gpa);
         if (s.stopped) |reason| g.gpa.free(reason);
-        for (s.unit.values) |v| if (v == .value) v.value.release();
+        g.dropCode(s);
         s.arena.deinit();
         g.gpa.destroy(s);
     }
@@ -1767,7 +2378,7 @@ pub const Group = struct {
             .dispose => |o| {
                 o.disposed = true;
                 // Disposing a Script's owner stops it, in this same input.
-                for (g.scripts.items) |x| if (x.owner == o) try g.stopScript(x, "owner disposed", null);
+                for (g.scripts.items) |x| if (x.owner == o) try g.stopScript(x, "owner disposed", null, .{});
             },
             .cancel_run => |id| {
                 defer g.gpa.free(id);
@@ -1782,7 +2393,7 @@ pub const Group = struct {
                 defer g.gpa.free(x.reason);
                 // A repeated Stop does nothing, and keeps the first reason.
                 const target = g.script(x.script) orelse continue;
-                try g.stopScript(target, x.reason, null);
+                try g.stopScript(target, x.reason, null, .{});
             },
             .revoke => |x| {
                 defer g.gpa.free(x.script);
@@ -1922,6 +2533,17 @@ pub const Group = struct {
             if (!waiting_at_end) return;
             if (failed) {
                 run.resume_with = .{ .join_failed = index };
+                // The other members stop waiting now; the Run abandons them
+                // when it resumes.
+                for (join.members.items) |*x| if (x.pending) |w| {
+                    for (g.pending.items, 0..) |y, i| if (y == w) {
+                        _ = g.pending.orderedRemove(i);
+                        break;
+                    };
+                    g.destroyPending(w);
+                    x.pending = null;
+                    x.cut = true;
+                };
             } else {
                 for (join.members.items) |x| if (x.with == null) return;
                 run.resume_with = .joined;
@@ -1971,7 +2593,7 @@ pub const Group = struct {
         const w = g.trace orelse return;
         for (g.scripts.items) |s| {
             w.print("vars {s}", .{s.name}) catch {};
-            for (s.unit.variables, s.variables) |name, v| {
+            for (s.variableNames(), s.variables) |name, v| {
                 w.print(" {s}=", .{name}) catch {};
                 display.writeTrace(w, v) catch {};
             }
@@ -1993,10 +2615,7 @@ pub const Group = struct {
     fn startRun(g: *Group, s: *Script, d: Delivery) !void {
         // An `error` message with no `on error` is dropped unseen.
         if (d.internal_error) {
-            const any = for (s.unit.bodies) |b| {
-                if (b.kind == .handler and std.mem.eql(u8, b.name, "error")) break true;
-            } else false;
-            if (!any) return g.releaseDelivery(d);
+            if (s.handlerUnit("error", .handler) == null) return g.releaseDelivery(d);
         }
         s.runs += 1;
         const run = g.gpa.create(Run) catch |e| {
@@ -2045,26 +2664,30 @@ pub const Group = struct {
     /// with `fallback` the Fallback's from `from`. A Run preempted in a
     /// clause's patterns or Guard goes on from the next one.
     fn dispatchFrom(g: *Group, s: *Script, run: *Run, d: Delivery, from: usize, fallback: bool) !Outcome {
-        if (!fallback) {
-            for (s.unit.bodies[from..], from..) |b, i| {
+        // A Handler's clauses, and the Fallback's, are each in one unit.
+        if (!fallback) if (s.handlerUnit(d.message, .handler)) |place| {
+            for (s.unitIn(place.library).bodies[from..], from..) |b, i| {
                 if (b.kind != .handler or !std.mem.eql(u8, b.name, d.message)) continue;
                 run.clauses_seen += 1;
                 if (b.params.len != d.args.len) continue;
                 run.clause = run.clauses_seen;
-                if (try g.tryClause(s, run, @intCast(i), d.args, d.during, false)) |end| return end;
+                if (try g.tryClause(s, run, place.library, @intCast(i), d.args, d.during, false)) |end| return end;
             }
+        };
+        if (!fallback) {
             // No named clause took it: the Fallback's clauses, with the
             // message map, built without charge. A Broadcast, a Decision and
             // an `error` message never reach them.
             if (d.internal_error or d.decides or d.broadcast != 0) return .unhandled;
         }
+        const place = s.handlerUnit("any message", .fallback) orelse return .unhandled;
         const message = try g.messageMap(d);
         defer message.release();
-        for (s.unit.bodies[if (fallback) from else 0..], if (fallback) from else 0..) |b, i| {
+        for (s.unitIn(place.library).bodies[if (fallback) from else 0..], if (fallback) from else 0..) |b, i| {
             if (b.kind != .fallback) continue;
             run.fallback = true;
             run.clause = b.clause orelse 1;
-            if (try g.tryClause(s, run, @intCast(i), &.{message}, null, true)) |end| return end;
+            if (try g.tryClause(s, run, place.library, @intCast(i), &.{message}, null, true)) |end| return end;
         }
         return .unhandled;
     }
@@ -2079,7 +2702,7 @@ pub const Group = struct {
         const in = run.preempted_in orelse return g.execute(run, true);
         run.preempted_in = null;
         const outcome = try g.execute(run, true);
-        if (try g.afterGuard(s, run, in.body, outcome, in.fallback)) |end| return end;
+        if (try g.afterGuard(s, run, in.library, in.body, outcome, in.fallback)) |end| return end;
         return g.dispatchFrom(s, run, run.delivery, in.body + 1, in.fallback);
     }
 
@@ -2094,10 +2717,12 @@ pub const Group = struct {
         if (deciding) run.verdict = true else try g.takePart(run.delivery, .allowed);
     }
 
-    fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value, fallback: bool) !?Outcome {
-        const b = s.unit.bodies[body];
+    fn tryClause(g: *Group, s: *Script, run: *Run, library: ?*Library, body: u32, args: []const *Value, during: ?*Value, fallback: bool) !?Outcome {
+        const unit = s.unitIn(library);
+        const b = unit.bodies[body];
         run.clause_body = body;
-        try g.pushFrame(run, body, args);
+        run.clause_unit = library;
+        try g.pushFrameIn(run, library, body, args);
         if (b.during) |slot| if (during) |x| {
             const f = &run.frames.items[run.frames.items.len - 1];
             f.locals[slot].release();
@@ -2107,25 +2732,25 @@ pub const Group = struct {
         // together with that instruction's own charge.
         run.clause_fuel = 4;
         run.select_at = b.first;
-        for (s.unit.unwind) |e| if (e.kind == .guard and e.first == b.first) {
+        for (unit.unwind) |e| if (e.kind == .guard and e.first == b.first) {
             run.select_at = e.last + 1;
         };
-        return g.afterGuard(s, run, body, try g.execute(run, true), fallback);
+        return g.afterGuard(s, run, library, body, try g.execute(run, true), fallback);
     }
 
     /// What follows a clause's patterns and Guard: its Queueing Policy and
     /// its body once they pass, or null when they fail.
-    fn afterGuard(g: *Group, s: *Script, run: *Run, body: u32, first: Outcome, fallback: bool) !?Outcome {
-        const b = s.unit.bodies[body];
+    fn afterGuard(g: *Group, s: *Script, run: *Run, library: ?*Library, body: u32, first: Outcome, fallback: bool) !?Outcome {
+        const b = s.unitIn(library).bodies[body];
         var outcome = first;
-        if (outcome == .preempted and run.select_at != null) run.preempted_in = .{ .body = body, .fallback = fallback };
+        if (outcome == .preempted and run.select_at != null) run.preempted_in = .{ .library = library, .body = body, .fallback = fallback };
         if (outcome == .selected) {
             // A clause with no patterns or Guard is tried at its body's first
             // instruction, which pays the `clause` rate. A Run that parks or
             // is dropped here pays it now; one that goes on pays it with that
             // instruction's fixed rate. A Run that can't faults there, before
             // the clause is taken.
-            const waits = g.clauseBusy(s, body) and (b.policy == .queued or b.policy == .dropping);
+            const waits = g.clauseBusy(s, library, body) and (b.policy == .queued or b.policy == .dropping);
             if (run.clause_fuel > 0) {
                 const f = &run.frames.items[run.frames.items.len - 1];
                 const head = unitOf(run, f).code[f.pc];
@@ -2137,7 +2762,7 @@ pub const Group = struct {
                 run.fuel += run.clause_fuel;
                 run.clause_fuel = 0;
             }
-            if (g.clauseBusy(s, body)) switch (b.policy) {
+            if (g.clauseBusy(s, library, body)) switch (b.policy) {
                 .queued => {
                     // Parking is a suspension, which measures the Script's
                     // Persistent State with the Run.
@@ -2159,7 +2784,7 @@ pub const Group = struct {
                     }
                     return .dropped;
                 },
-                .replacing => try g.cancelClause(s, body),
+                .replacing => try g.cancelClause(s, library, body),
                 .none => {},
             };
             try g.takeVerdict(run, b.deciding);
@@ -2269,7 +2894,16 @@ pub const Group = struct {
         const frame = &run.frames.items[run.frames.items.len - 1];
         const pc = frame.pc - 1;
         const ins = unitOf(run, frame).code[pc];
+        const fuel = run.fuel;
+        const alloc = run.alloc;
         const raised: ?*Value = try g.resumeWith(run, frame, with, waited, pc, ins);
+        // An answer whose cost takes the Run over its Fuel faults at its
+        // call, and isn't charged.
+        if (raised == null and run.cleanup_from == null and run.fuel > fuel and run.fuel > run.limits.fuel_per_run) {
+            run.fuel = fuel;
+            run.alloc = alloc;
+            return g.limitFault(run, .fuel, unitName(run, frame), pc, ins);
+        }
         if (raised) |err| {
             const outcome = try g.unwind(run, err, pc, ins, true);
             if (with == .timeout and waited.id.len > 0) g.write("abandon {s}\n", .{waited.id});
@@ -2612,7 +3246,7 @@ pub const Group = struct {
     fn waitFor(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
         const gpa = g.gpa;
         const index: u32 = @intCast(ins.operands[0].int);
-        const entry = run.script.unit.events[index];
+        const entry = unitOf(run, frame).events[index];
         var count: usize = @intFromBool(entry.timeout);
         for (entry.branches) |b| count += switch (b) {
             .when => |w| @as(usize, @intFromBool(w.from)) + w.captures,
@@ -2685,7 +3319,7 @@ pub const Group = struct {
         }
         const event = try gpa.create(EventWait);
         owned = false;
-        event.* = .{ .entry = index, .branches = branches, .any = ins.op == .wait_for_any };
+        event.* = .{ .library = frame.library, .entry = index, .branches = branches, .any = ins.op == .wait_for_any };
         try g.suspendRun(run, if (event.any) "wait-for-any" else "wait-for", .{ .run = run, .deadline = deadline, .order = 0, .event = event, .branch = fires });
         return .suspended;
     }
@@ -2835,15 +3469,15 @@ pub const Group = struct {
 
     fn eventEntry(g: *Group, p: *const Pending) lower.Event {
         _ = g;
-        return p.run.script.unit.events[p.event.?.entry];
+        return p.run.script.unitIn(p.event.?.library).events[p.event.?.entry];
     }
 
     /// The number of the first `when` branch of a pending `wait for` that
     /// a message matches, having bound its names, or null.
     fn eventMatch(g: *Group, p: *Pending, d: Delivery) !?u32 {
         const run = p.run;
-        const unit = &run.script.unit;
         const event = p.event.?;
+        const unit = run.script.unitIn(event.library);
         for (unit.events[event.entry].branches, event.branches, 1..) |b, held, number| {
             const w = switch (b) {
                 .when => |w| w,
@@ -2863,7 +3497,7 @@ pub const Group = struct {
                 if (!std.mem.eql(u8, sender[0..end], from.data.text)) continue;
             };
             if (w.body) |body| {
-                const values = try g.eventTest(run, body, d.args, held.when.captures) orelse continue;
+                const values = try g.eventTest(run, event.library, body, d.args, held.when.captures) orelse continue;
                 defer values.release();
                 const frame = &run.frames.items[run.frames.items.len - 1];
                 for (w.binds, values.data.list) |slot, v| {
@@ -2878,11 +3512,11 @@ pub const Group = struct {
 
     /// Runs a `when` branch's test body on its waiting Run, which it
     /// charges: the values its names bind, or null if it fails.
-    fn eventTest(g: *Group, run: *Run, body: u32, args: []const *Value, captures: []const *Value) !?*Value {
+    fn eventTest(g: *Group, run: *Run, library: ?*Library, body: u32, args: []const *Value, captures: []const *Value) !?*Value {
         const base = run.frames.items.len;
-        try g.pushFrame(run, body, args);
+        try g.pushFrameIn(run, library, body, args);
         const frame = &run.frames.items[base];
-        const first = run.script.unit.bodies[body].capture_slot;
+        const first = run.script.unitIn(library).bodies[body].capture_slot;
         for (captures, first..) |v, slot| {
             frame.locals[slot].release();
             frame.locals[slot] = v.retain();
@@ -2931,7 +3565,7 @@ pub const Group = struct {
         for (join.members.items) |x| {
             // A member still pending, or one whose failure the fail-fast
             // raise didn't take, is abandoned.
-            const abandoned = x.pending != null or (x.with != null and switch (x.with.?) {
+            const abandoned = x.pending != null or x.cut or (x.with != null and switch (x.with.?) {
                 .answer, .reply => false,
                 else => true,
             });
@@ -3019,7 +3653,7 @@ pub const Group = struct {
     /// Puts the Script's Variables back as they were when the Segment began.
     fn restoreBase(g: *Group, run: *Run) void {
         const base = run.segment_base orelse return;
-        for (run.script.variables, base) |*v, b| {
+        for (run.script.variables[0..base.len], base) |*v, b| {
             v.*.release();
             v.* = b.retain();
         }
@@ -3369,7 +4003,7 @@ pub const Group = struct {
         }
         // The first Run parked behind it in its `, queued` clause becomes
         // ready, behind any `error` message.
-        if (run.clause_body) |body| for (s.live.items) |r| if (r.parked and r.clause_body.? == body) {
+        if (run.clause_body) |body| for (s.live.items) |r| if (r.parked and r.clause_body.? == body and r.clause_unit == run.clause_unit) {
             r.parked = false;
             r.resume_with = .unparked;
             try s.work.append(g.gpa, .{ .run = r });
@@ -3394,7 +4028,11 @@ pub const Group = struct {
     /// failed`, reason `stopped`, and an open Decision settles undecided. The
     /// Script's Grants are released, and its `stopped` record lists what
     /// went. A stopped Script stays stopped.
-    fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run) !void {
+    /// How a Stop goes: a Reload's keeps the mailbox if asked, and releases
+    /// the Script's Grants with reason `reload`.
+    const StopHow = struct { keep_mailbox: bool = false, release: capabilities.ReleaseReason = .stop };
+
+    fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run, how: StopHow) !void {
         if (s.stopped != null) return;
         s.stopped = try g.gpa.dupe(u8, reason);
         var runs: std.ArrayList(*Run) = .empty;
@@ -3408,6 +4046,18 @@ pub const Group = struct {
         }.less);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);
+        // The pending calls the discarded Runs abandon, in call id order.
+        var abandoned: std.ArrayList([]const u8) = .empty;
+        defer abandoned.deinit(g.gpa);
+        for (runs.items) |r| {
+            if (r.waiting) |p| if (p.call) |c| try abandoned.append(g.gpa, c.id);
+            if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| if (p.call) |c| try abandoned.append(g.gpa, c.id);
+        }
+        std.mem.sort([]const u8, abandoned.items, {}, struct {
+            fn less(_: void, x: []const u8, y: []const u8) bool {
+                return callOrder(x, y);
+            }
+        }.less);
         for (runs.items) |r| {
             _ = g.abandonScopes(r);
             if (g.finalize(r, false)) |_| {}
@@ -3421,7 +4071,7 @@ pub const Group = struct {
         }
         var dropped: std.ArrayList(u8) = .empty;
         defer dropped.deinit(g.gpa);
-        for (s.work.items) |w| switch (w) {
+        if (!how.keep_mailbox) for (s.work.items) |w| switch (w) {
             .message => |d| if (d.from == null and d.id > 0) {
                 if (dropped.items.len > 0) try dropped.appendSlice(g.gpa, ", ");
                 try dropped.print(g.gpa, "d{d}", .{d.id});
@@ -3440,12 +4090,14 @@ pub const Group = struct {
                 return std.mem.order(u8, x.name, y.name) == .lt;
             }
         }.less);
-        for (order) |sg| g.releaseGrant(s, sg, .stop);
+        for (order) |sg| g.releaseGrant(s, sg, how.release);
         if (g.trace) |out| {
             out.print("stopped {s} reason=", .{s.name}) catch {};
             writeText(out, reason);
             if (discarded.items.len > 0) out.print(" discarded=[{s}]", .{discarded.items}) catch {};
             if (dropped.items.len > 0) out.print(" dropped=[{s}]", .{dropped.items}) catch {};
+            for (abandoned.items, 0..) |id, i| out.print("{s}{s}", .{ if (i == 0) " abandoned=[" else ", ", id }) catch {};
+            if (abandoned.items.len > 0) out.writeAll("]") catch {};
             out.writeAll("\n") catch {};
         }
         // The open Decisions settle undecided, `cancelled`, after the
@@ -3454,11 +4106,21 @@ pub const Group = struct {
             r.verdict = false;
             try g.takePart(r.delivery, .{ .undecided = .{ .script = s.name, .run = r.id, .outcome = "cancelled" } });
         };
-        for (s.work.items) |w| switch (w) {
-            .message => |d| try g.settleDropped(s, d),
-            .run => {},
-        };
-        s.work.clearRetainingCapacity();
+        if (how.keep_mailbox) {
+            // The messages stay, their senders waiting; the Runs go.
+            var kept: usize = 0;
+            for (s.work.items) |w| if (w == .message) {
+                s.work.items[kept] = w;
+                kept += 1;
+            };
+            s.work.shrinkRetainingCapacity(kept);
+        } else {
+            for (s.work.items) |w| switch (w) {
+                .message => |d| try g.settleDropped(s, d),
+                .run => {},
+            };
+            s.work.clearRetainingCapacity();
+        }
         for (runs.items) |r| if (r != running) g.destroyRun(r);
     }
 
@@ -3484,7 +4146,7 @@ pub const Group = struct {
     /// Stops the Group, for an effect whose state is unknown: every Script,
     /// with the running Run discarded in its own.
     fn stopGroup(g: *Group, running: *Run) !void {
-        for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == running.script) running else null);
+        for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == running.script) running else null, .{});
     }
 
     /// Whether the Group is stopped: by an effect whose state is unknown, or
@@ -3579,26 +4241,25 @@ pub const Group = struct {
     }
 
     /// Whether a Run of the clause hasn't ended.
-    fn clauseBusy(g: *Group, s: *Script, body: u32) bool {
+    fn clauseBusy(g: *Group, s: *Script, library: ?*Library, body: u32) bool {
         _ = g;
-        for (s.live.items) |r| if (r.clause_body != null and r.clause_body.? == body) return true;
+        for (s.live.items) |r| if (r.clause_body != null and r.clause_body.? == body and r.clause_unit == library) return true;
         return false;
     }
 
     /// `, replacing`: cancels every Run of the clause that hasn't ended.
     /// What each waits on is abandoned now, and its cleanup runs in its
     /// Script's turn (chapter 6, Cancellation and Stop).
-    fn cancelClause(g: *Group, s: *Script, body: u32) !void {
+    fn cancelClause(g: *Group, s: *Script, library: ?*Library, body: u32) !void {
         for (s.live.items) |r| {
-            if (r.clause_body == null or r.clause_body.? != body) continue;
+            if (r.clause_body == null or r.clause_body.? != body or r.clause_unit != library) continue;
             try g.cancel(s, r);
         }
     }
 
     fn hasHandler(g: *Group, s: *const Script, name: []const u8) bool {
         _ = g;
-        for (s.unit.bodies) |b| if (b.kind == .handler and std.mem.eql(u8, b.name, name)) return true;
-        return false;
+        return s.handlerUnit(name, .handler) != null;
     }
 
     /// A message as `{name, args}`, for `, during`.
@@ -3674,11 +4335,19 @@ pub const Group = struct {
     }
 
     /// The Group's record of a Function Value's code, made once.
-    fn functionCode(g: *Group, home: []const u8, library: ?*Library, body: u32) !*FunctionCode {
-        for (g.functions.items) |f| if (f.library == library and f.body == body and std.mem.eql(u8, f.home, home)) return f;
+    fn functionCode(g: *Group, home: *const Script, library: ?*Library, body: u32) !*FunctionCode {
+        for (g.functions.items) |f| if (f.library == library and f.body == body and f.generation == home.generation and std.mem.eql(u8, f.home, home.name)) return f;
+        const b = home.unitIn(library).bodies[body];
+        var required: usize = 0;
+        for (b.params) |p| {
+            if (std.mem.indexOf(u8, p, " = ") == null) required += 1;
+        }
         const f = try g.gpa.create(FunctionCode);
         errdefer g.gpa.destroy(f);
-        f.* = .{ .home = try g.gpa.dupe(u8, home), .library = library, .body = body };
+        const name = try g.gpa.dupe(u8, if (b.kind == .lambda) "" else b.name);
+        errdefer g.gpa.free(name);
+        f.* = .{ .home = try g.gpa.dupe(u8, home.name), .library = library, .body = body, .generation = home.generation, .name = name, .required = required, .total = b.params.len };
+        errdefer g.gpa.free(f.home);
         try g.functions.append(g.gpa, f);
         return f;
     }
@@ -3690,20 +4359,29 @@ pub const Group = struct {
         return null;
     }
 
+    /// The body a Function Value runs, or null once it is stale: its Home
+    /// Script has gone or been reloaded since it was made.
     fn functionBody(g: *Group, f: *const FunctionCode) ?lower.Body {
-        if (f.library) |l| return l.unit.bodies[f.body];
         const home = g.script(f.home) orelse return null;
-        return home.unit.bodies[f.body];
+        if (home.generation != f.generation) return null;
+        return home.unitIn(f.library).bodies[f.body];
     }
 
     /// A Function Value: `<function home:where {captures}>`, where `where`
     /// is a Library's name and `:` before its function's name or the
     /// Lambda's position.
     fn functionValue(g: *Group, run: *Run, library: ?*Library, body: u32, where: []const u8, captures: *Value) !*Value {
-        const f = try g.functionCode(run.script.name, library, body);
+        const f = try g.functionCode(run.script, library, body);
         var shown: std.Io.Writer.Allocating = .init(g.scratch.allocator());
-        try shown.writer.print("<function {s}:", .{run.script.name});
-        if (library) |l| try shown.writer.print("{s}:", .{l.name});
+        // An extension's Lambda is placed by the extension's unit name; its
+        // named functions, like the Script's own, by the Script's.
+        const extension = if (library) |l| l.extension > 0 else false;
+        if (extension and library.?.unit.bodies[body].kind == .lambda) {
+            try shown.writer.print("<function {s}:", .{library.?.name});
+        } else {
+            try shown.writer.print("<function {s}:", .{run.script.name});
+            if (library) |l| if (!extension) try shown.writer.print("{s}:", .{l.name});
+        }
         try shown.writer.writeAll(where);
         if (captures.data.map.len > 0) {
             try shown.writer.writeByte(' ');
@@ -4751,7 +5429,9 @@ pub const Group = struct {
             w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
             if (run.segment_base) |base| {
                 var first = true;
-                for (run.script.variables, base, run.script.unit.variables) |v, b, name| {
+                // Variables an extension added since the Segment began
+                // aren't in its base.
+                for (run.script.variables[0..base.len], base, run.script.variableNames()[0..base.len]) |v, b, name| {
                     if (v == b or (v.equal(b) catch false)) continue;
                     w.print("{s}{s}", .{ if (first) " rollback=[" else ", ", name }) catch {};
                     first = false;
@@ -5689,10 +6369,10 @@ pub const Group = struct {
                     body = @intCast(ops[0].int);
                     name = unit.bodies[body].name;
                 } else {
-                    const colon = std.mem.indexOfScalar(u8, ops[0].text, ':').?;
-                    library = importOf(run, frame, ops[0].text[0..colon]) orelse return g.raise("not implemented", &.{});
+                    const colon = std.mem.lastIndexOfScalar(u8, ops[0].text, ':').?;
+                    library = (importPlace(run, frame, ops[0].text[0..colon]) orelse return g.raise("not implemented", &.{})).library;
                     name = ops[0].text[colon + 1 ..];
-                    body = library.?.function(name) orelse return g.raise("not implemented", &.{});
+                    body = functionIn(run.script.unitIn(library), name) orelse return g.raise("not implemented", &.{});
                 }
                 const captures = try model.map(gpa, &.{});
                 defer captures.release();
@@ -5708,9 +6388,9 @@ pub const Group = struct {
                 const args = try a.alloc(*Value, n);
                 for (0..n) |i| args[n - 1 - i] = pop(frame);
                 defer for (args) |v| v.release();
-                const colon = std.mem.indexOfScalar(u8, ops[0].text, ':').?;
-                const library = importOf(run, frame, ops[0].text[0..colon]) orelse return g.raise("not implemented", &.{});
-                const body = library.function(ops[0].text[colon + 1 ..]) orelse return g.raise("not implemented", &.{});
+                const colon = std.mem.lastIndexOfScalar(u8, ops[0].text, ':').?;
+                const library = (importPlace(run, frame, ops[0].text[0..colon]) orelse return g.raise("not implemented", &.{})).library;
+                const body = functionIn(run.script.unitIn(library), ops[0].text[colon + 1 ..]) orelse return g.raise("not implemented", &.{});
                 try g.callFunction(run, library, body, args);
             },
             .call_handler, .call_handler_wait => {
@@ -5718,13 +6398,15 @@ pub const Group = struct {
                 const args = try a.alloc(*Value, n);
                 for (0..n) |i| args[n - 1 - i] = pop(frame);
                 defer for (args) |v| v.release();
-                // The unit's own Handler, or else one it imports.
+                // The unit's own Handler, or one of its Script's other units',
+                // or else one it imports.
                 const name = ops[0].text;
                 var library: ?*Library = frame.library;
                 const own = for (unit.bodies) |b| {
                     if (b.kind == .handler and std.mem.eql(u8, b.name, name)) break true;
                 } else false;
-                if (!own) library = for (importsOf(run, frame)) |l| {
+                const script_code = if (frame.library) |l| l.extension > 0 else true;
+                if (!own) library = if (script_code and run.script.handlerUnit(name, .handler) != null) run.script.handlerUnit(name, .handler).?.library else for (importsOf(run, frame)) |l| {
                     if (l.handler(name)) break l;
                 } else return g.raise("no match", &.{});
                 if (!try g.nextClause(run, library, name, 0, args)) return g.raise("no match", &.{});
@@ -5740,18 +6422,14 @@ pub const Group = struct {
                     m.builtin = ops[0].text;
                     m.args = args;
                     if (args[0].data != .function) return g.wrongKind("function", args[0]);
+                    // A stale value still answers both.
                     const code = g.codeOf(args[0]) orelse return g.raise("function gone", &.{});
-                    const body = g.functionBody(code) orelse return g.raise("function gone", &.{});
                     const r = if (std.mem.eql(u8, ops[0].text, "functionName"))
-                        (if (body.kind == .lambda) try nothing(gpa) else try model.text(gpa, body.name))
+                        (if (code.name.len == 0) try nothing(gpa) else try model.text(gpa, code.name))
                     else blk: {
-                        var required: i64 = 0;
-                        for (body.params) |p| {
-                            if (std.mem.indexOf(u8, p, " = ") == null) required += 1;
-                        }
-                        const low = try chunks.numberValue(gpa, required);
+                        const low = try chunks.numberValue(gpa, @intCast(code.required));
                         defer low.release();
-                        const high = try chunks.numberValue(gpa, @intCast(body.params.len));
+                        const high = try chunks.numberValue(gpa, @intCast(code.total));
                         defer high.release();
                         break :blk try model.range(gpa, low, high);
                     };
@@ -6905,7 +7583,7 @@ fn releaseAll(values: []*Value, gpa: Allocator) void {
 }
 
 /// A Script's code identity (chapter 9).
-pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, library }, imports: []const *const Library) [32]u8 {
+pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, library, extension }, imports: []const *const Library) [32]u8 {
     var h = std.crypto.hash.sha2.Sha256.init(.{});
     var buf: [64]u8 = undefined;
     h.update(std.fmt.bufPrint(&buf, "odgn-talk code identity 1\n{s}\n{d}\n{s}\n", .{ version.language, cost_model.version, @tagName(kind) }) catch unreachable);
@@ -7064,6 +7742,22 @@ fn importsOf(run: *const Run, frame: *const Frame) []*Library {
 
 fn importOf(run: *const Run, frame: *const Frame, name: []const u8) ?*Library {
     for (importsOf(run, frame)) |l| if (std.mem.eql(u8, l.name, name)) return l;
+    return null;
+}
+
+/// The unit an import names: `@<unit>`, one of its Run's Script's own units,
+/// or a Library the frame's unit imports.
+fn importPlace(run: *const Run, frame: *const Frame, name: []const u8) ?Place {
+    if (name.len == 0 or name[0] != '@') return .{ .library = importOf(run, frame, name) orelse return null };
+    const s = run.script;
+    if (std.mem.eql(u8, name[1..], s.name)) return .{ .library = null };
+    for (s.extensions.items) |x| if (std.mem.eql(u8, name[1..], x.name)) return .{ .library = x };
+    return null;
+}
+
+/// A unit's function by name.
+fn functionIn(unit: *const lower.Unit, name: []const u8) ?u32 {
+    for (unit.bodies, 0..) |b, i| if (b.kind == .function and std.mem.eql(u8, b.name, name)) return @intCast(i);
     return null;
 }
 

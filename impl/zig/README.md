@@ -330,8 +330,8 @@ answer still resumes the Run. A repeat, or a name the Script doesn't keep, is
 recorded and does nothing. A Capability's release hook, from
 `talk_with_release_hook` or `store`'s `release`, is called with the reason
 `revoke` then, and with `disable` right after the `effect-failure` record of a
-failed abandonment. The `stop` and `reload` releases come with Stop and
-Reload, in steps 4 and 5.
+failed abandonment. Stop releases with `stop`, and Reload and Library
+replacement with `reload`, only once the new code is accepted.
 
 Segment-bound Operations come from `talk_define_segment_capability`, which
 makes each Grant its own Segment Coordinator, or
@@ -474,8 +474,43 @@ in the caller's Run with its captures and defaults, after the `wrong kind`,
 `would suspend` and `wrong arity` checks. `call-value-wait` may run one that
 suspends, and sends another Script's to its Home Script, whose Run has one
 frame and no Handler Clause and writes `fn=` in place of a Handler.
-`functionArity` and `functionName` read the code. Stale values wait for
-Reload.
+`functionArity` and `functionName` read what the record kept when the value
+was made. The record also holds its Home Script's code generation, which a
+Reload replaces, so a value made before it is stale: calling it raises
+`function gone`, while `functionArity` and `functionName` still answer and its
+display is unchanged. An extension's Lambda displays with the extension's unit
+name, `<function s+1:3:9>`, and its named functions, like the Script's own,
+with the Script's name.
+
+`talk_script_extend` adds an Entry as a new code unit of the Script, an
+extension named `<script>+<n>`, counted from its last Load or Reload. Its
+checker sees the Script's Script Variables first, then its Constants,
+functions, Handlers and imports as imports from the unit that declares them,
+`@<unit>`, or from their Library, and only the Script's unrevoked Grants with
+the Operations it keeps. An Entry that declares a name the Script has is
+refused `name reused` before it's checked. The extension's definitions start
+with the Script's Constants, and its variables table with the Script's
+variables, which grow by its own; its initialiser runs, then the Script's
+Persistent State must fit its cap, or `state too large` puts everything back.
+An extension's diagnostics and errors are placed in its own source, under its
+unit name. Dispatch, `wait for` tables and Command Calls look across all the
+Script's units, since each Handler is in one of them. The extended Script's
+identity hashes the previous identity, `extend` and the extension's own.
+
+`talk_script_reload` builds the new code in a detached Script against the
+Script's kept, unrevoked Grants, objects and owner, and runs its initialiser
+between Pumps, with no Fuel Slice or Fuel cap. With `TALK_CARRY_VARIABLES`,
+each Script Variable both codes declare takes its old value, a preempted Run's
+Segment base standing in for what its Segment wrote. A LoadError or a carry
+over the cap changes nothing. Then the Script is stopped with reason
+`reload`, keeping its mailbox if asked, its revoked Grants are removed, and
+the new code replaces the old and every extension. Reload isn't sticky.
+`talk_replace_library` recompiles each held Library that imports the
+replaced one, directly or through another, with the Grant declarations it was
+compiled with, then rebuilds every Script that imports any of them from its
+source and extensions, in load order; any refusal changes nothing, and the
+Core owns the recompiled Libraries. A `use` line naming something its Library
+doesn't export binds nothing, so a later use is `unknown name`.
 
 The `store` notification router, a Host companion, waits for Save and
 Restore.
@@ -544,8 +579,9 @@ rolled back, and one in the middle of its Segment its Script Variables too;
 then they are discarded with no `finally` and the mailbox is dropped. Senders
 waiting on them get `send failed`, reason `stopped`. The Script's named Grants
 are released with reason `stop`, in code-point order, then its `stopped`
-record lists what was discarded and dropped, and its open Decisions settle
-undecided, `cancelled`. A Delivery that reaches a stopped Script later is
+record lists what was discarded, dropped and abandoned, the pending calls in
+call id order, and its open Decisions settle undecided, `cancelled`. A
+Delivery that reaches a stopped Script later is
 dropped with another `stopped` record, a Script's `send` to it is dropped, and
 a Broadcast leaves it out, as it does a Script a Stop or disposal queued ahead
 of it will stop. A Group whose Scripts are all stopped pumps as `stopped`.
@@ -604,7 +640,9 @@ Operation Declarations and Standard Capabilities. Trace Cases replay through
 `talk.h` alone ([`talk_replay.zig`](src/corpus/talk_replay.zig)) when they need
 only loads, Deliveries and Requests, Pumps, `vars`, `counters`, Host Object
 inputs, the Grants it makes and its Libraries, compiled with its Operations as
-their Grant declarations. Transcript replay and
+their Grant declarations, and `reload`, `extend` and `replace-library`, whose
+`source` it reads with its scalars as written, compiling a replacement against
+the version of each Library it compiled last. Transcript replay and
 encoding cases that register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the
