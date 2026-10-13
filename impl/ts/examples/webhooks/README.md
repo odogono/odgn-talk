@@ -51,7 +51,7 @@ The scenario sends one event per step and settles the Group before the next step
 
 The answers and failures the Promises gave appear as `answer` and `fail` Host Inputs, including the late failure of an aborted fetch, which is noted `late-answer`. A live Host has no Stubs, so the recorder writes what the immediate database calls returned as `stub` lines, ahead of the inputs each Pump drained ([chapter 11](../../../../spec/11-the-trace-and-conformance.md#stubs)). The database and the URLs never appear in the case.
 
-`webhooks.test.ts` fails if a fresh recording differs from the committed case. After changing the Host or its Script, rerecord, then bless the case with `bun run corpus:bless examples/webhooks`.
+`webhooks.test.ts` fails if a fresh recording differs from the committed case. After changing the Host or its Script, rerecord, then bless the case with `bun run corpus:bless examples/webhooks`. Its first blessing is [approved](../../../../docs/reviews/webhooks-blessings/README.md), so the recorder writes no `Unblessed` marker: a changed expectation needs its own human review of the diff.
 
 ## Limits
 

@@ -230,7 +230,6 @@ grants = { outbound = { ops = ["post"] }, rules = { ops = ["match", "record"] } 
 export const caseFiles = async (): Promise<Record<string, string>> => {
   const { lines } = await runScenario();
   const header = [
-    '# Unblessed: the Bun webhook rules Example Host (#144); first blessing awaits human review.',
     '# webhooks: the Bun webhook rules Example Host',
     '# (impl/ts/examples/webhooks), recorded by `bun impl/ts/examples/webhooks/main.ts record`.',
     '# The Host recorded the `stub` lines from what its immediate Host functions',
