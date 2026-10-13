@@ -52,7 +52,7 @@ tests and check commands.
   case setup and Disassembly Cases.
 - `src/machine/`: the Abstract Machine: Groups, Scripts, Runs and frames,
   the run loop, Cost Model 0 charging, chunks and properties, the Built-ins it
-  has so far, and Trace writing.
+  has so far, Trace writing, the Group Fingerprint, and saving and restoring.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
 `session` and the REPL join `src/` in step 6.
@@ -504,7 +504,9 @@ each Script Variable both codes declare takes its old value, a preempted Run's
 Segment base standing in for what its Segment wrote. A LoadError or a carry
 over the cap changes nothing. Then the Script is stopped with reason
 `reload`, keeping its mailbox if asked, its revoked Grants are removed, and
-the new code replaces the old and every extension. Reload isn't sticky.
+the new code replaces the old and every extension. Reload isn't sticky, and of a stopped Script it stops nothing. A stop whose
+rollback leaves an effect's state unknown stops the Group, with reason
+`effect state unknown`, and prevents the replacement.
 `talk_replace_library` recompiles each held Library that imports the
 replaced one, directly or through another, with the Grant declarations it was
 compiled with, then rebuilds every Script that imports any of them from its
@@ -512,8 +514,43 @@ source and extensions, in load order; any refusal changes nothing, and the
 Core owns the recompiled Libraries. A `use` line naming something its Library
 doesn't export binds nothing, so a later use is `unknown name`.
 
-The `store` notification router, a Host companion, waits for Save and
-Restore.
+`talk_save` saves the Group between Pumps in the Zig Core's own format
+([snapshot](src/machine/snapshot.zig)), which no other Core reads: a header
+with the format version, the language and Cost Model versions and the Group
+Fingerprint; the Group's state as plain data; and the SHA-256 of all of it.
+It holds every Library by identity, every Host Object by kind and id, every
+Function Value's code by its Home Script, unit and body, each Script's
+sources, Grants with their declarations, Script Variables, Constants and
+counters, every Run with its frames, error control, wait and Join, the
+Scripts' work, the waits in the order they were set, the pending calls with
+their arguments, the queued Host Inputs and the open Broadcast Decisions.
+Code is never saved, and pointers become indices. An attempt takes the next
+save id, `s<n>`; a live Capability Scope, a Segment participant or a stopped
+Group refuses it with `effects pending` and no snapshot.
+
+`talk_restore` builds a new Group in chapter 10's order. Bytes it can't read,
+or whose digest is wrong, are `invalid save`. It matches the Libraries the
+Host passes by name and identity, asks the Host's `grants` function to
+re-bind each Grant, whose kept Operations' declarations must match the
+saved ones, and compiles each Script's sources again as they were first
+compiled, against every Grant, without running an initialiser. A Grant the
+Host doesn't re-bind restores revoked, with a placeholder Capability built
+from its saved declarations. If the Group Fingerprint of what it rebuilt
+differs from the saved one, it is `save mismatch`; `TALK_VARIABLES_ONLY`
+isn't supported yet and refuses the same way. Then every Run is read and
+checked against its unit's code, Host Objects the Host's `resolve` refuses
+restore disposed, and the `restore` record lists the pending calls. Until
+the first Pump, `talk_settle` queues each settlement: Answer and Fail as
+the Host's would, Reissue runs the Operation's Start again, charging only
+its `Charge`, which a Run that can't cover it faults on at the call, and
+Adopt hands back the call. The first Pump must read a Clock at or after the
+saved one, or it is `clock backwards`, and after draining the settlements
+it fails every call still pending with `call lost`, in call id order. A
+restore checks every index, length and code position a save gives, so a
+corrupt or hostile save is refused, never read past; the operand stack
+shapes a Run's code expects aren't checked against its frames yet.
+
+The `store` notification router, a Host companion, waits for checkpoints.
 
 A Script's limits come from `talk_load_options`' `talk_limits`, a zero field
 taking its default from `limits.toml`, and a Delivery's `talk_limit_override`
@@ -642,7 +679,10 @@ only loads, Deliveries and Requests, Pumps, `vars`, `counters`, Host Object
 inputs, the Grants it makes and its Libraries, compiled with its Operations as
 their Grant declarations, and `reload`, `extend` and `replace-library`, whose
 `source` it reads with its scalars as written, compiling a replacement against
-the version of each Library it compiled last. Transcript replay and
+the version of each Library it compiled last. It keeps each `save` by its id,
+restores with the Libraries it compiled last but those `withheld`, the
+Grants it loaded each Script with but those `unbound`, and every Host Object
+but those `disposed`, and goes on with the restored Group's handles. Transcript replay and
 encoding cases that register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the

@@ -9,6 +9,7 @@ const model = @import("value.zig");
 const display = @import("display.zig");
 const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
+const snapshot = @import("machine/snapshot.zig");
 const caps = machine.capabilities;
 const standard = @import("machine/standard.zig");
 const sqlite = @import("machine/sqlite.zig");
@@ -802,6 +803,11 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     model.dates.validateInstant(clock) catch return .invalid_value;
     const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
+    // A restored Group's first Pump reads a Clock at or after the saved one.
+    if (g.group.restored) |r| if (seconds < r.clock.seconds or (seconds == r.clock.seconds and nanos < r.clock.nanos)) {
+        g.group.refusePump(clock, options.fuel_slice, options.fuel_cap);
+        return .clock_backwards;
+    };
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
     if (out) |r| r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
     return .ok;
@@ -827,6 +833,260 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver)
         .unknown_library => .invalid_value,
         .state_too_large => .state_too_large,
     };
+}
+
+// ---------------------------------------------------------------- save and restore
+
+/// Saves the Group between Pumps (chapter 10), a worker call: its bytes,
+/// which the caller releases, or `effects pending` with no snapshot. Either
+/// way the attempt takes the next save id, and its `save` record.
+export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
+    out.* = .{};
+    if (g.memory.refused) return .out_of_memory;
+    defer g.flush();
+    g.group.saves += 1;
+    g.group.write("> save s{d}\n", .{g.group.saves});
+    if (snapshot.effectsPending(&g.group)) {
+        g.group.write("refused code=\"effects pending\"\n", .{});
+        return .effects_pending;
+    }
+    const print = g.group.groupFingerprint() catch return .out_of_memory;
+    const saved = snapshot.save(&g.group, allocator, print) catch return .out_of_memory;
+    out.* = .{ .data = saved.ptr, .len = saved.len };
+    return .ok;
+}
+
+pub const MismatchPolicy = enum(c_int) { reject_mismatch, variables_only };
+
+pub const RebindFn = ?*const fn (context: ?*anyopaque, script: [*]const u8, script_len: usize, name: [*]const u8, name_len: usize) callconv(.c) ?*caps.Grant;
+pub const ResolveFn = ?*const fn (context: ?*anyopaque, kind: [*]const u8, kind_len: usize, id: [*]const u8, id_len: usize, native: *?*anyopaque) callconv(.c) bool;
+
+pub const RestoreOptions = extern struct {
+    name: ?[*]const u8,
+    name_len: usize,
+    trace: TraceSink,
+    trace_context: ?*anyopaque,
+    libraries: ?[*]const *machine.Library,
+    libraries_len: usize,
+    grants: RebindFn,
+    grants_context: ?*anyopaque,
+    resolve: ResolveFn,
+    resolve_context: ?*anyopaque,
+    mismatch: MismatchPolicy,
+    allocator: ?*const HostAllocator,
+    memory_cap: usize,
+};
+
+pub const PendingCall = extern struct {
+    id: [*]const u8,
+    id_len: usize,
+    script: [*]const u8,
+    script_len: usize,
+    grant: [*]const u8,
+    grant_len: usize,
+    operation: [*]const u8,
+    operation_len: usize,
+};
+
+pub const ObjectRef = extern struct { kind: [*]const u8, kind_len: usize, id: [*]const u8, id_len: usize };
+
+/// What a restore reports, owned by the caller.
+pub const RestoreResult = struct {
+    gpa: std.mem.Allocator,
+    variables_only: bool,
+    pending: []PendingCall,
+    disposed: []ObjectRef,
+};
+
+const Bridges = struct {
+    core: *Core,
+    options: *const RestoreOptions,
+
+    fn rebind(context: ?*anyopaque, script: []const u8, name: []const u8) ?*caps.Grant {
+        const b: *const Bridges = @ptrCast(@alignCast(context.?));
+        const f = b.options.grants orelse return null;
+        return f(b.options.grants_context, script.ptr, script.len, name.ptr, name.len);
+    }
+
+    fn resolve(context: ?*anyopaque, kind: []const u8, id: []const u8, native: *?*anyopaque) bool {
+        const b: *const Bridges = @ptrCast(@alignCast(context.?));
+        const f = b.options.resolve orelse return false;
+        return f(b.options.resolve_context, kind.ptr, kind.len, id.ptr, id.len, native);
+    }
+
+    fn kindNamed(context: ?*anyopaque, name: []const u8) ?*const objects.Kind {
+        const b: *const Bridges = @ptrCast(@alignCast(context.?));
+        for (b.core.kinds.items) |k| if (std.mem.eql(u8, k.name, name)) return k;
+        return null;
+    }
+};
+
+/// Builds a new Group from a save (chapter 10, Restoring): one that hasn't
+/// been pumped, its restore record in its Trace. Bytes this Core can't
+/// read are `invalid save`, and a save that doesn't match `save mismatch`;
+/// either way nothing is made.
+export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const RestoreOptions, out: *?*Group, restored: *?*RestoreResult) HostErrorCode {
+    out.* = null;
+    restored.* = null;
+    const bytes_in: []const u8 = if (len == 0) &.{} else (save orelse return .invalid_value)[0..len];
+    const given: []const *machine.Library = if (o.libraries_len == 0) &.{} else (o.libraries orelse return .invalid_value)[0..o.libraries_len];
+    // VariablesOnly arrives with the variables-only restore.
+    const group_options: GroupOptions = .{ .name = o.name, .name_len = o.name_len, .trace = o.trace, .trace_context = o.trace_context, .allocator = o.allocator, .memory_cap = o.memory_cap };
+    var made: ?*Group = null;
+    if (talk_new_group(c, &group_options, &made) != .ok) return .out_of_memory;
+    const g = made.?;
+    var bridges: Bridges = .{ .core = c, .options = o };
+    var report: snapshot.Result = .{};
+    const outcome = snapshot.restore(&g.group, bytes_in, .{
+        .libraries = given,
+        .grants = .{ .context = &bridges, .call = Bridges.rebind },
+        .resolve = .{ .context = &bridges, .call = Bridges.resolve },
+        .kinds = .{ .context = &bridges, .call = Bridges.kindNamed },
+        .variables_only = o.mismatch == .variables_only,
+    }, &report) catch |err| {
+        talk_group_release(g);
+        return switch (err) {
+            error.InvalidSave => .invalid_save,
+            error.OutOfMemory => .out_of_memory,
+        };
+    };
+    defer g.group.gpa.free(report.disposed);
+    if (outcome == .mismatch) {
+        g.flush();
+        talk_group_release(g);
+        return .save_mismatch;
+    }
+    const r = c.gpa.create(RestoreResult) catch {
+        talk_group_release(g);
+        return .out_of_memory;
+    };
+    r.* = .{ .gpa = c.gpa, .variables_only = false, .pending = &.{}, .disposed = &.{} };
+    const filled = blk: {
+        r.pending = c.gpa.alloc(PendingCall, g.group.restored.?.pending.items.len) catch break :blk false;
+        for (g.group.restored.?.pending.items, r.pending) |id, *p| {
+            const call = for (g.group.calls.items) |x| {
+                if (std.mem.eql(u8, x.id, id)) break x;
+            } else unreachable;
+            const operation = for (g.group.pending.items) |w| {
+                if (w.call == call) break w.operation;
+            } else "";
+            p.* = .{ .id = id.ptr, .id_len = id.len, .script = call.script.ptr, .script_len = call.script.len, .grant = call.grant.ptr, .grant_len = call.grant.len, .operation = operation.ptr, .operation_len = operation.len };
+        }
+        r.disposed = c.gpa.alloc(ObjectRef, report.disposed.len) catch break :blk false;
+        for (report.disposed, r.disposed) |x, *d| d.* = .{ .kind = x.kind.name.ptr, .kind_len = x.kind.name.len, .id = x.id.ptr, .id_len = x.id.len };
+        // Each Script gets its handle.
+        for (g.group.scripts.items) |s| {
+            const h = c.gpa.create(Script) catch break :blk false;
+            h.* = .{ .group = g, .name = c.gpa.dupe(u8, s.name) catch {
+                c.gpa.destroy(h);
+                break :blk false;
+            } };
+            g.scripts.append(c.gpa, h) catch {
+                c.gpa.free(h.name);
+                c.gpa.destroy(h);
+                break :blk false;
+            };
+        }
+        break :blk true;
+    };
+    if (!filled) {
+        talk_restore_result_release(r);
+        talk_group_release(g);
+        return .out_of_memory;
+    }
+    g.flush();
+    out.* = g;
+    restored.* = r;
+    return .ok;
+}
+
+export fn talk_restore_result_variables_only(r: *const RestoreResult) bool {
+    return r.variables_only;
+}
+
+/// The pending calls, in call id order; each borrows from the Group.
+export fn talk_restore_result_pending(r: *const RestoreResult, out: *?[*]const PendingCall) usize {
+    out.* = r.pending.ptr;
+    return r.pending.len;
+}
+
+/// The Host Objects the Host didn't resolve; each borrows from the Group.
+export fn talk_restore_result_disposed(r: *const RestoreResult, out: *?[*]const ObjectRef) usize {
+    out.* = r.disposed.ptr;
+    return r.disposed.len;
+}
+
+export fn talk_restore_result_release(r: ?*RestoreResult) void {
+    const x = r orelse return;
+    x.gpa.free(x.pending);
+    x.gpa.free(x.disposed);
+    x.gpa.destroy(x);
+}
+
+pub const Settlement = extern struct {
+    answer: ?*Value,
+    fail: ?*const ScriptError,
+    reissue: bool,
+    adopt: bool,
+};
+
+/// Settles a restored pending call before the first Pump, queued. A call
+/// that isn't pending, one settled already, or any once the first Pump has
+/// started, is `unknown call` at the call. Adopt gives the Call the Host
+/// answers or fails through.
+export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settlement, adopted: ?*?*Call) HostErrorCode {
+    if (adopted) |a| a.* = null;
+    if (g.memory.refused) return .out_of_memory;
+    defer g.flush();
+    const call_id = bytes(id, len) catch return .invalid_value;
+    const chosen = @as(u8, @intFromBool(st.answer != null)) + @intFromBool(st.fail != null) + @intFromBool(st.reissue) + @intFromBool(st.adopt);
+    if (chosen != 1) return .invalid_value;
+    const how: machine.How = if (st.answer != null) .answer else if (st.fail != null) .fail else if (st.reissue) .reissue else .adopt;
+    const gpa = g.group.gpa;
+    var shown: ?*Value = null;
+    defer if (shown) |v| v.release();
+    const with: ?machine.Resume = switch (how) {
+        .answer => .{ .answer = .{ .value = st.answer.?.retain(), .fuel = 0 } },
+        .fail => blk: {
+            const f = st.fail.?;
+            const code = gpa.dupe(u8, bytes(f.code, f.code_len) catch return .invalid_value) catch return .out_of_memory;
+            const message: ?[]const u8 = if (f.message == null) null else gpa.dupe(u8, bytes(f.message, f.message_len) catch return .invalid_value) catch {
+                gpa.free(code);
+                return .out_of_memory;
+            };
+            const failure: machine.Failure = .{ .code = code, .message = message, .data = if (f.data) |d| d.retain() else null };
+            shown = machine.failureValue(gpa, failure) catch null;
+            break :blk .{ .failed = failure };
+        },
+        .reissue, .adopt => null,
+    };
+    g.group.settleRestored(call_id, how, with) catch |err| switch (err) {
+        error.UnknownCall => {
+            g.group.refuseSettlement(call_id, how, if (how == .answer) st.answer.? else shown);
+            return .unknown_call;
+        },
+        error.NotAdoptable => return .not_adoptable,
+        error.OutOfMemory => return .out_of_memory,
+    };
+    if (how == .adopt) if (adopted) |a| {
+        for (g.group.calls.items) |x| if (std.mem.eql(u8, x.id, call_id)) {
+            a.* = x;
+        };
+    };
+    return .ok;
+}
+
+/// The handle of the Group's Script with that name, or NULL.
+export fn talk_group_script(g: *Group, name: ?[*]const u8, len: usize) ?*Script {
+    const n = bytes(name, len) catch return null;
+    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, n)) return s;
+    return null;
+}
+
+/// The Group Fingerprint (chapter 9), 32 bytes, a worker call.
+export fn talk_fingerprint(g: *Group, out: *[32]u8) HostErrorCode {
+    out.* = g.group.groupFingerprint() catch return .out_of_memory;
+    return .ok;
 }
 
 export fn talk_inspect(g: *Group) void {

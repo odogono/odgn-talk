@@ -788,6 +788,56 @@ static int reload_test(void) {
     return bad;
 }
 
+/* Save and restore: a Run in its wait restores and wakes on time, a
+ * corrupt save is refused, the first Pump can't go back in time, and a call
+ * that isn't pending can't be settled. */
+static int save_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable n = 0\non nap\n  wait 5 s\n  add 1 to n\nend nap\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_message nap = {"nap", 3, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &nap, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_owned_bytes saved = {0};
+    bad |= talk_save(group, &saved) != TALK_OK;
+    talk_restore_options ro = {"g", 1, record, NULL, NULL, 0, NULL, NULL, NULL, NULL, TALK_REJECT_MISMATCH, NULL, 0};
+    talk_group *restored = NULL;
+    talk_restore_result *result = NULL;
+    bad |= talk_restore(core, saved.data, saved.len, &ro, &restored, &result) != TALK_OK;
+    const talk_pending_call *pending = NULL;
+    bad |= talk_restore_result_pending(result, &pending) != 0;
+    bad |= talk_restore_result_variables_only(result);
+    talk_restore_result_release(result);
+    bad |= talk_group_script(restored, "s", 1) == NULL;
+    talk_settlement adopt = {NULL, NULL, false, true};
+    bad |= talk_settle(restored, "s/r1.c1", 7, &adopt, NULL) != TALK_UNKNOWN_CALL;
+    bad |= talk_pump(restored, 1789999999, 0, NULL, NULL) != TALK_CLOCK_BACKWARDS;
+    bad |= talk_pump(restored, 1790000006, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(restored);
+    saved.data[saved.len / 2] ^= 1;
+    talk_group *corrupt = NULL;
+    bad |= talk_restore(core, saved.data, saved.len, &ro, &corrupt, &result) != TALK_INVALID_SAVE || corrupt != NULL;
+    talk_owned_bytes_release(&saved);
+    bad |= strstr(trace, "> save s1\n") == NULL;
+    bad |= strstr(trace, "> restore from=s1 fingerprint=") == NULL;
+    bad |= strstr(trace, "refused code=\"unknown call\"\n") == NULL;
+    bad |= strstr(trace, "refused code=\"clock backwards\"\n") == NULL;
+    bad |= strstr(trace, "vars s n=1\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(restored);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* The Message Layer measurements' three runaway Scripts (docs/research/
  * message-layer-measurements.md): a growing List and a doubling text end in
  * their Allocation Limit Fault, and a growing Script Variable in its
@@ -1333,6 +1383,7 @@ int main(void) {
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
+    expect(save_test() == 0, "a save restores a waiting Run, a corrupt save is refused, and the first Pump can't go back in time");
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
