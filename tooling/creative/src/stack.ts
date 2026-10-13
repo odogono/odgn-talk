@@ -54,7 +54,10 @@ const FONTS = ['sans-serif', 'serif', 'monospace', 'cursive'];
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** An Element as the reader would see it, positioned in design pixels. */
-const renderElement = (element: Element, imageUrl?: string): HTMLElement => {
+export const renderElement = (
+  element: Element,
+  imageUrl?: string,
+): HTMLElement => {
   const node = h('div', {
     class: `el ${element.kind}${element.visible ? '' : ' hidden'}`,
     'data-element': element.name,
@@ -285,8 +288,11 @@ type Refusal = { attempted: string; check: NameCheck & { ok: false } };
 export type StackShell = {
   editor: StackEditor;
   images: ImageAssets;
+  onRedraw(listener: () => void): void;
+  openScript(owner: ScriptOwner, line?: number): void;
   readOnly: boolean;
   redraw(): void;
+  setPlaying(playing: boolean): void;
   setReadOnly(readOnly: boolean): void;
 };
 
@@ -300,6 +306,7 @@ export const mountStack = (
   project: Project,
   options: { readOnly?: boolean } = {},
 ): StackShell => {
+  const redrawListeners = new Set<() => void>();
   const editor = new StackEditor(project);
   const images = new ImageAssets();
   const scripts = new ScriptWindows(editor, () => draw());
@@ -308,7 +315,9 @@ export const mountStack = (
       images.dispose();
     }
   });
-  editor.readOnly = options.readOnly ?? false;
+  let readOnly = options.readOnly ?? false;
+  let playing = false;
+  editor.readOnly = readOnly;
   const desk = byId('desk');
   const stage = byId('stage');
   const pageNode = byId('page');
@@ -689,6 +698,9 @@ export const mountStack = (
     drawCommands();
     drawTextControls();
     scripts.sync();
+    for (const listener of redrawListeners) {
+      listener();
+    }
   };
 
   /** Applies an edit, forgetting any refused name, then redraws. */
@@ -1123,6 +1135,9 @@ export const mountStack = (
 
   // Ignore all editor shortcuts while typing, including the Script editor.
   document.addEventListener('keydown', event => {
+    if (playing) {
+      return;
+    }
     const target = event.target as HTMLElement;
     const typing = !!target.closest(
       'input, textarea, select, [contenteditable], [role="textbox"]',
@@ -1168,13 +1183,25 @@ export const mountStack = (
       return editor.readOnly;
     },
     redraw: draw,
+    onRedraw: listener => {
+      redrawListeners.add(listener);
+    },
+    openScript: (owner, line) => scripts.open(owner, line),
+    setPlaying(value) {
+      finishFieldEdit();
+      closeText();
+      playing = value;
+      editor.readOnly = readOnly || playing;
+      draw();
+    },
     setReadOnly(value: boolean) {
-      if (value === editor.readOnly) {
+      readOnly = value;
+      if ((value || playing) === editor.readOnly) {
         return;
       }
       finishFieldEdit();
       closeText();
-      editor.readOnly = value;
+      editor.readOnly = value || playing;
       draw();
     },
   };
