@@ -30,9 +30,9 @@ also have read-only Script editors.
 
 Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
-Scripts bind that Page's Elements, `thisPage` and `project`; the Project Script
-binds every Page name. The Manifests describe the planned `pages`, `elements` and `sound` Grants
-from ADR 0084; these Grants are not yet available during Play. Renames refresh open windows' Manifests and diagnostics. Problems
+Scripts bind that Page's Elements, `thisPage` and `project`; every Script
+also binds every Page name. The Manifests describe the planned `pages`, `elements` and `sound` Grants
+from ADR 0084; `pages` is available during Play; `elements` and `sound` are not yet implemented. Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -232,9 +232,17 @@ are ignored. **Back to Edit** discards Play State and restores the authored
 Project, selection and history. Autosave and export use authored content only.
 Script windows are read-only during Play.
 
-Navigation and the `pages` Grant are the next stage; `elements` and `sound`
-Grants are not implemented yet. Only the selected Page's and its Elements'
-Scripts load alongside the Project Script.
+Use `tell pages to show page2` to navigate. The departing Page receives
+`closePage` and has up to one second to finish before its Page and Element
+Scripts are stopped. Its visual changes remain for this Play Session.
+Revisiting reloads those Scripts with fresh variables and sends `openPage`;
+the Project Script keeps running and retains its variables. Showing the current
+Page does nothing. While a Page is closing, reader messages and further
+navigation requests are ignored. Requests in one Pump before closing begins
+use the last destination. The Pages strip stays hidden during Play.
+
+Only the current Page's and its Elements' Scripts run alongside the Project
+Script. The `elements` and `sound` Grants are not implemented yet.
 
 Browser regression checks run on a dedicated page without `main.js`:
 

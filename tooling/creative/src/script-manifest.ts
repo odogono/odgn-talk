@@ -102,7 +102,7 @@ const messages = [
   'textChanged',
 ].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
 
-/** Each Script binds only its own Page's Elements, or every Page for the Project. */
+/** Every Script binds all Pages and only its own Page's Elements. */
 export const scriptManifest = (project: Project, owner: ScriptOwner) => {
   const page = scriptPage(project, owner);
   if (owner !== project && !page) {
@@ -113,16 +113,19 @@ export const scriptManifest = (project: Project, owner: ScriptOwner) => {
     version: '1',
     language: coreVersions.language,
     libraries: [],
-    objects: page
-      ? [
-          ...page.elements.map(element => ({
-            name: element.name,
-            kind: element.kind,
-          })),
-          { name: 'thisPage', kind: 'page' },
-          { name: 'project', kind: 'project' },
-        ]
-      : project.pages.map(page => ({ name: page.name, kind: 'page' })),
+    objects: [
+      ...project.pages.map(page => ({ name: page.name, kind: 'page' })),
+      ...(page
+        ? [
+            ...page.elements.map(element => ({
+              name: element.name,
+              kind: element.kind,
+            })),
+            { name: 'thisPage', kind: 'page' },
+            { name: 'project', kind: 'project' },
+          ]
+        : []),
+    ],
     objectKinds,
     grants,
     messages,
