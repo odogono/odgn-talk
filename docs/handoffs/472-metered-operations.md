@@ -2,7 +2,7 @@
 
 ## Required base and delivery boundary
 
-- **Specification revision:** uncommitted changes on `docs/grill-issue-472`, based on `18877eaafa58df7990e4f13e6c2cd0cac80adec1`. Worktree: `/Users/alex/.t3/worktrees/odgn-talk/t3-b10f72ac`. No specification commit or PR exists yet. Carry the exact file set below together, or replace this block with the specification commit/PR before handing implementation to another checkout.
+- **Specification revision / required base:** [baac99a8c30ab2bf1e4322784dde0e5243649d7c](https://github.com/odogono/odgn-talk/commit/baac99a8c30ab2bf1e4322784dde0e5243649d7c) on `docs/grill-issue-472`, based on `18877eaafa58df7990e4f13e6c2cd0cac80adec1`. This is committed specification work awaiting merge. Start implementation from this revision or its merged successor; the file set below identifies the complete specification delivery.
 - **Implemented in:** no runtime changes in this handoff. The normative contract is [Metered Operations](../../spec/embedding/metered-operations.md), with [ADR 0082](../adr/0082-metered-operations-authorize-work-through-the-pump.md) and updated Go/TS interface declarations.
 - **Remaining work:** all Core, Host, replay, tool and executable-catalogue acceptance below. Current support is documented beside the [Go](../../impl/go/README.md#ordinary-capability-operations), [TS](../../impl/ts/README.md#process-wide-core-and-host-manifests) and [Zig](../../impl/zig/README.md#the-machine) APIs.
 - **Approval still needed:** no new expectation files have been created or blessed. Future Trace and Session expectations require their first blessing under the [corpus workflow](../../corpus/README.md#checking); execution agreement is not approval.
@@ -43,13 +43,13 @@ The planning inspection identified a **possible, unverified Zig discrepancy**: o
 
 ## Specification validation
 
-Checked on 2026-10-13 against the base and uncommitted file set below:
+Checked on 2026-10-13 against specification commit `baac99a8c30ab2bf1e4322784dde0e5243649d7c`:
 
 - `bun run spec:gen`, `bun run check` (153 tooling tests plus Spec, grammar, machine, corpus, generation and documentation checks), `bun run go:check`, and `git diff --check` pass.
 - `go -C impl/go test ./internal/apicheck` fails on the intentionally unimplemented `Operation.Metering` field and Query/Change callback signatures. It also reports the new charging API names as unimplemented alongside pre-existing missing API names. Runtime API conformance is not claimed; no exemptions or expectations were changed.
 - No runtime, SQLite driver, new Trace Case or Session expectation has been implemented or blessed by this specification delivery.
 
-## Exact uncommitted specification file set
+## Specification file set
 
 ```text
 GLOSSARY.md
