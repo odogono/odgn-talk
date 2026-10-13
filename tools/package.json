@@ -12,6 +12,7 @@
     "corpus:bless": "bun corpus/bless.ts",
     "unicode:generate": "bun unicode/generate.ts",
     "unicode:check": "bun unicode/generate.ts --check",
+    "unicode:fetch": "bun unicode/generate.ts --fetch",
     "syntax:generate": "bun syntax/generate.ts",
     "syntax:check": "bun syntax/generate.ts --check",
     "typecheck": "tsc",

@@ -334,8 +334,11 @@ const emitTables = (output: ReturnType<typeof generateUnicodeData>): string => {
 
 if (import.meta.main) {
   const args = Bun.argv.slice(2);
-  if (args.some(arg => arg !== '--check')) {
-    throw new Error('Usage: bun tools/unicode/generate.ts [--check]');
+  if (
+    args.length > 1 ||
+    args.some(arg => arg !== '--check' && arg !== '--fetch')
+  ) {
+    throw new Error('Usage: bun tools/unicode/generate.ts [--check | --fetch]');
   }
   const files = new Map(
     await Promise.all(
@@ -344,6 +347,12 @@ if (import.meta.main) {
       ),
     ),
   );
+  // --fetch only downloads and verifies the pinned files, for jobs that
+  // read them but don't check the tables.
+  if (args.includes('--fetch')) {
+    console.log(`Unicode ${unicode.version}: ${pins.length} verified files`);
+    process.exit(0);
+  }
   const data = generateUnicodeData(files);
   const generated = emitTables(data);
   const target = resolve(root, 'impl/ts/src/generated/unicode.ts');

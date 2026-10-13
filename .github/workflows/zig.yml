@@ -22,7 +22,9 @@ on:
       - '.github/workflows/zig.yml'
 
 jobs:
-  check:
+  # The generated tables, formatting and talk.h's names. Only this job needs
+  # Go and Bun.
+  generated:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,13 +49,35 @@ jobs:
       # Fails on a talk.h name talk.go doesn't declare, and lists the talk.go
       # names talk.h doesn't declare yet.
       - run: bun tools/zig/api.ts
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # The conformance tests read the pinned UCD.
+      - run: bun run unicode:fetch
       - run: zig build test --summary all
         working-directory: impl/zig
-      - run: zig build
-        working-directory: impl/zig
-      - run: zig build -Dtarget=wasm32-wasi
-        working-directory: impl/zig
-      - run: zig build corpus -- --check-passing
+
+  # Builds the library and runs the corpus in one invocation, so the two
+  # compile in parallel. The wasi job builds wasm32-wasi.
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - run: zig build install corpus -- --check-passing
         working-directory: impl/zig
 
   # Runs the wasm32-wasi build in wasmtime through talk.h, and holds its
