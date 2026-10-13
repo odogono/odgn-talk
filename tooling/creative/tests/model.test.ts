@@ -24,6 +24,7 @@ test('a fresh name numbers its way past taken names', () => {
   const taken = new Set(['door', 'door2']);
   expect(freshName('window', taken)).toBe('window');
   expect(freshName('door', taken)).toBe('door3');
+  expect(freshName('door2', taken)).toBe('door3');
 });
 
 test('a name is suggested from free text such as a label', () => {
@@ -56,7 +57,7 @@ test('a duplicated Page is independent and keeps its Element names', () => {
   const page = project.pages[0]!;
   page.elements.push(createElement('button', 'goButton'));
   const copy = duplicatePage(page, new Set(['page1']));
-  expect(copy.name).toBe('page12');
+  expect(copy.name).toBe('page2');
   expect(copy.elements[0]!.name).toBe('goButton');
   copy.elements[0]!.left = 999;
   copy.background = '#000000';

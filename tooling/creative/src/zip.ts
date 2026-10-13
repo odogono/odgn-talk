@@ -4,6 +4,11 @@
 
 export class ZipError extends Error {}
 
+// Record signatures, as read little-endian.
+const LOCAL_HEADER = 0x04_03_4b_50;
+const DIRECTORY_RECORD = 0x02_01_4b_50;
+const END_RECORD = 0x06_05_4b_50;
+
 export type ZipEntry = {
   data: Uint8Array;
   /** 0 stores the bytes as they are; 8 deflates them. Defaults to 0. */
@@ -121,7 +126,7 @@ export const writeZip = async (
     };
     written.push(record);
     const header = new DataView(new ArrayBuffer(30));
-    header.setUint32(0, 0x04_03_4b_50, true);
+    header.setUint32(0, LOCAL_HEADER, true);
     writeCommon(header, 4, record);
     push(new Uint8Array(header.buffer));
     push(nameBytes);
@@ -131,7 +136,7 @@ export const writeZip = async (
   const directoryAt = offset;
   for (const entry of written) {
     const record = new DataView(new ArrayBuffer(46));
-    record.setUint32(0, 0x02_01_4b_50, true);
+    record.setUint32(0, DIRECTORY_RECORD, true);
     record.setUint16(4, 20, true);
     writeCommon(record, 6, entry);
     record.setUint32(42, entry.offset, true);
@@ -140,7 +145,7 @@ export const writeZip = async (
   }
 
   const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06_05_4b_50, true);
+  end.setUint32(0, END_RECORD, true);
   end.setUint16(8, written.length, true);
   end.setUint16(10, written.length, true);
   end.setUint32(12, offset - directoryAt, true);
@@ -156,7 +161,7 @@ const findEndRecord = (view: DataView): number => {
   // The end record is 22 bytes plus an optional comment of up to 64 KiB.
   const earliest = Math.max(0, view.byteLength - 22 - 0xff_ff);
   for (let at = view.byteLength - 22; at >= earliest; at--) {
-    if (view.getUint32(at, true) === 0x06_05_4b_50) {
+    if (view.getUint32(at, true) === END_RECORD) {
       const comment = view.getUint16(at + 20, true);
       if (at + 22 + comment === view.byteLength) {
         return at;
@@ -195,7 +200,10 @@ export const readZip = async (
   const entries = new Map<string, Uint8Array>();
   let at = directoryAt;
   for (let i = 0; i < count; i++) {
-    if (at + 46 > bytes.length || view.getUint32(at, true) !== 0x02_01_4b_50) {
+    if (
+      at + 46 > bytes.length ||
+      view.getUint32(at, true) !== DIRECTORY_RECORD
+    ) {
       throw new ZipError('The zip central directory is damaged.');
     }
     const flags = view.getUint16(at + 8, true);
@@ -225,7 +233,7 @@ export const readZip = async (
     }
     if (
       localAt + 30 > bytes.length ||
-      view.getUint32(localAt, true) !== 0x04_03_4b_50
+      view.getUint32(localAt, true) !== LOCAL_HEADER
     ) {
       throw new ZipError(`The entry "${name}" is damaged.`);
     }
@@ -245,6 +253,9 @@ export const readZip = async (
     }
     if (crc32(data) !== crc) {
       throw new ZipError(`The entry "${name}" fails its CRC-32 check.`);
+    }
+    if (entries.has(name)) {
+      throw new ZipError(`The zip holds two entries named "${name}".`);
     }
     entries.set(name, data);
     at += 46 + nameLength + extraLength + commentLength;

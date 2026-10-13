@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { crc32, readZip, writeZip } from '../src/zip';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -37,4 +39,23 @@ test('a truncated archive is refused', async () => {
   await expect(readZip(bytes('not a zip at all'))).rejects.toThrow(
     'not a complete zip',
   );
+});
+
+test('entries whose sizes follow their data (flag bit 3) read correctly', async () => {
+  // Written by Python's zipfile to an unseekable stream, so every entry
+  // carries a data descriptor and zeros in its local header's sizes.
+  const zip = readFileSync(
+    resolve(import.meta.dir, 'fixtures/data-descriptors.zip'),
+  );
+  const entries = await readZip(zip);
+  expect(text(entries.get('stored.txt')!)).toBe('sizes follow the data');
+  expect(text(entries.get('deflated.txt')!)).toBe('NorthTalk '.repeat(50));
+});
+
+test('two entries with one name are refused', async () => {
+  const zip = await writeZip([
+    { name: 'a.txt', data: bytes('one') },
+    { name: 'a.txt', data: bytes('two') },
+  ]);
+  await expect(readZip(zip)).rejects.toThrow('two entries named "a.txt"');
 });

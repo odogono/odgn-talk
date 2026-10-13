@@ -28,7 +28,7 @@ type ElementBase = {
 };
 
 export type TextElement = ElementBase & {
-  /** Whether the reader may edit this text during Play. */
+  /** Whether the reader may edit this text during a Play Session. */
   editable: boolean;
   font: string;
   kind: 'text';
@@ -122,22 +122,24 @@ export type Project = {
 export const DEFAULT_DESIGN_WIDTH = 720;
 export const DEFAULT_PAGE_HEIGHT = 540;
 
-/** Page and Element names are identifiers, bound in Scripts at Play (#735). */
+/** Page and Element names are identifiers, bound in Scripts during a Play Session (#735). */
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
 export const isIdentifierName = (name: string): boolean =>
   IDENTIFIER.test(name);
 
 /**
- * The first name based on `base` that is not taken: `base`, then `base2`,
- * `base3`, and so on.
+ * The first name based on `base` that is not taken: `base` itself, else
+ * its trailing number counted up, so `door` gives `door2` and `page1`
+ * gives `page2`.
  */
 export const freshName = (base: string, taken: ReadonlySet<string>): string => {
   if (!taken.has(base)) {
     return base;
   }
-  for (let n = 2; ; n++) {
-    const candidate = `${base}${n}`;
+  const [, stem, digits] = /^(.*?)(\d*)$/u.exec(base)!;
+  for (let n = digits ? Number(digits) + 1 : 2; ; n++) {
+    const candidate = `${stem}${n}`;
     if (!taken.has(candidate)) {
       return candidate;
     }

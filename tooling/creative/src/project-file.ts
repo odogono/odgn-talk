@@ -12,6 +12,7 @@ import {
   type Page,
   type Project,
   type RichText,
+  type TextRun,
 } from './model';
 import { readZip, writeZip, ZipError, type ZipEntry } from './zip';
 
@@ -74,6 +75,17 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Copies an optional field onto `target` only when it is present. */
+const setDefined = <T extends object, K extends keyof T>(
+  target: T,
+  key: K,
+  value: T[K] | undefined,
+): void => {
+  if (value !== undefined) {
+    target[key] = value;
+  }
+};
 
 class Checker {
   readonly issues: ValidationIssue[] = [];
@@ -142,17 +154,6 @@ class Checker {
     return value;
   }
 
-  /** Copies an optional field onto `target` only when it is present. */
-  opt<T extends object, K extends keyof T>(
-    target: T,
-    key: K,
-    value: T[K] | undefined,
-  ): void {
-    if (value !== undefined) {
-      target[key] = value;
-    }
-  }
-
   /** Reports every item whose `name` repeats an earlier one in its list. */
   unique(
     items: readonly { name: string }[],
@@ -193,13 +194,13 @@ const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
       runs: runs.map((rawRun, j) => {
         const at = `${path}[${i}].runs[${j}]`;
         const r = c.obj(rawRun, at) ?? {};
-        const run: RichText[number]['runs'][number] = {
+        const run: TextRun = {
           text: c.str(r.text, `${at}.text`) ?? '',
         };
         for (const key of ['bold', 'italic', 'underline'] as const) {
-          c.opt(run, key, c.optBool(r[key], `${at}.${key}`));
+          setDefined(run, key, c.optBool(r[key], `${at}.${key}`));
         }
-        c.opt(run, 'color', c.optStr(r.color, `${at}.color`));
+        setDefined(run, 'color', c.optStr(r.color, `${at}.color`));
         return run;
       }),
     };
@@ -228,7 +229,7 @@ const checkElement = (
     height: c.num(e.height, `${path}.height`, 'nonNegative') ?? 0,
     visible: c.bool(e.visible, `${path}.visible`) ?? true,
   };
-  c.opt(base, 'script', c.optStr(e.script, `${path}.script`));
+  setDefined(base, 'script', c.optStr(e.script, `${path}.script`));
   switch (k) {
     case 'text':
       return {
@@ -288,7 +289,7 @@ const checkPage = (c: Checker, value: unknown, path: string): Page => {
     background: c.str(p.background, `${path}.background`) ?? '',
     elements: checked.map(({ element }) => element),
   };
-  c.opt(page, 'script', c.optStr(p.script, `${path}.script`));
+  setDefined(page, 'script', c.optStr(p.script, `${path}.script`));
   return page;
 };
 

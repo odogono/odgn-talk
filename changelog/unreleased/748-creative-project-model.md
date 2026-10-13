@@ -2,4 +2,5 @@
 type: feat
 scope: tools
 ---
-Add the creative tool's authored Project model and its portable file format in `tooling/creative`: Pages of positioned Elements (rich text, image, button, rectangle, ellipse and line) with identifier names, Scripts and SHA-256-keyed assets, written as a zip of a versioned `project.json` plus one file per asset through a small zip reader and writer of our own, with path-reporting validation and stepwise format migrations (#748).
+
+Add the creative tool's Project model and file format in `tooling/creative`. A Project holds Pages of named Elements (rich text, image, button, rectangle, ellipse and line), its Scripts and its assets. It saves as one zip file that ordinary unzip tools open. Opening a damaged file reports where the damage is, and a file from a newer version of the tool is refused rather than half-read (#748).
