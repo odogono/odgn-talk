@@ -290,6 +290,7 @@ pub const Kind = struct { name: Tok, civil_date: bool };
 pub const Word = enum { true, false, nothing, it, me };
 
 pub const BinaryOp = enum {
+    otherwise,
     @"or",
     @"and",
     equal,
@@ -348,6 +349,9 @@ pub const Expr = struct {
         conversion: struct { value: *Expr, kind: ?Kind, unit: ?Tok },
         /// `the k of x`, `x's k`, `the "k" of x`, `the (k) of x`.
         key: struct { base: *Expr, key: ?Tok, computed: ?*Expr },
+        /// `the optional k of x`, `the optional "k" of x`, `the optional
+        /// (k) of x`: a map-only read. `code points` is a literal key here.
+        optional_key: struct { base: *Expr, key: ?Tok, code_points: bool, computed: ?*Expr },
         property: struct { base: *Expr, name: Tok, code_points: bool, delimiter: ?*Expr, delimited: ?Tok },
         chunk: Chunk,
         whose: Whose,

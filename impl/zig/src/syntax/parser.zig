@@ -123,7 +123,7 @@ fn isSingular(word: []const u8) bool {
     return chunkKind(word, &plural) != null and !plural;
 }
 
-const continuing_words = [_][]const u8{ "and", "or", "is", "mod", "div", "contains", "matches", "with", "be", "contain", "match", "than", "least", "most" };
+const continuing_words = [_][]const u8{ "otherwise", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be", "contain", "match", "than", "least", "most" };
 const block_keywords = [_][]const u8{ "if", "repeat", "match", "try", "wait", "tell", "timeout" };
 const operand_words = [_][]const u8{ "the", "not", "true", "false", "nothing", "it", "me", "given", "replace" };
 
@@ -1198,7 +1198,7 @@ const Parser = struct {
             const n = try p.peek2("every-chunk", .operator);
             if (n.kind == .word and (isSingular(p.word(n)) or p.isWord(n, "code"))) return p.everyHead();
         }
-        const e = try p.orExpr();
+        const e = try p.defaultExpr();
         if (e.data == .chunk and e.data.chunk.ordinal != null and try p.atWord("whose", .operator)) {
             const op = try p.next(.operator);
             const condition = try p.whoseCondition();
@@ -1246,6 +1246,16 @@ const Parser = struct {
 
     fn binary(p: *Parser, pos: Tok, op: ast.BinaryOp, left: *Expr, right: *Expr, negated: bool) Error!*Expr {
         return p.mk(pos, .{ .binary = .{ .op = op, .left = left, .right = right, .negated = negated, .ignoring = null } }, &.{ left, right });
+    }
+
+    /// `a otherwise b`, the lowest binary operator.
+    fn defaultExpr(p: *Parser) Error!*Expr {
+        var l = try p.orExpr();
+        while (try p.atWord("otherwise", .operator)) {
+            const op = try p.next(.operator);
+            l = try p.binary(op, .otherwise, l, try p.orExpr(), false);
+        }
+        return l;
     }
 
     fn orExpr(p: *Parser) Error!*Expr {
@@ -1751,6 +1761,10 @@ const Parser = struct {
     fn the(p: *Parser) Error!*Expr {
         const pos = try p.next(.operand);
         const t = try p.peek(.operand);
+        if (p.isWord(t, "optional") and !p.isWord(try p.peek2("optional-key", .operator), "of")) {
+            _ = try p.next(.operand);
+            return p.optionalKey(pos);
+        }
         if (t.kind == .left_paren) {
             _ = try p.next(.operand);
             const key = try p.nested(expr);
@@ -1786,6 +1800,33 @@ const Parser = struct {
             }
         }
         return p.keyOrProperty(pos, null);
+    }
+
+    /// After `the optional`: a word, `code points`, a text or a
+    /// parenthesised key, always a literal map key.
+    fn optionalKey(p: *Parser, pos: Tok) Error!*Expr {
+        const t = try p.peek(.operand);
+        var key: ?Tok = null;
+        var computed: ?*Expr = null;
+        var code_points = false;
+        switch (t.kind) {
+            .left_paren => {
+                _ = try p.next(.operand);
+                computed = try p.nested(expr);
+                _ = try p.expect(.right_paren, .operator);
+            },
+            .text => key = try p.next(.operand),
+            .word => {
+                code_points = p.isWord(t, "code") and p.isWord(try p.peek2("code-point", .operator), "points");
+                key = try p.next(.operand);
+                if (code_points) _ = try p.next(.operand);
+            },
+            else => return p.failAt(t),
+        }
+        _ = try p.expectWord("of", .operator);
+        const base = try p.postfix(try p.primary());
+        const data: Expr.Data = .{ .optional_key = .{ .base = base, .key = key, .code_points = code_points, .computed = computed } };
+        return if (computed) |k| p.mk(pos, data, &.{ k, base }) else p.mk(pos, data, &.{base});
     }
 
     fn listLiteral(p: *Parser) Error!*Expr {
@@ -2473,4 +2514,155 @@ test "every corpus source parses losslessly, or fails as its case expects" {
     };
     try testing.expect(files > 100);
     try testing.expectEqual(@as(usize, 0), failures);
+}
+
+/// An expression's shape, operators and keys spelt out.
+fn shape(tree: *const ast.Tree, e: *const Expr, w: *std.Io.Writer) !void {
+    switch (e.data) {
+        .name, .number, .text => |t| try w.writeAll(tree.text(t)),
+        .word => |x| try w.writeAll(@tagName(x)),
+        .whose_key => |t| try w.print("(it's {s})", .{tree.text(t)}),
+        .group => |g| {
+            try w.writeAll("(group ");
+            try shape(tree, g, w);
+            try w.writeAll(")");
+        },
+        .binary => |b| {
+            try w.print("({t} ", .{b.op});
+            try shape(tree, b.left, w);
+            try w.writeAll(" ");
+            try shape(tree, b.right, w);
+            try w.writeAll(")");
+        },
+        inline .key, .optional_key => |k, tag| {
+            try w.writeAll(if (tag == .key) "(key " else "(optional ");
+            if (k.computed) |x| {
+                try w.writeAll("[");
+                try shape(tree, x, w);
+                try w.writeAll("]");
+            } else if (tag == .optional_key and k.code_points) {
+                try w.writeAll("code points");
+            } else try w.writeAll(tree.text(k.key.?));
+            try w.writeAll(" ");
+            try shape(tree, k.base, w);
+            try w.writeAll(")");
+        },
+        .chunk => |c| {
+            try w.writeAll("(chunk ");
+            if (c.index) |i| try shape(tree, i, w) else try w.writeAll(tree.text(c.ordinal.?));
+            try w.writeAll(" ");
+            try shape(tree, c.of, w);
+            try w.writeAll(")");
+        },
+        .whose => |x| {
+            try w.writeAll("(whose ");
+            try shape(tree, x.ordinal.?, w);
+            try w.writeAll(" ");
+            try shape(tree, x.condition, w);
+            try w.writeAll(")");
+        },
+        .replace => |r| {
+            try w.writeAll("(replace ");
+            try shape(tree, r.pattern, w);
+            try w.writeAll(" ");
+            try shape(tree, r.target, w);
+            try w.writeAll(" ");
+            try shape(tree, r.value, w);
+            try w.writeAll(")");
+        },
+        .list => |items| {
+            try w.writeAll("[");
+            for (items, 0..) |item, i| {
+                if (i > 0) try w.writeAll(" ");
+                try shape(tree, item.value, w);
+            }
+            try w.writeAll("]");
+        },
+        .call => |c| {
+            try w.print("({s}", .{tree.text(c.name)});
+            for (c.args) |x| {
+                try w.writeAll(" ");
+                try shape(tree, x, w);
+            }
+            try w.writeAll(")");
+        },
+        .lambda => |l| {
+            try w.writeAll("(given ");
+            try shape(tree, l.body.expr, w);
+            try w.writeAll(")");
+        },
+        else => try w.writeAll(@tagName(e.data)),
+    }
+}
+
+/// The shape of `<expression>` in `return <expression>`.
+fn expectShape(expression: []const u8, expected: []const u8) !void {
+    const source = try std.fmt.allocPrint(testing.allocator, "on t\n return {s}\nend t\n", .{expression});
+    defer testing.allocator.free(source);
+    var parsed = try parseForTest(source);
+    defer parsed.deinit();
+    const tree = &parsed.result.tree;
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try shape(tree, tree.declarations[0].data.handler.body[0].data.@"return".?, &out.writer);
+    try testing.expectEqualStrings(expected, out.written());
+}
+
+test "otherwise is the lowest binary operator, and optional reads keep literal keys" {
+    try expectShape("a otherwise b otherwise c", "(otherwise (otherwise a b) c)");
+    try expectShape("a + b otherwise 0", "(otherwise (add a b) 0)");
+    try expectShape("a otherwise b or c", "(otherwise a (or b c))");
+    try expectShape("a or b otherwise c", "(otherwise (or a b) c)");
+    try expectShape("(a otherwise 0) > 3", "(greater (group (otherwise a 0)) 3)");
+    try expectShape("the optional city of customer", "(optional city customer)");
+    try expectShape("the optional length of m", "(optional length m)");
+    try expectShape("the optional target of m", "(optional target m)");
+    try expectShape("the optional first of m", "(optional first m)");
+    try expectShape("the optional code points of m", "(optional code points m)");
+    try expectShape("the optional optional of m", "(optional optional m)");
+    try expectShape("the optional \"of\" of m", "(optional \"of\" m)");
+    try expectShape("the optional (k) of m", "(optional [k] m)");
+    try expectShape("the optional of m", "(key optional m)");
+    try expectShape("the optional b of the optional a of m", "(optional b (optional a m))");
+    try expectShape("the optional b of the a of m", "(optional b (key a m))");
+    try expectShape("otherwise", "otherwise");
+    try expectShape("item (otherwise) of xs", "(chunk (group otherwise) xs)");
+    try expectShape("the first item of xs whose active otherwise false", "(whose (chunk first xs) (otherwise (it's active) false))");
+    try expectShape("(the first item of xs whose active) otherwise fallback", "(otherwise (group (whose (chunk first xs) (it's active))) fallback)");
+    try expectShape("replace a in s with b otherwise c", "(otherwise (replace a s b) c)");
+    try expectShape("[a otherwise 1, b]", "[(otherwise a 1) b]");
+    try expectShape("f(a otherwise 1)", "(f (otherwise a 1))");
+    try expectShape("given x: x otherwise 0", "(given (otherwise x 0))");
+}
+
+test "optional reads are never Containers, and otherwise needs its operand" {
+    try expectOutcome("on t\n return a otherwise\nend t\n", "unexpected token at 3:1");
+    try expectOutcome("on t\n return replace a otherwise b in s with c\nend t\n", "unexpected token at 2:19");
+    try expectOutcome("on t\n put 1 into the optional k of m\nend t\n", "not a container at 2:13");
+    try expectOutcome("on t\n set the optional k of m to 1\nend t\n", "not a container at 2:6");
+    try expectOutcome("on t\n delete the optional k of m\nend t\n", "not a container at 2:9");
+    try expectOutcome("on t\n add 1 to the optional (k) of m\nend t\n", "not a container at 2:11");
+    try expectOutcome("on t\n subtract 1 from the optional k of m\nend t\n", "not a container at 2:18");
+    try expectOutcome("on t\n multiply the optional k of m by 2\nend t\n", "not a container at 2:11");
+    try expectOutcome("on t\n divide the optional k of m by 2\nend t\n", "not a container at 2:9");
+    try expectOutcome("on t\n put 1 into the b of the optional a of m\nend t\n", "not a container at 2:13");
+}
+
+test "a trailing otherwise continues the line, and an operand named otherwise does not" {
+    try expectShape("a otherwise -- note\n b", "(otherwise a b)");
+    var parsed = try parseForTest("on t\n put otherwise into x\n otherwise 1\nend t\n");
+    defer parsed.deinit();
+    const body = parsed.result.tree.declarations[0].data.handler.body;
+    try testing.expectEqual(@as(usize, 2), body.len);
+    try testing.expectEqualStrings("otherwise", parsed.result.tree.text(body[1].data.command.name));
+}
+
+test "otherwise is no Argument Label" {
+    try expectOutcome("on move x otherwise y\nend move\n", "unexpected token at 1:11");
+    try expectOutcome("on t\n return item otherwise of xs\nend t\n", "unexpected token at 2:24");
+    var parsed = try parseForTest("on t\n move 1 otherwise 2\nend t\n");
+    defer parsed.deinit();
+    const command = parsed.result.tree.declarations[0].data.handler.body[0].data.command;
+    try testing.expectEqual(@as(usize, 0), command.labels.len);
+    try testing.expectEqual(@as(usize, 1), command.args.len);
 }
