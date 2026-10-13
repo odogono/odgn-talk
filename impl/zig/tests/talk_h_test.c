@@ -737,6 +737,80 @@ static int stop_test(void) {
     return bad;
 }
 
+/* The Message Layer measurements' three runaway Scripts (docs/research/
+ * message-layer-measurements.md): a growing List and a doubling text end in
+ * their Allocation Limit Fault, and a growing Script Variable in its
+ * Persistent State Limit Fault, in a Group capped at 128 MiB. The Group
+ * never refuses, and a Script beside them keeps its state and goes on
+ * working. They run under the default limits, but the growing List's
+ * Allocation Budget is 1 MiB: appending to a List costs time in proportion
+ * to its length, so reaching the default 16 MiB takes about a minute. */
+static int load_limited(talk_group *group, const char *name, const char *source, const talk_limits *limits, talk_script **out) {
+    talk_load_options load = {name, strlen(name), source, strlen(source), NULL, 0, false, NULL, NULL, 0, limits};
+    return talk_load(group, &load, out) != TALK_OK;
+}
+
+static int runaway_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 128u << 20};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    /* The measurements run the allocation cases with Fuel to spare, so the
+     * Allocation Budget is what ends them. */
+    talk_limits fuel = {0};
+    fuel.fuel_per_run = 1000000000;
+    talk_limits list = fuel;
+    list.alloc_per_run = 1 << 20;
+    talk_script *hog = NULL, *dbl = NULL, *hoard = NULL, *calm = NULL;
+    int bad = load_limited(group, "hog", "on hog\n  put [] into xs\n  repeat forever\n    put \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" after xs\n  end repeat\nend hog\n", &list, &hog);
+    bad |= load_limited(group, "double", "on double\n  put \"x\" into s\n  repeat forever\n    put s & s into s\n  end repeat\nend double\n", &fuel, &dbl);
+    bad |= load_limited(group, "hoard", "script variable hoard = []\non stash n\n  repeat for each i in 1..n\n    put \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" after hoard\n  end repeat\nend stash\n", NULL, &hoard);
+    bad |= load_limited(group, "calm", "script variable n = 0\non bump\n  add 1 to n\nend bump\n", NULL, &calm);
+    if (bad) return 1;
+    talk_message bump = {"bump", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
+    talk_message hog_go = {"hog", 3, NULL, 0, NULL};
+    talk_message double_go = {"double", 6, NULL, 0, NULL};
+    talk_value *many = NULL;
+    talk_int(20000, &many);
+    talk_value *stash_args[] = {many};
+    talk_message stash = {"stash", 5, stash_args, 1, NULL};
+    bad |= talk_script_deliver(hog, &hog_go, NULL) != TALK_OK;
+    bad |= talk_script_deliver(dbl, &double_go, NULL) != TALK_OK;
+    bad |= talk_script_deliver(hoard, &stash, NULL) != TALK_OK;
+    bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
+    talk_value_release(many);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    /* Each runaway is healthy afterwards: it takes its next Delivery. */
+    talk_value *few = NULL;
+    talk_int(3, &few);
+    talk_value *few_args[] = {few};
+    talk_message small = {"stash", 5, few_args, 1, NULL};
+    bad |= talk_script_deliver(hoard, &small, NULL) != TALK_OK;
+    bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
+    talk_value_release(few);
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    talk_memory memory;
+    talk_group_memory(group, &memory);
+    bad |= memory.refused || memory.peak > memory.cap;
+    bad |= strstr(trace, "run hog/r1 outcome=limit-fault delivery=d2 handler=hog limit=alloc ") == NULL;
+    bad |= strstr(trace, "run double/r1 outcome=limit-fault delivery=d3 handler=double limit=alloc ") == NULL;
+    bad |= strstr(trace, "run hoard/r1 outcome=limit-fault delivery=d4 handler=stash limit=persistent ") == NULL;
+    bad |= strstr(trace, "run hoard/r2 outcome=completed delivery=d6 handler=stash ") == NULL;
+    bad |= strstr(trace, "vars calm n=3\n") == NULL;
+    talk_counters counted;
+    talk_script_counters(hoard, &counted);
+    bad |= counted.faults != 1 || counted.runs != 2;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A suspending Operation's Start: it keeps the call, to answer later. */
 static talk_call *started = NULL;
 static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -1114,6 +1188,7 @@ int main(void) {
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
+    expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
