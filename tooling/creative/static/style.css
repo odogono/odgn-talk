@@ -29,13 +29,18 @@ body {
   background-size: 14px 14px;
   color: var(--text);
 }
-header {
+#menu {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.3rem 0.8rem;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+}
+#project-title {
+  flex: 1;
+  text-align: center;
+  font-family: 'Iowan Old Style', Georgia, serif;
 }
 h1 {
   font-size: 1rem;
@@ -47,21 +52,201 @@ h1 span,
   font-weight: normal;
   font-size: 0.85rem;
 }
+button {
+  font: inherit;
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  padding: 0.15rem 0.6rem;
+}
+button:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--panel);
+}
+button:disabled {
+  opacity: 0.4;
+}
+
+/* The desk: the Page at the design width, scaled down to fit, with room
+   left for the Tools and Info windows. */
 #desk {
   flex: 1;
-  padding: 2rem;
-  overflow: auto;
+  overflow: hidden auto;
+  padding: 1.5rem 17rem 2rem 9rem;
 }
+#caption {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto 0.5rem;
+  font-family: 'Iowan Old Style', Georgia, serif;
+}
+#stage {
+  position: relative;
+  margin: 0 auto;
+  border: 1.5px solid var(--line);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 85%);
+  box-sizing: content-box;
+}
+.page {
+  position: relative;
+  overflow: hidden;
+  transform-origin: 0 0;
+}
+#stage .page {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.el {
+  position: absolute;
+  box-sizing: border-box;
+}
+.el.hidden {
+  opacity: 0.3;
+}
+.el.text {
+  overflow: hidden;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+.el.text p {
+  margin: 0;
+}
+.el.image {
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--muted);
+  background: rgb(0 0 0 / 5%);
+  color: var(--muted);
+  font-size: 14px;
+}
+.el.button {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 18px;
+  user-select: none;
+}
+.el.rectangle,
+.el.ellipse {
+  border: 2px solid;
+}
+.el.ellipse {
+  border-radius: 50%;
+}
+.el.line {
+  pointer-events: none;
+}
+.el.line svg {
+  position: absolute;
+  overflow: visible;
+  stroke-linecap: round;
+}
+.el.line line {
+  pointer-events: stroke;
+}
+.el.line line.hit {
+  stroke: transparent;
+}
+.page.edit .el {
+  cursor: move;
+  user-select: none;
+}
+.page.edit .el:hover:not(.selected) {
+  outline: calc(1px / var(--scale, 1)) solid rgb(47 111 237 / 50%);
+}
+.page.edit .el.selected {
+  outline: calc(2px / var(--scale, 1)) solid #2f6fed;
+  outline-offset: calc(1px / var(--scale, 1));
+}
+.handles {
+  position: absolute;
+  pointer-events: none;
+}
+.handle {
+  --size: calc(10px / var(--scale, 1));
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2);
+  background: #fff;
+  border: calc(1.5px / var(--scale, 1)) solid #2f6fed;
+  pointer-events: auto;
+}
+.handle.nw { left: 0; top: 0; cursor: nwse-resize; }
+.handle.n { left: 50%; top: 0; cursor: ns-resize; }
+.handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.handle.e { left: 100%; top: 50%; cursor: ew-resize; }
+.handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.handle.s { left: 50%; top: 100%; cursor: ns-resize; }
+.handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.handle.w { left: 0; top: 50%; cursor: ew-resize; }
+
+/* The Pages strip. */
+#strip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1rem;
+  border-top: 1.5px solid var(--line);
+  background: var(--panel);
+}
+#strip > button {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 1rem;
+  padding: 0;
+}
+#thumbnails {
+  display: flex;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+#thumbnails button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.7rem;
+  text-align: center;
+}
+.thumbnail {
+  width: 96px;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  pointer-events: none;
+}
+#thumbnails [aria-current] .thumbnail {
+  border-color: #ff3d7f;
+  box-shadow: 3px 3px 0 #ff3d7f;
+}
+
+/* Floating windows, dragged by their title bars. */
 .window {
-  width: min(40rem, 100%);
+  position: fixed;
+  z-index: 10;
   background: var(--panel);
   border: 1.5px solid var(--line);
   box-shadow: 4px 4px 0 rgb(0 0 0 / 80%);
 }
+.window.front {
+  z-index: 11;
+}
 .window .bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0 0.5rem;
   font-size: 0.75rem;
   font-weight: 600;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
   background: repeating-linear-gradient(
     var(--panel) 0 2px,
     var(--line) 2px 3px
@@ -70,6 +255,97 @@ h1 span,
 .window .bar span {
   background: var(--panel);
   padding: 0 0.4rem;
+}
+.window .bar .close {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+}
+#tools-window {
+  width: 7rem;
+}
+#tools {
+  display: flex;
+  flex-direction: column;
+}
+#tools button {
+  display: flex;
+  gap: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  font-size: 0.85rem;
+}
+#tools button span {
+  width: 1rem;
+  text-align: center;
+}
+#info-window {
+  width: 15rem;
+}
+#info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  max-height: calc(100vh - 12rem);
+  overflow-y: auto;
+}
+#info h2 {
+  font-size: 0.85rem;
+  margin: 0.2rem 0 0;
+}
+#info p {
+  margin: 0;
+}
+#info .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+#info .field > span {
+  color: var(--muted);
+}
+#info input:not([type='checkbox']),
+#info textarea,
+#info select {
+  font: inherit;
+  border: 1.5px solid var(--line);
+  padding: 0.15rem 0.3rem;
+  width: 100%;
+}
+#info input[type='color'] {
+  height: 1.7rem;
+  padding: 0.1rem;
+}
+#info input[aria-invalid] {
+  border-color: var(--error);
+}
+#info .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 0.5rem;
+}
+#info .row {
+  display: flex;
+  gap: 0.5rem;
+}
+#info .check {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+#info .problem {
+  color: var(--error);
+}
+#info .suggestion button {
+  font-family: ui-monospace, monospace;
+}
+#script-window {
+  width: min(28rem, 100vw);
 }
 #editor .cm-editor {
   height: 18rem;

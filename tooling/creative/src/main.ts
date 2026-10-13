@@ -1,6 +1,7 @@
-// The creative tool's page (#154). For now it opens one Script window on the
-// shared NorthTalk editor, with the language server's diagnostics,
-// completion and hover. The Project model and editor come with stage 1.
+// The creative tool's page (#154): the Stack editor shell (#749) on a new
+// Project, and a sample Script window on the shared NorthTalk editor, with
+// the language server's diagnostics, completion and hover. Script windows
+// for the Project's own Scripts come with stage 2.
 import { coreVersions } from '@odgn/northtalk';
 import {
   diagnosticsSpec,
@@ -10,11 +11,13 @@ import {
 import { LspClient } from '@odgn/northtalk-editor/lsp-client';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
+import { createProject } from './model';
+import { mountStack } from './stack';
 
 // A sample Script in the Host interface settled in #735.
 export const SAMPLE = `-- Script of button climbButton
 on click
-  set the label of climbButton to "Climbing…"
+  set the label of me to "Climbing…"
   tell pages to show lampRoom
 end click
 `;
@@ -29,7 +32,17 @@ const element = (id: string) => {
 };
 
 element('core').textContent = `Core ${coreVersions.core}`;
-element('script-title').textContent = 'Script of button “climbButton”';
+mountStack(createProject('Untitled'));
+
+element('script-title').textContent = 'Sample Script of button “climbButton”';
+const scriptWindow = element('script-window');
+element('show-script').addEventListener('click', () => {
+  scriptWindow.hidden = false;
+  view.requestMeasure();
+});
+element('close-script').addEventListener('click', () => {
+  scriptWindow.hidden = true;
+});
 
 const lsp = new LspClient(new Worker('./lsp.worker.js', { type: 'module' }));
 const problems = element('problems');
