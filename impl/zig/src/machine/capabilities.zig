@@ -119,6 +119,13 @@ pub const Shape = struct {
         return make(a, .{ .quantity_kind = copy });
     }
 
+    /// A Host Object of the Object Kind `kind_name`.
+    pub fn objectOf(a: Allocator, kind_name: []const u8) !*Shape {
+        const copy = try a.dupe(u8, kind_name);
+        errdefer a.free(copy);
+        return make(a, .{ .object = copy });
+    }
+
     /// Takes `inner`.
     pub fn listOf(a: Allocator, inner: *Shape) !*Shape {
         return make(a, .{ .list = inner });
@@ -402,6 +409,10 @@ pub const Outcome = union(enum) {
     limited,
     /// Any other failure, which the Script sees as `host error`.
     broken,
+    /// The Host cannot answer inside this call (the Message Layer): the
+    /// instruction is rewound and the Pump pauses at the crossing, to
+    /// re-make the call once the answer is at hand.
+    deferred,
 };
 
 /// A Host function: Do for an immediate Operation, Fire for a

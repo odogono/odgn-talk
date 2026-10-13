@@ -19,7 +19,7 @@ defmodule TalkHost.SessionTest do
         )
 
       {s, hello} = Session.ok!(s, "hello", %{"protocol" => 1})
-      assert hello["core"] =~ "go/"
+      assert hello["core"] =~ ~r{^(go|zig)/}
 
       {s, _} =
         Session.ok!(s, "define-capability", %{

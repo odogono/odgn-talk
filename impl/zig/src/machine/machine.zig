@@ -969,7 +969,7 @@ pub const Override = struct {
 };
 
 /// What preempted a Run: its Script's Fuel Slice or the Group's Fuel cap.
-pub const Preemption = enum { slice, cap };
+pub const Preemption = enum { slice, cap, crossing };
 
 /// The limit a Limit Fault names.
 pub const Fault = enum { fuel, alloc, persistent, depth, pattern, join, cleanup };
@@ -1161,6 +1161,11 @@ pub const Group = struct {
     /// lands at its next Host crossing, or at its end, rather than waiting
     /// for the next Pump (chapter 9, Threads and the input queue).
     pumping: bool = false,
+    /// A Host function deferred, so this Pump pauses mid-turn for its
+    /// answer; `resumePump` takes the turns up again (the Message Layer).
+    crossing_pause: bool = false,
+    /// The next Script to take a turn, kept across a crossing pause.
+    turn_at: usize = 0,
     landing: std.ArrayList(Landing) = .empty,
     /// What a Host function wrote to the Trace while it ran, inside a Pump:
     /// it follows the crossing's own records.
@@ -3064,13 +3069,35 @@ pub const Group = struct {
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
             try g.ready(p, with);
         }
-        // Turns: each Script with work, in load order, round and round,
-        // until the work is done, every Script with work has spent its slice
-        // or the Group has spent its cap.
+        g.turn_at = 0;
+        try g.turns();
+    }
+
+    /// Takes a Pump paused at a Host crossing up again: the same turns,
+    /// with the same Clock, slice and cap, and no second `pump` record.
+    pub fn resumePump(g: *Group) !void {
+        g.pumping = true;
+        defer g.pumping = false;
+        g.crossing_pause = false;
+        try g.turns();
+    }
+
+    /// Whether the Pump in progress paused at a Host crossing.
+    pub fn pumpPaused(g: *const Group) bool {
+        return g.crossing_pause;
+    }
+
+    // Turns: each Script with work, in load order, round and round,
+    // until the work is done, every Script with work has spent its slice
+    // or the Group has spent its cap. A crossing pause returns at once,
+    // its tail unwritten.
+    fn turns(g: *Group) !void {
         var busy = true;
         turns: while (busy) {
             busy = false;
-            for (g.scripts.items) |s| {
+            while (g.turn_at < g.scripts.items.len) {
+                const s = g.scripts.items[g.turn_at];
+                g.turn_at += 1;
                 // What landed during the last turn, and a Rewind, which
                 // ends the Pump.
                 if (g.landing.items.len > 0) try g.land(null);
@@ -3125,11 +3152,17 @@ pub const Group = struct {
                     },
                     .run => |r| try g.resumeRun(s, r),
                 }
+                if (g.crossing_pause) {
+                    // Resume at this Script: its parked Run heads its work.
+                    g.turn_at -= 1;
+                    return;
+                }
             }
+            g.turn_at = 0;
         }
         try g.land(null);
         // A slice overrun is carried to the Script's next Pump as debt.
-        if (slice > 0) for (g.scripts.items) |x| {
+        if (g.slice > 0) for (g.scripts.items) |x| {
             if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
         };
         g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.rewound) "rewound" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
@@ -3572,12 +3605,16 @@ pub const Group = struct {
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
         s.spent += fuel;
-        if (g.trace) |out| {
-            out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
-            if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
-            out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), fuel, alloc }) catch {};
+        // A crossing pause is the transport's, not the Run's: no record,
+        // and the Pump stops here instead of taking another turn.
+        if (by == .crossing) g.crossing_pause = true else {
+            if (g.trace) |out| {
+                out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
+                if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
+                out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), fuel, alloc }) catch {};
+            }
+            g.writeAbandoned(run);
         }
-        g.writeAbandoned(run);
         run.started = true;
         run.continuing = true;
         run.segment_fuel = run.fuel;
@@ -5560,6 +5597,13 @@ pub const Group = struct {
                     return other;
                 },
             };
+            if (done == .crossing) {
+                // The Host deferred: the instruction has not happened.
+                // Rewind it and pause like a preemption, in the Segment.
+                run.frames.items[run.frames.items.len - 1].pc = pc;
+                charge.release();
+                return .{ .preempted = .crossing };
+            }
             // An instruction charged nothing still pays dispatch's `clause`
             // rate.
             if (charged and charge.uncharged) {
@@ -5617,6 +5661,7 @@ pub const Group = struct {
             }
             charge.release();
             switch (done) {
+                .crossing => unreachable,
                 .next => {},
                 .returned => |v| {
                     g.popFrame(run);
@@ -6460,6 +6505,9 @@ pub const Group = struct {
         passed,
         /// It reached `veto`, with its reason.
         vetoed: *Value,
+        /// A Host function deferred (the Message Layer): rewind this
+        /// instruction and pause the Pump at the crossing.
+        crossing,
     };
 
     /// Pushes a value the frame takes; refused, the value is released.
@@ -7036,7 +7084,15 @@ pub const Group = struct {
                         try g.push(frame, id);
                         return .next;
                     }
-                    if (g.guardEntry(run, frame.pc - 1) == null) if (g.objectOf(base)) |o| return g.getProperty(run, frame, o, key, m);
+                    if (g.guardEntry(run, frame.pc - 1) == null) if (g.objectOf(base)) |o| {
+                        const step = try g.getProperty(run, frame, o, key, m);
+                        if (step == .crossing) {
+                            // Put the operands back, in their order.
+                            if (key_value) |k| try g.push(frame, k.retain());
+                            try g.push(frame, base.retain());
+                        }
+                        return step;
+                    };
                 }
                 if (base.data != .map) return g.wrongKind("map", base);
                 const v = base.get(key) orelse try nothing(gpa);
@@ -8015,6 +8071,24 @@ pub const Group = struct {
         const held = g.holdTrace();
         const outcome = decl.host.call(decl.host.context, call, args);
         g.trace = held;
+        if (outcome == .deferred) {
+            // No call was made: unmake its id and its suspending Call,
+            // put the arguments back, and pause at the crossing. The
+            // re-made call takes the same id.
+            run.calls -= 1;
+            if (suspending) {
+                for (g.calls.items, 0..) |c, at| if (c == call) {
+                    _ = g.calls.orderedRemove(at);
+                    break;
+                };
+                for (call.args) |v| v.release();
+                gpa.free(call.args);
+                gpa.free(call.id);
+                gpa.destroy(call);
+            }
+            for (args) |v| try g.push(frame, v.retain());
+            return .crossing;
+        }
         call.starting = false;
         m.reached_host = true;
         m.declared = decl.cost.fuel;
@@ -8056,6 +8130,7 @@ pub const Group = struct {
             else => {},
         };
         switch (outcome) {
+            .deferred => unreachable,
             .started => {
                 record(g, id, grant_name, op_name, args, "error", empty, call.charged);
                 return g.hostError(id, grant_name, op_name, &where);
@@ -8178,6 +8253,7 @@ pub const Group = struct {
         const held = g.holdTrace();
         const outcome = prop.get.call(prop.get.context, gpa, o);
         g.trace = held;
+        if (outcome == .deferred) return .crossing;
         m.fuel_extra = prop.get_cost.fuel;
         m.alloc_extra = prop.get_cost.alloc;
         switch (outcome) {
@@ -8241,6 +8317,13 @@ pub const Group = struct {
         const held = g.holdTrace();
         const outcome = set.call(set.context, gpa, o, value);
         g.trace = held;
+        if (outcome == .deferred) {
+            // Put the operands back, in their order, and pause.
+            if (key_value) |k| try g.push(frame, k.retain());
+            try g.push(frame, base.retain());
+            try g.push(frame, value.retain());
+            return .crossing;
+        }
         m.fuel_extra = prop.set_cost.fuel;
         m.alloc_extra = prop.set_cost.alloc;
         switch (outcome) {

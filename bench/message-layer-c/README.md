@@ -32,6 +32,10 @@ then compiles and runs the C Host. It downloads cJSON 1.7.19 from upstream into
 ignored `out/cjson/` and verifies both source files' SHA-256 hashes. The MIT
 licence is included in the upstream source headers.
 
+The same path argument measures the Zig Core's `wasm32-wasi` reactor
+([#635](https://github.com/odogono/odgn-talk/issues/635)), built with
+`zig build -Dtarget=wasm32-wasi` in `impl/zig`, beside the Go one.
+
 To measure an existing reactor without changing this checkout:
 
 ```sh
