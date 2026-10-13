@@ -1804,6 +1804,9 @@ const Checker = struct {
             .text, .target => {},
             .template => |tm| for (tm.holes) |h| try c.expr(s, h, in),
             .word => |w| {
+                // Initialisers and defaults run outside a body, so `it`
+                // has no local binding. Lambda bodies use `.normal`.
+                if (in == .initialiser and w == .it) try c.report(.unknown_name, e.pos);
                 if (in == .initialiser and (w == .it or w == .me)) c.notConstant(e.pos);
                 if (w == .me and c.context.library) try c.report(.not_in_a_library, e.pos);
             },
@@ -2323,6 +2326,18 @@ test "an unknown name in an initialiser is also not constant" {
     try expectDiagnostics("function f a = unknown\nreturn a\nend\n", .{}, "unknown name at 1:16\nnot constant at 1:16\n");
     // `not constant` names only the first token that isn't allowed.
     try expectDiagnostics("script variable v = 1\nconstant x = v + unknown\n", .{}, "not constant at 2:14\nunknown name at 2:18\n");
+}
+
+test "it outside a body is an unknown name" {
+    try expectDiagnostics("constant x = it\n", .{}, "unknown name at 1:14\nnot constant at 1:14\n");
+    try expectDiagnostics("script variable x = it\n", .{}, "unknown name at 1:21\nnot constant at 1:21\n");
+    try expectDiagnostics("function f x = it\nreturn it\nend\n", .{}, "unknown name at 1:16\nnot constant at 1:16\n");
+    try expectDiagnostics("script variable v = 1\nconstant x = [v, it, it]\n", .{}, "not constant at 2:15\nunknown name at 2:18\nunknown name at 2:22\n");
+    try expectDiagnostics("script variable v = 1\nscript variable x = v otherwise it\n", .{}, "not constant at 2:21\nunknown name at 2:33\n");
+    try expectDiagnostics("script variable v = 1\nfunction f x = v + it\nreturn it\nend\n", .{}, "not constant at 2:16\nunknown name at 2:20\n");
+    try expectDiagnostics("constant x = it otherwise it\n", .{}, "unknown name at 1:14\nnot constant at 1:14\nunknown name at 1:27\n");
+    try expectDiagnostics("on t\nreturn it\nend\nfunction f\nreturn it\nend\n", .{}, "");
+    try expectDiagnostics("constant f = given: given: it\nfunction g x = given: it\nreturn it\nend\n", .{}, "");
 }
 
 test "otherwise and optional reads are eligible where their operands are" {

@@ -1,0 +1,41 @@
+# `it` is a body local, not a literal value available to initialisers or
+# parameter defaults. Every unbound token reports `unknown name`, even after
+# the first `not constant`; Handler, function and Lambda locals still work
+# (spec chapters 2 and 4; #774, with the first-token rule from #768).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "constant"
+source = "constant.talk"
+
+[[scripts]]
+name = "script-variable"
+source = "script-variable.talk"
+
+[[scripts]]
+name = "parameter-default"
+source = "parameter-default.talk"
+
+[[scripts]]
+name = "constant-later"
+source = "constant-later.talk"
+
+[[scripts]]
+name = "script-variable-later"
+source = "script-variable-later.talk"
+
+[[scripts]]
+name = "parameter-default-later"
+source = "parameter-default-later.talk"
+
+[[scripts]]
+name = "repeated-it"
+source = "repeated-it.talk"
+
+[[scripts]]
+name = "bodylocals"
+source = "body-locals.talk"

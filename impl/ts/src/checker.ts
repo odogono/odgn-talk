@@ -912,6 +912,19 @@ export const checkSyntax = (
     return false;
   };
   const lookup = (site: Site): Binding | undefined => {
+    // Defaults are visited in the function scope for parameter checks, but
+    // the body's implicit `it` does not exist there. A Lambda has its own `it`.
+    if (site.name.text === 'it' && site.scope.kind === 'function') {
+      for (
+        let node = context.get(site.token)?.parent;
+        node && node.rule !== 'Function';
+        node = context.get(node)?.parent
+      ) {
+        if (node.rule === 'Parameter') {
+          return undefined;
+        }
+      }
+    }
     for (let scope: Scope | null = site.scope; scope; scope = scope.parent) {
       const binding = scope.bindings.get(site.name.text);
       if (binding) {

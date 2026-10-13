@@ -1,0 +1,37 @@
+# Unblessed: unknown name for it outside a body and preserved body locals (#774); first blessing awaits human review.
+> load constant identity=2a7b61a8dff98c55c72ecae5f2e491b909cbaa8ecdb340c24087d3752a082df7
+diag constant code="unknown name" pos=1:14
+diag constant code="not constant" pos=1:14
+> load script-variable identity=f1ffb5fdedf5d02c51817b9a7f670b5b77fc0e52bfe74d9f1fca35a484c2b46d
+diag script-variable code="unknown name" pos=1:21
+diag script-variable code="not constant" pos=1:21
+> load parameter-default identity=f17732f16d4592d253a84ea95e252745a3dd4e847b1b4695830e9272591f9948
+diag parameter-default code="unknown name" pos=1:16
+diag parameter-default code="not constant" pos=1:16
+> load constant-later identity=cbc8dd53b227bf4ad0807517f87dab28a9895cf24712c01db1a30f6257a9a520
+diag constant-later code="not constant" pos=2:15
+diag constant-later code="unknown name" pos=2:18
+diag constant-later code="unknown name" pos=2:22
+> load script-variable-later identity=0ebadb1a39d237e701555d35f2bd570f51d0645f94dd86f6333574be48ae411c
+diag script-variable-later code="not constant" pos=2:21
+diag script-variable-later code="unknown name" pos=2:33
+> load parameter-default-later identity=241ae18ba1f02d3f942b68dbb2e71b70d32f3d0ae0289fbe9b1097d1c93c0a66
+diag parameter-default-later code="not constant" pos=2:16
+diag parameter-default-later code="unknown name" pos=2:20
+> load repeated-it identity=a51b6864f066dd811311120bc2c3b7ddd9ec7230a71d84bb0e289b5c5f624dc3
+diag repeated-it code="unknown name" pos=1:14
+diag repeated-it code="not constant" pos=1:14
+diag repeated-it code="unknown name" pos=1:27
+> load bodylocals identity=17e0600f8041a6b9ea11693ba72325f2d404df124958d6b6eadf17a0f4a61938
+> deliver d1 to=bodylocals message=run
+> pump clock=2026-10-13T00:00:00Z
+seg bodylocals/r1 start delivery=d1 handler=run clause=1 fuel=85 alloc=112 state=80 end=return
+run bodylocals/r1 outcome=completed delivery=d1 handler=run fuel=85 alloc=112
+pumped state=idle fuel=85
+> deliver d2 to=bodylocals message=run
+> pump clock=2026-10-13T00:00:01Z
+seg bodylocals/r2 start delivery=d2 handler=run clause=1 fuel=85 alloc=112 state=80 end=return
+run bodylocals/r2 outcome=completed delivery=d2 handler=run fuel=85 alloc=112
+pumped state=idle fuel=85
+> vars
+vars bodylocals result=[7, nothing, 9]

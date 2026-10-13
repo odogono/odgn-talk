@@ -1,0 +1,21 @@
+script variable result
+constant initial = given: it
+
+function echo x
+  return x
+end
+
+function bodyIt
+  echo(7)
+  return it
+end
+
+on run
+  bodyIt()
+  put it into answer
+  put given
+    echo(9)
+    return it
+  end into block
+  put [answer, initial(), block()] into result
+end

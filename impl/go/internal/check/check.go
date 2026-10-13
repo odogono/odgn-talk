@@ -869,6 +869,13 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			}
 		}
 	case "literal", "binary-literal":
+		// The parser represents `it` as a literal, but it still needs a
+		// body-local binding; initialisers and defaults have no body.
+		if n.Token.Kind == syntax.Word && n.Text == "it" {
+			if _, ok := u.Resolve(b, n.Text); !ok {
+				u.unknownName(n, ctx)
+			}
+		}
 		if n.Token.Kind == syntax.Number && !validNumber(n.Text) {
 			u.add("bad number", n.Pos())
 		}
