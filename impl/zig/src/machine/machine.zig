@@ -458,6 +458,8 @@ pub const Script = struct {
     allowance: u64 = 0,
     spent: u64 = 0,
     debt: u64 = 0,
+    /// Why it was stopped, once it has been; Stop is sticky.
+    stopped: ?[]const u8 = null,
 
     fn object(s: *const Script, name: []const u8) ?*objects.Object {
         for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
@@ -669,6 +671,23 @@ pub const FunctionCode = struct {
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
+/// A Run's number, from its id `<script>/r<n>`.
+fn runNumber(id: []const u8) u64 {
+    const at = std.mem.lastIndexOfScalar(u8, id, 'r') orelse return 0;
+    return std.fmt.parseInt(u64, id[at + 1 ..], 10) catch 0;
+}
+
+/// Text in the Trace's quoted form.
+fn writeText(out: *std.Io.Writer, text: []const u8) void {
+    out.writeByte('"') catch {};
+    for (text) |c| switch (c) {
+        '"' => out.writeAll("\\\"") catch {},
+        '\\' => out.writeAll("\\\\") catch {},
+        else => out.writeByte(c) catch {},
+    };
+    out.writeByte('"') catch {};
+}
+
 /// The Fuel a Run may still spend: what its Fuel per Run leaves, or in a
 /// cancelled Run's cleanup, what its Cleanup Budget leaves.
 fn fuelLeft(run: *const Run) u64 {
@@ -837,6 +856,8 @@ const Input = union(enum) {
     revoke: struct { script: []const u8, grant: []const u8 },
     /// Cancels a Run, by its owned id.
     cancel_run: []const u8,
+    /// Stops a Script, with an owned name and reason.
+    stop: struct { script: []const u8, reason: []const u8 },
     /// Cancels a Delivery's Run, or the Delivery itself if it is still in
     /// a mailbox.
     cancel_delivery: u64,
@@ -861,6 +882,9 @@ pub const Group = struct {
     cap: u64 = 0,
     /// Whether this Pump ended with work its slices or cap left undone.
     sliced: bool = false,
+    /// Set when an effect's state is unknown: every Script stops, and the
+    /// Group with them.
+    fatal: bool = false,
     /// The override the next queued Host Delivery or Broadcast takes.
     override: ?Override = null,
     /// The limit an instruction found passed, with `error.LimitFault`.
@@ -925,6 +949,10 @@ pub const Group = struct {
                 g.gpa.free(x.grant);
             },
             .cancel_run => |id| g.gpa.free(id),
+            .stop => |x| {
+                g.gpa.free(x.script);
+                g.gpa.free(x.reason);
+            },
             .set_parent, .dispose, .cancel_delivery => {},
         };
         g.inputs.deinit(g.gpa);
@@ -1273,7 +1301,6 @@ pub const Group = struct {
             _ = g.abandonScopes(r);
             _ = g.finalize(r, false);
             g.restoreBase(r);
-            g.abandonUnwinding(r);
             r.preempted_in = null;
             // Its cleanup is a Segment of its own.
             r.segments += 1;
@@ -1307,7 +1334,18 @@ pub const Group = struct {
         const place = if (run.continuing) top.pc else top.pc -| 1;
         var cleanups: std.ArrayList(Cleanup) = .empty;
         errdefer cleanups.deinit(g.gpa);
-        try g.collect(run, &cleanups, 0, null, null, place);
+        // A cleanup it was preempted in ends. A catch dispatch it was
+        // preempted in runs its policy's own `finally` blocks, then leaves,
+        // bringing its failed frames back with theirs.
+        while (run.controls.items.len > 0 and run.controls.items[run.controls.items.len - 1] == .cleanup) {
+            var c = run.controls.pop().?;
+            g.disposeControl(&c);
+        }
+        if (run.controls.items.len > 0) {
+            const d = run.controls.items[run.controls.items.len - 1].dispatch;
+            try g.collect(run, &cleanups, d.owner, d.search.entry - 1, null, place);
+            try cleanups.append(g.gpa, .{ .leave = true });
+        } else try g.collect(run, &cleanups, 0, null, null, place);
         try g.startCleanup(run, try nothing(g.gpa), cleanups, .cancel);
         return (try g.nextCleanup(run, true)) orelse try g.execute(run, true);
     }
@@ -1432,11 +1470,11 @@ pub const Group = struct {
 
     /// Finds a Broadcast's recipients, in load order, each with its own
     /// delivery id.
-    fn resolveBroadcast(g: *Group, b: *Broadcast) !void {
+    fn resolveBroadcast(g: *Group, b: *Broadcast, stopping: []const *const Script) !void {
         if (b.recipients != null) return;
         var out: std.ArrayList(Recipient) = .empty;
         errdefer out.deinit(g.gpa);
-        for (g.scripts.items) |s| if (g.wants(s, b.message)) {
+        for (g.scripts.items) |s| if (s.stopped == null and std.mem.indexOfScalar(*const Script, stopping, s) == null and g.wants(s, b.message)) {
             try out.append(g.gpa, .{ .script = s, .delivery = g.deliveries + 1 });
             g.deliveries += 1;
         };
@@ -1532,6 +1570,7 @@ pub const Group = struct {
         s.work.deinit(g.gpa);
         for (s.live.items) |r| g.destroyRun(r);
         s.live.deinit(g.gpa);
+        if (s.stopped) |reason| g.gpa.free(reason);
         for (s.unit.values) |v| if (v == .value) v.value.release();
         s.arena.deinit();
         g.gpa.destroy(s);
@@ -1632,6 +1671,10 @@ pub const Group = struct {
             },
             .revoke => |x| out.print("> revoke {s} grant={s}", .{ x.script, x.grant }) catch {},
             .cancel_run => |id| out.print("> cancel-run {s}", .{id}) catch {},
+            .stop => |x| {
+                out.print("> stop {s} reason=", .{x.script}) catch {};
+                writeText(out, x.reason);
+            },
             .cancel_delivery => |id| out.print("> cancel-delivery d{d}", .{id}) catch {},
             .broadcast => |b| {
                 out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
@@ -1666,7 +1709,16 @@ pub const Group = struct {
         g.sliced = false;
         // A Broadcast's recipients are those that want it now, as the queue
         // is drained.
-        for (g.inputs.items) |*input| if (input.* == .broadcast) try g.resolveBroadcast(&input.broadcast);
+        // A Stop, or a disposal that stops a Script, queued before a
+        // Broadcast leaves that Script out of its recipients.
+        var stopping: std.ArrayList(*const Script) = .empty;
+        defer stopping.deinit(g.gpa);
+        for (g.inputs.items) |*input| switch (input.*) {
+            .broadcast => |*b| try g.resolveBroadcast(b, stopping.items),
+            .stop => |x| if (g.script(x.script)) |target| try stopping.append(g.gpa, target),
+            .dispose => |o| for (g.scripts.items) |x| if (x.owner == o) try stopping.append(g.gpa, x),
+            else => {},
+        };
         for (g.inputs.items) |input| g.writeInput(input);
         const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
         g.write("> pump clock={s}", .{shown});
@@ -1712,7 +1764,11 @@ pub const Group = struct {
                     g.write("refused code=\"{s}\"\n", .{code});
                 } else x.object.parent = x.parent;
             },
-            .dispose => |o| o.disposed = true,
+            .dispose => |o| {
+                o.disposed = true;
+                // Disposing a Script's owner stops it, in this same input.
+                for (g.scripts.items) |x| if (x.owner == o) try g.stopScript(x, "owner disposed", null);
+            },
             .cancel_run => |id| {
                 defer g.gpa.free(id);
                 for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
@@ -1721,6 +1777,13 @@ pub const Group = struct {
                 };
             },
             .cancel_delivery => |id| try g.cancelDelivery(id),
+            .stop => |x| {
+                defer g.gpa.free(x.script);
+                defer g.gpa.free(x.reason);
+                // A repeated Stop does nothing, and keeps the first reason.
+                const target = g.script(x.script) orelse continue;
+                try g.stopScript(target, x.reason, null);
+            },
             .revoke => |x| {
                 defer g.gpa.free(x.script);
                 defer g.gpa.free(x.grant);
@@ -1771,6 +1834,7 @@ pub const Group = struct {
             busy = false;
             for (g.scripts.items) |s| {
                 if (s.work.items.len == 0) continue;
+                if (g.fatal) break :turns;
                 if (g.cap > 0 and g.pump_fuel >= g.cap) {
                     g.sliced = true;
                     break :turns;
@@ -1817,7 +1881,7 @@ pub const Group = struct {
         if (slice > 0) for (g.scripts.items) |x| {
             if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
         };
-        g.write("pumped state={s} fuel={d}", .{ if (g.sliced) "sliced" else "idle", g.pump_fuel });
+        g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
         if (g.next()) |deadline| {
             const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
             const text = try model.dates.string(g.scratch.allocator(), model.dates.fields(at), true);
@@ -2989,13 +3053,16 @@ pub const Group = struct {
             run.participant = null;
         }
         const first = run.participant.?.grants.items[0].name;
+        // An uncertain commit, or a rollback that doesn't succeed, leaves the
+        // effects' state unknown, which stops the Group.
         if (commit) {
             const status = g.hook(run, .commit);
             if (status == .ok) return null;
-            _ = g.hook(run, .rollback);
+            if (status == .unknown) g.fatal = true;
+            if (g.hook(run, .rollback) != .ok) g.fatal = true;
             return .{ .grant = first, .phase = "commit", .status = @tagName(status) };
         }
-        _ = g.hook(run, .rollback);
+        if (g.hook(run, .rollback) != .ok) g.fatal = true;
         return null;
     }
 
@@ -3011,8 +3078,15 @@ pub const Group = struct {
         try run.participant.?.grants.append(g.gpa, granted);
         const status = g.hook(run, .begin);
         if (status == .ok) return;
-        // An uncertain begin may have acquired something.
-        if (status == .unknown) _ = g.hook(run, .rollback);
+        // An uncertain begin may have acquired something: after a rollback
+        // attempt, it stops the Group.
+        if (status == .unknown) {
+            _ = g.hook(run, .rollback);
+            run.participant.?.grants.deinit(g.gpa);
+            run.participant = null;
+            g.fatal = true;
+            return error.GroupStop;
+        }
         run.participant.?.grants.deinit(g.gpa);
         run.participant = null;
         return g.raise("host error", where);
@@ -3098,8 +3172,17 @@ pub const Group = struct {
         // permit it, or roll it back.
         var failure: ?EffectFailure = if (outcome != .suspended) g.abandonScopes(run) else null;
         // A cancelled Run's cleanup Segment commits, unless a limit ended it.
-        const commits = failure == null and outcome != .faulted and !(outcome == .cancelled and run.cleanup_limited);
+        const commits = failure == null and outcome != .faulted and outcome != .stopped and !(outcome == .cancelled and run.cleanup_limited);
         if (g.finalize(run, commits)) |f| failure = f;
+        // An effect whose state is unknown stops the Group with this Run.
+        if (g.fatal and outcome != .stopped) {
+            failure = null;
+            switch (outcome) {
+                .returned, .errored, .vetoed => |v| v.release(),
+                else => {},
+            }
+            outcome = .stopped;
+        }
         if (failure) |f| {
             g.restoreBase(run);
             if (outcome == .suspended) if (run.waiting) |p| if (p.call) |c| g.write("abandon {s}\n", .{c.id});
@@ -3138,6 +3221,7 @@ pub const Group = struct {
                 .passed => "pass",
                 .effect_failed => "effect-failed",
                 .vetoed => "veto",
+                .stopped => "stop",
                 .selected, .preempted => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
@@ -3152,6 +3236,12 @@ pub const Group = struct {
             };
             out.writeAll("\n") catch {};
             if (outcome == .cancelled) g.writeAbandoned(run);
+        }
+        // Stopping the Group discards this Run with every other.
+        if (outcome == .stopped) {
+            try g.stopGroup(run);
+            g.destroyRun(run);
+            return;
         }
         // The end of the first Segment seals a held Verdict: `veto` vetoes
         // it, and suspending or ending without one allows it.
@@ -3183,7 +3273,7 @@ pub const Group = struct {
                 .dropped => "dropped",
                 .cancelled => "cancelled",
                 .effect_failed => "effect-failed",
-                .suspended, .selected, .preempted => unreachable,
+                .suspended, .selected, .preempted, .stopped => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
             // A `run` record names a Host Delivery, never a sender.
@@ -3294,9 +3384,129 @@ pub const Group = struct {
         return .{ .id = 0, .message = message, .args = args, .request = false, .from = try g.gpa.dupe(u8, from) };
     }
 
+    /// Stops a Script (chapter 6, Cancellation and Stop): each of its Runs,
+    /// `running` too, in the order they started, has its scopes abandoned
+    /// and its participant rolled back, and one in the middle of its Segment
+    /// its Script Variables too; then they are discarded with no `finally`,
+    /// and its mailbox's messages dropped. Those waiting on them get `send
+    /// failed`, reason `stopped`, and an open Decision settles undecided. The
+    /// Script's Grants are released, and its `stopped` record lists what
+    /// went. A stopped Script stays stopped.
+    fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run) !void {
+        if (s.stopped != null) return;
+        s.stopped = try g.gpa.dupe(u8, reason);
+        var runs: std.ArrayList(*Run) = .empty;
+        defer runs.deinit(g.gpa);
+        try runs.appendSlice(g.gpa, s.live.items);
+        if (running) |r| try runs.append(g.gpa, r);
+        std.mem.sort(*Run, runs.items, {}, struct {
+            fn less(_: void, x: *Run, y: *Run) bool {
+                return runNumber(x.id) < runNumber(y.id);
+            }
+        }.less);
+        var discarded: std.ArrayList(u8) = .empty;
+        defer discarded.deinit(g.gpa);
+        for (runs.items) |r| {
+            _ = g.abandonScopes(r);
+            if (g.finalize(r, false)) |_| {}
+            if (r == running or r.continuing) g.restoreBase(r);
+            if (discarded.items.len > 0) try discarded.appendSlice(g.gpa, ", ");
+            try discarded.appendSlice(g.gpa, r.id);
+            const d = r.delivery;
+            if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
+            s.fuel_total += r.fuel;
+            s.alloc_total += r.alloc;
+        }
+        var dropped: std.ArrayList(u8) = .empty;
+        defer dropped.deinit(g.gpa);
+        for (s.work.items) |w| switch (w) {
+            .message => |d| if (d.from == null and d.id > 0) {
+                if (dropped.items.len > 0) try dropped.appendSlice(g.gpa, ", ");
+                try dropped.print(g.gpa, "d{d}", .{d.id});
+            },
+            .run => {},
+        };
+        // The running Run's caller ends it; the rest go once their Decisions
+        // settle.
+        s.live.clearRetainingCapacity();
+        // Its named Grants are released, in code-point order of their names.
+        const order = try g.gpa.alloc(*const ScriptGrant, s.grants.len);
+        defer g.gpa.free(order);
+        for (s.grants, order) |*sg, *o| o.* = sg;
+        std.mem.sort(*const ScriptGrant, order, {}, struct {
+            fn less(_: void, x: *const ScriptGrant, y: *const ScriptGrant) bool {
+                return std.mem.order(u8, x.name, y.name) == .lt;
+            }
+        }.less);
+        for (order) |sg| g.releaseGrant(s, sg, .stop);
+        if (g.trace) |out| {
+            out.print("stopped {s} reason=", .{s.name}) catch {};
+            writeText(out, reason);
+            if (discarded.items.len > 0) out.print(" discarded=[{s}]", .{discarded.items}) catch {};
+            if (dropped.items.len > 0) out.print(" dropped=[{s}]", .{dropped.items}) catch {};
+            out.writeAll("\n") catch {};
+        }
+        // The open Decisions settle undecided, `cancelled`, after the
+        // `stopped` record.
+        for (runs.items) |r| if (r.verdict or r.delivery.decision) {
+            r.verdict = false;
+            try g.takePart(r.delivery, .{ .undecided = .{ .script = s.name, .run = r.id, .outcome = "cancelled" } });
+        };
+        for (s.work.items) |w| switch (w) {
+            .message => |d| try g.settleDropped(s, d),
+            .run => {},
+        };
+        s.work.clearRetainingCapacity();
+        for (runs.items) |r| if (r != running) g.destroyRun(r);
+    }
+
+    /// A message a stopped Script won't run: its sender gets `send failed`,
+    /// reason `stopped`, and its Decision settles undecided, `cancelled`.
+    fn settleDropped(g: *Group, s: *Script, d: Delivery) !void {
+        if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
+        if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } });
+        g.releaseDelivery(d);
+    }
+
+    /// A Delivery reaching a stopped Script is dropped; a Host's is listed
+    /// in another `stopped` record under the Script's reason.
+    fn dropStopped(g: *Group, s: *Script, reason: []const u8, d: Delivery) !void {
+        if (d.from == null and d.id > 0) if (g.trace) |out| {
+            out.print("stopped {s} reason=", .{s.name}) catch {};
+            writeText(out, reason);
+            out.print(" dropped=[d{d}]\n", .{d.id}) catch {};
+        };
+        try g.settleDropped(s, d);
+    }
+
+    /// Stops the Group, for an effect whose state is unknown: every Script,
+    /// with the running Run discarded in its own.
+    fn stopGroup(g: *Group, running: *Run) !void {
+        for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == running.script) running else null);
+    }
+
+    /// Whether the Group is stopped: by an effect whose state is unknown, or
+    /// with every one of its Scripts stopped.
+    pub fn stoppedState(g: *const Group) bool {
+        if (g.fatal) return true;
+        if (g.scripts.items.len == 0) return false;
+        for (g.scripts.items) |x| if (x.stopped == null) return false;
+        return true;
+    }
+
+    /// Queues `Stop` for a Script.
+    pub fn stopInput(g: *Group, script_name: []const u8, reason: []const u8) !void {
+        const n = try g.gpa.dupe(u8, script_name);
+        errdefer g.gpa.free(n);
+        const why = try g.gpa.dupe(u8, reason);
+        errdefer g.gpa.free(why);
+        try g.inputs.append(g.gpa, .{ .stop = .{ .script = n, .reason = why } });
+    }
+
     /// Puts a message at the back of a Script's mailbox; refused, the
     /// message is released.
     fn post(g: *Group, s: *Script, d: Delivery) !void {
+        if (s.stopped) |reason| return g.dropStopped(s, reason, d);
         s.work.append(g.gpa, .{ .message = d }) catch |e| {
             g.releaseDelivery(d);
             return e;
@@ -3644,6 +3854,8 @@ pub const Group = struct {
         /// Its Script's Fuel Slice or the Group's Fuel cap is spent, so it
         /// stops before its next instruction, in the middle of its Segment.
         preempted: Preemption,
+        /// The Group stopped while it ran, discarding it.
+        stopped,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -3673,6 +3885,17 @@ pub const Group = struct {
                         return other;
                     };
                     break :blk Step{ .raised = err };
+                },
+                error.GroupStop => {
+                    // The call that stopped the Group keeps its charge.
+                    if (charged) {
+                        const spent = costs.charge(costKey(ins, &charge), &charge);
+                        run.fuel += spent.fuel + run.clause_fuel;
+                        run.alloc += spent.alloc;
+                        run.clause_fuel = 0;
+                    }
+                    charge.release();
+                    return .stopped;
                 },
                 error.LimitFault => {
                     // The instruction's own limit, checked before its charge.
@@ -4272,6 +4495,13 @@ pub const Group = struct {
         defer more.deinit(g.gpa);
         switch (u.then) {
             .transfer => |t| try g.collect(run, &more, t.frame, t.offer_entry, null, raised),
+            // A cancellation's cleanup goes on to the next dispatch's
+            // policy, which it leaves in turn, or to the Run's first frame.
+            .cancel => if (d_index > 0 and run.controls.items[d_index - 1] == .dispatch) {
+                const outer = run.controls.items[d_index - 1].dispatch;
+                try g.collect(run, &more, outer.owner, outer.search.entry - 1, null, raised);
+                try more.append(g.gpa, .{ .leave = true });
+            } else try g.collect(run, &more, 0, null, null, raised),
             else => try g.collect(run, &more, ended.owner, ended.search.entry - 1, null, raised),
         }
         // The cleanup holds its own error.

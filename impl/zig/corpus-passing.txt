@@ -4,8 +4,10 @@ builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding
+cancellation/broadcast-recipients
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
@@ -15,12 +17,14 @@ capabilities/charge-faults
 capabilities/declared-allocation
 capabilities/effect-abandon-failed
 capabilities/effect-begin-failed
+capabilities/effect-begin-unknown
 capabilities/effect-cancellation
 capabilities/effect-cancellation-commit-failed
 capabilities/effect-cancellation-error
 capabilities/effect-cancellation-limit
 capabilities/effect-close-conversion
 capabilities/effect-commit-failed
+capabilities/effect-commit-unknown
 capabilities/effect-completion
 capabilities/effect-coordinator-abandon-failed
 capabilities/effect-coordinator-commit-failed
@@ -32,6 +36,7 @@ capabilities/effect-operation-error
 capabilities/effect-ordinary-error
 capabilities/effect-participant-conflict
 capabilities/effect-pass
+capabilities/effect-rollback-failed
 capabilities/effect-segment-roundtrip
 capabilities/effect-suspension-commit-failed
 capabilities/effect-unrelated-abandon-failed
@@ -44,6 +49,7 @@ capabilities/ordinary-grants
 capabilities/scope-cancel-run
 capabilities/scope-close-conversion
 capabilities/scope-conversion-fault
+capabilities/scope-dispose
 capabilities/scope-failed-close
 capabilities/scope-limit-fault
 capabilities/scope-malformed-acquisition
@@ -51,6 +57,7 @@ capabilities/scope-ordinary-error
 capabilities/scope-reverse-abandonment
 capabilities/scope-revoked-cleanup
 capabilities/scope-slots
+capabilities/scope-stop
 capabilities/scope-suspension-boundaries
 capabilities/standard-calendar
 capabilities/standard-calendar-errors

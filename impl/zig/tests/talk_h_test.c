@@ -703,6 +703,40 @@ static int cancel_test(void) {
     return bad;
 }
 
+/* Stop Script: a waiting Run is discarded with no finally, a later Delivery
+ * is dropped, and a Group whose Scripts are all stopped pumps as stopped. */
+static int stop_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable n = 0\non hold\n  try\n    wait 1 s\n  finally\n    put 9 into n\n  end try\nend hold\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_message hold = {"hold", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_script_stop(script, "done", 4) != TALK_OK;
+    talk_pump_result result = {TALK_IDLE, 0};
+    bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
+    bad |= result.state != TALK_STOPPED;
+    bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "> stop s reason=\"done\"\n") == NULL;
+    bad |= strstr(trace, "stopped s reason=\"done\" discarded=[s/r1]\n") == NULL;
+    bad |= strstr(trace, "stopped s reason=\"done\" dropped=[d2]\n") == NULL;
+    bad |= strstr(trace, "vars s n=0\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A suspending Operation's Start: it keeps the call, to answer later. */
 static talk_call *started = NULL;
 static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -1079,6 +1113,7 @@ int main(void) {
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
+    expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");

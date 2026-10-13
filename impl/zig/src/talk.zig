@@ -803,7 +803,7 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
-    if (out) |r| r.* = .{ .state = if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
+    if (out) |r| r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
     return .ok;
 }
 
@@ -1872,6 +1872,15 @@ export fn talk_script_revoke(s: *Script, name: ?[*]const u8, len: usize) HostErr
     if (g.memory.refused) return .out_of_memory;
     const n = bytes(name, len) catch return .invalid_value;
     g.group.revoke(s.name, n) catch |err| return status(err);
+    return .ok;
+}
+
+export fn talk_script_stop(s: *Script, reason: ?[*]const u8, len: usize) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    const why = bytes(reason, len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(why)) return .invalid_value;
+    g.group.stopInput(s.name, why) catch |err| return status(err);
     return .ok;
 }
 

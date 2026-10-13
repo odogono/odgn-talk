@@ -873,6 +873,11 @@ talk_host_error_code talk_script_revoke(talk_script *s, const char *name, size_t
  * finally blocks run on its Cleanup Budget in its Script's turn, and it ends
  * cancelled. One that has ended does nothing. */
 talk_host_error_code talk_script_cancel_run(talk_script *s, const char *id, size_t len);
+/* Queues Stop Script, which is sticky: its Runs are discarded with no
+ * finally, after their scopes are abandoned and participants rolled back,
+ * its mailbox is dropped, and a later Delivery to it is dropped when it is
+ * drained. A repeat keeps the first reason. */
+talk_host_error_code talk_script_stop(talk_script *s, const char *reason, size_t len);
 /* C only: queues cancelling a Request or Decision, by its delivery id, such
  * as "d1", which talk.go does through its context: its Run is cancelled, or,
  * still in a mailbox, it is removed and reported cancelled with no Run. */

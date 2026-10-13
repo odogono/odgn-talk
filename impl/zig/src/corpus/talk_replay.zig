@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -20,13 +20,6 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         for (step1_inputs) |known| {
             if (std.mem.eql(u8, known, name)) break;
         } else return "a Host Input talk.h doesn't make yet";
-        // An uncertain effect outcome stops the Group, which comes with
-        // Stop in step 4.
-        if (std.mem.eql(u8, name, "stub-effect")) {
-            const status = field(input, "status") orelse return "a stub-effect without a status";
-            const phase = field(input, "phase") orelse return "a stub-effect without a phase";
-            if (std.mem.eql(u8, status, "unknown") or (std.mem.eql(u8, phase, "rollback") and !std.mem.eql(u8, status, "ok"))) return "stopping a Group is not implemented";
-        }
         if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to = field(input, "to") orelse return "a Delivery without a target";
             if (std.mem.startsWith(u8, to, "<object ")) continue;
@@ -1061,6 +1054,17 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_pump(group, seconds, nanos, &pump_options, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
+        } else if (std.mem.eql(u8, name, "stop")) {
+            const rest = input[name_end + 1 ..];
+            const script = scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+            var reason: ?*c.talk_value = null;
+            const shown = field(input, "reason") orelse return error.MalformedCase;
+            try check(c.talk_parse_display(shown.ptr, shown.len, &reason));
+            defer c.talk_value_release(reason);
+            var text: [*c]const u8 = null;
+            var text_len: usize = 0;
+            if (!c.talk_value_as_text(reason, &text, &text_len)) return error.MalformedCase;
+            try check(c.talk_script_stop(script, text, text_len));
         } else if (std.mem.eql(u8, name, "cancel-run")) {
             const id = input[name_end + 1 ..];
             const script = scripts.get(id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse return error.MalformedCase]) orelse return error.UnknownScript;
