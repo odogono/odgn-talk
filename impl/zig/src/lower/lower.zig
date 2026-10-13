@@ -2154,6 +2154,17 @@ const Frame = struct {
                     try f.emit(.get_key, &.{.{ .text = try f.keyText(k.key.?) }}, at, "");
                 }
             },
+            .optional_key => |k| {
+                if (k.computed) |x| {
+                    try f.expr(x);
+                    try f.expr(k.base);
+                    try f.emit(.get_optional_key_computed, &.{}, at, "");
+                } else {
+                    try f.expr(k.base);
+                    const key = if (k.code_points) try f.keyTextOf("code points") else try f.keyText(k.key.?);
+                    try f.emit(.get_optional_key, &.{.{ .text = key }}, at, "");
+                }
+            },
             .property => |p| {
                 try f.expr(p.base);
                 if (p.delimiter) |d| {
@@ -2216,6 +2227,16 @@ const Frame = struct {
     fn binary(f: *Frame, e: *const Expr, b: ast.Binary) Allocator.Error!void {
         const at = e.pos;
         switch (b.op) {
+            // ⟦a otherwise b⟧ = ⟦a⟧ branch-not-nothing done; pop; ⟦b⟧; done:
+            .otherwise => {
+                const end = try f.newLabel();
+                try f.expr(b.left);
+                try f.jump(.branch_not_nothing, end, at);
+                try f.emit(.pop, &.{}, at, "");
+                try f.expr(b.right);
+                try f.mark(end);
+                return;
+            },
             .@"and", .@"or" => {
                 const short = try f.newLabel();
                 const end = try f.newLabel();
@@ -2263,7 +2284,7 @@ const Frame = struct {
             .mod => .mod,
             .div => .div,
             .power => .power,
-            .@"and", .@"or" => unreachable,
+            .otherwise, .@"and", .@"or" => unreachable,
         };
         const takes_fold = switch (op) {
             .equal, .not_equal, .less, .greater, .less_or_equal, .greater_or_equal, .member, .contains, .begins_with, .ends_with, .matches => true,
@@ -2654,7 +2675,7 @@ fn exprReads(l: *Lowerer, e: *const Expr, out: *std.ArrayList([]const u8)) Alloc
         .is_empty => |k| try exprReads(l, k.value, out),
         .can_be => |k| try exprReads(l, k.value, out),
         .conversion => |c| try exprReads(l, c.value, out),
-        .key => |k| {
+        inline .key, .optional_key => |k| {
             if (k.computed) |x| try exprReads(l, x, out);
             try exprReads(l, k.base, out);
         },
@@ -2930,4 +2951,39 @@ test "parenthesized Containers and calls through a Constant lower" {
     try testing.expect(std.mem.indexOf(u8, out.written(), "property length") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "load-definition twice") != null);
     try testing.expect(std.mem.indexOf(u8, out.written(), "call-value 1") != null);
+}
+
+test "otherwise lowers at its own token, optional reads at `the`, and each branch keeps its charge" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const source =
+        \\on go m, k
+        \\ return the optional city of m otherwise the optional (k) of m otherwise "unknown"
+        \\end go
+    ;
+    const parsed = try parser.parse(a, source);
+    const checked = try check.check(a, &parsed.tree, .{});
+    try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+    const unit = try lower(a, &parsed.tree, &checked, .{ .name = "t" });
+    var out: std.Io.Writer.Allocating = .init(a);
+    try disassemble(&unit, &out.writer);
+    // The first branch lands on the second, not past every default.
+    const code =
+        \\  0002 2:30 load 1 ; m
+        \\  0003 2:9 get-optional-key "city"
+        \\  0004 2:32 branch-not-nothing 0009
+        \\  0005 2:32 pop
+        \\  0006 2:56 load 2 ; k
+        \\  0007 2:62 load 1 ; m
+        \\  0008 2:42 get-optional-key-computed
+        \\  0009 2:64 branch-not-nothing 0012
+        \\  0010 2:64 pop
+        \\  0011 2:74 const 1 ; "unknown"
+        \\  0012 2:2 return
+    ;
+    if (std.mem.indexOf(u8, out.written(), code) == null) {
+        std.debug.print("{s}\n", .{out.written()});
+        return error.TestUnexpectedDisassembly;
+    }
 }

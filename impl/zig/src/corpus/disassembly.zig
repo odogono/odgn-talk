@@ -102,7 +102,7 @@ test "every Disassembly Case's expected disassembly" {
             },
         }
     };
-    try std.testing.expectEqual(@as(usize, 13), cases);
+    try std.testing.expectEqual(@as(usize, 14), cases);
     try std.testing.expectEqual(@as(usize, 0), failures);
 }
 

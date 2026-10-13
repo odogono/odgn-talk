@@ -884,7 +884,7 @@ const Checker = struct {
             .is_empty => |k| try c.collectExpr(s, k.value),
             .can_be => |k| try c.collectExpr(s, k.value),
             .conversion => |k| try c.collectExpr(s, k.value),
-            .key => |k| {
+            inline .key, .optional_key => |k| {
                 if (k.computed) |x| try c.collectExpr(s, x);
                 try c.collectExpr(s, k.base);
             },
@@ -1847,6 +1847,12 @@ const Checker = struct {
                     if (key == null or !std.mem.eql(u8, key.?, "id")) try c.report(.not_in_a_guard, e.pos);
                 }
             },
+            // A map-only read that never crosses to the Host, so it is no
+            // Host property access, even of a known Object.
+            .optional_key => |k| {
+                if (k.computed) |x| try c.expr(s, x, in);
+                try c.expr(s, k.base, in);
+            },
             .property => |p| {
                 try c.expr(s, p.base, in);
                 if (p.delimiter) |d| {
@@ -2284,6 +2290,40 @@ test "Capability calls against the Script's Grants" {
         \\  say 1
         \\end t
     , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
+}
+
+test "both sides of otherwise and an optional read's operands are checked" {
+    // An unselected fallback's call is still `not in a guard`.
+    try expectDiagnostics("function f x\nreturn x\nend\non t x where true otherwise f(x)\nend\n", .{}, "not in a guard at 4:29\n");
+    try expectDiagnostics("function f x\nreturn x\nend\non t x where f(x) otherwise true\nend\n", .{}, "not in a guard at 4:14\n");
+    // An optional read of a known Host Object is no Host property access:
+    // it fails at runtime, and the ordinary `id` read stays allowed.
+    const objects: []const Object = &.{.{ .name = "warehouse", .kind = "store" }};
+    try expectDiagnostics("on t where the optional label of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
+    try expectDiagnostics("on t where the optional id of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
+    try expectDiagnostics("on t where the id of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "");
+    try expectDiagnostics("on t where the label of warehouse is \"w1\"\nend\n", .{ .objects = objects }, "not in a guard at 1:12\n");
+    try expectDiagnostics("on t\nreturn absent otherwise 1\nend\n", .{}, "unknown name at 2:8\n");
+    try expectDiagnostics("on t\nreturn 1 otherwise absent\nend\n", .{}, "unknown name at 2:20\n");
+    try expectDiagnostics("on t\nreturn the optional k of absent\nend\n", .{}, "unknown name at 2:26\n");
+    try expectDiagnostics("on t\nreturn the optional (absent) of nothing\nend\n", .{}, "unknown name at 2:22\n");
+}
+
+test "otherwise and optional reads are eligible where their operands are" {
+    for ([_][]const u8{
+        "constant fallback = 3\nconstant x = nothing otherwise fallback\n",
+        "constant m = {a: 1}\nconstant x = the optional a of m otherwise 0\n",
+        "script variable x = the optional a of nothing otherwise 1\n",
+        "function f a = nothing otherwise 1\nreturn a\nend\n",
+        "on t xs\nreturn every item of xs whose the optional active of it otherwise false\nend\n",
+        "on t\nput 1 into otherwise\nreturn otherwise\nend\n",
+        "function otherwise x\nreturn x\nend\non t\nreturn otherwise(2)\nend\n",
+        "on t\nreturn {otherwise: 1, optional: 2}\nend\n",
+    }) |source| try expectDiagnostics(source, .{}, "");
+    try expectDiagnostics("script variable v = 1\nconstant x = nothing otherwise v\n", .{}, "not constant at 2:32\n");
+    try expectDiagnostics("script variable v = 1\nconstant x = the optional a of v\n", .{}, "not constant at 2:32\n");
+    try expectDiagnostics("function f x\nreturn x\nend\nconstant y = nothing otherwise f(1)\n", .{}, "not constant at 4:32\n");
+    try expectDiagnostics("on t xs\nreturn every item of xs whose it otherwise f(it)\nend\nfunction f x\nreturn x\nend\n", .{}, "not in a whose at 2:44\n");
 }
 
 /// The diagnostics a case's Trace expects of one unit, as `diagnose` writes
