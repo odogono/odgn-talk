@@ -8,8 +8,8 @@
 # no closing colon are `bad message name`. `with` is a contextual word, not
 # a Reserved Word, so it names a message and reaches `object gone`. A
 # waiting send and a Join Member check the name the same way.
-> load a identity=e218845331f89637744542dfd9965bbc475cc6e0d3931bfb0659548b279c2ce3
-> load sink identity=7837e47f8f9696950d3250024177e46f3cadfa4b7f0e51946188c4a061891d88
+> load a identity=ab585a40f224bcb0503acab1f5f1b8101b5dc87eef17bb8b6a6b5f0e8c519013
+> load sink identity=dd1c7f70b6add4da54627fbb9bb797b1ae1a56bd5c27f6859afb1f70c5a6898f
 > deliver d1 to=a message=go
 > pump clock=2026-10-05T09:00:00Z
 send a/r1 to=sink message=note args=[1]

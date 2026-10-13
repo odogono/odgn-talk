@@ -2,7 +2,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #326.
 # Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
-> load s identity=916d622e49d99be4dd9d4074a309e76b4fbe94d232c836b7b8ea7c99246f2287
+> load s identity=54778da806fadfcdee65b97cf74dd064bcbc89b557bac7999cfd7d013ce28fd3
 > stub resource.openlock value=nothing
 > stub resource.write value=nothing
 > stub resource.unlock error={}

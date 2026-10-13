@@ -7,7 +7,7 @@
 # `offset`. Its Fuel, allocation and state figures are Cost Model 0's, as the
 # TS Core blessed them.
 
-> load search identity=580af77b5945dd45e16d20c8d2fc242938b20546a3dc377ca54f4454c6e38952
+> load search identity=eaa6cc75fc80a82cf851ad670b741427555b0bf595287f735ab7bb0a5235fdb3
 > deliver d1 to=search message=go
 > pump clock=2026-09-30T09:00:00Z
 seg search/r1 start delivery=d1 handler=go clause=1 fuel=131 alloc=237 state=133 end=return

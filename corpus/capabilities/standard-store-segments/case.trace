@@ -3,7 +3,7 @@
 # A read-only Grant never enlists. A second writable Store in one Segment
 # shares the first's participant, so one commit covers both (ADR 0069), and a
 # Limit Fault rolls the Store writes back.
-> load s identity=678585f2c9979ca1f94f9ccf5121157110386df1d51ae9eb63164fe2f8cc5bbe
+> load s identity=f81b7f1acc43ba1e2699af78911f2e9dfeed7cb713019a2891375ae293c741ce
 > stub store.get value=nothing
 > stub-effect s.st phase=begin status=ok
 > stub store.set value=nothing

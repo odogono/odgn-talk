@@ -1,6 +1,6 @@
 # Transfer uses the destination tail, preserves admission and charges no old dispatch.
-> load old identity=936e91b17494b5eb4b8a3cf26dbc0aeedaa166596683ffdf2dcd82cd08219668
-> load next identity=c30eb800fff61487e532720794dc05e3f03a06531a755f9f225518f4809f183b
+> load old identity=2a71d3d04ec92fff8a08a737f574cc6ed39a6544a4373cc154e6f2d36ff9bdd1
+> load next identity=0d5c1c26ae85254f988a5645549c11e9541045a154ab96ca8c246202940a921a
 > set-parent object=<object room "leaf"> parent=<object room "old">
 > deliver d1 to=<object room "leaf"> message=ping args=[1]
 > deliver d2 to=next message=ping args=[9]

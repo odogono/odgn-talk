@@ -1,18 +1,18 @@
 # Unblessed: Session observation (#438); first blessing awaits human review.
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on greet name" & newline & "  say " & quote & "hi " & quote & " & name" & newline & "end greet" identity=8e5b90f83380e2a745b8c10215bc436a193949f5a6400c698daf1f7b13cd7068
-> extend session source="on move x to y" & newline & "  say x + y" & newline & "end move" identity=cb51591dda82deebc1babfd798bb8186f35b0e1f4eec16ae2734c4a34978b79a
-> extend session source="on nap" & newline & "  wait 5 s" & newline & "  say " & quote & "woke" & quote & newline & "end nap" identity=a9a7ba3acb6e8f67656de2be125215b5c7b6039c9ea9c0260f898c8015daa533
-> extend session source="on boom" & newline & "  return 1 / 0" & newline & "end boom" identity=d87258e1b2e705f50b5193a8c5328559a43dc43d70341b45db75a6effc52aadf
-> extend session source="on error e" & newline & "  say " & quote & "caught " & quote & " & the code of e" & newline & "end error" identity=eded0dac5a32d4603f7e26d8a640a807aeb4d9d85c362f90e8f4a4465d19fd8c
-> extend session source="on entry1" & newline & "greet " & quote & "Ann" & quote & newline & "end entry1" & newline identity=d479a61e514c5d60d50ecdaf8c425804ecf7e28ee15545f5feb0b26b01dff365
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on greet name" & newline & "  say " & quote & "hi " & quote & " & name" & newline & "end greet" identity=903a65180727460884a223acab514aa85b4d98a80f1ee5c2110356cccd1c108c
+> extend session source="on move x to y" & newline & "  say x + y" & newline & "end move" identity=6e2bf7680cbe6fb46cab93413c73e100c053c37b83b9f1793a7ec9784fc3d900
+> extend session source="on nap" & newline & "  wait 5 s" & newline & "  say " & quote & "woke" & quote & newline & "end nap" identity=e5cf95e086a226ace5f5fdc5f4dfef6fcbbfe32832ff75464ed629947ba3f7c8
+> extend session source="on boom" & newline & "  return 1 / 0" & newline & "end boom" identity=e5ea77d97b3926c0d6cb6eaf7916ffa4af3e7044a6723f3c44bbdef6150dd73e
+> extend session source="on error e" & newline & "  say " & quote & "caught " & quote & " & the code of e" & newline & "end error" identity=f1a495ac95657ff71d36d2782bfcde8b95914238c157e8caf2547a2c44701392
+> extend session source="on entry1" & newline & "greet " & quote & "Ann" & quote & newline & "end entry1" & newline identity=b033d335616cd83f8db3089ffd46c9da376327e798689e3a16a156f1f9e84505
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 call session/r1.c1 op=console.write args=["hi Ann"]
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=40 alloc=22 state=0 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=40 alloc=22
 pumped state=idle fuel=40
-> extend session source="on entry2" & newline & "send greet with " & quote & "Bo" & quote & " to session" & newline & "end entry2" & newline identity=214d21f89e355581b6617020e8ef7291c0c81857b7b811842cb3e6ace85c5941
+> extend session source="on entry2" & newline & "send greet with " & quote & "Bo" & quote & " to session" & newline & "end entry2" & newline identity=edf0d7f5b5593e2a7e8b8cbe9da46b7b363938ed0f92adf8561d185f965e6596
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 send session/r2 to=session message=greet args=["Bo"]
@@ -22,7 +22,7 @@ call session/r3.c1 op=console.write args=["hi Bo"]
 seg session/r3 start from=session/r2 handler=greet clause=1 fuel=23 alloc=21 state=0 end=return
 run session/r3 outcome=completed handler=greet fuel=23 alloc=21
 pumped state=idle fuel=54
-> extend session source="on entry3" & newline & "send to session: move 1 to 2" & newline & "end entry3" & newline identity=cca43383c67fb7b7b171d7be282cc58e259708709042948d1d4fbd437710139d
+> extend session source="on entry3" & newline & "send to session: move 1 to 2" & newline & "end entry3" & newline identity=24dff1de742cefdba6ccbec56b09b0661518bd29c15dc0d024fb23c657f7f9ac
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 send session/r4 to=session message=move:to: args=[1, 2]
@@ -32,13 +32,13 @@ call session/r5.c1 op=console.write args=[3]
 seg session/r5 start from=session/r4 handler=move:to: clause=1 fuel=23 alloc=16 state=0 end=return
 run session/r5 outcome=completed handler=move:to: fuel=23 alloc=16
 pumped state=idle fuel=55
-> extend session source="on entry4" & newline & "return 1 + 2" & newline & "end entry4" & newline identity=6a59f5937c286d8468362dc6a99820254c97b2ce5faa9433855d0259bc636866
+> extend session source="on entry4" & newline & "return 1 + 2" & newline & "end entry4" & newline identity=4623587a1d21f9f9af2acca61157c7c556a3e531fdaacbea71d8a41fc4a45f19
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:00Z
 seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=12 alloc=16 state=0 end=return
 run session/r6 outcome=completed delivery=d4 handler=entry4 value=3 fuel=12 alloc=16
 pumped state=idle fuel=12
-> extend session source="on entry5" & newline & "send nap to session" & newline & "end entry5" & newline identity=958e9cc9e7a61643605781ae42da120ac44b9703bfc914685ed9dab59d61df5d
+> extend session source="on entry5" & newline & "send nap to session" & newline & "end entry5" & newline identity=8e5f3e8f73c2d68373d10e7f4bcbbb3535a31b9c1857541b14ad990b7d0c344d
 > request d5 to=session message=entry5
 > pump clock=2026-09-30T10:00:00Z
 send session/r7 to=session message=nap
@@ -46,7 +46,7 @@ seg session/r7 start delivery=d5 handler=entry5 clause=1 fuel=29 alloc=32 state=
 run session/r7 outcome=completed delivery=d5 handler=entry5 fuel=29 alloc=32
 seg session/r8 start from=session/r7 handler=nap clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:00:05Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:05Z
-> extend session source="on entry6" & newline & "send boom to session" & newline & "end entry6" & newline identity=d7f2302a5c53608251e1e70c7753c19a95a5e269f3420911b7d3976a1669ebc8
+> extend session source="on entry6" & newline & "send boom to session" & newline & "end entry6" & newline identity=784dabf2dc8bc8446c209680d8fe466e4e7e2a0d3530f2dddb450a5e53877b57
 > request d6 to=session message=entry6
 > pump clock=2026-09-30T10:00:00Z
 send session/r9 to=session message=boom
@@ -64,7 +64,7 @@ call session/r8.c1 op=console.write args=["woke"]
 seg session/r8 resume fuel=14 alloc=0 state=0 end=return
 run session/r8 outcome=completed handler=nap fuel=29 alloc=0
 pumped state=idle fuel=14
-> extend session source="on entry7" & newline & "repeat 2 times" & newline & "  send greet with " & quote & "Cy" & quote & " to session" & newline & "end repeat" & newline & "end entry7" & newline identity=1a32accbd61c146b44eb68471f197e8ed8884c31aed29ce0d1dfaa50d3ce74eb
+> extend session source="on entry7" & newline & "repeat 2 times" & newline & "  send greet with " & quote & "Cy" & quote & " to session" & newline & "end repeat" & newline & "end entry7" & newline identity=e4d651d6fccf92fcfda86b2e44c016099fb378cba49e6844327520029457ec15
 > request d7 to=session message=entry7
 > pump clock=2026-09-30T10:00:05Z
 send session/r12 to=session message=greet args=["Cy"]
@@ -79,7 +79,7 @@ seg session/r14 start from=session/r12 handler=greet clause=1 fuel=23 alloc=21 s
 run session/r14 outcome=completed handler=greet fuel=23 alloc=21
 pumped state=idle fuel=115
 > save s1
-> extend session source="on entry8" & newline & "send nap to session" & newline & "end entry8" & newline identity=877db18d2fcdc73a7c44cffda099cdaa0904402a1e92eba6f57adb9c74f76ce2
+> extend session source="on entry8" & newline & "send nap to session" & newline & "end entry8" & newline identity=485d235a5601796540782264d937bbe874190b615610a81809cef179d6308811
 > request d8 to=session message=entry8
 > pump clock=2026-09-30T10:00:05Z
 send session/r15 to=session message=nap
@@ -87,8 +87,8 @@ seg session/r15 start delivery=d8 handler=entry8 clause=1 fuel=29 alloc=32 state
 run session/r15 outcome=completed delivery=d8 handler=entry8 fuel=29 alloc=32
 seg session/r16 start from=session/r15 handler=nap clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:00:10Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
-> restore from=s1 fingerprint=87b2cfbae443e6c9bc927cafef33cf1d02975544b5cf98a1d3368a7cd97b91fa mode=full
-> extend session source="on entry8" & newline & "send nap to session" & newline & "end entry8" & newline identity=877db18d2fcdc73a7c44cffda099cdaa0904402a1e92eba6f57adb9c74f76ce2
+> restore from=s1 fingerprint=a3bf6fcc4be16e0561a2e9239edbfb1f575d0adb2dbbcc414402b3409673bf36 mode=full
+> extend session source="on entry8" & newline & "send nap to session" & newline & "end entry8" & newline identity=485d235a5601796540782264d937bbe874190b615610a81809cef179d6308811
 > request d8 to=session message=entry8
 > pump clock=2026-09-30T10:00:05Z
 send session/r15 to=session message=nap
@@ -96,10 +96,10 @@ seg session/r15 start delivery=d8 handler=entry8 clause=1 fuel=29 alloc=32 state
 run session/r15 outcome=completed delivery=d8 handler=entry8 fuel=29 alloc=32
 seg session/r16 start from=session/r15 handler=nap clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-09-30T10:00:10Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
-> reload session carry=yes source="on greet name" & newline & "  say " & quote & "hi " & quote & " & name" & newline & "end greet" & newline & "on move x to y" & newline & "  say x + y" & newline & "end move" & newline & "on nap" & newline & "  say " & quote & "replaced" & quote & newline & "end nap" & newline & "on boom" & newline & "  return 1 / 0" & newline & "end boom" & newline & "on error e" & newline & "  say " & quote & "caught " & quote & " & the code of e" & newline & "end error" & newline identity=08d418ec9bc81dfb6d90550334fd009de12a0d08f9d19cac4a8091d246019b6c
+> reload session carry=yes source="on greet name" & newline & "  say " & quote & "hi " & quote & " & name" & newline & "end greet" & newline & "on move x to y" & newline & "  say x + y" & newline & "end move" & newline & "on nap" & newline & "  say " & quote & "replaced" & quote & newline & "end nap" & newline & "on boom" & newline & "  return 1 / 0" & newline & "end boom" & newline & "on error e" & newline & "  say " & quote & "caught " & quote & " & the code of e" & newline & "end error" & newline identity=4b97cd3c4c73712cf6591b7e10a0b037b74f44687888462cfa657a5439615831
 stopped session reason="reload" discarded=[session/r16]
-> extend session source="on doze" & newline & "  wait 5 s" & newline & "end doze" identity=1dab457e0db644f57782a2d2e8067ad0e012d509994da1e3d36cf5c49dbc8b82
-> extend session source="on entry9" & newline & "send doze to session" & newline & "end entry9" & newline identity=037388beae35a60271fa5346c686e6253e88f389306950b8c1bc859de8a0d7e6
+> extend session source="on doze" & newline & "  wait 5 s" & newline & "end doze" identity=2b4b32e1988b595ab3d65a5d6696b46e9d57e41cfa593abe7c4333b90f43b4cd
+> extend session source="on entry9" & newline & "send doze to session" & newline & "end entry9" & newline identity=bfd48e9fa65a61d0cfa7e148c1f9f6f6226d3a77527662e0642b931aa647537b
 > request d9 to=session message=entry9
 > pump clock=2026-09-30T10:00:05Z
 send session/r17 to=session message=doze
@@ -112,8 +112,8 @@ pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
 seg session/r18 resume fuel=0 alloc=0 state=0 end=cancel
 run session/r18 outcome=cancelled handler=doze fuel=15 alloc=0
 pumped state=idle fuel=0
-> extend session source="on spin" & newline & "  spin" & newline & "end spin" identity=a48ac0434afea8e721a9837f5be601b8c2911e1b827557aed7bb094ece014390
-> extend session source="on entry10" & newline & "send spin to session" & newline & "end entry10" & newline identity=502001f4e0b3a3903337dd7101390ece702f97873b53120c7e181479c3798bac
+> extend session source="on spin" & newline & "  spin" & newline & "end spin" identity=4b515872301c9f446b24e99ae49edf02075b47e5b917bfbc36cb08a9bdc4b425
+> extend session source="on entry10" & newline & "send spin to session" & newline & "end entry10" & newline identity=faedd695d0a468eb035d620a6d01ff3d19d8f17bb96fea32ba02c4bdd59b3438
 > request d10 to=session message=entry10
 > pump clock=2026-09-30T10:00:05Z
 send session/r19 to=session message=spin

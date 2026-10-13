@@ -1,7 +1,7 @@
 # First blessing reviewed by the maintainer in #286. Go and TS agree.
 # Both ending spellings, local Handler frames, failed replies and timeouts.
-> load a identity=c8078a986915217e991fcea04d4d72324eda2e8b0c2b910cc452f5dc75b8b006
-> load b identity=efa18b70402516ac02b4809e541aec9c3ae5e38d9fa5262af74dba3ff3db44d0
+> load a identity=d76eaf140e9522f409c16dcf0cd1c9264ef9ac147a01d749f4bb467167e6e594
+> load b identity=9b1f0ed26e378b0e667330cc94279385b6b2656d17574f090bb84abc236bdae4
 > deliver d1 to=a message=direct args=[2]
 > deliver d2 to=a message=local args=[2]
 > pump clock=2026-10-04T12:00:00Z

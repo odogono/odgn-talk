@@ -7,7 +7,7 @@
 #   "Uncaught errors"; chapter 5, "Queueing Policies"), so `on error` runs as
 #   s/r3 before s/r2 resumes.
 
-> load s identity=ba70755a96996e3e9598337587cf558e06265848f32b38e93468d2925249e8be
+> load s identity=f2494ce3283012056a4707ef772ed01045a9b1b389c75e7e66d0abb29e1ee1f9
 > deliver d1 to=s message=work args=[1]
 > deliver d2 to=s message=work args=[2]
 > pump clock=2026-10-06T10:00:00Z

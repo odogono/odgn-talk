@@ -1,14 +1,14 @@
 # Unblessed: :store load and :store clear routing, and checkpoints (#621); first blessing awaits human review.
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on changed change, queued" & newline & "  say change" & newline & "end changed" identity=5e79b49a28e5acd1b4553b9f43273d39154b3aca32528ac432420e2ed9b76d31
-> extend session source="on entry1" & newline & "ask scores to watch " & quote & "scores" & quote & ", " & quote & "score/" & quote & ", " & quote & "changed" & quote & newline & "end entry1" & newline identity=c92a7bf947d8a56903ada8aba4276ae419eac8d7b35248ff77ba3ada23c139ba
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on changed change, queued" & newline & "  say change" & newline & "end changed" identity=048382e1beef9e9b32992da32820bd1a19c5148cbb2d606fc1118c84114567df
+> extend session source="on entry1" & newline & "ask scores to watch " & quote & "scores" & quote & ", " & quote & "score/" & quote & ", " & quote & "changed" & quote & newline & "end entry1" & newline identity=fdda5824dd823d3692348405886579e2c5bac44484f822df6cde85e9e848791a
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 call session/r1.c1 op=scores.watch args=["scores", "score/", "changed"] result=nothing
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=26 alloc=8 state=0 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=26 alloc=8
 pumped state=idle fuel=26
-> extend session source="on entry2" & newline & "ask other to watch " & quote & "everything" & quote & ", " & quote & quote & ", " & quote & "changed" & quote & newline & "end entry2" & newline identity=8102cb3a86202fd4c443eb31c7f2c52aff794f68944362b1ddb8015de4afdcbe
+> extend session source="on entry2" & newline & "ask other to watch " & quote & "everything" & quote & ", " & quote & quote & ", " & quote & "changed" & quote & newline & "end entry2" & newline identity=5c830d6a22c5c8040997c6928aa84d720c0404f902c22e94408d95720d81ce08
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 call session/r2.c1 op=other.watch args=["everything", "", "changed"] result=nothing
@@ -40,8 +40,8 @@ seg session/r6 start delivery=d6 handler=changed clause=1 fuel=18 alloc=0 state=
 run session/r6 outcome=completed delivery=d6 handler=changed fuel=18 alloc=0
 pumped state=idle fuel=18
 > save s1
-> restore from=s1 fingerprint=04c3f975cc47ad1f0acd999a13b4c53a7865aec7474899d329b677766b9cdf77 mode=full
-> extend session source="on entry3" & newline & "ask scores to set " & quote & "score/ann" & quote & ", 5" & newline & "end entry3" & newline identity=aacf5ef6d2cfc77b3922afc53cf80758c85367a56674d2863090df6fb0c81c56
+> restore from=s1 fingerprint=f6d7f9e03167f3f834042fed590ab5b20cd5688ea74ef29420decf762b03ee92 mode=full
+> extend session source="on entry3" & newline & "ask scores to set " & quote & "score/ann" & quote & ", 5" & newline & "end entry3" & newline identity=8f72ccb70a20e34d17ffdfd08fee6205f213460c823f64be7f7285db69121e55
 > request d7 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 effect session/r7.s1 grant=scores phase=begin status=ok
@@ -63,7 +63,7 @@ call session/r9.c1 op=console.write args=[{grant: "other", watch: "everything", 
 seg session/r9 start delivery=d9 handler=changed clause=1 fuel=18 alloc=0 state=0 end=return
 run session/r9 outcome=completed delivery=d9 handler=changed fuel=18 alloc=0
 pumped state=idle fuel=18
-> restore from=s2 fingerprint=7b50264bd9f6f332d9a2b676eef1a52607a1c904b89176c58c38d7676cafc5eb mode=full
+> restore from=s2 fingerprint=7efcaf5588275c490a3e4a2f5b8cbfa1801b05565f76146e2c36b37dfef7326f mode=full
 > deliver d9 to=session message=changed args=[{grant: "other", watch: "everything", prefix: "", keys: [], resync: true}]
 > pump clock=2026-09-30T10:00:00Z
 call session/r9.c1 op=console.write args=[{grant: "other", watch: "everything", prefix: "", keys: [], resync: true}]

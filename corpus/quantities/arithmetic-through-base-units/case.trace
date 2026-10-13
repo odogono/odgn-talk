@@ -3,7 +3,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load units identity=b82f2b3b363b86f488e2212388e8a491b095477bdfe0e42422809418bf72247d
+> load units identity=8873a970a80f59ffb384f7d14ed03d4e6697339eca87d8963db769742d65226e
 > deliver d1 to=units message=go
 > pump clock=2026-09-30T09:00:00Z
 seg units/r1 start delivery=d1 handler=go clause=1 fuel=130 alloc=328 state=344 end=return

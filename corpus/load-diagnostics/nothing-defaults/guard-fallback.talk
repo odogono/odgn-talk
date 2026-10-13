@@ -1,0 +1,5 @@
+function f
+  return true
+end f
+on go where true otherwise f()
+end go

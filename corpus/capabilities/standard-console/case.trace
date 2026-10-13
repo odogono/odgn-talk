@@ -1,8 +1,8 @@
 # Standard Console write accepts Function Values nested in Containers.
 # A Library's say uses the caller's Grant. Read accepts an empty line,
 # with extra starting and late Fuel; save/restore replay keeps declarations.
-> add-library helper identity=c5b7ba495c6f761f83dc2cdbd575eb04f18f282c299cf8d8a226ee03b9ed0cb3
-> load s identity=2192bd0d4acc0c802287933a01d2a7fd37e856e5e18e6b1315639b78e30d242c
+> add-library helper identity=713c5e1a7527062b72612146e1d4603a858748b9e717633e84b33c998fcd4fe9
+> load s identity=3f849fbf71770d6679669d95cd2cc99c6d20e599f26df5cb578456d486e46e58
 > stub console.write charge=5
 > stub console.read charge=3
 > deliver d1 to=s message=go

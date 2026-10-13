@@ -1,9 +1,9 @@
 # Unblessed: tell block (#337); first blessing awaits human review.
 # library: s records twice through the Library; quiet doesn't load.
 
-> add-library audit identity=9144fa8962dc9281787ddced9e30bc57c062d7077272e78eecfdfec0ad47d59f
-> load s identity=e25538ae6946e0f1fe3259114839f5bd586c93c4e4bfa783237d844874b7ab82
-> load quiet identity=207ce95c7916cc0b992ea5dc848ac920cd82aed6de3f4545e48196989a1b5d18
+> add-library audit identity=78058b827dd0ff2388744603e98e542f971c0449e6962022f15d236699ad3178
+> load s identity=8e19558542033d8eb18b36e14750db8a5df0b8c69275c25c94796bda70f9718b
+> load quiet identity=7d461c8948c5dddee06ecd6fcf0c28c33c8c8f2b2566abc717babb04109e2ba3
 diag quiet code="wrong mode" pos=3:1
 diag quiet code="wrong mode" pos=3:1
 > deliver d1 to=s message=go

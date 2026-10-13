@@ -1,9 +1,9 @@
 # First blessing approved by the maintainer on 2026-10-07 for #141.
 # Programs contain 1, 4 and 4 instructions, including the trailing match.
 # Their logical sizes are 24, 48 and 48 bytes; loading is uncharged.
-> load zero identity=eabf6cca9e19f249a9155bd8d693b22e7bcca08fd7f1892a5ea0d9d8a1f82550
-> load upper identity=dc74997705f42a75add9b3a0be0345fc29fb81fe2de7faaeac138a4b3a0fc36a
-> load lower identity=877c0ab7e03d8b731ca471e74641f366510f0820f3e45646f5c3faaec9e13648
+> load zero identity=f1fa421033c62bbcf80bba87cb32497c510b818cf7ef994910a37ffe0519c955
+> load upper identity=fc2f050ad60d5a1f666a151dbf549c4d345055ea61d93d6701fe2a84618efebb
+> load lower identity=47c871235a9b188868ecdeb25e8e786e5111b4a48fe4f0c1cc14731bdd2d95ba
 > vars
 vars zero result=<0 words>
 vars upper result=<3 uppercase letters>

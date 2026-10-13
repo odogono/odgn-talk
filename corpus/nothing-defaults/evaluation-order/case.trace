@@ -1,0 +1,55 @@
+# Unblessed: Nothing-default laziness and computed optional-key evaluation order and errors (#722); first blessing awaits human review.
+
+> load order identity=6543dac6941f2f223e675823a472919988010a059e62afe8f88bf7e5684b55bc
+> deliver d1 to=order message=presentLeft
+> deliver d2 to=order message=nothingLeft
+> deliver d3 to=order message=chains
+> deliver d4 to=order message=unselectedError
+> deliver d5 to=order message=leftError
+> deliver d6 to=order message=computedKey
+> deliver d7 to=order message=invalidKeyThenReceiverError
+> deliver d8 to=order message=invalidKeyNothingReceiver
+> deliver d9 to=order message=numberReceiver
+> deliver d10 to=order message=listReceiver
+> deliver d11 to=order message=textReceiver
+> deliver d12 to=order message=bytesReceiver
+> deliver d13 to=order message=caught
+> pump clock=2026-10-13T09:00:00Z
+seg order/r1 start delivery=d1 handler=presentLeft clause=1 fuel=47 alloc=67 state=442 end=return
+run order/r1 outcome=completed delivery=d1 handler=presentLeft fuel=47 alloc=67
+seg order/r2 start delivery=d2 handler=nothingLeft clause=1 fuel=69 alloc=82 state=429 end=return
+run order/r2 outcome=completed delivery=d2 handler=nothingLeft fuel=69 alloc=82
+seg order/r3 start delivery=d3 handler=chains clause=1 fuel=155 alloc=225 state=452 end=return
+run order/r3 outcome=completed delivery=d3 handler=chains fuel=155 alloc=225
+seg order/r4 start delivery=d4 handler=unselectedError clause=1 fuel=47 alloc=79 state=446 end=return
+run order/r4 outcome=completed delivery=d4 handler=unselectedError fuel=47 alloc=79
+raise order/r5 code="division by zero" at=order:142 pos=36:19
+seg order/r5 start delivery=d5 handler=leftError clause=1 fuel=24 alloc=25 state=415 end=error
+run order/r5 outcome=errored delivery=d5 handler=leftError error={code: "division by zero", at: {unit: "order", handler: "leftError", line: 36, column: 19}} fuel=24 alloc=25
+seg order/r6 start delivery=d6 handler=computedKey clause=1 fuel=171 alloc=412 state=854 end=return
+run order/r6 outcome=completed delivery=d6 handler=computedKey fuel=171 alloc=412
+raise order/r7 code="division by zero" at=order:220 pos=48:50
+seg order/r7 start delivery=d7 handler=invalidKeyThenReceiverError clause=1 fuel=47 alloc=65 state=824 end=error
+run order/r7 outcome=errored delivery=d7 handler=invalidKeyThenReceiverError error={code: "division by zero", at: {unit: "order", handler: "invalidKeyThenReceiverError", line: 48, column: 50}} fuel=47 alloc=65
+raise order/r8 code="wrong kind" at=order:243 pos=53:7
+seg order/r8 start delivery=d8 handler=invalidKeyNothingReceiver clause=1 fuel=66 alloc=110 state=1221 end=error
+run order/r8 outcome=errored delivery=d8 handler=invalidKeyNothingReceiver error={code: "wrong kind", expected: "text", got: "number", value: 1, at: {unit: "order", handler: "invalidKeyNothingReceiver", line: 53, column: 7}} fuel=66 alloc=110
+raise order/r9 code="wrong kind" at=order:253 pos=57:7
+seg order/r9 start delivery=d9 handler=numberReceiver clause=1 fuel=12 alloc=0 state=1773 end=error
+run order/r9 outcome=errored delivery=d9 handler=numberReceiver error={code: "wrong kind", expected: "map", got: "number", value: 1, at: {unit: "order", handler: "numberReceiver", line: 57, column: 7}} fuel=12 alloc=0
+raise order/r10 code="wrong kind" at=order:264 pos=61:7
+seg order/r10 start delivery=d10 handler=listReceiver clause=1 fuel=16 alloc=40 state=2312 end=error
+run order/r10 outcome=errored delivery=d10 handler=listReceiver error={code: "wrong kind", expected: "map", got: "list", value: [1], at: {unit: "order", handler: "listReceiver", line: 61, column: 7}} fuel=16 alloc=40
+raise order/r11 code="wrong kind" at=order:275 pos=65:7
+seg order/r11 start delivery=d11 handler=textReceiver clause=1 fuel=13 alloc=0 state=2871 end=error
+run order/r11 outcome=errored delivery=d11 handler=textReceiver error={code: "wrong kind", expected: "map", got: "text", value: "x", at: {unit: "order", handler: "textReceiver", line: 65, column: 7}} fuel=13 alloc=0
+raise order/r12 code="wrong kind" at=order:288 pos=69:7
+seg order/r12 start delivery=d12 handler=bytesReceiver clause=1 fuel=17 alloc=17 state=3407 end=error
+run order/r12 outcome=errored delivery=d12 handler=bytesReceiver error={code: "wrong kind", expected: "map", got: "bytes", value: <<0x01>>, at: {unit: "order", handler: "bytesReceiver", line: 69, column: 7}} fuel=17 alloc=17
+raise order/r13 code="wrong kind" at=order:298 pos=74:9
+seg order/r13 start delivery=d13 handler=caught clause=1 fuel=26 alloc=539 state=4490 end=return
+run order/r13 outcome=completed delivery=d13 handler=caught fuel=26 alloc=539
+pumped state=idle fuel=710
+
+> vars
+vars order log="|a|ab|abc|ab|a||kr|krf|k|kr" results=[1, nothing, 3, 2, 1, "Lima", "none", {code: "wrong kind", expected: "map", got: "number", value: 1, at: {unit: "order", handler: "caught", line: 74, column: 9}}]

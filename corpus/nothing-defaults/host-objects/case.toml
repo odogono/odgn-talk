@@ -1,0 +1,26 @@
+# host-objects: optional reads are map-only, so they reject every Host
+# Object, known or dynamic, live or disposed, for `id` and for any other
+# key, literal or computed, with `wrong kind` and no `prop` record: no Host
+# call. Returning a Host Object stored under a map key succeeds; reading on
+# into it fails. An ordinary read still calls the Host, for contrast (spec
+# chapter 4, Optional map-key reads; design acceptance group 6).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { label = '"on"' }
+
+[[scripts]]
+name = "h"
+source = "h.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

@@ -1,7 +1,7 @@
 # Unblessed: tell block (#337); first blessing awaits human review.
 # join: d1's two members are answered out of order.
 
-> load board identity=43ed473714664ec4b9db295798a4ff64733e9f9782181b3e5931f12f848fb569
+> load board identity=7592e4f41e2a937c0430fc468d5edfd518920b9b167418e227b184f3bc418825
 > deliver d1 to=board message=gather
 > pump clock=2026-09-30T09:00:00Z
 call board/r1.c1 op=feed.fetch args=["a"]

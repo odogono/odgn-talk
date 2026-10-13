@@ -11,7 +11,7 @@
 #   Pump they started in), not 30 s after the restore or the reissue. So the
 #   reissued call, still unanswered, times out at 10:00:30.
 
-> load shop identity=46b2b4aeff3fcdd933a445a4345618e0e7a41d0190cf9c7f11f4b8833152dc7a
+> load shop identity=70f09b22186bf61beaec5a92885541a3b15730d3eb5ec06949d2c03dd16434bd
 
 > deliver d1 to=shop message=check args=["A1"]
 > deliver d2 to=shop message=check args=["B2"]
@@ -23,7 +23,7 @@ seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 
 pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
 
 > save s1
-> restore from=s1 fingerprint=17bac90469f849d67f961c04999812e7d66f4d5a87becf815d4a15ec9a35a111 mode=full pending=[shop/r1.c1, shop/r2.c1]
+> restore from=s1 fingerprint=046b7c6269eee3ce29e948f7ef8adc1c76ce78493a29a0bde301d2cd5af3f55e mode=full pending=[shop/r1.c1, shop/r2.c1]
 
 # The reissue crosses to the Host again as the first Pump drains it. Neither
 # call is answered yet, so nothing runs, and the next deadline is still the

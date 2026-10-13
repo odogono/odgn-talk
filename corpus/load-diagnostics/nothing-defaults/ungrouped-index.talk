@@ -1,0 +1,4 @@
+on go
+  put 1 into otherwise
+  return item otherwise of [8]
+end go

@@ -1,6 +1,6 @@
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on size" & newline & "  ask user to choose [" & quote & "S" & quote & ", " & quote & "M" & quote & ", " & quote & "L" & quote & "], {prompt: " & quote & "Size?" & quote & "} and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end size" identity=d7d1fd56c97233a21bfd36b697d7d3ea045038c2eb64506b5115cf1be052d6b4
-> extend session source="on entry1" & newline & "size and wait" & newline & "end entry1" & newline identity=1f90a399c47655fc181b58a85be184258cc5ca74bdec068fac6cbf3c5f711fd3
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on size" & newline & "  ask user to choose [" & quote & "S" & quote & ", " & quote & "M" & quote & ", " & quote & "L" & quote & "], {prompt: " & quote & "Size?" & quote & "} and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end size" identity=4eb0eaa5dcf359d58061336a6d046e40712ccd0890934a6c47e8c485507f8f52
+> extend session source="on entry1" & newline & "size and wait" & newline & "end entry1" & newline identity=cb06c3a1fa65bee473179edd15e562e5a9fc71802c08ddc129107d5e61dd6a3a
 > request d1 to=session message=entry1
 > pump clock=2026-10-10T10:00:00Z
 call session/r1.c1 op=user.choose args=[["S", "M", "L"], {prompt: "Size?"}]
@@ -12,8 +12,8 @@ call session/r1.c2 op=console.write args=["got M"]
 seg session/r1 resume fuel=25 alloc=38 state=0 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=65 alloc=196
 pumped state=idle fuel=25
-> extend session source="on name" & newline & "  ask user to enter " & quote & "Name?" & quote & " and wait" & newline & "  if it is nothing then say " & quote & "no name" & quote & newline & "end name" identity=4d44fb0a8fea234451287329f30fe594d9947ed775347ae07bd10a1efe847de5
-> extend session source="on entry2" & newline & "name and wait" & newline & "end entry2" & newline identity=9e63ea633645e7a41e2fd9fabeb435289907836dca3cd7c3071bf12343628817
+> extend session source="on name" & newline & "  ask user to enter " & quote & "Name?" & quote & " and wait" & newline & "  if it is nothing then say " & quote & "no name" & quote & newline & "end name" identity=e0abe795847181cbaae8495552c46ec8fea2b1e665bdf7bf9ed918e7a1314178
+> extend session source="on entry2" & newline & "name and wait" & newline & "end entry2" & newline identity=e865c5a48fc0e7b5aafb1245b5d64ebd49bbdd8fdc4f657999895198f0c38a7b
 > request d2 to=session message=entry2
 > pump clock=2026-10-10T10:00:04Z
 call session/r2.c1 op=user.enter args=["Name?"]
@@ -25,8 +25,8 @@ call session/r2.c2 op=console.write args=["no name"]
 seg session/r2 resume fuel=25 alloc=8 state=0 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=52 alloc=8
 pumped state=idle fuel=25
-> extend session source="on hurry" & newline & "  try" & newline & "    with timeout of 5 s" & newline & "      ask user to confirm " & quote & "Quick?" & quote & " and wait" & newline & "    end timeout" & newline & "  catch {code: code}" & newline & "    say code" & newline & "  end try" & newline & "end hurry" identity=e81d46a26e06ef245ef3211d7e01cb7069d14747aa0cbab5fd2351d2e200451a
-> extend session source="on entry3" & newline & "hurry and wait" & newline & "end entry3" & newline identity=6d47a1fa486db85ea796f5373bcea9499464c8ef113a90349f3a16fe365c2466
+> extend session source="on hurry" & newline & "  try" & newline & "    with timeout of 5 s" & newline & "      ask user to confirm " & quote & "Quick?" & quote & " and wait" & newline & "    end timeout" & newline & "  catch {code: code}" & newline & "    say code" & newline & "  end try" & newline & "end hurry" identity=dd97365461e9c4497acc9a97c9cd0bbda66caabed7664ac6a4d4aceb55d4dad9
+> extend session source="on entry3" & newline & "hurry and wait" & newline & "end entry3" & newline identity=8916da1381cee700aa7a86a365c158d24410ec097b60da1e03d3c62195590e08
 > request d3 to=session message=entry3
 > pump clock=2026-10-10T10:00:06Z
 call session/r3.c1 op=user.confirm args=["Quick?"]
@@ -39,8 +39,8 @@ call session/r3.c2 op=console.write args=["timeout"]
 seg session/r3 resume fuel=27 alloc=0 state=0 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=57 alloc=40
 pumped state=idle fuel=27
-> extend session source="on later" & newline & "  ask user to confirm " & quote & "Later?" & quote & " and wait" & newline & "end later" identity=cf3e85d313a2a3ad134e51d3b3f9aa6eb35651553f12a4e0110ba80657c0c3b1
-> extend session source="on entry4" & newline & "send later to session" & newline & "end entry4" & newline identity=e16b86ee89745e4908dcd5f9c408dfd2ac1d0f970f5d77c421758ecb9338bdd4
+> extend session source="on later" & newline & "  ask user to confirm " & quote & "Later?" & quote & " and wait" & newline & "end later" identity=77721c012f939a8cf587fb2560a8dd2b21e59d5605896ceeb1e45549f94c9ac6
+> extend session source="on entry4" & newline & "send later to session" & newline & "end entry4" & newline identity=58bbbc5d14a3091a2218e25faf6f4d02cde5fa65f2c36ff0f6e67677a3a67abc
 > request d4 to=session message=entry4
 > pump clock=2026-10-10T10:00:12Z
 send session/r4 to=session message=later
@@ -49,14 +49,14 @@ run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=29 alloc=32
 call session/r5.c1 op=user.confirm args=["Later?"]
 seg session/r5 start from=session/r4 handler=later clause=1 fuel=15 alloc=0 state=224 end=ask-wait
 pumped state=idle fuel=44 next=2026-11-04T06:31:35.647Z
-> extend session source="on entry5" & newline & "tell user to notify " & quote & "Backup finished" & quote & ", {title: " & quote & "Backup" & quote & "}" & newline & "end entry5" & newline identity=6499023a506c82aca8ef33adee58ef42dd2c33b2efaffad3a06c676532126f80
+> extend session source="on entry5" & newline & "tell user to notify " & quote & "Backup finished" & quote & ", {title: " & quote & "Backup" & quote & "}" & newline & "end entry5" & newline identity=ede85f81808513ed947c2e309f72893c9675bb7cca5418ae209564ba3a4dd747
 > request d5 to=session message=entry5
 > pump clock=2026-10-10T10:00:13Z
 call session/r6.c1 op=user.notify args=["Backup finished", {title: "Backup"}]
 seg session/r6 start delivery=d5 handler=entry5 clause=1 fuel=23 alloc=67 state=224 end=return
 run session/r6 outcome=completed delivery=d5 handler=entry5 fuel=23 alloc=67
 pumped state=idle fuel=23 next=2026-11-04T06:31:35.647Z
-> extend session source="on entry6" & newline & "ask user to confirm " & quote & "Now?" & quote & " and wait" & newline & "end entry6" & newline identity=3334d3a566feabf0acf0e01756acc8a7cb2aa517a0665c2ccde4eccf20380e6b
+> extend session source="on entry6" & newline & "ask user to confirm " & quote & "Now?" & quote & " and wait" & newline & "end entry6" & newline identity=6be7cfe3995e52648d629f47d7bee5abaffca96716748873c4e019164df4cd96
 > request d6 to=session message=entry6
 > pump clock=2026-10-10T10:00:14Z
 call session/r7.c1 op=user.confirm args=["Now?"] error={code: "user busy", message: "Another prompt is waiting for an answer"}

@@ -8,8 +8,8 @@
 #   refused. tally imports nothing, so it still loads. Its Run tally/r1,
 #   suspended in its `wait`, is discarded, and `count` is kept.
 
-> add-library fmt identity=9ab27bd63baf66a30ed5dc05752da3efc02e99533835e8a29fc770641b050033
-> load tally identity=79b9c1a0407750ab09b0d644712816ffe13499d3b525e6c7a4ec3e526396d602
+> add-library fmt identity=b16764d2037577c8057fcbc731880ed19a21e74ba6d6037f0a2e41af807bd747
+> load tally identity=d9e6739896f1554fb92ba9d8803aaa5ea799bf7baca87a6ccb135c6e43ebe14f
 
 > deliver d1 to=tally message=bump
 > pump clock=2026-09-30T10:00:00Z
@@ -17,7 +17,7 @@ seg tally/r1 start delivery=d1 handler=bump clause=1 fuel=25 alloc=16 state=216 
 pumped state=idle fuel=25 next=2026-09-30T10:00:10Z
 
 > save s1
-> restore from=s1 mismatch=variables-only withheld=[fmt] fingerprint=67688f7d4a15a317c8900cba16299ad78692e4ac3305aaa39c3eb53e184fc484 mode=variables-only discarded=[tally/r1]
+> restore from=s1 mismatch=variables-only withheld=[fmt] fingerprint=63a74e0cf0af2b1b2a66ee25632f58a492fed7ad028bd08c0609baf3b3a4f480 mode=variables-only discarded=[tally/r1]
 
 # The discarded Run's wait is gone, so the only deadline is tally/r2's.
 > deliver d2 to=tally message=bump

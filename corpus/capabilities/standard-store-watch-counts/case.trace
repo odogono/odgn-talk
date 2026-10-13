@@ -1,15 +1,15 @@
 # Unblessed: Store watch Operations (#620); first blessing awaits human review.
 # Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
-> load s identity=22f636cff52b33ac41554eed61a8ca655b80304b51882b638e83aed3091f0c0d
-> load bad0 identity=cb5dd7c3b185781f89e7e9043b8f16212a775bb109dda638e1e7c68be6c43d0d
+> load s identity=5a697e17bb5872884bd52a07eb2529e4bb8a2a963b5bb00a19049012daafbe17
+> load bad0 identity=09002d3d5a7f13419d65fe0b9b03314053e5f31261241ecae08da8cb74e02f57
 diag bad0 code="wrong argument count" pos=2:13
-> load bad1 identity=8fc9f0c09ae7f6906efbd7e04a4f6812042290345bbf3ff193d79466e6508071
+> load bad1 identity=526fcbebcde986ad10146f4d517365d727db3046196ccbe6511d3d193a8ede3e
 diag bad1 code="wrong argument count" pos=2:13
-> load bad2 identity=f170667ee823564d25eca4a45dcbcb9671c474ab39402efae7455f193f69ba10
+> load bad2 identity=75ae6ee0b872f912a9772ad1e841eca8d0fff7b9505713060a8c97f438fd583a
 diag bad2 code="wrong argument count" pos=2:13
-> load bad3 identity=613e2425c0806395fb0286e6ce1c9cbdb5f7936cd2ab4554d046dfa16d6255d9
+> load bad3 identity=fe9ffc1c2863c025651e41cc3c2c813c527bdb0dcc3a252efaeed1654fa1ce54
 diag bad3 code="wrong argument count" pos=2:13
-> load bad4 identity=6df8dcaff1ab8bb0b982c11b94a6aaa40796327bb7a717040b2ef89581b5ce85
+> load bad4 identity=dbd6adab437c937e0bc86d9f4f3185df3419df2fce9f41275459c10d64e0ecce
 diag bad4 code="wrong argument count" pos=2:13
 > vars
 vars s ok=true

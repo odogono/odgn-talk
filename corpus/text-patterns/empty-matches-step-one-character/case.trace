@@ -6,7 +6,7 @@
 # pinned. Its Fuel, allocation and state figures are Cost Model 0's, as the
 # TS Core blessed them.
 
-> load search identity=bae054ce9613089a50136e3fe84284347e798012b4323ac89f4a912640967fb3
+> load search identity=891f744d46f0cb1c077a8723976fc0e57066e4b2400ee6d6bcabc1c7c879ebfe
 
 # Six searches of 2 steps each, 12 steps: a kept empty match at 0, 1 and 2,
 # each followed by a search from the same position whose empty match is

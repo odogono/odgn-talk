@@ -1,5 +1,5 @@
 # Unblessed: Whose Clauses over a list of maps (#547); first blessing awaits human review.
-> load s identity=cef6bcc13a6ebdfb184e99004bc50ea7e13f3020251178ae3fa9c08ea06aecd8
+> load s identity=8ba441bc3b9a3ba3200496fb2008df4e0d709ecd46aca7bc83b1236876c61341
 > request d1 to=s message=big
 > pump clock=2026-10-10T12:00:01Z
 seg s/r1 start delivery=d1 handler=big clause=1 fuel=69 alloc=1600 state=772 end=return

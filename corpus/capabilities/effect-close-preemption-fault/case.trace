@@ -1,7 +1,7 @@
 # effect-close-preemption-fault: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> load s identity=e49d73ae4dfc503d6d05ca1bf12eb59dff9895ba21a43afc7556b4d56630e2c4
+> load s identity=bfa1361cea34ad8c4cf90c35db4c87473140a4aa1efdfdffaa517918117642c3
 > stub resource.open value=nothing
 > stub resource.write value=nothing
 > stub resource.close value=nothing

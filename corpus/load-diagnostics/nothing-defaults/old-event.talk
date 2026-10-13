@@ -1,0 +1,3 @@
+on go
+  wait for move x otherwise y
+end go

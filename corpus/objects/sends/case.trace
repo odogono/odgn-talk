@@ -3,9 +3,9 @@
 # its path. Its Fuel, allocation and state figures are Cost Model 0's, as the
 # TS Core blessed them.
 
-> load office identity=fde7c8519b9a5c970761251d6c938c42d58ab6efafbb6fc2339e4897b90114d4
-> load desk identity=6fb5c71bb1f37378ec415a1f5682d1fcbc0fa8d140707fa6f1237bd8be9e26e6
-> load solo identity=5eb7df6c7b34aae6b69aace9bac0ff850827b19316f3f474516ce95272d32683
+> load office identity=7a624aa3946310a52a8757fae7f8396dbfdff7c073ade235b1c49f44f8b072cf
+> load desk identity=6d45353bb923fe8ddecd14c1a1c48b0a4a0e190500d71e100d176382f976ef6e
+> load solo identity=98aad2e31fd71da4ff2eca78e1ee8f605448cb9d3dbeb6fb1fd2a1d8e40a3cea
 > set-parent object=<object room "desk"> parent=<object room "office">
 > set-parent object=<object room "drawer"> parent=<object room "desk">
 > deliver d1 to=desk message=go

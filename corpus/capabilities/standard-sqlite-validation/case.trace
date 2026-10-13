@@ -2,7 +2,7 @@
 # After the Shape checks the Core checks max, a whole number from 0 to the
 # binding's cap of 10, then each parameter's kind, before it charges the call
 # or runs the implementation. A whole max written with zeros is accepted.
-> load s identity=7536c02f065d86e9f17e15d636e48710dd82b4e657063006e63e32bcc7378d8a
+> load s identity=35ebd25066657e01bd7401fc513138375753305a4d1a1edc1d0f54101961e11f
 > deliver d1 to=s message=read args=[[], -1]
 > pump clock=2026-10-09T12:00:00Z
 raise s/r1 code="out of range" at=s:11 pos=5:3

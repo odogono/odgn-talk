@@ -5,7 +5,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load packets identity=55e5015ec87685dcd981bab9563fccc516a41184b1515192fdbe032abcaf1944
+> load packets identity=ef3bf45c1745c432f3511fbcf74f82460438c5fd00f35924e40f10f47c88817c
 > deliver d1 to=packets message=go
 > pump clock=2026-09-30T09:00:00Z
 seg packets/r1 start delivery=d1 handler=go clause=1 fuel=293 alloc=871 state=366 end=return

@@ -1,5 +1,5 @@
 # Unblessed: user busy (#527); first blessing awaits human review.
-> load s identity=9bf7634a76bb8f920bbcfe70d45097416515c36cb844eae5cc07a4b2a961f685
+> load s identity=a442eb440db7195fc918491b3731f929fcb86c1ab3a008f03661bdbbf4f01cd6
 > deliver d1 to=s message=confirmIt
 > pump clock=2026-10-10T12:00:00Z
 call s/r1.c1 op=user.confirm args=["Delete?"]

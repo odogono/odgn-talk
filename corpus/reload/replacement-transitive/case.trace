@@ -1,18 +1,18 @@
 # replacement-transitive: A failed dependent Library changes nothing. Successful replacement rebuilds transitive importers and extensions, discards old work in load order, and leaves carried Function Values stale.
 
-> add-library base identity=d55f66c7837483561c2cea24922bbb301460ce9ee0468fbf6815f49f4740698c
-> add-library middle identity=f53b32a191c5552818ed55c47b55ff5eb2a7b47b8a4eeda93fab54e3d2a3b349
-> load a identity=e978ade92e17bce2d17d239ecf49e2bde8408b371cf737991c2a92372de879fd
-> load b identity=8576f2b7575fe74062d9e6e317a744545f545620a6ceca27b7859bf60cd3b887
-> extend b source="use count from base" & newline & "script variable fresh = 3" & newline & "on go" & newline & "  return count() + n + fresh" & newline & "end go" identity=5f36dcc8fc463cce381d19535dfd36700344dcc13c1cc808d9de9398d871b837
+> add-library base identity=bc2db5e004385629b363ef7eef0780e13fe148b798b929686df94c616f8348e4
+> add-library middle identity=9d9aedeff998e39910a9d9fd1c9839bee933d1ab8f84d85b21ef497f74de6818
+> load a identity=570055910af63c64eb77f3a10f086461918d58fbb20791bffb668119db4de857
+> load b identity=50c3f06c9e4e4cad9cb9f67d74eca1dd42819cbff187d75e6018160a0c8e3806
+> extend b source="use count from base" & newline & "script variable fresh = 3" & newline & "on go" & newline & "  return count() + n + fresh" & newline & "end go" identity=8f7a3c0c4c5c0e2bae652c98afa69a062a348d9b5f36701c375a660c05ac1e26
 > deliver d1 to=a message=make
 > pump clock=1970-01-01T00:00:00Z
 seg a/r1 start delivery=d1 handler=make clause=1 fuel=21 alloc=32 state=208 end=wait until=1970-01-01T00:00:01Z
 pumped state=idle fuel=21 next=1970-01-01T00:00:01Z
-> replace-library base carry=yes source="function other" & newline & "  return 2" & newline & "end other" identity=7f08ad5ac7fa88962042048c3cbd7328449286df99a0f4832991aa3a04573f63
+> replace-library base carry=yes source="function other" & newline & "  return 2" & newline & "end other" identity=054daecbbd7fdbf1d3da1d48a9c40747ff4197d2a96e51383d70530c0c15d855
 diag middle code="unknown import" pos=1:5
 diag middle code="unknown name" pos=3:10
-> replace-library base carry=yes source="function count" & newline & "  return 7" & newline & "end count" identity=5f5aacbe6201848ab1d46f6664cb01e0e7107f3585966a8deeb1224e3015161c
+> replace-library base carry=yes source="function count" & newline & "  return 7" & newline & "end count" identity=b7805d5d4c32cdf3d70ff7e8d7bf3f3bd6324c00adc764a3fbb395663dc892e1
 stopped a reason="reload" discarded=[a/r1]
 stopped b reason="reload"
 > deliver d2 to=a message=go

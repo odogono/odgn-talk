@@ -1,0 +1,55 @@
+# Unblessed: Guards with Nothing defaults and optional reads, including Host Objects (#722); first blessing awaits human review.
+
+> load g identity=055e8802823ff9b989d5c49cfadc6c3b35677076b41b95ed8198f12b07eeab66
+> deliver d1 to=g message=check args=[{active: true}]
+> deliver d2 to=g message=check args=[{}]
+> deliver d3 to=g message=check args=[{active: nothing}]
+> deliver d4 to=g message=check args=[nothing]
+> deliver d5 to=g message=check args=[{active: 4}]
+> deliver d6 to=g message=check args=[4]
+> deliver d7 to=g message=known
+> deliver d8 to=g message=viaHandler
+> deliver d9 to=g message=ordinaryCall
+> pump clock=2026-10-13T09:00:00Z
+seg g/r1 start delivery=d1 handler=check clause=1 fuel=22 alloc=30 state=458 end=return
+run g/r1 outcome=completed delivery=d1 handler=check fuel=22 alloc=30
+seg g/r2 start delivery=d2 handler=check clause=2 fuel=30 alloc=31 state=441 end=return
+run g/r2 outcome=completed delivery=d2 handler=check fuel=30 alloc=31
+seg g/r3 start delivery=d3 handler=check clause=2 fuel=30 alloc=31 state=386 end=return
+run g/r3 outcome=completed delivery=d3 handler=check fuel=30 alloc=31
+seg g/r4 start delivery=d4 handler=check clause=2 fuel=30 alloc=31 state=377 end=return
+run g/r4 outcome=completed delivery=d4 handler=check fuel=30 alloc=31
+guard-skip g/r5 at=g:9 pos=5:18 value=4
+seg g/r5 start delivery=d5 handler=check clause=2 fuel=28 alloc=31 state=314 end=return
+run g/r5 outcome=completed delivery=d5 handler=check fuel=28 alloc=31
+guard-skip g/r6 at=g:5 pos=5:18 code="wrong kind"
+seg g/r6 start delivery=d6 handler=check clause=2 fuel=26 alloc=31 state=297 end=return
+run g/r6 outcome=completed delivery=d6 handler=check fuel=26 alloc=31
+guard-skip g/r7 at=g:29 pos=12:16 code="wrong kind"
+seg g/r7 start delivery=d7 handler=known clause=2 fuel=26 alloc=37 state=302 end=return
+run g/r7 outcome=completed delivery=d7 handler=known fuel=26 alloc=37
+guard-skip g/r8 at=g:54 pos=19:20 code="wrong kind"
+seg g/r8 start delivery=d8 handler=viaHandler clause=1 fuel=44 alloc=39 state=309 end=return
+run g/r8 outcome=completed delivery=d8 handler=viaHandler fuel=44 alloc=39
+seg g/r9 start delivery=d9 handler=ordinaryCall clause=1 fuel=42 alloc=42 state=319 end=return
+run g/r9 outcome=completed delivery=d9 handler=ordinaryCall fuel=42 alloc=42
+pumped state=idle fuel=278
+
+# Disposed, the optional reads still fail with no Host call, and `id` reads.
+> dispose object=<object light "bulb-1">
+> deliver d10 to=g message=known
+> deliver d11 to=g message=viaHandler
+> deliver d12 to=g message=ordinaryCall
+> pump clock=2026-10-13T09:00:01Z
+guard-skip g/r10 at=g:29 pos=12:16 code="wrong kind"
+seg g/r10 start delivery=d10 handler=known clause=2 fuel=26 alloc=37 state=420 end=return
+run g/r10 outcome=completed delivery=d10 handler=known fuel=26 alloc=37
+guard-skip g/r11 at=g:54 pos=19:20 code="wrong kind"
+seg g/r11 start delivery=d11 handler=viaHandler clause=1 fuel=44 alloc=39 state=427 end=return
+run g/r11 outcome=completed delivery=d11 handler=viaHandler fuel=44 alloc=39
+seg g/r12 start delivery=d12 handler=ordinaryCall clause=1 fuel=42 alloc=42 state=437 end=return
+run g/r12 outcome=completed delivery=d12 handler=ordinaryCall fuel=42 alloc=42
+pumped state=idle fuel=112
+
+> vars
+vars g log=["chosen", "skipped", "skipped", "skipped", "skipped", "skipped", "known skipped", "dynamic skipped", "ordinary id chosen", "known skipped", "dynamic skipped", "ordinary id chosen"]

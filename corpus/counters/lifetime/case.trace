@@ -1,5 +1,5 @@
 # Live work carries across full restore, Stop, Reload and Extend.
-> load s identity=c535a2ec14129748537832785cb0434376b617071ef2977962b0b0ab79ad8e63
+> load s identity=9baac9f345cd43461e001fd26f1055eb14a93a84f516b40000eac823066076da
 > counters s
 counters s fuel=0 alloc=0 runs=0 faults=0 state=0 mailbox=0
 > deliver d1 to=s message=go
@@ -14,7 +14,7 @@ pumped state=idle fuel=10 next=2026-10-02T09:00:01Z
 > counters s
 counters s fuel=15 alloc=0 runs=1 faults=0 state=176 mailbox=0
 > save s1
-> restore from=s1 fingerprint=e0e7b3955fa1f53feaed6c0b7a8a296ea38c4b53ab56a58285b70be2f881a4b9 mode=full
+> restore from=s1 fingerprint=1be274a12c200c3faef30b6432ee3cdc46e3455cf2718e3c846e87a0e3f47847 mode=full
 > counters s
 counters s fuel=15 alloc=0 runs=1 faults=0 state=176 mailbox=0
 > pump clock=2026-10-02T09:00:01Z
@@ -35,10 +35,10 @@ stopped s reason="done" discarded=[s/r2]
 pumped state=stopped fuel=0
 > counters s
 counters s fuel=39 alloc=64 runs=2 faults=0 state=0 mailbox=0
-> reload s carry=no source="script variable n = 1" identity=1fd15238b3a1c063d437f0af70754024658f107ed809cf2fd898eb79e21022e1
+> reload s carry=no source="script variable n = 1" identity=8188ff67a9b86d55732d4618d798205583fdd0c1f66e70be4b88cec1c17afead
 > counters s
 counters s fuel=39 alloc=64 runs=2 faults=0 state=16 mailbox=0
-> extend s source="script variable xs = [1, 2]" identity=e70e7053142ca90275b250edac485a1c2e6684346d7b85868515b004019a8b52
+> extend s source="script variable xs = [1, 2]" identity=129a7a6da3359dcf537564d187ccddb7fa387138da46b450ae53f6e1c5c75148
 > counters s
 counters s fuel=39 alloc=64 runs=2 faults=0 state=80 mailbox=0
 > vars

@@ -191,7 +191,7 @@ const caseToml = `# webhooks: the Bun webhook rules Example Host (impl/ts/exampl
 kind = "trace"
 
 [versions]
-language = "1.0-rc.2"
+language = "1.0-rc.3"
 costModel = "0"
 
 [[operations]]

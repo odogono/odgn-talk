@@ -5,7 +5,7 @@
 # a deciding Verdict open; a wait seals it before follow-up work. Dropping
 # leaves the new Decision undecided. Finally runs before veto sealing, and
 # reaching the end of the path allows an unmatched message.
-> load s identity=addf87f2066db234ceafc6eb4858e328c1ee7d2ed9d2487a7ff782b33533d939
+> load s identity=4ab70f7f0e4d645f26a65918273f738a774cbe65a7bb101b861c32dab680ea81
 > decide d1 to=s message=ordinary limits={fuelPerRun: 4}
 > decide d2 to=s message=ordinary limits={fuelPerRun: 5}
 > pump clock=2026-10-03T12:00:00Z

@@ -1,6 +1,6 @@
 # A variables-only restore preserves charged dispatch and wait work from discarded Runs.
-> add-library helper identity=41f49deca19d0e9a458cb1f6b4b1c8b96b62eb8f68fa89e08c8f1f60e7d6598d
-> load s identity=1dddd10e990453051bf5f984895b484f782b564ddfac2e909160d747d00ebeb7
+> add-library helper identity=7d86f8249b18be22b6b0b06622469d89d9aad62b6e8d8c2a4dfbc6d192cbf9c6
+> load s identity=5dc80fcd87f4c42afbd13fae4afc2dbeebdf0ff6e6b0e8d6e90b26d336b258a7
 > deliver d1 to=s message=go args=[1]
 > deliver d2 to=s message=go args=[2]
 > deliver d3 to=s message=go args=[3]
@@ -11,11 +11,11 @@ pumped state=sliced fuel=19 next=2026-10-02T09:00:01Z
 > counters s
 counters s fuel=19 alloc=0 runs=2 faults=0 state=448 mailbox=1
 > save s1
-> restore from=s1 mismatch=variables-only withheld=[helper] fingerprint=07f2dd6c5517850007972396385125f9648374d843b7651a93ee1edbd30cb6d4 mode=variables-only discarded=[s/r1, s/r2] dropped=[d3]
+> restore from=s1 mismatch=variables-only withheld=[helper] fingerprint=04f534a07e055e6309fa2c6c99b5bc30d750ecb6ac52e0ade85ae7c0d162a846 mode=variables-only discarded=[s/r1, s/r2] dropped=[d3]
 > counters s
 counters s fuel=19 alloc=0 runs=2 faults=0 state=0 mailbox=0
 > save s2
-> restore from=s2 fingerprint=4b2db19f8c76eff8be5a87a76237a6ae3706adfdee70efb8cc3b5bb3d871137b mode=full
+> restore from=s2 fingerprint=c6f63172a7c5d3eb271bdde38fcc863e9816f9395ef6d60c07f22dbca40653b7 mode=full
 > counters s
 counters s fuel=19 alloc=0 runs=2 faults=0 state=0 mailbox=0
 > deliver d4 to=s message=go args=[4]

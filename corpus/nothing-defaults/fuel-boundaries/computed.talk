@@ -1,0 +1,4 @@
+-- computed.talk: a computed optional read.
+on go
+  return the optional ("x") of nothing
+end go

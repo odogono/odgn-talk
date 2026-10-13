@@ -2,7 +2,7 @@
 # In d1 the Run ends with the scope open, so the Core abandons it with an
 # automatic rollback, and the Segment then commits the rest. In d2 an explicit
 # rollback closes the scope, and the change after it commits with the Segment.
-> load s identity=56a5f55155b47215eef64352e19a8a28a958139ccfeb80ea1fb205d674c3b417
+> load s identity=0a67140bab0b1cb705a76c538e58e1b95d8c17635b58a1ee988f8c5fd17539c0
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.begin value=nothing
 > stub sqlite.change value={columns: [], rows: [], changes: 1}

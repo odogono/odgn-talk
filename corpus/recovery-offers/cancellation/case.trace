@@ -2,7 +2,7 @@
 # Transfer is stopped at entry to the policy cleanup copy: ordinary cancellation abandons
 # the current cleanup rather than restarting it, so its 5 is absent in transfer cleanup.
 # Cancellation rolls back policy writes, then runs retained and active policy finally scopes once.
-> load tests identity=774fe5ac7d90dd42911c5401e8653f044d63ce797355047ce31922c9733100b2
+> load tests identity=9c0eb0f703dce70396983e4d8eb71b6d663fb46f6cd553ba83d7b7216d888d98
 > deliver d1 to=tests message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=39
 raise tests/r1 code="bad" at=tests:7 pos=5:3
@@ -17,7 +17,7 @@ run tests/r1 outcome=cancelled delivery=d1 handler=go fuel=83 alloc=144
 pumped state=idle fuel=44
 > vars
 vars tests order=[1, 2, 3, 4] mark=0
-> load policy identity=1228abf6c29af48d5eba33f1d3b62e2061ee219d9aeda7a306c2e60871261466
+> load policy identity=7b6e63e5cbbb688274e67daa74084fb8e89d70b4ddd6da680ab444806e26232d
 > deliver d2 to=policy message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=46
 raise policy/r1 code="bad" at=policy:7 pos=5:3
@@ -33,7 +33,7 @@ pumped state=idle fuel=55
 > vars
 vars tests order=[1, 2, 3, 4] mark=0
 vars policy order=[5, 1, 2, 3, 4] mark=0
-> load transfer identity=9fd2a412116d23fdaba7f0bdcd7d3435717b7d90effbed6fabc11448088e503a
+> load transfer identity=52341c75d3fbbfab23c129c87c4860723aed14a84b9607d719e77acabff64597
 > deliver d3 to=transfer message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=62
 raise transfer/r1 code="bad" at=transfer:7 pos=5:3
@@ -51,7 +51,7 @@ pumped state=idle fuel=44
 vars tests order=[1, 2, 3, 4] mark=0
 vars policy order=[5, 1, 2, 3, 4] mark=0
 vars transfer order=[1, 2, 3, 4] mark=0
-> load stopped identity=806d33ad0ba2cf93ef53e21ebd6c8a70600b2142a71f3990ab9e8c79a76a716d
+> load stopped identity=91965d5899e4bfc00bc89bd118719905712bc3eda593214513d291b67fd658eb
 > deliver d4 to=stopped message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=62
 raise stopped/r1 code="bad" at=stopped:7 pos=5:3
@@ -69,7 +69,7 @@ vars tests order=[1, 2, 3, 4] mark=0
 vars policy order=[5, 1, 2, 3, 4] mark=0
 vars transfer order=[1, 2, 3, 4] mark=0
 vars stopped order=[] mark=0
-> load faulted identity=868d94457dd7b0bbbbe8c2023c73822cbff822310efd794d747b00b5284bf868
+> load faulted identity=a60bfdbebb0bbe357362b61ccaeee14cbfe1407d26e308c3032c3a50765817ee
 > deliver d5 to=faulted message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=62
 raise faulted/r1 code="bad" at=faulted:7 pos=5:3
@@ -90,7 +90,7 @@ vars transfer order=[1, 2, 3, 4] mark=0
 vars stopped order=[] mark=0
 vars faulted order=[] mark=0
 # A sliced policy cleanup and queued owner cleanup share locals after Restore.
-> load locals identity=9711798560e312677cef9c0cb86a6e9d0d5a8a160f6e484d74e4f28bd1fd33ff
+> load locals identity=bb0e4a921a38e937eb4d8bde2acc2bcbb465ec83a33d7d78fa28321578d04294
 > deliver d6 to=locals message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=21
 raise locals/r1 code="bad" at=locals:7 pos=6:4
@@ -112,7 +112,7 @@ vars stopped order=[] mark=0
 vars faulted order=[] mark=0
 vars locals result=1
 # Cancellation discards interrupted expression operands before queued cleanups.
-> load stack identity=18c96c57773bd2814cdfcdbb22b60e763c364b995e4e0e492fc1a3284fc3ab90
+> load stack identity=d2d845063d2c4994d0416dcc9d317058b9885238b732aed879dc58425cdaaf3b
 > deliver d7 to=stack message=go
 > pump clock=2026-10-06T09:00:00Z fuel-cap=47
 raise stack/r1 code="bad" at=stack:7 pos=5:3

@@ -1,8 +1,8 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # A receiver failure resumes through a local Handler frame. Its unwind spends
 # the Pump cap atomically before the caller's catch instructions can run.
-> load a identity=1e45d82b5582ebd40818df3162473aaa2183c1c9497cc75c1fe7162f5f41df20
-> load b identity=e73280d674f73a9a5d37dd690f2375ca9ddb642e72d3cb6942d435f6da8108a2
+> load a identity=43a7902f8b215a2adb1ceb248d2d8e44849e90c0dce588a42ffb9aba5d5807ea
+> load b identity=f0fd78cbf3295b44708f8472d7a2171da8de4b59b4b55977ed7b47725c957951
 > deliver d1 to=a message=go
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping wait=yes

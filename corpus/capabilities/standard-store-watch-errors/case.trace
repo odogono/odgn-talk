@@ -1,6 +1,6 @@
 # Unblessed: Store watch Operations (#620); first blessing awaits human review.
 # Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
-> load s identity=49004332940fdc2b64b8d68081aaaeedeac1e1e2064d602050654407cbf504c1
+> load s identity=3e0d91022569b39e99a2d9082e7b0d02026e8ccb773c21d50616bc9fbde9e44a
 > stub store.watch error={code: "watch limit", limit: "watches"}
 > deliver d1 to=s message=go
 > pump clock=2026-10-11T12:00:00Z

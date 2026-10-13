@@ -24,7 +24,7 @@
 #     and the const after it 17 = 19, before the second concat.
 #   Pump 4: concat 5, veto 2 = 7, and the Segment ends at the veto.
 
-> load board identity=067e7285608f1362f6f2cc739f7c058877b0afc70904f0ae04a9536d75bb53fd
+> load board identity=d4fea143ace92a3049355840379ff448194b242e17291f2b0ecd5c2870cab966
 
 > decide d1 to=board message=beforeMove args=[{from: "a1", to: "e5", path: ["b2", "c3", "d4", "e5"]}]
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20

@@ -6,9 +6,9 @@
 # reports unhandled, and an uncaught error still does not chain.
 # A limit fault and an unhandled ordinary message also send no error message.
 
-> load absent identity=7ca1206335d3c51bf82d2671a4192267d1341923fff0dae68d41915b55e72dd9
-> load unmatched identity=395ce4b9ce27b0a1f182155aec0411df306f331df676cb941c2a701979547d1c
-> load recursive identity=dc2d0f53c88f60ff2547bd950e93a7219525c555c94d01f21010c6734d228cd4
+> load absent identity=1b94edf27aa90073d2dc058aac37055acd9794121f3b1b929fda198ba027dc77
+> load unmatched identity=b100e6488ee260413d1924f7cf0d3d111af2ea3a36e8b05fa1eddd440786a335
+> load recursive identity=d6a3730160d581ad906765722134d4f536ab057c2765a3051ba3e0f292800cf1
 > deliver d1 to=absent message=fail
 > deliver d2 to=unmatched message=fail
 > deliver d3 to=recursive message=fail

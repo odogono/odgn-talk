@@ -6,7 +6,7 @@
 # follows the Run's `run` record. Fuel, allocation and state figures are
 # Cost Model 0's.
 
-> load board identity=54ba3a3e493328176590e14aff8927af72bf3262b9b79e5cfdca1ab5b9fb9710
+> load board identity=5c92f50e96b0668355f11a42fe42541d6cf3d98e8252d659c31d032c50f7de68
 
 > decide d1 to=board message=beforeMove args=[{from: "a2", to: "a3"}]
 > decide d2 to=board message=beforeMove args=[{from: "b2", to: "b3"}]

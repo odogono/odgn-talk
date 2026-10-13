@@ -1,7 +1,7 @@
 # scope-grants-as-used: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> load s identity=21671f9ab7581bc81ccda3e10f879b1239aad496b289c4ec715ea43e00d74d5a
+> load s identity=b50d6c0f60cf8c053491d1fa22532c7ecba419800d068ea4a82bc3fe020c6a27
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=go
@@ -14,7 +14,7 @@ seg s/r1 start delivery=d1 handler=go clause=1 fuel=20 alloc=8 state=16 end=retu
 run s/r1 outcome=completed delivery=d1 handler=go fuel=20 alloc=8
 pumped state=idle fuel=20
 > save s1
-> restore from=s1 fingerprint=cfa6b3a499b24c9dd9c33c361578e75807eaa3dc7cfcfd73ccde83962258ed10 mode=full
+> restore from=s1 fingerprint=c5cc4893c0925e3089676c015f4fea1237a6496456ecc1d0ed59da83d799ae77 mode=full
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d2 to=s message=go

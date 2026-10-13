@@ -1,0 +1,3 @@
+on go
+  return nothing otherwise
+end go

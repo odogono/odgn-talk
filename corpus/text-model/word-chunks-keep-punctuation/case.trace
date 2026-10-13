@@ -7,7 +7,7 @@
 # after it don't. Its Fuel, allocation and state figures are Cost Model 0's,
 # as the TS Core blessed them.
 
-> load words identity=f74812d3a6c251edb12459ffc1619d2901484eeecbe07d3ccf9376fb7aade9dc
+> load words identity=d76e7e454ed68e5d37e5504e16ca70fc88fa42bde8a5065825f419d526bda563
 > deliver d1 to=words message=go
 > pump clock=2026-09-30T09:00:00Z
 seg words/r1 start delivery=d1 handler=go clause=1 fuel=108 alloc=366 state=161 end=return

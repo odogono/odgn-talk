@@ -1,0 +1,18 @@
+# compatibility: language 1.0-rc.3's source changes. A label renamed from
+# `otherwise` works with a Host message of the renamed Selector, `move:instead:`.
+# An old `move a otherwise b` command or send now passes one default
+# expression to `move`, so it reaches `on move x`, not a two-label Handler.
+# A Handler named `otherwise` still loads, and a line starting with
+# `otherwise` is a Command Call to it rather than a continuation. The
+# `values` case runs an index variable named `otherwise` in parentheses
+# (spec chapter 0 and chapter 4; migration guide; design acceptance group 9).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "c"
+source = "c.talk"

@@ -1,8 +1,8 @@
 # Unblessed: Host failures at interrupted Operation crossings (#540); first blessing awaits human review.
 # Cancellation rolls back and runs finally; Stop rolls back without finally.
 # Both failures remain call error records, with no raise or call-failed record.
-> load s identity=6697467898929a3d812a2862545a50772be8a778b82324bcaabd1324e668488a
-> load t identity=195236b006d1bfc75dd54dc5378491348cfe5726c73cea9233d77ab190ba650d
+> load s identity=d38c2ab2855138591fd75f46b23cca1c23689199e6d61a7f7944015f37793101
+> load t identity=b107a7e933835654f75a0d469b3cdd222e83b4fee586bd9d75dc3657aad40f62
 > stub api.fail error={}
 > stub api.fail error={}
 > deliver d1 to=s message=go

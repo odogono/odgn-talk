@@ -1,0 +1,3 @@
+on go m
+  put 1 into the optional x of m
+end go

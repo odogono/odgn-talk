@@ -2,7 +2,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #326.
 # Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
-> load s identity=c495028e35d2aa70785a2f69e7a66f242bf03ce6b75136bbe2222cb1c482b10f
+> load s identity=9048589fe49fe5ea54b2d0294006ad63de264827676443a8f8c706265e0e7dda
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > stub-effect s.r phase=begin status=ok
@@ -14,9 +14,9 @@ call s/r1.c1 op=r.open args=[] result=nothing
 scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
-> reload s carry=yes source="on" identity=5ab93bd4eb70243a668dd51668d985adcf79f22ed624aa40fe695d213dd1c361
+> reload s carry=yes source="on" identity=7520c8979d91b26cc10e4a13a3782126a97cdd38052b0dabd82843d6403e804b
 diag s code="unexpected token" pos=1:3
-> reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=55b7ab7d1ed1a70d5ce3c686bb38edb437d12208f9052d820b73768e2f863443
+> reload s carry=yes source="script variable count = 0" & newline & "on go" & newline & "return count" & newline & "end go" identity=876b6c639fe4cf23048ac2c5b49e45dad1df22d1722229aabcf59ebc75291a30
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned
 effect s/r1.s1 grant=r phase=rollback status=ok

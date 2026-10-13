@@ -1,6 +1,6 @@
 # First blessing approved by the maintainer on 2026-10-07 for #141.
-> load a identity=775c73d5032574699a0aa129fd79bd42dacce37f56fbcfacbf654e2a02824f72
-> load b identity=68b4df455f6f2516099afe01018b608543f5604d33ff68a7aa993e5bb69ac87f
+> load a identity=01c955257b99c5d014a0d811bd4ed1f198d9a3821db7ea058965472426f462ce
+> load b identity=e08873efb564243fd8e4427f610d10d007187b557cb85b0e33f18d45ed2533b7
 > deliver d1 to=a message=go
 > deliver d2 to=b message=go
 > pump clock=2026-09-30T09:00:00Z

@@ -4,8 +4,8 @@
 # staying the piece throughout. Its Fuel, allocation and state figures are
 # Cost Model 0's, as the TS Core blessed them.
 
-> load board identity=fd3378c6f3ef980f2d6efa6db822ccca250c8d8c8ad1fa4ac99eac1fe0a023c4
-> load knight identity=3aad36a56bed535caf2d7c07688905ac1273e50c46d9b04a1710f73d80bc5616
+> load board identity=2a9d3294820db7d694750dfd23ccadac189a06930f0c5970bda0e19ad8c39461
+> load knight identity=a9af24d8f7ba04be4c4d50d0d9603365c6ef592ae41f17f6ea2f6b5d9366a5ce
 > deliver d1 to=<object piece "pawn"> message=move args=["lost"]
 > pump clock=2026-09-30T09:00:00Z
 unhandled d1 message=move args=["lost"] target=<object piece "pawn">

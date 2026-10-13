@@ -14,7 +14,7 @@ const setup = (source: string) => {
     manifest: {
       kind: 'test',
       version: '1',
-      language: '1.0-rc.2',
+      language: '1.0-rc.3',
       grants: [],
       libraries: [],
       messages: [],

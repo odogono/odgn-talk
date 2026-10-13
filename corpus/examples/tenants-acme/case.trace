@@ -3,7 +3,7 @@
 # The Host recorded the `stub` lines from what its Host functions did.
 # Its Fuel, allocation and state figures are Cost Model 0's.
 
-> load shop identity=1b256e1a1e3cfccf9024a6dc179ff0b6a276aa9c4d367c0ecf8ce8ce2269c853
+> load shop identity=bc4baf20ec058ce37a289d922c48c670285217f7779c89a0433e4e89cb081263
 
 # An order is priced from acme's own catalog binding, and `notify` Charges
 # 50 Fuel for its one recipient.
@@ -43,7 +43,7 @@ run shop/r3 outcome=completed delivery=d3 handler=remind fuel=106 alloc=36
 pumped state=idle fuel=91
 
 # acme uploads new code, which keeps its Script Variables.
-> reload shop carry=yes source="-- shop-v2.talk: the Reload a tenant uploads. Ten or more of a line take" & newline & "-- 10% off. Script Variables carry over." & newline & newline & "script variable revenue = 0.00 GBP" & newline & "script variable orders = 0" & newline & "script variable problems = []" & newline & newline & "on order {sku: sku, qty: qty, to: recipients}" & newline & "  try" & newline & "    ask catalog to lookUp sku" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "    return code" & newline & "  end try" & newline & "  put it * qty into total" & newline & "  if qty >= 10 then" & newline & "    put total * 0.9 into total" & newline & "  end if" & newline & "  add total to revenue" & newline & "  add 1 to orders" & newline & "  try" & newline & "    tell mail to notify recipients, " & quote & "order " & quote & " & sku & " & quote & " x" & quote & " & qty & " & quote & ": " & quote & " & total" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "  end try" & newline & "  return total" & newline & "end order" & newline & newline & "on remind recipients, note" & newline & "  wait 10 min" & newline & "  tell mail to notify recipients, " & quote & "reminder: " & quote & " & note" & newline & "end remind" & newline identity=bc8f18804a362af4c966c47fc5c1764a33ec8f0c5b688ef5727eeff2c14395d2
+> reload shop carry=yes source="-- shop-v2.talk: the Reload a tenant uploads. Ten or more of a line take" & newline & "-- 10% off. Script Variables carry over." & newline & newline & "script variable revenue = 0.00 GBP" & newline & "script variable orders = 0" & newline & "script variable problems = []" & newline & newline & "on order {sku: sku, qty: qty, to: recipients}" & newline & "  try" & newline & "    ask catalog to lookUp sku" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "    return code" & newline & "  end try" & newline & "  put it * qty into total" & newline & "  if qty >= 10 then" & newline & "    put total * 0.9 into total" & newline & "  end if" & newline & "  add total to revenue" & newline & "  add 1 to orders" & newline & "  try" & newline & "    tell mail to notify recipients, " & quote & "order " & quote & " & sku & " & quote & " x" & quote & " & qty & " & quote & ": " & quote & " & total" & newline & "  catch {code: code}" & newline & "    put code after problems" & newline & "  end try" & newline & "  return total" & newline & "end order" & newline & newline & "on remind recipients, note" & newline & "  wait 10 min" & newline & "  tell mail to notify recipients, " & quote & "reminder: " & quote & " & note" & newline & "end remind" & newline identity=eeab05cd278128ec169b0c456bb495a18822ab1dfe2793c329c1e5fd01879745
 stopped shop reason="reload"
 
 # The new code takes 10% off ten or more.

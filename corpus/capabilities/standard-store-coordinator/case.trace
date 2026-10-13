@@ -4,7 +4,7 @@
 # increment enrolls scores and runs begin, the set enrolls progress with no
 # hook, and one commit covers both. In d2 alias, a second Grant of scores,
 # enrolls first; its commit fails, so one rollback covers all three Grants.
-> load s identity=c3fef516fdf44516ad773e6a34222d2e2a309d2d87abe82bdcf3eb82fe12680e
+> load s identity=ddb0104966e25a9872984fa40f21cf9c49092c110a180e092db9978b5c5ac199
 > stub-effect s.scores phase=begin status=ok
 > stub store.increment value=10
 > stub store.set value=nothing

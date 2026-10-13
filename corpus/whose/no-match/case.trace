@@ -1,5 +1,5 @@
 # Unblessed: a Whose Clause with no match (#547); first blessing awaits human review.
-> load s identity=6b5393a23de8a04d734a0d704f742fff46057f8769e3c151493db0e3adfd0add
+> load s identity=d2b73f1b502533630099548faf4b20835dd6caad24dbefa25d6881d5b1c81c3d
 > request d1 to=s message=go
 > pump clock=2026-10-10T12:00:01Z
 seg s/r1 start delivery=d1 handler=go clause=1 fuel=200 alloc=861 state=0 end=return

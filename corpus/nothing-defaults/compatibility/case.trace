@@ -1,0 +1,26 @@
+# Unblessed: language 1.0-rc.3 source compatibility for `otherwise` (#722); first blessing awaits human review.
+
+> load c identity=1c065377652ad6f7041958de75a0abb9c80dca60b1275f4ab0198a5b270c1e5e
+> deliver d1 to=c message=move:instead: args=[nothing, 5]
+> deliver d2 to=c message=move:instead: args=[1, 5]
+> deliver d3 to=c message=oldCommand args=[nothing, 6]
+> deliver d4 to=c message=oldSend args=[7, 8]
+> deliver d5 to=c message=lineStart
+> pump clock=2026-10-13T09:00:00Z
+seg c/r1 start delivery=d1 handler=move:instead: clause=1 fuel=25 alloc=162 state=317 end=return
+run c/r1 outcome=completed delivery=d1 handler=move:instead: fuel=25 alloc=162
+seg c/r2 start delivery=d2 handler=move:instead: clause=1 fuel=23 alloc=162 state=338 end=return
+run c/r2 outcome=completed delivery=d2 handler=move:instead: fuel=23 alloc=162
+seg c/r3 start delivery=d3 handler=oldCommand clause=1 fuel=42 alloc=144 state=358 end=return
+run c/r3 outcome=completed delivery=d3 handler=oldCommand fuel=42 alloc=144
+send c/r4 to=c message=move args=[7]
+seg c/r4 start delivery=d4 handler=oldSend clause=1 fuel=32 alloc=48 state=342 end=return
+run c/r4 outcome=completed delivery=d4 handler=oldSend fuel=32 alloc=48
+seg c/r5 start delivery=d5 handler=lineStart clause=1 fuel=41 alloc=154 state=391 end=return
+run c/r5 outcome=completed delivery=d5 handler=lineStart fuel=41 alloc=154
+seg c/r6 start from=c/r4 handler=move clause=1 fuel=22 alloc=144 state=419 end=return
+run c/r6 outcome=completed handler=move fuel=22 alloc=144
+pumped state=idle fuel=185
+
+> vars
+vars c log=[["move:instead:", 5], ["move:instead:", 1], ["move", 6], ["otherwise", 5], ["move", 7]]

@@ -1,6 +1,6 @@
 # Error cleanup keeps its write; a limit rolls cleanup back to committed 9.
-> load error identity=dadf395700b776f9ddfeb1aaed400bcde7ca983844d6cea229e2a510c6bb751f
-> load limited identity=113b742d29f7689a03a20586e99b2dd5a4d8d90cf65977441ff42d1b50a72a61
+> load error identity=c106c89ea7ecf50160f01f31710ea10f02e6d8b7b53233b7b5cfde04c883ccbc
+> load limited identity=9f6e290ce556b72feb74c6cf52cc8ad3bf33b78258e1111fa7eee79f1887c96e
 > deliver d1 to=error message=go
 > deliver d2 to=limited message=go
 > pump clock=2026-10-01T09:00:00Z

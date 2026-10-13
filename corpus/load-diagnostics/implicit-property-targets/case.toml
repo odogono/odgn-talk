@@ -1,7 +1,7 @@
 # Implicit bindings are not Containers; direct owner properties are checked at load (#744).
 kind = "trace"
 [versions]
-language = "1.0-rc.2"
+language = "1.0-rc.3"
 costModel = "0"
 [[objectKinds]]
 name = "light"

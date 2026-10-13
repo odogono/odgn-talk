@@ -1,26 +1,26 @@
 # Corrected expectations approved by the maintainer on 2026-10-05 for #275.
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="script variable message" & newline & "on entry1" & newline & "put `" & newline & "  first" & newline & newline & "  value ${1 +" & newline & "2}" & newline & "  ` into message" & newline & "end entry1" & newline identity=7e98f705ed0703e5cc488555dbfa4c7bb236e49981c7fc6a10b627512d4c7984
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable message" & newline & "on entry1" & newline & "put `" & newline & "  first" & newline & newline & "  value ${1 +" & newline & "2}" & newline & "  ` into message" & newline & "end entry1" & newline identity=db25e6ec2019ee289db713bab75ce801f79490cc9fc25aa6374e761c8ec6fea7
 > request d1 to=session message=entry1
 > pump clock=2026-10-04T09:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=20 alloc=46 state=30 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=20 alloc=46
 pumped state=idle fuel=20
-> extend session source="on entry2" & newline & "say message" & newline & "end entry2" & newline identity=72c6aca5f4726e93f0425c2754d338b951f2812643df77a464f74a181426e11c
+> extend session source="on entry2" & newline & "say message" & newline & "end entry2" & newline identity=948b871115195980764669534ebfcddb61a9ecf029c016d9f0e61d33bc84fcfa
 > request d2 to=session message=entry2
 > pump clock=2026-10-04T09:00:00Z
 call session/r2.c1 op=console.write args=["first" & newline & newline & "value 3"]
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=18 alloc=0 state=30 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=18 alloc=0
 pumped state=idle fuel=18
-> extend session source="on entry3" & newline & "return `hello ${2 + 3}`" & newline & "end entry3" & newline identity=f91d805c2db4bdf02ed0484946b0aaff8b742cae167e6dac6518328463893cd6
+> extend session source="on entry3" & newline & "return `hello ${2 + 3}`" & newline & "end entry3" & newline identity=a8a75a484712197a5b9deaa73d56a406069555eef6cd695f2bbd0af2b30066a4
 > request d3 to=session message=entry3
 > pump clock=2026-10-04T09:00:00Z
 seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=17 alloc=39 state=30 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 value="hello 5" fuel=17 alloc=39
 pumped state=idle fuel=17
-> extend session source="use format from text" identity=96b1df57069c32e7fc0898aef631d44bd41d3bd807188e8605dda63a91b490cc
-> extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=a83aca9c73b330b4d548ce3bcf296642a680f774f4914108e9bfaa4074298dab
+> extend session source="use format from text" identity=37de32683688ca88b1f0b9aa40965103b4a12b571a7331880e336b0e048fb2c8
+> extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=1ae9e1c62ab9dfa4090f8a0cdeffcc093a931bc80080f4a06b3ace3e7eb34a69
 > request d4 to=session message=entry4
 > pump clock=2026-10-04T09:00:00Z
 seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=1975 alloc=5417 state=30 end=return

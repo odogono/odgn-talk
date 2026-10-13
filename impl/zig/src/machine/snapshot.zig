@@ -2546,6 +2546,31 @@ test "a variables-only restore keeps Script Variables and discards the rest" {
     try restored.pump(.{ .seconds = 1790000010, .nanos = 0 });
 }
 
+test "a save from language 1.0-rc.2 is a mismatch, refused or restored variables-only" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    const old = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(old);
+    // Same-length versions keep the string's length prefix; re-sign the bytes.
+    const previous = "1.0-rc.2";
+    try testing.expectEqual(previous.len, version.language.len);
+    const at = std.mem.indexOf(u8, old, version.language).?;
+    @memcpy(old[at..][0..previous.len], previous);
+    std.crypto.hash.sha2.Sha256.hash(old[0 .. old.len - 32], old[old.len - 32 ..][0..32], .{});
+    var refused: Group = .init(gpa, null);
+    defer refused.deinit();
+    var none: Result = .{};
+    try testing.expectEqual(Outcome.mismatch, try restore(&refused, old, .{}, &none));
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.variables_only, try restore(&restored, old, .{ .variables_only = true }, &result));
+    try testing.expectEqual(@as(usize, 4), result.discarded.len);
+    try testing.expectEqual(@as(usize, 1), result.dropped.len);
+}
+
 test "a save restores to the same save, and a restored Group goes on" {
     const gpa = testing.allocator;
     var g = try busyGroup(gpa);

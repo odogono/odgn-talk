@@ -4,7 +4,7 @@
 # mailbox. A Reload that keeps the mailbox then runs d1 on the new code as a
 # new Run, s/r2, which calls ping again.
 
-> load s identity=b9614560ff32d780b36d5da4240229394336c105de55b032a7a9328b5a4a23ed
+> load s identity=9ef7c9505597341419883ace1f8ff0e809bc220873679e14e72a0adaa832beb8
 > stub api.ping value=1
 > stub api.ping value=2
 > deliver d1 to=s message=go
@@ -15,7 +15,7 @@ seg s/r1 start delivery=d1 handler=go clause=1 fuel=17 alloc=0 state=48 end=rewi
 pumped state=rewound fuel=17
 > vars
 vars s n=0
-> reload s carry=yes mailbox=keep source="script variable n = 0" & newline & "on go" & newline & "ask api to ping" & newline & "put it + 10 into n" & newline & "end go" identity=f9455ab7e9274630865f8b83d0eb590ab4505c5dbcd95c81c53d6c63fe5ba6ab
+> reload s carry=yes mailbox=keep source="script variable n = 0" & newline & "on go" & newline & "ask api to ping" & newline & "put it + 10 into n" & newline & "end go" identity=78f00613adfda0f99a53e9f2e1ad5d58c40681bf22913bc15ed970d38e5c647c
 stopped s reason="reload"
 > pump clock=2026-10-01T09:00:01Z
 call s/r2.c1 op=api.ping args=[] result=2

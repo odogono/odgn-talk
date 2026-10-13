@@ -6,8 +6,8 @@
 # fires at 5 s. Its Fuel, allocation and state figures are Cost Model 0's,
 # as the TS Core blessed them.
 
-> load till identity=95f46430e987613c7b57d85a69a2ec4cc63ea31111bf62ed1ab7b18b07992e8b
-> load bank identity=e0aad2fc62333e51b65c82f6ea9086505ea8e845734d77cafa607bfe00115edc
+> load till identity=073a80312cd93c911d20809f2a7a26d272273d72e54003aad55f08c7c4029322
+> load bank identity=fdc7eb1eb7303f473aa5082ca8f9f549cc846ad56fe714eb58417f0299070eb1
 > deliver d1 to=till message=await args=[7]
 > deliver d2 to=till message=either
 > pump clock=2026-09-30T09:00:00Z

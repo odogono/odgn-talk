@@ -660,5 +660,9 @@ var Costs = CostsTable{
 			Issue:  "#719",
 			Change: "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#722",
+			Change: "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
+		},
 	},
 }

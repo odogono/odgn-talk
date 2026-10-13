@@ -4,7 +4,7 @@
 # back, as at a Limit Fault. The fire-and-forget `write` is final, so the
 # redispatched Run, s/r2, writes again.
 
-> load s identity=4dea42b659cb985c64a910db3f08e16a85efdd5dbff65a02a87319d87ffa0808
+> load s identity=205c6a6ee905b718ad41d3bedb26fa7bde8b9b3522bd9e3bca3402cb4b2fb3fa
 > stub resource.open value=nothing
 > stub resource.open value=nothing
 > stub resource.close value=nothing

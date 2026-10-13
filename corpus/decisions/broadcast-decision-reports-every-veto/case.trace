@@ -8,10 +8,10 @@
 # Decision that no Script wants has no recipients, and is allowed as it is
 # drained.
 
-> load analytics identity=ee35a042438ebfddc471d968b119f892db72526ef61cddc27f4e532080cf64bb
-> load email identity=e18779b2de2db4be88bf20a98ee52fbe910857eb56d100370ca66df7520430c1
-> load password identity=fec0add511a8b51779d89ff0fde435eb0ff0668c5fd33f833cccde3993aee48d
-> load terms identity=fa32493111a65f36eba7fc932d0ac7710935d59be368fcbeaff7a071eb26c47b
+> load analytics identity=e3bca1d5e63c6750fc02e4dda800c3d19d779e3212bacb88ab3240cc8aec3948
+> load email identity=be4967b0c15563771ce143011174c155becc57dcb2f79ad6d4e65b966615b324
+> load password identity=92556514a8cc2db9af7554f1576f4873fbee5e5a6d4a53560c624a873987b445
+> load terms identity=72783a1e070091aae7369ee3e87baccd4f96455d7e947df530d22a2998f470cb
 
 # A bad email and a short password: two vetoes, and one allow from terms.
 > decide-broadcast b1 message=submit args=[{email: "ann.example.com", password: "hunter2", terms: true}] recipients=[analytics:d1, email:d2, password:d3, terms:d4]

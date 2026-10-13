@@ -1,10 +1,10 @@
 # Unblessed: `not in a whose` and the `unknown name` of a later Name (#547); first blessing awaits human review.
-> load call identity=fd157dda7fea69aaef66fe1fc72c2236926e4261f32f167b0bfd46659c93a227
+> load call identity=38529164e766547940e20b260fdcebfc9f3fd37cfb9230da3e408b7e689001dc
 diag call code="not in a whose" pos=6:32
-> load shadow identity=09f7cca486ca39e2ae6dacd07a5eec76376adce74080c1b6ac2f0d35df07e316
+> load shadow identity=842855b9827fff946c3a89393ee37b46f83f2d1d84575c3129c883175dd91a5d
 diag shadow code="not in a whose" pos=3:36
-> load lambda identity=c915f0b68de69f65fc3859270f761b471566ce748eedbf1159ee691d4983db85
+> load lambda identity=87d0fd0af5426f21ee1793052bc6bda6ed107c4c7922f647eebb4b5207892dff
 diag lambda code="not in a whose" pos=2:33
-> load later identity=8b73d66049643b6afda6b99357f3cbeeb024e5922e91b0316f9dc2e300e424c5
+> load later identity=5ac989e4a8d39ef82eac4a215ef1e5ad9685542b76381a56917bc0846bc69ed7
 diag later code="unknown name" pos=2:47
 > vars

@@ -35,7 +35,7 @@ const uri = 'file:///workspace/main.talk';
 const manifest = {
   kind: 'demo',
   version: '1',
-  language: '1.0-rc.2',
+  language: '1.0-rc.3',
   grants: [
     {
       name: 'http',

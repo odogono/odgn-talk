@@ -1,8 +1,8 @@
 # effect-replace-fatal: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> add-library user identity=82e71f84bc526e24d744a868fb416e7a66910bab719bdd38cc96de7abbebcd7e
-> load s identity=4a2ef00394e35d1bb9fd40b5d8bc9c07d9936369e23595e32e747f38ce2b37da
+> add-library user identity=bc50d73e41bbce92993702e20fb8d41df5ab40a562ac9298e7c4ed32fe53d3a3
+> load s identity=9dd1917e64f01915aa18eb2d482752c42c77866aaa8d74c0cf43addfb3e18c92
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > stub-effect s.r phase=begin status=ok
@@ -14,7 +14,7 @@ call s/r1.c1 op=r.open args=[] result=nothing
 scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
-> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=64abb39061cd00a83abf2e7b1a8546f3c699cf4f03b51410df33e5c8272b9dc8
+> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=56037a115d109e5669e4e1d31d0feb39f4a95a833b500ebad964c0bab79d8e7c
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned
 effect s/r1.s1 grant=r phase=rollback status=failed

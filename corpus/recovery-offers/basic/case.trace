@@ -1,8 +1,8 @@
 # Same-Run callback and two nested Libraries retain rows and offer scopes.
 # Guard skips precede cleanup, choice precedes cleanup, entry follows cleanup.
-> add-library rows identity=c20c9abf0cc63e37fbfdfe08765717a940e02c6e2f9914f29d9fa922b58c0cb7
-> add-library wrapper identity=4de118ee60ea223527aaea3bf37e78fc092549392944123a5ec48cad77d1be92
-> load reader identity=f9e878e6140285e6bea219dc8d37c1bccb2bef41c0277b83dac72b03618b2516
+> add-library rows identity=4af25b6b9f590e9ccfe06cb5c6ffa07bd5efd6b288f75e6252a96b21a21df2ee
+> add-library wrapper identity=fe4b0825f4220ab693c797a8315a3f031f2f594da231a052cde6942ea3fd26ec
+> load reader identity=3ad678ef014c5387afa23b21110772d3e95b2c48e696f9fbb4e7145399a43ca2
 > deliver d1 to=reader message=skipRows
 > deliver d2 to=reader message=replaceRows
 > deliver d3 to=reader message=checkChoices

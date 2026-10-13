@@ -1,0 +1,72 @@
+-- values.talk: the Nothing-defaults values case's Script.
+
+constant fallback = nothing otherwise 4
+constant city = the optional city of {city: "Oslo"} otherwise "unknown"
+script variable initial = the optional missing of {} otherwise fallback
+script variable defaults
+script variable reads
+script variable chains
+script variable shapes
+script variable ordinary
+script variable named
+
+function withDefault a = nothing otherwise fallback
+  return a
+end withDefault
+
+function pick a
+  return a
+end pick
+
+function echo otherwise
+  return otherwise
+end echo
+
+on onlyNothing
+  put [nothing otherwise 9, the optional gone of {} otherwise 9, false otherwise 9, 0 otherwise 9, "" otherwise 9, [] otherwise 9, {} otherwise 9] into defaults
+  put nothing otherwise nothing after defaults
+  put nothing otherwise "text" after defaults
+  put nothing otherwise [1] after defaults
+end onlyNothing
+
+on optionalReads
+  put {city: "London", gone: nothing, length: 4, target: 5, first: 6, "code points": 7, optional: 8, "of": 9, "if": 10} into m
+  put [the optional city of m, the optional missing of m, the optional gone of m, the optional city of nothing] into reads
+  put [the optional length of m, the optional target of m, the optional first of m, the optional code points of m] after reads
+  put [the optional optional of m, the optional "of" of m, the optional "if" of m, the optional of m] after reads
+  put [the optional ("ci" & "ty") of m, the optional ("missing") of m, the optional ("city") of nothing] after reads
+end optionalReads
+
+on mixedChains
+  put {address: {city: "Paris"}, tags: [1, 2]} into m
+  put [the optional city of the optional address of m, the optional city of the optional nowhere of m, the optional city of the optional address of nothing] into chains
+  put [the optional city of the address of m, the city of the optional address of m, the length of the optional tags of m] after chains
+  put the optional city of the optional nowhere of m otherwise "unknown" after chains
+end mixedChains
+
+on precedence
+  put [nothing otherwise false or true, 1 + 2 otherwise 0, (nothing otherwise 4) > 3, nothing otherwise true and false] into shapes
+  put [nothing otherwise 1 otherwise 2, 3 otherwise nothing otherwise 2, [nothing otherwise 5, 6], pick(nothing otherwise 7)] after shapes
+  put given x: x otherwise 0 into f
+  put [f(nothing), f(8)] after shapes
+  put the first item of [{active: nothing}, {active: true}] whose active otherwise false after shapes
+  put (the first item of [] whose true) otherwise "none" after shapes
+  put replace "a" in (nothing otherwise "abc") with "z" after shapes
+  put nothing otherwise -- the fallback is on the next line
+    10 after shapes
+end precedence
+
+on loadTime
+  put [fallback, city, initial, withDefault(), withDefault(nothing), withDefault(11)] into named
+  put 2 into otherwise
+  put [otherwise, item (otherwise) of [8, 9], echo(nothing otherwise 12)] after named
+end loadTime
+
+on ordinaryReads
+  put [the length of [1, 2, 3], the city of {city: "Rome"}, the first item of [5, 6]] into ordinary
+  try
+    put the city of nothing into x
+  catch e
+    put e after ordinary
+  end try
+end ordinaryReads

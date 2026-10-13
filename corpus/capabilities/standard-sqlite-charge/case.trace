@@ -3,7 +3,7 @@
 # implementation runs. 5 rows fit the Run's 100 Fuel; 9 do not, so the call
 # has a Limit Fault and takes no Stub. An omitted max is the binding's cap,
 # whose charge is past every Fuel limit.
-> load s identity=51a43a242e630973683667ccd85741ca6f9282c1fe0d4e9b231ddb0a9ae81d4b
+> load s identity=79ed77e0549191936b16510a7793b240391a11d4d1efcca51f4a391202487189
 > stub sqlite.query value={columns: ["n"], rows: [[1]]}
 > deliver d1 to=s message=read args=[5]
 > pump clock=2026-10-09T12:00:00Z

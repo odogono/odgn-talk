@@ -1,3 +1,3 @@
-> load bad identity=761a4c952c2ff03ca51e09a8777a452c5bcf63ff788ef31ff5684c7c72cd876f
+> load bad identity=19c2eefa9d4291f94b3d21f828066e57f7d18adbb30cd9faca00de37047f73dd
 diag bad code="invalid text indentation" pos=2:3
 > vars

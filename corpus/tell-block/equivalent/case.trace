@@ -3,8 +3,8 @@
 # answered with 3. d3 and d4 ring "cake", whose price fails, so each Run
 # raises `no price` at its call: `ask` in oneline, `price` in block.
 
-> load oneline identity=0594e45262c2bd4a92f13a930901af0d253d173e8f75da37c6b7469489f27087
-> load block identity=939a738960285ac0d1c15b28b07b800d1c39a095cc90e22d6f719c7e503de9f2
+> load oneline identity=256e8cfaf04e9a0c90f26fdef53e02f5a5d02beabe6a9d071f5e386355e30f30
+> load block identity=772c4c83c6a947f919e395ac4c8997ff8d7df608fedab5bee7ad94a656ccd55d
 > stub till.price value=2
 > stub till.price value=2
 > stub till.price error={code: "no price"}

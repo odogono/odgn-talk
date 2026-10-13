@@ -9,8 +9,8 @@
 #   front/r1 as the reply, and front/r1 resumes with it in `it`, in the same
 #   Pump.
 
-> load front identity=09e11be438517b89ffe14ac958d20a36fa4b2888041cdceff601c8d4e0d81dde
-> load back identity=f485858dc23b098cf5856b99dd769de10bef98ad6a8f4aba8464afcdbd89d90e
+> load front identity=b316e98d9293b5b3bc2f8b0de5f8597768c1b610d83a953c3dc27492e0e6b755
+> load back identity=485155cfa585997c34dbe38696ba71d0476db67876669933f4950f73b5784b37
 
 > deliver d1 to=front message=order args=["A1"]
 > pump clock=2026-09-30T10:00:00Z
@@ -21,7 +21,7 @@ pumped state=idle fuel=43 next=2026-09-30T10:00:05Z
 
 # Saved with both ends waiting.
 > save s1
-> restore from=s1 fingerprint=7bd027b538025e4b0ad53a182f1b92a470354632d38b895cd3c2df8134afcb5e mode=full
+> restore from=s1 fingerprint=498971c4efb917dfe1a1c8a5cead19f4ee70c83ea80e882d04148abc1bd593de mode=full
 
 # back's wait is overdue at 10:00:06, well inside front's MaxWait (10:00:30).
 > pump clock=2026-09-30T10:00:06Z

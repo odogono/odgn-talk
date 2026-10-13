@@ -1,5 +1,5 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
-> load s identity=59ac3b1e1d8ecb6644e9acf70380975d2d6ad5781d10aeac7f464c04def5f034
+> load s identity=074845d64e4c19dd285bd5768f1e26d107981471d0be30925ae254dd79333ba2
 > deliver d1 to=s message=gather
 > pump clock=2026-09-30T09:00:00Z fuel-cap=41
 call s/r1.c1 op=api.fetch args=[1]
@@ -73,7 +73,7 @@ vars s seen=77 stage=4
 call s/r5.c1 op=api.fetch args=[5]
 seg s/r5 start delivery=d5 handler=cancel clause=1 fuel=15 alloc=0 state=288 end=ask-wait
 pumped state=sliced fuel=15 next=2026-09-30T09:00:03Z
-> reload s carry=yes source="script variable stage=0" & newline & "on go" & newline & "return stage" & newline & "end go" identity=f17a7374dfe28ead924aa3a0cd8b6d5078ddc6ae1cdf33bb8ba4419e941a4469
+> reload s carry=yes source="script variable stage=0" & newline & "on go" & newline & "return stage" & newline & "end go" identity=ef603ad047302ffb7287fb18251c334424af4d3aa742ba5bec5ad0cf8fd87ee5
 stopped s reason="reload" discarded=[s/r5] dropped=[d6] abandoned=[s/r5.c1]
 > answer s/r5.c1 value=6
 > deliver d7 to=s message=go

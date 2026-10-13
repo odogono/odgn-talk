@@ -1,7 +1,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #135.
 # A tightened MaxJoin faults before the second send charge, rolls back variables and preserves the first receiver.
-> load a identity=36a5db7b4bff225074c5c7401d25bb39a8d8b56a0e134932f2034ef0910b126b
-> load b identity=28cbb3973a4ff9534dc10292aa176f4fe8b09080404c79b11a271599c1bab60c
+> load a identity=fa52bed7ffb8605ccf26c8e3227f8f8abb68d51b7e3644d015c6b17fa28d80a4
+> load b identity=9e93ed55b972d7f06f3a6e777eee4c82135afd77028b9ccc534cc0843f701040
 > deliver d1 to=a message=go limits={fuelPerRun: 44, maxJoin: 1}
 > pump clock=2026-10-04T12:00:00Z
 send a/r1.c1 to=b message=ping args=[7] wait=join

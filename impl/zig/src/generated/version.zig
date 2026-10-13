@@ -5,5 +5,5 @@ pub const VersionTable = struct {
 };
 
 pub const version: VersionTable = .{
-    .language = "1.0-rc.2",
+    .language = "1.0-rc.3",
 };

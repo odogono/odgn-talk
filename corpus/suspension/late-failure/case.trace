@@ -3,7 +3,7 @@
 # The Host's failure arrives afterwards, and is recorded and ignored with
 # `note … kind=late-answer`, which covers a late answer or failure (chapter 11).
 
-> load s identity=8e5a9034180193b36a2404f3e9d9ebbdbf015d521a4388a5a012bc883c025ed4
+> load s identity=1274394db58c86d5b4300f6b6d42b3824dde53f05355813e9bc4421e432e24b2
 > deliver d1 to=s message=go
 > pump clock=2026-10-10T09:00:00Z
 call s/r1.c1 op=api.fetch args=[]

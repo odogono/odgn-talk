@@ -2,7 +2,7 @@
 # load-checks: bad gets one diagnostic for each wrong line, and one for the
 # block whose Grant it doesn't hold.
 
-> load bad identity=7f50a56bcac79028d80ccb7aab3d5a5c2ee449d356a2036434b79cefe7ea7f9e
+> load bad identity=d88a99b7e9f754002dfa4385b22a23acf2c812356cd71a325a495d62ff8ec84c
 diag bad code="wrong mode" pos=5:5
 diag bad code="wrong mode" pos=6:5
 diag bad code="wrong mode" pos=7:5

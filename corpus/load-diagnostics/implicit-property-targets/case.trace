@@ -1,44 +1,44 @@
 # First blessing approved for #744 on 2026-10-13; see docs/reviews/implicit-property-targets/README.md.
-> load readonly identity=f27f2f34180cd5f00c59f45bef5a96aeea4878a5bdaa449557863164fd63faa2
+> load readonly identity=c5b0f082f34a384d28954d406fe35588cc83f194bddd3849858208cf6f5fc979
 diag readonly code="can't write" pos=2:3
-> load readonly-computed identity=a061cc77b68d9194e13855c5f8fdf5f0dae41a923fcb3555cd2e55a94b0350d3
+> load readonly-computed identity=2787d0a4fc937fd4d280e98e033c2748cf7d46114e30a2932fbed4f350ede658
 diag readonly-computed code="can't write" pos=2:3
-> load me-bare-set identity=bd2872958bcde9c448c487e8a9d282f368c297afcd11db694ea296fab4327cfb
+> load me-bare-set identity=271dcf82ff0233724f74a9212e83bac6a5d2acc17e96fcc87912c4ef50e1f57e
 diag me-bare-set code="not a container" pos=2:7
-> load me-bare-put identity=63703a9773ac0e164dd1d7b53add379d25181f928cc58440e2cd8983eb3c1d66
+> load me-bare-put identity=05a9ee025c8758a37d724b6c3088c84744974fa8659093ae04b264d98258303f
 diag me-bare-put code="not a container" pos=2:14
-> load me-put-key identity=19d4112d7b9c487a0daccfa04b30a39865b151aaa1924b2bd2735af60b995da9
+> load me-put-key identity=3981d000faf9b151f6ff0d3c7e678ec09990b2733a4a4723640458ca36d29af8
 diag me-put-key code="not a container" pos=2:14
-> load me-delete-key identity=86ce368a0cdd618aa4d268a37b4fa11bb501b993b01fbfc74ba0b09ec4b8718e
+> load me-delete-key identity=c86e79a891142462f0b22b7ef06c43641b8e4fd02cb45a6c6ada19cb3b99ba5f
 diag me-delete-key code="not a container" pos=2:10
-> load me-chunk identity=d146517310bd52ac1d2bef3b520e26d854c3f37bdfa1ff21d1a360e76f8c295a
+> load me-chunk identity=da5ea04ea184bbbec20b5156d3037fb898f3764512fffa3899049553f14dd27e
 diag me-chunk code="not a container" pos=2:7
-> load me-builtin identity=7848e4f1be5032e0ee3b51cfc4c25a29b028d0f8f4928637edd8ec20b68262f2
+> load me-builtin identity=7f1e06a5735d161345e0a2e852e2085501e5a20daf7e1e0d59281227332b1264
 diag me-builtin code="not a container" pos=2:7
-> load it-bare-set identity=5b27188b36da1ecd173f3085d733a4328205467c6bc3ba3d6c5c96af397f12c2
+> load it-bare-set identity=072af45d559864a64a48bc2eaf7c6914bd8ec3c3bd8fd985b8a94798c3891820
 diag it-bare-set code="not a container" pos=2:7
-> load it-bare-put identity=8a88cf9c61c234f6de3f2852fd9246cf7a62ead03a121e5d09f405656c69d8b0
+> load it-bare-put identity=7e8303c88d28295435669327996545d45287dc175ef8730f225af6b2d2f964dc
 diag it-bare-put code="not a container" pos=2:14
-> load it-put-key identity=bc8f4a1720b6fe4fc6501b16700dc37dd17fed807c2a7fcbb39ee9458548f4f9
+> load it-put-key identity=0e1ccbd2cc07cca71d1aafa8ff4939eff9266fa58419d1e026987a389bbd6d26
 diag it-put-key code="not a container" pos=2:14
-> load it-add-key identity=4a0bbbf11e18bbfa8261bb4dd97016ebeaba86d23e7a802c778570ac58785a76
+> load it-add-key identity=fdf80cfc66c493c2fc14f3fe9b7034b6f686cb91c62a0b81f575284073571e76
 diag it-add-key code="not a container" pos=2:12
-> load it-chunk identity=4b51f82d474be2825b1fe829ca69dfbadfc8ea0481d8cb3d5de0368c92165852
+> load it-chunk identity=4bc4dd900756aadacdad1f0cfd848d347c84cf2331f54780243d5adc64e281c3
 diag it-chunk code="not a container" pos=2:7
-> load it-builtin identity=86ce9c410515f973094455fa7203c29404cdde6cd1d65e0877394cee10bf8d3e
+> load it-builtin identity=38a358c8f06ac2e2490177fd905a69b04f866fa1d4c4211831aab627685d4e45
 diag it-builtin code="not a container" pos=2:7
-> load target-bare-set identity=5fbdd79b8651b228fca8c9f02f775f450529664f7e0dd16b14965fd2729525a2
+> load target-bare-set identity=b0c4ca68b8dcfb1fc95c987d0f1281018e959b914ef0a014cdc53d54b0c4ed09
 diag target-bare-set code="not a container" pos=2:7
-> load target-bare-put identity=96fa9dbdc7cc0b00087ae70cfba442130b36531cedf0dcc4f10bc6ac28fe21ea
+> load target-bare-put identity=7742ab4858688be04e2d12263e902e37501b80b74915531b4f6caf52ce215128
 diag target-bare-put code="not a container" pos=2:14
-> load target-put-key identity=cad90d332bd62998627ae7695c527cd8615172f081af1b3f375e32992800a017
+> load target-put-key identity=33693c62a4c0fe97f238b0a0568996f3a8bf7963a842487d0c0c0686081d4b6a
 diag target-put-key code="not a container" pos=2:14
-> load target-multiply-key identity=d77373a511fbf8620555ea8458973f87fce97c054457e767ca9e01648b50332a
+> load target-multiply-key identity=b69d09f8630f5d48106d1940fce22c9acff25af920b322c8860c91d0bcbc1b3b
 diag target-multiply-key code="not a container" pos=2:12
-> load target-chunk identity=7ba935df8d171d2f92b77b6b09b958541277e3fdd2750e3b5d773c641e894977
+> load target-chunk identity=1db49f8fa93b027703c567d5a600de1c0d9382b8d8c467daa7e3f216ecfa9862
 diag target-chunk code="not a container" pos=2:7
-> load target-builtin identity=65a8f1386147f7fdb7fb8821e25abe2dd73f08314ff89a3c3cb67ebd7119459d
+> load target-builtin identity=6da9147bd61a70b501fb8372436718729ef63d4f36020679350ed4d3e1abe9aa
 diag target-builtin code="not a container" pos=2:7
-> load lambda-target identity=34ce5b1c86a2bf01ab0fbb0e32fb99a6b24b47d082f7ec9941d03b156e7fdc00
+> load lambda-target identity=b1b61687d9530b5642bb4593eacfaac6ad08e730150b5cdbf1968c6ec04865b7
 diag lambda-target code="not in a lambda" pos=3:22
 > vars

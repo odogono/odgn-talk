@@ -3,7 +3,7 @@
 # The Host recorded the `stub` lines from what its immediate Host functions
 # returned. Its Fuel, allocation and state figures are Cost Model 0's.
 
-> load rules identity=9de921247d5e79d4a88a1ae4a046a8b102f20d38c8277f1ed8b21ce797864c4d
+> load rules identity=c414293f6f13dcb6416a87b26725eeb270daeec4a8bc19de5524f000e18d05d1
 
 # No rule matches, so the Run records the event and replies at once.
 > stub rules.match

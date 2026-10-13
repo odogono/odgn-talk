@@ -1,8 +1,8 @@
 # First blessing approved by the maintainer on 2026-10-05 for #135.
 # Self-addressed mailbox messages count at same-Segment return and wait.
 # The paid send survives the sender's Persistent State fault.
-> load returner identity=e943407eda8630d4f021ef56680d4fc5ac432f8e363935c2a614f52d954ee4f3
-> load waiter identity=c290c3468065ceb79d0f2b16ac3b518e77a2fd368f14de3a08de6b6eeaacf558
+> load returner identity=57130f1c27c2d62f095c87ac5fef3c59fcfe352885143a86a147ab5928db2081
+> load waiter identity=65afaf9e167b729b3bf7f24d552f83e1ac92956a1230d167b8bbd5f94470581a
 > deliver d1 to=returner message=go
 > deliver d2 to=waiter message=go
 > pump clock=2026-10-04T12:00:00Z

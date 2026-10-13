@@ -3,7 +3,7 @@
 # A query on another database never enrolls, but a change there raises
 # `segment participant conflict` before the call, and the Segment commits the
 # first database's changes.
-> load s identity=67eb00150efca9e1bddaad489a741f005ab4164cd411de54dcffbb6e2fec55b8
+> load s identity=cabfd575bf2174681752b5e65b634f7541d853b339c72578d9050dc32f36a57e
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.change value={columns: [], rows: [], changes: 1}
 > stub sqlite.change value={columns: [], rows: [], changes: 1}

@@ -272,6 +272,37 @@ func TestVariablesOnlyUsesRollbackBaseAndReportsScriptCall(t *testing.T) {
 	}
 }
 
+func TestPreviousLanguageSaveRejectsOrRestoresVariablesOnly(t *testing.T) {
+	c := New()
+	g := c.NewGroup(GroupOptions{})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable n = 0\non go\n add 1 to n\n wait 10 s\nend go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Deliver(Message{Name: "go"})
+	g.Pump(time.Unix(0, 0), PumpOptions{})
+	s.Deliver(Message{Name: "go"})
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["Language"] = "1.0-rc.2" })
+	_, _, err = c.Restore(saved, RestoreOptions{})
+	if e, ok := err.(*HostError); !ok || e.Code != SaveMismatch {
+		t.Fatalf("RejectMismatch: %v", err)
+	}
+	restored, result, err := c.Restore(saved, RestoreOptions{Mismatch: VariablesOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.VariablesOnly || fmt.Sprint(result.DiscardedRuns) != "[s/r1]" || fmt.Sprint(result.DroppedMessages) != "[d2]" {
+		t.Fatalf("variables-only result: %#v", result)
+	}
+	if got := restored.Inspect().Scripts[0].Vars[0].Val.String(); got != "1" {
+		t.Fatalf("n = %s", got)
+	}
+}
+
 func TestFingerprintStringEscapes(t *testing.T) {
 	got := string(fingerprintJSON(struct {
 		Text string `json:"text"`

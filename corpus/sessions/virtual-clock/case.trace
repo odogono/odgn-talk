@@ -1,12 +1,12 @@
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="script variable ticks" & newline & "on entry1" & newline & "put 0 into ticks" & newline & "end entry1" & newline identity=a872c148f97f2d86490e99d478a7b7c84e3648b901b2e71c69fc9e7517c2fdaf
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable ticks" & newline & "on entry1" & newline & "put 0 into ticks" & newline & "end entry1" & newline identity=afe6fba4669510537cca45e0c8d30cf3bb262f7142cb74855125771d9a2389e9
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
 pumped state=idle fuel=10
-> extend session source="on tick" & newline & "  wait 5 s" & newline & "  add 1 to ticks" & newline & "  say " & quote & "tick " & quote & " & ticks" & newline & "end tick" identity=88626c7860dc9e750223d4ee40ac3a3762b99894232b98290ad41666b6686699
-> extend session source="on entry2" & newline & "tick and wait" & newline & "end entry2" & newline identity=8b9d66ab5e9ce1b957262f4572af64f63e0ddba749fcb7b3f47b66ea1c346b19
+> extend session source="on tick" & newline & "  wait 5 s" & newline & "  add 1 to ticks" & newline & "  say " & quote & "tick " & quote & " & ticks" & newline & "end tick" identity=5cf7385e8912b70d81e43efef2922638c3dbbc22798a8b88e1a36b460bb2f156
+> extend session source="on entry2" & newline & "tick and wait" & newline & "end entry2" & newline identity=727ff7ed88cceabc4541490fd87614a47fd28391a0923edec5f2178887883c4e
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=27 alloc=0 state=288 end=wait until=2026-09-30T10:00:05Z
@@ -18,7 +18,7 @@ call session/r2.c1 op=console.write args=["tick 1"]
 seg session/r2 resume fuel=33 alloc=38 state=16 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=60 alloc=38
 pumped state=idle fuel=33
-> extend session source="on entry3" & newline & "send tick to session" & newline & "end entry3" & newline identity=a3711e6d2628ed580a84624ec69f64e7c6e9174d23bf43fdfdda462d9a1492ce
+> extend session source="on entry3" & newline & "send tick to session" & newline & "end entry3" & newline identity=bd0f2709e0ff010868bb824904ec8a7c0a55e5131e6c92b7a13ed5634af896fe
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:05Z
 send session/r3 to=session message=tick
@@ -26,7 +26,7 @@ seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=29 alloc=32 state=
 run session/r3 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
 seg session/r4 start from=session/r3 handler=tick clause=1 fuel=15 alloc=0 state=208 end=wait until=2026-09-30T10:00:10Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:10Z
-> extend session source="on entry4" & newline & "send tick to session" & newline & "end entry4" & newline identity=1c45767e9b12743d239adab9e317c3132138e874cc96bd253c30861eee978f92
+> extend session source="on entry4" & newline & "send tick to session" & newline & "end entry4" & newline identity=1e20872189a4bb15c01e8adeafc804243bda52be7be43999f6128a35da8d084b
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:05Z
 send session/r5 to=session message=tick
@@ -42,7 +42,7 @@ call session/r6.c1 op=console.write args=["tick 3"]
 seg session/r6 resume fuel=29 alloc=38 state=16 end=return
 run session/r6 outcome=completed handler=tick fuel=44 alloc=38
 pumped state=idle fuel=58
-> extend session source="on entry5" & newline & "send tick to session" & newline & "end entry5" & newline identity=6cb248db695a1973f79700da9623574e25014d3c9b4e4335693018236defdb00
+> extend session source="on entry5" & newline & "send tick to session" & newline & "end entry5" & newline identity=a754be62b5407dac9fdd0ee8bfeab3ee004d619e58cfe7ac0608da65ddcc8467
 > request d5 to=session message=entry5
 > pump clock=2026-09-30T10:00:10Z
 send session/r7 to=session message=tick
@@ -50,17 +50,17 @@ seg session/r7 start delivery=d5 handler=entry5 clause=1 fuel=29 alloc=32 state=
 run session/r7 outcome=completed delivery=d5 handler=entry5 fuel=29 alloc=32
 seg session/r8 start from=session/r7 handler=tick clause=1 fuel=15 alloc=0 state=208 end=wait until=2026-09-30T10:00:15Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:15Z
-> reload session carry=yes source="script variable ticks" & newline & "on tick" & newline & "  add 10 to ticks" & newline & "end tick" & newline identity=5ce923d69f0c67161a820ad1348e3ad9d84faf0da49ae4455b25d49115fee088
+> reload session carry=yes source="script variable ticks" & newline & "on tick" & newline & "  add 10 to ticks" & newline & "end tick" & newline identity=8361ef2e62bc1796e0064616fbc168cefebec5ae7d7c41a74b23fcf0b53f2be1
 stopped session reason="reload" discarded=[session/r8]
 > pump clock=2026-09-30T10:00:20Z
 pumped state=idle fuel=0
-> extend session source="on entry6" & newline & "tick" & newline & "end entry6" & newline identity=9b2f07743f5c24f67b2303185f6c1d77cd0c193b24da98c7d7a955f2cf759a4b
+> extend session source="on entry6" & newline & "tick" & newline & "end entry6" & newline identity=71ebace9b7432c26755a06d2dd96744b8002983fc4dc12e7590f5d818a86b07f
 > request d6 to=session message=entry6
 > pump clock=2026-09-30T10:00:20Z
 seg session/r9 start delivery=d6 handler=entry6 clause=1 fuel=33 alloc=16 state=16 end=return
 run session/r9 outcome=completed delivery=d6 handler=entry6 fuel=33 alloc=16
 pumped state=idle fuel=33
-> extend session source="on entry7" & newline & "return ticks" & newline & "end entry7" & newline identity=f6924929e27bdd00a820474bf6aa81e7ce55fb5b2c12efc4afdb9d0e860533c4
+> extend session source="on entry7" & newline & "return ticks" & newline & "end entry7" & newline identity=323bda293b27d40373d4c3890fcd34077257df3c305b1d113784aa2a738fd958
 > request d7 to=session message=entry7
 > pump clock=2026-09-30T10:00:20Z
 seg session/r10 start delivery=d7 handler=entry7 clause=1 fuel=7 alloc=0 state=16 end=return

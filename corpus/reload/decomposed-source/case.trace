@@ -1,21 +1,21 @@
 # Source scalars and Code identities across Extend, Reload and Library replacement (#456).
 # Decomposed U+0065 U+0301 source must survive transport, while evaluated Text is NFC.
-> add-library lexicon identity=2eb6253e8ea94036d311c83304ab2519be36d56b27615976701698c6c2dffc28
-> load s identity=a8fb9494231e2118fe9ba97375d44b79db70d570b4f1773250fc356ca224232f
-> extend s source="script variable mark = " & quote & "é" & quote & newline & "on sample" & newline & "  return [mark, accent()]" & newline & "end sample" & newline identity=497b9057cab827c82e28c278c8cf63f3dddd9130dbe459edf5308b2920dcf023
+> add-library lexicon identity=2a93797122924b8f3c8c0cd57d33553202cc7ea694fe87347b4f720b7282dbc4
+> load s identity=d0cd33e1f01e924b10abdeb1e9a0d61e37861000957b7d6e305c3e6292e8fef4
+> extend s source="script variable mark = " & quote & "é" & quote & newline & "on sample" & newline & "  return [mark, accent()]" & newline & "end sample" & newline identity=dd293b8031b4b3bcf6856a96495f50504dd810301edf003079e184eaea427b1b
 > deliver d1 to=s message=sample
 > pump clock=2026-10-09T10:00:00Z
 seg s/r1 start delivery=d1 handler=sample clause=1 fuel=23 alloc=71 state=18 end=return
 run s/r1 outcome=completed delivery=d1 handler=sample value=["é", "plain"] fuel=23 alloc=71
 pumped state=idle fuel=23
-> reload s carry=no source="use accent from lexicon" & newline & "script variable mark = " & quote & "é" & quote & newline & "on sample" & newline & "  return [mark, accent()]" & newline & "end sample" & newline identity=28114d8d02e336bb8bc90b1342b1469516de4c112cf45cb9142f507d1c2f4be3
+> reload s carry=no source="use accent from lexicon" & newline & "script variable mark = " & quote & "é" & quote & newline & "on sample" & newline & "  return [mark, accent()]" & newline & "end sample" & newline identity=35d26f63dba7ae549e370216071c964b276de9bce4952129a4c63000d748f743
 stopped s reason="reload"
 > deliver d2 to=s message=sample
 > pump clock=2026-10-09T10:00:00Z
 seg s/r2 start delivery=d2 handler=sample clause=1 fuel=23 alloc=71 state=18 end=return
 run s/r2 outcome=completed delivery=d2 handler=sample value=["é", "plain"] fuel=23 alloc=71
 pumped state=idle fuel=23
-> replace-library lexicon carry=no source="function accent" & newline & "  return " & quote & "é" & quote & newline & "end accent" & newline identity=8396d0e033fc869bf829ef0b99d5fc7bef2fc2a36f2cbd822c65976cb7bd1883
+> replace-library lexicon carry=no source="function accent" & newline & "  return " & quote & "é" & quote & newline & "end accent" & newline identity=bc1288d3da1b34319362df52f7c680d28d14f70de40e31c547caaa37cfa6a87c
 stopped s reason="reload"
 > deliver d3 to=s message=sample
 > pump clock=2026-10-09T10:00:00Z

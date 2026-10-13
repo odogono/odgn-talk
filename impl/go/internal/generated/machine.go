@@ -690,7 +690,7 @@ var Machine = MachineTable{
 			Pushes:   1,
 			Suspends: false,
 			Cost:     "get-key",
-			Does:     "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+			Does:     "`the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind`",
 			Errors: []string{
 				"wrong kind",
 			},
@@ -703,7 +703,7 @@ var Machine = MachineTable{
 			Pushes:   1,
 			Suspends: false,
 			Cost:     "get-key",
-			Does:     "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+			Does:     "`the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does",
 			Errors: []string{
 				"wrong kind",
 			},

@@ -3,7 +3,7 @@
 # begin; alias and other enroll with no hook, and one commit covers all three.
 # In d2 other enrolls first, so begin and commit name it.
 
-> load s identity=c0ef981f04d47562c0c607d5c54938196dfcba5782c2fd90d8076938a05885b0
+> load s identity=23748be7cd7d7d288158ef70c4daf88473d470d8313a6f8be8cb3bb291ba2789
 > stub resource.write value=nothing
 > stub resource.write value=nothing
 > stub resource.write value=nothing

@@ -1,14 +1,14 @@
 # load-checks: bad gets one diagnostic for each of its six calls, and
 # good, granted only `stamp`, loads.
 
-> load bad identity=a3da1403d14a960c2de90070c428b66ad03201eb0ba9ce10947da58677714f0f
+> load bad identity=f278c80eaf4ddf5ccca8b8663e5cae7d1b75d89b47acc5903f4e1478f1d8bbdd
 diag bad code="unknown operation" pos=4:7
 diag bad code="unknown operation" pos=5:16
 diag bad code="wrong mode" pos=6:3
 diag bad code="wrong argument count" pos=7:16
 diag bad code="wrong argument" pos=8:22
 diag bad code="unknown operation" pos=9:3
-> load good identity=4c4932d512a9c1f0a38a1bdd9a6a39e5b6fd8c848cd0600c7ffa21c5e523598a
+> load good identity=dd453819e307b31cbd92b9acc4c81c2b37f1ca4866d22a7472261b3a5fc20106
 > stub clock.stamp value="x!"
 > deliver d1 to=good message=go
 > pump clock=2026-09-30T09:00:00Z

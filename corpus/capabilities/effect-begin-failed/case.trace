@@ -2,7 +2,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #326.
 # Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
-> load s identity=dfad5e245e9425ca16cdbcbc4963f147ba39f766a3797e7872afd2adf977ec5c
+> load s identity=c3667f181ba77e04c231251a92cd3d8ece505c790ff0c0a8d6326aafd22a2670
 > stub-effect s.r phase=begin status=failed
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T00:00:00Z

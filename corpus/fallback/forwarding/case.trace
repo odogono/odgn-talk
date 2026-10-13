@@ -7,9 +7,9 @@
 # `proxy`'s `error` message doesn't reach its Fallback. A spread of a number
 # raises `wrong kind`, and a Selector with too few spread arguments raises
 # `bad message name`.
-> load client identity=1220a361f38742300a738ecb4c77383eda4f09fa0476180c6b713fd92743210f
-> load proxy identity=e0b9bd7b22eb5667f4fe60e47ea704ef741908127ba8458a483d5785377d0434
-> load backend identity=0d6e3a126aeb06c40a3eb3cb27bc1c558cb17e72830bb634da66adaa0e27111a
+> load client identity=6ff76e680060c9a2e6bc894cbd918d74946656033544d65c7527da21f2129fe3
+> load proxy identity=75e964f1493cc402a9df99cb16b24d281a070d68d75fcf69c338edd2ea1d4132
+> load backend identity=ae7239efac79a1b6d5e267555d114d1e17d3d13e62713409b82b1f792a20a9ba
 > deliver d1 to=client message=go
 > pump clock=2026-10-07T09:00:00Z
 send client/r1.c1 to=proxy message=sum args=[2, 3] wait=yes

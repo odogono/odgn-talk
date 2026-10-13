@@ -4,8 +4,8 @@
 # reaches `b`'s Fallback, whose Runs carry `fallback=yes` and the message's
 # Selector as `handler`. Nothing is reported `unhandled`. A Host Request to
 # `b` for a message it has no Handler for is answered by the Fallback too.
-> load a identity=abba0e914ab0aafef946dd1a2282122dbce031adbe7f1c30001b6aeb5184d305
-> load b identity=1a09f80b0f0c7dededa880c1a7fecb3b0575653999b45ffbd60e7aa7ad4e1e96
+> load a identity=336a7a97615b4f31b4c8f052e735cf2ea6722795bc9cde6ab25f02c003a4b253
+> load b identity=947afcf36b1708a7437d59ac36e925f3a0a0d72326eb481b8f0dfda552768bfb
 > deliver d1 to=a message=go
 > pump clock=2026-10-07T09:00:00Z
 send a/r1 to=b message=missing args=[1]

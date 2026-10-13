@@ -1,9 +1,9 @@
 # extension-state-cap: An extension over Persistent State is refused atomically. Its unit number is not consumed; a later fault names s+1.
 
-> load s identity=93cd00b036ab44c3b82a725dd908c6343c8ca892be7709030aed93b494bd241a
-> extend s source="script variable fresh = " & quote & "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" & quote identity=bc917c764ce2da6de0e5070aea0c19f98648df270059821ca43f59f87e8d7f47
+> load s identity=5b67dd8c440d09a62dad062327e26d6755feea07c603d7aba6018267ac17000a
+> extend s source="script variable fresh = " & quote & "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" & quote identity=96af05104751f04aa4c1f7e885e3e812bdc8968ed3075915ab5a841bce9497f3
 refused code="state too large"
-> extend s source="script variable fresh = 2" & newline & "on go" & newline & "  return 1 / 0" & newline & "end go" identity=49756b5fdb5821b6efaba7c72d4a94ee753a54f1e236d48a176ed12c6b4a3fe3
+> extend s source="script variable fresh = 2" & newline & "on go" & newline & "  return 1 / 0" & newline & "end go" identity=a2fa1fa81b4a88bcaf5f6c77efdfda3739bc35b52cdd444812e25abe0710150b
 > deliver d1 to=s message=go
 > pump clock=1970-01-01T00:00:00Z
 raise s/r1 code="division by zero" at=s+1:6 pos=3:12

@@ -1,6 +1,6 @@
 # First blessing approved for #744 on 2026-10-13; see docs/reviews/implicit-property-targets/README.md.
-> load s identity=cdc21d11fb7cde04f95487ef91fa695852280bed0c8169ded06573110af961a2
-> load unowned identity=98b9c0eb0f23458883bae9e27f60c34bb067c88a2fe48f8229c475df9eae2cf2
+> load s identity=325c4db478ea9f68f7ce2b49348f21929f4098b5e67177fa37205e50a1011896
+> load unowned identity=a2aa56d718daa37be2a4b08d0ddcccdab7ea292c3de88f8a3009f2a9c8d2463f
 > set-parent object=<object light "child"> parent=<object light "parent">
 > deliver d1 to=<object light "child"> message=go
 > deliver d2 to=unowned message=go

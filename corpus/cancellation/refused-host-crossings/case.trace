@@ -1,5 +1,5 @@
 # Unblessed: refusals from property and Capability crossings (#492); first blessing awaits human review.
-> load s identity=8b1b7fb91f6011975db8a0e5ec39588d12f1d2e281b52705880914ad35e7420c
+> load s identity=460110c3fc191cf3388be3802db093c75ac9ea333465b7c19e0ce1f14e785c7c
 > stub api.check value=1
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T00:00:00Z

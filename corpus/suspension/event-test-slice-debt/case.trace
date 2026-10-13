@@ -3,7 +3,7 @@
 # Debt consumes the next slice and most of the following one, which permits
 # one dispatch instruction. The next Pump ends the Handler without observing
 # again, and the final two Pumps have no work.
-> load s identity=6f9f2554c977d943c04dd760a17ecec5da04100420d7fd984f7f3b7a53990311
+> load s identity=dfd73a5146e840e1fa474a2d006dd5eee8bb874e2418215cb5f31bc4c9c5d37b
 > deliver d1 to=s message=watch
 > deliver d2 to=s message=watch
 > pump clock=2026-09-30T10:00:00Z

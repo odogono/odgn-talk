@@ -1,4 +1,4 @@
 # Pins `no conversion` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
-> load bad identity=f14e311c0abcdf7923c755feb9df0b2916d04b135330b30514f54b345cdea194
+> load bad identity=59b491bdcc5eb865d9bb3680328dafb9f6cc0ce7391fd89b68cb39aa4c3ae952
 diag bad code="no conversion" pos=2:10
 > vars

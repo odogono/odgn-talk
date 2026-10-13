@@ -3,7 +3,7 @@
 # fails: the would-be commit becomes a rollback, and only alias is disabled.
 # In d2, r still begins and commits; in d3, alias is refused.
 
-> load s identity=e54383cd4b7eda0edddff46848e65f9a27bdba358aad00df6f322beb43b36108
+> load s identity=2621a59d55d2c089c165d580dbe1ad96f4cf00f0d5469798100126e2fb3a3811
 > stub resource.write value=nothing
 > stub resource.open value=nothing
 > stub resource.close error={}

@@ -696,7 +696,7 @@ pub const machine: MachineTable = .{
             .pushes = .{ .int = 1 },
             .suspends = false,
             .cost = "get-key",
-            .does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+            .does = "`the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind`",
             .errors = &.{
                 "wrong kind",
             },
@@ -709,7 +709,7 @@ pub const machine: MachineTable = .{
             .pushes = .{ .int = 1 },
             .suspends = false,
             .cost = "get-key",
-            .does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+            .does = "`the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does",
             .errors = &.{
                 "wrong kind",
             },

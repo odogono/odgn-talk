@@ -2,8 +2,8 @@
 # without and with `and wait`, and then as two Join Members. Each `send`
 # record names the message as a static `send` would, and `b`'s Handlers
 # take them by their Selectors.
-> load a identity=d7ea2865c421a45cec7087cfe035a0eb73c9203307e7674a2fb2706d4b045348
-> load b identity=b7a7566778781286105311a26db75db3e7a97a28e9596a123c1b5e68d13e2bc2
+> load a identity=4e7b3ec8b4d7a7ca9b09c97ddadca75485b30f3fe5780af5743d171620f24b63
+> load b identity=71f3c4a8dd5d68ef72bc3d28cea63beb7e0ec3116c2567766c784cb7cc0c5a8d
 > deliver d1 to=a message=go
 > pump clock=2026-10-05T09:00:00Z
 send a/r1 to=b message=note args=["sent"]

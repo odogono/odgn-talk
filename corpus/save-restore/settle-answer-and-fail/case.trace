@@ -8,7 +8,7 @@
 # - An answer settles as `Answer` would, and a failure raises its code at the
 #   `ask … and wait` (shop:5, pos 9:5), as `Fail` would.
 
-> load shop identity=ebc20f0d27bd2849307617636e738f9f6f5e1fb4d1ce8d8befe5cc5cc82932f2
+> load shop identity=73afb22652fec1bae4f9f93ba2fb6ac269f89dd3c59ffecc4b8eab5f1e12ec71
 
 # Two Runs, each suspended on its own call. Each call's MaxWait (30 s, the
 # default) is the next deadline.
@@ -22,7 +22,7 @@ seg shop/r2 start delivery=d2 handler=check clause=1 fuel=115 alloc=0 state=644 
 pumped state=idle fuel=230 next=2026-09-30T10:00:30Z
 
 > save s1
-> restore from=s1 fingerprint=bbb3bf2bca0ab44522cb56a7866ff13e4f9641dbc738cf60939ce31b68cdf0f7 mode=full pending=[shop/r1.c1, shop/r2.c1]
+> restore from=s1 fingerprint=1ec38bf16face40834c6a1ce94ab2473aa5ec69fc0a403cfa63142ad9aeea453 mode=full pending=[shop/r1.c1, shop/r2.c1]
 
 # Settled in this order, before the first Pump.
 > settle shop/r1.c1 how=answer value=12

@@ -3,7 +3,7 @@
 # and succeeds. Its Fuel, allocation and
 # state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load till identity=d2cf66bbc45c3de61328d098b478c3773327cd76651bac9ade87121df2a3dc7d
+> load till identity=a770d16959864d4e7eb7e87fcc42e02ce68c5e2902bbd91bd8749c9963051aee
 > stub fx.rate value=1.17 EUR/GBP
 > stub catalogue.price value=2.50 GBP charge=7
 > stub fx.rate value=1.18 EUR/GBP

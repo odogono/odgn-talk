@@ -2,7 +2,7 @@
 # A wait with the transaction open raises `scope open` and suspends nothing.
 # After commit closes the scope, the wait suspends: the Segment commits there,
 # and the Run continues in a new Segment.
-> load s identity=693976716b1ba0417c9ced79a1b17767656812e6656783ffbb419369bc1ba27d
+> load s identity=1cdae63a677198ced48eabcb10f96e662dc8bebf871c8975a1aec767b9c8bb6b
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.begin value=nothing
 > stub sqlite.change value={columns: [], rows: [], changes: 1}

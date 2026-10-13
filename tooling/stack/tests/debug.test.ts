@@ -299,7 +299,7 @@ test('a Rewind landed at a live breakpoint replays at the same instruction', () 
     writeFileSync(join(dir, 's.talk'), logged);
     const setup = {
       kind: 'trace',
-      versions: { language: '1.0-rc.2', costModel: '0' },
+      versions: { language: '1.0-rc.3', costModel: '0' },
       operations: [
         {
           capability: 'log',

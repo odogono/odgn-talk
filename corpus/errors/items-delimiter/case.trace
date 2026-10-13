@@ -2,7 +2,7 @@
 # Pins the error code, delimiter field/value and property source position on
 # lists, integer ranges and text, plus valid text/range reads.
 
-> load items identity=8d6e517fdfd5fa650f36e462999a81bba239cf78dde6dcc3af97a958cba87210
+> load items identity=cc1d4e5febaebfc465ea1e8f5879cd8da14f657eeefa667f8fd9656dce045cfc
 > deliver d1 to=items message=readItems args=[[1, 2], ""]
 > pump clock=2026-10-10T09:00:00Z
 raise items/r1 code="out of range" at=items:4 pos=4:10

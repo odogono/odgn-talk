@@ -1,21 +1,21 @@
 # Unblessed: Session watches through unwatch, Extend and Reload (#621); first blessing awaits human review.
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on scoresChanged change, queued" & newline & "  say the " & quote & "watch" & quote & " of change" & newline & "end scoresChanged" identity=b39cc09633fd6438d442639ae292c5c720eb7458f90db5b7c06d8d4c4367d264
-> extend session source="on entry1" & newline & "ask scores to watch " & quote & "all" & quote & ", " & quote & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry1" & newline identity=cc69b9c271e415f7c906f6abfb360df55e6692d9a2bd9c6d826b7eea8c3230ee
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on scoresChanged change, queued" & newline & "  say the " & quote & "watch" & quote & " of change" & newline & "end scoresChanged" identity=443ee9ce980b1a22a967891b8422a62be8c496d2c40a0ce8820077737ceb566e
+> extend session source="on entry1" & newline & "ask scores to watch " & quote & "all" & quote & ", " & quote & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry1" & newline identity=518b9ad052a679299cfd60b38503ea1657570a4c569439ad285ee6d3a575599e
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 call session/r1.c1 op=scores.watch args=["all", "", "scoresChanged"] result=nothing
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=26 alloc=8 state=0 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=26 alloc=8
 pumped state=idle fuel=26
-> extend session source="on entry2" & newline & "ask scores to watch " & quote & "names" & quote & ", " & quote & "name/" & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry2" & newline identity=9c059d852f0b4094416f6748c36d6a2f8451fd746413bdf5acb76ef644417426
+> extend session source="on entry2" & newline & "ask scores to watch " & quote & "names" & quote & ", " & quote & "name/" & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry2" & newline identity=985943a3f6291c7ca6b53705424003726011b148c9354a135a0c7bf498fccfbf
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 call session/r2.c1 op=scores.watch args=["names", "name/", "scoresChanged"] result=nothing
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=26 alloc=8 state=0 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=26 alloc=8
 pumped state=idle fuel=26
-> extend session source="on entry3" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 1" & newline & "end entry3" & newline identity=5ab6fe794220233378e8882dfcbd404051a781d9591f86214fec6813c53adc28
+> extend session source="on entry3" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 1" & newline & "end entry3" & newline identity=0b447adc366f74818b0cb638178acfc73bff6d552b08afc2a5a4a3680126534c
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 effect session/r3.s1 grant=scores phase=begin status=ok
@@ -34,14 +34,14 @@ call session/r5.c1 op=console.write args=["names"]
 seg session/r5 start delivery=d5 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
 run session/r5 outcome=completed delivery=d5 handler=scoresChanged fuel=21 alloc=0
 pumped state=idle fuel=42
-> extend session source="on entry4" & newline & "ask scores to unwatch " & quote & "names" & quote & newline & "end entry4" & newline identity=6bd5c6d03c77a36dcee17c8216b192c21f02ce8904ad4fd22274295766f6d3f8
+> extend session source="on entry4" & newline & "ask scores to unwatch " & quote & "names" & quote & newline & "end entry4" & newline identity=406bad9005de6e0fdf98eff0822c0e49d10a514020501e18c9066edbb2d27bf8
 > request d6 to=session message=entry4
 > pump clock=2026-09-30T10:00:00Z
 call session/r6.c1 op=scores.unwatch args=["names"] result=nothing
 seg session/r6 start delivery=d6 handler=entry4 clause=1 fuel=22 alloc=8 state=0 end=return
 run session/r6 outcome=completed delivery=d6 handler=entry4 fuel=22 alloc=8
 pumped state=idle fuel=22
-> extend session source="on entry5" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 2" & newline & "end entry5" & newline identity=dcec91fc3e62c72275cdce5172b0be2fdb1a4f26ca6f262b150f201b38dadab2
+> extend session source="on entry5" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 2" & newline & "end entry5" & newline identity=1f5b34acc7e569a7248e843c05870a2d67bfa00b51f2c47b7c73fbe0ddc8350c
 > request d7 to=session message=entry5
 > pump clock=2026-09-30T10:00:00Z
 effect session/r7.s1 grant=scores phase=begin status=ok
@@ -56,15 +56,15 @@ call session/r8.c1 op=console.write args=["all"]
 seg session/r8 start delivery=d8 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
 run session/r8 outcome=completed delivery=d8 handler=scoresChanged fuel=21 alloc=0
 pumped state=idle fuel=21
-> extend session source="on entry6" & newline & "ask scores to unwatch " & quote & "names" & quote & newline & "end entry6" & newline identity=22a8540b8a2ea5d827d25deb9ed5ef33437aa1a0a3b77cf0aefd1b0d83847830
+> extend session source="on entry6" & newline & "ask scores to unwatch " & quote & "names" & quote & newline & "end entry6" & newline identity=080e4c07a2e7c4cda507fb03d92fa9fddda60787ca99339969c41989509f90e6
 > request d9 to=session message=entry6
 > pump clock=2026-09-30T10:00:00Z
 call session/r9.c1 op=scores.unwatch args=["names"] result=nothing
 seg session/r9 start delivery=d9 handler=entry6 clause=1 fuel=22 alloc=8 state=0 end=return
 run session/r9 outcome=completed delivery=d9 handler=entry6 fuel=22 alloc=8
 pumped state=idle fuel=22
-> extend session source="function double n" & newline & "  return n * 2" & newline & "end double" identity=204cf906621d87f723e30cff4251f0b6ce6c165ae0021406cab92eb700b9c567
-> extend session source="on entry7" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 3" & newline & "end entry7" & newline identity=1671bf8bb6856d52d05353a8377b8b73c9b41aa9792cd0911b844d5b3721d02c
+> extend session source="function double n" & newline & "  return n * 2" & newline & "end double" identity=3a0514671cdb9203efba0e7b31b0e481b238a44d2b0e358d197ac225740905fd
+> extend session source="on entry7" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 3" & newline & "end entry7" & newline identity=da9ed0ff2bd3a6e9b263dd96a5e910c19e28b7e11a026ff65233b7fcba999aef
 > request d10 to=session message=entry7
 > pump clock=2026-09-30T10:00:00Z
 effect session/r10.s1 grant=scores phase=begin status=ok
@@ -79,9 +79,9 @@ call session/r11.c1 op=console.write args=["all"]
 seg session/r11 start delivery=d11 handler=scoresChanged clause=1 fuel=21 alloc=0 state=0 end=return
 run session/r11 outcome=completed delivery=d11 handler=scoresChanged fuel=21 alloc=0
 pumped state=idle fuel=21
-> reload session carry=yes source="on scoresChanged change, queued" & newline & "  say " & quote & "changed " & quote & " & the " & quote & "watch" & quote & " of change" & newline & "end scoresChanged" & newline & "function double n" & newline & "  return n * 2" & newline & "end double" & newline identity=1869f51f14ec0cc61e2f6db6e8047aaffc27fbd4050847b0a76ad03f71d00ad2
+> reload session carry=yes source="on scoresChanged change, queued" & newline & "  say " & quote & "changed " & quote & " & the " & quote & "watch" & quote & " of change" & newline & "end scoresChanged" & newline & "function double n" & newline & "  return n * 2" & newline & "end double" & newline identity=4898cde32e983f6ecd18130f14404747e23f9cac212989a11168adb80aad8fcf
 stopped session reason="reload"
-> extend session source="on entry8" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 4" & newline & "end entry8" & newline identity=a916cf25043c5b026cac39e4ca4c09fcab65c26a05438802f9921ec0fd23374e
+> extend session source="on entry8" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 4" & newline & "end entry8" & newline identity=e8cbbec556e571484f287fa3a610969d1b60db454353c446a6cc1dc53dbcab52
 > request d12 to=session message=entry8
 > pump clock=2026-09-30T10:00:00Z
 effect session/r12.s1 grant=scores phase=begin status=ok
@@ -90,14 +90,14 @@ effect session/r12.s1 grant=scores phase=commit status=ok
 seg session/r12 start delivery=d12 handler=entry8 clause=1 fuel=25 alloc=8 state=0 end=return
 run session/r12 outcome=completed delivery=d12 handler=entry8 fuel=25 alloc=8
 pumped state=idle fuel=25
-> extend session source="on entry9" & newline & "ask scores to watch " & quote & "all" & quote & ", " & quote & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry9" & newline identity=9a393ccbc3dab159858121dd815bdb6a29df760973399631f5dc1e2f697fdb41
+> extend session source="on entry9" & newline & "ask scores to watch " & quote & "all" & quote & ", " & quote & quote & ", " & quote & "scoresChanged" & quote & newline & "end entry9" & newline identity=4b28d1818608de21447c194d86378d91c940a57bc25e25d6ec7d8cde2232e301
 > request d13 to=session message=entry9
 > pump clock=2026-09-30T10:00:00Z
 call session/r13.c1 op=scores.watch args=["all", "", "scoresChanged"] result=nothing
 seg session/r13 start delivery=d13 handler=entry9 clause=1 fuel=26 alloc=8 state=0 end=return
 run session/r13 outcome=completed delivery=d13 handler=entry9 fuel=26 alloc=8
 pumped state=idle fuel=26
-> extend session source="on entry10" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 5" & newline & "end entry10" & newline identity=c5444dc7671fc083804a02e33206d5af7d6fafc9f924f7adaabfdd955559663e
+> extend session source="on entry10" & newline & "ask scores to set " & quote & "name/ann" & quote & ", 5" & newline & "end entry10" & newline identity=96c65cb971160424755b3215bde50bcf11a1779138b6b779ff031a2d30aa3dbc
 > request d14 to=session message=entry10
 > pump clock=2026-09-30T10:00:00Z
 effect session/r14.s1 grant=scores phase=begin status=ok

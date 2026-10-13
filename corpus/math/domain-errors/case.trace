@@ -2,7 +2,7 @@
 # names its 0, `power(0, -0.5)` is `division by zero`, and a bad `order` is
 # `out of domain` like a bad length.
 
-> load domains identity=0a33eabcafe9e5c465276bbf76833fc5c927fcd6158c4059825341eb295c87f8
+> load domains identity=c181a96b5ad64afd0782fcaea6a493b7a66a8fedd58a2204f29933a59bdee8d8
 > deliver d1 to=domains message=root
 > deliver d2 to=domains message=logarithm
 > deliver d3 to=domains message=base

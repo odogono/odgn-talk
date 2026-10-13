@@ -7,7 +7,7 @@
 # leave the Script Variable at its Segment-start value (size 22).
 # The successful Run adds concat (4), store-var (2), const (1), return (2):
 # 20 Fuel, 37 allocation, and retained size("a1b") = 19.
-> load fenced identity=4cb12298968489e17d15dc4c3c45e7488dea4bb08cd587edef511b4978d16974
+> load fenced identity=f81c5f7de38f1348791178b6f209dfc3c11ba656cb458cd8bb45c37024157c84
 > deliver d1 to=fenced message=go limits={fuelPerRun: 11}
 > pump clock=2026-10-04T09:00:00Z
 fault fenced/r1 limit=fuel at=fenced:8 pos=3:8

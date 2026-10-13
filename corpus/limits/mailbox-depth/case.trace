@@ -14,8 +14,8 @@
 # blessed them. `sink` names a Script loaded after `sender`, as a `send`'s
 # receiver may.
 
-> load sender identity=2728e25012f058833cee9f516b4c9067800b9aa8a41053643edfab86e7106b96
-> load sink identity=0bcd46f7821bc680893afd8c015194a8e4cbcb77c2fafcbae3c71eb56158e724
+> load sender identity=529874dfcc43d00192b19b9cce60f565ce77df2353cdf347b4b0d52d9528e55e
+> load sink identity=f3ea9173edfdd488b9395b5221766e638a2f4f5dc12696b65d259f8b0372368a
 
 > deliver d1 to=sender message=flood
 > pump clock=2026-09-28T09:00:00Z

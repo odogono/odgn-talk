@@ -1,4 +1,4 @@
 # Pins `not a property` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
-> load bad identity=e287168899eaca0599b17273fcad3b1a1570588e79ee9e33665e6fbbdff758ee
+> load bad identity=997460843995d39dc99eaecb990115e2e4c6b46eecbb9e369917778e75cfba32
 diag bad code="not a property" pos=2:1
 > vars

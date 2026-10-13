@@ -1,6 +1,6 @@
 # Join members keep distinct supplied argument lists, including during
 # save/restore replay. Answers still collect in member start order.
-> load s identity=efe198e7548c34eb46fc5e6aa69b46b67483df693791a938f9a5daf322252c0c
+> load s identity=b8ac4b982d386726a401aa762dcab77a141d2c6a1850891bd8638719016fc8d8
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T14:00:00Z
 call s/r1.c1 op=api.read args=[]

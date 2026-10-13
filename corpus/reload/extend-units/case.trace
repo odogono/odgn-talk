@@ -2,20 +2,20 @@
 # Originally corrected from maintainer-approved TS-only agreement; see docs/reviews/event-test-charging/.
 # extend-units: Extend keeps old frames and Function Values valid, links inherited Constants/defaults, rejects name reuse, and resumes event tests from the extension unit.
 
-> load s identity=c0d8add854de261af2be8ce91a9762dfe05a5480d9170c13ad572ee0af993311
+> load s identity=37ffda553a429b81f5e8b734bca657f9a8fa059a3227337d75a4f38c1336b730
 > deliver d1 to=s message=old
 > pump clock=1970-01-01T00:00:00Z
 seg s/r1 start delivery=d1 handler=old clause=1 fuel=21 alloc=32 state=224 end=wait until=1970-01-01T00:00:01Z
 pumped state=idle fuel=21 next=1970-01-01T00:00:01Z
-> extend s source="script variable fresh = offset + 5" & newline & "on newone" & newline & "  put callback(fresh) into n" & newline & "  return n" & newline & "end newone" identity=7e14ed8b3c39b59b7f854464f81513cbe6be654675736de4d64528677a2fb4ed
+> extend s source="script variable fresh = offset + 5" & newline & "on newone" & newline & "  put callback(fresh) into n" & newline & "  return n" & newline & "end newone" identity=91f03f058da4bfe1b3c38284f21a47fc6ce18d03a455cfa00395f350736d2bbc
 > deliver d2 to=s message=newone
 > pump clock=1970-01-01T00:00:00Z
 seg s/r2 start delivery=d2 handler=newone clause=1 fuel=43 alloc=32 state=240 end=return
 run s/r2 outcome=completed delivery=d2 handler=newone value=12 fuel=43 alloc=32
 pumped state=idle fuel=43 next=1970-01-01T00:00:01Z
-> extend s source="on old" & newline & "end old" identity=a5e547aad57a2f4e3098b47e4984fc1c694a255bb0868e6d30f46c13231d9294
+> extend s source="on old" & newline & "end old" identity=1f4b86b94fecad40bc96a50eb2a4d783781e76108b9e0c004fc437a0cfa6beed
 refused code="name reused"
-> extend s source="on waiting" & newline & "  wait for" & newline & "    when answer x where x > 2 then" & newline & "      put x into fresh" & newline & "  end wait" & newline & "end waiting" identity=af42f2211a5d231507c5913fa1eedf6ecc1ed1c195408ef972167fd658a9bfcd
+> extend s source="on waiting" & newline & "  wait for" & newline & "    when answer x where x > 2 then" & newline & "      put x into fresh" & newline & "  end wait" & newline & "end waiting" identity=3773aff5946cf06fbbabd04536ce22abf7f9c0078aac341c7c0ff246bb465ada
 > deliver d3 to=s message=waiting
 > pump clock=1970-01-01T00:00:00Z
 seg s/r3 start delivery=d3 handler=waiting clause=1 fuel=14 alloc=0 state=448 end=wait-for-any

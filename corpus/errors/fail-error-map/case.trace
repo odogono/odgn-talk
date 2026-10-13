@@ -14,7 +14,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load shop identity=d88d406dcdb744d8ccc990ab4ce2af8107a1d91118ced3f5d3112f2ef74b93e5
+> load shop identity=39063e7cfe4133ca2b5b33b7cfc444b95be8e2633d6c417cce6d774ad7516476
 
 > deliver d1 to=shop message=check args=["A1"]
 > pump clock=2026-09-30T10:00:00Z

@@ -1,0 +1,27 @@
+# Unblessed: stdlib error attribution through Nothing defaults and optional reads (#722); first blessing awaits human review.
+
+> load lib identity=ea111a6b5be9131c49a92b5a1add30e0ca8c07bece82e3e9dc2783f03ed83d41
+> deliver d1 to=lib message=leftOperand
+> deliver d2 to=lib message=keyOperand
+> deliver d3 to=lib message=receiverOperand
+> deliver d4 to=lib message=lambdaRead
+> deliver d5 to=lib message=lambdaDefault
+> pump clock=2026-10-13T09:00:00Z
+raise lib/r1 code="out of domain" at=text:1313 pos=347:3
+seg lib/r1 start delivery=d1 handler=leftOperand clause=1 fuel=127 alloc=297 state=144 end=error
+run lib/r1 outcome=errored delivery=d1 handler=leftOperand error={code: "out of domain", function: "pad", value: -1, at: {unit: "lib", handler: "leftOperand", line: 9, column: 7}} fuel=127 alloc=297
+raise lib/r2 code="out of domain" at=text:1313 pos=347:3
+seg lib/r2 start delivery=d2 handler=keyOperand clause=1 fuel=127 alloc=297 state=630 end=error
+run lib/r2 outcome=errored delivery=d2 handler=keyOperand error={code: "out of domain", function: "pad", value: -1, at: {unit: "lib", handler: "keyOperand", line: 13, column: 21}} fuel=127 alloc=297
+raise lib/r3 code="out of domain" at=text:1313 pos=347:3
+seg lib/r3 start delivery=d3 handler=receiverOperand clause=1 fuel=127 alloc=297 state=1115 end=error
+run lib/r3 outcome=errored delivery=d3 handler=receiverOperand error={code: "out of domain", function: "pad", value: -1, at: {unit: "lib", handler: "receiverOperand", line: 17, column: 25}} fuel=127 alloc=297
+raise lib/r4 code="wrong kind" at=lib:86 pos=21:33
+seg lib/r4 start delivery=d4 handler=lambdaRead clause=1 fuel=127 alloc=290 state=1605 end=error
+run lib/r4 outcome=errored delivery=d4 handler=lambdaRead error={code: "wrong kind", expected: "map", got: "number", value: 2, at: {unit: "lib", handler: "lambdaRead", line: 21, column: 33}} fuel=127 alloc=290
+seg lib/r5 start delivery=d5 handler=lambdaDefault clause=1 fuel=308 alloc=746 state=2306 end=return
+run lib/r5 outcome=completed delivery=d5 handler=lambdaDefault fuel=308 alloc=746
+pumped state=idle fuel=816
+
+> vars
+vars lib results=[[0, 2], [1, 0, 0]]
