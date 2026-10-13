@@ -869,6 +869,14 @@ talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, t
  * capability revoked; calls in flight are left to the Host. A repeat, or a
  * name the Script doesn't keep, is recorded and does nothing. */
 talk_host_error_code talk_script_revoke(talk_script *s, const char *name, size_t len);
+/* Queues cancelling one of the Script's Runs, by its id, such as "s/r1": its
+ * finally blocks run on its Cleanup Budget in its Script's turn, and it ends
+ * cancelled. One that has ended does nothing. */
+talk_host_error_code talk_script_cancel_run(talk_script *s, const char *id, size_t len);
+/* C only: queues cancelling a Request or Decision, by its delivery id, such
+ * as "d1", which talk.go does through its context: its Run is cancelled, or,
+ * still in a mailbox, it is removed and reported cancelled with no Run. */
+talk_host_error_code talk_cancel_delivery(talk_group *g, const char *id, size_t len);
 /* A Script's Counters: its lifetime work since load, live Runs included,
  * and its current Persistent State and mailbox. */
 typedef struct talk_counters {

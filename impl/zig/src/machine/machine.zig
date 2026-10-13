@@ -199,6 +199,11 @@ pub const Run = struct {
     continuing: bool = false,
     /// Named clauses dispatch has counted so far.
     clauses_seen: u32 = 0,
+    /// A cancelled Run's Fuel when its cleanup began, which the Cleanup
+    /// Budget, not Fuel per Run, bounds from there.
+    cleanup_from: ?u64 = null,
+    /// Whether a limit ended its cleanup, which rolls the cleanup back.
+    cleanup_limited: bool = false,
     /// Its error control: catch dispatches and cleanups, innermost last.
     controls: std.ArrayList(Control) = .empty,
     /// Recovery Offer choices made, which number their records.
@@ -233,8 +238,9 @@ pub const Run = struct {
     select_at: ?u32 = null,
     /// Whether it waits in its clause's queue, under `, queued`.
     parked: bool = false,
-    /// The call a cancellation abandoned, which its last `seg` names.
-    abandoned: []const u8 = "",
+    /// The calls a cancellation abandoned, which its first cleanup Stretch's
+    /// `seg` or `preempt` names; the ids are the Group's.
+    abandoned: std.ArrayList([]const u8) = .empty,
     /// The frame count at which running stops: 0, or while a pending
     /// `wait for`'s test body runs, the frames below it.
     base: usize = 0,
@@ -663,6 +669,13 @@ pub const FunctionCode = struct {
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
+/// The Fuel a Run may still spend: what its Fuel per Run leaves, or in a
+/// cancelled Run's cleanup, what its Cleanup Budget leaves.
+fn fuelLeft(run: *const Run) u64 {
+    if (run.cleanup_from) |from| return run.limits.cleanup_budget -| (run.fuel - from);
+    return run.limits.fuel_per_run -| run.fuel;
+}
+
 /// A retained frame's size: its slots, their values and its operand stack.
 fn frameSize(f: *const Frame) u64 {
     var total: u64 = 64 + 8 * f.locals.len;
@@ -754,7 +767,7 @@ pub const Override = struct {
 pub const Preemption = enum { slice, cap };
 
 /// The limit a Limit Fault names.
-pub const Fault = enum { fuel, alloc, persistent, depth, pattern, join };
+pub const Fault = enum { fuel, alloc, persistent, depth, pattern, join, cleanup };
 
 /// The positions of a unit's Text Pattern literals, those with no splices,
 /// whose programs run over `limit` instructions, counting every copy of a
@@ -822,6 +835,11 @@ const Input = union(enum) {
     broadcast: Broadcast,
     /// Revokes a Script's named Grant; both names are owned.
     revoke: struct { script: []const u8, grant: []const u8 },
+    /// Cancels a Run, by its owned id.
+    cancel_run: []const u8,
+    /// Cancels a Delivery's Run, or the Delivery itself if it is still in
+    /// a mailbox.
+    cancel_delivery: u64,
 };
 
 const Broadcast = struct {
@@ -906,7 +924,8 @@ pub const Group = struct {
                 g.gpa.free(x.script);
                 g.gpa.free(x.grant);
             },
-            .set_parent, .dispose => {},
+            .cancel_run => |id| g.gpa.free(id),
+            .set_parent, .dispose, .cancel_delivery => {},
         };
         g.inputs.deinit(g.gpa);
         for (g.objects.items) |o| o.destroy(g.gpa);
@@ -1208,6 +1227,99 @@ pub const Group = struct {
         return null;
     }
 
+    /// Queues `CancelRun` for a Run, by its id. One that has ended, or never
+    /// existed, is still recorded, and does nothing.
+    pub fn cancelRunInput(g: *Group, id: []const u8) !void {
+        const owned = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(owned);
+        try g.inputs.append(g.gpa, .{ .cancel_run = owned });
+    }
+
+    /// Queues cancelling a Delivery, by its delivery number.
+    pub fn cancelDeliveryInput(g: *Group, id: u64) !void {
+        try g.inputs.append(g.gpa, .{ .cancel_delivery = id });
+    }
+
+    /// Cancels a Delivery: the Run it started, or, still in a mailbox, the
+    /// Delivery itself, which is reported cancelled with no Run.
+    fn cancelDelivery(g: *Group, id: u64) !void {
+        for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) {
+            return g.cancel(x, r);
+        };
+        for (g.scripts.items) |x| for (x.work.items, 0..) |w, i| switch (w) {
+            .message => |d| if (d.id == id and d.from == null) {
+                _ = x.work.orderedRemove(i);
+                g.write("run outcome=cancelled delivery=d{d} fuel=0 alloc=0\n", .{id});
+                if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
+                g.releaseDelivery(d);
+                return;
+            },
+            .run => {},
+        };
+    }
+
+    /// Cancels a Run that isn't running (chapter 6, Cancellation and Stop).
+    /// A preempted Run, in the middle of its Segment, has its scopes
+    /// abandoned and its Segment and participant rolled back here. Its
+    /// pending calls are abandoned, and its `finally` blocks run in its
+    /// Script's turn, where a Run already in the queue keeps its place.
+    fn cancel(g: *Group, s: *Script, r: *Run) !void {
+        if (r.resume_with) |w| switch (w) {
+            .cancelled => return,
+            else => g.releaseResume(w),
+        };
+        const queued = r.resume_with != null or r.continuing;
+        if (r.continuing) {
+            _ = g.abandonScopes(r);
+            _ = g.finalize(r, false);
+            g.restoreBase(r);
+            g.abandonUnwinding(r);
+            r.preempted_in = null;
+            // Its cleanup is a Segment of its own.
+            r.segments += 1;
+        }
+        if (r.waiting) |p| {
+            for (g.pending.items, 0..) |y, i| if (y == p) {
+                _ = g.pending.orderedRemove(i);
+                break;
+            };
+            const id = if (p.call) |c| c.id else p.id;
+            if (id.len > 0) try r.abandoned.append(g.gpa, id);
+            g.destroyPending(p);
+            r.waiting = null;
+        }
+        // A Join's members still pending, in start order.
+        if (r.join) |join| for (join.members.items) |x| if (x.pending != null) {
+            try r.abandoned.append(g.gpa, x.waited.id);
+        };
+        g.dropJoin(r);
+        r.parked = false;
+        r.resume_with = .cancelled;
+        if (!queued) try s.work.append(g.gpa, .{ .run = r });
+    }
+
+    /// Starts a cancelled Run's cleanup: its `finally` blocks, once,
+    /// innermost first, on the Cleanup Budget; nothing is unwound.
+    fn startCancel(g: *Group, run: *Run) !Outcome {
+        run.cleanup_from = run.fuel;
+        const top = &run.frames.items[run.frames.items.len - 1];
+        // A preempted Run's place is the instruction it would run next.
+        const place = if (run.continuing) top.pc else top.pc -| 1;
+        var cleanups: std.ArrayList(Cleanup) = .empty;
+        errdefer cleanups.deinit(g.gpa);
+        try g.collect(run, &cleanups, 0, null, null, place);
+        try g.startCleanup(run, try nothing(g.gpa), cleanups, .cancel);
+        return (try g.nextCleanup(run, true)) orelse try g.execute(run, true);
+    }
+
+    /// Ends a cancelled Run's cleanup that failed: the rest of it doesn't
+    /// run, and the Run still ends `cancelled`.
+    fn cleanupFailed(g: *Group, run: *Run) Outcome {
+        g.abandonUnwinding(run);
+        while (run.frames.items.len > 0) g.popFrame(run);
+        return .cancelled;
+    }
+
     /// Queues `Revoke` for a Script's named Grant. A Script or name the
     /// Group doesn't know is still recorded, and does nothing.
     pub fn revoke(g: *Group, script_name: []const u8, grant_name: []const u8) !void {
@@ -1465,6 +1577,7 @@ pub const Group = struct {
         run.scopes.deinit(g.gpa);
         if (run.participant) |*p| p.grants.deinit(g.gpa);
         g.dropBase(run);
+        run.abandoned.deinit(g.gpa);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
         g.releaseDelivery(run.delivery);
@@ -1518,6 +1631,8 @@ pub const Group = struct {
                 display.writeTrace(out, o.value) catch {};
             },
             .revoke => |x| out.print("> revoke {s} grant={s}", .{ x.script, x.grant }) catch {},
+            .cancel_run => |id| out.print("> cancel-run {s}", .{id}) catch {},
+            .cancel_delivery => |id| out.print("> cancel-delivery d{d}", .{id}) catch {},
             .broadcast => |b| {
                 out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
                 // A refused Broadcast never had an id.
@@ -1598,6 +1713,14 @@ pub const Group = struct {
                 } else x.object.parent = x.parent;
             },
             .dispose => |o| o.disposed = true,
+            .cancel_run => |id| {
+                defer g.gpa.free(id);
+                for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
+                    try g.cancel(x, r);
+                    break;
+                };
+            },
+            .cancel_delivery => |id| try g.cancelDelivery(id),
             .revoke => |x| {
                 defer g.gpa.free(x.script);
                 defer g.gpa.free(x.grant);
@@ -1885,6 +2008,10 @@ pub const Group = struct {
     /// Goes on with a preempted Run: its dispatch, if a clause's patterns or
     /// Guard were running, or else its body.
     fn continueRun(g: *Group, s: *Script, run: *Run) !Outcome {
+        if (run.resume_with) |w| if (w == .cancelled) {
+            run.resume_with = null;
+            return g.startCancel(run);
+        };
         const in = run.preempted_in orelse return g.execute(run, true);
         run.preempted_in = null;
         const outcome = try g.execute(run, true);
@@ -1940,7 +2067,7 @@ pub const Group = struct {
                 const head = unitOf(run, f).code[f.pc];
                 var none: costs.Measures = .{};
                 const need = run.clause_fuel + if (waits) 0 else costs.charge(costKey(head, &none), &none).fuel;
-                if (run.fuel + need > run.limits.fuel_per_run) return g.limitFault(run, .fuel, unitName(run, f), f.pc, head);
+                if (need > fuelLeft(run)) return g.limitFault(run, .fuel, unitName(run, f), f.pc, head);
             }
             if (waits) {
                 run.fuel += run.clause_fuel;
@@ -2002,6 +2129,7 @@ pub const Group = struct {
             if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
             out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), fuel, alloc }) catch {};
         }
+        g.writeAbandoned(run);
         run.started = true;
         run.continuing = true;
         run.segment_fuel = run.fuel;
@@ -2015,6 +2143,13 @@ pub const Group = struct {
             g.destroyRun(run);
             return e;
         };
+    }
+
+    /// A cancellation's abandoned calls, once, after its first cleanup
+    /// Stretch.
+    fn writeAbandoned(g: *Group, run: *Run) void {
+        for (run.abandoned.items) |id| g.write("abandon {s}\n", .{id});
+        run.abandoned.clearAndFree(g.gpa);
     }
 
     /// A first Stretch's start keys.
@@ -2063,16 +2198,7 @@ pub const Group = struct {
         run.resume_with = null;
         switch (with) {
             .unparked => return g.execute(run, true),
-            .cancelled => {
-                // Its `finally` blocks run once, innermost first; nothing is
-                // unwound.
-                const top = &run.frames.items[run.frames.items.len - 1];
-                var cleanups: std.ArrayList(Cleanup) = .empty;
-                errdefer cleanups.deinit(g.gpa);
-                try g.collect(run, &cleanups, 0, null, null, top.pc -| 1);
-                try g.startCleanup(run, try nothing(g.gpa), cleanups, .cancel);
-                return (try g.nextCleanup(run, true)) orelse try g.execute(run, true);
-            },
+            .cancelled => return g.startCancel(run),
             else => {},
         }
         const waited = run.waited;
@@ -2971,7 +3097,8 @@ pub const Group = struct {
         // Abandon leftover scopes, then commit the participant if they
         // permit it, or roll it back.
         var failure: ?EffectFailure = if (outcome != .suspended) g.abandonScopes(run) else null;
-        const commits = failure == null and outcome != .faulted and outcome != .cancelled;
+        // A cancelled Run's cleanup Segment commits, unless a limit ended it.
+        const commits = failure == null and outcome != .faulted and !(outcome == .cancelled and run.cleanup_limited);
         if (g.finalize(run, commits)) |f| failure = f;
         if (failure) |f| {
             g.restoreBase(run);
@@ -3024,7 +3151,7 @@ pub const Group = struct {
                 out.print(" until={s}", .{text}) catch {};
             };
             out.writeAll("\n") catch {};
-            if (outcome == .cancelled and run.abandoned.len > 0) out.print("abandon {s}\n", .{run.abandoned}) catch {};
+            if (outcome == .cancelled) g.writeAbandoned(run);
         }
         // The end of the first Segment seals a held Verdict: `veto` vetoes
         // it, and suspending or ending without one allows it.
@@ -3211,9 +3338,15 @@ pub const Group = struct {
     /// next Owning Script's mailbox. Copies it.
     fn climb(g: *Group, s: *Script, d: Delivery) !void {
         const handled = if (d.at) |at| at.owned() else s.owner;
-        const copy = try g.copyDelivery(d);
+        var copy = try g.copyDelivery(d);
         if (d.internal_error) return g.unhandled(copy);
-        const parent = (handled orelse return g.unhandled(copy)).parent orelse return g.unhandled(copy);
+        const from = handled orelse return g.unhandled(copy);
+        // A Script's message that climbs from its owner ends there, naming
+        // that object.
+        const parent = from.parent orelse {
+            if (copy.target == null) copy.target = from;
+            return g.unhandled(copy);
+        };
         var moved = copy;
         moved.at = parent;
         moved.passed_by = handled;
@@ -3246,23 +3379,7 @@ pub const Group = struct {
     fn cancelClause(g: *Group, s: *Script, body: u32) !void {
         for (s.live.items) |r| {
             if (r.clause_body == null or r.clause_body.? != body) continue;
-            if (r.resume_with) |w| switch (w) {
-                .cancelled => continue,
-                else => g.releaseResume(w),
-            };
-            const queued = r.resume_with != null;
-            if (r.waiting) |p| {
-                for (g.pending.items, 0..) |y, i| if (y == p) {
-                    _ = g.pending.orderedRemove(i);
-                    break;
-                };
-                r.abandoned = if (p.call) |c| c.id else p.id;
-                g.destroyPending(p);
-                r.waiting = null;
-            }
-            g.dropJoin(r);
-            r.resume_with = .cancelled;
-            if (!queued) try s.work.append(g.gpa, .{ .run = r });
+            try g.cancel(s, r);
         }
     }
 
@@ -3570,10 +3687,6 @@ pub const Group = struct {
                     return other;
                 },
             };
-            // An error is raised, with its record and its Join abandoned,
-            // before the raising instruction's charge, which may fault.
-            const recorded = done == .raised and g.guardEntry(run, pc) == null;
-            if (recorded) g.raiseRecord(run, done.raised, pc, ins);
             // An instruction charged nothing still pays dispatch's `clause`
             // rate.
             if (charged and charge.uncharged) {
@@ -3598,7 +3711,7 @@ pub const Group = struct {
                     null
                 else if (ending and g.persistentState(run.script) > run.script.limits.persistent_state)
                     .persistent
-                else if (run.fuel + cost.fuel > run.limits.fuel_per_run)
+                else if (cost.fuel > fuelLeft(run))
                     .fuel
                 else if (run.alloc + cost.alloc > run.limits.alloc_per_run)
                     .alloc
@@ -3666,10 +3779,7 @@ pub const Group = struct {
                     if (try g.unwind(run, err, call_pc, call_ins, charged)) |end| return end;
                 },
                 .raised => |err| {
-                    if (recorded) {
-                        const top = run.frames.items.len - 1;
-                        if (try g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged)) |end| return end;
-                    } else if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
+                    if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
                 },
                 .end_cleanup => {
                     // A `finally` block an uncaught error ran raises it
@@ -3891,7 +4001,7 @@ pub const Group = struct {
     /// Charges `unwind` for frames a search leaves, as part of the charge of
     /// the instruction driving it, which faults if the Run can't cover it.
     fn chargeUnwind(g: *Group, run: *Run, fuel: u64) ?Outcome {
-        if (run.base == 0 and run.fuel + fuel > run.limits.fuel_per_run) {
+        if (run.base == 0 and fuel > fuelLeft(run)) {
             const d = g.driving;
             return g.limitFault(run, .fuel, d.unit, d.pc, d.ins);
         }
@@ -3947,6 +4057,17 @@ pub const Group = struct {
         switch (bound.*) {
             .dispatch => return g.abortRecovery(run, err, s.raised, position, s.skip, charged),
             .cleanup => |*u| {
+                // An error ending a cancelled Run's cleanup keeps its
+                // writes; the rest of the cleanup doesn't run.
+                if (u.then == .cancel) {
+                    if (g.trace) |w| {
+                        w.print("cleanup-failed {s} code=", .{run.id}) catch {};
+                        display.writeTrace(w, err.get("code").?) catch {};
+                        w.writeAll("\n") catch {};
+                    }
+                    err.release();
+                    return g.cleanupFailed(run);
+                }
                 const at = u.cleanups.items[u.next - 1];
                 // An aborted policy's own `finally` blocks run in its
                 // activation, which this search leaves as a frame.
@@ -4385,6 +4506,15 @@ pub const Group = struct {
     /// bindings restored, its pending calls abandoned and its frames gone.
     /// Nothing of the instruction's charge is made.
     fn limitFault(g: *Group, run: *Run, limit: Fault, unit: []const u8, pc: u32, ins: lower.Instruction) Outcome {
+        // A limit during a cancelled Run's cleanup ends the cleanup, and
+        // rolls back its writes.
+        if (run.cleanup_from != null) {
+            // The Fuel a cleanup runs out of is its Cleanup Budget.
+            g.write("cleanup-failed {s} limit={s}\n", .{ run.id, @tagName(if (limit == .fuel) .cleanup else limit) });
+            g.restoreBase(run);
+            run.cleanup_limited = true;
+            return g.cleanupFailed(run);
+        }
         if (g.trace) |w| {
             w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
             if (run.segment_base) |base| {
@@ -4517,7 +4647,7 @@ pub const Group = struct {
                 // A write it can't pay for faults before it writes, so the
                 // rollback doesn't see it.
                 var none: costs.Measures = .{};
-                if (run.base == 0 and run.fuel + run.clause_fuel + costs.charge("store-var", &none).fuel > run.limits.fuel_per_run) return g.faultOn(.fuel);
+                if (run.base == 0 and run.clause_fuel + costs.charge("store-var", &none).fuel > fuelLeft(run)) return g.faultOn(.fuel);
                 const s: usize = @intCast(ops[0].int);
                 run.script.variables[s].release();
                 run.script.variables[s] = pop(frame);
@@ -5952,11 +6082,17 @@ pub const Group = struct {
 
         // A Run that can't cover the declared cost faults before the Host
         // is called.
-        if (run.base == 0 and (run.fuel + decl.cost.fuel > run.limits.fuel_per_run)) return g.faultOn(.fuel);
-        if (run.base == 0 and (run.alloc + decl.cost.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
+        // The call's charge before its result: its rate with the declared
+        // cost, and dispatch's `clause` rate when it is the first
+        // instruction.
+        m.declared = decl.cost.fuel;
+        m.alloc_extra = decl.cost.alloc;
+        const before = costs.charge(costKey(ins, m), m);
+        if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.base == 0 and (run.alloc + before.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
-        const left: ?u64 = if (run.fuel + decl.cost.fuel >= run.limits.fuel_per_run) 0 else run.limits.fuel_per_run - run.fuel - decl.cost.fuel;
+        const left: ?u64 = fuelLeft(run) -| decl.cost.fuel;
         var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.

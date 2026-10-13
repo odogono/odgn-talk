@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -56,12 +56,6 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
         if (mode != .string) return "an Operation without a mode";
         for ((case_setup.field(t, "args") orelse continue).array) |shape| if (!shapeSupported(shape)) return "object Shapes are not implemented";
-    }
-    for (all) |t| {
-        if (!std.mem.eql(u8, t.header, "[[scripts]]")) continue;
-        if (case_setup.field(t, "limits")) |limits| for (limits.table) |l| {
-            if (std.mem.eql(u8, l.key, "cleanupBudget")) return "limits are not implemented";
-        };
     }
     return null;
 }
@@ -339,11 +333,10 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
         result.* = parsed(shown) orelse return c.TALK_CALL_BROKEN;
         return c.TALK_CALL_ANSWERED;
     }
-    if (h.mode == c.TALK_FIRE_AND_FORGET) {
-        _ = c.talk_nothing(result);
-        return c.TALK_CALL_ANSWERED;
-    }
-    return c.TALK_CALL_BROKEN;
+    // A Stub with no value or error answers Nothing, as a fire-and-forget
+    // call does.
+    _ = c.talk_nothing(result);
+    return c.TALK_CALL_ANSWERED;
 }
 
 /// A shown error map as a Script error: its code, message and the rest as
@@ -1068,6 +1061,13 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_pump(group, seconds, nanos, &pump_options, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
+        } else if (std.mem.eql(u8, name, "cancel-run")) {
+            const id = input[name_end + 1 ..];
+            const script = scripts.get(id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+            try check(c.talk_script_cancel_run(script, id.ptr, id.len));
+        } else if (std.mem.eql(u8, name, "cancel-delivery")) {
+            const id = input[name_end + 1 ..];
+            try check(c.talk_cancel_delivery(group, id.ptr, id.len));
         } else if (std.mem.eql(u8, name, "revoke")) {
             const rest = input[name_end + 1 ..];
             const script_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase;

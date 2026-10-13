@@ -508,7 +508,22 @@ and Error, its activation, the owner's own stack and the frames it holds
 aside. Dispatch's `clause` rate is paid at the clause's first instruction,
 with that instruction's fixed rate for a clause with no patterns or Guard, or
 alone for one that parks or is dropped; parking and dropping measure
-Persistent State. Cancellation and its Cleanup Budget, and Stop, come next.
+Persistent State.
+
+`talk_script_cancel_run` cancels a Run by its id, and the C-only
+`talk_cancel_delivery` a Request or Decision by its delivery id, both as Host
+Inputs; `, replacing` cancels through the same path. Where the cancel lands, a
+preempted Run, in the middle of its Segment, has its scopes abandoned and its
+Segment and participant rolled back, and its cleanup becomes a Segment of its
+own. Every cancelled Run's pending calls and Join Members are abandoned, and
+named in `abandon` records after its first cleanup Stretch. Its `finally`
+blocks run once, innermost first, in its Script's turn, a queued Run keeping
+its place, on the Cleanup Budget in place of Fuel per Run. An error escaping
+cleanup ends it with `cleanup-failed … code=`, keeping its writes; a limit
+ends it with `cleanup-failed … limit=`, rolling them back. Either way the Run
+ends `cancelled`, and its cleanup Segment's participant commits unless a limit
+ended it. A Delivery still in a mailbox is removed and reported as a `run`
+with no Run, and its Decision settles undecided. Stop comes next.
 
 ## Values and ownership
 

@@ -1875,6 +1875,24 @@ export fn talk_script_revoke(s: *Script, name: ?[*]const u8, len: usize) HostErr
     return .ok;
 }
 
+export fn talk_script_cancel_run(s: *Script, id: ?[*]const u8, len: usize) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    const run = bytes(id, len) catch return .invalid_value;
+    g.group.cancelRunInput(run) catch |err| return status(err);
+    return .ok;
+}
+
+export fn talk_cancel_delivery(g: *Group, id: ?[*]const u8, len: usize) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
+    const text = bytes(id, len) catch return .invalid_value;
+    if (text.len < 2 or text[0] != 'd') return .invalid_value;
+    const n = std.fmt.parseInt(u64, text[1..], 10) catch return .invalid_value;
+    if (n == 0) return .invalid_value;
+    g.group.cancelDeliveryInput(n) catch |err| return status(err);
+    return .ok;
+}
+
 export fn talk_dispose(g: *Group, o: *objects.Object) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
     if (!g.owns(o)) return .wrong_group;
