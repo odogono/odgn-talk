@@ -1,10 +1,12 @@
 # Learn NorthTalk in Y minutes
 
-> **Status: design only.** No Core (implementation of the language) exists yet, so nothing below runs. This tour is an informative introduction. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Each section heading names the [ADRs](adr/) behind it. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
+> This tour is an informative introduction to NorthTalk. The Go and TS Cores run Scripts today; see their [Go](../impl/go/README.md) and [TS](../impl/ts/README.md) guides for current support and limitations. The rules are in [the spec](../spec/), and where the two disagree, the spec wins. Section headings name the [ADRs](adr/) behind them. Capitalised terms (Script, Handler, Run, …) are defined in the glossary, [`GLOSSARY.md`](../GLOSSARY.md). Anything still undecided is left out.
 
 NorthTalk is a HyperTalk-descended scripting language for untrusted end-user Scripts, run in a sandbox inside Go servers, Bun servers and browsers. It reads like English (`put word 2 of line 3 of report into w`). Values are strict, with one exact decimal number type. Each Script is an actor with its own mailbox, and every effect goes through a Capability the Host grants.
 
-Script files end in `.talk`.
+Script files end in `.talk`. Try expressions and declarations in the [Playground](https://opendoorgonorth.com/odgn-talk/) or run `bun run repl` from this repository after `bun install`.
+
+The examples below are independent teaching snippets, not one loadable Script. Names such as `approvals`, `storage` and `door` stand for Scripts, Grants or Host Objects supplied by an embedding application; they are not all available in the default REPL.
 
 ```talk
 -- Comments start with two dashes and run to the end of the line.
@@ -20,7 +22,7 @@ Script files end in `.talk`.
 -- Statements live inside Handlers, so every section below wraps its
 -- examples in one.
 
--- 1. Values (ADR 0001, 0002, 0003, 0011, 0029) --------------------------------
+-- 1. Values (ADR 0001, 0002, 0003, 0011, 0029, 0053) --------------------------------
 
 on valuesTour
   -- One number type: an exact 34-digit decimal. No floats, NaN or Infinity.
@@ -29,12 +31,26 @@ on valuesTour
   if y = 7.5 then say "equal"       -- ...but `=` compares by value
 
   -- `1 / 0` is an error, not Infinity. (`say` writes to the Host's console.)
-  -- Text is double-quoted, on one line. It is a sequence of Characters,
+  -- Ordinary text is double-quoted, on one line. It is a sequence of Characters,
   -- each one character as a reader sees it, and compares exactly.
   put "naïve" into word1            -- 5 Characters
   -- There are no escapes: "C:\new" is exactly what it shows. Line breaks,
   -- tabs and quotes come from the Built-in Constants `newline`, `tab`, `quote`.
   put "say " & quote & "hi" & quote & newline into shout
+
+  -- Backticks interpolate expressions now, and accept escapes such as \n.
+  put `Hello ${2 + 3}!` into greeting            -- "Hello 5!"
+  put `
+    Keep your reply under ${80} words.
+    Reply as JSON.
+    ` into prompt
+  -- Raw fences preserve placeholders, quotes and backslashes literally:
+  put """
+    Dear ${name},
+    Thanks for ordering ${qty} items.
+    """ into template
+  -- An immediate newline selects closing-margin indentation; an inline
+  -- start preserves whitespace. Ordinary double quotes have no escapes.
 
   -- Booleans are `true` and `false`. Conditions must be booleans:
   -- `if 0 then …` and `if "yes" then …` are errors.
@@ -62,11 +78,11 @@ on valuesTour
   -- `fruit` still starts with "apples".
 end valuesTour
 
--- 2. Containers (ADR 0001, 0019, 0020) ----------------------------------------
+-- 2. Containers (ADR 0001, 0019, 0020, 0079) ----------------------------------------
 
 -- A Script Variable is shared by all of this Script's Handlers and kept for
 -- as long as the Host keeps the Script loaded. `=` means "starts as" here, and
--- only here. Everywhere else `=` is a test.
+-- in declarations; function defaults also use `=`. In expressions it is a test.
 script variable visits = 0
 
 -- A Constant is fixed when the Script loads and can never be put into. Its
@@ -82,6 +98,9 @@ on containersTour person
   put " please" after drink         -- "tea please"
   put "A cup of " before drink      -- "A cup of tea please"
   put 35 into the age of person     -- a key path is a Container too
+  -- Built-in properties are read-only; quote a map key with the same name.
+  put 10 into the "length" of person
+  delete the age of person         -- removes a key; delete also removes chunks
   let total be 10                   -- `let` binds by Destructuring (matching
                                     -- a value's shape and naming its parts)...
   let [a, b, ...rest] be [10, 20, 30, 40]   -- ...a = 10, rest = [30, 40]
@@ -125,7 +144,7 @@ on operatorsTour row
        3] into listed
 end operatorsTour
 
--- 4. Comparison and kinds (ADR 0003, 0011) ------------------------------------
+-- 4. Comparison and kinds (ADR 0003, 0011, 0043, 0075) ------------------------------------
 
 on comparisonTour input
   -- Text compares exactly, so case matters unless you say otherwise.
@@ -143,9 +162,14 @@ on comparisonTour input
   if 3.0 is an integer then say "whole"   -- a test on the value, not a kind
   if "banana" contains "nan" then say "contains"   -- also: begins with, ends with
   if 3 is in [1, 2, 3] then say "found it"
+  if 12 is at least 10 then say "enough"        -- >=, in words
+  if "cat" comes before "dog" then say "earlier" -- the same ordering as <
+  if "banana" does not contain "z" then say "no z"
+  put kindOf(input) into kind        -- e.g. "number", "text", "map"
+  -- objectKind(o) names a Host Object's kind; isDisposed(o) tests its lifetime.
 end comparisonTour
 
--- 5. Control flow (ADR 0003, 0019) --------------------------------------------
+-- 5. Control flow (ADR 0003, 0019, 0059) --------------------------------------------
 
 on controlTour fruit
   -- One-line `if`. Its `else` must be on the same line.
@@ -178,6 +202,13 @@ on controlTour fruit
     if count > 9 then exit repeat         -- leave the loop
   end repeat
 
+  -- Collect a value at the end of every completed pass. Skipped passes
+  -- add nothing, and the collecting target is a read-only local in the body.
+  repeat for each n in [1, 2, 3, 4] collecting n * n into squares
+    if n mod 2 = 0 then next repeat
+  end repeat
+  -- squares is [1, 9]; an empty loop gives [].
+
   -- `match` tries each `when` in order: Destructuring, plus an optional Guard.
   match fruit
     when [] then put "none" into shape
@@ -187,7 +218,7 @@ on controlTour fruit
   end match
 end controlTour
 
--- 6. Chunk Expressions (ADR 0011, 0019) ---------------------------------------
+-- 6. Chunk Expressions (ADR 0011, 0019, 0074) ---------------------------------------
 
 -- A Chunk Expression names part of a text or list by ordinal and kind.
 on chunksTour
@@ -204,6 +235,14 @@ on chunksTour
   put item 2 of row into b          -- "b": items are comma-separated...
   put item 2 of "a;b;c" delimited by ";" into b2   -- ...unless you say
   put "X" into item 2 of row        -- `row` is now "a,X,c"
+
+  -- `whose` filters chunks. `it` is the chunk being tested.
+  put every item of [3, 8, 1, 12] whose it > 5 into big   -- [8, 12]
+  put the last word of "a bb ccc dd" whose length = 2 into shortWord -- "dd"
+  put the first item of [1, 3] whose it > 5 into missing -- nothing
+  -- A leading name such as `length` reads that chunk's key or property.
+  -- `every` gives a list, even for text. These selections cannot be written
+  -- into; their conditions may call Built-ins, but not Script/Library code.
 
   -- Chunks of text are text, so arithmetic needs `as number`.
   put word 1 of "12 apples" as number * 2 into dozen2   -- 24
@@ -236,7 +275,7 @@ on unitsTour
   -- `1 month + 1 day` is an error: a month has no fixed length.
 end unitsTour
 
--- 8. Handlers and functions (ADR 0004, 0016, 0019, 0020, 0021) ----------------
+-- 8. Handlers and functions (ADR 0004, 0016, 0019, 0020, 0021, 0035, 0055) ----
 
 -- A Handler runs when its message reaches the Script. Its Run lasts from
 -- that message to its end.
@@ -261,8 +300,8 @@ end handle
 on handle other
   pass handle                       -- hand it on up the Message Path
 end handle
--- With no matching clause, the message climbs the Message Path: the parent
--- objects the Host declares.
+-- With no matching clause, dispatch tries a Fallback Handler if present,
+-- then climbs the Message Path: the parent objects the Host declares.
 
 on move [x, y], speed where speed > 0 m/s   -- one Destructuring each
   put x & "," & y into position
@@ -279,15 +318,27 @@ on score {player: p, points: pts} where max(pts) >= 100
 end score
 
 -- A function is called `f(x)` and returns a value. It can never suspend.
-function tax amount, rate
+function tax amount, rate = 0.2
   return amount * rate
 end tax
 
 on checkout
-  say "Tax is " & tax(100, 0.2)     -- "Tax is 20.0"
+  say "Tax is " & tax(100)     -- "Tax is 20.0"
 end checkout
+-- Trailing function parameters may have defaults fixed at load, using the
+-- same expressions as Constants. Handlers and Lambdas do not have defaults.
 
--- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026, 0031) ------------------
+-- Argument Labels make a Handler's call read like a sentence.
+on move piece to square
+  say piece & " to " & square
+end move
+on labelsTour
+  move "knight" to "e4"             -- local call; result goes into `it`
+  send to board: move "knight" to "e4" -- message Selector is "move:to:"
+end labelsTour
+-- Labels are part of the message name, not names for optional arguments.
+
+-- 9. Messages and waiting (ADR 0004, 0016, 0019, 0026, 0031, 0057, 0064) ------
 
 -- Every Script is an actor with one FIFO mailbox. It never executes two Runs
 -- at the same instant, but a new Run may start while another is suspended.
@@ -299,6 +350,19 @@ on submit order
   send review with order to approvals and wait   -- suspend until it answers
   if it is "approved" then ship order            -- the answer is in `it`
 end submit
+
+-- Parentheses compute the message name, including labelled Selectors.
+on forward messageName, args
+  send (messageName) with ...args to approvals
+end forward
+
+-- A Fallback sees ordinary messages for which no named clause matched.
+on any message m
+  say "No handler accepted " & the name of m
+  pass any message                  -- continue up the Message Path
+end any message
+-- m has name and args keys. Local calls, Decisions,
+-- Broadcasts and error messages do not enter a Fallback.
 
 on review order                     -- the receiving side
   if the amount of order > 1000 then return "needs a human"
@@ -404,7 +468,7 @@ on librariesTour body
   put sqrt(2) * pi into odd         -- correctly rounded to 34 digits
 end librariesTour
 
--- 11. Errors (ADR 0006, 0017) -------------------------------------------------
+-- 11. Errors (ADR 0006, 0017, 0060) -------------------------------------------------
 
 -- An Error is a plain map with a text `code`. `catch` clauses Destructure it,
 -- with optional Guards, and are tried top to bottom like Handler Clauses.
@@ -530,7 +594,7 @@ on lambdasTour readings
   put it into status                -- the result lands in `it`
 end lambdasTour
 
--- 14. Joins (ADR 0026) --------------------------------------------------------
+-- 14. Joins and timeouts (ADR 0026, 0073) --------------------------------------------------------
 
 -- A Join starts several requests at once and suspends once, at its closing
 -- `end`. Each `… and wait` it reaches is a Join Member.
@@ -545,6 +609,21 @@ end compare
 -- The first member to fail raises its own Error at the closing `end`, with
 -- `index` (its start position) added, so `catch {code: "timeout", index: i}`
 -- works around the whole Join.
+
+-- A Timeout Block shares one deadline among the waits written inside it.
+on timedReview order
+  try
+    with timeout of 5 s
+      send review with order to approvals and wait
+      wait for confirmation or 10 s
+    end timeout
+  catch {code: "timeout", deadline: true}
+    say "The whole review took too long"
+  end try
+end timedReview
+-- The deadline also bounds a Join when the whole Join is inside the block.
+-- It does not stop CPU work or reach into called Handlers. Suspending local
+-- calls are forbidden here; use `send … to me and wait` for a bounded request.
 
 -- 15. Binary Patterns (ADR 0013) ----------------------------------------------
 
@@ -563,7 +642,7 @@ on encodeMove id, x, y
 end encodeMove
 -- `byte 1 of b` and `bytes 2..5 of b` are chunks. `b as text` decodes UTF-8.
 
--- 16. Capabilities (ADR 0012, 0019, 0023, 0024) -------------------------------
+-- 16. Capabilities (ADR 0012, 0019, 0023, 0024, 0047, 0050, 0063) -----------------
 
 -- Scripts have no ambient I/O. Every effect is an Operation on a Capability
 -- the Host has granted, and the loader checks every call against the Grants.
@@ -582,11 +661,26 @@ end capabilitiesTour
 -- `and wait` must be there exactly when the Operation can suspend. The
 -- loader checks both ways, so a wrong guess fails at load, not at run time.
 
--- 17. Advanced Constructs (ADR 0007, 0011, 0013, 0027) ------------------------
+-- A tell block groups Operations of one Grant; each keeps its declared mode.
+on storeTour
+  tell store
+    set "visits", 1
+    get "visits"                    -- immediate answer in `it`
+    increment "visits", 1
+  end tell
+end storeTour
+-- Store writes commit or roll back with the current Segment. They are not
+-- one transaction across waits. Optional Grants also include SQLite and
+-- user interaction; a Host must explicitly supply them.
+-- Hosts can declare paired Operations as a Capability Scope. The Core
+-- attempts abandonment if the Run ends with it open, even on a Limit Fault.
+-- Open scopes forbid suspension and Joins; closing a scope is not rollback.
+
+-- 17. Advanced Constructs (ADR 0007, 0011, 0013, 0027, 0060, 0064) ------------
 
 -- Every Core accepts these, but tooling warns beginners about them. Each one
 -- has a form on the Beginner Surface (the rest of the language, everything
--- above) that does the same job.
+-- above) that does the same job. Computed message names and send spreads above are also advanced.
 
 script variable pending = 0
 
@@ -607,26 +701,37 @@ on firstBytes data, n
   end match
 end firstBytes
 -- Beginner Surface form: `when << ...rest >>`, then `bytes 1..n of rest`.
+
+-- A Recovery Offer lets a caller choose an action before failed frames unwind.
+function parseRows lines
+  put [] into rows
+  repeat for each line in lines
+    try
+      put line as number after rows
+    offer useValue value
+      put value after rows
+    end try
+  end repeat
+  return rows
+end parseRows
+on recoveryTour
+  try
+    put parseRows(["5", "bad", "7"]) into parsed
+  catch {code: "can't convert"} before unwind
+    choose offer useValue(0)
+  end try
+  -- parsed is [5, 0, 7]: the callee kept its accumulated rows.
+end recoveryTour
+-- Policy selection cannot suspend. The chosen action continues after its
+-- offering try; it does not retry the failed expression or roll back effects.
+-- Beginner Surface alternative: pass an explicit policy callback to the parser.
 ```
 
 ## Further reading
 
+- [The REPL and Playground](../README.md#the-repl): run and explore Scripts.
+- [Testing Scripts](../tooling/cli/README.md#testing-scripts): black-box Test Scripts and Transcripts.
+- [Standard Capabilities](../spec/07-libraries-and-the-standard-library.md): Store notifications, SQLite and user interaction.
 - [`GLOSSARY.md`](../GLOSSARY.md): the glossary.
 - [`docs/adr/`](adr/): every decision and why it was made.
 - [`corpus/examples/orders-pricing/`](../corpus/examples/orders-pricing/): two Scripts talking to each other, as a conformance case.
-
-Backticks interpolate expressions, while raw fences preserve reusable placeholders:
-
-```talk
-let greeting be `Hello ${2 + 3}!`
-let prompt be `
-  Reply as JSON: {"answer": "..."}
-  Keep it under ${80} words.
-  `
-let template be """
-  Dear ${name},
-  Thanks for ordering ${qty} items.
-  """
-```
-
-An immediate newline after the opener selects closing-margin indentation; inline-start text preserves whitespace. Backticks interpret JavaScript-style escapes such as `\n`; ordinary double quotes and raw fences do not.
