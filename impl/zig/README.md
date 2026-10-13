@@ -492,8 +492,23 @@ The fault's record names the Script Variables its rollback changes back, and
 every Script's Segment keeps a base for it. MaxWait bounds a Run's waiting
 calls, and a Script's `send` to a mailbox at its depth raises `mailbox full`.
 A Host Delivery to a Script whose mailbox and queued Deliveries reach its
-depth is refused `TALK_ERR_MAILBOX_FULL`. Fuel Slices and caps, cancellation
-and its Cleanup Budget, and Stop come next.
+depth is refused `TALK_ERR_MAILBOX_FULL`.
+
+`talk_pump_options` gives a Pump a Fuel Slice per Script and a Fuel cap for
+the Group. Each Script's slice is what its debt leaves of it, and an overrun
+is carried to its next Pump as debt. Before each instruction, a Run whose
+Script has spent its slice, or whose Group has spent its cap, is preempted:
+its Stretch ends with a `preempt` record, it stays at the head of its
+Script's work, and a later Pump continues it with `seg … continue`, in the
+same Segment. A Run preempted in a clause's patterns or Guard goes on with
+its dispatch from that clause. A Script that has spent its slice takes no
+more turns, a spent cap ends the turns, and either leaves the Pump `sliced`.
+A preempted Run's Persistent State counts its catch dispatches: each context
+and Error, its activation, the owner's own stack and the frames it holds
+aside. Dispatch's `clause` rate is paid at the clause's first instruction,
+with that instruction's fixed rate for a clause with no patterns or Guard, or
+alone for one that parks or is dropped; parking and dropping measure
+Persistent State. Cancellation and its Cleanup Budget, and Stop, come next.
 
 ## Values and ownership
 
