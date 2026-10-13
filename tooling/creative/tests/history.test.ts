@@ -279,3 +279,50 @@ test('long mixed history repeats every Project exactly without drift', () => {
     expect(editor.canRedo).toBe(false);
   }
 });
+
+test('onChange is told of edits, live drags, undo and redo (#752)', () => {
+  const editor = makeEditor();
+  const notices: string[] = [];
+  editor.onChange = () => notices.push(editor.project.pages.length.toString());
+  editor.addPage();
+  expect(notices.length).toBeGreaterThan(0);
+
+  editor.goToPage(0);
+  const beforeDrag = notices.length;
+  select(editor, 'a');
+  const gesture = editor.startMove();
+  gesture.to(5, 5);
+  expect(notices.length).toBeGreaterThan(beforeDrag); // A live notice.
+  gesture.finish();
+
+  const beforeUndo = notices.length;
+  editor.undo();
+  expect(notices.length).toBeGreaterThan(beforeUndo);
+  const beforeRedo = notices.length;
+  editor.redo();
+  expect(notices.length).toBeGreaterThan(beforeRedo);
+
+  // Selection and navigation alone are not authored changes.
+  const settled = notices.length;
+  editor.click('b');
+  editor.goToPage(0);
+  expect(notices).toHaveLength(settled);
+});
+
+test('replaceProject loads another Project without history or a change notice', () => {
+  const editor = makeEditor();
+  const reference = editor.project;
+  editor.addPage();
+  let notices = 0;
+  editor.onChange = () => notices++;
+  const other = createProject('Other');
+  editor.replaceProject(other);
+  expect(editor.project).toBe(reference);
+  expect(editor.project).toEqual(other);
+  expect(editor.project).not.toBe(other);
+  expect(editor.canUndo).toBe(false);
+  expect(editor.canRedo).toBe(false);
+  expect(editor.pageIndex).toBe(0);
+  expect(editor.selection).toEqual([]);
+  expect(notices).toBe(0);
+});
