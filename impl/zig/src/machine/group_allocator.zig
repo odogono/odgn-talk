@@ -189,3 +189,55 @@ test "a refusal at any allocation leaves nothing behind" {
         };
     }
 }
+
+test "Extend, Reload and Library replacement refused at any allocation leave nothing behind" {
+    const machine = @import("machine.zig");
+    const gpa = std.testing.allocator;
+    const first = (try machine.compileLibrary(gpa, "lib", "1", "constant k = 1\nfunction twice x\n  return x * 2\nend twice\n", &.{}, null)).library;
+    defer first.destroy();
+    const source =
+        \\use k, twice from lib
+        \\script variable n = k
+        \\script variable f = nothing
+        \\on go
+        \\  put twice into f
+        \\  put (given x: x + n) into f
+        \\  wait 1 s
+        \\  add 1 to n
+        \\end go
+        \\
+    ;
+    var cap: usize = 4096;
+    var finished = false;
+    while (!finished) : (cap += 512) {
+        // Each attempt compiles its own replacement, which the Core would
+        // own, and frees the ones the Group recompiled.
+        const next = (try machine.compileLibrary(gpa, "lib", "2", "constant k = 2\nfunction twice x\n  return x * 3\nend twice\n", &.{}, null)).library;
+        defer next.destroy();
+        var memory: GroupAllocator = .init(gpa, cap);
+        var group: machine.Group = .init(memory.allocator(), null);
+        defer group.deinit();
+        finished = blk: {
+            group.addLibrary(first) catch break :blk false;
+            _ = group.load("s", source, .{}) catch break :blk false;
+            const s = group.script("s") orelse break :blk false;
+            _ = group.deliver("s", "go", &.{}, false) catch break :blk false;
+            group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;
+            const added = group.extend(s, "script variable m = 3\non more\n  return twice(m) + n\nend more\n") catch break :blk false;
+            if (added != .extended) break :blk false;
+            if ((group.extend(s, "on go\nend go\n") catch break :blk false) != .name_reused) break :blk false;
+            if ((group.extend(s, "on") catch break :blk false) != .refused) break :blk false;
+            _ = group.deliver("s", "more", &.{}, false) catch break :blk false;
+            group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;
+            _ = group.deliver("s", "go", &.{}, false) catch break :blk false;
+            const reloaded = group.reload(s, source, true, true) catch break :blk false;
+            if (reloaded != .reloaded) break :blk false;
+            if ((group.reload(s, "on", false, false) catch break :blk false) != .refused) break :blk false;
+            const replaced = group.replaceLibrary(next, true, gpa) catch break :blk false;
+            if (replaced != .replaced) break :blk false;
+            memory.allocator().free(replaced.replaced);
+            group.pump(.{ .seconds = 1790000002, .nanos = 0 }) catch break :blk false;
+            break :blk !memory.refused;
+        };
+    }
+}

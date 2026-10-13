@@ -109,6 +109,22 @@ pub const Context = struct {
     owner: ?[]const u8 = null,
     /// Whether `key` of an Object Kind can be set; null when it isn't known.
     writable: ?Writable = null,
+    /// For a Script's extension: the names the Script already has, which
+    /// resolve as its own Script Variables or as imports (chapter 8, Code
+    /// units).
+    inherited: []const Inherited = &.{},
+};
+
+/// A name an extension inherits: a Script Variable, or a Constant, function
+/// or Handler linked from the code unit `unit` that declares it, `@<unit>`,
+/// or from the Library a `use` line imported it from.
+pub const Inherited = struct {
+    /// The name the Script uses.
+    name: []const u8,
+    variable: bool = false,
+    unit: []const u8 = "",
+    /// What the unit exports it as: its own name there, kind and arity.
+    export_: Export = .{ .name = "", .kind = .function },
 };
 
 pub const Writable = struct {
@@ -482,6 +498,13 @@ const Checker = struct {
 
     fn run(c: *Checker) Allocator.Error!void {
         const decls = c.tree.declarations;
+        // An extension's inherited names come first: its Script Variables
+        // number on from the Script's.
+        for (c.context.inherited) |x| {
+            if (x.variable) {
+                try c.variables.put(c.a, x.name, @intCast(c.variables.count()));
+            } else try c.imports.put(c.a, x.name, .{ .decl = std.math.maxInt(u32), .name = 0, .export_ = x.export_ });
+        }
         // The unit's names, and their clashes.
         for (decls, 0..) |*d, i| {
             const index: u32 = @intCast(i);
@@ -521,7 +544,12 @@ const Checker = struct {
                     for (u.names) |n| {
                         const name = c.text(n);
                         const ex = if (known) libraryExport(c.context, library, name) else null;
-                        if (known and ex == null) try c.report(.unknown_import, n);
+                        // A name the Library doesn't export binds nothing, so
+                        // its uses are unknown names.
+                        if (known and ex == null) {
+                            try c.report(.unknown_import, n);
+                            continue;
+                        }
                         const local = if (u.rename) |r| r else n;
                         const entry = try c.imports.getOrPut(c.a, c.text(local));
                         if (entry.found_existing) {

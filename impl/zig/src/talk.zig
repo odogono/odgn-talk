@@ -807,6 +807,28 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     return .ok;
 }
 
+/// Replaces a Library the Group holds, a worker call: the Libraries that
+/// import it are recompiled, and the Core owns them; the Scripts that import
+/// any of them are stop-and-reloaded. A refusal changes nothing.
+export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
+    defer g.flush();
+    const c = g.core;
+    // Room for every Library it could recompile, so that once the Group
+    // uses them the Core can own them.
+    c.libraries.ensureUnusedCapacity(c.gpa, g.group.libraries.items.len) catch return .out_of_memory;
+    return switch (g.group.replaceLibrary(l, carry == .carry_variables, c.gpa) catch |err| return status(err)) {
+        .replaced => |made| {
+            defer g.group.gpa.free(made);
+            c.libraries.appendSliceAssumeCapacity(made);
+            return .ok;
+        },
+        .refused => .load_refused,
+        .unknown_library => .invalid_value,
+        .state_too_large => .state_too_large,
+    };
+}
+
 export fn talk_inspect(g: *Group) void {
     g.group.vars();
     g.flush();
@@ -1882,6 +1904,46 @@ export fn talk_script_stop(s: *Script, reason: ?[*]const u8, len: usize) HostErr
     if (!std.unicode.utf8ValidateSlice(why)) return .invalid_value;
     g.group.stopInput(s.name, why) catch |err| return status(err);
     return .ok;
+}
+
+/// talk.h's `talk_carry_over`.
+pub const CarryOver = enum(c_int) { reset_variables, carry_variables };
+
+pub const ReloadOptions = extern struct { keep_mailbox: bool };
+
+/// Stop-and-reload, a worker call: refused with the Script unchanged, or
+/// stopped and replaced, its `stopped` report in the Trace.
+export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry: CarryOver, o: ?*const ReloadOptions) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    defer g.flush();
+    const src = bytes(source, len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(src)) return .invalid_value;
+    const script = g.group.script(s.name) orelse return .invalid_value;
+    const keep = if (o) |x| x.keep_mailbox else false;
+    return switch (g.group.reload(script, src, carry == .carry_variables, keep) catch |err| return status(err)) {
+        .reloaded => .ok,
+        .refused => .load_refused,
+        .state_too_large => .state_too_large,
+        .stopped => .effect_state_unknown,
+    };
+}
+
+/// Extend Script, a worker call: the Entry is a new code unit of the
+/// Script, or it is refused and the Script unchanged.
+export fn talk_script_extend(s: *Script, source: ?[*]const u8, len: usize) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    defer g.flush();
+    const src = bytes(source, len) catch return .invalid_value;
+    if (!std.unicode.utf8ValidateSlice(src)) return .invalid_value;
+    const script = g.group.script(s.name) orelse return .invalid_value;
+    return switch (g.group.extend(script, src) catch |err| return status(err)) {
+        .extended => .ok,
+        .refused => .load_refused,
+        .name_reused => .name_reused,
+        .state_too_large => .state_too_large,
+    };
 }
 
 export fn talk_script_cancel_run(s: *Script, id: ?[*]const u8, len: usize) HostErrorCode {

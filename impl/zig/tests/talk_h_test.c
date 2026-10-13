@@ -738,6 +738,56 @@ static int stop_test(void) {
     return bad;
 }
 
+/* Reload and extend Script: an Entry adds a Handler, a reused name is
+ * refused, a Reload carries Script Variables by name, a refused one changes
+ * nothing, and replacing a Library rebuilds the Script that imports it. */
+static int reload_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable n = 1\non bump\n  add 1 to n\nend bump\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    const char *entry = "on twice\n  add 2 to n\nend twice\n";
+    bad |= talk_script_extend(script, entry, strlen(entry)) != TALK_OK;
+    const char *reused = "on bump\nend bump\n";
+    bad |= talk_script_extend(script, reused, strlen(reused)) != TALK_NAME_REUSED;
+    talk_message bump = {"bump", 4, NULL, 0, NULL}, twice = {"twice", 5, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &bump, NULL) != TALK_OK;
+    bad |= talk_script_deliver(script, &twice, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    const char *next = "script variable n = 0\nscript variable m = 5\n";
+    bad |= talk_script_reload(script, next, strlen(next), TALK_CARRY_VARIABLES, NULL) != TALK_OK;
+    bad |= talk_script_reload(script, "on", 2, TALK_RESET_VARIABLES, NULL) != TALK_LOAD_REFUSED;
+    talk_library_source lib_src = {"lib", 3, "1", 1, "constant k = 1\n", 15};
+    talk_library *lib = NULL, *replaced = NULL;
+    bad |= talk_compile_library(core, &lib_src, NULL, 0, NULL, 0, &lib) != TALK_OK;
+    bad |= talk_add_library(group, lib) != TALK_OK;
+    const char *user = "use k from lib\nscript variable v = k\n";
+    talk_load_options user_load = {"t", 1, user, strlen(user), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *t = NULL;
+    bad |= talk_load(group, &user_load, &t) != TALK_OK;
+    talk_library_source next_src = {"lib", 3, "2", 1, "constant k = 2\n", 15};
+    bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced) != TALK_OK;
+    bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "refused code=\"name reused\"\n") == NULL;
+    bad |= strstr(trace, "stopped s reason=\"reload\"\n") == NULL;
+    bad |= strstr(trace, "diag s code=\"unexpected token\"") == NULL;
+    bad |= strstr(trace, "stopped t reason=\"reload\"\n") == NULL;
+    bad |= strstr(trace, "vars s n=4 m=5\n") == NULL;
+    bad |= strstr(trace, "vars t v=2\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* The Message Layer measurements' three runaway Scripts (docs/research/
  * message-layer-measurements.md): a growing List and a doubling text end in
  * their Allocation Limit Fault, and a growing Script Variable in its
@@ -1283,6 +1333,7 @@ int main(void) {
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
+    expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
