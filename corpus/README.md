@@ -1,26 +1,64 @@
 # The Conformance Corpus
 
-The cases both Cores must pass, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). Their formats are in [chapter 11](../spec/11-the-trace-and-conformance.md) of the Spec.
+The cases every Core must pass for conformance, bit for bit ([ADR 0009](../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [ADR 0018](../docs/adr/0018-the-trace-is-the-corpus-case.md)). Their formats are in [chapter 11](../spec/11-the-trace-and-conformance.md) of the Spec.
 
 ## Checking
 
-Run these commands from the repository root. Both runners resolve relative case selectors under `corpus/`, not the shell's current directory; use `text-model/chunk-write-padding`, not `corpus/text-model/chunk-write-padding`. Absolute case directories also work.
+Commands below run from the repository root unless they explicitly change directory.
+Use case names relative to `corpus/`, such as `text-model/chunk-write-padding`.
 
-| Runner | Entry point                                                                         | Selection and gate                                                                                                                                               |
-| ------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TS     | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run`   | A named case or directory; `--list` reports support. With no selection it runs every case, blessed or not.                                                       |
-| Go     | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), run inside `impl/go` | Named case directories; `--list` reports support, and `--check-passing` runs every case and also enforces [`corpus-passing.txt`](../impl/go/corpus-passing.txt). |
+| Runner | Entry point | Selection and gate |
+| --- | --- | --- |
+| TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or category directory; `--list` reports support. No selection runs every case, blessed or not. |
+| Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), via `go -C impl/go run ./cmd/corpus` | One or more **individual case directories**, not category directories; `--list` reports support. `--check-passing` runs every case and enforces [the passing list](../impl/go/corpus-passing.txt); unsupported cases fail. |
+| Zig | [`impl/zig/src/corpus/main.zig`](../impl/zig/src/corpus/main.zig), via `(cd impl/zig && zig build corpus -- …)` | Case names or category directories; `--list` reports support. `--check-passing` enforces [the passing list](../impl/zig/corpus-passing.txt), including missing cases, but skips unlisted cases that fail or are unsupported while the Core is incomplete. An explicit unsupported selection fails. |
 
-For Go, after the [build/test prerequisites](../impl/go/README.md#build-and-test):
+After the implementation guide's build prerequisites:
 
 ```sh
-(cd impl/go && go run ./cmd/corpus text-model/chunk-write-padding)
-(cd impl/go && go run ./cmd/corpus --check-passing)
+bun run corpus:run recovery-offers                 # TS category
+bun run corpus:run recovery-offers/cleanup-restore # TS single case
+go -C impl/go run ./cmd/corpus recovery-offers/cleanup-restore recovery-offers/cancellation
+(cd impl/zig && zig build corpus -- recovery-offers)
+go -C impl/go run ./cmd/corpus --check-passing
+(cd impl/zig && zig build corpus -- --check-passing)
 ```
 
-CI runs both commands on every change, so both Cores run the complete Corpus in ordinary and save/restore replay. Each failure reports the case's first divergence, followed by a `reproduce:` line with the command that replays it.
+For a Go category, discover its case directories rather than passing the category
+itself (this example runs from the root):
 
-Bless with [`tools/corpus/bless.ts`](../tools/corpus/bless.ts), which needs named cases and writes Disassembly, Trace or Transcript expectations, not encoding cases. The TS runner writes the expectations, then the TS and Go runners must each pass them in both replays. If either Core diverges, the case directory is restored and the divergence reported, as [chapter 11](../spec/11-the-trace-and-conformance.md#bless) requires. The TS runner's own `--bless` is the TS-only step it uses; the Go runner never writes expectations. Agreement is not first-blessing approval: follow the [seed review notes](#seed-blessing).
+```sh
+rg --files corpus/recovery-offers -g case.toml | sort | while IFS= read -r file; do
+  name=${file#corpus/}
+  go -C impl/go run ./cmd/corpus "${name%/case.toml}" || exit 1
+done
+```
+
+A failure reports the first divergence and a `reproduce:` command. Current
+support and limitations belong in the [TS](../impl/ts/README.md),
+[Go](../impl/go/README.md) and [Zig](../impl/zig/README.md) guides.
+
+### Replay modes and backends
+
+- **Trace Case:** replay `case.trace` normally and with save/restore between
+  Pumps. The runners perform these two modes automatically; no extra CLI flag
+  or separate invocation is needed.
+- **Session Transcript:** drive the Session Host with `session.transcript` and
+  compare both printed output and the emitted `case.trace`, as the
+  [conformance requirement](../spec/11-the-trace-and-conformance.md#conformance)
+  specifies. TS and Go additionally replay that Trace in both modes, deriving
+  its setup from the Transcript automatically ([TS](../impl/ts/tools/case-checks.ts),
+  [Go](../impl/go/internal/corpus/session.go)). A second manual invocation is
+  unnecessary; treating the companion Trace as an independent case would lose
+  its Session-derived setup. A new Core's Transcript conformance requirement
+  is distinct from this additional TS/Go verification.
+- **Backend:** the execution adapter chosen by a runner, distinct from replay
+  mode. Go's [backend registry](../impl/go/internal/corpus/execution.go) selects
+  Trace, Disassembly and Session execution; Zig's runner uses
+  [talk.h replay](../impl/zig/src/corpus/talk_replay.zig) for Trace Cases.
+  Encoding and Disassembly cases compare their own outputs.
+
+Bless with [`tools/corpus/bless.ts`](../tools/corpus/bless.ts), which needs named cases and writes Disassembly, Trace or Transcript expectations, not encoding cases. The TS runner writes the expectations, then the TS and Go runners must each pass them, including both replay modes for Trace Cases. If either Core diverges, the case directory is restored and the divergence reported, as [chapter 11](../spec/11-the-trace-and-conformance.md#bless) requires. The TS runner's own `--bless` is the TS-only step it uses; the Go runner never writes expectations. Agreement is not first-blessing approval: follow the [seed review notes](#seed-blessing).
 
 ```sh
 bun run corpus:check          # what CI runs: every case reads as chapter 11 says
@@ -40,7 +78,19 @@ A new case passes CI only when all of these hold:
 - **Passes on Go:** `--check-passing` fails on every case Go cannot run, listed or not, so a case written against the TS Core alone fails the Go job. Add each case to [`corpus-passing.txt`](../impl/go/corpus-passing.txt) when the gate reports `NEW PASS`; Session Transcripts must be listed.
 - **Blessed by agreement:** write expectations with `bun run corpus:bless <case> …`, not the TS runner's `--bless`.
 
-Before pushing, run `bun run corpus:check` and `go -C impl/go run ./cmd/corpus --check-passing`.
+Go's [acceptance tests](../impl/go/internal/corpus/execution_test.go) discover
+new cases in their covered families automatically. The
+[required-case baseline](../impl/go/internal/corpus/testdata/required-cases.txt)
+pins existing names and kinds so removing or reclassifying a case fails without
+making every addition change a numeric total. Add a baseline entry when a new
+case must also be protected from deletion; deliberate removals or kind changes
+must explain the corresponding baseline edit. Keep the passing lists current
+for each Core that supports the case.
+
+Before pushing, run `bun run corpus:check`,
+`go -C impl/go test ./internal/corpus` and
+`go -C impl/go run ./cmd/corpus --check-passing`. For Zig cases, also run
+`(cd impl/zig && zig build corpus -- --check-passing)`.
 
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 

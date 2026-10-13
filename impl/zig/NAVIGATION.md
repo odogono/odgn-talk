@@ -9,7 +9,8 @@ before changing anything they settle. For domain terms, use
 
 Commands below run from the repository root; Zig commands change to `impl/zig/` first. On a fresh worktree, run
 `bun install --frozen-lockfile` and `bun run unicode:check` first; the Unicode
-check prepares and verifies the pinned test data. Read the Go and TS Cores for
+check prepares and verifies the pinned test data. For runner selectors, replay modes and backends, use the
+[corpus command guide](../../corpus/README.md#checking). Read the Go and TS Cores for
 nothing but the cases they blessed: the Zig Core is written from the Spec.
 
 | Task | Implementation | Rules | Tests and cases | First check |
@@ -37,7 +38,14 @@ nothing but the cases they blessed: the Zig Core is written from the Spec.
 | Generated tables | [catalogue emitter](../../tools/zig/generate.ts), [Unicode emitter](../../tools/unicode/generate-zig.ts) → [tables](src/generated/) | [Data Files](../../spec/README.md#data-files) | [emitter tests](../../tools/zig/generate.test.ts) | `bun run zig:check && bun run unicode:check` |
 | The C API | [`talk.h`](include/talk.h), [exports](src/talk.zig) | [embedding](../../spec/09-embedding.md), [`talk.go`](../../spec/embedding/talk.go) | [API check](../../tools/zig/api.ts) and [its tests](../../tools/zig/api.test.ts), [C Host tests](tests/talk_h_test.c) | `bun tools/zig/api.ts` |
 | The Message Layer on `wasm32-wasi`: `talk_buffer`/`talk_send`, frames, needs and Reports | [message layer](src/message.zig), [machine](src/machine/machine.zig) (crossing pause, RunEnd reports) | [the message layer](../../spec/09-embedding.md#the-message-layer), [decisions on #625](https://github.com/odogono/odgn-talk/issues/625#issuecomment-6111271797) | tests in the module, [WASI checks](../../tools/wasi/zig.py), [the reactor check](../../tools/wasi/check.py) | `uv run tools/wasi/check.py impl/zig/zig-out/bin/talk.wasm` |
-| Build, targets and CI | [`build.zig`](build.zig), [`build.zig.zon`](build.zig.zon), [workflow](../../.github/workflows/zig.yml) | [ADR 0078](../../docs/adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md) | the workflow's steps | `cd impl/zig && zig build -Dtarget=wasm32-wasi` |
+| Build, targets and CI | [`build.zig`](build.zig), [`build.zig.zon`](build.zig.zon), [workflow](../../.github/workflows/zig.yml) | [ADR 0078](../../docs/adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md) | the workflow's steps | `cd impl/zig && zig build -Dtarget=wasm32-wasi`; then from the root `uv run tools/wasi/zig.py impl/zig/zig-out/bin/talk.wasm` |
 
 Update generated files through their generators. A Zig upgrade is its own PR
 and changes no behaviour.
+
+For Session Host work, first check [C API coverage](../../tools/zig/api.ts) with
+`bun tools/zig/api.ts`: inspect missing Reports, Run accounting, Inspection and
+Notification routing before planning Transcript support. The guide owns
+[current support](README.md); the [corpus guide](../../corpus/README.md#replay-modes-and-backends)
+distinguishes Transcript replay from the two Trace replay modes. Unit tests use
+`zig build test`; this build has no `-Dtest-filter` option.

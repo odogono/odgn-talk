@@ -8,25 +8,56 @@ import (
 	"testing"
 )
 
+// Pin identities and kinds, not family sizes: additions are discovered by the
+// execution tests below, while deleting or reclassifying a baseline case fails.
+func TestRequiredAcceptanceCases(t *testing.T) {
+	data, err := os.ReadFile("testdata/required-cases.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for line, text := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(text)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		if len(fields) != 2 {
+			t.Fatalf("required-cases.txt:%d: expected kind and case name", line+1)
+		}
+		kind, name := fields[0], fields[1]
+		if seen[name] {
+			t.Fatalf("required-cases.txt:%d: duplicate case %s", line+1, name)
+		}
+		seen[name] = true
+		t.Run(name, func(t *testing.T) {
+			cases, err := Discover("../../../../corpus", []string{name})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(cases) != 1 || cases[0].Kind != kind {
+				t.Fatalf("required case %s must remain kind %s", name, kind)
+			}
+		})
+	}
+	if len(seen) == 0 {
+		t.Fatal("required-case baseline is empty")
+	}
+}
+
 func TestExecutionBackends(t *testing.T) {
 	cases, e := Discover("../../../../corpus", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	count := 0
 	r := Runner{Root: "../../../../corpus", Output: io.Discard, Backends: ExecutionBackends()}
 	for _, c := range cases {
 		if c.Kind == "trace" && (len(c.Name) >= 11 && c.Name[:11] == "text-model/" || len(c.Name) >= 17 && c.Name[:17] == "load-diagnostics/") {
-			count++
 			t.Run(c.Name, func(t *testing.T) {
 				if _, e := r.execute(c); e != nil {
 					t.Fatal(e)
 				}
 			})
 		}
-	}
-	if count != 63 {
-		t.Fatalf("expected 63 Trace cases, got %d", count)
 	}
 }
 
@@ -45,19 +76,14 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 	for _, line := range strings.Split(string(b), "\n") {
 		listed[line] = true
 	}
-	count := 0
 	for _, c := range cases {
 		required := strings.HasPrefix(c.Name, "text-model/") || strings.HasPrefix(c.Name, "load-diagnostics/") || strings.HasPrefix(c.Name, "disassembly/") || c.Name == "bytes/value-encoding" || c.Name == "dates/value-encoding" || c.Name == "quantities/value-encoding"
 		if !required {
 			continue
 		}
-		count++
 		if !listed[c.Name] {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
-	}
-	if count != 81 {
-		t.Fatalf("required set: %d cases, want 81", count)
 	}
 }
 
@@ -116,13 +142,11 @@ func TestLimitsStepFourAcceptance(t *testing.T) {
 	}
 	listed := "\n" + string(b)
 	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
-	count := 0
 	for _, c := range cases {
 		required := strings.HasPrefix(c.Name, "limits/") || strings.HasPrefix(c.Name, "cancellation/") || c.Name == "text-patterns/matching-fuel-exhaustion" || c.Name == "text-patterns/pattern-size-literal-limit" || c.Name == "text-patterns/pattern-size-made-at-run-time"
 		if !required {
 			continue
 		}
-		count++
 		t.Run(c.Name, func(t *testing.T) {
 			if !strings.Contains(listed, "\n"+c.Name+"\n") {
 				t.Errorf("required step-4 case missing from passing gate: %s", c.Name)
@@ -131,9 +155,6 @@ func TestLimitsStepFourAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-	if count != 42 {
-		t.Fatalf("required step-4 limits set: %d cases, want 42", count)
 	}
 }
 
@@ -149,13 +170,11 @@ func TestSegmentEffectStepFourAcceptance(t *testing.T) {
 	}
 	listed := "\n" + string(b)
 	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
-	count := 0
 	for _, c := range cases {
 		if !strings.HasPrefix(c.Name, "capabilities/effect-") {
 			continue
 		}
 
-		count++
 		t.Run(c.Name, func(t *testing.T) {
 			if !strings.Contains(listed, "\n"+c.Name+"\n") {
 				t.Errorf("required step-4 effect missing from passing gate: %s", c.Name)
@@ -164,9 +183,6 @@ func TestSegmentEffectStepFourAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-	if count != 30 {
-		t.Fatalf("required effect set: %d cases, want 30", count)
 	}
 }
 
@@ -931,7 +947,6 @@ func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
 	}
 	listed := "\n" + string(b)
 	r := Runner{Root: root, Output: io.Discard, Backends: ExecutionBackends()}
-	count := 0
 	for _, c := range cases {
 		required := strings.HasPrefix(c.Name, "save-restore/")
 		for _, name := range names {
@@ -940,7 +955,6 @@ func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
 		if !required {
 			continue
 		}
-		count++
 		t.Run(c.Name, func(t *testing.T) {
 			if !strings.Contains(listed, "\n"+c.Name+"\n") {
 				t.Errorf("required step-5 case missing from gate: %s", c.Name)
@@ -949,9 +963,6 @@ func TestSaveRestoreStepFiveAcceptance(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
-	}
-	if count != 19 {
-		t.Fatalf("required step-5 set: %d cases, want 19", count)
 	}
 }
 
