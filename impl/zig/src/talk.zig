@@ -11,6 +11,7 @@ const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
 const standard = @import("machine/standard.zig");
+const sqlite = @import("machine/sqlite.zig");
 const objects = machine.objects;
 const group_allocator = @import("machine/group_allocator.zig");
 /// Value constructors take no Core, as talk.go's don't, so values come from
@@ -313,6 +314,8 @@ pub const Core = struct {
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
     mappings: std.ArrayList(*Mapping) = .empty,
     lifecycles: std.ArrayList(*SegmentLifecycle) = .empty,
+    sqlite_impls: std.ArrayList(*SqliteImpl) = .empty,
+    sql_bridges: std.ArrayList(*SqlBridge) = .empty,
 };
 
 pub const TraceSink = ?*const fn (context: ?*anyopaque, line: [*]const u8, len: usize) callconv(.c) void;
@@ -497,6 +500,10 @@ export fn talk_core_release(c: ?*Core) void {
     core.mappings.deinit(gpa);
     for (core.lifecycles.items) |l| gpa.destroy(l);
     core.lifecycles.deinit(gpa);
+    for (core.sqlite_impls.items) |x| gpa.destroy(x);
+    core.sqlite_impls.deinit(gpa);
+    for (core.sql_bridges.items) |x| gpa.destroy(x);
+    core.sql_bridges.deinit(gpa);
     for (core.libraries.items) |l| l.destroy();
     core.libraries.deinit(gpa);
     allocator.destroy(core);
@@ -1324,10 +1331,12 @@ const max_cost = 9_007_199_254_740_991;
 /// Defines a Standard Capability from a cost per Operation and one C Host
 /// function per Operation, in `standard.operations` order.
 fn defineStandard(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
-    return defineStandardWith(c, which, fns, context, costs, null, out);
+    return defineStandardWith(c, which, fns, &.{}, context, costs, null, out);
 }
 
-fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn, context: ?*anyopaque, costs: ?*const Costs, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
+/// `own` gives a Core Host function for an Operation in place of the
+/// bridged C one, by position.
+fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn, own: []const ?caps.HostFn, context: ?*anyopaque, costs: ?*const Costs, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const gpa = c.gpa;
     const names = standard.operations(which);
@@ -1343,6 +1352,10 @@ fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn,
     }
     var impl: [8]?caps.HostFn = @splat(null);
     for (fns, 0..) |f, i| {
+        if (i < own.len) if (own[i]) |h| {
+            impl[i] = h;
+            continue;
+        };
         const call = f orelse return .invalid_value;
         const bridge = gpa.create(Bridge) catch return .out_of_memory;
         bridge.* = .{ .call = call, .context = context };
@@ -1409,7 +1422,113 @@ export fn talk_store_capability(c: *Core, impl: *const StoreImpl, costs: ?*const
         return .out_of_memory;
     };
     // In name order: delete, get, increment, keys, set, swap, unwatch, watch.
-    return defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
+    return defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, &.{}, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
+}
+
+pub const SqlFn = *const fn (context: ?*anyopaque, call: *Call, sql: [*]const u8, sql_len: usize, params: *const sqlite.Params, max: i64, rows: *sqlite.Rows, err: *ScriptError) callconv(.c) CallEnd;
+pub const SqliteImpl = extern struct {
+    context: ?*anyopaque,
+    coordinator: ?*const fn (context: ?*anyopaque, database: [*]const u8, len: usize) callconv(.c) ?*const SegmentLifecycle,
+    query: ?SqlFn,
+    change: ?SqlFn,
+    begin: OperationFn,
+    commit: OperationFn,
+    rollback: OperationFn,
+    release_rows: ?*const fn (context: ?*anyopaque, rows: *sqlite.Rows) callconv(.c) void,
+};
+
+/// A `query` or `change` Host function: the implementation, the per-row
+/// cost, and which it is.
+const SqlBridge = struct { impl: SqliteImpl, per_row: u64, change: bool };
+
+/// The Core's `query` and `change`: `max` times the per-row cost charged
+/// before the work, `params` converted, and the rows converted back.
+fn sqlCall(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome {
+    const b: *const SqlBridge = @ptrCast(@alignCast(context.?));
+    const binding = sqlite.bindingOf(call.binding) orelse return .broken;
+    const max = sqlite.effectiveMax(args, binding);
+    const cost = std.math.mul(u64, max, b.per_row) catch std.math.maxInt(u64);
+    if (cost > 0 and !call.charge(cost)) return .limited;
+    var arena: std.heap.ArenaAllocator = .init(call.gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const params = sqlite.params(a, args[1]) catch return .broken;
+    var rows: sqlite.Rows = .{};
+    var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+    const f = (if (b.change) b.impl.change else b.impl.query).?;
+    const sql = args[0].data.text;
+    switch (f(b.impl.context, call, sql.ptr, sql.len, &params, @intCast(max), &rows, &failure)) {
+        .answered => {
+            defer if (b.impl.release_rows) |release| release(b.impl.context, &rows);
+            return switch (sqlite.convert(call.gpa, a, rows, max, b.change) catch return .broken) {
+                .value => |v| .{ .value = v },
+                .broken => .broken,
+                .failed => |x| blk: {
+                    const text = model.text(call.gpa, x.text) catch break :blk .broken;
+                    defer text.release();
+                    const data = model.map(call.gpa, &.{.{ .key = x.key, .value = text }}) catch break :blk .broken;
+                    const code = call.gpa.dupe(u8, x.code) catch {
+                        data.release();
+                        break :blk .broken;
+                    };
+                    break :blk .{ .failed = .{ .code = code, .message = null, .data = data } };
+                },
+            };
+        },
+        .failed => return failedOutcome(call, failure),
+        .limited => return .limited,
+        .broken, .started => return .broken,
+    }
+}
+
+/// A Host function's Script error as an Outcome, its code and message
+/// copied.
+fn failedOutcome(call: *Call, failure: ScriptError) caps.Outcome {
+    const code = bytes(failure.code, failure.code_len) catch return .broken;
+    const message = bytes(failure.message, failure.message_len) catch return .broken;
+    const owned_code = call.gpa.dupe(u8, code) catch return .broken;
+    const owned_message: ?[]const u8 = if (failure.message == null) null else call.gpa.dupe(u8, message) catch {
+        call.gpa.free(owned_code);
+        return .broken;
+    };
+    return .{ .failed = .{ .code = owned_code, .message = owned_message, .data = failure.data } };
+}
+
+/// Each `sqlite` Grant's coordinator: its binding's database's, which the
+/// implementation gives; a malformed binding refuses the Grant.
+fn sqliteCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    const impl: *const SqliteImpl = @ptrCast(@alignCast(context.?));
+    const binding = sqlite.bindingOf(g.binding) orelse return null;
+    if (!sqlite.validBinding(binding)) return null;
+    const database: [*]const u8 = binding.database orelse "";
+    const l = impl.coordinator.?(impl.context, database, binding.database_len) orelse return null;
+    if (l.begin == null or l.commit == null or l.rollback == null) return null;
+    return .{ .identity = @intFromPtr(l), .hook = segmentHook, .context = @constCast(l) };
+}
+
+export fn talk_sqlite_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_row: i64, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    if (per_row < 0 or per_row > sqlite.max_whole) return .invalid_value;
+    if (impl.coordinator == null or impl.query == null or impl.change == null) return .invalid_value;
+    const gpa = c.gpa;
+    const kept = gpa.create(SqliteImpl) catch return .out_of_memory;
+    kept.* = impl.*;
+    c.sqlite_impls.append(gpa, kept) catch {
+        gpa.destroy(kept);
+        return .out_of_memory;
+    };
+    var own: [5]?caps.HostFn = @splat(null);
+    // In name order: begin, change, commit, query, rollback.
+    for ([_]usize{ 1, 3 }) |i| {
+        const bridge = gpa.create(SqlBridge) catch return .out_of_memory;
+        bridge.* = .{ .impl = impl.*, .per_row = @intCast(per_row), .change = i == 1 };
+        c.sql_bridges.append(gpa, bridge) catch {
+            gpa.destroy(bridge);
+            return .out_of_memory;
+        };
+        own[i] = .{ .call = sqlCall, .context = bridge };
+    }
+    return defineStandardWith(c, .sqlite, &.{ impl.begin, null, impl.commit, null, impl.rollback }, &own, impl.context, costs, .{ .call = sqliteCoordinator, .context = kept }, out);
 }
 
 // ---------------------------------------------------------------- answers

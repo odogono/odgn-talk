@@ -54,6 +54,7 @@ test {
     _ = @import("machine/matcher.zig");
     _ = @import("machine/capabilities.zig");
     _ = @import("machine/standard.zig");
+    _ = @import("machine/sqlite.zig");
     _ = @import("machine/objects.zig");
     _ = @import("machine/builtins.zig");
     _ = @import("machine/group_allocator.zig");

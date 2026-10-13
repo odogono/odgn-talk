@@ -5060,6 +5060,15 @@ pub const Group = struct {
                     return g.raise("bad locale", &.{.{ .key = "locale", .value = locale }});
                 },
                 .invalid_key => return g.raise("invalid key", &.{}),
+                .mismatch => |x| {
+                    defer if (x.keep) |v| v.release();
+                    return g.raiseMismatch(x.bad, x.position, &where);
+                },
+                .out_of_range => |x| {
+                    const field = try model.text(gpa, x.field);
+                    defer field.release();
+                    return g.raise("out of range", &.{ .{ .key = "field", .value = field }, .{ .key = "value", .value = x.value } });
+                },
                 .invalid_watch => |which| {
                     const field = try model.text(gpa, which);
                     defer field.release();
