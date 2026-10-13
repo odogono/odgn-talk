@@ -2,7 +2,7 @@
 
 The browser creative tool planned in [#154](https://github.com/odogono/odgn-talk/issues/154): a HyperCard-inspired tool for making illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk. "Creative tool" is a working name until the application is named.
 
-For now the page opens one Script window on the [shared editor](../editor/), with the language server's diagnostics, completion and hover, and shows the TS Core it loaded. The Project model and the editor come with stage 1 of #154. The design so far:
+For now the page opens one Script window on the [shared editor](../editor/), with the language server's diagnostics, completion and hover, and shows the TS Core it loaded. The editor comes with stage 1 of #154. The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). The design so far:
 
 - The editor layout and Script windows: the [UI prototype's verdict](https://github.com/odogono/odgn-talk/issues/154#issuecomment-6141500821).
 - How Scripts reach Projects, Pages and Elements: [#735](https://github.com/odogono/odgn-talk/issues/735).
