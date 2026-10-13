@@ -153,6 +153,7 @@ export type Gesture = { finish(): void; to(dx: number, dy: number): void };
 export type Edit = { change(update: () => void): void; finish(): void };
 
 type Snapshot = {
+  identities: { elements: number[]; page: number }[];
   pageIndex: number;
   pageSelected: boolean;
   project: Project;
@@ -169,6 +170,18 @@ const CASCADE = 20;
  * place; the shell renders after each one.
  */
 export class StackEditor {
+  #nextIdentity = 0;
+  #identities = new WeakMap<object, number>();
+  /** Session-local identities survive history, but never enter Project files. */
+  identity(owner: object): number {
+    let id = this.#identities.get(owner);
+    if (id === undefined) {
+      id = ++this.#nextIdentity;
+      this.#identities.set(owner, id);
+    }
+    return id;
+  }
+
   #pageIndex = 0;
   #selection: string[] = [];
   // Set only by an explicit Page selection, so Delete never removes a Page
@@ -193,11 +206,17 @@ export class StackEditor {
    * Page still change, so a read-only tab can look around.
    */
   readOnly = false;
+  /** Incremented when switching Projects or loading a stored version. */
+  generation = 0;
 
   constructor(readonly project: Project) {}
 
   #snapshot(): Snapshot {
     return structuredClone({
+      identities: this.project.pages.map(page => ({
+        page: this.identity(page),
+        elements: page.elements.map(element => this.identity(element)),
+      })),
       project: this.project,
       pageIndex: this.#pageIndex,
       selection: this.#selection,
@@ -208,6 +227,13 @@ export class StackEditor {
   #restore(snapshot: Snapshot): void {
     const copy = structuredClone(snapshot);
     this.#assignProject(copy.project);
+    copy.project.pages.forEach((page, index) => {
+      const ids = copy.identities[index]!;
+      this.#identities.set(page, ids.page);
+      page.elements.forEach((element, i) =>
+        this.#identities.set(element, ids.elements[i]!),
+      );
+    });
     this.#pageIndex = copy.pageIndex;
     this.#selection = copy.selection;
     this.#pageSelected = copy.pageSelected;
@@ -231,6 +257,7 @@ export class StackEditor {
    * so `onChange` is not told.
    */
   replaceProject(project: Project): void {
+    this.generation++;
     this.#pending = undefined;
     this.#assignProject(structuredClone(project));
     this.#past = [];

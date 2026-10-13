@@ -23,6 +23,8 @@ import {
   textOf,
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
+import { ScriptWindows, bringWindowForward } from './scripts';
+import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
 import { type Attributes, byId, h } from './dom';
@@ -176,7 +178,6 @@ const floatWindows = () => {
   } catch {
     /* Positions are optional. */
   }
-  const windows = [...document.querySelectorAll<HTMLElement>('.window')];
   const place = (win: HTMLElement, left: number, top: number) => {
     const header = byId('menu').offsetHeight;
     // Keep the whole window on screen where it fits.
@@ -188,7 +189,7 @@ const floatWindows = () => {
     win.style.left = `${clampedLeft}px`;
     win.style.top = `${clampedTop}px`;
   };
-  for (const win of windows) {
+  const register = (win: HTMLElement) => {
     const saved = positions[win.id];
     if (saved) {
       place(win, saved.left, saved.top);
@@ -229,13 +230,17 @@ const floatWindows = () => {
       bar.addEventListener('pointercancel', up, { once: true });
     });
     win.addEventListener('pointerdown', () => {
-      for (const other of windows) {
-        other.classList.toggle('front', other === win);
-      }
+      bringWindowForward(win);
     });
-  }
+  };
+  document.querySelectorAll<HTMLElement>('.window').forEach(register);
+  document.addEventListener('script-window-opened', event => {
+    const win = event.target as HTMLElement;
+    register(win);
+    bringWindowForward(win);
+  });
   window.addEventListener('resize', () => {
-    for (const win of windows) {
+    for (const win of document.querySelectorAll<HTMLElement>('.window')) {
       place(win, win.offsetLeft, win.offsetTop);
     }
   });
@@ -297,6 +302,7 @@ export const mountStack = (
 ): StackShell => {
   const editor = new StackEditor(project);
   const images = new ImageAssets();
+  const scripts = new ScriptWindows(editor, () => draw());
   window.addEventListener('pagehide', event => {
     if (!event.persisted) {
       images.dispose();
@@ -315,6 +321,10 @@ export const mountStack = (
   const closeText = () => {
     activeText?.destroy();
     activeText = undefined;
+  };
+  const openScript = (owner: ScriptOwner) => {
+    closeText();
+    scripts.open(owner);
   };
   let scale = 1;
   let refusal: Refusal | undefined;
@@ -535,6 +545,11 @@ export const mountStack = (
     }
     return [
       h('h2', {}, `${KIND_NAMES[element.kind]} “${element.name}”`),
+      h(
+        'button',
+        { type: 'button', 'data-script': 'element', 'data-view-only': '' },
+        'Edit Script',
+      ),
       ...nameField(
         element.name,
         element.kind === 'button'
@@ -559,6 +574,11 @@ export const mountStack = (
   const pageInfo = (page: Page): HTMLElement[] => [
     h('h2', {}, `Page ${editor.pageIndex + 1} of ${project.pages.length}`),
     ...nameField(page.name),
+    h(
+      'button',
+      { type: 'button', 'data-script': 'page', 'data-view-only': '' },
+      'Edit Page Script',
+    ),
     h(
       'div',
       { class: 'row' },
@@ -588,6 +608,11 @@ export const mountStack = (
       ),
     ),
     h('h2', {}, 'Project'),
+    h(
+      'button',
+      { type: 'button', 'data-script': 'project', 'data-view-only': '' },
+      'Edit Project Script',
+    ),
     field('Title', input('projectName', project.name)),
     field(
       'Design width',
@@ -622,7 +647,7 @@ export const mountStack = (
         | HTMLSelectElement
         | HTMLTextAreaElement
       >('button, input, select, textarea')) {
-        control.disabled = true;
+        control.disabled = !control.hasAttribute('data-view-only');
       }
     } else if (focused) {
       info.querySelector<HTMLElement>(`[data-field="${focused}"]`)?.focus();
@@ -663,6 +688,7 @@ export const mountStack = (
     drawInfo();
     drawCommands();
     drawTextControls();
+    scripts.sync();
   };
 
   /** Applies an edit, forgetting any refused name, then redraws. */
@@ -760,7 +786,14 @@ export const mountStack = (
   });
   info.addEventListener('click', event => {
     const button = (event.target as HTMLElement).closest('button');
-    if (button?.dataset.replaceImage) {
+    if (button?.dataset.script) {
+      const owners = {
+        project: () => project,
+        page: () => editor.page,
+        element: () => editor.selected[0]!,
+      };
+      openScript(owners[button.dataset.script as keyof typeof owners]());
+    } else if (button?.dataset.replaceImage) {
       chooseImage(button.dataset.replaceImage);
     } else if (button?.dataset.editText) {
       openText(button.dataset.editText);
@@ -781,6 +814,13 @@ export const mountStack = (
     // take the detached target for empty space.
     down.stopPropagation();
     const target = down.target as HTMLElement;
+    const scriptElement =
+      target.closest<HTMLElement>('[data-element]')?.dataset.element;
+    if (down.metaKey && down.altKey && scriptElement) {
+      down.preventDefault();
+      openScript(editor.element(scriptElement)!);
+      return;
+    }
     if (target.closest('[data-replace-image], [contenteditable="true"]')) {
       return;
     }
@@ -874,14 +914,23 @@ export const mountStack = (
     );
   };
   pageNode.addEventListener('dblclick', event => {
-    if (event.shiftKey || event.metaKey || event.altKey || activeText) {
+    const name =
+      (event.target as HTMLElement).closest<HTMLElement>('[data-element]')
+        ?.dataset.element ?? pointerElement;
+    const element = name ? editor.element(name) : undefined;
+    if (!element) {
       return;
     }
-    const name = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-element]',
-    )?.dataset.element;
-    // The first click can redraw the selection; dblclick then targets the Page.
-    openText(name ?? pointerElement ?? '');
+    if (
+      element.kind !== 'text' ||
+      event.shiftKey ||
+      (event.metaKey && event.altKey)
+    ) {
+      event.preventDefault();
+      openScript(element);
+    } else if (!activeText) {
+      openText(element.name);
+    }
   });
   // A click on the desk around the Page selects the Page.
   desk.addEventListener('pointerdown', event => {
