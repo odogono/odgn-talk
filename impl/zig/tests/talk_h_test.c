@@ -670,6 +670,39 @@ static int slice_test(void) {
     return bad;
 }
 
+/* Cancelling: a waiting Run's finally runs on its Cleanup Budget and it ends
+ * cancelled; a Request still in the mailbox is removed. */
+static int cancel_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable n = 0\non hold\n  try\n    wait 1 s\n  finally\n    put 9 into n\n  end try\nend hold\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_message hold = {"hold", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_cancel_delivery(group, "x1", 2) != TALK_INVALID_VALUE;
+    bad |= talk_script_cancel_run(script, "s/r1", 4) != TALK_OK;
+    talk_pending *pending = NULL;
+    bad |= talk_script_request(script, &hold, NULL, &pending) != TALK_OK;
+    bad |= talk_cancel_delivery(group, "d2", 2) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "> cancel-run s/r1\n") == NULL || strstr(trace, "> cancel-delivery d2\n") == NULL;
+    bad |= strstr(trace, "run s/r1 outcome=cancelled delivery=d1 handler=hold") == NULL;
+    bad |= strstr(trace, "vars s n=9\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A suspending Operation's Start: it keeps the call, to answer later. */
 static talk_call *started = NULL;
 static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -1045,6 +1078,7 @@ int main(void) {
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
+    expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
