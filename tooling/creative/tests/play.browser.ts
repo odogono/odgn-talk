@@ -1,6 +1,6 @@
 // Run on a dedicated page without main.js, as described in README.md.
 import { EditorView } from '@codemirror/view';
-import { createElement, createProject } from '../src/model';
+import { createElement, createPage, createProject } from '../src/model';
 import { mountStack } from '../src/stack';
 import { mountPlay } from '../src/play-view';
 
@@ -62,6 +62,29 @@ export const runBrowserTests = async () => {
   toggle.click();
   assert(readerButton().textContent === 'Button', 'New Play kept old state');
   toggle.click();
+  const second = createPage('page2');
+  const back = createElement('button', 'button1');
+  back.script = 'on click\n tell pages to show page1\nend click';
+  second.elements.push(back);
+  project.pages.push(second);
+  button.script =
+    'on click\n set the label of me to "Kept"\n tell pages to show page2\nend click';
+  toggle.click();
+  assert(
+    getComputedStyle(document.querySelector('#strip')!).display === 'none',
+    'Pages strip visible in Play',
+  );
+  readerButton().click();
+  await until(() => !document.querySelector('#reader [data-element="input1"]'));
+  readerButton().click();
+  await until(
+    () => !!document.querySelector('#reader [data-element="input1"]'),
+  );
+  assert(
+    readerButton().textContent === 'Kept',
+    'Revisit lost visual state or reused the wrong click listener',
+  );
+  toggle.click();
   button.script = 'on click\n repeat forever\n end repeat\nend click';
   toggle.click();
   readerButton().click();
@@ -98,6 +121,7 @@ export const runBrowserTests = async () => {
   return {
     passed: true,
     checks: [
+      'navigation, same-named Elements, retained visuals and hidden strip',
       'visible property writes',
       'reader textChanged',
       'authored isolation',

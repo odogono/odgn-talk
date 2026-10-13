@@ -31,7 +31,12 @@ test('each owner gets its scoped names, typed properties and three Grants', () =
     expect(manifest.objects).toEqual(
       owner === project
         ? project.pages.map(p => p.name)
-        : [...page.elements.map(e => e.name), 'thisPage', 'project'],
+        : [
+            ...project.pages.map(p => p.name),
+            ...page.elements.map(e => e.name),
+            'thisPage',
+            'project',
+          ],
     );
     expect([...manifest.grants.keys()]).toEqual(['pages', 'elements', 'sound']);
     expect([...manifest.grants.get('elements')!.keys()]).toEqual([

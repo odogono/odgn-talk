@@ -2,6 +2,7 @@
 import {
   bool,
   defineObjectKind,
+  defineCapability,
   LoadError,
   MailboxFull,
   newGroup,
@@ -14,12 +15,17 @@ import {
   type Value,
 } from '@odgn/northtalk';
 import { replacePlainText, textOf, type Project } from './model';
-import { scriptManifest, type ScriptOwner } from './script-manifest';
+import {
+  scriptManifest,
+  scriptPage,
+  type ScriptOwner,
+} from './script-manifest';
 
 export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
 export type PlayMessage =
   | 'startPlay'
   | 'openPage'
+  | 'closePage'
   | 'click'
   | 'pointerEnter'
   | 'pointerLeave'
@@ -36,12 +42,40 @@ export class PlaySession {
   readonly objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
   readonly authored = new Map<ScriptOwner, ScriptOwner>();
   readonly owners = new Map<string, ScriptOwner>();
+  #requestedPage: number | undefined;
+  #closing:
+    | {
+        cancel: AbortController;
+        deadline: bigint;
+        done: boolean;
+        id: string;
+        target: number;
+      }
+    | undefined;
+  #pages = defineCapability('pages', {
+    show: {
+      mode: 'fire-and-forget',
+      args: [{ k: 'object', kind: 'page' }],
+      cost: { fuel: 1 },
+      fire: (_call, value) => {
+        const index = this.project.pages.findIndex(
+          p => this.objects.get(p) === value.asObject(),
+        );
+        if (index < 0) {
+          throw new ScriptError('out of domain', 'Unknown Page');
+        }
+        if (!this.stopped && !this.#closing) {
+          this.#requestedPage = index;
+        }
+      },
+    },
+  });
   stopped = false;
   changed = false;
 
   constructor(
     project: Project,
-    readonly pageIndex = 0,
+    public pageIndex = 0,
   ) {
     this.project = structuredClone(project);
     const originals = [
@@ -136,7 +170,24 @@ export class PlaySession {
         );
       }
     }
-    for (const owner of [this.project, this.page, ...this.page.elements]) {
+    this.#load([this.project, this.page, ...this.page.elements]);
+    this.send(this.project, 'startPlay');
+    this.send(this.page, 'openPage');
+  }
+
+  #load(owners: ScriptOwner[]): void {
+    const pages = Object.fromEntries(
+      this.project.pages.map(p => [p.name, this.objects.get(p)!]),
+    );
+    const pageObjects = {
+      ...pages,
+      ...Object.fromEntries(
+        this.page.elements.map(e => [e.name, this.objects.get(e)!]),
+      ),
+      thisPage: this.objects.get(this.page)!,
+      project: this.objects.get(this.project)!,
+    };
+    for (const owner of owners) {
       if (!owner.script?.trim()) {
         continue;
       }
@@ -147,24 +198,19 @@ export class PlaySession {
             ? `page:${this.page.name}`
             : `element:${this.page.name}/${owner.name}`;
       this.owners.set(name, owner);
-      const objects =
-        owner === this.project
-          ? Object.fromEntries(
-              this.project.pages.map(p => [p.name, this.objects.get(p)!]),
-            )
-          : {
-              ...Object.fromEntries(
-                this.page.elements.map(e => [e.name, this.objects.get(e)!]),
-              ),
-              thisPage: this.objects.get(this.page)!,
-              project: this.objects.get(this.project)!,
-            };
+      const objects = owner === this.project ? pages : pageObjects;
       try {
+        const existing = this.group.script(name);
+        if (existing) {
+          existing.reload(owner.script, 'reset variables');
+          continue;
+        }
         this.group.load({
           name,
           source: owner.script,
           owner: this.objects.get(owner),
           objects,
+          grants: { pages: this.#pages.grant(['show'], undefined) },
         });
       } catch (error) {
         if (!(error instanceof LoadError)) {
@@ -172,14 +218,31 @@ export class PlaySession {
         }
         for (const diagnostic of error.diagnostics) {
           this.problems.push({
-            owner: originals[copies.indexOf(owner)]!,
+            owner: this.authored.get(owner)!,
             line: diagnostic.line,
             message: diagnostic.code,
           });
         }
       }
     }
-    this.send(this.project, 'startPlay');
+  }
+
+  get navigating(): boolean {
+    return this.#closing !== undefined || this.#requestedPage !== undefined;
+  }
+
+  #finishNavigation(): void {
+    const closing = this.#closing!;
+    closing.cancel.abort();
+    for (const [name, owner] of this.owners) {
+      if (scriptPage(this.project, owner) === this.page) {
+        this.group.script(name)?.stop('Left Page');
+      }
+    }
+    this.pageIndex = closing.target;
+    this.#closing = undefined;
+    this.#load([this.page, ...this.page.elements]);
+    this.changed = true;
     this.send(this.page, 'openPage');
   }
 
@@ -233,7 +296,7 @@ export class PlaySession {
   }
 
   send(owner: ScriptOwner, name: PlayMessage, args: Value[] = []): void {
-    if (this.stopped) {
+    if (this.stopped || this.navigating) {
       return;
     }
     try {
@@ -254,6 +317,12 @@ export class PlaySession {
 
   /** One bounded turn; the browser schedules another turn only after yielding. */
   pump(now: bigint) {
+    if (
+      this.#closing &&
+      (this.#closing.done || now >= this.#closing.deadline)
+    ) {
+      this.#finishNavigation();
+    }
     const result = this.group.pump(now, { fuelSlice: 1000, fuelCap: 5000 });
     for (const report of result.reports) {
       if (
@@ -268,6 +337,49 @@ export class PlaySession {
         });
       }
     }
+    const target = this.#requestedPage;
+    this.#requestedPage = undefined;
+    if (!this.stopped && target !== undefined && target !== this.pageIndex) {
+      const cancel = new AbortController();
+      const request = this.group.request(
+        this.objects.get(this.page)!,
+        { name: 'closePage' },
+        { signal: cancel.signal },
+      );
+      const closing = {
+        target,
+        deadline: now + 1_000_000_000n,
+        id: request.id,
+        cancel,
+        done: false,
+      };
+      this.#closing = closing;
+      const complete = () => {
+        closing.done = true;
+      };
+      void request.result.then(complete, complete);
+      return { ...result, state: 'sliced' as const };
+    }
+    if (
+      this.#closing &&
+      result.reports.some(
+        report =>
+          (report.kind === 'run end' || report.kind === 'unhandled') &&
+          report.delivery === this.#closing!.id,
+      )
+    ) {
+      return { ...result, state: 'sliced' as const };
+    }
+    if (this.#closing) {
+      return {
+        ...result,
+        nextDeadline:
+          result.nextDeadline !== undefined &&
+          result.nextDeadline < this.#closing.deadline
+            ? result.nextDeadline
+            : this.#closing.deadline,
+      };
+    }
     return result;
   }
 
@@ -276,6 +388,9 @@ export class PlaySession {
       return;
     }
     this.stopped = true;
+    this.#closing?.cancel.abort();
+    this.#closing = undefined;
+    this.#requestedPage = undefined;
     for (const name of this.group.scriptNames()) {
       this.group.script(name)!.stop('Stopped by reader');
     }

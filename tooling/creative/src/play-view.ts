@@ -31,12 +31,18 @@ export const mountPlay = (shell: StackShell): void => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
   let problemCount = 0;
+  let drawnPage: PlaySession['page'] | undefined;
 
   const draw = () => {
     if (!session) {
       return;
     }
     const play = session;
+    if (drawnPage !== play.page) {
+      pageNode.replaceChildren();
+      drawnPage = play.page;
+      reader.scrollTop = 0;
+    }
     const scale = Math.min(
       1,
       (reader.clientWidth - 32) / play.project.designWidth,
