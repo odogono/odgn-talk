@@ -1,4 +1,3 @@
-# Unblessed: Nothing defaults and optional map-key reads, with `otherwise` in a Guard, chained defaults, a Constant fallback and literal and computed optional keys (#719); first blessing awaits human review.
 kind = "disassembly"
 
 [versions]

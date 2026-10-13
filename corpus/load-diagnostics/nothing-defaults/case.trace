@@ -1,5 +1,3 @@
-# Unblessed: load diagnostics for Nothing defaults and optional reads (#722); first blessing awaits human review.
-
 > load missing identity=30eb7e0566349cc48c25117cadf324a7e99d9f3c0bfef98ed6d96bf7a3b3d5a7
 diag missing code="unexpected token" pos=3:1
 > load lambda-fallback identity=e60ab7c0570d2e6fedbe3c84acad31d7daa71056524d5c15a530fdbd275d3698
