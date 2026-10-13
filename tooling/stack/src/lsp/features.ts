@@ -486,6 +486,26 @@ export const completion = (
   }
 
   const rest = source.slice(offset).split(/\r\n|\r|\n/)[0]!;
+  // A property slot with a named receiver can use the Host's Object Kind.
+  // `me` has no kind in the Manifest; do not guess one from other objects.
+  const propertySlot = /\bthe\s+([\p{L}\p{N}_]*)$/u.exec(line);
+  const propertyReceiver =
+    /^[\p{L}\p{N}_]*\s+of\s+([\p{L}_][\p{L}\p{N}_]*)\b/u.exec(rest);
+  if (propertySlot && propertyReceiver && manifest) {
+    const kind = manifest.objectsKinds.get(propertyReceiver[1]!);
+    const properties = kind && manifest.objectKinds.get(kind)?.props;
+    if (properties) {
+      return [...properties]
+        .filter(([name]) => name.startsWith(propertySlot[1]!))
+        .map(([name, prop]) =>
+          item(
+            name,
+            10,
+            `${kind} property${prop.readOnly ? ' (read-only)' : ''}`,
+          ),
+        );
+    }
+  }
   // `tell g to` calls only fire-and-forget Operations, and `ask g to` only the
   // others; a `tell` block line calls any, in its own mode (ADR 0063).
   const operations = (

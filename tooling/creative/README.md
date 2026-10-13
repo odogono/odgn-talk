@@ -2,7 +2,7 @@
 
 The browser creative tool planned in [#154](https://github.com/odogono/odgn-talk/issues/154): a HyperCard-inspired tool for making illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk. "Creative tool" is a working name until the application is named.
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It refuses a name that isn't an identifier or that another Element on the Page already has, and offers one instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). A sample Script window on the [shared editor](../editor/) shows the language server's diagnostics, completion and hover; Script windows for the Project's own Scripts come with stage 2.
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It refuses a name that isn't an identifier or that another Element on the Page already has, and offers one instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -10,6 +10,47 @@ The authored Project model and its zip file format — pure TypeScript with no U
 - How Scripts reach Projects, Pages and Elements: [#735](https://github.com/odogono/odgn-talk/issues/735).
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
+
+## Scripts
+
+Double-click an Element to open its Script. For text, Shift-double-click opens
+its Script and plain double-click edits the text. ⌘⌥-click opens any Element's
+Script, including text being edited. Info also offers **Edit Script**, or
+**Edit Page Script** and **Edit Project Script** when nothing is selected.
+Opening a Script already on the desk brings its window forward. Each window's
+Message Path links to its Page and Project Scripts.
+
+Edits change the authored Project immediately and share its undo/redo,
+autosave and portable export/import. The Script editor's ⌘/Ctrl-Z and redo
+shortcuts use the same history as the Edit menu. Closing a window keeps its
+Script. Renaming or reordering an owner keeps its window attached, including
+through undo; deleting the owner closes its window. Opening another Project
+or a stored version closes the previous Script windows. Read-only Projects
+also have read-only Script editors.
+
+Each window has a separate language-server workspace with a live Host Manifest
+from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
+Scripts bind that Page's Elements, `thisPage` and `project`; the Project Script
+binds every Page name. All receive the `pages`, `elements` and `sound` Grants
+from ADR 0084. Renames refresh open windows' Manifests and diagnostics. Problems
+show their lines below the editor and in its gutter. Completion and hover use
+the Manifest; property completion for a named receiver uses its Object Kind.
+The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
+properties. Scripts do not execute in Edit; Play remains separate work.
+
+Unit tests cover each owner's Manifest and language-server diagnostics and
+completion. Browser regression checks exercise real editor windows, workers,
+history, IndexedDB and portable files. With the server running:
+
+```sh
+bun build tooling/creative/tests/scripts.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/scripts-test.html
+```
+
+Open `/scripts-test.html` and run
+`await import('/scripts.browser.js').then(m => m.runBrowserTests())`.
+Every result must have `passed: true`. Reload before repeating and rebuild the
+test files after an app rebuild.
 
 ## Saving
 

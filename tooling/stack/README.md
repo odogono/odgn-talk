@@ -165,6 +165,10 @@ initializer and shown in the display form. Operations show their dictionary
 entry, below; Function Values show their Home Script. Hover also shows Declaration Documentation for named functions, Constants, Script Variables and each Handler Clause in declaration order. Imports and aliases resolve to the defining Library's block; Built-ins use the catalogue's descriptive text. Locals and parameters do not inherit a same-spelled declaration's documentation. Formatting delegates to
 the formatter, and `prefer-explicit-end` has an insertion quick fix.
 
+When completing the property in `the label of button1`, the Manifest's kind
+for `button1` supplies its properties. The Manifest does not identify `me`'s
+kind, so this completion does not infer properties for `me`.
+
 Host-authored Operation descriptions are shown as plain text and examples as NorthTalk source in the dictionary, hover and completion documentation.
 
 Each Grant's Operations form a dictionary, built from the manifest's Operation

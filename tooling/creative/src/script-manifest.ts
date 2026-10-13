@@ -1,0 +1,130 @@
+// The authoring Host interface from ADR 0084 and #735. Data only: Edit never
+// constructs a Core Group or executes an authored Script.
+import { coreVersions } from '@odgn/northtalk';
+import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
+
+export type ScriptOwner = Project | Page | Element;
+
+/** The Page containing an owner, absent for the Project Script. */
+export const scriptPage = (
+  project: Project,
+  owner: ScriptOwner,
+): Page | undefined =>
+  project.pages.find(
+    page => page === owner || page.elements.includes(owner as Element),
+  );
+
+const props = (fields: Record<string, string>) =>
+  Object.entries(fields).map(([name, shape]) => ({
+    name,
+    shape,
+    readOnly: name === 'name',
+  }));
+const common = {
+  name: 'text',
+  left: 'number',
+  top: 'number',
+  width: 'number',
+  height: 'number',
+  visible: 'boolean',
+};
+const specific: Record<Element['kind'], Record<string, string>> = {
+  text: {
+    text: 'text',
+    textColor: 'text',
+    textSize: 'number',
+    font: 'text',
+    editable: 'boolean',
+  },
+  image: { image: 'text' },
+  button: { label: 'text', fill: 'text', textColor: 'text' },
+  rectangle: { fill: 'text', stroke: 'text' },
+  ellipse: { fill: 'text', stroke: 'text' },
+  line: { stroke: 'text', thickness: 'number' },
+};
+const operation = (name: string, args: unknown[], result?: unknown) => ({
+  name,
+  args,
+  mode: result === undefined ? 'fire-and-forget' : 'immediate',
+  ...(result === undefined ? {} : { result }),
+});
+
+// Shared by every Script's manifest.
+const objectKinds = [
+  { name: 'project', props: props({ name: 'text' }) },
+  {
+    name: 'page',
+    props: props({ name: 'text', background: 'text', height: 'number' }),
+  },
+  ...ELEMENT_KINDS.map(name => ({
+    name,
+    props: props({ ...common, ...specific[name] }),
+  })),
+];
+const grants = [
+  {
+    name: 'pages',
+    capability: 'pages',
+    operations: [operation('show', [{ object: 'page' }])],
+  },
+  {
+    name: 'elements',
+    capability: 'elements',
+    operations: [
+      operation(
+        'create',
+        ['text', { object: 'page' }, { optional: 'text' }],
+        'object',
+      ),
+      operation('clone', ['object'], 'object'),
+      operation('delete', ['object']),
+      operation('find', ['text', { object: 'page' }], 'object'),
+    ],
+  },
+  {
+    name: 'sound',
+    capability: 'sound',
+    operations: [
+      operation('play', ['text']),
+      operation('loop', ['text']),
+      operation('stop', [{ optional: 'text' }]),
+    ],
+  },
+];
+const messages = [
+  'click',
+  'pointerEnter',
+  'pointerLeave',
+  'keyDown',
+  'openPage',
+  'closePage',
+  'startPlay',
+  'textChanged',
+].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
+
+/** Each Script binds only its own Page's Elements, or every Page for the Project. */
+export const scriptManifest = (project: Project, owner: ScriptOwner) => {
+  const page = scriptPage(project, owner);
+  if (owner !== project && !page) {
+    throw new Error('The Script owner is not in this Project');
+  }
+  return {
+    kind: 'kind' in owner ? owner.kind : owner === project ? 'project' : 'page',
+    version: '1',
+    language: coreVersions.language,
+    libraries: [],
+    objects: page
+      ? [
+          ...page.elements.map(element => ({
+            name: element.name,
+            kind: element.kind,
+          })),
+          { name: 'thisPage', kind: 'page' },
+          { name: 'project', kind: 'project' },
+        ]
+      : project.pages.map(page => ({ name: page.name, kind: 'page' })),
+    objectKinds,
+    grants,
+    messages,
+  };
+};

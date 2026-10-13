@@ -376,10 +376,10 @@ button:disabled {
 #info .suggestion button {
   font-family: ui-monospace, monospace;
 }
-#script-window {
+.script-window {
   width: min(28rem, 100vw);
 }
-#editor .cm-editor {
+.script-editor .cm-editor {
   height: 18rem;
   font-size: 13px;
 }
@@ -397,12 +397,12 @@ button:disabled {
   padding: 0.3rem 0.5rem;
   max-width: 40rem;
 }
-#problems {
+.script-problems {
   border-top: 1px solid var(--line);
   padding: 0.3rem 0.5rem;
   font-size: 0.8rem;
 }
-#problems.bad {
+.script-problems.bad {
   color: var(--error);
 }
 
@@ -551,4 +551,17 @@ button:disabled {
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+}
+
+.message-path {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.message-path button {
+  font-size: 0.8rem;
+}
+.script-problems {
+  white-space: pre-wrap;
+  max-height: 8rem;
+  overflow: auto;
 }
