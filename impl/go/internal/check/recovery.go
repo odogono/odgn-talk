@@ -12,7 +12,7 @@ func (u *Unit) checkRestrictedSuspension() {
 		}
 	}
 	suspends := func(b *Body, n *syntax.Node) bool {
-		s, ok := u.Resolve(b, n.Text)
+		s, ok := u.Callee(b, n)
 		return ok && (s.Kind == "handler" || s.Kind == "function") && (s.MaySuspend || s.Import == "" && reaches[s.Name])
 	}
 	for changed := true; changed; {

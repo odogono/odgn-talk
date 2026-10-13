@@ -266,6 +266,7 @@ nothing-defaults/compatibility
 nothing-defaults/evaluation-order
 nothing-defaults/fuel-boundaries
 nothing-defaults/guards
+nothing-defaults/handler-name-locals
 nothing-defaults/host-objects
 nothing-defaults/stdlib-attribution
 nothing-defaults/values

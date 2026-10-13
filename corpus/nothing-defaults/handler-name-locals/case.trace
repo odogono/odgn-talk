@@ -1,0 +1,17 @@
+# Unblessed: locals that share a Handler's name (#764); first blessing awaits human review.
+
+> load h identity=0d81d5eda4459d85ddaeb07d1428e09c06b4c9c159ac9cbf42a33c22c869dfc2
+> deliver d1 to=h message=local
+> deliver d2 to=h message=otherwiseLocal args=[[5, 6]]
+> deliver d3 to=h message=bindings args=[2, [3]]
+> pump clock=2026-10-13T09:00:00Z
+seg h/r1 start delivery=d1 handler=local clause=1 fuel=67 alloc=368 state=352 end=return
+run h/r1 outcome=completed delivery=d1 handler=local fuel=67 alloc=368
+seg h/r2 start delivery=d2 handler=otherwiseLocal clause=1 fuel=99 alloc=632 state=572 end=return
+run h/r2 outcome=completed delivery=d2 handler=otherwiseLocal fuel=99 alloc=632
+seg h/r3 start delivery=d3 handler=bindings clause=1 fuel=69 alloc=272 state=564 end=return
+run h/r3 outcome=completed delivery=d3 handler=bindings fuel=69 alloc=272
+pumped state=idle fuel=235
+
+> vars
+vars h log=[["foo", 3], ["local", 9], ["otherwise", 4], ["command", 40], ["index", 5], ["default", 1], ["bindings", 15]]

@@ -266,12 +266,13 @@ separate human review ([corpus guide](../../corpus/README.md#seed-blessing)).
 | 9 | [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
 | 10 | [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/); the empty-stack verifier check is a TS unit test ([lowering tests](../../impl/ts/tests/lowering.test.ts)) |
 
-Two cross-Core findings narrowed the cases. Go refuses a local named like a
-Handler ([#764](https://github.com/odogono/odgn-talk/issues/764)), so
-`compatibility` doesn't pair a Handler and a local named `otherwise`. Zig
-omits `not constant` after `unknown name` in an initializer
+Zig omits `not constant` after `unknown name` in an initializer
 ([#765](https://github.com/odogono/odgn-talk/issues/765)), so the unresolved
-fallback is checked in a Handler.
+fallback is checked in a Handler. Go refused a local named like a Handler until
+[#764](https://github.com/odogono/odgn-talk/issues/764), so `compatibility`
+doesn't pair them; [`nothing-defaults/handler-name-locals`](../../corpus/nothing-defaults/handler-name-locals/)
+covers a local `otherwise` beside `on otherwise`, and its first blessing awaits
+review.
 
 1. Default only Nothing: explicit Nothing and absent map keys use the
    fallback; false, zero, empty text, list and map do not. A fallback may

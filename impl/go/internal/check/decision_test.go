@@ -51,10 +51,10 @@ func TestDecisionCallUsesLambdaScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The parameter clashes with a global name, but its call must not also
-	// misclassify the deciding Handler as locally called.
+	// The parameter shadows the Handler, so its call must not misclassify the
+	// deciding Handler as locally called.
 	got := Check(tree, Options{}).Diagnostics
-	if len(got) != 1 || got[0].Code != "name clash" {
+	if len(got) != 0 {
 		t.Fatal(got)
 	}
 }

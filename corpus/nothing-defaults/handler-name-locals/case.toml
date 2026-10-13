@@ -1,0 +1,15 @@
+# handler-name-locals: a local, parameter, pattern binding or Lambda parameter
+# may share a Handler's name. The name reads the local, while a Command Call
+# of that name still reaches the Handler. A local named `otherwise` beside
+# `on otherwise` is the language 1.0-rc.3 pairing the `compatibility` case
+# leaves out (spec chapter 4, Resolving a name; #764).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "h"
+source = "h.talk"
