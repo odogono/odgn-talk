@@ -28,7 +28,7 @@ import { standardChecks } from '../src/standard-capability-checks';
 import { storeCapability, type StoreImpl } from '../src/store-capability';
 import { map, nothing, text, type Value } from '../src/values';
 
-// Not import.meta.dir, so the runner also runs under Node and Deno.
+// Not import.meta.dir, so the runner also runs under Node.
 export const sqliteKitRoot = fileURLToPath(
   new URL('../../../corpus/sqlite-kit', import.meta.url),
 );

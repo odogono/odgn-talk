@@ -1,4 +1,4 @@
-// A `sqlite` database on `node:sqlite`, which Node, Deno and Bun all provide
+// A `sqlite` database on `node:sqlite`, which Node and Bun both provide
 // (chapter 9, `sqlite` Host obligations; ADR 0070). One database is one
 // Segment Coordinator, shared by every `sqlite` Grant on it and by the Stores
 // it keeps. A Segment's first write takes the one writer connection and opens
@@ -562,10 +562,8 @@ export class SqliteDatabase {
       const bound = Array.isArray(params)
         ? (params as SqlValue[])
         : [Object.fromEntries(params as ReadonlyMap<string, SqlValue>)];
-      // Stepped no further than max + 1 rows, where the runtime allows.
-      const stepped = iterateReportsErrors()
-        ? prepared.iterate(...(bound as SqlValue[]))
-        : prepared.all(...(bound as SqlValue[]));
+      // Stepped no further than max + 1 rows.
+      const stepped = prepared.iterate(...(bound as SqlValue[]));
       for (const row of stepped as Iterable<SqlValue[]>) {
         if (rows.length === max) {
           throw failure('too many rows', [['max', dec(String(max))]]);
@@ -707,24 +705,6 @@ export class SqliteDatabase {
     };
   }
 }
-
-// Deno 2.9's `iterate` ends quietly when a step fails, where Node's and Bun's
-// throw, so there a call steps every row with `all`, which throws.
-let iterates: boolean | undefined;
-const iterateReportsErrors = (): boolean => {
-  if (iterates === undefined) {
-    const probe = new DatabaseSync(':memory:');
-    try {
-      probe.prepare('SELECT abs(-9223372036854775807 - 1)').iterate().next();
-      iterates = false;
-    } catch {
-      iterates = true;
-    } finally {
-      probe.close();
-    }
-  }
-  return iterates;
-};
 
 // node:sqlite decodes TEXT with replacement characters, so one may stand for
 // bytes that weren't UTF-8. Refusing it keeps them from reaching a Script.

@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { notifyKitSequences } from '../tools/notify-kit';
 
-// The router uses no Bun API, so it runs unchanged under Node and Deno. A
-// runtime that isn't on PATH is skipped, unless NORTHTALK_NOTIFY_RUNTIMES,
-// a comma list, requires it.
+// The router uses no Bun API, so it runs unchanged under Node. Node is
+// skipped when it isn't on PATH, unless NORTHTALK_NOTIFY_RUNTIMES, a comma
+// list, requires it.
 const required = new Set(
   (process.env.NORTHTALK_NOTIFY_RUNTIMES ?? '').split(',').filter(Boolean),
 );
@@ -29,13 +29,6 @@ const bundled = async () => {
 
 const runtimes = {
   node: (script: string, ...args: string[]) => ['node', script, ...args],
-  deno: (script: string, ...args: string[]) => [
-    'deno',
-    'run',
-    '--allow-read',
-    script,
-    ...args,
-  ],
 };
 
 for (const [name, command] of Object.entries(runtimes)) {

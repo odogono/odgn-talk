@@ -1,4 +1,4 @@
-// A `sqlite` implementation on `node:sqlite`, for Hosts on Node, Deno or Bun
+// A `sqlite` implementation on `node:sqlite`, for Hosts on Node or Bun
 // (chapter 9, `sqlite` Host obligations). None of this is the Core: a Host
 // passes `sqliteDatabases` to `sqliteCapability`, and a database's Stores to
 // `storeCapability`.
