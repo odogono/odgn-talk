@@ -10,6 +10,8 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const transcript = @import("transcript.zig");
 const store = @import("store.zig");
+/// The normative `:inspect` reader (session-observation.md).
+const reader_template = @embedFile("inspect-reader");
 
 const Allocator = std.mem.Allocator;
 const parser = northtalk.syntax.parser;
@@ -54,6 +56,10 @@ pub const Driver = struct {
     trace: *const fn (context: *anyopaque, line: []const u8) void,
     /// A file `:export <directory>` writes; false if it can't.
     write: *const fn (context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) bool,
+    /// The next recorded object crossing envelope here, or null.
+    crossing: *const fn (context: *anyopaque) ?[]const u8,
+    /// Consumes the crossing `crossing` gave.
+    take: *const fn (context: *anyopaque) void,
 };
 
 const Mode = enum { immediate, suspending, fire_and_forget };
@@ -227,6 +233,20 @@ pub const Session = struct {
     trace_out: std.ArrayList([]const u8) = .empty,
     /// Whether the Entry being run is measured, by `:fuel`.
     measuring: bool = false,
+    /// Object crossings: the recorded Object Kinds, the identities
+    /// registered before the Group was made, the initial bindings, and the
+    /// Function Values exposed under each handle.
+    kinds: std.StringHashMapUnmanaged(KindInfo) = .empty,
+    objects: std.ArrayList(ObjectRef) = .empty,
+    setup: std.ArrayList(SetupBinding) = .empty,
+    handles: std.StringHashMapUnmanaged(*c.talk_value) = .empty,
+    /// The object an `:inspect` Run returned, for its reader Run.
+    reader: ?*c.talk_value = null,
+    /// A Restore's recorded resolver outcomes.
+    resolved: ?[]const std.json.Value = null,
+
+    const ObjectRef = struct { kind: []const u8, id: []const u8 };
+    const SetupBinding = struct { name: []const u8, kind: []const u8, id: []const u8 };
 
     const Library = struct { source: []const u8, library: *c.talk_library };
     const UnitSource = struct { name: []const u8, source: []const u8 };
@@ -411,7 +431,12 @@ pub const Session = struct {
             try check_(c.talk_capability_def_grant_all(d, null, &made));
             try s.loaded.append(s.alloc(), .{ .name = m.capability.ptr, .name_len = m.capability.len, .grant = made });
         }
-        const load: c.talk_load_options = .{ .name = "session", .name_len = 7, .source = "", .source_len = 0, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = false, .owner = null, .objects = null, .objects_len = 0, .limits = null };
+        // Recorded objects, as dummy native identities, and the initial
+        // bindings.
+        for (s.objects.items) |o| _ = try s.objectOf(o.kind, o.id);
+        var bound: std.ArrayList(c.talk_load_object) = .empty;
+        for (s.setup.items) |b| try bound.append(s.alloc(), .{ .name = b.name.ptr, .name_len = b.name.len, .object = try s.objectOf(b.kind, b.id) });
+        const load: c.talk_load_options = .{ .name = "session", .name_len = 7, .source = "", .source_len = 0, .grants = s.loaded.items.ptr, .grants_len = s.loaded.items.len, .grants_as_used = false, .owner = null, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = null };
         var script: ?*c.talk_script = null;
         try check_(c.talk_load(s.group, &load, &script));
         s.script = script;
@@ -748,6 +773,7 @@ pub const Session = struct {
     fn follow(s: *Session, reports: ?*c.talk_reports) void {
         var items: [*c]const c.talk_report = null;
         const n = c.talk_reports_items(reports, &items);
+        for (items[0..n]) |r| s.exposeReport(r);
         // Lifecycle first: Runs started and discarded.
         for (items[0..n]) |r| switch (r.kind) {
             c.TALK_REPORT_RUN_STARTED => {
@@ -856,6 +882,12 @@ pub const Session = struct {
         switch (x.outcome) {
             c.TALK_COMPLETED => if (s.entryOf(run)) |e| if (e.inspect) {
                 s.valueRows(x.result);
+                var o: ?*c.talk_object = null;
+                if (c.talk_value_as_object(s.group, x.result, &o)) {
+                    s.objectRows(x.result);
+                    c.talk_value_retain(x.result);
+                    s.reader = x.result;
+                }
             } else if (e.expression) {
                 s.sayf("{s}{s}", .{ p, s.display(x.result) });
             },
@@ -1048,6 +1080,10 @@ pub const Session = struct {
         if (std.mem.trim(u8, text.items, " \t\n").len == 0) return s.say("! bad arguments");
         const w = firstWords(text.items);
         if (w.doc or isDeclaration(w) or isOneOf(w.first, &statement_words) or w.first[0] == ':') return s.say("! bad arguments");
+        // Trailing input after the expression is refused.
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        if ((try parser.parseEntryEnd(arena.allocator(), text.items, true)).trailing) return s.say("! bad arguments");
         _ = try s.runAs(text.items, true, true);
     }
 
@@ -1101,6 +1137,27 @@ pub const Session = struct {
         s.next_entry = n + 1;
         for (roots) |r| try s.decls.append(s.alloc(), .{ .text = s.print("script variable {s}", .{r}), .kind = .variable, .names = try s.alloc().dupe([]const u8, &.{s.dupe(r)}) });
         // Requested with the `:limits` override, and pumped.
+        var override = s.limitOverride();
+        const message: c.talk_message = .{ .name = name.ptr, .name_len = name.len, .args = null, .args_len = 0, .limits = if (override.set != 0) &override else null };
+        var id: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+        var pending: ?*c.talk_pending = null;
+        try check_(c.talk_script_request(s.script, &message, &id, &pending));
+        const delivery = s.dupe(id.data[0..id.len]);
+        c.talk_owned_bytes_release(&id);
+        s.foreground = .{ .delivery = delivery, .entry = n, .expression = expression, .inspect = inspect };
+        if (s.measuring) try s.observing.measurements.append(s.alloc(), .{ .entry = name, .root = delivery, .started = true });
+        if (!try s.pump()) return .ran;
+        try s.foregroundLoop();
+        if (s.reader) |v| {
+            s.reader = null;
+            defer c.talk_value_release(v);
+            try s.readProperties(v);
+        }
+        return .ran;
+    }
+
+    /// The `:limits` override an Entry's Delivery carries.
+    fn limitOverride(s: *Session) c.talk_limit_override {
         var override: c.talk_limit_override = std.mem.zeroes(c.talk_limit_override);
         if (s.limits.fuel_per_run) |x| {
             override.set |= 1;
@@ -1118,17 +1175,7 @@ pub const Session = struct {
             override.set |= 8;
             override.max_join = x;
         }
-        const message: c.talk_message = .{ .name = name.ptr, .name_len = name.len, .args = null, .args_len = 0, .limits = if (override.set != 0) &override else null };
-        var id: c.talk_owned_bytes = .{ .data = null, .len = 0 };
-        var pending: ?*c.talk_pending = null;
-        try check_(c.talk_script_request(s.script, &message, &id, &pending));
-        const delivery = s.dupe(id.data[0..id.len]);
-        c.talk_owned_bytes_release(&id);
-        s.foreground = .{ .delivery = delivery, .entry = n, .expression = expression, .inspect = inspect };
-        if (s.measuring) try s.observing.measurements.append(s.alloc(), .{ .entry = name, .root = delivery, .started = true });
-        if (!try s.pump()) return .ran;
-        try s.foregroundLoop();
-        return .ran;
+        return override;
     }
 
     /// The smallest number above the last one used that the Script has no
@@ -1700,12 +1747,13 @@ pub const Session = struct {
         const saved = s.saves.get(name) orelse return s.say("! no such save");
         var libraries: std.ArrayList(?*c.talk_library) = .empty;
         for (s.libraries.values()) |l| try libraries.append(s.alloc(), l.library);
-        const options: c.talk_restore_options = .{ .name = "session", .name_len = 7, .trace = traceSink, .trace_context = s, .libraries = @ptrCast(libraries.items.ptr), .libraries_len = libraries.items.len, .grants = rebind, .grants_context = s, .resolve = null, .resolve_context = null, .mismatch = c.TALK_REJECT_MISMATCH, .allocator = null, .memory_cap = 0 };
+        const options: c.talk_restore_options = .{ .name = "session", .name_len = 7, .trace = traceSink, .trace_context = s, .libraries = @ptrCast(libraries.items.ptr), .libraries_len = libraries.items.len, .grants = rebind, .grants_context = s, .resolve = restoreResolve, .resolve_context = s, .mismatch = c.TALK_REJECT_MISMATCH, .allocator = null, .memory_cap = 0 };
         var group: ?*c.talk_group = null;
         var result: ?*c.talk_restore_result = null;
         var routing: ?*c.talk_routing_result = null;
         s.trace_lines.clearRetainingCapacity();
         s.admitted = false;
+        s.resolved = null;
         const code = c.talk_router_restore(s.router, s.core, saved.bytes.ptr, saved.bytes.len, &options, &group, &result, &routing);
         if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
         defer c.talk_restore_result_release(result);
@@ -1718,6 +1766,10 @@ pub const Session = struct {
         }
         s.group = group;
         s.script = c.talk_group_script(group, "session", 7);
+        // Handles from the old Group are invalid.
+        var handles = s.handles.valueIterator();
+        while (handles.next()) |h| c.talk_value_release(h.*);
+        s.handles.clearRetainingCapacity();
         s.harvest();
         s.decls = .fromOwnedSlice(try s.alloc().dupe(Decl, saved.decls));
         s.next_entry = saved.next_entry;
@@ -2574,6 +2626,453 @@ pub const Session = struct {
         s.measuring = true;
         defer s.measuring = false;
         _ = try s.runEntry(text.items, !statement);
+    }
+    // ------------------------------------------------------------ object crossings
+
+    /// A recorded Object Kind: its handle, and each property's declaration
+    /// as the Transcript gives it.
+    const KindInfo = struct { name: []const u8, kind: *c.talk_object_kind, props: []PropInfo };
+    const PropInfo = struct { name: []const u8, shape: []const u8, read_only: bool, get: [2]i64, set: [2]i64, session: *Session, kind: []const u8 };
+
+    fn parseJson(s: *Session, text: []const u8) ?std.json.Value {
+        return std.json.parseFromSliceLeaky(std.json.Value, s.alloc(), text, .{}) catch null;
+    }
+
+    fn jsonText(v: std.json.Value, key: []const u8) []const u8 {
+        if (v != .object) return "";
+        const x = v.object.get(key) orelse return "";
+        return if (x == .string) x.string else "";
+    }
+
+    fn jsonInt(v: std.json.Value, key: []const u8) i64 {
+        if (v != .object) return 0;
+        const x = v.object.get(key) orelse return 0;
+        return switch (x) {
+            .integer => |n| n,
+            .string => |t| std.fmt.parseInt(i64, t, 10) catch 0,
+            else => 0,
+        };
+    }
+
+    fn costOf(v: ?std.json.Value) [2]i64 {
+        const x = v orelse return .{ 0, 0 };
+        return .{ jsonInt(x, "fuel"), jsonInt(x, "alloc") };
+    }
+
+    /// The next recorded crossing, if the Transcript has one here.
+    fn peekCrossing(s: *Session) ?std.json.Value {
+        const text = s.driver.crossing(s.driver.context) orelse return null;
+        return s.parseJson(text);
+    }
+
+    fn takeCrossing(s: *Session) void {
+        s.driver.take(s.driver.context);
+    }
+
+    /// A top-level crossing envelope, between Host calls.
+    pub fn crossing(s: *Session, text: []const u8) !void {
+        const v = s.parseJson(text) orelse return error.MalformedTranscript;
+        const kind = jsonText(v, "type");
+        if (std.mem.eql(u8, kind, "kind")) return s.defineKind(v);
+        if (std.mem.eql(u8, kind, "object")) return s.registerObject(v.object.get("object").?);
+        if (std.mem.eql(u8, kind, "setup")) {
+            var it = v.object.get("objects").?.object.iterator();
+            while (it.next()) |e| try s.setup.append(s.alloc(), .{ .name = s.dupe(e.key_ptr.*), .kind = s.dupe(jsonText(e.value_ptr.*, "kind")), .id = s.dupe(jsonText(e.value_ptr.*, "id")) });
+            return;
+        }
+        if (std.mem.eql(u8, kind, "input")) {
+            try s.start();
+            try s.hostInput(v.object.get("request").?);
+            return;
+        }
+        return error.MalformedTranscript;
+    }
+
+    fn shapeOf(s: *Session, shape: std.json.Value) !*const c.talk_shape {
+        _ = s;
+        if (shape == .string) {
+            const names = [_]struct { []const u8, *const fn () callconv(.c) ?*const c.talk_shape }{
+                .{ "any", c.talk_any_shape },               .{ "value", c.talk_value_shape },     .{ "nothing", c.talk_nothing_shape },
+                .{ "boolean", c.talk_bool_shape },          .{ "number", c.talk_number_shape },   .{ "text", c.talk_text_shape },
+                .{ "bytes", c.talk_bytes_shape },           .{ "instant", c.talk_instant_shape }, .{ "range", c.talk_range_shape },
+                .{ "civil date", c.talk_civil_date_shape }, .{ "pattern", c.talk_pattern_shape }, .{ "function", c.talk_function_shape },
+            };
+            for (names) |n| if (std.mem.eql(u8, n[0], shape.string)) return n[1]().?;
+        }
+        return c.talk_any_shape().?;
+    }
+
+    fn defineKind(s: *Session, v: std.json.Value) !void {
+        const name = s.dupe(jsonText(v, "name"));
+        const props_json = v.object.get("props").?.array.items;
+        const infos = try s.alloc().alloc(PropInfo, props_json.len);
+        const props = try s.alloc().alloc(c.talk_prop, props_json.len);
+        for (props_json, infos, props) |p, *info, *prop| {
+            const read_only = if (p.object.get("readOnly")) |r| r == .bool and r.bool else true;
+            const shape_value = p.object.get("shape") orelse std.json.Value{ .string = "any" };
+            var shape_text: std.Io.Writer.Allocating = .init(s.alloc());
+            try std.json.Stringify.value(shape_value, .{}, &shape_text.writer);
+            info.* = .{ .name = s.dupe(jsonText(p, "name")), .shape = shape_text.written(), .read_only = read_only, .get = costOf(p.object.get("getCost")), .set = costOf(p.object.get("setCost")), .session = s, .kind = name };
+            prop.* = .{
+                .name = info.name.ptr,
+                .name_len = info.name.len,
+                .shape = try s.shapeOf(shape_value),
+                .get = propGet,
+                .set = if (read_only) null else propSet,
+                .context = info,
+                .get_cost = .{ .fuel = info.get[0], .alloc = info.get[1] },
+                .set_cost = .{ .fuel = info.set[0], .alloc = info.set[1] },
+            };
+        }
+        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.ptr, .props_len = props.len, .parent_kinds = null, .parent_kinds_lens = null, .parent_kinds_len = 0 };
+        var kind: ?*c.talk_object_kind = null;
+        try check_(c.talk_define_object_kind(s.core, &def, &kind));
+        try s.kinds.put(s.alloc(), name, .{ .name = name, .kind = kind.?, .props = infos });
+    }
+
+    /// An object's handle in the Group, made the first time it is named.
+    fn registerObject(s: *Session, ref: std.json.Value) !void {
+        const kind = s.dupe(jsonText(ref, "kind"));
+        const id = s.dupe(jsonText(ref, "id"));
+        try s.objects.append(s.alloc(), .{ .kind = kind, .id = id });
+        if (s.group != null) _ = try s.objectOf(kind, id);
+    }
+
+    fn objectOf(s: *Session, kind: []const u8, id: []const u8) !?*c.talk_object {
+        const g = s.group orelse return null;
+        var o: ?*c.talk_object = null;
+        if (c.talk_object_by_id(g, kind.ptr, kind.len, id.ptr, id.len, &o)) return o;
+        const k = s.kinds.get(kind) orelse return null;
+        // A dummy native identity; replay never calls the original Host.
+        try check_(c.talk_group_object(g, k.kind, id.ptr, id.len, @ptrFromInt(1), &o));
+        return o;
+    }
+
+    fn objectRef(s: *Session, ref: std.json.Value) !?*c.talk_object {
+        if (ref != .object) return null;
+        return s.objectOf(jsonText(ref, "kind"), jsonText(ref, "id"));
+    }
+
+    fn resolveObject(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize) callconv(.c) ?*c.talk_value {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        const o = (s.objectOf(kind[0..kind_len], id[0..id_len]) catch return null) orelse return null;
+        var v: ?*c.talk_value = null;
+        if (c.talk_object_value(o, &v) != c.TALK_OK) return null;
+        return v;
+    }
+
+    /// A Restore's resolver: each object as the recorded `resolve`
+    /// envelope says.
+    fn restoreResolve(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize, native: [*c]?*anyopaque) callconv(.c) bool {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        if (s.resolved == null) {
+            const record = s.peekCrossing() orelse return false;
+            if (!std.mem.eql(u8, jsonText(record, "type"), "resolve")) return false;
+            s.takeCrossing();
+            s.resolved = record.object.get("objects").?.array.items;
+        }
+        for (s.resolved.?) |r| {
+            const o = r.object.get("object").?;
+            if (!std.mem.eql(u8, jsonText(o, "kind"), kind[0..kind_len]) or !std.mem.eql(u8, jsonText(o, "id"), id[0..id_len])) continue;
+            const yes = r.object.get("resolved").?;
+            if (yes != .bool or !yes.bool) return false;
+            native.* = @ptrFromInt(1);
+            return true;
+        }
+        return false;
+    }
+
+    /// A Value from a crossing's JSON: the Value Encoding, with each
+    /// `{"$sessionFunction": <handle>}` the Function Value it names.
+    fn valueOf(s: *Session, v: std.json.Value) !?*c.talk_value {
+        const marked = try s.markHandles(v);
+        var text: std.Io.Writer.Allocating = .init(s.alloc());
+        try std.json.Stringify.value(marked, .{}, &text.writer);
+        var out: ?*c.talk_value = null;
+        if (c.talk_decode_value(text.written().ptr, text.written().len, resolveObject, s, &out) != c.TALK_OK) return null;
+        defer c.talk_value_release(out);
+        return s.unmarkHandles(out);
+    }
+
+    const handle_mark = "\u{1}session-function:";
+
+    fn markHandles(s: *Session, v: std.json.Value) !std.json.Value {
+        switch (v) {
+            .object => |o| {
+                if (o.count() == 1) if (o.get("$sessionFunction")) |h| if (h == .string) return .{ .string = s.print("{s}{s}", .{ handle_mark, h.string }) };
+                var out: std.json.ObjectMap = .{};
+                var it = o.iterator();
+                while (it.next()) |e| try out.put(s.alloc(), e.key_ptr.*, try s.markHandles(e.value_ptr.*));
+                return .{ .object = out };
+            },
+            .array => |a| {
+                var out: std.json.Array = .init(s.alloc());
+                for (a.items) |x| try out.append(try s.markHandles(x));
+                return .{ .array = out };
+            },
+            else => return v,
+        }
+    }
+
+    /// A new reference with each marked text replaced by its handle's
+    /// Function Value.
+    fn unmarkHandles(s: *Session, v: ?*c.talk_value) ?*c.talk_value {
+        var p: [*c]const u8 = null;
+        var n: usize = 0;
+        if (c.talk_value_as_text(v, &p, &n) and std.mem.startsWith(u8, p[0..n], handle_mark)) {
+            const f = s.handles.get(p[handle_mark.len..n]) orelse return null;
+            c.talk_value_retain(f);
+            return f;
+        }
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
+        switch (value.data) {
+            .list => |items| {
+                const out = s.alloc().alloc(?*c.talk_value, items.len) catch return null;
+                for (items, out) |x, *o| o.* = s.unmarkHandles(@ptrCast(x)) orelse return null;
+                defer for (out) |x| c.talk_value_release(x);
+                var made: ?*c.talk_value = null;
+                if (c.talk_list(@ptrCast(out.ptr), out.len, &made) != c.TALK_OK) return null;
+                return made;
+            },
+            .map => |pairs| {
+                const out = s.alloc().alloc(c.talk_pair, pairs.len) catch return null;
+                for (pairs, out) |x, *o| o.* = .{ .key = x.key.ptr, .key_len = x.key.len, .value = s.unmarkHandles(@ptrCast(x.value)) orelse return null };
+                defer for (out) |x| c.talk_value_release(x.value);
+                var made: ?*c.talk_value = null;
+                if (c.talk_map(out.ptr, out.len, &made) != c.TALK_OK) return null;
+                return made;
+            },
+            else => {
+                c.talk_value_retain(@constCast(v));
+                return @constCast(v);
+            },
+        }
+    }
+
+    /// A Value exposure: each Function Value leaf, depth first, binds the
+    /// handle its recorded `function` envelope names.
+    fn expose(s: *Session, values: []const ?*const c.talk_value) void {
+        for (values) |v| s.exposeOne(v orelse continue);
+    }
+
+    fn exposeOne(s: *Session, maybe: ?*const c.talk_value) void {
+        const v = maybe orelse return;
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v));
+        switch (value.data) {
+            .function => {
+                const record = s.peekCrossing() orelse return;
+                if (!std.mem.eql(u8, jsonText(record, "type"), "function")) return;
+                s.takeCrossing();
+                c.talk_value_retain(@constCast(v));
+                s.handles.put(s.alloc(), s.dupe(jsonText(record, "handle")), @constCast(v)) catch {};
+            },
+            .list => |items| for (items) |x| s.exposeOne(@ptrCast(x)),
+            .map => |pairs| for (pairs) |p| s.exposeOne(@ptrCast(p.value)),
+            else => {},
+        }
+    }
+
+    /// A report's Values, as one exposure.
+    fn exposeReport(s: *Session, r: c.talk_report) void {
+        switch (r.kind) {
+            c.TALK_REPORT_RUN_STARTED => {
+                const x = r.as.run_started;
+                s.exposeOne(x.function);
+                for (x.args[0..x.args_len]) |a| s.exposeOne(a);
+            },
+            c.TALK_REPORT_RUN_END => {
+                const x = r.as.run_end;
+                s.exposeOne(x.result);
+                if (x.@"error") |e| s.exposeOne(e.*.data);
+            },
+            c.TALK_REPORT_UNHANDLED => for (r.as.unhandled.args[0..r.as.unhandled.args_len]) |a| s.exposeOne(a),
+            else => {},
+        }
+    }
+
+    /// A Host action an external Host made, or one a property callback made
+    /// while it ran, which its Pump drains.
+    fn hostInput(s: *Session, request: std.json.Value) !void {
+        const kind = jsonText(request, "kind");
+        const g = s.group orelse return;
+        if (std.mem.eql(u8, kind, "set-parent")) {
+            const o = try s.objectRef(request.object.get("object").?) orelse return;
+            const parent = if (request.object.get("parent")) |p| try s.objectRef(p) else null;
+            _ = c.talk_set_parent(g, o, parent);
+        } else if (std.mem.eql(u8, kind, "dispose")) {
+            const o = try s.objectRef(request.object.get("object").?) orelse return;
+            _ = c.talk_dispose(g, o);
+        } else if (std.mem.eql(u8, kind, "deliver")) {
+            const message = request.object.get("message").?;
+            const name = jsonText(message, "name");
+            const args = try s.argsOf(message.object.get("args"));
+            const m: c.talk_message = .{ .name = name.ptr, .name_len = name.len, .args = @ptrCast(args.ptr), .args_len = args.len, .limits = null };
+            const to = request.object.get("to").?;
+            if (to.object.get("script")) |script| {
+                const target = c.talk_group_script(g, script.string.ptr, script.string.len) orelse return;
+                _ = c.talk_script_deliver(target, &m, null);
+            } else if (try s.objectRef(to.object.get("object") orelse return)) |o| {
+                _ = c.talk_deliver(g, o, &m, null);
+            }
+            for (args) |a| c.talk_value_release(a);
+        } else if (std.mem.eql(u8, kind, "call")) {
+            const fn_value = try s.valueOf(request.object.get("fn").?) orelse return;
+            defer c.talk_value_release(fn_value);
+            const args = try s.argsOf(request.object.get("args"));
+            defer for (args) |a| c.talk_value_release(a);
+            var pending: ?*c.talk_pending = null;
+            _ = c.talk_group_call(g, fn_value, @ptrCast(args.ptr), args.len, null, null, &pending);
+            if (pending) |p| c.talk_pending_release(p);
+        }
+    }
+
+    fn argsOf(s: *Session, list: ?std.json.Value) ![]?*c.talk_value {
+        const items = if (list) |l| l.array.items else &.{};
+        const out = try s.alloc().alloc(?*c.talk_value, items.len);
+        for (items, out) |x, *o| o.* = try s.valueOf(x);
+        return out;
+    }
+
+    /// The crossings a property callback recorded, up to its end: objects
+    /// it registered and actions it made, then its reply.
+    fn callbackReply(s: *Session) ?std.json.Value {
+        const begin = s.peekCrossing() orelse return null;
+        if (!std.mem.eql(u8, jsonText(begin, "type"), "property-begin")) return null;
+        s.takeCrossing();
+        while (s.peekCrossing()) |x| {
+            const t = jsonText(x, "type");
+            s.takeCrossing();
+            if (std.mem.eql(u8, t, "property-end")) return x.object.get("reply");
+            if (std.mem.eql(u8, t, "object")) s.registerObject(x.object.get("object").?) catch {};
+            if (std.mem.eql(u8, t, "kind")) s.defineKind(x) catch {};
+            if (std.mem.eql(u8, t, "input")) {
+                s.hostInput(x.object.get("request").?) catch {};
+                s.queued = true;
+            }
+        }
+        return null;
+    }
+
+    fn replyEnd(s: *Session, reply: std.json.Value, result: ?[*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+        if (reply.object.get("value")) |v| {
+            const value = (s.valueOf(v) catch return c.TALK_CALL_BROKEN) orelse return c.TALK_CALL_BROKEN;
+            if (result) |r| r.* = value else c.talk_value_release(value);
+            return c.TALK_CALL_ANSWERED;
+        }
+        if (reply.object.get("ok") != null) return c.TALK_CALL_ANSWERED;
+        if (reply.object.get("fail")) |f| {
+            const code = s.dupe(jsonText(f, "code"));
+            const message: ?[]const u8 = if (f.object.get("message")) |m| s.dupe(m.string) else null;
+            const data = if (f.object.get("data")) |d| (s.valueOf(d) catch null) else null;
+            err.* = .{ .code = code.ptr, .code_len = code.len, .message = if (message) |m| m.ptr else null, .message_len = if (message) |m| m.len else 0, .data = data };
+            return c.TALK_CALL_FAILED;
+        }
+        return c.TALK_CALL_BROKEN;
+    }
+
+    fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        _ = o;
+        const info: *PropInfo = @ptrCast(@alignCast(context.?));
+        const s = info.session;
+        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
+        return s.replyEnd(reply, result, err);
+    }
+
+    fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        _ = o;
+        const info: *PropInfo = @ptrCast(@alignCast(context.?));
+        const s = info.session;
+        // The setter's argument is an exposure, before the callback.
+        s.expose(&.{v});
+        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
+        return s.replyEnd(reply, null, err);
+    }
+
+    /// An object's rows: its kind, id and whether it is disposed, then each
+    /// declared property in name order.
+    fn objectRows(s: *Session, v: ?*const c.talk_value) void {
+        var o: ?*c.talk_object = null;
+        if (!c.talk_value_as_object(s.group, v, &o)) return;
+        const object: *const northtalk.machine.objects.Object = @ptrCast(@alignCast(o.?));
+        s.sayf("object {{kind: {s}, id: {s}, disposed: {}}}", .{ s.textShown(object.kind.name), s.textShown(object.id), object.disposed });
+        const info = s.kinds.get(object.kind.name) orelse return;
+        const props = s.alloc().dupe(PropInfo, info.props) catch return;
+        std.mem.sort(PropInfo, props, {}, struct {
+            fn less(_: void, x: PropInfo, y: PropInfo) bool {
+                return std.mem.order(u8, x.name, y.name) == .lt;
+            }
+        }.less);
+        for (props) |p| {
+            var shape: ?*c.talk_value = null;
+            const shown_shape = if (c.talk_decode_value(p.shape.ptr, p.shape.len, null, null, &shape) == c.TALK_OK) blk: {
+                defer c.talk_value_release(shape);
+                break :blk s.display(shape);
+            } else s.textShown(p.shape);
+            const set = if (p.read_only) "nothing" else s.print("{{fuel: {d}, alloc: {d}}}", .{ p.set[0], p.set[1] });
+            s.sayf("property {{name: {s}, shape: {s}, readOnly: {}, getCost: {{fuel: {d}, alloc: {d}}}, setCost: {s}}}", .{ s.textShown(p.name), shown_shape, p.read_only, p.get[0], p.get[1], set });
+        }
+    }
+
+    /// `:inspect`'s second Run: the normative reader, extended under the
+    /// first free `entry<n>` and requested with the object and its readable
+    /// property names in order.
+    fn readProperties(s: *Session, v: ?*c.talk_value) !void {
+        var o: ?*c.talk_object = null;
+        if (!c.talk_value_as_object(s.group, v, &o)) return;
+        const object: *const northtalk.machine.objects.Object = @ptrCast(@alignCast(o.?));
+        const info = s.kinds.get(object.kind.name) orelse return;
+        var names: std.ArrayList([]const u8) = .empty;
+        for (info.props) |p| try names.append(s.alloc(), p.name);
+        std.mem.sort([]const u8, names.items, {}, struct {
+            fn less(_: void, x: []const u8, y: []const u8) bool {
+                return std.mem.order(u8, x, y) == .lt;
+            }
+        }.less);
+        var n = s.next_entry;
+        while (true) : (n += 1) {
+            const stem = s.print("entry{d}", .{n});
+            const words = [_][]const u8{ "", "Object", "Names", "Name", "Row", "Error", "Clean", "Key" };
+            const taken = for (words) |w| {
+                const id = s.print("{s}{s}", .{ stem, w });
+                if (s.hasName(id) or s.handlerStarting(id)) break true;
+            } else false;
+            if (!taken) break;
+        }
+        const stem = s.print("entry{d}", .{n});
+        var source: std.ArrayList(u8) = .empty;
+        var rest: []const u8 = reader_template;
+        while (std.mem.indexOf(u8, rest, "entry0")) |at| {
+            try source.appendSlice(s.alloc(), rest[0..at]);
+            try source.appendSlice(s.alloc(), stem);
+            rest = rest[at + "entry0".len ..];
+        }
+        try source.appendSlice(s.alloc(), rest);
+        if (c.talk_script_extend(s.script, source.items.ptr, source.items.len) != c.TALK_OK) return;
+        s.extensions += 1;
+        s.harvest();
+        s.next_entry = n + 1;
+        const selector = s.print("{s}:to:", .{stem});
+        var name_values: std.ArrayList(?*c.talk_value) = .empty;
+        defer for (name_values.items) |x| c.talk_value_release(x);
+        for (names.items) |x| {
+            var t: ?*c.talk_value = null;
+            try check_(c.talk_text(x.ptr, x.len, &t));
+            try name_values.append(s.alloc(), t);
+        }
+        var list: ?*c.talk_value = null;
+        try check_(c.talk_list(@ptrCast(name_values.items.ptr), name_values.items.len, &list));
+        defer c.talk_value_release(list);
+        const args = [_]?*c.talk_value{ v, list };
+        var override = s.limitOverride();
+        const message: c.talk_message = .{ .name = selector.ptr, .name_len = selector.len, .args = @ptrCast(&args), .args_len = 2, .limits = if (override.set != 0) &override else null };
+        var id: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+        var pending: ?*c.talk_pending = null;
+        try check_(c.talk_script_request(s.script, &message, &id, &pending));
+        const delivery = s.dupe(id.data[0..id.len]);
+        c.talk_owned_bytes_release(&id);
+        s.foreground = .{ .delivery = delivery, .entry = n, .expression = false };
+        if (!try s.pump()) return;
+        try s.foregroundLoop();
     }
 };
 

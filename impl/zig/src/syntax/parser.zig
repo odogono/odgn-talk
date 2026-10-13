@@ -60,16 +60,24 @@ pub fn parseWithScratch(arena: Allocator, scratch: Allocator, source: []const u8
 /// one statement or one expression, then the end of the source, which ends
 /// its last line. Its first syntax error, if it has one.
 pub fn parseEntry(arena: Allocator, source: []const u8, expression: bool) Allocator.Error!?Diagnostic {
+    const r = try parseEntryEnd(arena, source, expression);
+    return r.failure;
+}
+
+/// As `parseEntry`, and whether its error came after the statement or
+/// expression ended: trailing input.
+pub fn parseEntryEnd(arena: Allocator, source: []const u8, expression: bool) Allocator.Error!struct { failure: ?Diagnostic, trailing: bool } {
     const shared = try arena.create(lexer.Shared);
     shared.* = .{ .source = source, .arena = arena };
     var p: Parser = .{ .a = arena, .scratch = arena, .lex = .init(shared) };
     try p.brackets.ensureTotalCapacity(arena, 16);
     try p.nl_base.append(arena, 0);
-    p.entry(expression) catch |e| switch (e) {
-        error.Syntax => return p.failure.?,
+    var ended = false;
+    p.entry(expression, &ended) catch |e| switch (e) {
+        error.Syntax => return .{ .failure = p.failure.?, .trailing = ended },
         error.OutOfMemory => return error.OutOfMemory,
     };
-    return null;
+    return .{ .failure = null, .trailing = false };
 }
 
 const Error = error{Syntax} || Allocator.Error;
@@ -434,9 +442,10 @@ const Parser = struct {
 
     // ------------------------------------------------------------ top level
 
-    fn entry(p: *Parser, expression: bool) Error!void {
+    fn entry(p: *Parser, expression: bool, ended: *bool) Error!void {
         try p.skipNewlines();
         if (expression) _ = try p.expr() else _ = try p.statement();
+        ended.* = true;
         try p.endOfStatement();
         try p.skipNewlines();
         const t = try p.peek(.operand);

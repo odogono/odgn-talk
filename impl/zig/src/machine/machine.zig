@@ -8480,12 +8480,47 @@ pub const Group = struct {
                 try g.push(frame, v);
                 return .next;
             },
+            .failed => |f| return g.propFailed(run, o, key, "get", .{ .code = f.code, .message = f.message, .data = f.data }, m),
             else => {
                 g.releasePropResult(outcome);
                 g.propRecord(run, o, key, "get", "error", null);
                 return g.propError(o, key);
             },
         }
+    }
+
+    /// A property's failure, which it takes: recorded with its code,
+    /// message and Data, and raised as an Operation's is, with `capability`
+    /// the Object Kind and `operation` the property. One that isn't well
+    /// formed is `host error`.
+    fn propFailed(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, f: Failure, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        defer gpa.free(f.code);
+        defer if (f.message) |t| gpa.free(t);
+        defer if (f.data) |d| d.release();
+        const shown = try failureMap(gpa, f);
+        defer shown.release();
+        g.propRecord(run, o, key, op, "error", shown);
+        if (try g.landedAt(run)) return error.Landed;
+        if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(o, key);
+        // Its Data is converted as a value read is, an empty map when it
+        // has none.
+        const empty = try model.map(gpa, &.{});
+        defer empty.release();
+        const size = costs.size(f.data orelse empty);
+        m.fuel_extra += (size + 31) / 32;
+        m.alloc_extra += size;
+        const capability = try model.text(gpa, o.kind.name);
+        defer capability.release();
+        const operation_name = try model.text(gpa, key);
+        defer operation_name.release();
+        var pairs: std.ArrayList(model.Pair) = .empty;
+        defer pairs.deinit(gpa);
+        try pairs.appendSlice(gpa, shown.data.map);
+        try pairs.appendSlice(gpa, &.{ .{ .key = "capability", .value = capability }, .{ .key = "operation", .value = operation_name } });
+        g.pending_error = try model.map(gpa, pairs.items);
+        g.pending_core = false;
+        return error.Raised;
     }
 
     /// `set the k of o to e`: the value is checked against the property's
@@ -8536,6 +8571,7 @@ pub const Group = struct {
                 if (try g.landedAt(run)) return error.Landed;
                 return .next;
             },
+            .failed => |f| return g.propFailed(run, o, key, "set", .{ .code = f.code, .message = f.message, .data = f.data }, m),
             else => {
                 g.releasePropResult(outcome);
                 g.propRecord(run, o, key, "set", "error", null);
