@@ -12,11 +12,11 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
   mkdirSync(dist, { recursive: true });
   const result = await Bun.build({
     entrypoints: [
-      'main.ts',
-      'session.worker.ts',
-      'lsp.worker.ts',
-      'syntax.worker.ts',
-    ].map(f => resolve(root, 'src', f)),
+      ...['main.ts', 'session.worker.ts', 'syntax.worker.ts'].map(f =>
+        resolve(root, 'src', f),
+      ),
+      resolve(root, '../editor/src/lsp.worker.ts'),
+    ],
     outdir: dist,
     target: 'browser',
     format: 'esm',

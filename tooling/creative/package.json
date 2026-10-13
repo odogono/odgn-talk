@@ -1,0 +1,18 @@
+{
+  "name": "@odgn/northtalk-creative",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "bun test tests",
+    "build": "bun tools/build.ts",
+    "dev": "bun tools/serve.ts --watch",
+    "start": "bun tools/serve.ts"
+  },
+  "dependencies": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@odgn/northtalk": "workspace:*",
+    "@odgn/northtalk-editor": "workspace:*"
+  }
+}

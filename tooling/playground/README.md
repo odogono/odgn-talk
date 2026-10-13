@@ -85,11 +85,10 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
 - [`src/session.ts`](src/session.ts): the Playground session over the Session Host. It handles Apply, Restart, Library saves, breakpoint mapping, pause views and opening a Transcript. It does no I/O and is tested under Bun.
 - [`src/declarations.ts`](src/declarations.ts): splits a tab into top-level declarations with the Core's parser, and plans Apply.
 - [`src/session.worker.ts`](src/session.worker.ts): the Playground Host. It holds the session, its deadline timers and the replay debugger.
-- [`src/lsp.worker.ts`](src/lsp.worker.ts): the tooling stack's language server over `postMessage`.
-- [`src/main.ts`](src/main.ts), [`src/editor.ts`](src/editor.ts), [`src/lsp-client.ts`](src/lsp-client.ts): the page, the CodeMirror 6 editor, and its LSP client.
+- [`src/main.ts`](src/main.ts) and [`src/editor.ts`](src/editor.ts): the page, and the Playground's editor. The editor adds the breakpoint gutter, the paused line, print it, and the keys to run a selection or save, to the [shared browser editor](../editor/). That package also has the LSP client and the LSP worker, which runs the tooling stack's language server over `postMessage`.
 - [`src/workbench.ts`](src/workbench.ts): pane controls, themes and syntax navigation. [`src/syntax.worker.ts`](src/syntax.worker.ts) projects the recovering tree; [`src/canvas.ts`](src/canvas.ts) renders validated drawing commands.
 - [`src/examples.ts`](src/examples.ts): the Examples menu's catalogue, over the `.talk` files in [`src/examples/`](src/examples/). [`tests/examples.test.ts`](tests/examples.test.ts) runs each one fresh and lints it with the beginner profile.
-- [`src/link.ts`](src/link.ts): the Shared Link codec. [`src/protocol.ts`](src/protocol.ts): the worker messages.
+- [`src/link.ts`](src/link.ts): the Shared Link codec. [`src/protocol.ts`](src/protocol.ts): the session and syntax worker messages.
 
 ## The corpus in a browser
 

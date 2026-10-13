@@ -1,0 +1,99 @@
+/* The creative tool's page: a desk with floating windows, in the Stack
+   layout chosen for #154. */
+:root {
+  --bg: #d8d4cb;
+  --panel: #ffffff;
+  --line: #111111;
+  --text: #1f1d1a;
+  --muted: #6d675d;
+  --accent: #2f5d8a;
+  --keyword: #7a3e9d;
+  --string: #2e7d32;
+  --number: #b25b00;
+  --comment: #8a8478;
+  --operator: #4a4a4a;
+  --error: #b3261e;
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  background-image: radial-gradient(rgb(0 0 0 / 6%) 1px, transparent 1px);
+  background-size: 14px 14px;
+  color: var(--text);
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.3rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+h1 {
+  font-size: 1rem;
+  margin: 0;
+}
+h1 span,
+.muted {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+#desk {
+  flex: 1;
+  padding: 2rem;
+  overflow: auto;
+}
+.window {
+  width: min(40rem, 100%);
+  background: var(--panel);
+  border: 1.5px solid var(--line);
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 80%);
+}
+.window .bar {
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: repeating-linear-gradient(
+    var(--panel) 0 2px,
+    var(--line) 2px 3px
+  );
+}
+.window .bar span {
+  background: var(--panel);
+  padding: 0 0.4rem;
+}
+#editor .cm-editor {
+  height: 18rem;
+  font-size: 13px;
+}
+.cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cm-hint {
+  font-size: 0.8em;
+  opacity: 0.7;
+  margin-right: 0.2em;
+}
+.cm-hover {
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  padding: 0.3rem 0.5rem;
+  max-width: 40rem;
+}
+#problems {
+  border-top: 1px solid var(--line);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+#problems.bad {
+  color: var(--error);
+}

@@ -4,7 +4,7 @@ import type {
   RpcMessage,
   WorkspaceConfiguration,
 } from '@odgn/northtalk-tooling/lsp';
-import type { FromLsp, ToLsp } from './protocol';
+import type { FromLsp, ToLsp } from './lsp-protocol';
 
 export class LspClient {
   private next = 1;

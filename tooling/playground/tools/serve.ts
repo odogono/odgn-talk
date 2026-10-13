@@ -25,7 +25,13 @@ if (watching) {
       );
     }, 100);
   };
-  for (const dir of ['src', 'static', '../stack/src', '../../impl/ts/src']) {
+  for (const dir of [
+    'src',
+    'static',
+    '../editor/src',
+    '../stack/src',
+    '../../impl/ts/src',
+  ]) {
     watch(resolve(root, dir), { recursive: true }, rebuild);
   }
 }
