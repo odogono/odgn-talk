@@ -257,3 +257,19 @@ test('marked comments preserve documentation and executable disassembly across f
     expect(canonical(disassemble(after))).toBe(canonical(disassemble(before)));
   }
 });
+
+test('Nothing defaults preserve grouping, optional keys and lazy lowering', () => {
+  const source =
+    'on go\nreturn (nothing otherwise false)or the optional ("active") of {} otherwise false\nend go';
+  const formatted = formatSource(source);
+  expect(formatted.error).toBeNull();
+  expect(formatted.source).toContain(
+    '(nothing otherwise false) or the optional ("active") of {} otherwise false',
+  );
+  expect(
+    canonical(
+      disassemble(compileSource(formatted.source, { name: 's' }).unit!),
+    ),
+  ).toBe(canonical(disassemble(compileSource(source, { name: 's' }).unit!)));
+  expect(formatSource(formatted.source).source).toBe(formatted.source);
+});

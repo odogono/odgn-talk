@@ -87,6 +87,8 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `mod` | operator position |
 | `most` | after `is at` or `is not at` |
 | `next` | at the start of a statement, before `repeat` |
+| `optional` | after `the`, unless followed by `of` |
+| `otherwise` | between default expression operands |
 | `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
 | `queued` | after a comma in a Handler head |
 | `replacing` | after a comma in a Handler head |
@@ -109,7 +111,7 @@ The chunk kinds, the ordinals, the Built-in property names, the Text Pattern key
 
 <!-- generated: grammar.follow -->
 
-`as`, `before`, `begins`, `by`, `can`, `collecting`, `comes`, `contains`, `delimited`, `div`, `does`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `whose`, `with`
+`as`, `before`, `begins`, `by`, `can`, `collecting`, `comes`, `contains`, `delimited`, `div`, `does`, `ends`, `from`, `ignoring`, `matches`, `mod`, `otherwise`, `times`, `whose`, `with`
 
 <!-- end -->
 
@@ -122,7 +124,7 @@ Any Name may be an [Argument Label](#argument-labels), except these. Of the Rese
 <!-- generated: grammar.labels -->
 
 - **Reserved Words that may be labels:** `to`.
-- **Names that may not be labels:** `from`, `with`.
+- **Names that may not be labels:** `from`, `otherwise`, `with`.
 
 <!-- end -->
 
@@ -388,11 +390,29 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 
 ## Expressions
 
+### Default and optional-key expressions
+
+`Default` is the lowest ordinary binary precedence, left-associative.
+A trailing Whose Clause still requires an ordinal Chunk Expression as its
+whole preceding operand. Restricted replace subjects and replacements need
+parentheses around a default expression.
+
+After `the`, `optional` followed by `of` selects the existing ordinary key;
+otherwise the registered `optional-key` two-token decision selects an optional
+map-key read. Neither `otherwise` nor `optional` is Reserved or Advanced.
+`otherwise` is excluded as an Argument Label and belongs to FOLLOW, so an
+index variable of that name must be grouped: `item (otherwise) of xs`.
+See the [migration guide](../docs/migrations/nothing-defaults.md) before
+changing labelled message producers or consumers.
+
+
 <!-- generated: ebnf.expressions -->
 
 ```ebnf
-Expression     ::= Lambda | EveryHead Whose | Or Whose?
-                   /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
+Expression     ::= Lambda | EveryHead Whose | Default Whose?
+                   /* `Whose` after `Default` only when it is an ordinal Chunk Expression, with or without its `delimited by` */
+Default        ::= Or ( 'otherwise' Or )*
+OptionalKey    ::= Key | Text | '(' Expression ')'
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
@@ -425,18 +445,19 @@ The operators, lowest precedence first:
 
 | Level | Associativity | Operators |
 | --- | --- | --- |
-| 1 | left | `or` |
-| 2 | left | `and` |
-| 3 | prefix | `not` |
-| 4 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches`, `does not contain`, `does not begin with`, `does not end with`, `does not match`, `is greater than`, `is not greater than`, `is less than`, `is not less than`, `is at least`, `is not at least`, `is at most`, `is not at most`, `comes before`, `comes after` |
-| 5 | left | `&` |
-| 6 | none | `..` |
-| 7 | left | `+`, `-` |
-| 8 | left | `*`, `/`, `mod`, `div` |
-| 9 | right | `^` |
-| 10 | prefix | `-` |
-| 11 | postfix | `as` |
-| 12 | postfix | `of`, `'s`, `f(…)` |
+| 1 | left | `otherwise` |
+| 2 | left | `or` |
+| 3 | left | `and` |
+| 4 | prefix | `not` |
+| 5 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches`, `does not contain`, `does not begin with`, `does not end with`, `does not match`, `is greater than`, `is not greater than`, `is less than`, `is not less than`, `is at least`, `is not at least`, `is at most`, `is not at most`, `comes before`, `comes after` |
+| 6 | left | `&` |
+| 7 | none | `..` |
+| 8 | left | `+`, `-` |
+| 9 | left | `*`, `/`, `mod`, `div` |
+| 10 | right | `^` |
+| 11 | prefix | `-` |
+| 12 | postfix | `as` |
+| 13 | postfix | `of`, `'s`, `f(…)` |
 
 <!-- end -->
 
@@ -483,7 +504,8 @@ Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | Binary
 Call           ::= Name CallOpen ExpressionList? ')'
 Chunk          ::= ChunkWord Range 'of' Postfix
 ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
-The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
+The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
+                         | '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
                          | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
@@ -683,6 +705,7 @@ These are the only places where the parser reads a second token before it choose
 | `kind` | `civil` followed by `date` is the kind `civil date` |
 | `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |
+| `optional-key` | after `the`, `optional` followed by `of` is an ordinary key; otherwise it introduces an optional map-key read |
 | `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key |
 | `ordering-words` | after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |

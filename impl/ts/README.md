@@ -1,5 +1,7 @@
 # TS Core foundations
 
+The TS Core supports lazy `otherwise` and map-only `the optional k of x` reads, including computed keys, Constants and Guards. See the [migration and integration constraints](../../docs/migrations/nothing-defaults.md).
+
 The TS Core constructs and encodes values, parses and checks source, lowers it to the Abstract Machine, and runs Scripts through the embedding API. Its Session Host supports Entries, Session Commands, Transcript recording and replay; the CLI provides the REPL. The Spec and Data Files remain the authority; limitations are described beside each feature below.
 
 Run commands in this guide from the repository root. Workspace-only scripts select their package explicitly with `--cwd`.

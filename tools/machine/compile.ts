@@ -2718,6 +2718,16 @@ export class BodyCompiler {
         return void this.load(n.name, n);
       case 'Call':
         return this.call(n, false);
+      case 'otherwise': {
+        const end = this.label();
+        this.expr(n.l);
+        this.at(n);
+        this.emit('branch-not-nothing', [end]);
+        this.emit('pop');
+        this.expr(n.r);
+        this.place(end);
+        return;
+      }
       case 'and':
       case 'or':
         return this.logical(n);
@@ -2775,6 +2785,7 @@ export class BodyCompiler {
         this.at(n);
         this.emit('can-convert', [n.kind]);
         return;
+      case 'OptionalKey':
       case 'Key': {
         if (n.computed) {
           this.expr(n.key);
@@ -2782,7 +2793,13 @@ export class BodyCompiler {
         this.expr(n.base);
         this.at(n);
         this.emit(
-          n.computed ? 'get-key-computed' : 'get-key',
+          n.k === 'OptionalKey'
+            ? n.computed
+              ? 'get-optional-key-computed'
+              : 'get-optional-key'
+            : n.computed
+              ? 'get-key-computed'
+              : 'get-key',
           n.computed ? [] : [n.key],
         );
         return;

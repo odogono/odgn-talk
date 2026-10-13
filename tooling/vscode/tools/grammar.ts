@@ -74,6 +74,7 @@ const operatorWords = follow.filter(word =>
     'ends',
     'matches',
     'mod',
+    'otherwise',
   ].includes(word),
 );
 // Contextual words worth colouring wherever they stand, as the Playground does.
@@ -84,6 +85,7 @@ const contextual = [
   'case',
   'each',
   'say',
+  'optional',
 ];
 
 const builtins = (group: (name: string) => boolean) =>

@@ -1,0 +1,10 @@
+constant fallback = 9
+script variable result
+on go where the optional active of {} otherwise false
+  return 0
+end go
+on go
+  put [1 otherwise 2 otherwise 3, nothing otherwise nothing otherwise 3] into result
+  put [the optional length of {length: 4}, the optional ("city") of nothing otherwise fallback] after result
+  return result
+end go

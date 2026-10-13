@@ -188,6 +188,17 @@ cost = "jump"
 does = "Continues at the label"
 
 [[instruction]]
+name = "branch-not-nothing"
+group = "control"
+operands = ["label"]
+pops = 1
+pushes = 1
+jumps = 1
+suspends = false
+cost = "branch"
+does = "Preserves the top value and continues at the label if it is not Nothing"
+
+[[instruction]]
 name = "branch-false"
 group = "control"
 operands = ["label"]
@@ -529,6 +540,28 @@ suspends = false
 cost = "get-key"
 errors = ["wrong kind", "object gone"]
 does = "`the (k) of x`, with the key below the value"
+
+[[instruction]]
+name = "get-optional-key"
+group = "access"
+operands = ["key"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text"
+
+[[instruction]]
+name = "get-optional-key-computed"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text"
 
 [[instruction]]
 name = "property"

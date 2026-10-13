@@ -535,3 +535,60 @@ test('property Host errors return Host-only detail without a fabricated Trace ca
   expect(trace.join('\n')).not.toContain('Host secret');
   expect(trace.some(l => l.startsWith('call-failed'))).toBe(false);
 });
+
+test('optional reads reject live and disposed objects without Host calls, including Guards', () => {
+  let calls = 0;
+  const kind = defineObjectKind({
+    name: 'optional-test',
+    props: {
+      value: {
+        get: () => {
+          calls++;
+          return text('host');
+        },
+      },
+    },
+  });
+  for (const disposed of [false, true]) {
+    const lines: string[] = [];
+    const group = newGroup({ name: 'g', trace: line => lines.push(line) });
+    const object = group.object(kind, 'o', null);
+    const script = group.load({
+      name: 's',
+      objects: { obj: object },
+      source: `script variable results = []
+on go where the optional value of obj otherwise false
+return 0
+end go
+on go
+put obj into dynamic
+put the optional held of {held: obj} into held
+put [held = obj] into results
+try
+put the optional id of obj into x
+catch e
+put e's expected after results
+end try
+try
+put the optional ("value") of dynamic into x
+catch e
+put e's expected after results
+end try
+end go`,
+    });
+    if (disposed) {
+      group.dispose(object);
+    }
+    script.deliver({ name: 'go' });
+    group.pump(now);
+    group.inspect();
+    expect(lines.at(-1)).toBe('vars s results=[true, "map", "map"]');
+    expect(lines.some(line => line.startsWith('prop '))).toBe(false);
+    expect(
+      lines.some(
+        line => line.startsWith('guard-skip ') && line.includes('wrong kind'),
+      ),
+    ).toBe(true);
+  }
+  expect(calls).toBe(0);
+});

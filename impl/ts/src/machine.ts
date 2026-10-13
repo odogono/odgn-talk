@@ -4096,6 +4096,9 @@ export class Run {
       case Op.Jump:
         this.pay(rate);
         return jump(a as number);
+      case Op.BranchNotNothing:
+        this.pay(rate);
+        return this.peek().kind !== 'nothing' ? jump(a as number) : next();
       case Op.BranchFalse:
       case Op.BranchTrue:
       case Op.CheckBoolean: {
@@ -4183,6 +4186,15 @@ export class Run {
       }
 
       // Keys, properties and chunks
+      case Op.GetOptionalKey:
+      case Op.GetOptionalKeyComputed: {
+        const computed = ins.opcode === Op.GetOptionalKeyComputed;
+        const key = computed ? keyText(this.peek(1)) : (a as string);
+        const receiver = this.peek();
+        m.result =
+          receiver.kind === 'nothing' ? receiver : getKey(receiver, key);
+        return this.replace(computed ? 2 : 1, rate);
+      }
       case Op.GetKey:
         if (this.peek().kind === 'object') {
           m.result = this.getProperty(this.peek(), a as string, rate);

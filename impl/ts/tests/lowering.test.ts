@@ -681,3 +681,19 @@ for (const ending of ['end', 'end wait']) {
     });
   }
 }
+
+test('Nothing branch requires a value and preserves equal depth on both edges', () => {
+  const unit = compile(
+    'on go\nreturn nothing otherwise the optional ("x") of nothing\nend go',
+  );
+  expect(verify(unit)).toEqual([]);
+  const branch = unit.code.find(i => i.op === 'branch-not-nothing')!;
+  const body = unit.bodies[1]!;
+  const malformed = {
+    ...unit,
+    bodies: [{ ...body, start: unit.code.indexOf(branch) }],
+  };
+  expect(verify(malformed)).toContain(
+    `go: ${malformed.bodies[0]!.start} branch-not-nothing pops 1 of 0`,
+  );
+});

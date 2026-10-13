@@ -317,3 +317,17 @@ test('a Rewind landed at a live breakpoint replays at the same instruction', () 
     rmSync(dir, { recursive: true });
   }
 });
+
+test('default branches and optional reads retain debugger source positions', () => {
+  const code =
+    'on go\nreturn nothing otherwise the optional x of {} otherwise 4\nend go';
+  const { debug, script } = setup(code);
+  expect(
+    debug.setBreakpoints([{ unit: 's', line: 2, col: 16 }])[0],
+  ).toMatchObject({ verified: true, col: 16 });
+  script.deliver({ name: 'go' });
+  expect(debug.pump().state).toBe('paused');
+  expect(debug.current?.col).toBe(16);
+  debug.clearBreakpoints();
+  expect(debug.resume().state).toBe('idle');
+});

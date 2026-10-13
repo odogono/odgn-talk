@@ -51,6 +51,7 @@ const unwrap = (root: SemanticNode): SemanticElement => {
   let e: SemanticElement = root;
   const wrappers = new Set([
     'Expression',
+    'Default',
     'Or',
     'And',
     'Not',
@@ -211,8 +212,10 @@ const keyRead = (root: SemanticNode): KeyRead | undefined => {
     if (!base || !direct.some(t => t.text === 'of')) {
       return;
     }
+    const optional = direct[1]?.text === 'optional';
     const keyNode = child(e, 'Key');
     if (
+      !optional &&
       !keyNode &&
       direct[1]?.kind === 'token' &&
       direct[1].type === 'word' &&
@@ -220,9 +223,10 @@ const keyRead = (root: SemanticNode): KeyRead | undefined => {
     ) {
       return;
     }
-    const key = keyNode ? first(keyNode) : direct[1];
-    // Unquoted Built-in properties do not perform a map key lookup.
+    const key = keyNode ? first(keyNode) : direct[optional ? 2 : 1];
+    // Optional reads always use map keys, including Built-in spellings.
     if (
+      !optional &&
       key?.kind === 'token' &&
       key.type === 'word' &&
       propertyNames.has(key.text)

@@ -1,5 +1,7 @@
 # Go Core
 
+The GO Core does not yet implement `otherwise` or optional map-key reads. See the [migration and integration constraints](../../docs/migrations/nothing-defaults.md).
+
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
 package `northtalk`. It provides immutable values, decimal arithmetic, pinned
 Unicode text, a front end and standalone Abstract Machine execution. Its Group

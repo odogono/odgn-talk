@@ -403,7 +403,8 @@ const labelCompletion = (before: string, selectors: string[]) => {
             const next = parts[prior.length + 1];
             return parts[0] === head.v &&
               prior.every((t, i) => parts[i + 1] === t.v) &&
-              next?.startsWith(active?.v ?? '')
+              next?.startsWith(active?.v ?? '') &&
+              !grammar.labels.excluded.includes(next)
               ? [next]
               : [];
           }),
@@ -574,6 +575,14 @@ export const completion = (
   }
   if (/[0-9](?:\.[0-9]*)?[\p{L}]*$/u.test(line)) {
     return units.map(unit => item(unit.name, 11, unit.kind));
+  }
+  if (/\bthe\s+opt[a-z]*$/.test(line)) {
+    return [
+      item('optional', 14, 'Read a map key, accepting a Nothing receiver'),
+    ];
+  }
+  if (/\S\s+other[a-z]*$/.test(line)) {
+    return [item('otherwise', 14, 'Evaluate the fallback only for Nothing')];
   }
   const ordinals = grammar.ordinals.join('|');
   if (

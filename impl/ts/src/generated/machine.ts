@@ -126,6 +126,17 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "branch-not-nothing",
+    "cost": "branch",
+    "operands": [
+      "label"
+    ],
+    "pops": 1,
+    "pushes": 1,
+    "jumps": 1,
+    "suspends": false
+  },
+  {
     "name": "branch-false",
     "cost": "branch",
     "operands": [
@@ -401,6 +412,24 @@ export const instructions = [
   },
   {
     "name": "get-key-computed",
+    "cost": "get-key",
+    "operands": [],
+    "pops": 2,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
+    "name": "get-optional-key",
+    "cost": "get-key",
+    "operands": [
+      "key"
+    ],
+    "pops": 1,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
+    "name": "get-optional-key-computed",
     "cost": "get-key",
     "operands": [],
     "pops": 2,

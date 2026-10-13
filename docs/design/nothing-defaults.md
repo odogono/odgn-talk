@@ -9,8 +9,8 @@ This is a complete behavior and lowering draft for review, not an active
 language declaration. It deliberately stages the grammar and instruction
 catalogue edits with implementation, as permitted by the
 [Spec change-impact guide](../agents/spec-changes.md#splitting-delivery).
-Current Cores do not support this syntax. The existing Spec and generated
-Data Files continue describing the implemented language until integration.
+This records the design-review baseline. For current support and integration
+constraints, see the [migration guide](../migrations/nothing-defaults.md).
 The [exploration](../research/nothing-default-syntax.md) records alternatives.
 
 ## Behavior

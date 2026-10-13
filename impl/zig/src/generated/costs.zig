@@ -245,7 +245,7 @@ pub const costs: CostsTable = .{
         .{
             .key = "get-key",
             .fuel = "3",
-            .input = "the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
+            .input = "the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
         },
         .{
             .key = "property",
@@ -654,6 +654,10 @@ pub const costs: CostsTable = .{
         .{
             .issue = "#388",
             .change = "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
+        },
+        .{
+            .issue = "#719",
+            .change = "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
         },
     },
 };

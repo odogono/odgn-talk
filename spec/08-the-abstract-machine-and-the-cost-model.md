@@ -140,6 +140,7 @@ The operand kinds:
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
 | `jump` | `label` | 0 | 0 | Continues at the label |  |
+| `branch-not-nothing` | `label` | 1 | 1, 1 on a jump | Preserves the top value and continues at the label if it is not Nothing |  |
 | `branch-false` | `label` | 1 | 0 | Pops a boolean and continues at the label if it is false | `wrong kind` |
 | `branch-true` | `label` | 1 | 0 | Pops a boolean and continues at the label if it is true | `wrong kind` |
 | `check-boolean` |  | 1 | 1 | Raises `wrong kind` unless the top value is a boolean | `wrong kind` |
@@ -191,6 +192,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | --- | --- | --- | --- | --- | --- |
 | `get-key` | `key` | 1 | 1 | `the k of x`: a map's value, or a Host Object's property | `wrong kind`, `object gone` |
 | `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone` |
+| `get-optional-key` | `key` | 1 | 1 | Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text | `wrong kind` |
+| `get-optional-key-computed` |  | 2 | 1 | Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text | `wrong kind` |
 | `property` | `property` | 1 | 1 | `the p of x`, for a Built-in property | `wrong kind` |
 | `property-delimited` | `property` | 2 | 1 | `the items of x delimited by d`, with the delimiter on top | `wrong kind`, `out of range` |
 | `chunk-get` | `chunk` | 2 | 1 | One chunk level: pops the value, then its index, and pushes the chunk | `wrong kind` |
@@ -416,6 +419,24 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 - **Ordinals** lower as their index: `first` is `const 1`, …, `tenth` is `const 10`, and `last` is `const -1`.
 - **Negative literals** are the literal and `negate`, so `-5` is `const 5` `negate`.
 - **A field's type** in `bytes-field` is `value` when the field has no `as`, and otherwise its integer type and byte order (`uint16 little`). In `bytes-sized` it is its size unit, `bytes` or `bytes as text`, and ⟦n⟧ is the `load` of a pinned name, or ⟦size⟧, as in a Binary Pattern.
+
+`a otherwise b` lowers to ⟦a⟧ `branch-not-nothing L` `pop` ⟦b⟧, L:.
+The branch pops and pushes the same value, without copying or conversion,
+and preserves it on both edges. Its stack signature requires an incoming
+value. Both branch and pop point at `otherwise`.
+
+`the optional k of x` lowers to ⟦x⟧ `get-optional-key k`;
+`the optional (k) of x` lowers to ⟦k⟧ ⟦x⟧ `get-optional-key-computed`.
+Both read instructions point at `the`, preserve operand positions and use
+the same rules inside Guards. They allocate no result storage of their own.
+
+An optional read charges 3 Fuel beyond its operands, including failure or
+a Nothing receiver. A default adds 1 Fuel for a present left operand, or
+2 plus the right operand's Fuel for Nothing. Left-associated chains retain
+every branch: `1 otherwise 2 otherwise 3` costs 3 Fuel including its constant;
+`nothing otherwise nothing otherwise 3` costs 7. A jump that skips later
+branches would violate normative lowering. Budget exhaustion before any
+branch, pop or read follows the ordinary Limit Fault rules.
 
 ### Chunk Expressions
 
@@ -920,7 +941,7 @@ Cost Model **0**.
 | `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, through the first equal one, or 2 for a range |
 | `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
 | `search` | `4 + steps` | 0 | the text searched |
-| `get-key` | `3` | 0 | the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
+| `get-key` | `3` | 0 | the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
 | `property` | `3 + scalars(input) / 8 + items(result)` | `size(result)` | the value whose property is read |
 | `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk, code points for a `code point` chunk, and all of them when the chunk isn't there; `test-chunk` measures as a read of the chunk it tests |
 | `chunk-set` | `4 + scalars(result) / 8 + items(result) / 8` | `size(input)` | the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010) |
@@ -1031,6 +1052,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |
 | [#126](https://github.com/odogono/odgn-talk/issues/126) | The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit |
 | [#388](https://github.com/odogono/odgn-talk/issues/388) | Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes |
+| [#719](https://github.com/odogono/odgn-talk/issues/719) | Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional. |
 
 <!-- end -->
 

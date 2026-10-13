@@ -66,6 +66,29 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 - **`and` and `or` short-circuit:** `a and b` evaluates `b` only if `a` is `true`, and `a or b` only if `a` is `false`. Each operand they evaluate, and the operand of `not`, must be a boolean, or `wrong kind` is raised with `expected` `"boolean"`.
 - **Conditions** of `if`, `repeat while` and `repeat until` must be booleans too, so `if 0 then …` raises `wrong kind`. A Guard's must be `true` for its clause to be chosen ([Guards](#guards)).
 
+## Nothing defaults
+
+`a otherwise b` evaluates `a` once and returns that same value unless it is
+Nothing. Only then does it evaluate and return `b`, once. False, zero, empty
+text, lists and maps are present values. The fallback may itself be Nothing.
+Errors and Limit Faults propagate; `otherwise` catches neither. Unselected
+operands consume no Fuel or allocation budget.
+
+The operator is left-associative and has lower precedence than `or` and all
+other ordinary binary operators. `a otherwise b or c` means
+`a otherwise (b or c)`. Lambdas and Whose conditions keep their whole-expression
+boundaries: `given x: x otherwise d` defaults the Lambda result, and
+`the first item of xs whose active otherwise false` defaults its condition.
+Default the selection with `(the first item of xs whose active) otherwise d`.
+A Lambda used as a binary operand still requires parentheses.
+
+Both default expressions and optional key reads are permitted in Guards,
+Whose conditions, Constants, Script Variable initializers and parameter
+defaults when every operand meets that context's existing restrictions.
+Checking includes unselected operands: a lazy branch cannot hide a forbidden
+call or unresolved name. A Guard's runtime error or nonboolean result skips
+its clause under the ordinary rules.
+
 ## Operators
 
 | Operator | Meaning |
@@ -82,6 +105,7 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 | `&` | joins the [text forms](03-values.md#the-text-form) of its operands |
 | `..` | makes a [range](03-values.md#ranges) |
 | `+`, `-`, `*`, `/`, `mod`, `div`, `^`, unary `-` | arithmetic on [numbers](03-values.md#arithmetic), [Quantities](03-values.md#quantity-arithmetic) and [dates](03-values.md#date-arithmetic) |
+| `otherwise` | [Nothing defaults](#nothing-defaults) |
 | `as` | [conversion](03-values.md#conversion) |
 | `of`, `'s` | [keys](#keys-and-properties) and [chunks](#chunk-expressions) |
 
@@ -113,9 +137,40 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 - **`the k of x` and `x's k`** read the Built-in property `k` if `k` is one (below), and otherwise the key `k`. `the "k" of x` always reads a key, and `the (e) of x` reads the key that `e` gives, which must be text, or `wrong kind` is raised.
 - **On a map,** a key gives its value, or Nothing if the map has no such key.
 - **On a Host Object,** `id` gives its Core-held id. Outside Guards, any other key reads the Host's property ([chapter 9](09-embedding.md)); a key its Object Kind doesn't define gives Nothing, as a map's missing key does, and reading it on a disposed object raises `object gone`. [Guards](#guards) use the pure key rules below and never call the Host.
-- **On anything else,** Nothing included, reading a key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`. The `map` Library's `lookup(m, ["a", "b"], default)` gives `default` there instead ([chapter 7](07-libraries-and-the-standard-library.md#map)).
+- **On anything else,** Nothing included, reading an ordinary key raises `wrong kind` with `expected` `"map"`. So in `the b of the a of m`, a missing `a` raises at `b`. The `map` Library's `lookup(m, ["a", "b"], default)` gives `default` there instead ([chapter 7](07-libraries-and-the-standard-library.md#map)).
 
-The Built-in properties:
+### Optional map-key reads
+
+`the optional k of x` reads a map key, even when `k` spells a Built-in property,
+`target` or an ordinal such as `first`. The key is a Word, Text literal,
+`code points`, or a parenthesized expression. `the optional of m` retains
+its ordinary key read; write `the optional optional of m` for its optional
+form and `the optional "of" of m` for the key `of`.
+
+For a computed key, evaluate the key expression and then the receiver once
+each, in source order. After both finish, require a text key; otherwise raise
+`wrong kind`, with `expected: "text"` and `value` the key. A receiver expression's
+error therefore takes precedence over a previously computed invalid key.
+
+A Nothing receiver returns Nothing. A map returns its value, or Nothing for
+an absent key. All other receivers raise `wrong kind`, with `expected: "map"`
+and `value` the receiver. This includes every live or disposed Host Object,
+even for `id`, with no Host calls or conversions. A map may return a stored
+Host Object, but a subsequent optional read cannot step into it. Known Host
+Objects in Guards use this runtime rule, not the load-time Host-property rule.
+
+Every nullable step must be explicit: `the optional b of the a of m` can
+still fail at the ordinary inner read. Computed keys in outer steps still
+run even if an inner optional read returned Nothing. Optional reads are not
+Containers and all writes reject them with `not a container` at the
+Container's first token. There is no optional possessive, chunk or call form.
+
+```talk
+put the optional city of the optional address of customer otherwise "unknown" into city
+put the optional ("city") of nothing otherwise "unknown" into city
+```
+
+### Built-in properties
 
 | Property | Of | Gives |
 | --- | --- | --- |

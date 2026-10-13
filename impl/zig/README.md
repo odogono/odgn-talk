@@ -1,5 +1,7 @@
 # Zig Core
 
+The ZIG Core does not yet implement `otherwise` or optional map-key reads. See the [migration and integration constraints](../../docs/migrations/nothing-defaults.md).
+
 The Zig Core is a third NorthTalk Core for embedding outside Go and TS: natively
 through the C API in [`include/talk.h`](include/talk.h), and as a `wasm32-wasi`
 module for Hosts with a WASM runtime

@@ -41,8 +41,8 @@ pub const MachineTableInstructionEntry = struct {
     suspends: bool,
     cost: []const u8,
     does: []const u8,
-    errors: ?[]const []const u8 = null,
     jumps: ?i64 = null,
+    errors: ?[]const []const u8 = null,
 };
 
 /// A field whose Data File value is an integer in some entries and text in others.
@@ -230,6 +230,19 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "jump",
             .does = "Continues at the label",
+        },
+        .{
+            .name = "branch-not-nothing",
+            .group = "control",
+            .operands = &.{
+                "label",
+            },
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "branch",
+            .does = "Preserves the top value and continues at the label if it is not Nothing",
+            .jumps = 1,
         },
         .{
             .name = "branch-false",
@@ -671,6 +684,34 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "object gone",
+            },
+        },
+        .{
+            .name = "get-optional-key",
+            .group = "access",
+            .operands = &.{
+                "key",
+            },
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "get-key",
+            .does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+            .errors = &.{
+                "wrong kind",
+            },
+        },
+        .{
+            .name = "get-optional-key-computed",
+            .group = "access",
+            .operands = &.{},
+            .pops = .{ .int = 2 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "get-key",
+            .does = "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+            .errors = &.{
+                "wrong kind",
             },
         },
         .{
