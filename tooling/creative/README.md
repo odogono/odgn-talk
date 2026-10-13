@@ -11,6 +11,49 @@ The authored Project model and its zip file format — pure TypeScript with no U
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
 
+## Rich text
+
+Double-click a text Element, or choose **Edit formatted text** in Info, to edit
+it on the Page. Formatting controls head the Info window whenever one text
+Element is selected, as a text layer's properties do in a design tool's
+inspector. Without editing, they apply to all of the Element's text; while
+editing, select text and use them for bold, italic, underline and selection
+colour. Clicking an active mark
+removes it; **Clear** removes
+all selection marks so the Element's colour applies again. **Paragraph** inserts
+a paragraph break at the selection, as Enter does. Formatting requires a text
+selection. Font, size, whole-Element colour and **Reader can edit** remain in Info;
+the reader flag is stored for future Play Sessions.
+
+**Done**, Escape, selecting another Element or changing Page finishes editing.
+The toolbar's Undo and Redo, or ⌘/Ctrl-Z and ⌘/Ctrl-Shift-Z (also Ctrl-Y), are
+the Edit menu's: each text change or formatting step is one entry in the same
+history as every other authored edit.
+
+Pasting HTML keeps paragraphs, bold, italic, underline and text colours from
+semantic tags and inline styles. Links become text; images, scripts, embedded
+content, stylesheet/class formatting, fonts, sizes and backgrounds are dropped.
+Plain text paste keeps its paragraph breaks. Dragging external content into text
+is disabled. The authored model holds paragraphs of styled runs, and the Project
+file round-trip preserves them; the editor never stores raw HTML.
+
+The model's `textOf(element)` reads paragraphs joined by newlines;
+`replacePlainText(element, text)` replaces them and clears mixed formatting,
+even when the plain text is unchanged. These are the plain-text operations the
+Play Host can use for `the text of` in stage 2. Info's plain text field also
+clears mixed formatting when its text is changed.
+
+Browser regression checks use the real DOM, including clipboard HTML, selections,
+IME composition and the toolbar. With the creative tool server running, build:
+
+```sh
+bun build tooling/creative/tests/rich-text.browser.ts --outdir tooling/creative/dist --target browser
+```
+
+Then run `await import('/rich-text.browser.js').then(m => m.runBrowserTests())`
+in the browser console on the creative tool page. Every result must have
+`passed: true`. Rebuild this test bundle after the watch server rebuilds the app.
+
 ## Running it
 
 From the repository root, with Bun 1.4.2:

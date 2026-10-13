@@ -14,13 +14,18 @@ import {
 import {
   ELEMENT_KINDS,
   plainTextOf,
-  richTextFromPlainText,
+  replacePlainText,
   type Element,
   type ElementKind,
   type Page,
   type Project,
+  type TextElement,
+  textOf,
 } from './model';
 import { commandForKey, type EditingCommand } from './shortcuts';
+
+import { renderRichText } from './rich-text-dom';
+import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 
 type Attributes = Record<string, string | number | boolean | undefined>;
 
@@ -89,20 +94,7 @@ const renderElement = (element: Element): HTMLElement => {
         fontFamily: element.font,
         fontSize: `${element.textSize}px`,
       });
-      for (const paragraph of element.richText) {
-        const p = h('p');
-        for (const run of paragraph.runs) {
-          const span = h('span', {}, run.text);
-          Object.assign(span.style, {
-            fontWeight: run.bold ? 'bold' : '',
-            fontStyle: run.italic ? 'italic' : '',
-            textDecoration: run.underline ? 'underline' : '',
-            color: run.color ?? '',
-          });
-          p.append(span);
-        }
-        node.append(p);
-      }
+      renderRichText(node, element.richText);
       break;
     case 'image':
       // A placeholder until image assets arrive (#753).
@@ -284,6 +276,14 @@ export const mountStack = (project: Project): StackEditor => {
   const pageNode = byId('page');
   const info = byId('info') as HTMLFormElement;
   const thumbnails = byId('thumbnails');
+  let pointerElement: string | undefined;
+  let activeText: InPlaceTextEditor | undefined;
+  let textControls: ElementTextControls | undefined;
+  const historyOf = (element: TextElement) => editor.textHistory(element);
+  const closeText = () => {
+    activeText?.destroy();
+    activeText = undefined;
+  };
   let scale = 1;
   let refusal: Refusal | undefined;
   let fieldEdit: Edit | undefined;
@@ -417,8 +417,13 @@ export const mountStack = (project: Project): StackEditor => {
     switch (element.kind) {
       case 'text':
         kind.push(
+          h(
+            'button',
+            { type: 'button', 'data-edit-text': element.name },
+            'Edit formatted text',
+          ),
           field(
-            'Text',
+            'Plain text (replaces formatting)',
             h(
               'textarea',
               { 'data-field': 'text', rows: 4 },
@@ -583,22 +588,44 @@ export const mountStack = (project: Project): StackEditor => {
     }
   };
 
+  // Formatting controls for one selected text Element; while it is edited in
+  // place, the InPlaceTextEditor drives them instead.
+  const drawTextControls = () => {
+    const [element, ...others] = editor.selected;
+    const target =
+      !activeText && !others.length && element?.kind === 'text'
+        ? element
+        : undefined;
+    if (textControls?.history.element !== target) {
+      textControls?.destroy();
+      textControls =
+        target &&
+        new ElementTextControls(byId('text-toolbar'), historyOf(target), () =>
+          draw(),
+        );
+    }
+    textControls?.update();
+  };
+
   const draw = () => {
     byId('project-title').textContent = project.name;
     drawPage();
     drawStrip();
     drawInfo();
     drawCommands();
+    drawTextControls();
   };
 
   /** Applies an edit, forgetting any refused name, then redraws. */
   const edit = (change: () => void) => {
+    closeText();
     refusal = undefined;
     change();
     draw();
   };
 
   const rename = (name: string) => {
+    closeText();
     const [element] = editor.selected;
     const check =
       editor.selection.length === 1
@@ -614,6 +641,7 @@ export const mountStack = (project: Project): StackEditor => {
     if (!key || key === 'name') {
       return;
     }
+    closeText();
     const number = Number(target.value);
     const isNumber = target.type === 'number';
     if (isNumber && (target.value === '' || !Number.isFinite(number))) {
@@ -630,8 +658,8 @@ export const mountStack = (project: Project): StackEditor => {
       const [element] = editor.selected;
       if (element && editor.selection.length === 1) {
         if (key === 'text' && element.kind === 'text') {
-          if (plainTextOf(element.richText) !== value) {
-            element.richText = richTextFromPlainText(String(value));
+          if (textOf(element) !== value) {
+            replacePlainText(element, String(value));
           }
         } else {
           const sizes = key === 'width' || key === 'height';
@@ -683,7 +711,9 @@ export const mountStack = (project: Project): StackEditor => {
   });
   info.addEventListener('click', event => {
     const button = (event.target as HTMLElement).closest('button');
-    if (button?.dataset.rename) {
+    if (button?.dataset.editText) {
+      openText(button.dataset.editText);
+    } else if (button?.dataset.rename) {
       rename(button.dataset.rename);
     } else if (button?.dataset.movePage) {
       const from = editor.pageIndex;
@@ -700,14 +730,25 @@ export const mountStack = (project: Project): StackEditor => {
     // take the detached target for empty space.
     down.stopPropagation();
     const target = down.target as HTMLElement;
+    if (target.closest('[contenteditable="true"]')) {
+      return;
+    }
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset
       .handle as Handle | undefined;
     const name = target.closest<HTMLElement>('[data-element]')?.dataset.element;
+    pointerElement = name;
     let gesture: Gesture | undefined;
     if (handle) {
       gesture = editor.startResize(handle);
     } else {
-      edit(() => editor.click(name, { shift: down.shiftKey }));
+      if (
+        down.shiftKey ||
+        editor.selection.length !== 1 ||
+        editor.selection[0] !== name ||
+        activeText
+      ) {
+        edit(() => editor.click(name, { shift: down.shiftKey }));
+      }
       if (name && !down.shiftKey) {
         gesture = editor.startMove();
       }
@@ -716,7 +757,6 @@ export const mountStack = (project: Project): StackEditor => {
       return;
     }
     down.preventDefault();
-    pageNode.setPointerCapture(down.pointerId);
     let moved = false;
     const move = (event: PointerEvent) => {
       const dx = (event.clientX - down.clientX) / scale;
@@ -724,6 +764,9 @@ export const mountStack = (project: Project): StackEditor => {
       // A small wobble during a click isn't a drag.
       if (!moved && Math.abs(dx) + Math.abs(dy) < 3 / scale) {
         return;
+      }
+      if (!moved) {
+        pageNode.setPointerCapture(down.pointerId);
       }
       moved = true;
       gesture.to(dx, dy);
@@ -741,6 +784,46 @@ export const mountStack = (project: Project): StackEditor => {
     pageNode.addEventListener('pointermove', move);
     pageNode.addEventListener('pointerup', up, { once: true });
     pageNode.addEventListener('pointercancel', up, { once: true });
+  });
+  const openText = (name: string) => {
+    const element = editor.element(name);
+    if (element?.kind !== 'text') {
+      return;
+    }
+    edit(() => {
+      editor.selectPage();
+      editor.click(element.name);
+    });
+    pageNode.querySelector('.handles')?.remove();
+    textControls?.destroy();
+    textControls = undefined;
+    const node = pageNode.querySelector<HTMLElement>(
+      `[data-element="${CSS.escape(element.name)}"]`,
+    )!;
+    activeText = new InPlaceTextEditor(
+      node,
+      byId('text-toolbar'),
+      historyOf(element),
+      () => {
+        drawStrip();
+        drawInfo();
+        drawCommands();
+      },
+      () => {
+        closeText();
+        draw();
+      },
+    );
+  };
+  pageNode.addEventListener('dblclick', event => {
+    if (event.shiftKey || event.metaKey || event.altKey || activeText) {
+      return;
+    }
+    const name = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-element]',
+    )?.dataset.element;
+    // The first click can redraw the selection; dblclick then targets the Page.
+    openText(name ?? pointerElement ?? '');
   });
   // A click on the desk around the Page selects the Page.
   desk.addEventListener('pointerdown', event => {

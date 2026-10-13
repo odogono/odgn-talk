@@ -14,7 +14,10 @@ import {
   type ElementKind,
   type Page,
   type Project,
+  type RichText,
+  type TextElement,
 } from './model';
+import { renormalizeRichText, type TextHistory } from './rich-text';
 
 /** The outcome of checking a proposed Page or Element name. */
 export type NameCheck =
@@ -297,6 +300,11 @@ export class StackEditor {
     return this.page.elements.find(e => e.name === name);
   }
 
+  /** Text edits for a text Element on the showing Page, one undo step each. */
+  textHistory(element: TextElement): TextHistory {
+    return new EditorTextHistory(this, element);
+  }
+
   /**
    * Selects as a click does. A plain click on an Element selects only it,
    * unless it is already selected, so a group can be dragged. Shift-click
@@ -537,5 +545,46 @@ export class StackEditor {
         }
       }
     });
+  }
+}
+
+class EditorTextHistory implements TextHistory {
+  #last: TextElement;
+  constructor(
+    readonly editor: StackEditor,
+    element: TextElement,
+  ) {
+    this.#last = element;
+  }
+  get canUndo(): boolean {
+    return this.editor.canUndo;
+  }
+  get canRedo(): boolean {
+    return this.editor.canRedo;
+  }
+  get element(): TextElement {
+    const found = this.editor.element(this.#last.name);
+    if (found?.kind === 'text') {
+      this.#last = found;
+    }
+    return this.#last;
+  }
+  set(text: RichText): void {
+    const target = this.element;
+    const next = renormalizeRichText(text);
+    if (
+      JSON.stringify(next) !==
+      JSON.stringify(renormalizeRichText(target.richText))
+    ) {
+      this.editor.edit(() => {
+        target.richText = next;
+      });
+    }
+  }
+  undo(): void {
+    this.editor.undo();
+  }
+  redo(): void {
+    this.editor.redo();
   }
 }
