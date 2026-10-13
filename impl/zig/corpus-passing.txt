@@ -334,6 +334,7 @@ sessions/fix
 sessions/inspection
 sessions/mocks
 sessions/named-functions
+sessions/object-inspection
 sessions/observation
 sessions/real-clock
 sessions/refusals

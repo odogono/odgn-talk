@@ -64,6 +64,19 @@ const Replay = struct {
         r.trace.append(r.gpa, '\n') catch {};
     }
 
+    fn crossing(context: *anyopaque) ?[]const u8 {
+        const r: *Replay = @ptrCast(@alignCast(context));
+        const item = r.peek() orelse return null;
+        return if (item == .crossing) item.crossing else null;
+    }
+
+    fn take(context: *anyopaque) void {
+        const r: *Replay = @ptrCast(@alignCast(context));
+        const item = r.peek() orelse return;
+        r.next += 1;
+        r.written.writer.print("% {s}\n", .{item.crossing}) catch {};
+    }
+
     /// `:export <directory>` writes to a scratch directory, which a replay
     /// never makes.
     fn write(context: *anyopaque, directory: []const u8, name: []const u8, data: []const u8) bool {
@@ -95,7 +108,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, name: []const u8
     const expected_trace = try dir.readFileAlloc(io, "case.trace", a, .limited(64 * 1024 * 1024));
     const items = try transcript.parse(a, text);
     var replay: Replay = .{ .gpa = a, .items = items, .written = .init(a) };
-    const driver: session.Driver = .{ .context = &replay, .reading = Replay.reading, .line = Replay.line, .answer = Replay.answer, .output = Replay.output, .trace = Replay.traceLine, .write = Replay.write };
+    const driver: session.Driver = .{ .context = &replay, .reading = Replay.reading, .line = Replay.line, .answer = Replay.answer, .output = Replay.output, .trace = Replay.traceLine, .write = Replay.write, .crossing = Replay.crossing, .take = Replay.take };
     const s = try Session.init(gpa, driver);
     defer s.deinit();
     while (replay.peek()) |item| {
@@ -114,7 +127,11 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, name: []const u8
                 try detail.print("{s}: a `<` or `~` line the session didn't read", .{name});
                 return error.CaseFailed;
             },
-            .crossing => return error.Unsupported,
+            // An envelope between Host calls.
+            .crossing => |x| {
+                try replay.written.writer.print("% {s}\n", .{x});
+                try s.crossing(x);
+            },
             .output => unreachable,
         }
     }

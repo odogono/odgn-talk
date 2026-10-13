@@ -274,8 +274,16 @@ Trace go.
   from the Run lifecycle reports, and Fuel Measurements from Run accounting,
   each after a Host call's ordinary output.
 
-Not implemented yet: object crossings (`%` envelopes), which
-`sessions/object-inspection` needs.
+- **Object crossings** (`%` envelopes) follow
+  [Session observation](../../spec/session-observation.md#object-crossings-in-session-transcripts).
+  A replay defines each recorded Object Kind and registers each object with a
+  dummy native identity. Its getters and setters answer from the recorded
+  `property-begin`/`property-end` pairs, making the Host actions recorded
+  between them. Each Function Value leaf a report or a setter exposes binds
+  the next `function` handle, and a Restore's resolver answers from the
+  `resolve` envelope. `:inspect` of an object adds its `object` and
+  `property` rows. It then reads each property in a second Run, the normative
+  reader, extended under the first free `entry<n>`.
 
 ## The Notification router
 
@@ -583,7 +591,9 @@ one disposed. A Script may own an object, which is `me`, and binds well-known
 objects by name, which the checker uses for `can't write`. `the k of o` reads
 the Kind's Get, with a `prop` record, charged `get-key`, the property's
 `getCost` and the value's conversion; `id` is the Core's, and a Guard reads
-nothing else. `set` checks the Shape, uncharged when it fails, then runs the
+nothing else. A well-formed Get or Set failure raises its code, as an
+Operation's does, with `capability` the Kind and `operation` the property,
+and its Data's conversion is charged. Any other failure is `host error`. `set` checks the Shape, uncharged when it fails, then runs the
 Set. A Delivery or `send` to an object goes to its nearest Owning Script,
 whose path is walked again when the message reaches the head of its mailbox,
 so a message follows its object if it moves. A Run that ends `unhandled` or

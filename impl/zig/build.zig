@@ -62,6 +62,8 @@ pub fn build(b: *std.Build) void {
     });
     session_module.addImport("northtalk", core);
     session_module.addImport("talk-c", c_module);
+    // The normative `:inspect` reader, from the Spec.
+    session_module.addAnonymousImport("inspect-reader", .{ .root_source_file = b.path("../../spec/session/inspect-reader.talk") });
     corpus_module.addImport("session", session_module);
     const corpus = b.addExecutable(.{ .name = "talk-corpus", .root_module = corpus_module });
     const run_corpus = b.addRunArtifact(corpus);

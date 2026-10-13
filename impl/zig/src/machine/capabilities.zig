@@ -684,6 +684,19 @@ fn catalogued(code: []const u8) bool {
     return false;
 }
 
+/// Whether a property's failure is well formed: as an Operation's that
+/// declares no codes.
+pub fn validPropFailure(code: []const u8, data: ?*const Value) bool {
+    if (data) |d| switch (d.data) {
+        .nothing => {},
+        .map => |pairs| for (pairs) |p| {
+            for (reserved) |r| if (std.mem.eql(u8, r, p.key)) return false;
+        },
+        else => return false,
+    };
+    return !catalogued(code);
+}
+
 /// Whether a `Fail` is well formed for its Operation: a map or Nothing for
 /// Data, no reserved key, no catalogue code, and a declared code when the
 /// Operation lists its codes.
