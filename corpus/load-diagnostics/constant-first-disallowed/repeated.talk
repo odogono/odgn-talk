@@ -1,0 +1,3 @@
+script variable v = 1
+constant x = v + v
+constant y = [v, v]

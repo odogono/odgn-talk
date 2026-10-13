@@ -1,0 +1,24 @@
+# Unblessed: the first disallowed token per initialiser or parameter default (#768); first blessing awaits human review.
+> load repeated identity=ce3a400827b1e7aded2bdfac82a0c2772de637f3d8a1f704d468f000b6368da6
+diag repeated code="not constant" pos=2:14
+diag repeated code="not constant" pos=3:15
+> load unknown-later identity=05bbe0810f52033447936f7a88d86873f97cc6a00237885b59330bf16a855851
+diag unknown-later code="not constant" pos=2:14
+diag unknown-later code="unknown name" pos=2:26
+> load unknown-first identity=2e427cdc3aeb0aa90d35227f13b40ede41daf4b81e0cc9ded0d491b4fd35044a
+diag unknown-first code="unknown name" pos=2:14
+diag unknown-first code="not constant" pos=2:14
+> load script-variable identity=a98c31bd315fc077441329adf6d01401e67c1ecd57b7e3f1d8c8c2a034cbe4f0
+diag script-variable code="not constant" pos=2:21
+> load parameter-default identity=6ea2f12bd7570b819c25287ce2d6963abe554cbb49c01954a0810168673cb03d
+diag parameter-default code="not constant" pos=2:16
+diag parameter-default code="not constant" pos=2:27
+diag parameter-default code="unknown name" pos=2:39
+> load call identity=0bb10ee109816ab5ce2db0f962cbbacc3d30e952b4697469123c3d05f72726c5
+diag call code="not constant" pos=5:14
+diag call code="not constant" pos=6:19
+> load implicit-values identity=c6a1764cf16151b402e3237542a8bd19ca3033ab93dd7183ee65f6fcd79abb1b
+diag implicit-values code="not constant" pos=1:14
+> load target identity=e1102a42e037597186822aeda4c1ab6e9ffabe91ba048dc30cb3e16f235ac84c
+diag target code="not constant" pos=2:14
+> vars

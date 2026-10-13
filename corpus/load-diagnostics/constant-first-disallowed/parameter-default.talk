@@ -1,0 +1,4 @@
+script variable v = 1
+function f a = v + v, b = v otherwise unknown
+  return a + b
+end f
