@@ -321,6 +321,7 @@ A Pump does these steps, in order:
 
 1. **Reads the Clock:** it takes its one Clock reading. A reading earlier than the last Pump's is the Host error `clock backwards`.
 2. **Drains the input queue** in call order. A Delivery joins the back of its receiver's mailbox, even past its depth, since the depth was checked at the call ([chapter 9](09-embedding.md#deliveries)). An answer or a failure settles its call, which makes the waiting Run ready, unless it waits in a Join with members still pending.
+   [Asynchronous charge requests](embedding/metered-operations.md#asynchronous-authorization) spend the pending call's shared Run allowance in this same FIFO drain. Acceptance does not make a waiting Run runnable; refusal ends it at its originating call. The complete batch drains before Fuel-cap and slice scheduling checks; accepted charges count toward this Pump and normal slice debt.
 3. **Fires due timers:** every `wait`, `wait for` timeout, `after` branch, `maxPending`, `MaxWait` and Timeout Block whose deadline is at or before the reading fires, in deadline order, and of equal deadlines, in the order they were set. Each makes its Run ready.
 4. **Runs turns** until no Script has work left, or every Script that has work has spent its Fuel Slice, or the Group's Fuel cap is spent.
 

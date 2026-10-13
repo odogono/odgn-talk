@@ -69,7 +69,7 @@ raised_when = "The state an extension adds, or the Script Variables a Reload or 
 
 [[error]]
 code = "effects pending"
-raised_when = "Save is attempted while a Capability Scope or Segment participant is live, or after fatal effect uncertainty stopped the Group"
+raised_when = "Save is attempted while a Capability Scope or Segment participant is live, an asynchronous metered call is pending, a charge request is unresolved, or after fatal effect uncertainty stopped the Group"
 
 [[error]]
 code = "effect state unknown"

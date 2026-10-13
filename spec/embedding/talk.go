@@ -315,6 +315,7 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl // immediate only
 	SegmentBound bool       // immediate only; false by default
+	Metering     string     // empty, "read-only" or "segment-bound"; see metered-operations.md
 	Description  string     // plain text for tooling; only the Host Manifest carries it
 	Examples     []string   // NorthTalk source, each calling this Operation; manifest only
 
@@ -431,13 +432,37 @@ func (c *Call) Now() time.Time           // the last observed Clock reading; nev
 func (c *Call) Context() context.Context // cancelled when the call is abandoned (a failed Join, a cancelled Run, a stop, a timeout)
 
 // Charge draws Fuel in proportion to work, before doing it. It is legal only
-// while a Script Operation is starting, never during automatic abandonment.
+// during a Script Operation callback, never during automatic abandonment.
+// Metered calls may authorize successive chunks. Refusal latches ErrLimit.
 func (c *Call) Charge(fuel int64) error
+
+// RequestCharge queues authorization for a read-only suspending Metered
+// Operation. One unresolved request per Call; any goroutine. Invalid usage
+// returns HostError invalid value synchronously. See metered-operations.md.
+func (c *Call) RequestCharge(fuel int64) (*ChargeRequest, error)
+
+type ChargeRequestID string
+
+type ChargeRequest struct { /* opaque */
+}
+
+func (r *ChargeRequest) ID() ChargeRequestID
+func (r *ChargeRequest) Done() <-chan struct{}
+func (r *ChargeRequest) Result() *ChargeResult // read after Done closes at Pump end
+
+type ChargeResult struct {
+	Request ChargeRequestID
+	Call    CallID
+	Fuel    int64  // requested amount; only accepted contributes Fuel
+	Status  string // "accepted", "limit" or "inactive"
+}
+
+func (*ChargeResult) isReport()
 
 // Answer, AnswerWithCost and Fail settle a Suspending call. They are safe from
 // any goroutine and queue a Host Input, into the Group that made the Call,
 // never one restored from a save of it. An answer to a call that isn't
-// pending (abandoned, its Run ended, or discarded by a restore) is ignored. AnswerWithCost carries a cost known only now, charged when
+// pending (abandoned, its Run ended, or discarded by a restore) is ignored. AnswerWithCost carries an additional unpaid cost, charged when
 // the Run resumes, where it can fault.
 func (c *Call) Answer(v Value)
 func (c *Call) AnswerWithCost(v Value, fuel int64)
@@ -571,7 +596,9 @@ type SqlRows struct {
 }
 
 // The Core has checked the Shapes and max, converted params by the chapter 7
-// rules and charged max × perRow. It converts the result, raising `sql` for a
+// rules and charged the declared cost. Call beforeStep immediately before
+// each statement step, including completion/overflow probes; return on error.
+// The factory callback charges perStep. It converts the result, raising `sql` for a
 // column named twice and `unrepresentable` for a double it can't hold or a
 // string that isn't valid UTF-8. Change, Begin, Commit and Rollback are
 // Segment-bound: they act inside the calling Segment's transaction, which the
@@ -582,17 +609,17 @@ type SqlRows struct {
 type SqliteImpl interface {
 	// Coordinator is called once per Grant. The same database gives the same pointer.
 	Coordinator(database string) *SegmentLifecycle
-	Query(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
-	Change(c *Call, sql string, params SqlParams, max int64) (SqlRows, error)
+	Query(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
+	Change(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
 	Begin(c *Call) error
 	Commit(c *Call) error
 	Rollback(c *Call) error
 }
 
-// SqliteCapability is optional for Hosts. perRow is whole Fuel charged per row
-// of max; a bad one is HostError `invalid value`. Every binding must be a
+// SqliteCapability is optional for Hosts. perStep is whole Fuel charged before
+// every statement step; a bad one is HostError `invalid value`. Every binding must be a
 // SqliteBinding.
-func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perRow int64) (*CapabilityDef, error)
+func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perStep int64) (*CapabilityDef, error)
 
 // user is optional (chapter 7, ADR 0077), and has no binding. The Core has
 // checked the Shapes and refused an empty items with `out of domain`; an
@@ -936,6 +963,8 @@ const (
 
 // Save is a worker call between Pumps. Live scopes, an enlisted participant
 // or fatal effect uncertainty return EffectsPending without advancing execution.
+// Also refuses with effects pending for pending asynchronous metered calls
+// or unresolved charge requests, without draining them.
 func (g *Group) Save() ([]byte, error)
 
 // Fingerprint is the Group Fingerprint (ADR 0009), the one lockstep check.

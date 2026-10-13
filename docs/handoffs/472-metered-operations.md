@@ -1,0 +1,81 @@
+# Metered Operations: specification handoff for #472
+
+## Required base and delivery boundary
+
+- **Specification revision:** uncommitted changes on `docs/grill-issue-472`, based on `18877eaafa58df7990e4f13e6c2cd0cac80adec1`. Worktree: `/Users/alex/.t3/worktrees/odgn-talk/t3-b10f72ac`. No specification commit or PR exists yet. Carry the exact file set below together, or replace this block with the specification commit/PR before handing implementation to another checkout.
+- **Implemented in:** no runtime changes in this handoff. The normative contract is [Metered Operations](../../spec/embedding/metered-operations.md), with [ADR 0082](../adr/0082-metered-operations-authorize-work-through-the-pump.md) and updated Go/TS interface declarations.
+- **Remaining work:** all Core, Host, replay, tool and executable-catalogue acceptance below. Current support is documented beside the [Go](../../impl/go/README.md#ordinary-capability-operations), [TS](../../impl/ts/README.md#process-wide-core-and-host-manifests) and [Zig](../../impl/zig/README.md#the-machine) APIs.
+- **Approval still needed:** no new expectation files have been created or blessed. Future Trace and Session expectations require their first blessing under the [corpus workflow](../../corpus/README.md#checking); execution agreement is not approval.
+
+Required sections: declaration/effect safety and synchronous authorization; asynchronous admission, cancellation and fault location; accounting and saves; Trace/message-layer records; SQLite step authorization. Chapters 5–11 and Session observation link or reconcile those rules. Do not treat the prose or public declaration changes as runtime support.
+
+## Implementation sequence
+
+1. Add declaration metadata, validation, manifests/fingerprints and native APIs. Add pending-call source positions, request identity/counter, retained issued-call eligibility, one-outstanding enforcement, FIFO admission, report/future settlement and terminal cleanup. Preserve queued requests across lifecycle teardown until a Pump resolves them inactive. Match the Go/TS declarations and expose the same behavior through the Message Layer and Zig's embedding surface.
+2. Implement accounting, saved counter/version changes and Save refusals. Preserve existing early-interruption and timer order. Paid requests remain paid if cancellation lands later in the same Pump. No asynchronous write transaction or synthetic Segment is introduced.
+3. Activate the executable Trace and setup catalogues together with parsers, writers, replay backends, case loaders and Session recording/replay. Add cases only once consumers understand them; do not weaken coverage or bless changed expectations merely to make checks pass.
+4. Change SQLite factories and every supplied driver to `perStep` and the `beforeStep` callback. Update Go/Bun/Node/Deno adapters, test kits, examples and current-support guides together. No standard SQLite Message Layer factory is added by this design; generic metered Operations must work over that layer.
+
+### Deferred Data Files and consumers
+
+- `spec/data/corpus.toml`: add `charge-request` and `charge-result` with the ordered fields in the contract, optional `call.charge-refused`, optional `stub.charge-refused`, optional Operation setup `metering`, and SQLite standard setup `perStep` replacing `perRow` (default 0, old key rejected). Existing generated tables intentionally lack these extensions until implementation. Remove the staging notices in chapters 11 and the metering contract when activated.
+- `spec/data/stdlib.toml`: add SQLite query/change metering metadata together with its schema and factory/catalogue consumers. Preserve the other SQLite declarations. This delivery does not change active Standard Capability tables.
+- Regenerate Spec output and Go/Zig tables when those catalogues change; update TS consumers and tooling manifest readers. `trace.ebnf` needs no syntax extension: its record grammar already permits the new names and fields. Existing `invalid value`, `unknown call` and `effects pending` codes suffice.
+- The Go API comparison will need runtime parity for the new request/result types, Operation field and SQLite callback signatures. Do not add exemptions to hide that intentional spec/implementation gap. Review snapshot format versions and manifest compatibility when implementing persisted counters and metadata.
+
+## Acceptance matrix
+
+| Area | Required evidence |
+| --- | --- |
+| Declarations | Omission preserves legacy up-front calls; validate both values, mode/effect/scope combinations, missing coordinator and fire-and-forget rejection. Manifest/fingerprint changes on metering changes, not documentation edits. |
+| Synchronous charging | Several accepted chunks, zero, exact exhaustion, refused first charge and refused suffix; refused amount is never counted. Suppressed refusal and later return/error/charge cannot clear the fault. Result/error conversion and rollback retain accepted Fuel. |
+| Admission | One outstanding request per call; invalid amount/mode/overlap allocate no id. Ids and issued-call eligibility survive a permitted Save; stale native and Message Layer calls agree. TS async run may await a request, while synchronous callbacks cannot block. Inactive calls receive outcomes with no debit. Futures settle exactly once at Pump end and match reports. |
+| Shared budgets | Two Join Members compete in FIFO order; first unaffordable request ends their Run and abandons siblings. Later requests are inactive. Other Runs continue. Refusal while the Join body is preempted rolls back its still-open Segment without creating a Stretch. Fault location identifies the originating member, with no synthetic Segment. |
+| Races | Both orderings of request versus Answer/Fail/Stop/cancel; existing early interruption; accepted request then due timeout in the same Pump; revocation does not independently cancel in-flight calls. Reload before drain still permits inactive outcome delivery. Acceptance never renews deadlines or refunds Fuel. |
+| Accounting | Accepted increments appear immediately in Run accounting, Script counters and Pump FuelUsed even without execution. Cap/slice overrun during queue drain becomes normal debt. Waiting-only Pumps need no runnable continuation. Late answer costs add only unpaid work. Cancellation cleanup preserves its existing allowance. |
+| Saves | Refuse with no input drain for pending metered calls and unresolved requests after their call ends. Check refused Trace output and later successful save after settlement. No metered pending call can be adopted/reissued from a new snapshot. |
+| Replay and transport | Synchronous accepted prefix plus refusal reproduces totals and outcome with and without Stubs. Check zero prefix, malformed Stub combinations, synchronously rejected requests (including invalid amounts), asynchronous input/outcome order, inactive outcomes and charge-only Pumps. Native and Message Layer results agree; stale local fuelLeft cannot fund post-start work. Session recordings preserve these inputs. |
+| SQLite | Empty result, N rows plus completion, max=0, overflow probe, SQL-error step, zero rate, exact Fuel and refusal before completion/overflow. Non-returning change pays a step. Driver never steps after callback refusal; Segment rollback undoes all provisional writes. Parameter/result charges and ordinary failed-call atomicity remain intact. |
+
+Run focused native API, driver-kit, replay, message-layer and cross-Core cases in Go, TS and Zig as support lands. Public accounting requires API assertions independently of Trace equality. Compare changed existing SQLite expectations against the new step counts before first blessing.
+
+The planning inspection identified a **possible, unverified Zig discrepancy**: ordinary `Call.charge` refusal may not latch, and `.limited` may discard previously accepted totals (`impl/zig/src/machine/capabilities.zig` and `machine.zig`). Verify with focused tests. If confirmed, open and link the cross-Core issue during implementation under the [issue conventions](../agents/issue-tracker.md#cross-core-findings); this documentation task publishes no tracker changes.
+
+## Specification validation
+
+Checked on 2026-10-13 against the base and uncommitted file set below:
+
+- `bun run spec:gen`, `bun run check` (153 tooling tests plus Spec, grammar, machine, corpus, generation and documentation checks), `bun run go:check`, and `git diff --check` pass.
+- `go -C impl/go test ./internal/apicheck` fails on the intentionally unimplemented `Operation.Metering` field and Query/Change callback signatures. It also reports the new charging API names as unimplemented alongside pre-existing missing API names. Runtime API conformance is not claimed; no exemptions or expectations were changed.
+- No runtime, SQLite driver, new Trace Case or Session expectation has been implemented or blessed by this specification delivery.
+
+## Exact uncommitted specification file set
+
+```text
+GLOSSARY.md
+changelog/unreleased/metered-operations.md
+docs/adr/README.md
+docs/adr/0049-live-host-effects-prevent-saving.md
+docs/adr/0070-sqlite-is-an-optional-standard-capability-with-segment-bound-writes.md
+docs/adr/0082-metered-operations-authorize-work-through-the-pump.md
+docs/handoffs/472-metered-operations.md
+docs/sqlite.md
+impl/go/README.md
+impl/ts/README.md
+impl/zig/README.md
+spec/README.md
+spec/05-handlers-messages-and-scheduling.md
+spec/06-errors-and-limits.md
+spec/07-libraries-and-the-standard-library.md
+spec/08-the-abstract-machine-and-the-cost-model.md
+spec/09-embedding.md
+spec/10-save-and-restore.md
+spec/11-the-trace-and-conformance.md
+spec/appendix-a-glossary.md
+spec/data/host-errors.toml
+spec/embedding/metered-operations.md
+spec/embedding/scoped-effects.md
+spec/embedding/talk.go
+spec/embedding/talk.ts
+spec/session-observation.md
+```
