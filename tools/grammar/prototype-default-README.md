@@ -3,7 +3,7 @@
 THROWAWAY, based on `0ea3a15c`, run on 2026-10-13. This experiment answers
 whether a lazy-default expression can fit the two-token predictive grammar,
 and whether `otherwise` or `??` preserves existing source meanings. It does
-not implement runtime evaluation, checking, lowering, Fuel or optional reads.
+not implement runtime evaluation, checking, lowering, Fuel or optional-read execution. It now also parses optional reads.
 
 Run from the repository root:
 
@@ -28,18 +28,18 @@ lookahead guard, decision catalogue checks, or relex instrumentation.
 ## Results
 
 The captured output is [prototype-default-results.txt](prototype-default-results.txt).
-41 focused examples cover precedence, association, grouping, Whose/Lambda
+57 focused examples cover precedence, association, grouping, Whose/Lambda
 boundaries, line breaks, comments, names, labels, sends, events, restricted
 replace slots, patterns, binary builds and missing operands. These print
 observations rather than assert an expected tree. The output was inspected;
-there is no claim of exhaustive grammar proof or runtime acceptance.
+there is no claim of exhaustive grammar proof or runtime acceptance. Both variants now include optional-key syntax.
 
 Of 624 tracked `.talk` files, the baseline parser accepted 609 and rejected
 15. For every accepted file, both variants produced exactly the same AST,
 including positions. Baseline-rejected files were excluded from comparison;
 this is not a check of their diagnostics. There were zero relexes across the
-focused parses and candidate scans, no third-token requests, and no new
-second-token decision sites.
+focused parses and candidate scans, no third-token requests, and one new
+second-token decision site, `optional-key`, registered in the isolated variants.
 
 The deliberate compatibility witnesses matter despite that clean scan:
 
@@ -64,8 +64,19 @@ identifier/selector collisions with the same expression behavior. Choosing
 `otherwise` requires accepting a source-breaking migration or version gate;
 excluding label declarations alone cannot prevent silent retargeting of sends.
 This experiment does not settle readability for the HyperTalk audience or
-supply the issue's missing real-world usage evidence. Optional reads stay deferred.
+supply the issue's missing real-world usage evidence. The user selected `otherwise` despite its compatibility cost and included optional reads. The earlier spelling preference above is the experiment's compatibility assessment, not the selected language design.
 
 The prototype is retained on local branch `prototype/issue-687-default`;
 the proposal in the working branch captures this finding. No Core changes
 should be inferred from this branch.
+
+## Optional-key follow-up
+
+Added 16 cases for literal, quoted, computed, reserved, built-in-looking,
+ordinal-looking and multiword keys; nested reads with a fallback; Guards;
+and rejection of assignment, set, chunk and malformed-key forms. The
+`optional-key` decision looks at `optional` and its next token after `the`.
+`optional of` remains the old key named optional; otherwise it selects
+the new map-key-only production. Existing `the optional of m` retains its
+AST. There are still 609 unchanged accepted repository scripts and zero
+relexes. Parsing a Guard does not prove checker purity or execution behavior.

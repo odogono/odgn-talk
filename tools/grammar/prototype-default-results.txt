@@ -1,5 +1,85 @@
 THROWAWAY #687; base 0ea3a15c; full trees omit positions except errors. No runtime semantics implemented.
 
+CASE optional literal
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `city`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"city","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"city","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional chain with fallback
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `city`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"OptionalKey","key":"city","computed":false,"base":{"k":"OptionalKey","key":"address","computed":false,"base":{"k":"Name","name":"customer"}}},"r":{"k":"Text","v":"unknown"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"OptionalKey","key":"city","computed":false,"base":{"k":"OptionalKey","key":"address","computed":false,"base":{"k":"Name","name":"customer"}}},"r":{"k":"Text","v":"unknown"}}}],"finally":null}]
+
+CASE optional computed
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `(`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":{"k":"Call","fn":"key","args":[]},"computed":true,"base":{"k":"Call","fn":"receiver","args":[]}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":{"k":"Call","fn":"key","args":[]},"computed":true,"base":{"k":"Call","fn":"receiver","args":[]}}}],"finally":null}]
+
+CASE optional property spelling
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `length`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"length","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"length","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional target spelling
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `target`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"target","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"target","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional ordinal spelling
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `first`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"first","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"first","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional multiword key
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `code`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"code points","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"code points","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional reserved key
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `if`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"if","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"if","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional quoted of key
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `of`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"of","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"of","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional optional key
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `optional`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"optional","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"optional","computed":false,"base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE optional guard
+baseline: {"error":"unexpected token","line":1,"col":31,"message":"expected `of`, found `active`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[{"k":"Bind","name":"x"}],"guard":{"k":"Group","e":{"k":"Default","l":{"k":"OptionalKey","key":"active","computed":false,"base":{"k":"Name","name":"x"}},"r":{"k":"Const","v":"false"}}},"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[{"k":"Bind","name":"x"}],"guard":{"k":"Group","e":{"k":"Default","l":{"k":"OptionalKey","key":"active","computed":false,"base":{"k":"Name","name":"x"}},"r":{"k":"Const","v":"false"}}},"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+
+CASE optional assignment rejected
+baseline: {"error":"unexpected token","line":2,"col":25,"message":"expected `of`, found `a`"}
+otherwise: {"error":"not a container","line":2,"col":12,"message":"a Container is a name, or a chunk or key rooted in one"}
+??: {"error":"not a container","line":2,"col":12,"message":"a Container is a name, or a chunk or key rooted in one"}
+
+CASE optional set rejected
+baseline: {"error":"unexpected token","line":2,"col":18,"message":"expected `of`, found `a`"}
+otherwise: {"error":"not a container","line":2,"col":5,"message":"a Container is a name, or a chunk or key rooted in one"}
+??: {"error":"not a container","line":2,"col":5,"message":"a Container is a name, or a chunk or key rooted in one"}
+
+CASE optional chunk rejected
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `first`"}
+otherwise: {"error":"unexpected token","line":2,"col":27,"message":"expected `of`, found `item`"}
+??: {"error":"unexpected token","line":2,"col":27,"message":"expected `of`, found `item`"}
+
+CASE optional missing key rejected
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `(`"}
+otherwise: {"error":"unexpected token","line":2,"col":23,"message":"expected an expression, found `)`"}
+??: {"error":"unexpected token","line":2,"col":23,"message":"expected an expression, found `)`"}
+
+CASE optional inner ordinary
+baseline: {"error":"unexpected token","line":2,"col":21,"message":"expected `of`, found `b`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"b","computed":false,"base":{"k":"Key","key":"a","base":{"k":"Name","name":"m"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"OptionalKey","key":"b","computed":false,"base":{"k":"Key","key":"a","base":{"k":"Name","name":"m"}}}}],"finally":null}]
+
 CASE basic
 baseline: {"error":"unexpected token","line":2,"col":28,"message":"expected end of line, found `otherwise`"}
 otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Key","key":"second","base":{"k":"Name","name":"found"}},"r":{"k":"Num","v":"0"}}}],"finally":null}]
@@ -207,5 +287,5 @@ otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":nu
 
 SCAN {"files":624,"baselineAccepted":609,"baselineRejected":15,"wordChanges":0,"symbolChanges":0}
 RELEXES 0
-DECISIONS ["and-wait","any-message","as-in-build","begins-with","binary-field","can-be","capture","choose-offer","chunk-word","code-point","comes","delimited-by","does-not","during","every-chunk","every-match","ignoring-case","is-a","kind","map-key","next-repeat","ordering-words","ordinal","pattern-anchor","replace-first","script-variable","target","wait-from","when-contains","with-timeout"]
+DECISIONS ["and-wait","any-message","as-in-build","begins-with","binary-field","can-be","capture","choose-offer","chunk-word","code-point","comes","delimited-by","does-not","during","every-chunk","every-match","ignoring-case","is-a","kind","map-key","next-repeat","optional-key","ordering-words","ordinal","pattern-anchor","replace-first","script-variable","target","wait-from","when-contains","with-timeout"]
 The parser throws on third-token lookahead and undeclared second-token decisions; neither guard was changed.

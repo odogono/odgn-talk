@@ -35,11 +35,51 @@ function variant(symbol: boolean) {
       .replace('new Set<string>(grammar.labels.excluded)', "new Set<string>([...grammar.labels.excluded, 'otherwise'])")
       .replace("const CONTINUING_WORDS = new Set([", "const CONTINUING_WORDS = new Set([\n  'otherwise',");
   }
+  source = source.replace('new Set<string>(grammar.decision.map((d: any) => d.name))', "new Set<string>([...grammar.decision.map((d: any) => d.name), 'optional-key'])");
+  source = source.replace(`  the(): Node {
+    this.next();
+    const t = this.peek(0);`, `  the(): Node {
+    this.next();
+    const t = this.peek(0);
+    if (this.isWord(t, 'optional') && !this.isWord(this.la2('optional-key', 'operator'), 'of')) {
+      this.next();
+      let key: string | Node;
+      let computed = false;
+      const start = this.peek(0);
+      if (this.isOp(start, '(')) {
+        this.next();
+        key = this.nested(() => this.expr());
+        this.expectOp(')');
+        computed = true;
+      } else if (start.t === 'str') {
+        key = this.next().v;
+      } else {
+        key = this.propertyOrKey('an optional map key');
+      }
+      this.expectWord('of', 'operator');
+      return { k: 'OptionalKey', key, computed, base: this.postfix(this.primary()) };
+    }`);
   return emit(`prototype-default-${symbol ? 'symbol' : 'word'}.generated.ts`, source);
 }
 const body = (s: string) => `on demo\n${s}\nend demo\n`;
 const expression = (s: string) => body(`return ${s}`);
 const cases: [string, string][] = [
+  ['optional literal', expression('the optional city of m')],
+  ['optional chain with fallback', expression('the optional city of the optional address of customer OP "unknown"')],
+  ['optional computed', expression('the optional (key()) of receiver()')],
+  ['optional property spelling', expression('the optional length of m')],
+  ['optional target spelling', expression('the optional target of m')],
+  ['optional ordinal spelling', expression('the optional first of m')],
+  ['optional multiword key', expression('the optional code points of m')],
+  ['optional reserved key', expression('the optional if of m')],
+  ['optional quoted of key', expression('the optional "of" of m')],
+  ['optional optional key', expression('the optional optional of m')],
+  ['optional guard', 'on demo x where (the optional active of x OP false)\nreturn x\nend demo\n'],
+  ['optional assignment rejected', body('put 1 into the optional a of m')],
+  ['optional set rejected', body('set the optional a of m to 1')],
+  ['optional chunk rejected', expression('the optional first item of xs')],
+  ['optional missing key rejected', expression('the optional ( ) of m')],
+  ['optional inner ordinary', expression('the optional b of the a of m')],
   ['basic', expression('the second of found OP 0')],
   ['left association', expression('a OP b OP c')],
   ['below or', expression('a OP b or c')],
