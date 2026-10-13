@@ -9,6 +9,7 @@ const std = @import("std");
 const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const transcript = @import("transcript.zig");
+const store = @import("store.zig");
 
 const Allocator = std.mem.Allocator;
 const parser = northtalk.syntax.parser;
@@ -172,6 +173,11 @@ pub const Session = struct {
     queued: bool = false,
     /// Each Run's last `seg` end reason and whether it had a deadline.
     waits: std.StringHashMapUnmanaged(Wait) = .empty,
+    /// The Session Stores, and the router their watches go through.
+    router: *c.talk_router,
+    stores: store.Stores,
+    /// Whether the router admitted a Notification since this was cleared.
+    admitted: bool = false,
 
     const Library = struct { source: []const u8, library: *c.talk_library };
     const Held = struct { run: []const u8, lines: std.ArrayList([]const u8) = .empty };
@@ -179,15 +185,54 @@ pub const Session = struct {
 
     pub fn init(gpa: Allocator, driver: Driver) !*Session {
         const s = try gpa.create(Session);
-        s.* = .{ .gpa = gpa, .arena = .init(gpa), .driver = driver, .core = c.talk_new() orelse return error.OutOfMemory };
+        errdefer gpa.destroy(s);
+        const options: c.talk_router_options = .{ .context = s, .admitted = admittedHook, .limits = watchLimits, .revision = revisionOf, .store_of = storeOf };
+        const router = c.talk_router_new(&options) orelse return error.OutOfMemory;
+        s.* = .{ .gpa = gpa, .arena = .init(gpa), .driver = driver, .core = c.talk_new() orelse return error.OutOfMemory, .router = router, .stores = .init(gpa, router) };
         return s;
     }
 
     pub fn deinit(s: *Session) void {
-        if (s.group) |g| c.talk_group_release(g);
+        if (s.group) |g| {
+            c.talk_router_detach(s.router, g);
+            c.talk_group_release(g);
+        }
+        c.talk_router_free(s.router);
+        s.stores.deinit();
         c.talk_core_release(s.core);
         s.arena.deinit();
         s.gpa.destroy(s);
+    }
+
+    // ------------------------------------------------------------ the router's Host side
+
+    fn admittedHook(context: ?*anyopaque, g: ?*c.talk_group) callconv(.c) void {
+        _ = g;
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        s.admitted = true;
+    }
+
+    /// Each Session Store's watch limits (chapter 12, The Session Store).
+    fn watchLimits(context: ?*anyopaque, name: [*c]const u8, len: usize) callconv(.c) c.talk_watch_limits {
+        _ = context;
+        _ = name;
+        _ = len;
+        return .{ .watches = 100, .watch_size = 65_536, .pending = 1_000, .pending_size = 1_048_576 };
+    }
+
+    fn revisionOf(context: ?*anyopaque, name: [*c]const u8, len: usize, out: [*c][*c]const u8, out_len: [*c]usize) callconv(.c) void {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        const text = s.stores.named(name[0..len]).revision_text;
+        out.* = text.ptr;
+        out_len.* = text.len;
+    }
+
+    fn storeOf(context: ?*anyopaque, binding: ?*anyopaque, out: [*c][*c]const u8, out_len: [*c]usize) callconv(.c) bool {
+        _ = context;
+        const name: []const u8 = if (binding) |b| std.mem.span(@as([*:0]const u8, @ptrCast(b))) else "default";
+        out.* = name.ptr;
+        out_len.* = name.len;
+        return true;
     }
 
     fn alloc(s: *Session) Allocator {
@@ -310,7 +355,9 @@ pub const Session = struct {
     fn definition(s: *Session, capability: []const u8) !*c.talk_capability_def {
         if (s.defs.get(capability)) |d| return d;
         var def: ?*c.talk_capability_def = null;
-        if (std.mem.eql(u8, capability, "user")) {
+        if (std.mem.eql(u8, capability, "store")) {
+            def = try s.stores.capability(s.core);
+        } else if (std.mem.eql(u8, capability, "user")) {
             const costs = [_]c.talk_named_cost{ .{ .name = "confirm", .name_len = 7, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "choose", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "enter", .name_len = 5, .cost = .{ .fuel = 0, .alloc = 0 } }, .{ .name = "notify", .name_len = 6, .cost = .{ .fuel = 0, .alloc = 0 } } };
             const impl: c.talk_user_impl = .{ .context = s, .confirm = userPrompt, .choose = userPrompt, .enter = userPrompt, .notify = userNotify };
             try check_(c.talk_user_capability(s.core, &impl, &.{ .entries = &costs, .len = 4 }, &def));
@@ -607,7 +654,26 @@ pub const Session = struct {
         s.last = at;
         if (code != c.TALK_OK) return error.HostError;
         s.follow(result.reports);
+        try s.notifications(at);
         return result.state;
+    }
+
+    /// After each Pump: the router's retry, then, while the router admitted
+    /// a Notification and Host Inputs are queued, Pumps at the same reading
+    /// (chapter 12, Session Store Notifications).
+    fn notifications(s: *Session, at: Instant) !void {
+        while (true) {
+            const pending = c.talk_router_pumped(s.router, s.group);
+            _ = pending;
+            if (!s.admitted) return;
+            s.admitted = false;
+            s.trace_lines.clearRetainingCapacity();
+            var result: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
+            const code = c.talk_pump(s.group, at.seconds, at.nanos, null, &result);
+            defer c.talk_reports_release(result.reports);
+            if (code != c.TALK_OK) return error.HostError;
+            s.follow(result.reports);
+        }
     }
 
     /// Follows a Host call's Runs: its reports, placed by its Trace, so the
@@ -1216,6 +1282,7 @@ pub const Session = struct {
         if (std.mem.eql(u8, name, ":library")) return s.libraryCommand(args, input.more);
         if (std.mem.eql(u8, name, ":export")) return s.exportCommand(args);
         if (std.mem.eql(u8, name, ":fix")) return s.fixCommand(args, input.more);
+        if (std.mem.eql(u8, name, ":store")) return s.storeCommand(args, input.more);
         s.say("! unknown command");
     }
 
@@ -1227,12 +1294,14 @@ pub const Session = struct {
         const mocked = for (s.mocks.items) |m| {
             if (std.mem.eql(u8, m.capability, capability)) break true;
         } else false;
-        const builtin = std.mem.eql(u8, capability, "user");
+        const is_store = std.mem.eql(u8, capability, "store");
+        const builtin = std.mem.eql(u8, capability, "user") or is_store;
         if (!mocked and !builtin) return s.say("! bad arguments");
         // Only `calendar`, `locale` and `store` take a binding.
-        if (args.len == 3) return s.say("! bad arguments");
+        if (args.len == 3 and !is_store) return s.say("! bad arguments");
         if (s.started) return s.say("! session started");
-        try s.grants.append(s.alloc(), .{ .name = s.dupe(args[0]), .capability = s.dupe(capability), .binding = null });
+        const binding: ?[]const u8 = if (is_store) (if (args.len == 3) s.dupe(args[2]) else "default") else null;
+        try s.grants.append(s.alloc(), .{ .name = s.dupe(args[0]), .capability = s.dupe(capability), .binding = binding });
     }
 
     fn mockCommand(s: *Session, args: []const []const u8) !void {
@@ -1474,8 +1543,9 @@ pub const Session = struct {
     fn saveCommand(s: *Session, args: []const []const u8) !void {
         if (args.len > 1) return s.say("! bad arguments");
         const name = if (args.len == 1) args[0] else "default";
+        // A Store Notification checkpoint: the Group's save and its routing.
         var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };
-        const code = c.talk_save(s.group, &saved);
+        const code = c.talk_router_save(s.router, s.group, &saved);
         if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
         defer c.talk_owned_bytes_release(&saved);
         var stubs: std.ArrayList([]const Stub) = .empty;
@@ -1511,12 +1581,19 @@ pub const Session = struct {
         const options: c.talk_restore_options = .{ .name = "session", .name_len = 7, .trace = traceSink, .trace_context = s, .libraries = @ptrCast(libraries.items.ptr), .libraries_len = libraries.items.len, .grants = rebind, .grants_context = s, .resolve = null, .resolve_context = null, .mismatch = c.TALK_REJECT_MISMATCH, .allocator = null, .memory_cap = 0 };
         var group: ?*c.talk_group = null;
         var result: ?*c.talk_restore_result = null;
+        var routing: ?*c.talk_routing_result = null;
         s.trace_lines.clearRetainingCapacity();
-        const code = c.talk_restore(s.core, saved.bytes.ptr, saved.bytes.len, &options, &group, &result);
+        s.admitted = false;
+        const code = c.talk_router_restore(s.router, s.core, saved.bytes.ptr, saved.bytes.len, &options, &group, &result, &routing);
         if (code != c.TALK_OK) return s.sayf("! {s}", .{hostErrorName(code)});
         defer c.talk_restore_result_release(result);
-        // The Group it replaces goes; the session's own state comes back.
-        if (s.group) |old| c.talk_group_release(old);
+        c.talk_routing_result_release(routing);
+        // The Group it replaces goes, detached from the router; the
+        // session's own state comes back.
+        if (s.group) |old| {
+            c.talk_router_detach(s.router, old);
+            c.talk_group_release(old);
+        }
         s.group = group;
         s.script = c.talk_group_script(group, "session", 7);
         s.decls = .fromOwnedSlice(try s.alloc().dupe(Decl, saved.decls));
@@ -1546,6 +1623,80 @@ pub const Session = struct {
             s.queued = true;
         }
         s.baseline(c.talk_restore_result_reports(result));
+        // Markers for Stores changed since the save are pumped for as the
+        // Pump `:restore` causes.
+        if (s.admitted) {
+            s.admitted = false;
+            s.queued = false;
+            _ = try s.pump();
+        }
+    }
+
+    /// `:store [<store>]`, `:store load [<store>]` with the file's lines,
+    /// `:store save <path> [<store>]` and `:store clear [<store>]`.
+    fn storeCommand(s: *Session, args: []const []const u8, lines: []const []const u8) !void {
+        if (args.len == 0 or (args.len == 1 and !isOneOf(args[0], &.{ "load", "save", "clear" }))) {
+            const name = if (args.len == 1) args[0] else "default";
+            for (try s.stores.sorted(name)) |k| {
+                const v = s.stores.valueOf(name, k) orelse continue;
+                defer c.talk_value_release(v);
+                var key: ?*c.talk_value = null;
+                try check_(c.talk_text(k.ptr, k.len, &key));
+                defer c.talk_value_release(key);
+                s.sayf("{s} = {s}", .{ s.display(key), s.display(v) });
+            }
+            return;
+        }
+        if (std.mem.eql(u8, args[0], "load")) {
+            if (args.len > 2 or lines.len == 0) return s.say("! bad arguments");
+            const name = if (args.len == 2) args[1] else "default";
+            s.admitted = false;
+            const n = try s.stores.load(name, s.sourceOf(lines)) orelse return s.say("! bad arguments");
+            s.sayf("loaded {d} keys", .{n});
+            return s.pumpForAdmitted();
+        }
+        if (std.mem.eql(u8, args[0], "clear")) {
+            if (args.len > 2) return s.say("! bad arguments");
+            const name = if (args.len == 2) args[1] else "default";
+            s.admitted = false;
+            try s.stores.clear(name);
+            s.sayf("cleared {s}", .{name});
+            return s.pumpForAdmitted();
+        }
+        // `:store save <path> [<store>]`: the contents as one JSON object,
+        // in key order, with no white space.
+        if (args.len < 2 or args.len > 3) return s.say("! bad arguments");
+        const name = if (args.len == 3) args[2] else "default";
+        var json: std.ArrayList(u8) = .empty;
+        try json.append(s.alloc(), '{');
+        for (try s.stores.sorted(name), 0..) |k, i| {
+            const v = s.stores.valueOf(name, k) orelse continue;
+            defer c.talk_value_release(v);
+            var key: ?*c.talk_value = null;
+            try check_(c.talk_text(k.ptr, k.len, &key));
+            defer c.talk_value_release(key);
+            var ek: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+            try check_(c.talk_encode_value(key, &ek));
+            defer c.talk_owned_bytes_release(&ek);
+            var ev: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+            try check_(c.talk_encode_value(v, &ev));
+            defer c.talk_owned_bytes_release(&ev);
+            if (i > 0) try json.append(s.alloc(), ',');
+            try json.print(s.alloc(), "{s}:{s}", .{ ek.data[0..ek.len], ev.data[0..ev.len] });
+        }
+        try json.append(s.alloc(), '}');
+        const dir = std.fs.path.dirname(args[1]) orelse ".";
+        const file = std.fs.path.basename(args[1]);
+        if (!s.driver.write(s.driver.context, dir, file, json.items)) return s.say("! bad arguments");
+        s.sayf("wrote {s}", .{args[1]});
+    }
+
+    /// The Pump a Host-originated commit causes when the router admitted a
+    /// Notification for it.
+    fn pumpForAdmitted(s: *Session) !void {
+        if (!s.admitted) return;
+        s.admitted = false;
+        _ = try s.pump();
     }
 
     /// A restore's accounting baseline: its live Runs, and the Runs a

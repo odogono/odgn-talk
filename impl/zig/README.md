@@ -258,8 +258,15 @@ Trace go.
   the Transcript it writes, its `@`, `<` and `~` lines included where it read
   them, and the Group's Trace with `case.trace`.
 
-Not implemented yet: the Session Store and Store Notifications, the
-observation commands (`:describe`, `:inspect`, `:apropos`, `:trace`,
+- **The Session Store** ([`src/session/store.zig`](src/session/store.zig))
+  keeps each Store in memory, every value by its Value Encoding, so Stores
+  outlive any Group a `:restore` replaces. Writes wait in their Segment until
+  it commits, and a commit with changed keys counts a revision and goes to the
+  router. After each Pump the router retries, and while it admitted a
+  Notification the session pumps again at the same reading. `:save` and
+  `:restore` take and restore router checkpoints.
+
+Not implemented yet: the observation commands (`:describe`, `:inspect`, `:apropos`, `:trace`,
 `:untrace`, `:fuel`) and object crossings. The Transcripts that need them
 aren't on the passing list.
 
