@@ -674,7 +674,12 @@ under both mismatch policies.
 The `store` notification router, a Host companion, waits for checkpoints.
 
 A Script's limits come from `talk_load_options`' `talk_limits`, a zero field
-taking its default from `limits.toml`, and a Delivery's `talk_limit_override`
+taking its default from `limits.toml`. On both native and WASI targets, each
+positive field is supported up to its conformance minimum in that Data File;
+a larger or negative field is refused at load as `TALK_INVALID_VALUE`, before
+the Script is compiled or registered. The Message Layer's `load` follows the
+same profile and returns `invalid value`. Refusing an unsupported profile
+leaves the Group able to load and run Scripts. A Delivery's `talk_limit_override`
 tightens its Run's Fuel, allocation, MaxWait and MaxJoin; one that loosens is
 refused `invalid value`, with the override on its `>` line. A Limit Fault
 comes before the faulting instruction's charge, so none of it is made:

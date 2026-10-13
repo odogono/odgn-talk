@@ -15,6 +15,7 @@ const standard = @import("machine/standard.zig");
 const sqlite = @import("machine/sqlite.zig");
 const objects = machine.objects;
 const group_allocator = @import("machine/group_allocator.zig");
+const limits_table = @import("generated/limits.zig").limits;
 /// Value constructors take no Core, as talk.go's don't, so values come from
 /// one process-wide allocator.
 const allocator = if (builtin.target.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.smp_allocator;
@@ -414,13 +415,14 @@ export fn talk_default_limits(out: *Limits) void {
     out.* = .{ .fuel_per_run = @intCast(d.fuel_per_run), .alloc_per_run = @intCast(d.alloc_per_run), .persistent_state = @intCast(d.persistent_state), .call_depth = @intCast(d.call_depth), .pattern_size = @intCast(d.pattern_size), .mailbox_depth = @intCast(d.mailbox_depth), .max_wait_ms = @intCast(d.max_wait_ms), .max_join = @intCast(d.max_join), .cleanup_budget = @intCast(d.cleanup_budget) };
 }
 
-/// A Script's limits from the Host's: zero fields take the defaults.
+/// A Script's limits from the Host's: zero fields take the defaults. This
+/// Core supports exactly the conformance profile, on native and WASI targets.
 fn limitsOf(given: ?*const Limits) error{InvalidValue}!machine.Limits {
     var out: machine.Limits = .{};
     const l = given orelse return out;
-    inline for (@typeInfo(Limits).@"struct".field_names) |name| {
+    inline for (@typeInfo(Limits).@"struct".field_names, 0..) |name, i| {
         const v = @field(l, name);
-        if (v < 0) return error.InvalidValue;
+        if (v < 0 or v > limits_table.limit[i].minimum) return error.InvalidValue;
         if (v > 0) @field(out, name) = @intCast(v);
     }
     return out;
@@ -1797,6 +1799,35 @@ test "a Group loads, pumps and inspects through the exports" {
     try std.testing.expectEqual(HostErrorCode.ok, talk_pending_result(pending.?, &result_value));
     defer talk_value_release(result_value);
     try std.testing.expectEqualStrings("41!", result_value.?.data.text);
+}
+
+test "load honours the supported profile and refuses larger limits without taking a name" {
+    const core = talk_new().?;
+    defer talk_core_release(core);
+    inline for (@typeInfo(Limits).@"struct".field_names, 0..) |name, i| {
+        const minimum = limits_table.limit[i].minimum;
+        for ([_]i64{ -1, minimum + 1, std.math.maxInt(i64), 0, 1, minimum }) |value| {
+            var group: ?*Group = null;
+            const options: GroupOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null };
+            try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &options, &group));
+            defer talk_group_release(group);
+            var limits: Limits = .{};
+            @field(limits, name) = value;
+            const source = "on ping\nend ping\n";
+            var load: LoadOptions = .{ .name = "s", .name_len = 1, .source = source.ptr, .source_len = source.len, .limits = &limits };
+            var script: ?*Script = null;
+            if (value < 0 or value > minimum) {
+                const before = group.?.memory.used;
+                try std.testing.expectEqual(HostErrorCode.invalid_value, talk_load(group.?, &load, &script));
+                try std.testing.expectEqual(@as(?*Script, null), script);
+                try std.testing.expectEqual(before, group.?.memory.used);
+                try std.testing.expect(!group.?.memory.refused);
+                load.limits = null;
+            }
+            try std.testing.expectEqual(HostErrorCode.ok, talk_load(group.?, &load, &script));
+            try std.testing.expect(script != null);
+        }
+    }
 }
 
 // ---------------------------------------------------------------- Shapes

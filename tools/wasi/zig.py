@@ -23,6 +23,7 @@ import json
 import struct
 import sys
 import time
+import tomllib
 import zlib
 from pathlib import Path
 
@@ -271,8 +272,10 @@ class MessageHost:
     through talk_buffer/talk_send, interim op needs answered under the
     Pump's own ref."""
 
-    def __init__(self, engine, module):
+    def __init__(self, engine, module, *, memory_limit=None):
         self.store = wasmtime.Store(engine)
+        if memory_limit is not None:
+            self.store.set_limits(memory_size=memory_limit)
         wasi = wasmtime.WasiConfig()
         wasi.inherit_stderr()
         self.store.set_wasi(wasi)
@@ -346,6 +349,39 @@ def message_layer(engine, module):
     return {"hello": hello, "linearMemory": size}
 
 
+def supported_limits(engine, module):
+    """Reject unsupported profiles before they can exhaust the reactor,
+    then load and run on the same Group after repeated refusals (#807)."""
+    h = MessageHost(engine, module, memory_limit=16 << 20)
+    h.ok("hello", protocol=1)
+    h.ok("new-group", group="g", name="g")
+    source = (
+        "on dive\n  return recurse()\nend dive\n"
+        "function recurse\n  return recurse()\nend recurse\n"
+        "on ping\n  return 42\nend ping\n"
+    )
+    data_file = Path(__file__).resolve().parents[2] / "spec/data/limits.toml"
+    limits = tomllib.loads(data_file.read_text())["limit"]
+    for limit in limits:
+        reply = h.send("load", group="g", name="s", source=source, limits={limit["ts"]: limit["minimum"] + 1})
+        assert reply.get("err", {}).get("code") == "invalid value", (limit["ts"], reply)
+    for _ in range(20):
+        reply = h.send("load", group="g", name="s", source=source, limits={"callDepth": 1_000_000})
+        assert reply.get("err", {}).get("code") == "invalid value", reply
+    h.ok("load", group="g", name="s", source=source, limits={limit["ts"]: limit["minimum"] for limit in limits})
+    now = "2026-10-13T12:00:00Z"
+    h.ok("request", group="g", to={"script": "s"}, message={"name": "dive"})
+    reports = h.ok("pump", group="g", now=now)["reports"]
+    ended = [r for r in reports if r["kind"] == "run end"]
+    assert len(ended) == 1 and ended[0]["outcome"] == "limit fault" and ended[0]["limit"] == "depth", ended
+    h.ok("request", group="g", to={"script": "s"}, message={"name": "ping"})
+    reports = h.ok("pump", group="g", now=now)["reports"]
+    ended = [r for r in reports if r["kind"] == "run end"]
+    assert len(ended) == 1 and ended[0]["outcome"] == "completed" and ended[0]["result"] == 42, ended
+    h.ok("load", group="g", name="fresh", source="on ping\nend ping\n")
+    return {"refusedProfiles": len(limits) + 20, "callDepth": 1000, "freshLoad": "passed"}
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: uv run tools/wasi/zig.py path/to/talk.wasm")
@@ -363,6 +399,7 @@ def main():
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
     messages = message_layer(engine, module)
+    profiles = supported_limits(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -384,6 +421,7 @@ def main():
                 "nesting": nesting,
                 "largeLoads": loads,
                 "messageLayer": messages,
+                "supportedLimits": profiles,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),
