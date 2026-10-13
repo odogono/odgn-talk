@@ -33,12 +33,20 @@ const run = (text: string, fuelPerRun?: number) => {
   const outcome = execution.finish();
   return { outcome, fuel: execution.fuel, execution };
 };
-const value = (expression: string) => {
-  const { outcome } = run(source(expression));
+const result = (text: string) => {
+  const { outcome } = run(text);
   if (outcome.kind !== 'completed') {
     throw new Error(JSON.stringify(outcome));
   }
   return outcome.result.toString();
+};
+const value = (expression: string) => result(source(expression));
+/** Every Fuel budget short of a full run faults at the limit. */
+const expectExactFuel = (expression: string) => {
+  const full = run(source(expression));
+  for (let fuel = 0; fuel < full.fuel; fuel++) {
+    expect(run(source(expression), fuel).outcome.kind).toBe('limit fault');
+  }
 };
 
 describe('Nothing defaults and optional map-key reads', () => {
@@ -198,12 +206,7 @@ end go`;
       26,
     );
     expect(disassemble(unit)).toContain('get-optional-key-computed');
-    const full = run(source('nothing otherwise 3'));
-    for (let fuel = 0; fuel < full.fuel; fuel++) {
-      expect(run(source('nothing otherwise 3'), fuel).outcome.kind).toBe(
-        'limit fault',
-      );
-    }
+    expectExactFuel('nothing otherwise 3');
   });
 });
 
@@ -226,11 +229,7 @@ put the optional (key()) of receiver() otherwise fallback() into result
 put result otherwise fallback() into again
 return [result, again, log]
 end go`;
-  const outcome = run(text).outcome;
-  expect(outcome.kind).toBe('completed');
-  if (outcome.kind === 'completed') {
-    expect(outcome.result.toString()).toBe('[7, 7, "krf"]');
-  }
+  expect(result(text)).toBe('[7, 7, "krf"]');
   expect(run(text.replace('return "x"', 'return 1')).outcome.kind).toBe(
     'errored',
   );
@@ -249,15 +248,8 @@ test('optional reads charge exactly three Fuel including errors', () => {
   const literal = caught('the optional x of 1');
   const computed = caught('the optional (1) of nothing');
   expect(computed.fuel - literal.fuel).toBe(1);
-  for (const expression of [
-    'the optional x of nothing',
-    'the optional (1) of nothing',
-  ]) {
-    const full = run(source(expression));
-    for (let fuel = 0; fuel < full.fuel; fuel++) {
-      expect(run(source(expression), fuel).outcome.kind).toBe('limit fault');
-    }
-  }
+  expectExactFuel('the optional x of nothing');
+  expectExactFuel('the optional (1) of nothing');
 });
 
 test('source compatibility excludes labels but retains names and grouped indexes', () => {
@@ -314,11 +306,7 @@ test('the staged source emits all new instructions and runs without shared expec
     expect(unit.code.some(i => i.op === op)).toBe(true);
   }
   expect(() => referenceCompile('test', 'script', text)).not.toThrow();
-  const outcome = run(text).outcome;
-  expect(outcome.kind).toBe('completed');
-  if (outcome.kind === 'completed') {
-    expect(outcome.result.toString()).toBe('[1, 3, [4, 9]]');
-  }
+  expect(result(text)).toBe('[1, 3, [4, 9]]');
 });
 
 const guarded = (expression: string) =>
@@ -331,11 +319,7 @@ test('Guards select true, skip nonbooleans and preserve all operand checks', () 
     ['the optional active of {active: 4} otherwise false', '2'],
     ['the optional active of 4 otherwise true', '2'],
   ]) {
-    const outcome = run(guarded(expression!)).outcome;
-    expect(outcome.kind).toBe('completed');
-    if (outcome.kind === 'completed') {
-      expect(outcome.result.toString()).toBe(expected!);
-    }
+    expect(result(guarded(expression!))).toBe(expected!);
   }
   const forbidden = 'function f\nreturn true\nend f\n';
   for (const expression of [

@@ -2793,13 +2793,7 @@ export class BodyCompiler {
         this.expr(n.base);
         this.at(n);
         this.emit(
-          n.k === 'OptionalKey'
-            ? n.computed
-              ? 'get-optional-key-computed'
-              : 'get-optional-key'
-            : n.computed
-              ? 'get-key-computed'
-              : 'get-key',
+          `get-${n.k === 'OptionalKey' ? 'optional-' : ''}key${n.computed ? '-computed' : ''}`,
           n.computed ? [] : [n.key],
         );
         return;

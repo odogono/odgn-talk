@@ -1993,50 +1993,28 @@ export class Parser {
 
   the(): Node {
     this.next();
-    const t = this.peek(0);
-    if (
+    let t = this.peek(0);
+    const optional =
       this.isWord(t, 'optional') &&
-      !this.isWord(this.la2('optional-key', 'operator'), 'of')
-    ) {
+      !this.isWord(this.la2('optional-key', 'operator'), 'of');
+    if (optional) {
       this.next();
-      const keyToken = this.peek(0);
-      let key: string | Node;
-      const computed = this.isOp(keyToken, '(');
-      if (computed) {
-        this.next();
-        key = this.nested(() => this.expr());
-        this.expectOp(')');
-      } else if (keyToken.t === 'str') {
-        key = this.next().v;
-      } else {
-        key = this.propertyOrKey('an optional map key');
-      }
-      this.expectWord('of', 'operator');
-      return {
-        k: 'OptionalKey',
-        key,
-        computed,
-        base: this.postfix(this.primary()),
-      };
+      t = this.peek(0);
     }
+    const k = optional ? 'OptionalKey' : 'Key';
     if (this.isOp(t, '(')) {
       this.next();
       const key = this.nested(() => this.expr());
       this.expectOp(')');
       this.expectWord('of', 'operator');
-      return {
-        k: 'Key',
-        key,
-        computed: true,
-        base: this.postfix(this.primary()),
-      };
+      return { k, key, computed: true, base: this.postfix(this.primary()) };
     }
     if (t.t === 'str') {
       this.next();
       this.expectWord('of', 'operator');
-      return { k: 'Key', key: t.v, base: this.postfix(this.primary()) };
+      return { k, key: t.v, base: this.postfix(this.primary()) };
     }
-    if (this.isWord(t, 'target') || ORDINALS.has(t.v)) {
+    if (!optional && (this.isWord(t, 'target') || ORDINALS.has(t.v))) {
       const n = this.la2(t.v === 'target' ? 'target' : 'ordinal', 'operator');
       if (t.v === 'target' && !this.isWord(n, 'of')) {
         this.next();
@@ -2062,10 +2040,12 @@ export class Parser {
         };
       }
     }
-    const key = this.propertyOrKey('a key or property name');
+    const key = this.propertyOrKey(
+      optional ? 'an optional map key' : 'a key or property name',
+    );
     this.expectWord('of', 'operator');
     return {
-      k: PROPERTIES.has(key) ? 'Property' : 'Key',
+      k: optional ? k : PROPERTIES.has(key) ? 'Property' : 'Key',
       key,
       base: this.postfix(this.primary()),
     };

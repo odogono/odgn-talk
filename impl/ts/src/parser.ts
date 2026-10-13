@@ -2715,50 +2715,28 @@ class Parser {
     const frame = this.enter('The');
     try {
       this.next();
-      const t = this.peek(0);
-      if (
+      let t = this.peek(0);
+      const optional =
         this.isWord(t, 'optional') &&
-        !this.isWord(this.la2('optional-key', 'operator'), 'of')
-      ) {
+        !this.isWord(this.la2('optional-key', 'operator'), 'of');
+      if (optional) {
         this.next();
-        const keyToken = this.peek(0);
-        let key: string | Node;
-        const computed = this.isOp(keyToken, '(');
-        if (computed) {
-          this.next();
-          key = (yield this.nested(() => this.expr())) as Node;
-          this.expectOp(')');
-        } else if (keyToken.t === 'str') {
-          key = this.next().v;
-        } else {
-          key = (yield this.propertyOrKey('an optional map key')) as string;
-        }
-        this.expectWord('of', 'operator');
-        return {
-          k: 'OptionalKey',
-          key,
-          computed,
-          base: (yield this.postfix()) as Node,
-        };
+        t = this.peek(0);
       }
+      const k = optional ? 'OptionalKey' : 'Key';
       if (this.isOp(t, '(')) {
         this.next();
         const key = (yield this.nested(() => this.expr())) as Node;
         this.expectOp(')');
         this.expectWord('of', 'operator');
-        return {
-          k: 'Key',
-          key,
-          computed: true,
-          base: (yield this.postfix()) as Node,
-        };
+        return { k, key, computed: true, base: (yield this.postfix()) as Node };
       }
       if (t.t === 'str') {
         this.next();
         this.expectWord('of', 'operator');
-        return { k: 'Key', key: t.v, base: (yield this.postfix()) as Node };
+        return { k, key: t.v, base: (yield this.postfix()) as Node };
       }
-      if (this.isWord(t, 'target') || ORDINALS.has(t.v)) {
+      if (!optional && (this.isWord(t, 'target') || ORDINALS.has(t.v))) {
         const n = this.la2(t.v === 'target' ? 'target' : 'ordinal', 'operator');
         if (t.v === 'target' && !this.isWord(n, 'of')) {
           this.next();
@@ -2785,11 +2763,11 @@ class Parser {
         }
       }
       const key = (yield this.propertyOrKey(
-        'a key or property name',
+        optional ? 'an optional map key' : 'a key or property name',
       )) as string;
       this.expectWord('of', 'operator');
       return {
-        k: PROPERTIES.has(key) ? 'Property' : 'Key',
+        k: optional ? k : PROPERTIES.has(key) ? 'Property' : 'Key',
         key,
         base: (yield this.postfix()) as Node,
       };
