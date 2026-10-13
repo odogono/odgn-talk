@@ -15,7 +15,7 @@ const parser = @import("../syntax/parser.zig");
 const lexer = @import("../syntax/lexer.zig");
 const ast = @import("../syntax/ast.zig");
 const chunks = @import("chunks.zig");
-const costs = @import("costs.zig");
+pub const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
 const binary = @import("binary.zig");
 const conversions = @import("convert.zig");
@@ -576,7 +576,7 @@ pub fn callOrder(x: []const u8, y: []const u8) bool {
 }
 
 /// An extended Script's code identity (chapter 10, Extend Script).
-fn extendedIdentity(previous: [32]u8, extension: [32]u8) [32]u8 {
+pub fn extendedIdentity(previous: [32]u8, extension: [32]u8) [32]u8 {
     var h = std.crypto.hash.sha2.Sha256.init(.{});
     h.update(&std.fmt.bytesToHex(previous, .lower));
     h.update("\nextend\n");
@@ -995,6 +995,11 @@ pub const LoadResult = union(enum) {
     refused: usize,
 };
 
+/// An open Decision a variables-only restore discarded: its delivery and
+/// broadcast ids, and its recipient's mark, owned; or a Broadcast Decision
+/// dropped before it had recipients, with none.
+pub const Deferred = struct { id: u64, broadcast: u64 = 0, mark: ?Mark = null };
+
 /// What a restored Group keeps until its first Pump (chapter 10, Settling
 /// pending calls): the calls still pending, in call id order, and those
 /// already settled.
@@ -1107,6 +1112,9 @@ pub const Group = struct {
     /// For a restored Group until its first Pump: its pending calls, and the
     /// Clock reading that Pump must not go back before.
     restored: ?Restored = null,
+    /// The open Decisions a variables-only restore discarded or dropped,
+    /// which its first Pump settles undecided, in delivery id order.
+    deferred: std.ArrayList(Deferred) = .empty,
     /// Text a restore rebuilt that the Group's parts borrow, and the
     /// placeholder Capabilities of Grants it couldn't re-bind.
     keep: std.heap.ArenaAllocator,
@@ -1154,6 +1162,8 @@ pub const Group = struct {
         while (open.next()) |x| g.releaseOpen(x.*);
         g.open_broadcasts.deinit(g.gpa);
         if (g.restored) |*r| r.deinit(g.gpa);
+        for (g.deferred.items) |x| if (x.mark) |m| g.releaseMark(m);
+        g.deferred.deinit(g.gpa);
         g.scratch.deinit();
         g.keep.deinit();
     }
@@ -1435,7 +1445,7 @@ pub const Group = struct {
     /// How an extension is added: as the Host Input `extend`, rebuilding a
     /// Script whose cap is checked later, or restoring one whose values come
     /// from a save.
-    pub const Adding = enum { input, rebuild, restore };
+    pub const Adding = enum { input, rebuild, rebuild_restored, restore };
 
     /// Adds an extension to `s`. As an input it writes its record and
     /// refuses a reused name or a Persistent State over the cap; restoring
@@ -1489,7 +1499,7 @@ pub const Group = struct {
         for (s.variableNames()) |n| try inherited.append(a, .{ .name = n, .variable = true });
         try inherited.appendSlice(a, s.names.items);
         var context = try g.codeContext(a, .{}, s.objects, s.owner);
-        context.grants = try keptView(a, s.grants, how == .restore);
+        context.grants = try keptView(a, s.grants, how == .restore or how == .rebuild_restored);
         context.inherited = inherited.items;
         var refused: usize = 0;
         const code = try g.lowerCode(a, l.name, l.name, &parsed, context, s.limits.pattern_size, &refused) orelse return .refused;
@@ -1582,7 +1592,7 @@ pub const Group = struct {
             display.writeSource(out, source) catch {};
             out.print(" identity={x}\n", .{fresh.identity}) catch {};
         }
-        if (!try g.buildCode(s, fresh, &parsed, &.{})) return .refused;
+        if (!try g.buildCode(s, fresh, &parsed, &.{}, false)) return .refused;
         if (carry) try g.carryOver(s, fresh);
         if (g.carriedState(s, fresh, keep_mailbox) > s.limits.persistent_state) {
             g.write("refused code=\"state too large\"\n", .{});
@@ -1614,10 +1624,12 @@ pub const Group = struct {
     /// kept Grants, objects and owner, runs its initialiser, and adds each
     /// of `extensions` in order: false, its diagnostics written, if any
     /// refuses.
-    fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *const Parsed, extensions: []const []const u8) !bool {
+    /// A variables-only restore checks against its revoked Grants too, which
+    /// still bind their names.
+    pub fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *const Parsed, extensions: []const []const u8, revoked: bool) !bool {
         const ca = fresh.code.allocator();
         var context = try g.codeContext(ca, .{}, s.objects, s.owner);
-        context.grants = try keptView(ca, s.grants, false);
+        context.grants = try keptView(ca, s.grants, revoked);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, parsed, context, s.limits.pattern_size, &refused) orelse return false;
         fresh.unit = code.unit;
@@ -1625,7 +1637,7 @@ pub const Group = struct {
         fresh.variables = try g.newValues(fresh.unit.variables.len, &.{}, &.{});
         fresh.definitions = try g.newValues(fresh.unit.definitions.len, fresh.unit.definitions, fresh.imports);
         if (!try g.initialise(fresh, null, s.name)) return false;
-        for (extensions) |x| if (try g.addExtension(fresh, x, .rebuild) != .extended) return false;
+        for (extensions) |x| if (try g.addExtension(fresh, x, if (revoked) .rebuild_restored else .rebuild) != .extended) return false;
         return true;
     }
 
@@ -1820,7 +1832,7 @@ pub const Group = struct {
                 fresh.imports = parsed.imports;
                 const sources = try ca.alloc([]const u8, s.extensions.items.len);
                 for (s.extensions.items, sources) |x, *src| src.* = try ca.dupe(u8, x.source);
-                if (!try g.buildCode(s, fresh, &parsed, sources)) break :blk .refused;
+                if (!try g.buildCode(s, fresh, &parsed, sources, false)) break :blk .refused;
                 fresh.identity = codeIdentity(s.name, s.source, .script, fresh.imports);
                 for (fresh.extensions.items) |x| fresh.identity = extendedIdentity(fresh.identity, x.identity);
                 if (carry) try g.carryOver(s, fresh);
@@ -2336,7 +2348,7 @@ pub const Group = struct {
     }
 
     /// Writes a queued Host Input as the Trace's `>` line.
-    fn writeInput(g: *Group, input: Input) void {
+    pub fn writeInput(g: *Group, input: Input) void {
         const out = g.trace orelse return;
         switch (input) {
             .deliver => |d| {
@@ -2575,6 +2587,25 @@ pub const Group = struct {
                 }
             }
         }
+        // The open Decisions a variables-only restore discarded settle
+        // undecided, `cancelled`, before any Stretch.
+        if (g.deferred.items.len > 0) {
+            std.mem.sort(Deferred, g.deferred.items, {}, struct {
+                fn less(_: void, x: Deferred, y: Deferred) bool {
+                    return x.id < y.id;
+                }
+            }.less);
+            defer g.deferred.clearRetainingCapacity();
+            for (g.deferred.items) |*x| {
+                const m = x.mark orelse {
+                    try g.sealAs(x.id, true, &.{}, .undecided);
+                    continue;
+                };
+                x.mark = null;
+                defer g.releaseMark(m);
+                try g.takePart(.{ .id = x.id, .message = "", .args = &.{}, .request = false, .decision = true, .broadcast = x.broadcast }, .{ .undecided = m });
+            }
+        }
         // Due timers, in deadline order, then the order they were set.
         const now = nanos(clock);
         while (true) {
@@ -2628,10 +2659,18 @@ pub const Group = struct {
                             }
                         }
                         // A `wait for` that takes a Decision allows it.
+                        // Refused before its Run takes it, the message goes.
                         var taken = d;
-                        if (try g.observe(s, d) and d.decision) {
+                        const seen = g.observe(s, d) catch |e| {
+                            g.releaseDelivery(d);
+                            return e;
+                        };
+                        if (seen and d.decision) {
                             taken.decision = false;
-                            try g.takePart(d, .allowed);
+                            g.takePart(d, .allowed) catch |e| {
+                                g.releaseDelivery(d);
+                                return e;
+                            };
                         }
                         try g.startRun(s, taken);
                     },
@@ -3623,7 +3662,7 @@ pub const Group = struct {
         return taken;
     }
 
-    fn releaseMark(g: *Group, m: Mark) void {
+    pub fn releaseMark(g: *Group, m: Mark) void {
         g.gpa.free(m.script);
         g.gpa.free(m.run);
         if (m.reason) |v| v.release();
@@ -3690,6 +3729,12 @@ pub const Group = struct {
     /// recipient vetoed, undecided if none did but one was undecided, and
     /// allowed otherwise.
     fn seal(g: *Group, id: u64, is_broadcast: bool, parts: []const ?Part) !void {
+        return g.sealAs(id, is_broadcast, parts, null);
+    }
+
+    /// Seals with a Verdict the parts don't give: a dropped Broadcast
+    /// Decision's, undecided with empty lists.
+    fn sealAs(g: *Group, id: u64, is_broadcast: bool, parts: []const ?Part, verdict: ?Verdict) !void {
         var vetoes: std.ArrayList(Mark) = .empty;
         var undecided: std.ArrayList(Mark) = .empty;
         for (parts) |part| switch (part.?) {
@@ -3704,7 +3749,7 @@ pub const Group = struct {
             },
         };
         const decided: Decided = .{
-            .verdict = if (vetoes.items.len > 0) .vetoed else if (undecided.items.len > 0) .undecided else .allowed,
+            .verdict = verdict orelse if (vetoes.items.len > 0) .vetoed else if (undecided.items.len > 0) .undecided else .allowed,
             .vetoes = vetoes.toOwnedSlice(g.gpa) catch &.{},
             .undecided = undecided.toOwnedSlice(g.gpa) catch &.{},
         };
@@ -4478,13 +4523,10 @@ pub const Group = struct {
             }
             out.writeAll("\n") catch {};
         }
+        defer g.releaseDelivery(d);
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
         // A Decision that reaches the end of its path is allowed.
-        if (d.decision) g.takePart(d, .allowed) catch |e| {
-            g.releaseDelivery(d);
-            return e;
-        };
-        g.releaseDelivery(d);
+        if (d.decision) try g.takePart(d, .allowed);
     }
 
     /// A message no Run of `s` ended goes on from the parent of the object

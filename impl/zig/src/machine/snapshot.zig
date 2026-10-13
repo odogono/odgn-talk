@@ -35,9 +35,17 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 1;
+pub const format_version: u32 = 2;
 
-pub const Error = error{InvalidSave} || Allocator.Error;
+pub const Error = error{
+    InvalidSave,
+    /// A variables-only restore whose Script no longer loads; its
+    /// diagnostics are in the Trace.
+    LoadRefused,
+    /// A variables-only restore whose carried Script Variables pass a
+    /// Script's Persistent State cap.
+    StateTooLarge,
+} || Allocator.Error;
 
 // ---------------------------------------------------------------- encoding
 
@@ -884,6 +892,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             try o.str(n.name);
             try s.object(n.object);
         }
+        try o.int(x.variableNames().len);
+        for (x.variableNames()) |n| try o.str(n);
         try s.values(x.variables);
         try s.values(x.definitions);
         for (x.extensions.items) |e| try s.values(e.definitions);
@@ -950,6 +960,14 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
             }
         }
     }
+    // Decisions a variables-only restore left for the first Pump.
+    try o.int(g.deferred.items.len);
+    for (g.deferred.items) |x| {
+        try o.int(x.id);
+        try o.int(x.broadcast);
+        try o.flag(x.mark != null);
+        if (x.mark) |m| try s.mark(m);
+    }
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(o.bytes.items, &digest, .{});
     try o.bytes.appendSlice(gpa, &digest);
@@ -999,13 +1017,24 @@ pub const Options = struct {
     variables_only: bool = false,
 };
 
-pub const Outcome = enum { full, mismatch };
+pub const Outcome = enum { full, variables_only, mismatch };
 
 /// What a restore reports beside its Group: the Host Objects that didn't
 /// resolve, which `gpa` owns; the pending calls are the Group's
 /// `restored.pending`.
 pub const Result = struct {
     disposed: []*objects.Object = &.{},
+    /// For a variables-only restore, what it discarded, by id.
+    discarded: []const []const u8 = &.{},
+    dropped: []const []const u8 = &.{},
+    abandoned: []const []const u8 = &.{},
+
+    pub fn deinit(x: *Result, gpa: Allocator) void {
+        gpa.free(x.disposed);
+        gpa.free(x.discarded);
+        gpa.free(x.dropped);
+        gpa.free(x.abandoned);
+    }
 };
 
 /// A saved Grant, kept until its Script is built.
@@ -1035,6 +1064,9 @@ const Restoring = struct {
     /// The Grants the Host didn't re-bind, as `<script>.<name>`.
     unbound: std.ArrayList([]const u8) = .empty,
     mismatch: bool = false,
+    /// A variables-only restore reads Runs only to discard them, against
+    /// code that may no longer match: no code position is trusted or used.
+    skim: bool = false,
 
     fn gpa(r: *Restoring) Allocator {
         return r.g.gpa;
@@ -1088,6 +1120,14 @@ const Restoring = struct {
     /// A unit relative to `s`: null for its own.
     fn unit(r: *Restoring, s: *const Script) Error!?*Library {
         const tag = std.enums.fromInt(UnitTag, try r.i.byte()) orelse return error.InvalidSave;
+        if (r.skim) {
+            switch (tag) {
+                .own => {},
+                .extension, .library => _ = try r.i.int(),
+                .stdlib => _ = try r.i.str(),
+            }
+            return null;
+        }
         return switch (tag) {
             .own => null,
             .extension => s.extensions.items[try r.i.index(s.extensions.items.len)],
@@ -1174,8 +1214,8 @@ const Restoring = struct {
     }
 
     /// The Operation a Script's Grant names, for a wait's declaration.
-    fn decl(r: *Restoring, s: *const Script, grant: []const u8, operation: []const u8) Error!*const capabilities.Operation {
-        _ = r;
+    fn decl(r: *Restoring, s: *const Script, grant: []const u8, operation: []const u8) Error!?*const capabilities.Operation {
+        if (r.skim) return null;
         const sg = s.grant(grant) orelse return error.InvalidSave;
         const i = sg.grant.capability.find(operation) orelse return error.InvalidSave;
         return &sg.grant.capability.operations[i];
@@ -1213,11 +1253,12 @@ const Restoring = struct {
         if (try r.i.flag()) {
             const library = try r.unit(run.script);
             const entry = try r.i.small(u32);
-            const events = run.script.unitIn(library).events;
-            if (entry >= events.len) return error.InvalidSave;
             const any = try r.i.flag();
             const n = try r.i.count();
-            if (n != events[entry].branches.len) return error.InvalidSave;
+            if (!r.skim) {
+                const events = run.script.unitIn(library).events;
+                if (entry >= events.len or n != events[entry].branches.len) return error.InvalidSave;
+            }
             const branches = try a.alloc(machine.EventBranch, n);
             var made: usize = 0;
             errdefer {
@@ -1322,17 +1363,18 @@ const Restoring = struct {
         try out.ensureTotalCapacity(a, out.items.len + n);
         for (0..n) |_| {
             const library = try r.unit(run.script);
-            const unit_code = run.script.unitIn(library);
             const body = try r.i.small(u32);
-            if (body >= unit_code.bodies.len) return error.InvalidSave;
-            const b = unit_code.bodies[body];
             const pc = try r.i.small(u32);
-            if (pc < b.first or pc > b.last) return error.InvalidSave;
             const locals = try r.values();
             var f: Frame = .{ .library = library, .body = body, .pc = pc, .locals = locals };
             out.appendAssumeCapacity(f);
             const placed = &out.items[out.items.len - 1];
-            if (locals.len != b.locals) return error.InvalidSave;
+            if (!r.skim) {
+                const unit_code = run.script.unitIn(library);
+                if (body >= unit_code.bodies.len) return error.InvalidSave;
+                const b = unit_code.bodies[body];
+                if (pc < b.first or pc > b.last or locals.len != b.locals) return error.InvalidSave;
+            }
             try r.slots(&placed.stack);
             placed.called = try r.i.flag();
             f = placed.*;
@@ -1443,7 +1485,7 @@ const Restoring = struct {
         if (try r.i.flag()) {
             const library = try r.unit(s);
             const body = try r.i.small(u32);
-            if (body >= s.unitIn(library).bodies.len) return error.InvalidSave;
+            if (!r.skim and body >= s.unitIn(library).bodies.len) return error.InvalidSave;
             x.preempted_in = .{ .library = library, .body = body, .fallback = try r.i.flag() };
         }
         x.continuing = try r.i.flag();
@@ -1484,7 +1526,7 @@ const Restoring = struct {
         if (try r.i.flag()) {
             const body = try r.i.small(u32);
             const library = try r.unit(s);
-            if (body >= s.unitIn(library).bodies.len) return error.InvalidSave;
+            if (!r.skim and body >= s.unitIn(library).bodies.len) return error.InvalidSave;
             x.clause_body = body;
             x.clause_unit = library;
         }
@@ -1499,7 +1541,7 @@ const Restoring = struct {
         if (try r.i.flag()) {
             const base = try r.values();
             x.segment_base = base;
-            if (base.len > s.variables.len) return error.InvalidSave;
+            if (!r.skim and base.len > s.variables.len) return error.InvalidSave;
         }
         try r.frames(x, &x.frames);
         if (x.base > x.frames.items.len) return error.InvalidSave;
@@ -1600,41 +1642,71 @@ fn unbound(context: ?*anyopaque, c: *capabilities.Call, args: []const *Value) ca
     return .broken;
 }
 
-/// Builds a restored Script from its saved state, compiled again: null
-/// when it no longer compiles, a mismatch. `g` owns it once it returns.
-fn readScript(r: *Restoring, generation: u64) Error!?*Script {
+/// A Script as saved, its Grants re-bound, until it is built: as first
+/// compiled for a full restore, or rebuilt for a variables-only one. Its
+/// text is the Group's `keep`; its values are released unless taken.
+const Saved = struct {
+    name: []const u8,
+    source: []const u8,
+    extensions: []const []const u8,
+    limits: machine.Limits,
+    grants: []machine.ScriptGrant,
+    effects: bool,
+    owner: ?*objects.Object,
+    objects: []machine.NamedObject,
+    variable_names: []const []const u8,
+    variables: []*Value,
+    definitions: []*Value,
+    extension_definitions: [][]*Value,
+    runs: u64,
+    fuel_total: u64,
+    alloc_total: u64,
+    faults: u64,
+    debt: u64,
+    stopped: ?[]const u8,
+
+    fn release(x: *Saved, gpa: Allocator) void {
+        machine.releaseValues(x.variables, gpa);
+        machine.releaseValues(x.definitions, gpa);
+        for (x.extension_definitions) |d| machine.releaseValues(d, gpa);
+        gpa.free(x.extension_definitions);
+        x.variables = &.{};
+        x.definitions = &.{};
+        x.extension_definitions = &.{};
+    }
+};
+
+/// Reads a Script's saved state, re-binding its Grants: each the Host
+/// returns must match its saved declarations, and each it doesn't is kept
+/// revoked with them.
+fn readSaved(r: *Restoring, out: *Saved) Error!void {
     const a = r.gpa();
+    const k = r.keep();
     const i = &r.i;
-    const s = try a.create(Script);
-    s.* = .{ .name = "", .identity = undefined, .arena = .init(a), .code = .init(a), .unit = undefined, .variables = &.{}, .definitions = &.{}, .generation = generation };
-    s.unit.values = &.{};
-    var joined = false;
-    errdefer if (!joined) r.g.destroyScript(s);
-    const sa = s.arena.allocator();
-    s.name = try sa.dupe(u8, try i.str());
-    for (r.g.scripts.items) |x| if (std.mem.eql(u8, x.name, s.name)) return error.InvalidSave;
+    out.* = .{ .name = "", .source = "", .extensions = &.{}, .limits = .{}, .grants = &.{}, .effects = false, .owner = null, .objects = &.{}, .variable_names = &.{}, .variables = &.{}, .definitions = &.{}, .extension_definitions = &.{}, .runs = 0, .fuel_total = 0, .alloc_total = 0, .faults = 0, .debt = 0, .stopped = null };
+    errdefer out.release(a);
+    out.name = try r.kept();
     if (i.bytes.len - i.pos < 32) return error.InvalidSave;
     i.pos += 32;
-    s.source = try s.code.allocator().dupe(u8, try i.str());
-    const extensions = try sa.alloc([]const u8, try i.count());
-    for (extensions) |*x| x.* = try sa.dupe(u8, try i.str());
-    s.limits = try r.limits();
-    // Its Grants, re-bound by the Host, or kept revoked with their saved
-    // declarations.
-    const grants = try sa.alloc(machine.ScriptGrant, try i.count());
+    out.source = try r.kept();
+    const extensions = try k.alloc([]const u8, try i.count());
+    for (extensions) |*x| x.* = try r.kept();
+    out.extensions = extensions;
+    out.limits = try r.limits();
+    const grants = try k.alloc(machine.ScriptGrant, try i.count());
     for (grants) |*sg| {
         const saved: SavedGrant = blk: {
-            const name = try sa.dupe(u8, try i.str());
-            const json = try sa.dupe(u8, try i.str());
-            const capability = try sa.dupe(u8, try i.str());
-            const ops = try sa.alloc(SavedOperation, try i.count());
-            for (ops) |*o| o.* = .{ .name = try sa.dupe(u8, try i.str()), .mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave, .required = try i.small(usize), .total = try i.small(usize) };
+            const name = try r.kept();
+            const json = try r.kept();
+            const capability = try r.kept();
+            const ops = try k.alloc(SavedOperation, try i.count());
+            for (ops) |*o| o.* = .{ .name = try r.kept(), .mode = std.enums.fromInt(capabilities.Mode, try i.byte()) orelse return error.InvalidSave, .required = try i.small(usize), .total = try i.small(usize) };
             break :blk .{ .name = name, .json = json, .capability = capability, .ops = ops, .revoked = try i.flag(), .disabled = try i.flag() };
         };
-        const rebound: ?*capabilities.Grant = if (r.options.grants) |x| x.call(x.context, s.name, saved.name) else null;
+        const rebound: ?*capabilities.Grant = if (r.options.grants) |x| x.call(x.context, out.name, saved.name) else null;
         if (rebound) |grant| {
             // Only the saved Operations, whose declarations must match.
-            const kept = try sa.alloc(bool, grant.capability.operations.len);
+            const kept = try k.alloc(bool, grant.capability.operations.len);
             @memset(kept, false);
             for (saved.ops) |o| {
                 const at = grant.capability.find(o.name) orelse {
@@ -1650,42 +1722,94 @@ fn readScript(r: *Restoring, generation: u64) Error!?*Script {
             if (!std.mem.eql(u8, json, saved.json)) r.mismatch = true;
             sg.* = .{ .name = saved.name, .grant = grant, .kept = kept, .revoked = saved.revoked, .disabled = saved.disabled };
         } else {
-            try r.unbound.append(a, try std.fmt.allocPrint(r.keep(), "{s}.{s}", .{ s.name, saved.name }));
+            try r.unbound.append(a, try std.fmt.allocPrint(k, "{s}.{s}", .{ out.name, saved.name }));
             const grant = try placeholder(r.g, saved);
-            const kept = try sa.alloc(bool, saved.ops.len);
+            const kept = try k.alloc(bool, saved.ops.len);
             @memset(kept, true);
             sg.* = .{ .name = saved.name, .grant = grant, .kept = kept, .revoked = true, .disabled = saved.disabled, .declarations = saved.json };
         }
-        if (sg.grant.coordinator != null) s.effects = true;
+        if (sg.grant.coordinator != null) out.effects = true;
     }
-    s.grants = grants;
-    s.owner = try r.object();
-    s.objects = try sa.alloc(machine.NamedObject, try i.count());
-    for (s.objects) |*x| x.* = .{ .name = try sa.dupe(u8, try i.str()), .object = try r.object() orelse return error.InvalidSave };
-    // The code, as first compiled: a Script that no longer compiles
-    // against these Libraries and Grants is a mismatch.
-    if (!(r.g.compileSaved(s, extensions) catch |e| return valueError(e))) {
-        r.mismatch = true;
+    out.grants = grants;
+    out.owner = try r.object();
+    const named = try k.alloc(machine.NamedObject, try i.count());
+    for (named) |*x| x.* = .{ .name = try r.kept(), .object = try r.object() orelse return error.InvalidSave };
+    out.objects = named;
+    const names = try k.alloc([]const u8, try i.count());
+    for (names) |*x| x.* = try r.kept();
+    out.variable_names = names;
+    out.variables = try r.values();
+    if (out.variables.len != names.len) return error.InvalidSave;
+    out.definitions = try r.values();
+    out.extension_definitions = try a.alloc([]*Value, extensions.len);
+    @memset(out.extension_definitions, &.{});
+    for (out.extension_definitions) |*d| d.* = try r.values();
+    out.runs = try i.int();
+    out.fuel_total = try i.int();
+    out.alloc_total = try i.int();
+    out.faults = try i.int();
+    out.debt = try i.int();
+    out.stopped = if (try i.optStr()) |x| try k.dupe(u8, x) else null;
+}
+
+/// A new Script of the Group with a saved Script's name, Grants, objects,
+/// limits and counters, and no code yet.
+fn newScript(r: *Restoring, saved: *const Saved) Error!*Script {
+    const a = r.gpa();
+    for (r.g.scripts.items) |x| if (std.mem.eql(u8, x.name, saved.name)) return error.InvalidSave;
+    const s = try a.create(Script);
+    r.g.generations += 1;
+    s.* = .{ .name = saved.name, .identity = undefined, .arena = .init(a), .code = .init(a), .unit = undefined, .variables = &.{}, .definitions = &.{}, .generation = r.g.generations, .limits = saved.limits, .grants = saved.grants, .effects = saved.effects, .owner = saved.owner, .objects = saved.objects, .runs = saved.runs, .fuel_total = saved.fuel_total, .alloc_total = saved.alloc_total, .faults = saved.faults };
+    s.unit.values = &.{};
+    r.g.scripts.append(a, s) catch |e| {
         r.g.destroyScript(s);
-        joined = true;
-        return null;
-    }
-    s.variables = try r.values();
-    if (s.variables.len != s.variableNames().len) return error.InvalidSave;
-    s.definitions = try r.values();
-    if (s.definitions.len != s.unit.definitions.len) return error.InvalidSave;
-    for (s.extensions.items) |x| {
-        x.definitions = try r.values();
-        if (x.definitions.len != x.unit.definitions.len) return error.InvalidSave;
-    }
-    s.runs = try i.int();
-    s.fuel_total = try i.int();
-    s.alloc_total = try i.int();
-    s.faults = try i.int();
-    s.debt = try i.int();
-    if (try i.optStr()) |reason| s.stopped = try a.dupe(u8, reason);
-    try r.g.scripts.append(a, s);
-    joined = true;
+        return e;
+    };
+    s.source = s.code.allocator().dupe(u8, saved.source) catch |e| return e;
+    return s;
+}
+
+/// Builds a saved Script as first compiled, without running an
+/// initialiser: false when it no longer compiles, a mismatch.
+fn buildSaved(r: *Restoring, saved: *const Saved) Error!bool {
+    const s = try newScript(r, saved);
+    return r.g.compileSaved(s, saved.extensions) catch |e| valueError(e);
+}
+
+/// Puts a fully restored Script's saved values in place.
+fn fillSaved(r: *Restoring, s: *Script, saved: *Saved) Error!void {
+    if (saved.variables.len != s.variableNames().len) return error.InvalidSave;
+    for (saved.variable_names, s.variableNames()) |x, y| if (!std.mem.eql(u8, x, y)) return error.InvalidSave;
+    if (saved.definitions.len != s.unit.definitions.len) return error.InvalidSave;
+    if (saved.extension_definitions.len != s.extensions.items.len) return error.InvalidSave;
+    for (saved.extension_definitions, s.extensions.items) |d, x| if (d.len != x.unit.definitions.len) return error.InvalidSave;
+    const a = r.gpa();
+    machine.releaseValues(s.variables, a);
+    machine.releaseValues(s.definitions, a);
+    s.variables = saved.variables;
+    s.definitions = saved.definitions;
+    for (saved.extension_definitions, s.extensions.items) |d, x| x.definitions = d;
+    a.free(saved.extension_definitions);
+    saved.variables = &.{};
+    saved.definitions = &.{};
+    saved.extension_definitions = &.{};
+    s.debt = saved.debt;
+    if (saved.stopped) |x| s.stopped = try a.dupe(u8, x);
+}
+
+/// Rebuilds a saved Script for a variables-only restore, from its saved
+/// source and then each extension, against the Core's current versions, the
+/// Libraries given and the Grants re-bound, running its initialisers. A
+/// Script that no longer loads fails the restore.
+fn rebuildSaved(r: *Restoring, saved: *const Saved) Error!*Script {
+    const s = try newScript(r, saved);
+    const g = r.g;
+    const ca = s.code.allocator();
+    const parsed = try g.parseCode(ca, s.source);
+    s.imports = parsed.imports;
+    if (!(g.buildCode(s, s, &parsed, saved.extensions, true) catch |e| return valueError(e))) return error.LoadRefused;
+    s.identity = machine.codeIdentity(s.name, s.source, .script, s.imports);
+    for (s.extensions.items) |x| s.identity = machine.extendedIdentity(s.identity, x.identity);
     return s;
 }
 
@@ -1724,19 +1848,29 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     @memset(r.libraries, null);
     var withheld: std.ArrayList([]const u8) = .empty;
     defer withheld.deinit(a);
+    // A variables-only restore rebuilds against the Library given under
+    // each saved name, whatever its identity.
+    var named: std.ArrayList(*Library) = .empty;
+    defer named.deinit(a);
     for (r.libraries) |*l| {
         const name = try i.str();
         _ = try i.str();
         if (i.bytes.len - i.pos < 32) return error.InvalidSave;
         const identity = i.bytes[i.pos..][0..32];
         i.pos += 32;
-        l.* = for (options.libraries) |x| {
-            if (std.mem.eql(u8, &x.identity, identity) and std.mem.eql(u8, x.name, name)) break x;
+        const given = for (options.libraries) |x| {
+            if (std.mem.eql(u8, x.name, name)) break x;
         } else null;
-        if (l.* == null) {
+        if (given) |x| {
+            try named.append(a, x);
+            if (std.mem.eql(u8, &x.identity, identity)) {
+                l.* = x;
+                try g.libraries.append(a, x);
+            } else r.mismatch = true;
+        } else {
             r.mismatch = true;
             try withheld.append(a, name);
-        } else try g.libraries.append(a, l.*.?);
+        }
     }
     // Host Objects, resolved once the save is known to be good.
     const object_count = try i.count();
@@ -1831,15 +1965,25 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         c.* = x;
     }
     r.calls = calls;
-    // The Scripts, compiled again.
+    // The Scripts, read whole, then compiled again as first compiled.
     const script_count = try i.count();
-    for (0..script_count) |_| {
-        g.generations += 1;
-        if (try readScript(&r, g.generations) == null) return .mismatch;
+    const saved = try a.alloc(Saved, script_count);
+    var read: usize = 0;
+    defer {
+        for (saved[0..read]) |*x| x.release(a);
+        a.free(saved);
     }
+    for (saved) |*x| {
+        try readSaved(&r, x);
+        read += 1;
+    }
+    for (saved) |*x| if (!try buildSaved(&r, x)) {
+        r.mismatch = true;
+        break;
+    };
     // Versions: the Fingerprint of what this Group now is.
-    if (!std.mem.eql(u8, &(try g.groupFingerprint()), &saved_print)) r.mismatch = true;
-    if (r.mismatch) {
+    if (!r.mismatch and !std.mem.eql(u8, &(try g.groupFingerprint()), &saved_print)) r.mismatch = true;
+    if (r.mismatch and !options.variables_only) {
         if (g.trace) |w| {
             w.print("> restore from=s{d}", .{g.saves}) catch {};
             writeIds(w, "unbound", r.unbound.items);
@@ -1848,11 +1992,21 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         }
         return .mismatch;
     }
+    const variables_only = r.mismatch;
+    if (variables_only) {
+        // Each Script rebuilt, against what the Host passes now.
+        while (g.scripts.pop()) |x| g.destroyScript(x);
+        g.libraries.clearRetainingCapacity();
+        try g.libraries.appendSlice(a, named.items);
+        for (saved) |*x| _ = try rebuildSaved(&r, x);
+        r.skim = true;
+    } else for (g.scripts.items, saved) |x, *y| try fillSaved(&r, x, y);
     for (g.scripts.items) |s| {
         if (s.owner) |o| if (o.owner_of == null or !std.mem.eql(u8, o.owner_of.?, s.name)) return error.InvalidSave;
     }
-    // Function Value code, placed in its Home Script's units.
-    for (g.functions.items, places) |f, place| {
+    // Function Value code, placed in its Home Script's units; after a
+    // variables-only restore every one is stale.
+    if (!variables_only) for (g.functions.items, places) |f, place| {
         if (!place.live) continue;
         const home = g.script(f.home) orelse continue;
         f.library = switch (place.tag) {
@@ -1864,7 +2018,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         if (place.body >= home.unitIn(f.library).bodies.len) return error.InvalidSave;
         f.body = place.body;
         f.generation = home.generation;
-    }
+    };
     // Every Run, Script by Script.
     for (g.scripts.items) |s| {
         const n = try i.count();
@@ -1939,18 +2093,30 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             };
         }
     }
+    const deferred = try i.count();
+    try g.deferred.ensureTotalCapacity(a, deferred);
+    for (0..deferred) |_| {
+        const id = try i.int();
+        const broadcast = try i.int();
+        const mark = if (try i.flag()) try r.mark() else null;
+        g.deferred.appendAssumeCapacity(.{ .id = id, .broadcast = broadcast, .mark = mark });
+    }
     if (i.pos != i.bytes.len) return error.InvalidSave;
-    // The calls that still pend, with their Grants' bindings.
-    var pending_ids: std.ArrayList([]const u8) = .empty;
-    errdefer pending_ids.deinit(a);
+    // Each call's Grant binding.
     for (calls) |c| {
         const s = g.script(c.script) orelse return error.InvalidSave;
         if (s.grant(c.grant)) |sg| c.binding = sg.grant.binding;
-        for (g.pending.items) |p| if (p.call == c) {
-            try pending_ids.append(a, c.id);
-            break;
-        };
     }
+    var discarded: Discarded = .{};
+    defer discarded.deinit(a);
+    if (variables_only) try discard(&r, saved, &discarded);
+    // The calls that still pend.
+    var pending_ids: std.ArrayList([]const u8) = .empty;
+    errdefer pending_ids.deinit(a);
+    for (calls) |c| for (g.pending.items) |p| if (p.call == c) {
+        try pending_ids.append(a, c.id);
+        break;
+    };
     std.mem.sort([]const u8, pending_ids.items, {}, struct {
         fn less(_: void, x: []const u8, y: []const u8) bool {
             return machine.callOrder(x, y);
@@ -1970,12 +2136,15 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         }
     }
     result.disposed = try disposed.toOwnedSlice(a);
+    result.discarded = try discarded.runs.toOwnedSlice(a);
+    result.dropped = try discarded.dropped.toOwnedSlice(a);
+    result.abandoned = try discarded.abandoned.toOwnedSlice(a);
     if (g.trace) |w| {
         w.print("> restore from=s{d}", .{g.saves}) catch {};
         if (options.variables_only) w.writeAll(" mismatch=variables-only") catch {};
         writeIds(w, "unbound", r.unbound.items);
         writeIds(w, "withheld", withheld.items);
-        w.print(" fingerprint={x} mode=full", .{saved_print}) catch {};
+        w.print(" fingerprint={x} mode={s}", .{ saved_print, if (variables_only) "variables-only" else "full" }) catch {};
         writeIds(w, "pending", g.restored.?.pending.items);
         if (result.disposed.len > 0) {
             w.writeAll(" disposed=[") catch {};
@@ -1985,9 +2154,123 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             }
             w.writeAll("]") catch {};
         }
+        writeIds(w, "discarded", result.discarded);
+        writeIds(w, "dropped", result.dropped);
+        writeIds(w, "abandoned", result.abandoned);
         w.writeAll("\n") catch {};
     }
-    return .full;
+    return if (variables_only) .variables_only else .full;
+}
+
+/// What a variables-only restore discarded, by id, in order; the ids are
+/// the Group's `keep`.
+const Discarded = struct {
+    runs: std.ArrayList([]const u8) = .empty,
+    dropped: std.ArrayList([]const u8) = .empty,
+    abandoned: std.ArrayList([]const u8) = .empty,
+
+    fn deinit(d: *Discarded, gpa: Allocator) void {
+        d.runs.deinit(gpa);
+        d.dropped.deinit(gpa);
+        d.abandoned.deinit(gpa);
+    }
+};
+
+/// A variables-only restore's discarding (chapter 10, Variables-only
+/// restore): every Run, with no `finally`, its Fuel kept in its Script's
+/// counters; the mailboxes, the input queue and the Fuel Slice debt; and
+/// every pending call. Each Script Variable the new code still declares
+/// takes its saved value, as a preempted Run's rollback would leave it,
+/// and each open Decision settles undecided at the first Pump.
+fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
+    const g = r.g;
+    const a = r.gpa();
+    const k = r.keep();
+    var dropped: std.ArrayList(u64) = .empty;
+    defer dropped.deinit(a);
+    for (g.scripts.items, saved) |s, *x| {
+        var runs: std.ArrayList(*Run) = .empty;
+        defer runs.deinit(a);
+        try runs.appendSlice(a, s.live.items);
+        std.mem.sort(*Run, runs.items, {}, struct {
+            fn less(_: void, p: *Run, q: *Run) bool {
+                return runNumber(p.id) < runNumber(q.id);
+            }
+        }.less);
+        // The prospective post-rollback view of the saved variables.
+        const view = try a.dupe(*Value, x.variables);
+        defer a.free(view);
+        for (runs.items) |run| if (run.continuing) if (run.segment_base) |base| {
+            if (base.len > view.len) return error.InvalidSave;
+            @memcpy(view[0..base.len], base);
+        };
+        for (s.variableNames(), s.variables) |name, *v| {
+            for (x.variable_names, view) |old, value| if (std.mem.eql(u8, old, name)) {
+                v.*.release();
+                v.* = value.retain();
+                break;
+            };
+        }
+        var state: u64 = 0;
+        for (s.variables) |v| state += machine.costs.size(v);
+        if (state > s.limits.persistent_state) return error.StateTooLarge;
+        for (runs.items) |run| {
+            try out.runs.append(a, try k.dupe(u8, run.id));
+            s.fuel_total += run.fuel;
+            s.alloc_total += run.alloc;
+            if (run.waiting) |p| if (p.call) |c| try out.abandoned.append(a, try k.dupe(u8, c.id));
+            if (run.join) |j| for (j.members.items) |m| if (m.pending) |p| if (p.call) |c| try out.abandoned.append(a, try k.dupe(u8, c.id));
+            if (run.verdict or run.delivery.decision) try defer_(g, run.delivery, s.name, run.id);
+        }
+        for (s.work.items) |w| switch (w) {
+            .message => |d| {
+                if (d.from == null and d.id > 0) try dropped.append(a, d.id);
+                if (d.decision) try defer_(g, d, s.name, "");
+                g.releaseDelivery(d);
+            },
+            .run => {},
+        };
+        s.work.clearRetainingCapacity();
+        s.live.clearRetainingCapacity();
+        for (runs.items) |run| g.destroyRun(run);
+    }
+    // The input queue: each queued call's line is written before the
+    // restore's, since it is never drained.
+    for (g.inputs.items) |x| {
+        g.writeInput(x);
+        switch (x) {
+            .deliver => |d| {
+                if (d.delivery.id > 0) try dropped.append(a, d.delivery.id);
+                if (d.delivery.decision) try defer_(g, d.delivery, d.script, "");
+            },
+            .broadcast => |b| if (b.decision) try g.deferred.append(a, .{ .id = b.id }),
+            else => {},
+        }
+    }
+    g.releaseInputs(g.inputs.items);
+    g.inputs.clearRetainingCapacity();
+    std.mem.sort(u64, dropped.items, {}, std.sort.asc(u64));
+    for (dropped.items) |id| try out.dropped.append(a, try std.fmt.allocPrint(k, "d{d}", .{id}));
+    std.mem.sort([]const u8, out.abandoned.items, {}, struct {
+        fn less(_: void, p: []const u8, q: []const u8) bool {
+            return machine.callOrder(p, q);
+        }
+    }.less);
+}
+
+/// Defers an open Decision's undecided part to the first Pump.
+fn defer_(g: *Group, d: machine.Delivery, script: []const u8, run: []const u8) !void {
+    const a = g.gpa;
+    const s = try a.dupe(u8, script);
+    errdefer a.free(s);
+    const r = try a.dupe(u8, run);
+    errdefer a.free(r);
+    try g.deferred.append(a, .{ .id = d.id, .broadcast = d.broadcast, .mark = .{ .script = s, .run = r, .outcome = "cancelled" } });
+}
+
+fn runNumber(id: []const u8) u64 {
+    const at = std.mem.lastIndexOfScalar(u8, id, 'r') orelse return 0;
+    return std.fmt.parseInt(u64, id[at + 1 ..], 10) catch 0;
 }
 
 fn writeIds(w: *std.Io.Writer, key: []const u8, ids: []const []const u8) void {
@@ -2021,7 +2304,7 @@ fn busyGroup(gpa: Allocator) !Group {
         \\  put "woke" after log
         \\end nap
         \\on watch
-        \\  wait for ping x where x > 1 or 9 s
+        \\  wait for ping n or 9 s
         \\  put it after log
         \\end watch
         \\
@@ -2033,8 +2316,8 @@ fn busyGroup(gpa: Allocator) !Group {
         \\end note
         \\
     ;
-    _ = try g.load("a", a, .{});
-    _ = try g.load("b", b, .{});
+    try testing.expect(try g.load("a", a, .{}) == .loaded);
+    try testing.expect(try g.load("b", b, .{}) == .loaded);
     const seven = try model.scalar(gpa, .{ .number = model.Decimal.fromInt(7) });
     var args = [_]*Value{seven};
     _ = try g.deliver("a", "go", &args, false);
@@ -2043,6 +2326,26 @@ fn busyGroup(gpa: Allocator) !Group {
     try g.pump(.{ .seconds = 1790000000, .nanos = 0 });
     _ = try g.deliver("a", "nap", &.{}, false);
     return g;
+}
+
+test "a variables-only restore keeps Script Variables and discards the rest" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    // A withheld nothing still mismatches when the Fingerprint differs: a
+    // save from another Group shape is forced here by a bad fingerprint.
+    const good = try save(&g, gpa, @splat(0));
+    defer gpa.free(good);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.variables_only, try restore(&restored, good, .{ .variables_only = true }, &result));
+    try testing.expectEqual(@as(usize, 4), result.discarded.len);
+    try testing.expectEqual(@as(usize, 1), result.dropped.len);
+    for (restored.scripts.items) |x| try testing.expectEqual(@as(usize, 0), x.live.items.len);
+    try testing.expectEqual(@as(usize, 0), restored.pending.items.len);
+    try restored.pump(.{ .seconds = 1790000010, .nanos = 0 });
 }
 
 test "a save restores to the same save, and a restored Group goes on" {
@@ -2056,7 +2359,7 @@ test "a save restores to the same save, and a restored Group goes on" {
     defer restored.deinit();
     var result: Result = .{};
     try testing.expectEqual(Outcome.full, try restore(&restored, first, .{}, &result));
-    defer gpa.free(result.disposed);
+    defer result.deinit(gpa);
     const again = try save(&restored, gpa, print);
     defer gpa.free(again);
     try testing.expectEqualSlices(u8, first, again);
@@ -2087,10 +2390,14 @@ test "a corrupt or hostile save is refused, never a crash" {
             if (n >= good.len - 32) continue;
             bad[n] ^= flip;
             std.crypto.hash.sha2.Sha256.hash(bad[0 .. bad.len - 32], bad[bad.len - 32 ..][0..32], .{});
-            var restored: Group = .init(gpa, null);
-            defer restored.deinit();
-            var result: Result = .{};
-            if (restore(&restored, bad, .{}, &result)) |_| gpa.free(result.disposed) else |_| {}
+            // Both policies: a variables-only restore reads Runs only to
+            // discard them.
+            for ([_]bool{ false, true }) |variables_only| {
+                var restored: Group = .init(gpa, null);
+                defer restored.deinit();
+                var result: Result = .{};
+                if (restore(&restored, bad, .{ .variables_only = variables_only }, &result)) |_| result.deinit(gpa) else |_| {}
+            }
         }
         var restored: Group = .init(gpa, null);
         defer restored.deinit();
@@ -2119,7 +2426,7 @@ test "a save or restore refused at any allocation leaves nothing behind" {
                 if (e != error.OutOfMemory) return e;
                 break :blk false;
             };
-            memory.allocator().free(result.disposed);
+            result.deinit(memory.allocator());
             try testing.expectEqual(Outcome.full, outcome);
             const again = save(&restored, memory.allocator(), print) catch break :blk false;
             defer memory.allocator().free(again);

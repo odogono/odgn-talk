@@ -536,8 +536,19 @@ saved ones, and compiles each Script's sources again as they were first
 compiled, against every Grant, without running an initialiser. A Grant the
 Host doesn't re-bind restores revoked, with a placeholder Capability built
 from its saved declarations. If the Group Fingerprint of what it rebuilt
-differs from the saved one, it is `save mismatch`; `TALK_VARIABLES_ONLY`
-isn't supported yet and refuses the same way. Then every Run is read and
+differs from the saved one, it is `save mismatch`, unless the Host's policy
+is `TALK_VARIABLES_ONLY`. A variables-only restore rebuilds each Script from
+its saved source and extensions, like a Reload, against the Library given
+under each saved name and its Grants, revoked ones included, so a Grant the
+Host didn't re-bind still binds its name. It reads the Runs only to discard
+them, trusting none of their code positions: each Script Variable the new
+code declares takes its saved value, as a preempted Run's rollback would
+leave it, and each discarded Run's Fuel stays in its counters. The
+mailboxes, the input queue, whose lines it writes before its own, the Fuel
+Slice debt and every pending call go, and each open Decision settles
+undecided, `cancelled`, at the first Pump. A Script that no longer loads is
+`TALK_LOAD_REFUSED`, and carried variables over a cap
+`TALK_STATE_TOO_LARGE`. Then every Run is read and
 checked against its unit's code, Host Objects the Host's `resolve` refuses
 restore disposed, and the `restore` record lists the pending calls. Until
 the first Pump, `talk_settle` queues each settlement: Answer and Fail as

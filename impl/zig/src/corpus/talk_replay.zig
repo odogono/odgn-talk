@@ -1131,7 +1131,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var restored: ?*c.talk_group = null;
             var result: ?*c.talk_restore_result = null;
             const code = c.talk_restore(core, bytes_saved.ptr, bytes_saved.len, &restore_options, &restored, &result);
-            if (code == c.TALK_SAVE_MISMATCH) continue;
+            if (code == c.TALK_SAVE_MISMATCH or code == c.TALK_LOAD_REFUSED or code == c.TALK_STATE_TOO_LARGE) continue;
             try check(code);
             c.talk_restore_result_release(result);
             // The runner goes on with the restored Group; the old one lives

@@ -1028,8 +1028,11 @@ typedef struct talk_restore_options {
     void *grants_context;
     talk_resolve_fn resolve;
     void *resolve_context;
-    /* TALK_VARIABLES_ONLY isn't supported yet, and refuses a mismatch as
-     * TALK_REJECT_MISMATCH does. */
+    /* With TALK_VARIABLES_ONLY a mismatch rebuilds each Script from its
+     * saved sources, keeping only its Script Variables, counters, owner,
+     * objects, limits and Grant states. A Script that no longer loads is
+     * TALK_LOAD_REFUSED, and carried variables over the Persistent State cap
+     * TALK_STATE_TOO_LARGE. */
     talk_mismatch_policy mismatch;
     /* C only: as talk_group_options. */
     const talk_allocator *allocator;
@@ -1066,6 +1069,11 @@ bool talk_restore_result_variables_only(const talk_restore_result *r);
 size_t talk_restore_result_pending(const talk_restore_result *r, const talk_pending_call **out);
 /* C only: the Host Objects that didn't resolve; *out borrows from r. */
 size_t talk_restore_result_disposed(const talk_restore_result *r, const talk_object_ref **out);
+/* C only: an id the Group holds. */
+typedef struct talk_id { const char *data; size_t len; } talk_id;
+/* C only: what a variables-only restore discarded: which 0 the Runs, 1 the
+ * dropped Deliveries, 2 the abandoned calls; *out borrows from the Group. */
+size_t talk_restore_result_ids(const talk_restore_result *r, int which, const talk_id **out);
 /* C only: ends the caller's result. */
 void talk_restore_result_release(talk_restore_result *r);
 /* Exactly one of these. */
