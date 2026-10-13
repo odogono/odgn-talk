@@ -76,7 +76,10 @@ receiver into a map. A map value may itself be a Host Object; returning the
 handle is allowed, but the next optional read cannot step into it.
 
 An error from the read instruction has `at` at its `the` token. Operand errors
-retain their own source positions. No cumulative `path` field is added:
+retain their own source positions. Both statements remain subject to the
+existing Standard Library attribution rule: an operator error raised inside
+stdlib source points to the entering Script call, as specified in
+[chapter 6](../../spec/06-errors-and-limits.md#errors). No cumulative `path` field is added:
 these are individual expressions rather than one Value Path operation.
 No new Error Code is needed.
 
@@ -260,7 +263,9 @@ These are required observations, not blessed expectation files yet.
    key followed by an erroring receiver reports the receiver error; invalid
    key plus Nothing reports `wrong kind`, expected text. A valid key plus
    number/list/text/Bytes reports expected map. Check `value`, `at`, absence
-   of a fabricated path, and instruction charge on failures.
+   of a fabricated path, and instruction charge on failures. An optional-read
+   or evaluated-operand error raised inside stdlib source must retain the
+   existing attribution to the entering Script call.
 6. Live and disposed Host Objects, known and dynamic, fail optional reads
    for both `id` and another key, with zero Host calls. Returning a Host
    Object stored under a map key succeeds; stepping into it fails.

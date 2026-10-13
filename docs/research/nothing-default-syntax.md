@@ -282,7 +282,8 @@ catalogues unchanged until implementation can satisfy their consumer checks.
 
 ## Evidence and remaining validation
 
-The evidence gate remains unmet. A later proposal needs real Scripts showing
+The original real-Script evidence gate remains unmet; the selected design
+was authorized separately. Future usage validation should seek Scripts showing
 that the shorter form helps, especially whether the word `optional` teaches
 map-only semantics clearly enough. The default-operator parser questions now have the bounded evidence above;
 the optional-key follow-up supplies the same bounded grammar evidence. Pin evaluation
