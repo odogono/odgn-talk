@@ -4,6 +4,8 @@
 import {
   createElement,
   createPage,
+  duplicateElement,
+  duplicatePage,
   freshName,
   isIdentifierName,
   suggestName,
@@ -141,7 +143,19 @@ export const resizeBox = (
 };
 
 /** A drag in progress. `to` takes the offset from where the drag began. */
-export type Gesture = { to(dx: number, dy: number): void };
+export type Gesture = { finish(): void; to(dx: number, dy: number): void };
+
+/** Several live updates that become one undoable edit on `finish`. */
+export type Edit = { change(update: () => void): void; finish(): void };
+
+type Snapshot = {
+  pageIndex: number;
+  pageSelected: boolean;
+  project: Project;
+  selection: string[];
+};
+type HistoryEntry = { after: Snapshot; before: Snapshot };
+export type LayerOrder = 'forward' | 'backward' | 'front' | 'back';
 
 /** Where a new Element goes: down and right of the last one added. */
 const CASCADE = 20;
@@ -153,8 +167,112 @@ const CASCADE = 20;
 export class StackEditor {
   #pageIndex = 0;
   #selection: string[] = [];
+  // Set only by an explicit Page selection, so Delete never removes a Page
+  // just because no Elements are selected.
+  #pageSelected = false;
+  #past: HistoryEntry[] = [];
+  #future: HistoryEntry[] = [];
+  // An object, not a bare Snapshot, so stale Edit handles can be detected by
+  // identity. `json` caches the serialised Project for change checks.
+  #pending: { before: Snapshot; json: string } | undefined;
 
   constructor(readonly project: Project) {}
+
+  #snapshot(): Snapshot {
+    return structuredClone({
+      project: this.project,
+      pageIndex: this.#pageIndex,
+      selection: this.#selection,
+      pageSelected: this.#pageSelected,
+    });
+  }
+
+  #restore(snapshot: Snapshot): void {
+    const copy = structuredClone(snapshot);
+    // Preserve the Project reference held by the shell and storage clients.
+    for (const key of Object.keys(this.project)) {
+      if (!(key in copy.project)) {
+        delete (this.project as Partial<Project>)[key as keyof Project];
+      }
+    }
+    Object.assign(this.project, copy.project);
+    this.#pageIndex = copy.pageIndex;
+    this.#selection = copy.selection;
+    this.#pageSelected = copy.pageSelected;
+  }
+
+  get #pendingChanged(): boolean {
+    return (
+      !!this.#pending && this.#pending.json !== JSON.stringify(this.project)
+    );
+  }
+
+  #finish(): void {
+    const pending = this.#pending;
+    const changed = this.#pendingChanged;
+    this.#pending = undefined;
+    if (pending && changed) {
+      this.#past.push({ before: pending.before, after: this.#snapshot() });
+      this.#future = [];
+    }
+  }
+
+  get canUndo(): boolean {
+    return this.#past.length > 0 || this.#pendingChanged;
+  }
+
+  get canRedo(): boolean {
+    return this.#future.length > 0 && !this.#pendingChanged;
+  }
+
+  /** Records any authored Project change, including Info and future Script edits. */
+  edit<T>(change: () => T): T {
+    const edit = this.startEdit();
+    let result!: T;
+    edit.change(() => {
+      result = change();
+    });
+    edit.finish();
+    return result;
+  }
+
+  /** Starts a live edit. Starting another edit also finishes this one. */
+  startEdit(): Edit {
+    this.#finish();
+    const before = this.#snapshot();
+    const pending = { before, json: JSON.stringify(before.project) };
+    this.#pending = pending;
+    return {
+      change: update => {
+        if (this.#pending === pending) {
+          update();
+        }
+      },
+      finish: () => {
+        if (this.#pending === pending) {
+          this.#finish();
+        }
+      },
+    };
+  }
+
+  undo(): void {
+    this.#finish();
+    const entry = this.#past.pop();
+    if (entry) {
+      this.#restore(entry.before);
+      this.#future.push(entry);
+    }
+  }
+
+  redo(): void {
+    this.#finish();
+    const entry = this.#future.pop();
+    if (entry) {
+      this.#restore(entry.after);
+      this.#past.push(entry);
+    }
+  }
 
   get pageIndex(): number {
     return this.#pageIndex;
@@ -185,12 +303,15 @@ export class StackEditor {
    * adds or removes it. A click on empty space (`undefined`) selects the Page.
    */
   click(name: string | undefined, { shift = false } = {}): void {
+    this.#finish();
     if (name === undefined || !this.element(name)) {
       if (!shift) {
         this.#selection = [];
+        this.#pageSelected = true;
       }
       return;
     }
+    this.#pageSelected = false;
     if (shift) {
       this.#selection = this.#selection.includes(name)
         ? this.#selection.filter(n => n !== name)
@@ -201,33 +322,42 @@ export class StackEditor {
   }
 
   selectPage(): void {
+    this.#finish();
     this.#selection = [];
+    this.#pageSelected = true;
   }
 
   /** Adds an Element of `kind` named like `button1`, and selects it. */
   addElement(kind: ElementKind): Element {
-    const page = this.page;
-    const element = createElement(
-      kind,
-      freshName(`${kind}1`, namesExcept(page.elements)),
-    );
-    const step = (page.elements.length % 10) * CASCADE;
-    element.left += step;
-    element.top += step;
-    page.elements.push(element);
-    this.#selection = [element.name];
-    return element;
+    return this.edit(() => {
+      const page = this.page;
+      const element = createElement(
+        kind,
+        freshName(`${kind}1`, namesExcept(page.elements)),
+      );
+      const step = (page.elements.length % 10) * CASCADE;
+      element.left += step;
+      element.top += step;
+      page.elements.push(element);
+      this.#selection = [element.name];
+      this.#pageSelected = false;
+      return element;
+    });
   }
 
   /** Starts moving the selected Elements; offsets are in design pixels. */
   startMove(): Gesture {
     const origins = this.selected.map(e => ({ e, left: e.left, top: e.top }));
+    const edit = this.startEdit();
     return {
+      finish: edit.finish,
       to(dx, dy) {
-        for (const { e, left, top } of origins) {
-          e.left = Math.round(left + dx);
-          e.top = Math.round(top + dy);
-        }
+        edit.change(() => {
+          for (const { e, left, top } of origins) {
+            e.left = Math.round(left + dx);
+            e.top = Math.round(top + dy);
+          }
+        });
       },
     };
   }
@@ -239,12 +369,16 @@ export class StackEditor {
       return undefined;
     }
     const origin: Box = { ...element };
+    const edit = this.startEdit();
     return {
+      finish: edit.finish,
       to(dx, dy) {
-        Object.assign(
-          element,
-          resizeBox(origin, handle, dx, dy, minimumSize(element)),
-        );
+        edit.change(() => {
+          Object.assign(
+            element,
+            resizeBox(origin, handle, dx, dy, minimumSize(element)),
+          );
+        });
       },
     };
   }
@@ -257,8 +391,10 @@ export class StackEditor {
     }
     const check = checkElementName(this.page, name, current);
     if (check.ok) {
-      element.name = name;
-      this.#selection = this.#selection.map(n => (n === current ? name : n));
+      this.edit(() => {
+        element.name = name;
+        this.#selection = this.#selection.map(n => (n === current ? name : n));
+      });
     }
     return check;
   }
@@ -267,18 +403,22 @@ export class StackEditor {
   renamePage(name: string): NameCheck {
     const check = checkPageName(this.project, name, this.page.name);
     if (check.ok) {
-      this.page.name = name;
+      this.edit(() => {
+        this.page.name = name;
+      });
     }
     return check;
   }
 
   /** Shows the Page at `index` and selects it. */
   goToPage(index: number): void {
+    this.#finish();
     if (index < 0 || index >= this.project.pages.length) {
       return;
     }
     this.#pageIndex = index;
     this.#selection = [];
+    this.#pageSelected = true;
   }
 
   previousPage(): void {
@@ -291,15 +431,19 @@ export class StackEditor {
 
   /** Adds a Page after the showing one, and shows it. */
   addPage(): Page {
-    const page = createPage(
-      freshName(
-        `page${this.project.pages.length + 1}`,
-        namesExcept(this.project.pages),
-      ),
-    );
-    this.project.pages.splice(this.#pageIndex + 1, 0, page);
-    this.goToPage(this.#pageIndex + 1);
-    return page;
+    return this.edit(() => {
+      const page = createPage(
+        freshName(
+          `page${this.project.pages.length + 1}`,
+          namesExcept(this.project.pages),
+        ),
+      );
+      this.project.pages.splice(this.#pageIndex + 1, 0, page);
+      this.#pageIndex++;
+      this.#selection = [];
+      this.#pageSelected = false;
+      return page;
+    });
   }
 
   /** Moves the Page at `from` to `to`; the showing Page stays showing. */
@@ -308,9 +452,90 @@ export class StackEditor {
     if (from < 0 || from >= pages.length || to < 0 || to >= pages.length) {
       return;
     }
-    const showing = this.page;
-    const [moved] = pages.splice(from, 1);
-    pages.splice(to, 0, moved!);
-    this.#pageIndex = pages.indexOf(showing);
+    this.edit(() => {
+      const showing = this.page;
+      const [moved] = pages.splice(from, 1);
+      pages.splice(to, 0, moved!);
+      this.#pageIndex = pages.indexOf(showing);
+    });
+  }
+
+  /** Copies the selection in layer order, nudges it, and selects the copies. */
+  duplicate(): void {
+    this.edit(() => {
+      this.#pageSelected = false;
+      if (this.#selection.length) {
+        const taken = namesExcept(this.page.elements);
+        const copies = this.selected.map(element => {
+          const copy = duplicateElement(element, taken);
+          taken.add(copy.name);
+          copy.left += CASCADE;
+          copy.top += CASCADE;
+          return copy;
+        });
+        this.page.elements.push(...copies);
+        this.#selection = copies.map(e => e.name);
+      } else {
+        const copy = duplicatePage(this.page, namesExcept(this.project.pages));
+        this.project.pages.splice(++this.#pageIndex, 0, copy);
+      }
+    });
+  }
+
+  /** The editor keeps at least one Page in the authored Project. */
+  get canDelete(): boolean {
+    return (
+      this.#selection.length > 0 ||
+      (this.#pageSelected && this.project.pages.length > 1)
+    );
+  }
+
+  /** Deletes the selected Elements, or the Page only when it is selected. */
+  delete(): void {
+    if (!this.canDelete) {
+      return;
+    }
+    this.edit(() => {
+      this.#pageSelected = false;
+      if (this.#selection.length) {
+        this.page.elements = this.page.elements.filter(
+          e => !this.#selection.includes(e.name),
+        );
+        this.#selection = [];
+      } else {
+        this.project.pages.splice(this.#pageIndex, 1);
+        this.#pageIndex = Math.min(
+          this.#pageIndex,
+          this.project.pages.length - 1,
+        );
+      }
+    });
+  }
+
+  /** Keeps selected Elements' relative order, including adjacent groups. */
+  orderLayers(order: LayerOrder): void {
+    this.edit(() => {
+      const elements = this.page.elements;
+      const selection = new Set(this.#selection);
+      const selected = (element: Element) => selection.has(element.name);
+      if (order === 'front' || order === 'back') {
+        const chosen = elements.filter(selected);
+        const others = elements.filter(e => !selected(e));
+        this.page.elements =
+          order === 'front' ? [...others, ...chosen] : [...chosen, ...others];
+      } else if (order === 'forward') {
+        for (let i = elements.length - 2; i >= 0; i--) {
+          if (selected(elements[i]!) && !selected(elements[i + 1]!)) {
+            [elements[i], elements[i + 1]] = [elements[i + 1]!, elements[i]!];
+          }
+        }
+      } else {
+        for (let i = 1; i < elements.length; i++) {
+          if (selected(elements[i]!) && !selected(elements[i - 1]!)) {
+            [elements[i], elements[i - 1]] = [elements[i - 1]!, elements[i]!];
+          }
+        }
+      }
+    });
   }
 }

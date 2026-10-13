@@ -174,14 +174,46 @@ button:disabled {
   border: calc(1.5px / var(--scale, 1)) solid #2f6fed;
   pointer-events: auto;
 }
-.handle.nw { left: 0; top: 0; cursor: nwse-resize; }
-.handle.n { left: 50%; top: 0; cursor: ns-resize; }
-.handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
-.handle.e { left: 100%; top: 50%; cursor: ew-resize; }
-.handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
-.handle.s { left: 50%; top: 100%; cursor: ns-resize; }
-.handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
-.handle.w { left: 0; top: 50%; cursor: ew-resize; }
+.handle.nw {
+  left: 0;
+  top: 0;
+  cursor: nwse-resize;
+}
+.handle.n {
+  left: 50%;
+  top: 0;
+  cursor: ns-resize;
+}
+.handle.ne {
+  left: 100%;
+  top: 0;
+  cursor: nesw-resize;
+}
+.handle.e {
+  left: 100%;
+  top: 50%;
+  cursor: ew-resize;
+}
+.handle.se {
+  left: 100%;
+  top: 100%;
+  cursor: nwse-resize;
+}
+.handle.s {
+  left: 50%;
+  top: 100%;
+  cursor: ns-resize;
+}
+.handle.sw {
+  left: 0;
+  top: 100%;
+  cursor: nesw-resize;
+}
+.handle.w {
+  left: 0;
+  top: 50%;
+  cursor: ew-resize;
+}
 
 /* The Pages strip. */
 #strip {
@@ -372,4 +404,35 @@ button:disabled {
 }
 #problems.bad {
   color: var(--error);
+}
+
+/* The Edit menu stays above the desk and floating windows. */
+#edit-menu {
+  position: relative;
+}
+#edit-menu summary {
+  cursor: pointer;
+}
+.edit-commands {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 100;
+  width: 15rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 30%);
+}
+.edit-commands button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  border: 0;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+.edit-commands kbd {
+  font: inherit;
+  color: var(--muted);
 }

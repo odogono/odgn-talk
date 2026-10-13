@@ -9,6 +9,25 @@
   <body>
     <header id="menu">
       <h1>NorthTalk <span>creative tool</span></h1>
+      <details id="edit-menu">
+        <summary>Edit</summary>
+        <div class="edit-commands" aria-label="Editing commands">
+          <button type="button" data-command="undo">Undo <kbd>⌘Z</kbd></button>
+          <button type="button" data-command="redo">Redo <kbd>⇧⌘Z</kbd></button>
+          <hr />
+          <button type="button" data-command="duplicate">
+            Duplicate <kbd>⌘D</kbd>
+          </button>
+          <button type="button" data-command="delete">
+            Delete <kbd>⌫</kbd>
+          </button>
+          <hr />
+          <button type="button" data-command="forward">Bring forward</button>
+          <button type="button" data-command="backward">Send backward</button>
+          <button type="button" data-command="front">Bring to front</button>
+          <button type="button" data-command="back">Send to back</button>
+        </div>
+      </details>
       <span id="project-title"></span>
       <button id="show-script" type="button">Sample Script</button>
       <span id="core" class="muted"></span>
@@ -54,7 +73,12 @@
       hidden
     >
       <div class="bar">
-        <button id="close-script" type="button" class="close" title="Close"></button>
+        <button
+          id="close-script"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
         <span id="script-title"></span>
       </div>
       <div id="editor"></div>
