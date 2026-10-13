@@ -134,7 +134,7 @@ test "a refusal at any allocation leaves nothing behind" {
         \\  end try
         \\end go
         \\on watch
-        \\  wait for ping {n: n} where n > 1 or 5 s
+        \\  wait for ping {n: n} or 5 s
         \\  put it after log
         \\end watch
         \\on fan
@@ -167,8 +167,8 @@ test "a refusal at any allocation leaves nothing behind" {
         var group: machine.Group = .init(memory.allocator(), null);
         defer group.deinit();
         finished = blk: {
-            _ = group.load("caller", caller, .{}) catch break :blk false;
-            _ = group.load("callee", callee, .{}) catch break :blk false;
+            if ((group.load("caller", caller, .{}) catch break :blk false) != .loaded) return error.TestUnexpectedResult;
+            if ((group.load("callee", callee, .{}) catch break :blk false) != .loaded) return error.TestUnexpectedResult;
             const n = model.scalar(memory.allocator(), .{ .number = model.Decimal.fromInt(7) }) catch break :blk false;
             var args = [_]*model.Value{n};
             _ = group.deliver("caller", "go", &args, false) catch {
@@ -219,7 +219,7 @@ test "Extend, Reload and Library replacement refused at any allocation leave not
         defer group.deinit();
         finished = blk: {
             group.addLibrary(first) catch break :blk false;
-            _ = group.load("s", source, .{}) catch break :blk false;
+            if ((group.load("s", source, .{}) catch break :blk false) != .loaded) return error.TestUnexpectedResult;
             const s = group.script("s") orelse break :blk false;
             _ = group.deliver("s", "go", &.{}, false) catch break :blk false;
             group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;

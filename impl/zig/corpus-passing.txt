@@ -59,6 +59,7 @@ capabilities/scope-cancel-run
 capabilities/scope-close-conversion
 capabilities/scope-conversion-fault
 capabilities/scope-disabled-reject
+capabilities/scope-disabled-variables-only
 capabilities/scope-dispose
 capabilities/scope-failed-close
 capabilities/scope-grants-as-used
@@ -122,6 +123,7 @@ computed-sends/names
 computed-sends/unhandled
 counters/faults-and-cleanup
 counters/lifetime
+counters/variables-only
 dates/civil-arithmetic
 dates/instants-and-offsets
 dates/value-encoding
@@ -284,6 +286,8 @@ save-restore/settle-answer-and-fail
 save-restore/settle-reissue-and-adopt
 save-restore/unbound-grant-and-unresolved-object
 save-restore/unsettled-call-is-lost
+save-restore/variables-only-restore
+save-restore/withheld-library
 stdlib/calls
 stdlib/errors-name-the-call
 stdlib/lookup

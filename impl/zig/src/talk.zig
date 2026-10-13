@@ -896,7 +896,13 @@ pub const RestoreResult = struct {
     variables_only: bool,
     pending: []PendingCall,
     disposed: []ObjectRef,
+    discarded: []Id,
+    dropped: []Id,
+    abandoned: []Id,
 };
+
+/// An id the Group holds, such as a Run's or a call's.
+pub const Id = extern struct { data: [*]const u8, len: usize };
 
 const Bridges = struct {
     core: *Core,
@@ -930,7 +936,6 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
     restored.* = null;
     const bytes_in: []const u8 = if (len == 0) &.{} else (save orelse return .invalid_value)[0..len];
     const given: []const *machine.Library = if (o.libraries_len == 0) &.{} else (o.libraries orelse return .invalid_value)[0..o.libraries_len];
-    // VariablesOnly arrives with the variables-only restore.
     const group_options: GroupOptions = .{ .name = o.name, .name_len = o.name_len, .trace = o.trace, .trace_context = o.trace_context, .allocator = o.allocator, .memory_cap = o.memory_cap };
     var made: ?*Group = null;
     if (talk_new_group(c, &group_options, &made) != .ok) return .out_of_memory;
@@ -944,13 +949,16 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
         .kinds = .{ .context = &bridges, .call = Bridges.kindNamed },
         .variables_only = o.mismatch == .variables_only,
     }, &report) catch |err| {
+        g.flush();
         talk_group_release(g);
         return switch (err) {
             error.InvalidSave => .invalid_save,
+            error.LoadRefused => .load_refused,
+            error.StateTooLarge => .state_too_large,
             error.OutOfMemory => .out_of_memory,
         };
     };
-    defer g.group.gpa.free(report.disposed);
+    defer report.deinit(g.group.gpa);
     if (outcome == .mismatch) {
         g.flush();
         talk_group_release(g);
@@ -960,7 +968,7 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
         talk_group_release(g);
         return .out_of_memory;
     };
-    r.* = .{ .gpa = c.gpa, .variables_only = false, .pending = &.{}, .disposed = &.{} };
+    r.* = .{ .gpa = c.gpa, .variables_only = outcome == .variables_only, .pending = &.{}, .disposed = &.{}, .discarded = &.{}, .dropped = &.{}, .abandoned = &.{} };
     const filled = blk: {
         r.pending = c.gpa.alloc(PendingCall, g.group.restored.?.pending.items.len) catch break :blk false;
         for (g.group.restored.?.pending.items, r.pending) |id, *p| {
@@ -973,6 +981,11 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
             p.* = .{ .id = id.ptr, .id_len = id.len, .script = call.script.ptr, .script_len = call.script.len, .grant = call.grant.ptr, .grant_len = call.grant.len, .operation = operation.ptr, .operation_len = operation.len };
         }
         r.disposed = c.gpa.alloc(ObjectRef, report.disposed.len) catch break :blk false;
+        inline for (.{ "discarded", "dropped", "abandoned" }) |f| {
+            const ids = @field(report, f);
+            @field(r, f) = c.gpa.alloc(Id, ids.len) catch break :blk false;
+            for (ids, @field(r, f)) |id, *x| x.* = .{ .data = id.ptr, .len = id.len };
+        }
         for (report.disposed, r.disposed) |x, *d| d.* = .{ .kind = x.kind.name.ptr, .kind_len = x.kind.name.len, .id = x.id.ptr, .id_len = x.id.len };
         // Each Script gets its handle.
         for (g.group.scripts.items) |s| {
@@ -1016,10 +1029,26 @@ export fn talk_restore_result_disposed(r: *const RestoreResult, out: *?[*]const 
     return r.disposed.len;
 }
 
+/// What a variables-only restore discarded: 0 the Runs, 1 the dropped
+/// Deliveries, 2 the abandoned calls; each id borrows from the Group.
+export fn talk_restore_result_ids(r: *const RestoreResult, which: c_int, out: *?[*]const Id) usize {
+    const ids = switch (which) {
+        0 => r.discarded,
+        1 => r.dropped,
+        2 => r.abandoned,
+        else => &.{},
+    };
+    out.* = ids.ptr;
+    return ids.len;
+}
+
 export fn talk_restore_result_release(r: ?*RestoreResult) void {
     const x = r orelse return;
     x.gpa.free(x.pending);
     x.gpa.free(x.disposed);
+    x.gpa.free(x.discarded);
+    x.gpa.free(x.dropped);
+    x.gpa.free(x.abandoned);
     x.gpa.destroy(x);
 }
 
