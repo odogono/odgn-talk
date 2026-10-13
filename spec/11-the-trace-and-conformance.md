@@ -175,6 +175,10 @@ IdList         ::= '[' ( Id ( ', ' Id )* )? ']'
 - **Comments and blank lines:** a line that starts with `#`, and an empty line, are an author's. The Core writes neither, and comparing ignores them.
 - **Only outcomes** are recorded, never single instructions.
 
+### Metering extensions
+
+[Metered Operations](embedding/metered-operations.md#trace-and-message-layer) specify `charge-request`, `charge-result`, synchronous `charge-refused`, and the `metering` Operation setup key. These normative extensions are staged separately from the generated catalogue tables below; the [handoff](../docs/handoffs/472-metered-operations.md) lists their activation work. Synchronous replay must preserve accepted prefix charges before refusal. Asynchronous replay processes each request in input order, including inactive outcomes and charge-only Pumps. No synthetic Segment is emitted for admission-time refusal.
+
 ### What is recorded, and when
 
 A record is written when what it records happens, so a Trace is in the order the Core acted:
@@ -551,9 +555,9 @@ A Stub supplies, in advance, what a Host function returns during a Pump, since n
   - **`begin`, `commit` and `rollback`:** a Stub gives Nothing, or fails.
 - **Standard `user` calls:** `confirm`, `choose` and `enter` are suspending calls, so a case answers each with an `answer` or `fail` line, and writes a Host's `user busy` as a Stub's `error`. `notify` takes fire-and-forget Stubs.
 - **Fire-and-forget calls** take the next Stub if there is one. With none, they succeed.
-- **`charge`** is drawn with `Charge` while the Operation starts, and a suspending call takes a Stub for its `charge` and `error` only.
+- **`charge`** is drawn with `Charge` during the Host callback. The [metering extension](embedding/metered-operations.md#trace-and-message-layer) adds `charge-refused` to represent an accepted prefix followed by refusal; a suspending call takes a Stub for its synchronous charge, refusal or error only. Later charge requests are separate Host Inputs.
 - **Suspending calls** are answered by later `answer` and `fail` lines, unless a Stub's `error` fails one as it starts, as a Host that refuses a call at once does. The runner's Host functions do nothing else.
-- **Replaying a Trace from a live Host,** which has no Stubs, a replaying Host answers each immediate call from its `call` record's `result` or `error`, charges its `charged`, and answers each property read from its `prop` record ([chapter 12](12-sessions-and-tooling.md#the-debugger)).
+- **Replaying a Trace from a live Host,** which has no Stubs, a replaying Host answers each immediate call from its `call` record's `result` or `error`, charges its accepted `charged` and then reproduces `charge-refused` when present, and answers each property read from its `prop` record ([chapter 12](12-sessions-and-tooling.md#the-debugger)).
 
 ### Key types
 

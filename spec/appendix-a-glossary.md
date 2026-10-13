@@ -66,8 +66,12 @@ _Avoid_: scoped Operation (for atomic effects), transactional Run
 The Host object that begins, commits and rolls back the Segment-bound effects of every Grant whose binding the Host maps to it. All of a Segment's Segment-bound Operations must go through one Segment Coordinator, so that the Segment commits or rolls back as a whole.
 _Avoid_: participant (for the Host object), transaction manager, resource manager
 
+**Metered Operation**:
+An Operation that obtains Fuel authorization incrementally before doing each chunk of work, with effects that are read-only or belong to the calling Segment.
+_Avoid_: streaming Operation (for charging), billable Operation
+
 **Operation Declaration**:
-The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional Capability Scope and Segment-bound behavior. A Host may add a description and examples, which only tooling reads. The same form serves Hosts, the Conformance Corpus and tooling.
+The data form of an Operation: its name, argument and result shapes, per-call cost, mode (immediate, suspending or fire-and-forget), longest time pending, and optional metering, Capability Scope and Segment-bound behavior. A Host may add a description and examples, which only tooling reads. The same form serves Hosts, the Conformance Corpus and tooling.
 _Avoid_: signature, schema, spec (unqualified)
 
 **Value Encoding**:
@@ -509,7 +513,7 @@ Everything a Script retains between Segments: its Script Variables, the frames o
 _Avoid_: heap, live memory
 
 **Limit Fault**:
-The end of a Run caused by exceeding a resource limit. A Script can never catch it; the failing Segment is rolled back and no further Script code runs in that Run.
+The end of a Run caused by exceeding a resource limit. A Script can never catch it; any executing Segment is rolled back and no further Script code runs in that Run.
 _Avoid_: out-of-memory, resource error, exception
 
 **Cleanup Budget**:

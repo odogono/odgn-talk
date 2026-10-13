@@ -38,7 +38,7 @@ A Script that keeps records it needs to search, join or total has outgrown the S
   - `query` is checked with `sqlite3_stmt_readonly`.
 - **Values in** (ADR 0030): `nothing` binds as `NULL`. A number that is an integer with exponent 0 and fits int64 binds as `INTEGER`, and any other number as `REAL`, by the nearest double. Text binds as `TEXT`, bytes as `BLOB`, and `true` and `false` as 1 and 0. Every other kind raises `wrong kind`, and Scripts convert explicitly (ADR 0003).
 - **Values out:** `NULL` gives `nothing` and `INTEGER` a number. `REAL` gives the shortest decimal that reads back as the same double, then the number rules. NaN, the infinities and magnitudes of 10^34 or more raise `unrepresentable`. `TEXT` gives NFC text and `BLOB` gives bytes. Duplicate column names in a result raise `sql`.
-- **Cost:** a call charges `max × perRow` before the work, where `max` defaults to the binding's cap and can't exceed it. A result with more rows than `max` raises `too many rows`. Results are never truncated. The returned rows are charged to the Run's Allocation Budget.
+- **Original cost decision (superseded by [ADR 0082](0082-metered-operations-authorize-work-through-the-pump.md)):** a call charges `max × perRow` before the work, where `max` defaults to the binding's cap and can't exceed it. A result with more rows than `max` raises `too many rows`. Results are never truncated. The returned rows are charged to the Run's Allocation Budget.
 - **Errors:** `sql`, `constraint` with `{kind}`, `sqlite busy`, `readonly`, `too many rows` and `unrepresentable`, plus the scope errors of ADR 0047.
 - **The Store in the same database:** a Host may keep its Stores in a `sqlite` database and map both to that database's coordinator. The Bun Host does this in v1. The Store's commit then writes on the Segment's connection inside its transaction, and:
   - the Store and `sqlite` share one connection manager per database. The Host process still owns the file, as ADR 0062's in-process reservations need, but no longer holds SQLite's exclusive lock;
@@ -51,7 +51,7 @@ A Script that keeps records it needs to search, join or total has outgrown the S
 - **Follow-ups:**
   - Named-statement catalogues.
   - A load-time validation hook, so literal SQL becomes a load diagnostic.
-  - Metered Operations that charge for rows as they arrive.
+  - Metered Operations: settled by [ADR 0082](0082-metered-operations-authorize-work-through-the-pump.md), charging statement steps before work, including completion and overflow probes; implementation is deferred.
   - `sqlite` in Sessions and the Playground.
 - **Amended 2026-10-08** ([#466](https://github.com/odogono/odgn-talk/issues/466)): the error raised for a `query` that could write is named `not read-only`, not `readonly`, so it can't be confused with the existing `read only`. Error codes may now contain hyphenated words.
 - Amends [ADR 0050](0050-the-store-is-a-standard-capability-with-segment-bound-writes.md) and [ADR 0062](0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md): a Store that shares a coordinator with `sqlite` raises `store busy` while another Segment holds the database's write lock.

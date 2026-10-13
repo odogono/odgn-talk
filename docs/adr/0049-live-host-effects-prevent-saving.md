@@ -11,3 +11,5 @@ A Quiescent Group with an open Capability Scope or an enlisted Segment participa
 ## Consequences
 
 The Host can resume pumping until effects finalize and retry, or intentionally stop work before saving. Successful save/restore remains unobservable. Conformance checks refusal at live-effect boundaries and resumes the original Group; elsewhere it retains automatic save/restore replay. Failed-release Grant disablement is saved state, so restoring or reloading cannot bypass it.
+
+Amended by [ADR 0082](0082-metered-operations-authorize-work-through-the-pump.md): Save also refuses while an asynchronous metered call is pending or a charge request is unresolved, because external work permissions and waiting futures cannot be captured safely.

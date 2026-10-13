@@ -616,6 +616,8 @@ Go passing gate.
 
 ### Ordinary Capability Operations
 
+**Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. See [#472](https://github.com/odogono/odgn-talk/issues/472).
+
 `Core.DefineCapability` copies Operation declarations and validates their modes,
 Shapes, costs and Host functions. `Grant` selects Operations, and `GrantAll`
 selects the whole definition with an opaque Host binding. Load copies each named

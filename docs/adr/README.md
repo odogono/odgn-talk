@@ -83,3 +83,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0079: Built-in properties are read-only in Containers](0079-built-in-properties-are-read-only-in-containers.md)
 - [0080: Scripts check Shapes through Built-ins](0080-scripts-check-shapes-through-built-ins.md)
 - [0081: Mappings compose Shapes with restricted transformations](0081-mappings-compose-shapes-with-restricted-transformations.md)
+- [0082: Metered Operations authorize work through the Pump](0082-metered-operations-authorize-work-through-the-pump.md)

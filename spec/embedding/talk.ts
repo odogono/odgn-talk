@@ -1,4 +1,6 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
+// Metering extensions and SQLite perStep signatures are staged in
+// metered-operations.md#target-embedding-declarations until runtime implementation.
 // The package is @odgn/northtalk.
 //
 // This file mirrors talk.go call for call. The differences are idiom only

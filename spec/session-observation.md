@@ -4,6 +4,8 @@ This is a normative extension of [chapter 12](12-sessions-and-tooling.md), settl
 
 All command output uses chapter 11's display form, including map insertion order. Maps specified here are constructed in the field order listed, omitting only explicitly optional fields. Error rows use the existing Session error projection: remove the `message` and `at` fields, a Host `Fail`'s `message` included; source locations, when part of ordinary failure output, remain in their existing separate position. Apply that projection to caught getter errors and `trace end` errors too. Never expose Host-only failure detail as normative output.
 
+Metered Operations feed the same cumulative Run accounting: a Pump that only admits charges still updates Fuel measurements. Session recording and replay must preserve asynchronous charge requests and outcomes in their original input order ([metering contract](embedding/metered-operations.md#trace-and-message-layer)); reconstructing spending from Segment records is insufficient.
+
 ## Declaration documentation
 
 A contiguous block of `--|` line comments immediately preceding a named top-level function, Handler Clause, Constant or Script Variable is its Declaration Documentation. Imports, local bindings and anonymous Lambdas have none. Leading indentation before the marker is ignored. Remove `--|` and at most one following ASCII space from each line, then join the remaining text with LF. Preserve all other spaces, empty marked lines and text; do not interpret Markdown or normalize the source text. A blank unmarked line, intervening ordinary comment or another declaration ends attachment. A trailing comment on another declaration is never a leading doc block.

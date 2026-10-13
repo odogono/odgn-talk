@@ -58,9 +58,13 @@ on editNote noteId, body
 end editNote
 ```
 
-The Host charges each `query` and `change` its Operation cost plus
+Current implementations charge each `query` and `change` its Operation cost plus
 `max × perRow` Fuel before execution, regardless of how many rows come back.
-Choose a small `max` when the result size is known.
+Choose a small `max` when the result size is known. The specified
+[step-metering contract](../spec/embedding/metered-operations.md#sqlite-step-authorization)
+replaces this with `perStep`, including completion and overflow probes, but is
+not yet implemented; see the [Go support note](../impl/go/README.md#ordinary-capability-operations)
+and [TS support note](../impl/ts/README.md#process-wide-core-and-host-manifests).
 
 ## Values crossing the SQL boundary
 

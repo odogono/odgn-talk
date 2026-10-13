@@ -275,7 +275,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 
 <!-- end -->
 
-- **Fuel per Run** covers the Run's whole life, suspensions included. Each instruction's whole charge applies at it, so a Run that can't cover a charge faults at that instruction ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). A Capability call charges its declared cost at the call, `Charge` only while the Operation starts, and a late cost when the Run resumes, where it can fault. A pending call costs no Fuel.
+- **Fuel per Run** covers the Run's whole life, suspensions included. Each instruction's whole charge applies at it, so a Run that can't cover a charge faults at that instruction ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)). A Capability call charges its declared cost at the call, `Charge` during its Host callback, and an additional late cost when the Run resumes. [Metered Operations](embedding/metered-operations.md) can authorize successive chunks; asynchronous requests charge when their Pump admits them, even while the Run waits. Waiting alone costs no Fuel.
 - **The Allocation Budget** counts the logical size of every value the Run constructs over its life, as if nothing were shared, with frees ignored.
 - **Persistent State** counts, by logical size, everything the Script keeps between Segments: its Script Variables, the frames of its suspended, parked and preempted Runs, the answers a Join has received early, and the messages in its mailbox. It is measured at each Segment end, at a suspension or at the Run's end, and a breach faults the Run at that instruction. Growth within a Segment is the Allocation Budget's job.
   - **A Run that is ending** isn't suspended, parked or preempted, so its own frames don't count at its end. A suspending Run's frames do.
@@ -293,6 +293,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 
 - **Uncatchable:** a Limit Fault ends the Run at once, as `limit fault`. No `catch` or `finally` runs, and no `error` message is sent. The report names the limit.
 - **Rollback:** the failing Segment is rolled back, so the Script's Script Variables return to their bindings at the Segment's start. An enlisted [Segment participant](embedding/scoped-effects.md#segment-participant) rolls back too, after scope abandonment. Other effects already made in the Segment, such as ordinary immediate and fire-and-forget Capability calls and messages sent, are final ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
+- **Asynchronous metering refusal:** draining the request ends the Run at the originating call's saved source position. A suspended Run has no executing Segment to roll back: already committed state remains, with no synthetic Segment or Stretch. If its pending Join Member belongs to a preempted Run with an open Segment, roll back that existing Segment instead ([metering](embedding/metered-operations.md#ordering-cancellation-and-fault-location)).
 - **Pending calls,** including Join Members, are abandoned.
 - **Other Runs** of the Script carry on.
 - **Senders** of the message get `send failed`, reason `limit fault`, and a deciding Run that faults before its seal leaves its Decision undecided.

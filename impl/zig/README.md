@@ -171,6 +171,8 @@ doesn't declare yet. Those fail only from step 6's conformance gate.
 
 ## The machine
 
+**Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. See [#472](https://github.com/odogono/odgn-talk/issues/472).
+
 `talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
 `talk_script_request`, `talk_pending_result`, `talk_pump`, `talk_inspect` and
 `talk_script_counters` drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at

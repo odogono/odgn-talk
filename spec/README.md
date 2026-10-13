@@ -38,6 +38,10 @@ Recovery Offers and two-phase catch search are specified in [chapter 4](04-expre
 
 Store `watch` and `unwatch` are specified in [chapter 7](07-libraries-and-the-standard-library.md#store-watch-operations), with the Grant release hook and router in [chapter 9](09-embedding.md#the-grant-release-hook), checkpoints in [chapter 10](10-save-and-restore.md#store-notification-checkpoints), conformance scenarios in [chapter 11](11-the-trace-and-conformance.md#store-notification-conformance-scenarios) and Session driving in [chapter 12](12-sessions-and-tooling.md#session-store-notifications). [ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md) records the design. Both Cores and Session Hosts implement the contract, and its Operation and Error Data Files are active.
 
+## Metered Operations
+
+[The metering contract](embedding/metered-operations.md) specifies synchronous chunks and queued asynchronous Fuel authorization, with SQLite step charging. [ADR 0082](../docs/adr/0082-metered-operations-authorize-work-through-the-pump.md) records the choices; the [specification handoff](../docs/handoffs/472-metered-operations.md) names staged executable catalogues and implementation acceptance.
+
 ## Data Files
 
 Before editing grammar, instructions or catalogues, use the [change-impact guide](../docs/agents/spec-changes.md) to identify generators, Core/tooling coverage requirements and delivery boundaries.
