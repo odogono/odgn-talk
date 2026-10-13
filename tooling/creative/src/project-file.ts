@@ -142,6 +142,35 @@ class Checker {
     return value;
   }
 
+  /** Copies an optional field onto `target` only when it is present. */
+  opt<T extends object, K extends keyof T>(
+    target: T,
+    key: K,
+    value: T[K] | undefined,
+  ): void {
+    if (value !== undefined) {
+      target[key] = value;
+    }
+  }
+
+  /** Reports every item whose `name` repeats an earlier one in its list. */
+  unique(
+    items: readonly { name: string }[],
+    pathOf: (i: number) => string,
+    noun: string,
+  ): void {
+    const seen = new Set<string>();
+    items.forEach(({ name }, i) => {
+      if (seen.has(name)) {
+        this.fail(
+          `${pathOf(i)}.name`,
+          `another ${noun} is also named "${name}"`,
+        );
+      }
+      seen.add(name);
+    });
+  }
+
   name(value: unknown, path: string): string | undefined {
     const name = this.str(value, path);
     if (name !== undefined && !isIdentifierName(name)) {
@@ -167,22 +196,10 @@ const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
         const run: RichText[number]['runs'][number] = {
           text: c.str(r.text, `${at}.text`) ?? '',
         };
-        const bold = c.optBool(r.bold, `${at}.bold`);
-        const italic = c.optBool(r.italic, `${at}.italic`);
-        const underline = c.optBool(r.underline, `${at}.underline`);
-        const color = c.optStr(r.color, `${at}.color`);
-        if (bold !== undefined) {
-          run.bold = bold;
+        for (const key of ['bold', 'italic', 'underline'] as const) {
+          c.opt(run, key, c.optBool(r[key], `${at}.${key}`));
         }
-        if (italic !== undefined) {
-          run.italic = italic;
-        }
-        if (underline !== undefined) {
-          run.underline = underline;
-        }
-        if (color !== undefined) {
-          run.color = color;
-        }
+        c.opt(run, 'color', c.optStr(r.color, `${at}.color`));
         return run;
       }),
     };
@@ -198,15 +215,12 @@ const checkElement = (
   if (!e) {
     return undefined;
   }
-  const kind = e.kind;
-  if (
-    typeof kind !== 'string' ||
-    !(ELEMENT_KINDS as readonly string[]).includes(kind)
-  ) {
-    c.fail(`${path}.kind`, `unknown Element kind ${JSON.stringify(kind)}`);
+  const k = e.kind as ElementKind;
+  if (!ELEMENT_KINDS.includes(k)) {
+    c.fail(`${path}.kind`, `unknown Element kind ${JSON.stringify(e.kind)}`);
     return undefined;
   }
-  const base = {
+  const base: Omit<Element, 'kind'> = {
     name: c.name(e.name, `${path}.name`) ?? '',
     left: c.num(e.left, `${path}.left`, 'finite') ?? 0,
     top: c.num(e.top, `${path}.top`, 'finite') ?? 0,
@@ -214,11 +228,7 @@ const checkElement = (
     height: c.num(e.height, `${path}.height`, 'nonNegative') ?? 0,
     visible: c.bool(e.visible, `${path}.visible`) ?? true,
   };
-  const script = c.optStr(e.script, `${path}.script`);
-  if (script !== undefined) {
-    Object.assign(base, { script });
-  }
-  const k = kind as ElementKind;
+  c.opt(base, 'script', c.optStr(e.script, `${path}.script`));
   switch (k) {
     case 'text':
       return {
@@ -260,32 +270,25 @@ const checkElement = (
 
 const checkPage = (c: Checker, value: unknown, path: string): Page => {
   const p = c.obj(value, path) ?? {};
-  const elements: Element[] = [];
-  const seen = new Set<string>();
-  (c.arr(p.elements, `${path}.elements`) ?? []).forEach((raw, i) => {
-    const element = checkElement(c, raw, `${path}.elements[${i}]`);
-    if (!element) {
-      return;
-    }
-    if (seen.has(element.name)) {
-      c.fail(
-        `${path}.elements[${i}].name`,
-        `another Element on this Page is also named "${element.name}"`,
-      );
-    }
-    seen.add(element.name);
-    elements.push(element);
-  });
+  // Keep each Element's list index so issues name the right path.
+  const checked = (c.arr(p.elements, `${path}.elements`) ?? []).flatMap(
+    (raw, i) => {
+      const element = checkElement(c, raw, `${path}.elements[${i}]`);
+      return element ? [{ element, i }] : [];
+    },
+  );
+  c.unique(
+    checked.map(({ element }) => element),
+    n => `${path}.elements[${checked[n]!.i}]`,
+    'Element on this Page',
+  );
   const page: Page = {
     name: c.name(p.name, `${path}.name`) ?? '',
     height: c.num(p.height, `${path}.height`, 'positive') ?? 1,
     background: c.str(p.background, `${path}.background`) ?? '',
-    elements,
+    elements: checked.map(({ element }) => element),
   };
-  const script = c.optStr(p.script, `${path}.script`);
-  if (script !== undefined) {
-    page.script = script;
-  }
+  c.opt(page, 'script', c.optStr(p.script, `${path}.script`));
   return page;
 };
 
@@ -318,29 +321,14 @@ export const validateProjectJson = (
 ): { project: Project } | { issues: ValidationIssue[] } => {
   const c = new Checker();
   const root = c.obj(data, 'project.json') ?? {};
-  const pages: Page[] = [];
-  const pageNames = new Set<string>();
-  (c.arr(root.pages, 'pages') ?? []).forEach((raw, i) => {
-    const page = checkPage(c, raw, `pages[${i}]`);
-    if (pageNames.has(page.name)) {
-      c.fail(`pages[${i}].name`, `another Page is also named "${page.name}"`);
-    }
-    pageNames.add(page.name);
-    pages.push(page);
-  });
-  const assets: Asset[] = [];
-  const assetNames = new Set<string>();
-  (c.arr(root.assets, 'assets') ?? []).forEach((raw, i) => {
-    const asset = checkAsset(c, raw, `assets[${i}]`);
-    if (assetNames.has(asset.name)) {
-      c.fail(
-        `assets[${i}].name`,
-        `another asset is also named "${asset.name}"`,
-      );
-    }
-    assetNames.add(asset.name);
-    assets.push(asset);
-  });
+  const pages = (c.arr(root.pages, 'pages') ?? []).map((raw, i) =>
+    checkPage(c, raw, `pages[${i}]`),
+  );
+  c.unique(pages, i => `pages[${i}]`, 'Page');
+  const assets = (c.arr(root.assets, 'assets') ?? []).map((raw, i) =>
+    checkAsset(c, raw, `assets[${i}]`),
+  );
+  c.unique(assets, i => `assets[${i}]`, 'asset');
   const project: Project = {
     name: c.str(root.name, 'name') ?? '',
     designWidth: c.num(root.designWidth, 'designWidth', 'positive') ?? 1,
@@ -356,72 +344,30 @@ export const validateProjectJson = (
 
 /** Checks an in-memory Project the same way reading a file does. */
 export const validateProject = (project: Project): ValidationIssue[] => {
-  const result = validateProjectJson(projectToJson(project));
+  const result = validateProjectJson(project);
   return 'issues' in result ? result.issues : [];
 };
 
 // --- Serialization -----------------------------------------------------------
 
-const elementToJson = (e: Element): Obj => {
-  const base: Obj = {
-    kind: e.kind,
-    name: e.name,
-    left: e.left,
-    top: e.top,
-    width: e.width,
-    height: e.height,
-    visible: e.visible,
-  };
-  if (e.script !== undefined) {
-    base.script = e.script;
-  }
-  switch (e.kind) {
-    case 'text':
-      return {
-        ...base,
-        richText: e.richText,
-        textColor: e.textColor,
-        textSize: e.textSize,
-        font: e.font,
-        editable: e.editable,
-      };
-    case 'image':
-      return { ...base, image: e.image };
-    case 'button':
-      return { ...base, label: e.label, fill: e.fill, textColor: e.textColor };
-    case 'rectangle':
-    case 'ellipse':
-      return { ...base, fill: e.fill, stroke: e.stroke };
-    case 'line':
-      return { ...base, stroke: e.stroke, thickness: e.thickness };
-  }
-};
-
-const projectToJson = (project: Project): Obj => ({
-  name: project.name,
-  designWidth: project.designWidth,
-  script: project.script,
-  pages: project.pages.map(p => {
-    const page: Obj = {
-      name: p.name,
-      height: p.height,
-      background: p.background,
-      elements: p.elements.map(elementToJson),
-    };
-    if (p.script !== undefined) {
-      page.script = p.script;
-    }
-    return page;
-  }),
-  assets: project.assets.map(a => ({ ...a })),
-});
-
-/** The parsed-JSON form of a Project file's `project.json`. */
+/**
+ * The parsed-JSON form of a Project file's `project.json`. The model is
+ * plain JSON data, so this is an independent copy plus the format header.
+ */
 export const serializeProject = (project: Project): Obj => ({
   format: CURRENT_FORMAT,
   app: APP,
-  ...projectToJson(project),
+  ...structuredClone(project),
 });
+
+/** The error for a damaged `project.json`, named by its first issue. */
+const damaged = (issues: ValidationIssue[]): ProjectFileError => {
+  const [first] = issues;
+  return new ProjectFileError(
+    `The Project inside this file is damaged at ${first!.path}: ${first!.message}.`,
+    issues,
+  );
+};
 
 // --- Migrations --------------------------------------------------------------
 
@@ -441,17 +387,13 @@ export const migrateProjectJson = (
   currentFormat: number = CURRENT_FORMAT,
 ): Obj => {
   if (!isObj(data)) {
-    throw new ProjectFileError(
-      'The Project inside this file is damaged at project.json: expected an object.',
-      [{ path: 'project.json', message: 'expected an object' }],
-    );
+    throw damaged([{ path: 'project.json', message: 'expected an object' }]);
   }
   const format = data.format;
   if (typeof format !== 'number' || !Number.isInteger(format) || format < 1) {
-    throw new ProjectFileError(
-      'The Project inside this file is damaged at format: expected a positive whole number.',
-      [{ path: 'format', message: 'expected a positive whole number' }],
-    );
+    throw damaged([
+      { path: 'format', message: 'expected a positive whole number' },
+    ]);
   }
   if (format > currentFormat) {
     throw new ProjectFileError(
@@ -481,6 +423,10 @@ export type ReadProject = {
   project: Project;
 };
 
+/** Whether `bytes` are the asset's: its size and its SHA-256. */
+const bytesMatch = async (asset: Asset, bytes: Uint8Array): Promise<boolean> =>
+  bytes.length === asset.size && (await sha256Hex(bytes)) === asset.hash;
+
 /**
  * Writes a Project and its asset bytes (by hash) as a Project file.
  * Bytes the asset table does not name are dropped from the export.
@@ -489,29 +435,35 @@ export const writeProjectFile = async (
   project: Project,
   assetBytes: ReadonlyMap<string, Uint8Array>,
 ): Promise<Uint8Array> => {
-  const issues = validateProject(project);
-  if (issues.length) {
+  const result = validateProjectJson(project);
+  if ('issues' in result) {
     throw new ProjectFileError(
-      `This Project cannot be written: ${issues.map(i => `${i.path}: ${i.message}`).join('; ')}.`,
-      issues,
+      `This Project cannot be written: ${result.issues.map(i => `${i.path}: ${i.message}`).join('; ')}.`,
+      result.issues,
     );
   }
+  // One zip entry per hash, reported at its first asset-table row.
+  const seen = new Set<string>();
+  const toWrite = [...project.assets.entries()].filter(
+    ([, asset]) => !seen.has(asset.hash) && seen.add(asset.hash),
+  );
+  const checks = await Promise.all(
+    toWrite.map(([, asset]) => {
+      const bytes = assetBytes.get(asset.hash);
+      return bytes ? bytesMatch(asset, bytes) : false;
+    }),
+  );
   const entries: ZipEntry[] = [
     { name: 'mimetype', data: new TextEncoder().encode(PROJECT_MIMETYPE) },
     {
       name: 'project.json',
       data: new TextEncoder().encode(
-        JSON.stringify(serializeProject(project), null, 2),
+        JSON.stringify(serializeProject(result.project), null, 2),
       ),
       method: 8,
     },
   ];
-  const written = new Set<string>();
-  for (const [i, asset] of project.assets.entries()) {
-    if (written.has(asset.hash)) {
-      continue;
-    }
-    written.add(asset.hash);
+  for (const [n, [i, asset]] of toWrite.entries()) {
     const bytes = assetBytes.get(asset.hash);
     if (!bytes) {
       throw new ProjectFileError(
@@ -519,10 +471,7 @@ export const writeProjectFile = async (
         [{ path: `assets[${i}].hash`, message: 'no bytes for this hash' }],
       );
     }
-    if (
-      bytes.length !== asset.size ||
-      (await sha256Hex(bytes)) !== asset.hash
-    ) {
+    if (!checks[n]) {
       throw new ProjectFileError(
         `The bytes for the asset "${asset.name}" do not match its hash and size.`,
         [{ path: `assets[${i}].hash`, message: 'bytes do not match the hash' }],
@@ -538,6 +487,9 @@ export const writeProjectFile = async (
       : error;
   }
 };
+
+/** The hash an `assets/<sha256>[.<ext>]` entry name stores, if it is one. */
+const ASSET_ENTRY = /^assets\/([0-9a-f]{64})(?:\.[^/]*)?$/u;
 
 /**
  * Reads a Project file. Any damage — a corrupt zip, a CRC mismatch,
@@ -573,43 +525,35 @@ export const readProjectFile = async (
   try {
     data = JSON.parse(new TextDecoder().decode(jsonBytes));
   } catch {
-    throw new ProjectFileError(
-      'The Project inside this file is damaged at project.json: it is not valid JSON.',
-      [{ path: 'project.json', message: 'not valid JSON' }],
-    );
+    throw damaged([{ path: 'project.json', message: 'not valid JSON' }]);
   }
-  const migrated = migrateProjectJson(data);
-  const result = validateProjectJson(migrated);
+  const result = validateProjectJson(migrateProjectJson(data));
   if ('issues' in result) {
-    const first = result.issues[0]!;
-    throw new ProjectFileError(
-      `The Project inside this file is damaged at ${first.path}: ${first.message}.`,
-      result.issues,
-    );
+    throw damaged(result.issues);
   }
   const { project } = result;
-  const assets = new Map<string, Uint8Array>();
-  const missingAssets: Asset[] = [];
-  for (const asset of project.assets) {
-    if (assets.has(asset.hash)) {
-      continue;
+  const filesByHash = new Map<string, Uint8Array>();
+  for (const [name, data] of entries) {
+    const hash = ASSET_ENTRY.exec(name)?.[1];
+    if (hash) {
+      filesByHash.set(hash, data);
     }
-    const entry = [...entries.keys()].find(
-      name =>
-        name.startsWith(`assets/${asset.hash}.`) ||
-        name === `assets/${asset.hash}`,
-    );
-    const data = entry ? entries.get(entry) : undefined;
-    if (!data) {
-      missingAssets.push(asset);
-      continue;
-    }
-    if (data.length !== asset.size || (await sha256Hex(data)) !== asset.hash) {
-      throw new ProjectFileError(
-        `The file for the asset "${asset.name}" does not match its hash and size.`,
-      );
-    }
-    assets.set(asset.hash, data);
   }
-  return { project, assets, missingAssets };
+  const present = [
+    ...new Map(project.assets.map(a => [a.hash, a])).values(),
+  ].filter(a => filesByHash.has(a.hash));
+  const checks = await Promise.all(
+    present.map(a => bytesMatch(a, filesByHash.get(a.hash)!)),
+  );
+  const mismatch = present.find((_, n) => !checks[n]);
+  if (mismatch) {
+    throw new ProjectFileError(
+      `The file for the asset "${mismatch.name}" does not match its hash and size.`,
+    );
+  }
+  return {
+    project,
+    assets: new Map(present.map(a => [a.hash, filesByHash.get(a.hash)!])),
+    missingAssets: project.assets.filter(a => !filesByHash.has(a.hash)),
+  };
 };

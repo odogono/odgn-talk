@@ -174,7 +174,7 @@ test('damaged JSON reports the path of what is wrong', async () => {
 
 test('invalid JSON and a missing project.json are errors, never a half-read Project', async () => {
   await expect(readProjectFile(await fileWithJson('{oops'))).rejects.toThrow(
-    'project.json: it is not valid JSON',
+    'project.json: not valid JSON',
   );
   const bare = await writeZip([
     { name: 'mimetype', data: encode(PROJECT_MIMETYPE) },

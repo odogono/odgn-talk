@@ -25,8 +25,8 @@ const CRC_TABLE = (() => {
 
 export const crc32 = (data: Uint8Array): number => {
   let crc = 0xff_ff_ff_ff;
-  for (const byte of data) {
-    crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+  for (let i = 0; i < data.length; i++) {
+    crc = CRC_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
   }
   return (crc ^ 0xff_ff_ff_ff) >>> 0;
 };
@@ -34,30 +34,12 @@ export const crc32 = (data: Uint8Array): number => {
 const runStream = async (
   stream: CompressionStream | DecompressionStream,
   data: Uint8Array,
-): Promise<Uint8Array> => {
-  const writer = stream.writable.getWriter();
-  const write = (async () => {
-    await writer.write(data as Uint8Array<ArrayBuffer>);
-    await writer.close();
-  })();
-  const chunks: Uint8Array[] = [];
-  const reader = stream.readable.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    chunks.push(value);
-  }
-  await write;
-  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
-  let at = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.length;
-  }
-  return out;
-};
+): Promise<Uint8Array> =>
+  new Uint8Array(
+    await new Response(
+      new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(stream),
+    ).arrayBuffer(),
+  );
 
 const deflate = (data: Uint8Array): Promise<Uint8Array> =>
   runStream(new CompressionStream('deflate-raw'), data);
@@ -77,6 +59,22 @@ const inflate = async (
 const DOS_TIME = 0;
 const DOS_DATE = 0x21;
 const UTF8_FLAG = 0x8_00;
+
+/**
+ * Writes the fields a local header and its central directory record share,
+ * from "version needed" on; `at` is where that run starts in each.
+ */
+const writeCommon = (view: DataView, at: number, entry: Written): void => {
+  view.setUint16(at, entry.method === 8 ? 20 : 10, true);
+  view.setUint16(at + 2, UTF8_FLAG, true);
+  view.setUint16(at + 4, entry.method, true);
+  view.setUint16(at + 6, DOS_TIME, true);
+  view.setUint16(at + 8, DOS_DATE, true);
+  view.setUint32(at + 10, entry.crc, true);
+  view.setUint32(at + 14, entry.compressed.length, true);
+  view.setUint32(at + 18, entry.size, true);
+  view.setUint16(at + 22, entry.nameBytes.length, true);
+};
 
 type Written = {
   compressed: Uint8Array;
@@ -113,26 +111,18 @@ export const writeZip = async (
     ) {
       throw new ZipError(`The entry "${entry.name}" is too large.`);
     }
-    const crc = crc32(entry.data);
-    const header = new DataView(new ArrayBuffer(30));
-    header.setUint32(0, 0x04_03_4b_50, true);
-    header.setUint16(4, method === 8 ? 20 : 10, true);
-    header.setUint16(6, UTF8_FLAG, true);
-    header.setUint16(8, method, true);
-    header.setUint16(10, DOS_TIME, true);
-    header.setUint16(12, DOS_DATE, true);
-    header.setUint32(14, crc, true);
-    header.setUint32(18, compressed.length, true);
-    header.setUint32(22, entry.data.length, true);
-    header.setUint16(26, nameBytes.length, true);
-    written.push({
+    const record: Written = {
       nameBytes,
       method,
-      crc,
+      crc: crc32(entry.data),
       compressed,
       size: entry.data.length,
       offset,
-    });
+    };
+    written.push(record);
+    const header = new DataView(new ArrayBuffer(30));
+    header.setUint32(0, 0x04_03_4b_50, true);
+    writeCommon(header, 4, record);
     push(new Uint8Array(header.buffer));
     push(nameBytes);
     push(compressed);
@@ -143,15 +133,7 @@ export const writeZip = async (
     const record = new DataView(new ArrayBuffer(46));
     record.setUint32(0, 0x02_01_4b_50, true);
     record.setUint16(4, 20, true);
-    record.setUint16(6, entry.method === 8 ? 20 : 10, true);
-    record.setUint16(8, UTF8_FLAG, true);
-    record.setUint16(10, entry.method, true);
-    record.setUint16(12, DOS_TIME, true);
-    record.setUint16(14, DOS_DATE, true);
-    record.setUint32(16, entry.crc, true);
-    record.setUint32(20, entry.compressed.length, true);
-    record.setUint32(24, entry.size, true);
-    record.setUint16(28, entry.nameBytes.length, true);
+    writeCommon(record, 6, entry);
     record.setUint32(42, entry.offset, true);
     push(new Uint8Array(record.buffer));
     push(entry.nameBytes);
@@ -165,13 +147,9 @@ export const writeZip = async (
   end.setUint32(16, directoryAt, true);
   push(new Uint8Array(end.buffer));
 
-  const out = new Uint8Array(offset);
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.length;
-  }
-  return out;
+  return new Uint8Array(
+    await new Blob(parts as Uint8Array<ArrayBuffer>[]).arrayBuffer(),
+  );
 };
 
 const findEndRecord = (view: DataView): number => {
