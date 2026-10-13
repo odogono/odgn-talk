@@ -242,10 +242,14 @@ mailbox, and writes the `counters` record without draining Host Inputs.
 
 Lists keep immutable visible slices over shared backing storage. Appending or
 prepending to the newest slice uses spare capacity, with geometric growth when
-it runs out, so repeatedly growing a List takes amortised linear time. Growing
-an older slice or writing inside a shared slice copies its spine; inserting a
-value that would form an ownership cycle also copies. Snapshots, captures and
-rollback bindings keep their previous contents. Spare capacity and retained
+it runs out, so repeated spine growth takes amortised linear time when the
+inserted values have lower ownership ranks. Ranks decrease along physical
+ownership edges, including hidden items, so cycle prevention needs no graph
+walk. Growing an older slice or writing inside a shared slice copies its
+spine; inserting a value with an equal or higher rank also copies into new,
+higher-ranked storage. Growing a Host List copies its spine into the Group
+allocator. Snapshots, captures and rollback bindings keep their previous
+contents. Spare capacity and retained
 items outside an older slice count against the Group's physical cap; Cost
 Model 0 still charges only the specified logical allocation.
 

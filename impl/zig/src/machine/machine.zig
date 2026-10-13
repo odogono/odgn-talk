@@ -5543,9 +5543,9 @@ pub const Group = struct {
                     .list => blk: {
                         if (ins.op == .append_all or ins.op == .prepend_all) {
                             if (v.data != .list) return g.wrongKind("list", v);
-                            break :blk model.listGrow(whole, v.data.list, after) catch return error.OutOfMemory;
+                            break :blk model.listGrow(gpa, whole, v.data.list, after) catch return error.OutOfMemory;
                         }
-                        break :blk model.listGrow(whole, &.{v}, after) catch return error.OutOfMemory;
+                        break :blk model.listGrow(gpa, whole, &.{v}, after) catch return error.OutOfMemory;
                     },
                     .text => |t| blk: {
                         if (ins.op == .append_all or ins.op == .prepend_all) return g.wrongKind("list", whole);

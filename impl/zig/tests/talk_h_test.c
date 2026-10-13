@@ -750,6 +750,19 @@ static int load_limited(talk_group *group, const char *name, const char *source,
     return talk_load(group, &load, out) != TALK_OK;
 }
 
+static int timed_pump(talk_group *group, const char *name) {
+    struct timespec before = {0}, after = {0};
+    int bad = timespec_get(&before, TIME_UTC) != TIME_UTC;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= timespec_get(&after, TIME_UTC) != TIME_UTC;
+    double elapsed = (double)(after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec) / 1e9;
+    if (elapsed >= 1.0) {
+        fprintf(stderr, "talk.h: %s took %.3f s (expected under 1 s)\n", name, elapsed);
+        bad = 1;
+    }
+    return bad;
+}
+
 static int runaway_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
@@ -781,15 +794,7 @@ static int runaway_test(void) {
     bad |= talk_script_deliver(hoard, &stash, NULL) != TALK_OK;
     bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
     talk_value_release(many);
-    struct timespec before = {0}, after = {0};
-    bad |= timespec_get(&before, TIME_UTC) != TIME_UTC;
-    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    bad |= timespec_get(&after, TIME_UTC) != TIME_UTC;
-    double elapsed = (double)(after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec) / 1e9;
-    if (elapsed >= 1.0) {
-        fprintf(stderr, "talk.h: runaway Scripts took %.3f s (expected under 1 s)\n", elapsed);
-        bad = 1;
-    }
+    bad |= timed_pump(group, "runaway Scripts");
     /* Each runaway is healthy afterwards: it takes its next Delivery. */
     talk_value *few = NULL;
     talk_int(3, &few);
@@ -1079,6 +1084,89 @@ static void host_free(void *context, void *ptr, size_t size, size_t alignment) {
     free(ptr);
 }
 
+static int host_list_memory_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_allocator host = {NULL, host_alloc, host_free};
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, NULL, NULL, &host, 64 * 1024};
+    int bad = talk_new_group(core, &options, &group) != TALK_OK;
+    /* Both arguments are Host values. Reusing the same child isolates the
+     * growing List's allocations: its backing must come from the Group. */
+    const char *source = "on grow xs, child\n  repeat 10000 times\n    put child after xs\n  end repeat\nend grow\n";
+    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_value *list = NULL, *child = NULL;
+    bad |= talk_list(NULL, 0, &list) != TALK_OK;
+    bad |= talk_int(1, &child) != TALK_OK;
+    talk_value *args[] = {list, child};
+    talk_message message = {"grow", 4, args, 2, NULL};
+    if (!bad) {
+        bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+        talk_host_error_code pumped = talk_pump(group, 1790000000, 0, NULL, NULL);
+        talk_memory memory;
+        talk_group_memory(group, &memory);
+        if (pumped != TALK_OUT_OF_MEMORY || !memory.refused) {
+            fprintf(stderr, "Host List growth: Pump=%d refused=%d peak=%zu cap=%zu\n", pumped, memory.refused, memory.peak, memory.cap);
+            bad = 1;
+        }
+        bad |= memory.peak > memory.cap;
+        bad |= talk_value_len(list) != 0;
+    }
+    talk_value_release(list);
+    talk_value_release(child);
+    talk_group_release(group);
+    bad |= host_live != 0;
+    talk_core_release(core);
+    return bad;
+}
+
+/* Every root visibly stays [nothing]. Older slices must not make appending
+ * these constant-size snapshots walk an ever-growing hidden ownership graph. */
+static int snapshot_growth_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0};
+    int bad = talk_new_group(core, &options, &group) != TALK_OK;
+    const char *source = "on probe n\n  put [] into root\n  put nothing after root\n  put [] into result\n  repeat n times\n    put [] into prefix\n    put nothing after prefix\n    put prefix into snapshot\n    put root after prefix\n    put snapshot into root\n    put root after result\n  end repeat\n  return result\nend probe\n";
+    talk_limits limits = {0};
+    limits.fuel_per_run = 1000000000;
+    talk_load_options load = {"probe", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &limits};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_value *count = NULL;
+    bad |= talk_int(8000, &count) != TALK_OK;
+    talk_value *args[] = {count};
+    talk_message message = {"probe", 5, args, 1, NULL};
+    talk_pending *pending = NULL;
+    talk_value *result = NULL, *first = NULL, *child = NULL;
+    if (!bad) {
+        bad |= talk_script_request(script, &message, NULL, &pending) != TALK_OK;
+        bad |= timed_pump(group, "snapshot growth");
+        bad |= talk_pending_result(pending, &result) != TALK_OK;
+        if (result != NULL) {
+            bad |= talk_value_len(result) != 8000;
+            bad |= talk_value_index(result, 1, &first) != TALK_OK;
+            bad |= talk_value_len(first) != 1;
+            bad |= talk_value_index(first, 1, &child) != TALK_OK;
+            bad |= talk_value_kind(child) != TALK_KIND_NOTHING;
+        }
+        talk_counters counters;
+        talk_script_counters(script, &counters);
+        bad |= counters.fuel_total != 280027 || counters.alloc_total != 896072 || counters.faults != 0;
+    }
+    talk_value_release(child);
+    talk_value_release(first);
+    talk_value_release(result);
+    talk_pending_release(pending);
+    talk_value_release(count);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 static int memory_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
@@ -1198,6 +1286,8 @@ int main(void) {
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
+    expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
+    expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     return failures == 0 ? 0 : 1;
