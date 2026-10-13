@@ -74,7 +74,9 @@ pub fn parseEntryEnd(arena: Allocator, source: []const u8, expression: bool) All
     try p.nl_base.append(arena, 0);
     var ended = false;
     p.entry(expression, &ended) catch |e| switch (e) {
-        error.Syntax => return .{ .failure = p.failure.?, .trailing = ended },
+        // A literal left open is found only on peeking past the statement,
+        // so only an unexpected token after it is trailing input.
+        error.Syntax => return .{ .failure = p.failure.?, .trailing = ended and p.failure.?.code == .unexpected_token },
         error.OutOfMemory => return error.OutOfMemory,
     };
     return .{ .failure = null, .trailing = false };

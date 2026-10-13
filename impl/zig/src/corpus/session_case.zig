@@ -44,7 +44,8 @@ const Replay = struct {
         return item.line;
     }
 
-    fn answer(context: *anyopaque, call: []const u8) ?session.Answer {
+    fn answer(context: *anyopaque, call: []const u8, busy: bool) ?session.Answer {
+        _ = busy;
         const r: *Replay = @ptrCast(@alignCast(context));
         const item = r.peek() orelse return null;
         if (item != .answer or !std.mem.eql(u8, item.answer.call, call)) return null;
@@ -75,6 +76,11 @@ const Replay = struct {
         const item = r.peek() orelse return;
         r.next += 1;
         r.written.writer.print("% {s}\n", .{item.crossing}) catch {};
+    }
+
+    fn sleep(context: *anyopaque, until: session.Instant) void {
+        _ = context;
+        _ = until;
     }
 
     /// `:export <directory>` writes to a scratch directory, which a replay
@@ -108,7 +114,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, name: []const u8
     const expected_trace = try dir.readFileAlloc(io, "case.trace", a, .limited(64 * 1024 * 1024));
     const items = try transcript.parse(a, text);
     var replay: Replay = .{ .gpa = a, .items = items, .written = .init(a) };
-    const driver: session.Driver = .{ .context = &replay, .reading = Replay.reading, .line = Replay.line, .answer = Replay.answer, .output = Replay.output, .trace = Replay.traceLine, .write = Replay.write, .crossing = Replay.crossing, .take = Replay.take };
+    const driver: session.Driver = .{ .context = &replay, .reading = Replay.reading, .line = Replay.line, .answer = Replay.answer, .output = Replay.output, .trace = Replay.traceLine, .write = Replay.write, .crossing = Replay.crossing, .take = Replay.take, .sleep = Replay.sleep };
     const s = try Session.init(gpa, driver);
     defer s.deinit();
     while (replay.peek()) |item| {

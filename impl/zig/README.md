@@ -285,6 +285,51 @@ Trace go.
   `property` rows. It then reads each property in a second Run, the normative
   reader, extended under the first free `entry<n>`.
 
+### The REPL and Transcript replay
+
+[`src/repl/main.zig`](src/repl/main.zig) is `talk-repl`, the Session Host at
+a terminal under a real Clock. It reads Entries and Session Commands from
+standard input and prints what the session prints. An Entry may span lines:
+the REPL prompts `| ` and waits while its syntax ends early or a fenced literal
+or hole is open
+([chapter 12](../../spec/12-sessions-and-tooling.md#fenced-text-in-sessions-and-tooling)). It answers
+the foreground's `read` with the next line (`< `), and a `user` prompt (`~ `)
+with a value in the display form, or `fail` and an error map. A line that
+isn't in the display form answers as text. While it waits for input, it pumps at each deadline the session
+reaches. `:library add|replace <name> <path>`, `:fix <run> <path>` and
+`:store load [<store>] <path>` read the file, and the Transcript records its
+lines in place of the path. End the session with end of input (Ctrl-D). Ctrl-C
+isn't caught yet, so it ends the REPL rather than cancelling the foreground
+Run.
+
+From a clean checkout, with Zig 0.17 (nothing else is needed to build):
+
+```sh
+cd impl/zig
+zig build repl                                       # start a session
+zig build repl -- --transcript s.transcript --trace s.trace
+zig build && ./zig-out/bin/talk-repl --help          # the installed binary
+```
+
+`--transcript` writes the session's Transcript as it goes, and `--trace` the
+Group's Trace.
+
+Transcript replay is the corpus runner's. It gives a case's
+`session.transcript` to a fresh Session Host, with the recorded Clock
+readings, lines, answers and object crossings, and compares what it writes
+with the Transcript and its Trace with `case.trace`:
+
+```sh
+cd impl/zig
+zig build corpus -- sessions                         # every Session Transcript case
+zig build corpus -- sessions/real-clock              # one
+```
+
+To replay a Transcript the REPL wrote, put it in a case directory under
+`corpus/` as `session.transcript`, with the Trace as `case.trace`, and a
+`case.toml` holding `kind = "transcript"` and the `[versions]` table, as in
+[`corpus/sessions/mocks`](../../corpus/sessions/mocks/case.toml).
+
 ## The Notification router
 
 [`src/notify/router.zig`](src/notify/router.zig) is the router chapter 7

@@ -5,6 +5,7 @@ pub const Session = session.Session;
 pub const Driver = session.Driver;
 pub const Instant = session.Instant;
 pub const Answer = session.Answer;
+pub const user_busy = session.user_busy;
 
 test {
     _ = transcript;

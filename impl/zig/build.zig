@@ -71,6 +71,22 @@ pub fn build(b: *std.Build) void {
     run_corpus.addPassthruArgs();
     b.step("corpus", "Run supported conformance cases through talk.h").dependOn(&run_corpus.step);
 
+    // The REPL: the Session Host at a terminal (chapter 12).
+    const repl_module = b.createModule(.{
+        .root_source_file = b.path("src/repl/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    repl_module.addImport("talk-c", c_module);
+    repl_module.addImport("session", session_module);
+    const repl = b.addExecutable(.{ .name = "talk-repl", .root_module = repl_module });
+    // It waits on standard input with poll, which WASI hasn't.
+    if (target.result.os.tag != .wasi) b.installArtifact(repl);
+    const run_repl = b.addRunArtifact(repl);
+    run_repl.stdio = .inherit;
+    run_repl.addPassthruArgs();
+    b.step("repl", "Run the REPL").dependOn(&run_repl.step);
+
     const test_step = b.step("test", "Run the Zig Core's tests");
     const tests = b.addTest(.{ .root_module = core });
     const run_tests = b.addRunArtifact(tests);
