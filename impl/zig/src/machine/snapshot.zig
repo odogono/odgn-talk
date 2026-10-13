@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 4;
+pub const format_version: u32 = 5;
 
 pub const Error = error{
     InvalidSave,
@@ -864,6 +864,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.str(f.name);
         try o.int(f.required);
         try o.int(f.total);
+        try o.bytes.appendSlice(gpa, &f.unit);
         const home = g.script(f.home);
         const live = if (home) |h| h.generation == f.generation else false;
         try o.flag(live);
@@ -2157,6 +2158,9 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         };
         f.required = try i.small(usize);
         f.total = try i.small(usize);
+        if (i.bytes.len - i.pos < 32) return error.InvalidSave;
+        f.unit = i.bytes[i.pos..][0..32].*;
+        i.pos += 32;
         place.* = .{};
         if (try i.flag()) {
             place.live = true;

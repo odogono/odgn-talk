@@ -56,6 +56,22 @@ pub fn parseWithScratch(arena: Allocator, scratch: Allocator, source: []const u8
     } };
 }
 
+/// Parses a Session Entry that isn't a declaration (chapter 2, Entries):
+/// one statement or one expression, then the end of the source, which ends
+/// its last line. Its first syntax error, if it has one.
+pub fn parseEntry(arena: Allocator, source: []const u8, expression: bool) Allocator.Error!?Diagnostic {
+    const shared = try arena.create(lexer.Shared);
+    shared.* = .{ .source = source, .arena = arena };
+    var p: Parser = .{ .a = arena, .scratch = arena, .lex = .init(shared) };
+    try p.brackets.ensureTotalCapacity(arena, 16);
+    try p.nl_base.append(arena, 0);
+    p.entry(expression) catch |e| switch (e) {
+        error.Syntax => return p.failure.?,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    return null;
+}
+
 const Error = error{Syntax} || Allocator.Error;
 
 fn wordSet(comptime lists: []const []const []const u8) type {
@@ -417,6 +433,15 @@ const Parser = struct {
     }
 
     // ------------------------------------------------------------ top level
+
+    fn entry(p: *Parser, expression: bool) Error!void {
+        try p.skipNewlines();
+        if (expression) _ = try p.expr() else _ = try p.statement();
+        try p.endOfStatement();
+        try p.skipNewlines();
+        const t = try p.peek(.operand);
+        if (t.kind != .eof) return p.failAt(t);
+    }
 
     fn sourceUnit(p: *Parser) Error![]const ast.Declaration {
         var out: std.ArrayList(ast.Declaration) = .empty;

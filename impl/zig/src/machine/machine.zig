@@ -866,6 +866,9 @@ pub const FunctionCode = struct {
     name: []const u8 = "",
     required: usize = 0,
     total: usize = 0,
+    /// The code identity of the unit that defines it, which a Host's tooling
+    /// finds its source and documentation by, stale or not.
+    unit: [32]u8 = @splat(0),
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
@@ -5484,7 +5487,8 @@ pub const Group = struct {
         errdefer g.gpa.destroy(f);
         const name = try g.gpa.dupe(u8, if (b.kind == .lambda) "" else b.name);
         errdefer g.gpa.free(name);
-        f.* = .{ .home = try g.gpa.dupe(u8, home.name), .library = library, .body = body, .generation = home.generation, .name = name, .required = required, .total = b.params.len };
+        const unit = if (library) |l| l.identity else codeIdentity(home.name, home.source, .script, home.imports);
+        f.* = .{ .home = try g.gpa.dupe(u8, home.name), .library = library, .body = body, .generation = home.generation, .name = name, .required = required, .total = b.params.len, .unit = unit };
         errdefer g.gpa.free(f.home);
         try g.functions.append(g.gpa, f);
         return f;

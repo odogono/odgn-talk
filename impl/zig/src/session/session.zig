@@ -102,7 +102,7 @@ const PendingCall = struct { id: []const u8, run: []const u8, kind: PendingKind,
 const RunInfo = struct { id: []const u8, entry: ?u64 = null };
 
 /// The foreground: the Entry's Run while its Host call goes on.
-const Foreground = struct { run: ?[]const u8 = null, delivery: []const u8, entry: u64, expression: bool, ended: bool = false };
+const Foreground = struct { run: ?[]const u8 = null, delivery: []const u8, entry: u64, expression: bool, inspect: bool = false, ended: bool = false };
 
 /// What `:save` keeps beside the Group.
 const Checkpoint = struct {
@@ -115,9 +115,49 @@ const Checkpoint = struct {
     limits: Limits,
     clock: Clock,
     stubs: []const []const Stub,
+    observing: Observing,
 };
 
-const RunEntry = struct { run: []const u8, entry: u64, expression: bool };
+const RunEntry = struct { run: []const u8, entry: u64, expression: bool, inspect: bool = false };
+
+/// A Fuel Measurement: an Entry's root Delivery and every Run spawned from
+/// it, each counted at its latest cumulative Fuel.
+const Measurement = struct {
+    entry: []const u8,
+    root: []const u8,
+    members: std.StringArrayHashMapUnmanaged(i64) = .empty,
+    live: i64 = 0,
+    queued: i64 = 0,
+    interrupted: bool = false,
+    settled: bool = false,
+    /// Whether its final row has been printed.
+    final: bool = false,
+    /// Whether the Host call in progress started it.
+    started: bool = false,
+
+    fn fuel(m: *const Measurement) i64 {
+        var n: i64 = 0;
+        for (m.members.values()) |f| n += f;
+        return n;
+    }
+};
+
+const Observing = struct {
+    filters: std.StringArrayHashMapUnmanaged(void) = .empty,
+    /// Each traced Run's Selector.
+    latched: std.StringArrayHashMapUnmanaged([]const u8) = .empty,
+    measurements: std.ArrayList(Measurement) = .empty,
+
+    fn clone(o: *const Observing, a: Allocator) !Observing {
+        var out: Observing = .{ .filters = try o.filters.clone(a), .latched = try o.latched.clone(a) };
+        for (o.measurements.items) |m| {
+            var copy = m;
+            copy.members = try m.members.clone(a);
+            try out.measurements.append(a, copy);
+        }
+        return out;
+    }
+};
 
 pub const Limits = struct {
     fuel_per_run: ?i64 = null,
@@ -178,8 +218,18 @@ pub const Session = struct {
     stores: store.Stores,
     /// Whether the router admitted a Notification since this was cleared.
     admitted: bool = false,
+    /// Every unit's source the session has seen, by code identity.
+    sources: std.AutoHashMapUnmanaged([32]u8, UnitSource) = .empty,
+    /// Observation (session-observation.md): trace filters, the Runs they
+    /// latched, and Fuel Measurements.
+    observing: Observing = .{},
+    /// This Host call's trace rows, which follow its ordinary output.
+    trace_out: std.ArrayList([]const u8) = .empty,
+    /// Whether the Entry being run is measured, by `:fuel`.
+    measuring: bool = false,
 
     const Library = struct { source: []const u8, library: *c.talk_library };
+    const UnitSource = struct { name: []const u8, source: []const u8 };
     const Held = struct { run: []const u8, lines: std.ArrayList([]const u8) = .empty };
     const Wait = struct { reason: []const u8, until: bool };
 
@@ -261,6 +311,22 @@ pub const Session = struct {
     fn flush(s: *Session) void {
         for (s.out.items) |line| s.driver.output(s.driver.context, line);
         s.out.clearRetainingCapacity();
+        for (s.trace_out.items) |line| s.driver.output(s.driver.context, line);
+        s.trace_out.clearRetainingCapacity();
+        // Fuel rows: once after the Host call that started a measurement,
+        // and again when one settles later.
+        for (s.observing.measurements.items) |*m| {
+            if (m.started or (m.settled and !m.final)) {
+                s.driver.output(s.driver.context, s.fuelRow(m));
+                if (m.settled) m.final = true;
+            }
+            m.started = false;
+        }
+    }
+
+    fn fuelRow(s: *Session, m: *const Measurement) []const u8 {
+        const state = if (!m.settled) "pending" else if (m.interrupted) "interrupted" else "complete";
+        return s.print("fuel {{entry: {s}, fuel: {d}, state: {s}, interrupted: {}, runs: {d}, queued: {d}}}", .{ s.textShown(m.entry), m.fuel(), s.textShown(state), m.interrupted, m.live, m.queued });
     }
 
     /// The prefix a Run's lines take: none for the foreground Run, and
@@ -349,6 +415,7 @@ pub const Session = struct {
         var script: ?*c.talk_script = null;
         try check_(c.talk_load(s.group, &load, &script));
         s.script = script;
+        s.harvest();
     }
 
     /// The Capability a `:grant` or a mock names, defined once.
@@ -688,7 +755,7 @@ pub const Session = struct {
                 s.live.append(s.alloc(), .{ .id = s.dupe(x.run[0..x.run_len]) }) catch {};
                 if (s.foreground) |*f| if (f.run == null and std.mem.eql(u8, x.delivery[0..x.delivery_len], f.delivery)) {
                     f.run = s.dupe(x.run[0..x.run_len]);
-                    s.entry_runs.append(s.alloc(), .{ .run = f.run.?, .entry = f.entry, .expression = f.expression }) catch {};
+                    s.entry_runs.append(s.alloc(), .{ .run = f.run.?, .entry = f.entry, .expression = f.expression, .inspect = f.inspect }) catch {};
                 };
             },
             else => {},
@@ -729,9 +796,18 @@ pub const Session = struct {
                 const reason = x.reason[0..x.reason_len];
                 s.forget(x.run[0..x.run_len]);
                 if (!std.mem.eql(u8, reason, "rewind")) s.sayf("! discarded {s}", .{x.run[0..x.run_len]});
+                s.measureDiscard(x);
             },
             else => {},
         };
+        // Trace rows, in lifecycle order.
+        for (items[0..n]) |r| switch (r.kind) {
+            c.TALK_REPORT_RUN_STARTED => s.traceStart(r.as.run_started),
+            c.TALK_REPORT_RUN_END => s.traceEnd(r.as.run_end),
+            c.TALK_REPORT_RUN_DISCARDED => s.traceDiscarded(r.as.run_discarded),
+            else => {},
+        };
+        s.measure(items[0..n]);
     }
 
     fn nthOf(items: []const c.talk_report, kind: c.talk_report_kind, n: usize) ?*const c.talk_report {
@@ -778,7 +854,9 @@ pub const Session = struct {
         if (run.len == 0) return;
         const p = s.prefix(run);
         switch (x.outcome) {
-            c.TALK_COMPLETED => if (s.entryOf(run)) |e| if (e.expression) {
+            c.TALK_COMPLETED => if (s.entryOf(run)) |e| if (e.inspect) {
+                s.valueRows(x.result);
+            } else if (e.expression) {
                 s.sayf("{s}{s}", .{ p, s.display(x.result) });
             },
             c.TALK_ERRORED => {
@@ -923,20 +1001,54 @@ pub const Session = struct {
         return false;
     }
 
+    fn isDeclaration(w: anytype) bool {
+        return isOneOf(w.first, &declaration_words) or (std.mem.eql(u8, w.first, "script") and std.mem.eql(u8, w.second, "variable"));
+    }
+
     fn entry(s: *Session, input: transcript.Input) !void {
         const text = try entryText(input, s.alloc());
-        const w = firstWords(text);
-        if (isOneOf(w.first, &declaration_words) or (std.mem.eql(u8, w.first, "script") and std.mem.eql(u8, w.second, "variable"))) return s.declaration(text);
-        if (w.doc) {
-            s.say("! bad arguments");
-            return;
+        // What decides the Entry: its first line after any `--|` block.
+        var deciding = text;
+        // A leading `--|` block documents the declaration straight after it.
+        // A blank line detaches it; before anything else it is refused.
+        const lines = try splitLines(s.alloc(), text);
+        var i: usize = 0;
+        while (i < lines.len and std.mem.startsWith(u8, std.mem.trimStart(u8, lines[i], " \t"), "--|")) i += 1;
+        if (i > 0) {
+            if (i == lines.len) return s.say("! bad arguments");
+            if (std.mem.trim(u8, lines[i], " \t").len == 0) {
+                while (i < lines.len and std.mem.trim(u8, lines[i], " \t").len == 0) i += 1;
+                if (i == lines.len) return s.say("! bad arguments");
+                deciding = try std.mem.join(s.alloc(), "\n", lines[i..]);
+            } else {
+                const w = firstWords(lines[i]);
+                if (!isDeclaration(w) or std.mem.eql(u8, w.first, "use")) return s.say("! bad arguments");
+                return s.declaration(text);
+            }
         }
+        const w = firstWords(deciding);
+        if (isDeclaration(w)) return s.declaration(text);
         const statement = isOneOf(w.first, &statement_words) or
             (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
             (std.mem.eql(u8, w.first, "choose") and std.mem.eql(u8, w.second, "offer")) or
             (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
             std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
         _ = try s.runEntry(text, !statement);
+    }
+
+    /// `:inspect <expression>`: one expression, run as an ordinary Entry,
+    /// whose value is described in rows rather than echoed.
+    fn inspectExpression(s: *Session, rest: []const u8, more: []const []const u8) !void {
+        var text: std.ArrayList(u8) = .empty;
+        try text.appendSlice(s.alloc(), rest);
+        for (more) |l| {
+            try text.append(s.alloc(), '\n');
+            try text.appendSlice(s.alloc(), l);
+        }
+        if (std.mem.trim(u8, text.items, " \t\n").len == 0) return s.say("! bad arguments");
+        const w = firstWords(text.items);
+        if (w.doc or isDeclaration(w) or isOneOf(w.first, &statement_words) or w.first[0] == ':') return s.say("! bad arguments");
+        _ = try s.runAs(text.items, true, true);
     }
 
     /// Whether the Session Script has a Handler whose Selector starts with
@@ -952,24 +1064,23 @@ pub const Session = struct {
     /// Variables and Handler extend the Script, which is then requested and
     /// pumped.
     fn runEntry(s: *Session, text: []const u8, expression: bool) !Ran {
+        return s.runAs(text, expression, false);
+    }
+
+    fn runAs(s: *Session, text: []const u8, expression: bool, inspect: bool) !Ran {
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
         const ta = arena.allocator();
         const n = s.freeEntry();
         const name = s.print("entry{d}", .{n});
-        // Its syntax, in its own lines.
-        const wrapped = try std.fmt.allocPrint(ta, "on {s}\n{s}{s}\nend {s}\n", .{ name, if (expression) "return " else "", text, name });
-        switch (try parser.parse(ta, wrapped)) {
-            .failure => |d| {
-                var lines = try lexer.Lines.init(ta, wrapped);
-                const at = lines.position(d.offset);
-                const line = @as(i64, @intCast(at.line)) - 1;
-                const column = @as(i64, @intCast(at.column)) - @as(i64, if (expression and line == 1) 7 else 0);
-                s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), line, column });
-                return .refused;
-            },
-            .tree => {},
+        // Its syntax, on its own: the end of the Entry ends its last line.
+        if (try parser.parseEntry(ta, text, expression)) |d| {
+            var lines = try lexer.Lines.init(ta, text);
+            const at = lines.position(d.offset);
+            s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), at.line, at.column });
+            return .refused;
         }
+        const wrapped = try std.fmt.allocPrint(ta, "on {s}\n{s}{s}\nend {s}\n", .{ name, if (expression) "return " else "", text, name });
         // The names it binds that become Script Variables.
         const roots = try s.implicitNames(ta, name, wrapped);
         var source: std.ArrayList(u8) = .empty;
@@ -986,6 +1097,7 @@ pub const Session = struct {
             return .refused;
         }
         s.extensions += 1;
+        s.harvest();
         s.next_entry = n + 1;
         for (roots) |r| try s.decls.append(s.alloc(), .{ .text = s.print("script variable {s}", .{r}), .kind = .variable, .names = try s.alloc().dupe([]const u8, &.{s.dupe(r)}) });
         // Requested with the `:limits` override, and pumped.
@@ -1012,7 +1124,8 @@ pub const Session = struct {
         try check_(c.talk_script_request(s.script, &message, &id, &pending));
         const delivery = s.dupe(id.data[0..id.len]);
         c.talk_owned_bytes_release(&id);
-        s.foreground = .{ .delivery = delivery, .entry = n, .expression = expression };
+        s.foreground = .{ .delivery = delivery, .entry = n, .expression = expression, .inspect = inspect };
+        if (s.measuring) try s.observing.measurements.append(s.alloc(), .{ .entry = name, .root = delivery, .started = true });
         if (!try s.pump()) return .ran;
         try s.foregroundLoop();
         return .ran;
@@ -1177,6 +1290,7 @@ pub const Session = struct {
                 return;
             }
             s.extensions += 1;
+            s.harvest();
             try s.decls.append(s.alloc(), decl);
             return;
         }
@@ -1193,6 +1307,7 @@ pub const Session = struct {
         }
         s.decls = .fromOwnedSlice(placed.decls);
         s.extensions = 0;
+        s.harvest();
         s.follow(reports);
     }
 
@@ -1283,6 +1398,12 @@ pub const Session = struct {
         if (std.mem.eql(u8, name, ":export")) return s.exportCommand(args);
         if (std.mem.eql(u8, name, ":fix")) return s.fixCommand(args, input.more);
         if (std.mem.eql(u8, name, ":store")) return s.storeCommand(args, input.more);
+        if (std.mem.eql(u8, name, ":describe")) return s.describeCommand(rest);
+        if (std.mem.eql(u8, name, ":apropos")) return s.aproposCommand(rest);
+        if (std.mem.eql(u8, name, ":inspect")) return s.inspectExpression(rest, input.more);
+        if (std.mem.eql(u8, name, ":trace")) return s.traceCommand(rest);
+        if (std.mem.eql(u8, name, ":untrace")) return s.untraceCommand(rest);
+        if (std.mem.eql(u8, name, ":fuel")) return s.fuelCommand(rest, input.more);
         s.say("! unknown command");
     }
 
@@ -1560,6 +1681,7 @@ pub const Session = struct {
             .limits = s.limits,
             .clock = s.clock,
             .stubs = stubs.items,
+            .observing = try s.observing.clone(s.alloc()),
         });
         s.sayf("saved {s}", .{name});
     }
@@ -1596,6 +1718,7 @@ pub const Session = struct {
         }
         s.group = group;
         s.script = c.talk_group_script(group, "session", 7);
+        s.harvest();
         s.decls = .fromOwnedSlice(try s.alloc().dupe(Decl, saved.decls));
         s.next_entry = saved.next_entry;
         s.extensions = saved.extensions;
@@ -1604,6 +1727,11 @@ pub const Session = struct {
         s.limits = saved.limits;
         s.clock = saved.clock;
         for (s.mocks.items, saved.stubs) |m, stubs| m.stubs = .fromOwnedSlice(try s.alloc().dupe(Stub, stubs));
+        // Observation state is replaced: each pending measurement is
+        // abandoned, after the ordinary restore output.
+        var abandoned: std.ArrayList([]const u8) = .empty;
+        for (s.observing.measurements.items) |m| if (!m.settled) try abandoned.append(s.alloc(), m.entry);
+        s.observing = try saved.observing.clone(s.alloc());
         s.live.clearRetainingCapacity();
         s.pending.clearRetainingCapacity();
         s.waits.clearRetainingCapacity();
@@ -1623,6 +1751,7 @@ pub const Session = struct {
             s.queued = true;
         }
         s.baseline(c.talk_restore_result_reports(result));
+        for (abandoned.items) |e| s.sayf("fuel abandoned {s}", .{s.textShown(e)});
         // Markers for Stores changed since the save are pumped for as the
         // Pump `:restore` causes.
         if (s.admitted) {
@@ -1761,6 +1890,8 @@ pub const Session = struct {
             s.follow(reports);
         }
         try s.libraries.put(s.alloc(), s.dupe(name), .{ .source = source, .library = library.? });
+        s.harvestLibrary(library, name, source);
+        s.harvest();
     }
 
     fn exportCommand(s: *Session, args: []const []const u8) !void {
@@ -1851,6 +1982,7 @@ pub const Session = struct {
             s.diagnostics(mark, "session", 0, false, true);
         } else {
             s.extensions = 0;
+            s.harvest();
             s.follow(reports);
         }
         // The message runs again.
@@ -1866,6 +1998,582 @@ pub const Session = struct {
             .script_variable => |v| v.keyword,
             .use => |u| u.keyword,
         };
+    }
+    // ------------------------------------------------------------ sources
+
+    /// Keeps each of the Session Script's units' sources by code identity,
+    /// so documentation outlives a Reload for the Function Values that
+    /// still refer to it.
+    fn harvest(s: *Session) void {
+        const script = s.script orelse return;
+        var i: usize = 0;
+        var info: c.talk_unit_info = undefined;
+        while (c.talk_script_unit(script, i, &info)) : (i += 1) {
+            if (s.sources.contains(info.identity)) continue;
+            s.sources.put(s.alloc(), info.identity, .{ .name = s.dupe(info.name[0..info.name_len]), .source = s.dupe(info.source[0..info.source_len]) }) catch {};
+        }
+    }
+
+    fn harvestLibrary(s: *Session, library: ?*c.talk_library, name: []const u8, source: []const u8) void {
+        var id: [32]u8 = undefined;
+        c.talk_library_identity(library, &id);
+        s.sources.put(s.alloc(), id, .{ .name = s.dupe(name), .source = s.dupe(source) }) catch {};
+    }
+
+    /// A Library's source: a user Library's, or a stdlib Library's.
+    fn librarySource(s: *Session, name: []const u8) ?[]const u8 {
+        if (s.libraries.get(name)) |l| return l.source;
+        for (northtalk.generated.stdlib_sources.sources) |src| if (std.mem.eql(u8, src.name, name)) return src.source;
+        return null;
+    }
+
+    fn librarySourceByIdentity(s: *Session, unit: [32]u8) ?UnitSource {
+        if (s.sources.get(unit)) |u| return u;
+        for (northtalk.generated.stdlib_sources.sources) |src| {
+            const l = northtalk.machine.stdlibLibrary(src.name) orelse continue;
+            if (std.mem.eql(u8, &l.identity, &unit)) return .{ .name = src.name, .source = src.source };
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------ declarations in source
+
+    /// A declaration as tooling shows it: its kind, its name, for a Handler
+    /// its Selector, its signature and its documentation.
+    const Shown = struct {
+        kind: []const u8,
+        name: []const u8,
+        signature: []const u8,
+        doc: []const u8,
+        private: bool,
+        required: usize = 0,
+        total: usize = 0,
+    };
+
+    /// Every declaration of a source, in order.
+    fn declarationsOf(s: *Session, source: []const u8) ![]Shown {
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        const ta = arena.allocator();
+        const tree = switch (try parser.parse(ta, source)) {
+            .tree => |t| t,
+            .failure => return &.{},
+        };
+        var lines = try lexer.Lines.init(ta, source);
+        var out: std.ArrayList(Shown) = .empty;
+        const all_lines = try splitLines(ta, source);
+        for (tree.declarations) |d| {
+            const first = firstToken(d);
+            const line = lines.position(tree.tokens[first].start).line;
+            const doc = s.dupe(try docBefore(ta, all_lines, line - 1));
+            const head_end = headEnd(&tree, first);
+            switch (d.data) {
+                .handler => |h| {
+                    const name = if (h.fallback) "any message" else try selectorText(ta, &tree, h);
+                    try out.append(s.alloc(), .{ .kind = "handler", .name = s.dupe(name), .signature = s.dupe(source[tree.tokens[h.on].start..head_end]), .doc = doc, .private = d.private != null });
+                },
+                .function => |f| {
+                    var required: usize = 0;
+                    for (f.params) |p| {
+                        if (p.default == null) required += 1;
+                    }
+                    try out.append(s.alloc(), .{ .kind = "function", .name = s.dupe(tree.text(f.name)), .signature = s.dupe(source[tree.tokens[f.keyword].start..head_end]), .doc = doc, .private = d.private != null, .required = required, .total = f.params.len });
+                },
+                .constant => |k| try out.append(s.alloc(), .{ .kind = "constant", .name = s.dupe(tree.text(k.name)), .signature = s.print("constant {s}", .{tree.text(k.name)}), .doc = doc, .private = d.private != null }),
+                .script_variable => |v| try out.append(s.alloc(), .{ .kind = "variable", .name = s.dupe(tree.text(v.name)), .signature = s.print("script variable {s}", .{tree.text(v.name)}), .doc = doc, .private = false }),
+                .use => {},
+            }
+        }
+        return out.items;
+    }
+
+    fn splitLines(ta: Allocator, source: []const u8) ![]const []const u8 {
+        var out: std.ArrayList([]const u8) = .empty;
+        var it = std.mem.splitScalar(u8, source, '\n');
+        while (it.next()) |l| try out.append(ta, std.mem.trimEnd(u8, l, "\r"));
+        return out.items;
+    }
+
+    /// The `--|` block straight before line `index` (0-based): each line
+    /// without its indentation, `--|` and one space, joined with LF.
+    fn docBefore(ta: Allocator, lines: []const []const u8, index: usize) ![]const u8 {
+        var from = index;
+        while (from > 0) {
+            const t = std.mem.trimStart(u8, lines[from - 1], " \t");
+            if (!std.mem.startsWith(u8, t, "--|")) break;
+            from -= 1;
+        }
+        var out: std.ArrayList(u8) = .empty;
+        for (lines[from..index], 0..) |l, i| {
+            if (i > 0) try out.append(ta, '\n');
+            var t = std.mem.trimStart(u8, l, " \t")[3..];
+            if (t.len > 0 and t[0] == ' ') t = t[1..];
+            try out.appendSlice(ta, t);
+        }
+        return out.items;
+    }
+
+    /// Where a declaration's head ends: its last token before the first
+    /// line break after `first`.
+    fn headEnd(tree: *const ast.Tree, first: usize) usize {
+        var t = first;
+        while (t + 1 < tree.tokens.len and tree.tokens[t + 1].kind != .newline and tree.tokens[t + 1].kind != .eof) t += 1;
+        return tree.tokens[t].end;
+    }
+
+    fn selectorText(ta: Allocator, tree: *const ast.Tree, h: ast.Handler) ![]const u8 {
+        if (h.labels.len == 0) return tree.text(h.name);
+        var out: std.ArrayList(u8) = .empty;
+        try out.appendSlice(ta, tree.text(h.name));
+        try out.append(ta, ':');
+        for (h.labels) |l| try out.print(ta, "{s}:", .{tree.text(l)});
+        return out.items;
+    }
+
+    // ------------------------------------------------------------ shown values
+
+    fn textShown(s: *Session, text: []const u8) []const u8 {
+        var v: ?*c.talk_value = null;
+        if (c.talk_text(text.ptr, text.len, &v) != c.TALK_OK) return "\"\"";
+        defer c.talk_value_release(v);
+        return s.display(v);
+    }
+
+    /// A target map: `{name, origin}`, or `{library, name, origin}`.
+    fn targetShown(s: *Session, library: ?[]const u8, name: []const u8, origin: []const u8) []const u8 {
+        if (library) |l| return s.print("{{library: {s}, name: {s}, origin: {s}}}", .{ s.textShown(l), s.textShown(name), s.textShown(origin) });
+        return s.print("{{name: {s}, origin: {s}}}", .{ s.textShown(name), s.textShown(origin) });
+    }
+
+    /// The rows a value gets: its kind and display form, its size, a map's
+    /// fields, and a Function Value's name, arity, Home Script and
+    /// documentation.
+    fn valueRows(s: *Session, v: ?*const c.talk_value) void {
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
+        s.sayf("value {{kind: {s}, value: {s}}}", .{ s.textShown(northtalk.machine.kindName(value)), s.display(v) });
+        switch (value.data) {
+            .list => |items| s.sayf("size {d}", .{items.len}),
+            .map => |pairs| s.sayf("size {d}", .{pairs.len}),
+            .bytes => |b| s.sayf("size {d}", .{b.len}),
+            .text => |t| s.sayf("size {d}", .{northtalk.unicode.grapheme.count(t)}),
+            else => {},
+        }
+        if (value.data == .map) {
+            const pairs = s.alloc().dupe(northtalk.value.Pair, value.data.map) catch return;
+            std.mem.sort(northtalk.value.Pair, pairs, {}, struct {
+                fn less(_: void, x: northtalk.value.Pair, y: northtalk.value.Pair) bool {
+                    return std.mem.order(u8, x.key, y.key) == .lt;
+                }
+            }.less);
+            for (pairs) |p| s.sayf("field {s} = {s}", .{ s.textShown(p.key), s.display(@ptrCast(p.value)) });
+        }
+        if (value.data == .function) {
+            var info: c.talk_function_info = undefined;
+            if (!c.talk_function_info_of(s.group, v, &info)) return;
+            const name = info.name[0..info.name_len];
+            const shown_name = if (name.len == 0) "nothing" else s.textShown(name);
+            s.sayf("function {{name: {s}, arity: {d}..{d}, home: {s}}}", .{ shown_name, info.required, info.total, s.textShown(info.home[0..info.home_len]) });
+            var doc: []const u8 = "";
+            if (name.len > 0) if (s.librarySourceByIdentity(info.unit)) |u| {
+                const decls = s.declarationsOf(u.source) catch &.{};
+                for (decls) |d| if (std.mem.eql(u8, d.kind, "function") and std.mem.eql(u8, d.name, name)) {
+                    doc = d.doc;
+                    break;
+                };
+            };
+            s.sayf("doc {s}", .{s.textShown(doc)});
+        }
+    }
+
+    // ------------------------------------------------------------ :describe
+
+    const Target = struct { name: []const u8, origin: enum { any, session, builtin, library }, library: ?[]const u8 = null };
+
+    /// A describe target: a name or Selector, or a target map.
+    fn parseTarget(s: *Session, rest: []const u8) ?Target {
+        if (rest.len == 0) return null;
+        if (rest[0] != '{') {
+            if (std.mem.indexOfAny(u8, rest, " \t") != null) return null;
+            return .{ .name = rest, .origin = .any };
+        }
+        var v: ?*c.talk_value = null;
+        if (c.talk_parse_display(rest.ptr, rest.len, &v) != c.TALK_OK) return null;
+        defer c.talk_value_release(v);
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
+        if (value.data != .map) return null;
+        var name: ?[]const u8 = null;
+        var origin: ?[]const u8 = null;
+        var library: ?[]const u8 = null;
+        for (value.data.map) |p| {
+            if (p.value.data != .text) return null;
+            const t = s.dupe(p.value.data.text);
+            if (std.mem.eql(u8, p.key, "name")) name = t else if (std.mem.eql(u8, p.key, "origin")) origin = t else if (std.mem.eql(u8, p.key, "library")) library = t else return null;
+        }
+        const n = name orelse return null;
+        const o = origin orelse return null;
+        if (std.mem.eql(u8, o, "session") and library == null) return .{ .name = n, .origin = .session };
+        if (std.mem.eql(u8, o, "builtin") and library == null) return .{ .name = n, .origin = .builtin };
+        if (std.mem.eql(u8, o, "library")) if (library) |l| return .{ .name = n, .origin = .library, .library = l };
+        return null;
+    }
+
+    const Builtin = struct { name: []const u8, call: []const u8, gives: []const u8 };
+
+    fn builtinNamed(name: []const u8) ?Builtin {
+        for (northtalk.generated.stdlib.stdlib.builtin) |b| if (std.mem.eql(u8, b.name, name)) return .{ .name = b.name, .call = b.call, .gives = b.gives };
+        return null;
+    }
+
+    /// What a current name binds in the session source: a declaration of
+    /// the Session Script's own, or a `use` alias with its Library.
+    const Binding = struct { decls: []const Shown, library: ?[]const u8 = null };
+
+    fn currentBinding(s: *Session, name: []const u8) !?Binding {
+        const source = s.sessionSource(s.decls.items);
+        var found: std.ArrayList(Shown) = .empty;
+        for (try s.declarationsOf(source)) |d| if (std.mem.eql(u8, d.name, name)) try found.append(s.alloc(), d);
+        if (found.items.len > 0) return .{ .decls = found.items };
+        for (s.decls.items) |d| if (d.kind == .use) {
+            const u = d.use.?;
+            for (u.names) |n| {
+                const seen = u.rename orelse n;
+                if (!std.mem.eql(u8, seen, name)) continue;
+                const lib = s.librarySource(u.library) orelse continue;
+                var exported: std.ArrayList(Shown) = .empty;
+                for (try s.declarationsOf(lib)) |x| if (!x.private and std.mem.eql(u8, x.name, n)) try exported.append(s.alloc(), x);
+                if (exported.items.len > 0) return .{ .decls = exported.items, .library = u.library };
+            }
+        };
+        return null;
+    }
+
+    fn describeCommand(s: *Session, rest: []const u8) !void {
+        const target = s.parseTarget(rest) orelse return s.say("! bad arguments");
+        switch (target.origin) {
+            .any, .session => {
+                if (try s.currentBinding(target.name)) |b| return s.describeBinding(target.name, b);
+                if (target.origin == .any) if (builtinNamed(target.name)) |b| return s.describeBuiltin(b);
+                return s.say("! no such name");
+            },
+            .builtin => {
+                const b = builtinNamed(target.name) orelse return s.say("! no such name");
+                return s.describeBuiltin(b);
+            },
+            .library => {
+                const lib = target.library.?;
+                const source = s.librarySource(lib) orelse return s.say("! no such name");
+                var any = false;
+                var clause: usize = 0;
+                for (try s.declarationsOf(source)) |d| {
+                    if (d.private or !std.mem.eql(u8, d.name, target.name)) continue;
+                    any = true;
+                    clause += 1;
+                    s.describeRow(s.targetShown(lib, target.name, "library"), lib, d, clause);
+                }
+                if (!any) s.say("! no such name");
+            },
+        }
+    }
+
+    fn describeBuiltin(s: *Session, b: Builtin) void {
+        s.sayf("describe {{target: {s}, origin: \"builtin\", declaration: \"builtin\", signature: {s}}}", .{ s.targetShown(null, b.name, "builtin"), s.textShown(b.call) });
+        s.sayf("doc {s}", .{s.textShown(b.gives)});
+    }
+
+    fn describeRow(s: *Session, target: []const u8, origin: []const u8, d: Shown, clause: usize) void {
+        if (std.mem.eql(u8, d.kind, "handler")) {
+            s.sayf("describe {{target: {s}, origin: {s}, declaration: \"handler\", signature: {s}, clause: {d}}}", .{ target, s.textShown(origin), s.textShown(d.signature), clause });
+        } else s.sayf("describe {{target: {s}, origin: {s}, declaration: {s}, signature: {s}}}", .{ target, s.textShown(origin), s.textShown(d.kind), s.textShown(d.signature) });
+        s.sayf("doc {s}", .{s.textShown(d.doc)});
+        if (std.mem.eql(u8, d.kind, "function")) s.sayf("arity {d}..{d}", .{ d.required, d.total });
+    }
+
+    fn describeBinding(s: *Session, name: []const u8, b: Binding) !void {
+        const target = s.targetShown(null, name, "session");
+        const origin = b.library orelse "session";
+        var clause: usize = 0;
+        for (b.decls) |d| {
+            clause += 1;
+            s.describeRow(target, origin, d, clause);
+            // A Script Variable's value comes from one explicit `vars` Host
+            // Input.
+            if (std.mem.eql(u8, d.kind, "variable")) {
+                var inspection: ?*c.talk_inspection = null;
+                try check_(c.talk_inspect(s.group, &inspection));
+                defer c.talk_inspection_release(inspection);
+                for (inspection.?.scripts[0..inspection.?.scripts_len]) |view| {
+                    if (!std.mem.eql(u8, view.name[0..view.name_len], "session")) continue;
+                    for (view.vars[0..view.vars_len]) |p| if (std.mem.eql(u8, p.key[0..p.key_len], name)) s.valueRows(p.value);
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ :apropos
+
+    const Found = struct { name: []const u8, rank: u8, library: []const u8, line: []const u8, docs: []const []const u8 };
+
+    fn lowered(s: *Session, text: []const u8) []const u8 {
+        const mapped = northtalk.builtins.caseMapped(s.alloc(), text, false) catch return text;
+        return northtalk.unicode.nfc(s.alloc(), mapped) catch mapped;
+    }
+
+    fn docLines(s: *Session, decls: []const Shown) []const []const u8 {
+        var out: std.ArrayList([]const u8) = .empty;
+        if (decls.len > 0 and std.mem.eql(u8, decls[0].kind, "handler")) {
+            for (decls, 1..) |d, n| out.append(s.alloc(), s.print("doc {d} {s}", .{ n, s.textShown(d.doc) })) catch {};
+        } else if (decls.len > 0) out.append(s.alloc(), s.print("doc {s}", .{s.textShown(decls[0].doc)})) catch {};
+        return out.items;
+    }
+
+    fn aproposCommand(s: *Session, rest: []const u8) !void {
+        var query: []const u8 = rest;
+        if (rest.len > 0 and rest[0] == '"') {
+            var v: ?*c.talk_value = null;
+            if (c.talk_parse_display(rest.ptr, rest.len, &v) != c.TALK_OK) return s.say("! bad arguments");
+            defer c.talk_value_release(v);
+            var p: [*c]const u8 = null;
+            var n: usize = 0;
+            if (!c.talk_value_as_text(v, &p, &n)) return s.say("! bad arguments");
+            query = s.dupe(p[0..n]);
+        }
+        const q = s.lowered(query);
+        var found: std.ArrayList(Found) = .empty;
+        // Current bindings: the session's declarations, by name, and its
+        // `use` aliases.
+        const source = s.sessionSource(s.decls.items);
+        const own = try s.declarationsOf(source);
+        var seen: std.StringArrayHashMapUnmanaged(void) = .empty;
+        for (own) |d| {
+            if (seen.contains(d.name)) continue;
+            try seen.put(s.alloc(), d.name, {});
+            var same: std.ArrayList(Shown) = .empty;
+            for (own) |x| if (std.mem.eql(u8, x.name, d.name)) try same.append(s.alloc(), x);
+            try found.append(s.alloc(), .{ .name = d.name, .rank = 0, .library = "", .line = s.print("name {{target: {s}, origin: \"session\", available: true, import: nothing}}", .{s.targetShown(null, d.name, "session")}), .docs = s.docLines(same.items) });
+        }
+        for (s.decls.items) |d| if (d.kind == .use) {
+            const u = d.use.?;
+            for (u.names) |n| {
+                const alias = u.rename orelse n;
+                if (seen.contains(alias)) continue;
+                const binding = try s.currentBinding(alias) orelse continue;
+                try seen.put(s.alloc(), alias, {});
+                try found.append(s.alloc(), .{ .name = alias, .rank = 0, .library = "", .line = s.print("name {{target: {s}, origin: {s}, available: true, import: nothing}}", .{ s.targetShown(null, alias, "session"), s.textShown(u.library) }), .docs = s.docLines(binding.decls) });
+            }
+        };
+        // Built-ins, even when shadowed.
+        for (northtalk.generated.stdlib.stdlib.builtin) |b| {
+            const available = !seen.contains(b.name);
+            try found.append(s.alloc(), .{ .name = b.name, .rank = 1, .library = "", .line = s.print("name {{target: {s}, origin: \"builtin\", available: {}, import: nothing}}", .{ s.targetShown(null, b.name, "builtin"), available }), .docs = try s.alloc().dupe([]const u8, &.{s.print("doc {s}", .{s.textShown(b.gives)})}) });
+        }
+        // Every registered Library's public exports, imported or not.
+        var libs: std.ArrayList([]const u8) = .empty;
+        for (northtalk.generated.stdlib_sources.sources) |src| try libs.append(s.alloc(), src.name);
+        for (s.libraries.keys()) |k| try libs.append(s.alloc(), k);
+        for (libs.items) |lib| {
+            const lsource = s.librarySource(lib) orelse continue;
+            const decls = try s.declarationsOf(lsource);
+            var names: std.StringArrayHashMapUnmanaged(void) = .empty;
+            for (decls) |d| if (!d.private and !std.mem.eql(u8, d.kind, "variable")) try names.put(s.alloc(), d.name, {});
+            for (names.keys()) |name| {
+                var same: std.ArrayList(Shown) = .empty;
+                for (decls) |x| if (!x.private and std.mem.eql(u8, x.name, name)) try same.append(s.alloc(), x);
+                const imported = s.importsAs(lib, name);
+                const available = imported and true;
+                const import_shown = if (imported) "nothing" else s.textShown(s.print("use {s} from {s}", .{ name, lib }));
+                try found.append(s.alloc(), .{ .name = name, .rank = 2, .library = lib, .line = s.print("name {{target: {s}, origin: {s}, available: {}, import: {s}}}", .{ s.targetShown(lib, name, "library"), s.textShown(lib), available, import_shown }), .docs = s.docLines(same.items) });
+            }
+        }
+        std.mem.sort(Found, found.items, {}, struct {
+            fn less(_: void, x: Found, y: Found) bool {
+                switch (std.mem.order(u8, x.name, y.name)) {
+                    .lt => return true,
+                    .gt => return false,
+                    .eq => {},
+                }
+                if (x.rank != y.rank) return x.rank < y.rank;
+                return std.mem.order(u8, x.library, y.library) == .lt;
+            }
+        }.less);
+        for (found.items) |f| {
+            if (std.mem.indexOf(u8, s.lowered(f.name), q) == null) continue;
+            s.say(f.line);
+            for (f.docs) |d| s.say(d);
+        }
+    }
+
+    /// Whether the session imports a Library's export under its own name.
+    fn importsAs(s: *Session, library: []const u8, name: []const u8) bool {
+        for (s.decls.items) |d| if (d.kind == .use) {
+            const u = d.use.?;
+            if (!std.mem.eql(u8, u.library, library) or u.rename != null) continue;
+            for (u.names) |n| if (std.mem.eql(u8, n, name)) return true;
+        };
+        return false;
+    }
+
+    // ------------------------------------------------------------ :trace and :fuel
+
+    fn argsShown(s: *Session, args: []const ?*c.talk_value) []const u8 {
+        var out: std.ArrayList(u8) = .empty;
+        out.append(s.alloc(), '[') catch {};
+        for (args, 0..) |v, i| {
+            if (i > 0) out.appendSlice(s.alloc(), ", ") catch {};
+            out.appendSlice(s.alloc(), s.withoutCoreMessage(v)) catch {};
+        }
+        out.append(s.alloc(), ']') catch {};
+        return out.items;
+    }
+
+    /// A value's display form, an error map's Core-written `message` left
+    /// out, since its wording is outside parity.
+    fn withoutCoreMessage(s: *Session, v: ?*const c.talk_value) []const u8 {
+        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
+        if (value.data != .map or !value.core_message) return s.display(v);
+        var pairs: std.ArrayList(c.talk_pair) = .empty;
+        var i: usize = 0;
+        var pair: c.talk_pair = undefined;
+        while (c.talk_value_entries(v, i, &pair)) : (i += 1) {
+            if (std.mem.eql(u8, pair.key[0..pair.key_len], "message")) continue;
+            pairs.append(s.alloc(), pair) catch {};
+        }
+        var shown: ?*c.talk_value = null;
+        if (c.talk_map(pairs.items.ptr, pairs.items.len, &shown) != c.TALK_OK) return s.display(v);
+        defer c.talk_value_release(shown);
+        return s.display(shown);
+    }
+
+    /// At dispatch, a Run whose message's Selector a filter names is latched.
+    fn traceStart(s: *Session, x: c.talk_run_started) void {
+        const selector = x.selector[0..x.selector_len];
+        if (selector.len == 0 or !s.observing.filters.contains(selector)) return;
+        const run = s.dupe(x.run[0..x.run_len]);
+        s.observing.latched.put(s.alloc(), run, s.dupe(selector)) catch return;
+        s.trace_out.append(s.alloc(), s.print("trace start {{script: {s}, run: {s}, selector: {s}, args: {s}}}", .{ s.textShown(x.script[0..x.script_len]), s.textShown(run), s.textShown(selector), s.argsShown(@ptrCast(x.args[0..x.args_len])) })) catch {};
+    }
+
+    fn traceEnd(s: *Session, x: c.talk_run_end) void {
+        const run = x.run[0..x.run_len];
+        const kv = s.observing.latched.fetchOrderedRemove(run) orelse return;
+        const head = s.print("trace end {{script: {s}, run: {s}, selector: {s}, outcome: ", .{ s.textShown(x.script[0..x.script_len]), s.textShown(run), s.textShown(kv.value) });
+        const tail = switch (x.outcome) {
+            c.TALK_COMPLETED => s.print("\"completed\", result: {s}}}", .{s.display(x.result)}),
+            c.TALK_ERRORED => s.print("\"errored\", error: {s}}}", .{s.errorShown(x.@"error".*.data)}),
+            c.TALK_LIMIT_FAULT => s.print("\"limit fault\", limit: {s}}}", .{s.textShown(x.limit[0..x.limit_len])}),
+            c.TALK_CANCELLED => "\"cancelled\"}",
+            c.TALK_UNHANDLED_OUTCOME => "\"unhandled\"}",
+            c.TALK_DROPPED => "\"dropped\"}",
+            else => "\"effect failed\"}",
+        };
+        s.trace_out.append(s.alloc(), s.print("{s}{s}", .{ head, tail })) catch {};
+    }
+
+    fn traceDiscarded(s: *Session, x: c.talk_run_discarded) void {
+        const run = x.run[0..x.run_len];
+        const kv = s.observing.latched.fetchOrderedRemove(run) orelse return;
+        s.trace_out.append(s.alloc(), s.print("trace end {{script: {s}, run: {s}, selector: {s}, outcome: \"discarded\", reason: {s}}}", .{ s.textShown(x.script[0..x.script_len]), s.textShown(run), s.textShown(kv.value), s.textShown(x.reason[0..x.reason_len]) })) catch {};
+    }
+
+    fn measurementOf(s: *Session, root: []const u8) ?*Measurement {
+        for (s.observing.measurements.items) |*m| if (!m.settled and std.mem.eql(u8, m.root, root)) return m;
+        return null;
+    }
+
+    /// A lifecycle discard of a member interrupts its measurement.
+    fn measureDiscard(s: *Session, x: c.talk_run_discarded) void {
+        const m = s.measurementOf(x.ancestry.root_delivery[0..x.ancestry.root_delivery_len]) orelse return;
+        if (!std.mem.eql(u8, x.reason[0..x.reason_len], "rewind")) m.interrupted = true;
+    }
+
+    /// Each member's latest Fuel, and each root's work, from the accounting
+    /// tail.
+    fn measure(s: *Session, reports: []const c.talk_report) void {
+        for (reports) |r| switch (r.kind) {
+            c.TALK_REPORT_RUN_ACCOUNTING => {
+                const x = r.as.run_accounting;
+                const m = s.measurementOf(x.ancestry.root_delivery[0..x.ancestry.root_delivery_len]) orelse continue;
+                m.members.put(s.alloc(), s.dupe(x.run[0..x.run_len]), x.fuel) catch {};
+            },
+            c.TALK_REPORT_CAUSAL_WORK => {
+                const x = r.as.causal_work;
+                const m = s.measurementOf(x.root_delivery[0..x.root_delivery_len]) orelse continue;
+                m.live = x.live_runs;
+                m.queued = x.queued_messages;
+                if (x.live_runs == 0 and x.queued_messages == 0) m.settled = true;
+            },
+            else => {},
+        };
+    }
+
+    /// A Selector, as `:trace` takes it: a Name, or Names each ended by `:`.
+    fn validSelector(text: []const u8) bool {
+        if (text.len == 0) return false;
+        if (std.mem.indexOfScalar(u8, text, ':') == null) return isName(text);
+        if (text[text.len - 1] != ':') return false;
+        var parts = std.mem.splitScalar(u8, text[0 .. text.len - 1], ':');
+        var n: usize = 0;
+        while (parts.next()) |p| {
+            if (!isName(p)) return false;
+            n += 1;
+        }
+        return n >= 2;
+    }
+
+    fn isName(w: []const u8) bool {
+        if (w.len == 0) return false;
+        for (w, 0..) |ch, i| {
+            const ok = std.ascii.isAlphabetic(ch) or ch == '_' or ch >= 0x80 or (i > 0 and std.ascii.isDigit(ch));
+            if (!ok) return false;
+        }
+        return true;
+    }
+
+    fn traceCommand(s: *Session, rest: []const u8) !void {
+        if (rest.len == 0) {
+            const names = try s.alloc().dupe([]const u8, s.observing.filters.keys());
+            std.mem.sort([]const u8, names, {}, struct {
+                fn less(_: void, x: []const u8, y: []const u8) bool {
+                    return std.mem.order(u8, x, y) == .lt;
+                }
+            }.less);
+            for (names) |n| s.sayf("trace {s}", .{s.textShown(n)});
+            return;
+        }
+        if (!validSelector(rest)) return s.say("! bad arguments");
+        try s.observing.filters.put(s.alloc(), s.dupe(rest), {});
+    }
+
+    fn untraceCommand(s: *Session, rest: []const u8) !void {
+        if (rest.len == 0) {
+            s.observing.filters.clearRetainingCapacity();
+            return;
+        }
+        if (!validSelector(rest)) return s.say("! bad arguments");
+        _ = s.observing.filters.orderedRemove(rest);
+    }
+
+    /// `:fuel` lists every measurement; `:fuel <entry>` measures an
+    /// executable Entry and everything it spawns.
+    fn fuelCommand(s: *Session, rest: []const u8, more: []const []const u8) !void {
+        if (rest.len == 0 and more.len == 0) {
+            for (s.observing.measurements.items) |*m| s.say(s.fuelRow(m));
+            return;
+        }
+        var text: std.ArrayList(u8) = .empty;
+        try text.appendSlice(s.alloc(), rest);
+        for (more) |l| {
+            try text.append(s.alloc(), '\n');
+            try text.appendSlice(s.alloc(), l);
+        }
+        const w = firstWords(text.items);
+        if (w.doc or isDeclaration(w) or (w.first.len > 0 and w.first[0] == ':')) return s.say("! bad arguments");
+        const statement = isOneOf(w.first, &statement_words) or
+            (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
+            (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
+            std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
+        s.measuring = true;
+        defer s.measuring = false;
+        _ = try s.runEntry(text.items, !statement);
     }
 };
 

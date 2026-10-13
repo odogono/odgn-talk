@@ -266,9 +266,16 @@ Trace go.
   Notification the session pumps again at the same reading. `:save` and
   `:restore` take and restore router checkpoints.
 
-Not implemented yet: the observation commands (`:describe`, `:inspect`, `:apropos`, `:trace`,
-`:untrace`, `:fuel`) and object crossings. The Transcripts that need them
-aren't on the passing list.
+- **Observation** (`:describe`, `:inspect`, `:apropos`, `:trace`, `:untrace`,
+  `:fuel`) follows [Session observation](../../spec/session-observation.md).
+  The session keeps every code unit's source by its code identity, which
+  `talk_script_unit` gives, so `talk_function_info_of` finds a Function
+  Value's documentation even once a Reload has made it stale. Trace rows come
+  from the Run lifecycle reports, and Fuel Measurements from Run accounting,
+  each after a Host call's ordinary output.
+
+Not implemented yet: object crossings (`%` envelopes), which
+`sessions/object-inspection` needs.
 
 ## The Notification router
 
