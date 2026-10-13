@@ -99,10 +99,13 @@ class Host:
         return self.call("talk_script_deliver", script, packed, 0)
 
     def pump(self, group, seconds):
-        # talk_pump_result: state, then fuel_used at offset 8.
-        result = self.out(16)
+        # talk_pump_result: state, has_next_deadline, next_deadline_seconds
+        # at 8, next_deadline_nanos at 16, fuel_used at 24, reports at 32.
+        result = self.out(40)
         code = self.call("talk_pump", group, seconds, 0, 0, result)
-        fuel = struct.unpack("<q", self.read(result + 8, 8))[0]
+        fuel = struct.unpack("<q", self.read(result + 24, 8))[0]
+        reports = self.pointer_at(result + 32)
+        self.call("talk_reports_release", reports)
         return code, fuel
 
     def group_memory(self, group):
