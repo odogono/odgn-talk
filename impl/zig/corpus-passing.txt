@@ -104,6 +104,7 @@ collecting/next-filter
 collecting/partial-error
 collecting/waiting-body
 collecting/zero-passes
+computed-sends/bad-names
 computed-sends/forwarding
 computed-sends/names
 computed-sends/unhandled
@@ -137,6 +138,8 @@ disassembly/tell-block
 disassembly/timeout-block
 disassembly/whose
 errors/fail-error-map
+errors/handler-backstop
+errors/handler-delivery
 errors/items-delimiter
 errors/lambda-capture-parity
 errors/queued-error-before-parked-run
@@ -236,6 +239,7 @@ math/number-functions
 objects/argument-labels
 objects/guard-keys
 objects/message-path
+objects/moving-climb
 objects/moving-mailbox
 objects/properties
 objects/queued-parent-refusals

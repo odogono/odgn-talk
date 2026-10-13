@@ -3348,7 +3348,9 @@ pub const Group = struct {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
                 if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "errored", .err = e.retain() } });
-                if (!d.internal_error) {
+                // A Run handling an `error` message, the Core's or a Host's,
+                // sends none: there is no chain.
+                if (!d.internal_error and !std.mem.eql(u8, d.message, "error")) {
                     const args = g.gpa.alloc(*Value, 1) catch |err| {
                         e.release();
                         return err;
@@ -3548,15 +3550,15 @@ pub const Group = struct {
     /// next Owning Script's mailbox. Copies it.
     fn climb(g: *Group, s: *Script, d: Delivery) !void {
         const handled = if (d.at) |at| at.owned() else s.owner;
+        // An `error` message no clause matched is dropped: it never climbs
+        // and isn't reported as `unhandled`.
+        if (d.internal_error) return;
         var copy = try g.copyDelivery(d);
-        if (d.internal_error) return g.unhandled(copy);
         const from = handled orelse return g.unhandled(copy);
-        // A Script's message that climbs from its owner ends there, naming
-        // that object.
-        const parent = from.parent orelse {
-            if (copy.target == null) copy.target = from;
-            return g.unhandled(copy);
-        };
+        // A message to a Script climbs from its owner, which stays its
+        // Target, `the target`, the rest of the way.
+        if (copy.target == null) copy.target = from;
+        const parent = from.parent orelse return g.unhandled(copy);
         var moved = copy;
         moved.at = parent;
         moved.passed_by = handled;
@@ -7046,7 +7048,9 @@ fn messageName(name: []const u8, count: usize) bool {
         if (!(if (parts > 0) labelWord(part) else nameWord(part))) return false;
         parts += 1;
     }
-    return parts == count;
+    // A message with no labels keeps its plain name, so a Selector has two
+    // parts or more.
+    return parts >= 2 and parts == count;
 }
 
 /// The code a frame runs: its Library's, or its Run's Script's.
