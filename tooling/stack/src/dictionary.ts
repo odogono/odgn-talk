@@ -12,6 +12,8 @@ export type DictionaryFormat = 'markdown' | 'plaintext';
 export type DictionaryOperation = {
   /** The one-line call its mode allows, with argument Shapes as placeholders. */
   call: string;
+  description?: string;
+  examples?: string[];
   /** Facts about the call: mode, result, cost, errors, scope, Segment binding. */
   facts: string[];
   mode: ManifestOperation['mode'];
@@ -114,6 +116,8 @@ export const dictionaryOperation = (
   op: ManifestOperation,
 ): DictionaryOperation => ({
   name: op.name,
+  description: op.description,
+  examples: op.examples,
   mode: op.mode,
   call: callForm(grant, op),
   facts: facts(op),
@@ -142,10 +146,34 @@ export const readDictionary = (manifest: unknown): DictionaryGrant[] => {
 export const operationText = (
   op: DictionaryOperation,
   format: DictionaryFormat,
-): string =>
-  format === 'markdown'
-    ? `\`\`\`northtalk\n${op.call}\n\`\`\`\n\n${op.facts.map(f => `- ${f}`).join('\n')}`
-    : [op.call, ...op.facts.map(f => `  ${f}`)].join('\n');
+): string => {
+  const md = format === 'markdown';
+  const code = md ? codeBlock : (text: string) => text;
+  const sections = [code(op.call)];
+  if (op.description) {
+    sections.push(md ? escapeMarkdown(op.description) : op.description);
+  }
+  sections.push(op.facts.map(f => (md ? `- ${f}` : `  ${f}`)).join('\n'));
+  if (op.examples?.length) {
+    sections.push('Examples:', ...op.examples.map(code));
+  }
+  return sections.join(md ? '\n\n' : '\n');
+};
+
+const escapeMarkdown = (text: string): string =>
+  text.replaceAll(/[!#()*+.<>[\\\]_`{|}~-]/g, String.raw`\$&`);
+
+const codeBlock = (source: string): string => {
+  const fence = '`'.repeat(
+    Math.max(
+      3,
+      ...[...source.matchAll(/`+/g)].map(match => match[0].length + 1),
+    ),
+  );
+  return `${fence}northtalk
+${source}
+${fence}`;
+};
 
 /** One Grant's section of the dictionary, as LSP hover on its name shows it. */
 export const grantText = (

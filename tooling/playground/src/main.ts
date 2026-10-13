@@ -733,7 +733,19 @@ const renderDictionary = (data: unknown) => {
           article.className = 'dictionary-op';
           const facts = element('ul');
           facts.append(...op.facts.map(fact => element('li', fact)));
-          article.append(element('code', op.call), facts);
+          article.append(element('code', op.call));
+          if (op.description) {
+            article.append(element('p', op.description));
+          }
+          article.append(facts);
+          if (op.examples?.length) {
+            article.append(element('h4', 'Examples'));
+            for (const example of op.examples) {
+              const pre = element('pre');
+              pre.append(element('code', example));
+              article.append(pre);
+            }
+          }
           return article;
         }),
       ];

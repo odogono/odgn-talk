@@ -10,6 +10,8 @@ import (
 // corpus case.toml's written as JSON (spec/09-embedding.md#the-host-manifest-format).
 
 type operationDecl struct {
+	Description  json.RawMessage   `json:"description"`
+	Examples     json.RawMessage   `json:"examples"`
 	Name         string            `json:"name"`
 	Mode         string            `json:"mode"`
 	Args         []json.RawMessage `json:"args"`
@@ -44,6 +46,25 @@ var modeNames = map[talk.Mode]string{talk.Immediate: "immediate", talk.Suspendin
 // operation builds an Operation with no callbacks; the caller binds them.
 func (d operationDecl) operation() (talk.Operation, error) {
 	op := talk.Operation{Name: d.Name, Cost: talk.Cost{Fuel: d.Cost.Fuel, Alloc: d.Cost.Alloc}, Scope: d.Scope, SegmentBound: d.SegmentBound}
+	if len(d.Description) > 0 {
+		var text *string
+		if err := json.Unmarshal(d.Description, &text); err != nil || text == nil {
+			return op, protocolErrorf("description must be text")
+		}
+		op.Description = *text
+	}
+	if len(d.Examples) > 0 {
+		var examples *[]*string
+		if err := json.Unmarshal(d.Examples, &examples); err != nil || examples == nil {
+			return op, protocolErrorf("examples must be a list of text")
+		}
+		for _, text := range *examples {
+			if text == nil {
+				return op, protocolErrorf("examples must be a list of text")
+			}
+			op.Examples = append(op.Examples, *text)
+		}
+	}
 	mode, ok := modes[d.Mode]
 	if !ok {
 		return op, protocolErrorf("Operation %s has invalid mode %q", d.Name, d.Mode)

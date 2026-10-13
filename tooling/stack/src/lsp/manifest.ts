@@ -11,7 +11,9 @@ export type ManifestOperation = {
   /** The declared cost; a manifest written by `ExportManifest` always has one. */
   cost?: { alloc: number; fuel: number };
   declaration: Record<string, unknown>;
+  description?: string;
   errors: string[];
+  examples?: string[];
   /** Whole milliseconds, on a suspending Operation only. */
   maxPending?: number;
   mode: 'immediate' | 'suspending' | 'fire-and-forget';
@@ -148,6 +150,12 @@ export const readManifest = (value: unknown): HostManifest => {
       }
       operations.set(opName, {
         name: opName,
+        ...(op.description === undefined
+          ? {}
+          : { description: string(op.description) }),
+        ...(op.examples === undefined
+          ? {}
+          : { examples: array(op.examples).map(string) }),
         mode,
         args: array(op.args ?? []).map(v => shape(v)),
         ...(op.result === undefined ? {} : { result: shape(op.result) }),

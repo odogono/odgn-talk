@@ -5299,11 +5299,18 @@ const savedRuns = (s: SavedScriptState) =>
     ...s.suspended,
     ...s.parked,
   ].sort((a, b) => Number(a.id.split('/r')[1]) - Number(b.id.split('/r')[1]));
+// Callbacks are executable and documentation is manifest-only.
+const unsavedOperationKeys = new Set([
+  'do',
+  'fire',
+  'run',
+  'start',
+  'description',
+  'examples',
+]);
 const savedOperation = (op: Operation<unknown>): Operation<unknown> =>
   Object.fromEntries(
-    Object.entries(op).filter(
-      ([key]) => !['do', 'fire', 'run', 'start'].includes(key),
-    ),
+    Object.entries(op).filter(([key]) => !unsavedOperationKeys.has(key)),
   ) as Operation<unknown>;
 const readSave = (bytes: Uint8Array): SavedGroup => {
   try {
