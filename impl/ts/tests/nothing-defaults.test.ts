@@ -293,9 +293,12 @@ test('source compatibility excludes labels but retains names and grouped indexes
   expect(lines.at(-1)).toBe('vars s result=5');
 });
 
-test('the staged source emits all new instructions and runs without shared expectations', async () => {
+test('the Disassembly Case emits all new instructions and runs', async () => {
   const text = await Bun.file(
-    new URL('./fixtures/nothing-defaults/main.talk', import.meta.url),
+    new URL(
+      '../../../corpus/disassembly/nothing-defaults/defaults.talk',
+      import.meta.url,
+    ),
   ).text();
   const unit = compile(text);
   for (const op of [
