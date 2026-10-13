@@ -1,0 +1,22 @@
+# Unblessed: Built-in argument counts and shadowing (#773); first blessing awaits human review.
+> load constant-too-many identity=208d9d858c2506bc407eebb5a1cbb7daed4f91d17ad63ec3a053473be224f81a
+diag constant-too-many code="wrong argument count" pos=1:14
+> load too-few identity=6701cf085a6adedf0c8a9d971cd614442cf3989580736bf076ab7f526d0a5af0
+diag too-few code="wrong argument count" pos=2:10
+> load defaults-too-few identity=27cba7644eddfce28eed9164be4bbfe40bd962cc15f5aecd2c224fef158cfeff
+diag defaults-too-few code="wrong argument count" pos=1:21
+> load defaults-too-many identity=66bb4ef2905c5adeb13148a98235ed46a9712966f7fd7b6211e8ee266c4833f3
+diag defaults-too-many code="wrong argument count" pos=1:16
+> load valid identity=230ea7a4335470f3d392d7895a08e1d3b1993909ed64e80a847fc5dcf208f440
+> load shadowing identity=61357fa9a486256d1334bc58659de5e255a67be71651df5c0d10025d93c10652
+> deliver d1 to=valid message=t
+> deliver d2 to=shadowing message=t
+> pump clock=2026-10-13T09:00:00Z
+seg valid/r1 start delivery=d1 handler=t clause=1 fuel=10 alloc=0 state=112 end=return
+run valid/r1 outcome=completed delivery=d1 handler=t fuel=10 alloc=0
+seg shadowing/r1 start delivery=d2 handler=t clause=1 fuel=158 alloc=424 state=168 end=return
+run shadowing/r1 outcome=completed delivery=d2 handler=t fuel=158 alloc=424
+pumped state=idle fuel=168
+> vars
+vars valid seen=[1, 1, 1.3, 1.3]
+vars shadowing min=<function shadowing:4:7> seen=[3, 10, [23, 23]]

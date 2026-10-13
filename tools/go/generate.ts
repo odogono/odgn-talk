@@ -14,6 +14,7 @@ import grammar from '../../spec/data/grammar.toml';
 import stdlib from '../../spec/data/stdlib.toml';
 import { compileCostModel, type CompiledCostModel } from '../costs/compile';
 import { formatGo, writeOutput } from './output';
+import { functionContract } from '../grammar/function-contract';
 
 type Shape =
   | { kind: 'scalar'; type: string }
@@ -240,7 +241,12 @@ export const generateGoCatalogues = async (check: boolean): Promise<void> => {
     version,
     corpus,
     grammar,
-    builtins: { builtin: stdlib.builtin },
+    builtins: {
+      builtin: (stdlib.builtin as { call: string }[]).map(builtin => ({
+        ...builtin,
+        ...functionContract(builtin.call),
+      })),
+    },
   })) {
     await writeOutput(
       resolve(import.meta.dir, `../../impl/go/internal/generated/${name}.go`),

@@ -14,7 +14,7 @@ func TestWhoseClauseDiagnostics(t *testing.T) {
 		want         []at
 	}{
 		{"function f x\n return x\nend f\non t xs\n return every item of xs whose f(it)\nend t", "not in a whose", []at{{5, 32}}},
-		{"on t xs\n return the first item of xs whose min(it, 1) > 0\nend t", "", nil},
+		{"on t xs\n return the first item of xs whose min([it, 1]) > 0\nend t", "", nil},
 		{"on t xs, min\n return every item of xs whose min(it, 1) > 0\nend t", "not in a whose", []at{{2, 32}}},
 		// The Lambda is reported once, not the call in its body.
 		{"function f x\n return x\nend f\non t xs\n return every item of xs whose [given: f(it)] is not empty\nend t", "not in a whose", []at{{5, 33}}},

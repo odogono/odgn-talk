@@ -1,0 +1,5 @@
+constant defaults = [min([2, 1]), round(1.25), round(1.25, 1), round(1.25, 1, "half up")]
+script variable seen = []
+on t
+  put defaults into seen
+end t

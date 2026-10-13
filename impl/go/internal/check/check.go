@@ -85,7 +85,7 @@ func (u *Unit) Resolve(body *Body, name string) (Symbol, bool) {
 		if b.Group == "constants" {
 			kind = "builtin-constant"
 		}
-		return Symbol{Kind: kind, Name: name}, true
+		return Symbol{Kind: kind, Name: name, Required: int(b.Required), Maximum: int(b.Total)}, true
 	}
 	return Symbol{}, false
 }
@@ -904,7 +904,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		s, ok := u.Resolve(b, n.Text)
 		if !ok {
 			u.unknownName(n, ctx)
-		} else if s.Kind == "function" && (len(n.Children) < s.Required || len(n.Children) > s.Maximum) {
+		} else if (s.Kind == "function" || s.Kind == "builtin") && (len(n.Children) < s.Required || len(n.Children) > s.Maximum) {
 			u.add("wrong argument count", n.Pos())
 		}
 	case "put", "add", "subtract", "multiply", "divide", "delete", "replace":
