@@ -22,6 +22,14 @@ pub const Range = struct { from: *Value, to: *Value };
 pub const Object = struct { kind: []const u8, id: []const u8, identity: usize };
 /// A Function Value: its display source, home Script and captured values.
 pub const Function = struct { display: []const u8, home: []const u8, identity: usize, captures: *Value };
+/// List versions share an initialized span of a buffer. Extending that span
+/// leaves each older version's slice unchanged; an interior write must copy.
+const ListStorage = struct {
+    references: usize = 1,
+    buffer: []*Value,
+    start: usize,
+    end: usize,
+};
 /// A value's payload, one variant per Kind. Slices and children are owned.
 pub const Data = union(Kind) {
     nothing: void,
@@ -51,6 +59,12 @@ pub const Value = struct {
     /// A Script's name as `load-object` pushes it: a Script is not a
     /// value, so retained state doesn't count it (chapter 8).
     script_name: bool = false,
+    list_storage: ?*ListStorage = null,
+    /// Greater than every physical child's rank. Shared List growth keeps
+    /// it fixed; higher-ranked insertions copy to preserve acyclic ownership.
+    ownership_rank: u64 = 0,
+    /// Intrusive work list used only after the last reference is released.
+    release_next: ?*Value = null,
     data: Data,
     /// The kind of the value's payload.
     pub fn kind(self: *const Value) Kind {
@@ -63,38 +77,53 @@ pub const Value = struct {
     }
     /// Ends one reference, freeing the node and its children with the last.
     pub fn release(self: *Value) void {
-        self.references -= 1;
-        if (self.references != 0) return;
-        const gpa = self.allocator;
-        switch (self.data) {
-            .text, .bytes, .pattern => |s| gpa.free(s),
-            .list => |items| {
-                for (items) |v| v.release();
-                gpa.free(items);
-            },
-            .map => |pairs| {
-                for (pairs) |p| {
-                    gpa.free(p.key);
-                    p.value.release();
-                }
-                gpa.free(pairs);
-            },
-            .range => |r| {
-                r.from.release();
-                r.to.release();
-            },
-            .object => |o| {
-                gpa.free(o.kind);
-                gpa.free(o.id);
-            },
-            .function => |f| {
-                gpa.free(f.display);
-                gpa.free(f.home);
-                f.captures.release();
-            },
-            else => {},
+        // Hidden List tails can make physical ownership deeper than a
+        // Script's logical nesting. Teardown is iterative and allocates
+        // nothing, including when the Group allocator has refused memory.
+        var pending: ?*Value = null;
+        queueRelease(self, &pending);
+        while (pending) |node| {
+            pending = node.release_next;
+            const gpa = node.allocator;
+            switch (node.data) {
+                .text, .bytes, .pattern => |s| gpa.free(s),
+                .list => |items| {
+                    if (node.list_storage) |storage| {
+                        storage.references -= 1;
+                        if (storage.references == 0) {
+                            for (storage.buffer[storage.start..storage.end]) |v| queueRelease(v, &pending);
+                            gpa.free(storage.buffer);
+                            gpa.destroy(storage);
+                        }
+                    } else {
+                        for (items) |v| queueRelease(v, &pending);
+                        gpa.free(items);
+                    }
+                },
+                .map => |pairs| {
+                    for (pairs) |p| {
+                        gpa.free(p.key);
+                        queueRelease(p.value, &pending);
+                    }
+                    gpa.free(pairs);
+                },
+                .range => |r| {
+                    queueRelease(r.from, &pending);
+                    queueRelease(r.to, &pending);
+                },
+                .object => |o| {
+                    gpa.free(o.kind);
+                    gpa.free(o.id);
+                },
+                .function => |f| {
+                    gpa.free(f.display);
+                    gpa.free(f.home);
+                    queueRelease(f.captures, &pending);
+                },
+                else => {},
+            }
+            gpa.destroy(node);
         }
-        gpa.destroy(self);
     }
     /// The value a map holds under the NFC `key`, borrowed, or null.
     pub fn get(self: *const Value, key: []const u8) ?*Value {
@@ -173,10 +202,33 @@ pub const Value = struct {
         };
     }
 };
+fn queueRelease(node: *Value, pending: *?*Value) void {
+    node.references -= 1;
+    if (node.references != 0) return;
+    node.release_next = pending.*;
+    pending.* = node;
+}
+
+fn ownershipRank(data: Data) error{OutOfMemory}!u64 {
+    var child_rank: u64 = 0;
+    switch (data) {
+        .list => |items| for (items) |item| {
+            child_rank = @max(child_rank, item.ownership_rank);
+        },
+        .map => |pairs| for (pairs) |pair| {
+            child_rank = @max(child_rank, pair.value.ownership_rank);
+        },
+        .range => |r| child_rank = @max(r.from.ownership_rank, r.to.ownership_rank),
+        .function => |f| child_rank = f.captures.ownership_rank,
+        else => return 0,
+    }
+    return std.math.add(u64, child_rank, 1) catch error.OutOfMemory;
+}
 /// A value with no children, which takes ownership of `data`'s slices.
 pub fn scalar(gpa: std.mem.Allocator, data: Data) !*Value {
+    const rank = try ownershipRank(data);
     const v = try gpa.create(Value);
-    v.* = .{ .allocator = gpa, .data = data };
+    v.* = .{ .allocator = gpa, .data = data, .ownership_rank = rank };
     return v;
 }
 /// Text from UTF-8, normalised to NFC. Invalid UTF-8 is refused.
@@ -204,6 +256,170 @@ pub fn list(gpa: std.mem.Allocator, items: []const *Value) Error!*Value {
     for (items) |item| _ = item.retain();
     return v;
 }
+/// Adds borrowed items to either end, returning a new immutable List version.
+/// Only unused capacity is written when the newest span can be extended.
+/// Otherwise a geometrically larger buffer copies and retains the spine.
+/// New storage belongs to `gpa`; a different allocator's spine is copied.
+pub fn listGrow(gpa: std.mem.Allocator, old: *Value, items: []const *Value, after: bool) Error!*Value {
+    if (old.data != .list) return error.InvalidValue;
+    var depth = old.depth;
+    var child_rank: u64 = 0;
+    for (items) |item| {
+        depth = @max(depth, item.depth + 1);
+        child_rank = @max(child_rank, item.ownership_rank);
+    }
+    if (depth > max_depth) return error.TooDeep;
+    if (items.len == 0) return old.retain();
+    const same_allocator = gpa.ptr == old.allocator.ptr and gpa.vtable == old.allocator.vtable;
+    const length = std.math.add(usize, old.data.list.len, items.len) catch return error.OutOfMemory;
+    if (old.list_storage) |storage| {
+        const newest = same_allocator and old.data.list.ptr == storage.buffer[storage.start..].ptr and old.data.list.len == storage.end - storage.start;
+        const spare = if (after) storage.buffer.len - storage.end else storage.start;
+        // Ranks decrease along every physical ownership edge. Extending
+        // the buffer with lower-ranked children cannot introduce a cycle,
+        // including one through another version's hidden items.
+        const safe = newest and items.len <= spare and child_rank < old.ownership_rank;
+        if (safe) {
+            const start = if (after) storage.start else storage.start - items.len;
+            const end = if (after) storage.end + items.len else storage.end;
+            const next = try gpa.create(Value);
+            next.* = .{ .allocator = gpa, .data = .{ .list = storage.buffer[start..end] }, .ownership_rank = old.ownership_rank };
+            const added = if (after) storage.buffer[storage.end..end] else storage.buffer[start..storage.start];
+            for (added, items) |*slot, item| slot.* = item.retain();
+            storage.start = start;
+            storage.end = end;
+            storage.references += 1;
+            next.list_storage = storage;
+            next.depth = depth;
+            return next;
+        }
+    }
+    // Base capacity on this version's length, not a larger buffer kept by
+    // an old snapshot: repeatedly branching must not double unused memory.
+    const capacity = @max(@as(usize, 8), std.math.mul(usize, length, 2) catch return error.OutOfMemory);
+    const rank = std.math.add(u64, @max(old.ownership_rank, child_rank), 1) catch return error.OutOfMemory;
+    const storage = try gpa.create(ListStorage);
+    errdefer gpa.destroy(storage);
+    const buffer = try gpa.alloc(*Value, capacity);
+    errdefer gpa.free(buffer);
+    const start = (capacity - length) / 2;
+    const end = start + length;
+    const next = try gpa.create(Value);
+    next.* = .{ .allocator = gpa, .data = .{ .list = buffer[start..end] }, .ownership_rank = rank };
+    storage.* = .{ .buffer = buffer, .start = start, .end = end };
+    next.list_storage = storage;
+    next.depth = depth;
+    const first = if (after) old.data.list else items;
+    const second = if (after) items else old.data.list;
+    for (buffer[start..][0..first.len], first) |*slot, item| slot.* = item.retain();
+    for (buffer[start + first.len .. end], second) |*slot, item| slot.* = item.retain();
+    return next;
+}
+
+test "List growth preserves snapshots, branches, interior writes and self-insertion" {
+    const gpa = std.testing.allocator;
+    const one = try scalar(gpa, .{ .number = try Decimal.parse("1") });
+    defer one.release();
+    const two = try scalar(gpa, .{ .number = try Decimal.parse("2") });
+    defer two.release();
+    const empty = try list(gpa, &.{});
+    defer empty.release();
+    const first = try listGrow(gpa, empty, &.{one}, true);
+    defer first.release();
+    var latest = try listGrow(gpa, first, &.{two}, true);
+    defer latest.release();
+    try std.testing.expectEqual(@as(usize, 1), first.data.list.len);
+    try std.testing.expectEqual(@as(usize, 2), latest.data.list.len);
+    const branch = try listGrow(gpa, first, &.{one}, true);
+    defer branch.release();
+    try std.testing.expectEqual(two, latest.data.list[1]);
+    try std.testing.expectEqual(one, branch.data.list[1]);
+    const prepended = try listGrow(gpa, latest, &.{ two, one }, false);
+    defer prepended.release();
+    try std.testing.expectEqualSlices(*Value, &.{ two, one, one, two }, prepended.data.list);
+    try listSet(&latest, 0, two);
+    try std.testing.expectEqual(one, first.data.list[0]);
+    try std.testing.expectEqual(one, prepended.data.list[2]);
+    const older_self = try listGrow(gpa, prepended, &.{first}, true);
+    defer older_self.release();
+    try std.testing.expectEqual(first, older_self.data.list[4]);
+    const self = try listGrow(gpa, first, &.{first}, true);
+    defer self.release();
+    try std.testing.expectEqual(first, self.data.list[1]);
+    // A different version and a nested child may also hold the same storage.
+    const nested = try map(gpa, &.{.{ .key = "snapshot", .value = prepended }});
+    defer nested.release();
+    const nested_self = try listGrow(gpa, prepended, &.{nested}, true);
+    defer nested_self.release();
+    try std.testing.expectEqual(nested, nested_self.data.list[4]);
+    const unchanged = try listGrow(gpa, prepended, &.{}, true);
+    defer unchanged.release();
+    try std.testing.expect(try prepended.equal(unchanged));
+}
+
+test "List growth preserves snapshots when ownership ranks require a copy" {
+    const gpa = std.testing.allocator;
+    const item = try scalar(gpa, .nothing);
+    defer item.release();
+    const empty = try list(gpa, &.{});
+    defer empty.release();
+    const target = try listGrow(gpa, empty, &.{item}, true);
+    defer target.release();
+    const prefix = try listGrow(gpa, empty, &.{item}, true);
+    defer prefix.release();
+    const tail = try listGrow(gpa, prefix, &.{target}, true);
+    defer tail.release();
+    const result = try listGrow(gpa, target, &.{prefix}, true);
+    defer result.release();
+    try std.testing.expectEqual(prefix, result.data.list[1]);
+    try std.testing.expectEqual(target, tail.data.list[1]);
+}
+
+test "constant-size snapshot growth preserves shallow visible values" {
+    const gpa = std.testing.allocator;
+    const item = try scalar(gpa, .nothing);
+    defer item.release();
+    const empty = try list(gpa, &.{});
+    defer empty.release();
+    var root = try listGrow(gpa, empty, &.{item}, true);
+    defer root.release();
+    for (0..1000) |_| {
+        const prefix = try listGrow(gpa, empty, &.{item}, true);
+        errdefer prefix.release();
+        const tail = try listGrow(gpa, prefix, &.{root}, true);
+        tail.release();
+        root.release();
+        root = prefix;
+    }
+    try std.testing.expectEqual(@as(u32, 2), root.depth);
+    const grown = try listGrow(gpa, root, &.{item}, true);
+    defer grown.release();
+}
+
+test "List growth and shared writes free everything after any allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, listGrowthAllocations, .{});
+}
+
+fn listGrowthAllocations(gpa: std.mem.Allocator) !void {
+    const item = try scalar(gpa, .nothing);
+    defer item.release();
+    var root = try list(gpa, &.{});
+    defer root.release();
+    for (0..40) |i| {
+        const next = try listGrow(gpa, root, &.{item}, i % 2 == 0);
+        root.release();
+        root = next;
+    }
+    const snapshot = root.retain();
+    defer snapshot.release();
+    try listSet(&root, 0, item);
+    const self = try listGrow(gpa, root, &.{root}, true);
+    defer self.release();
+    const wrapped = try map(gpa, &.{.{ .key = "snapshot", .value = root }});
+    defer wrapped.release();
+    const nested = try listGrow(gpa, self, &.{wrapped}, true);
+    defer nested.release();
+}
 /// A map in insertion order that retains each value and copies each key as
 /// NFC. A key duplicated after normalisation is refused.
 pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
@@ -228,7 +444,8 @@ pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
     }
     const v = try gpa.create(Value);
     errdefer gpa.destroy(v);
-    v.* = .{ .allocator = gpa, .data = .{ .map = try out.toOwnedSlice(gpa) }, .depth = depth };
+    const rank = try ownershipRank(.{ .map = out.items });
+    v.* = .{ .allocator = gpa, .data = .{ .map = try out.toOwnedSlice(gpa) }, .depth = depth, .ownership_rank = rank };
     return v;
 }
 /// A range that retains both ends, which must be numbers or compatible
@@ -254,11 +471,14 @@ pub fn listSet(root: **Value, index: usize, item: *Value) Error!void {
     if (old.data != .list or index >= old.data.list.len) return error.InvalidValue;
     // A unique container can be changed in place unless the new child could
     // contain it. Shared containers copy their spine, retaining every child.
-    if (old.references == 1 and !contains(item, old)) {
+    const unique_storage = if (old.list_storage) |storage| storage.references == 1 else true;
+    const rank = std.math.add(u64, item.ownership_rank, 1) catch return error.OutOfMemory;
+    if (old.references == 1 and unique_storage and !contains(item, old)) {
         if (item.depth + 1 > max_depth) return error.TooDeep;
         _ = item.retain();
         old.data.list[index].release();
         old.data.list[index] = item;
+        old.ownership_rank = @max(old.ownership_rank, rank);
         old.depth = 1;
         for (old.data.list) |v| old.depth = @max(old.depth, v.depth + 1);
     } else {
@@ -268,6 +488,7 @@ pub fn listSet(root: **Value, index: usize, item: *Value) Error!void {
         _ = item.retain();
         v.data.list[index].release();
         v.data.list[index] = item;
+        v.ownership_rank = @max(v.ownership_rank, rank);
         v.depth = @max(v.depth, item.depth + 1);
         root.* = v;
         old.release();
