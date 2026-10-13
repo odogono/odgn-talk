@@ -19,6 +19,7 @@ import importlib.metadata
 import json
 import struct
 import sys
+import time
 import zlib
 from pathlib import Path
 
@@ -86,16 +87,16 @@ class Host:
         source, source_len = self.text(source)
         # talk_load_options: name, name_len, source, source_len, grants,
         # grants_len, grants_as_used and its padding, owner, objects,
-        # objects_len.
-        options = self.alloc(struct.pack("<6I?3x3I", name, name_len, source, source_len, 0, 0, False, 0, 0, 0))
+        # objects_len, limits.
+        options = self.alloc(struct.pack("<6I?3x4I", name, name_len, source, source_len, 0, 0, False, 0, 0, 0, 0))
         out = self.out()
         code = self.call("talk_load", group, options, out)
         return code, self.pointer_at(out)
 
     def deliver(self, script, message):
         name, name_len = self.text(message)
-        # talk_message: name, name_len, args, args_len.
-        packed = self.alloc(struct.pack("<4I", name, name_len, 0, 0))
+        # talk_message: name, name_len, args, args_len, limits.
+        packed = self.alloc(struct.pack("<5I", name, name_len, 0, 0, 0))
         return self.call("talk_script_deliver", script, packed, 0)
 
     def pump(self, group, seconds):
@@ -165,6 +166,54 @@ def containment(engine, module):
     return memory
 
 
+def large_loads(engine, module):
+    """#790: large honest sources load within a 256 MiB instance and retain
+    source/code, rather than the front end's working storage. Time bounds
+    leave room for slow CI Hosts, but catch the former ~80 s Handler load.
+    Each measurement starts in a fresh instance."""
+    sources = {
+        "blank": "\n" * (1 << 20),
+        "handlers50000": "".join(f"on h{i}\nend h{i}\n" for i in range(50_000)),
+        "handlers100000": "".join(f"on h{i}\nend h{i}\n" for i in range(100_000)),
+    }
+    measured = {}
+    for name, source in sources.items():
+        h = Host(engine, module, memory_limit=256 << 20)
+        core = h.call("talk_new") & 0xFFFFFFFF
+        group = h.new_group(core)
+        before = h.group_memory(group)["used"]
+        start = time.perf_counter()
+        code, script = h.load(group, name, source)
+        elapsed = time.perf_counter() - start
+        assert code == OK and script > 0, (name, code)
+        memory = h.group_memory(group)
+        retained = memory["used"] - before
+        limit = (4 if name == "blank" else 64) << 20
+        assert retained <= limit, (name, retained, limit)
+        assert elapsed < 10, (name, elapsed)
+        if name != "blank":
+            # Both ends of the body table run after compiler storage is gone.
+            last = "h49999" if name == "handlers50000" else "h99999"
+            assert h.deliver(script, "h0") == OK
+            assert h.deliver(script, last) == OK
+            assert h.pump(group, 1791633600)[0] == OK
+        measured[name] = {
+            "sourceBytes": len(source.encode()),
+            "seconds": round(elapsed, 4),
+            "retainedBytes": retained,
+            "groupPeakBytes": memory["peak"],
+            "linearMemory": h.memory.data_len(h.store),
+        }
+        h.call("talk_group_release", group)
+        # Destruction frees retained code, and the capped instance remains
+        # usable for another Group and Script.
+        fresh = h.new_group(core)
+        code, script = h.load(fresh, "s", "on ping\nend ping\n")
+        assert code == OK and h.deliver(script, "ping") == OK
+        assert h.pump(fresh, 1791633600)[0] == OK
+    return measured
+
+
 def deep(engine, module):
     """The deepest source the depth guards accept loads and runs on the
     1 MiB stack, a Value nested until its guard stops it raises, and deeper
@@ -229,6 +278,7 @@ def main():
     with_stdlib = instance_memory(engine, module, 'use padLeft from text\non ping\n  put padLeft("7", 3, "0") into x\nend ping\n')
     refused = containment(engine, module)
     nesting = deep(engine, module)
+    loads = large_loads(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -248,6 +298,7 @@ def main():
                 "instanceWithStdlib": with_stdlib,
                 "containment": refused,
                 "nesting": nesting,
+                "largeLoads": loads,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),

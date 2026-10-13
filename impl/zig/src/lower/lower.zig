@@ -134,6 +134,9 @@ pub const Options = struct {
     /// the lowering; the arena when null. The caller then releases each
     /// `Constant.value` once.
     values: ?Allocator = null,
+    /// Backing allocator for per-body working storage, reclaimed when the
+    /// body is finished. The caller's arena when null.
+    scratch: ?Allocator = null,
 };
 
 /// Lowers a checked unit with no diagnostics. Everything is allocated in
@@ -145,7 +148,14 @@ pub fn lower(arena: Allocator, tree: *const ast.Tree, checked: *const check.Resu
         .checked = checked,
         .options = options,
         .lines = try .init(arena, tree.source),
+        .declaration_bodies = try arena.alloc(?*const check.Body, tree.declarations.len),
     };
+    @memset(l.declaration_bodies, null);
+    for (checked.bodies) |*b| {
+        if (b.lambda) |e| {
+            try l.lambda_bodies.put(arena, e, b);
+        } else if (b.declaration) |d| l.declaration_bodies[d] = b;
+    }
     // The pool's values outlive the arena, so a refusal releases them.
     errdefer if (options.values != null) for (l.values.items) |c| if (c == .value) c.value.release();
     try l.run();
@@ -184,6 +194,8 @@ const Lowerer = struct {
     functions: std.StringHashMapUnmanaged(u32) = .empty,
     /// The next clause number of each Handler selector.
     clauses: std.StringHashMapUnmanaged(u32) = .empty,
+    declaration_bodies: []?*const check.Body,
+    lambda_bodies: std.AutoHashMapUnmanaged(*const Expr, *const check.Body) = .empty,
 
     fn position(l: *Lowerer, t: Tok) Position {
         const p = l.lines.position(l.tree.tokens[t].start);
@@ -358,18 +370,15 @@ const Lowerer = struct {
     }
 
     fn checkerBody(l: *Lowerer, kind: check.BodyKind, decl: ?u32, lambda: ?*const Expr) *const check.Body {
-        for (l.checked.bodies) |*b| {
-            if (b.kind != kind) continue;
-            if (lambda) |e| {
-                if (b.lambda == e) return b;
-            } else if (b.declaration == decl) return b;
-        }
-        unreachable;
+        const b = if (lambda) |e| l.lambda_bodies.get(e).? else if (decl) |d| l.declaration_bodies[d].? else &l.checked.bodies[0];
+        std.debug.assert(b.kind == kind);
+        return b;
     }
 
     fn initialiser(l: *Lowerer) Allocator.Error!void {
         const cb = l.checkerBody(.init, null, null);
         var f = try Frame.init(l, .init, "initialiser", cb);
+        defer f.deinit();
         try f.finishSlots();
         for (l.tree.declarations) |d| switch (d.data) {
             .script_variable => |v| if (v.value) |e| {
@@ -401,6 +410,7 @@ const Lowerer = struct {
     fn function(l: *Lowerer, fun: *const ast.Function, decl: u32) Allocator.Error!*BodyCode {
         const cb = l.checkerBody(.function, decl, null);
         var f = try Frame.init(l, .function, l.text(fun.name), cb);
+        defer f.deinit();
         var params: std.ArrayList([]const u8) = .empty;
         for (fun.params) |p| {
             _ = try f.addSlot(l.text(p.name));
@@ -420,6 +430,7 @@ const Lowerer = struct {
         const cb = l.checkerBody(kind, decl, null);
         const name = if (h.fallback) "any message" else try l.selector(h.name, h.labels);
         var f = try Frame.init(l, if (h.fallback) .fallback else .handler, name, cb);
+        defer f.deinit();
         const counter = try l.clauses.getOrPut(l.a, name);
         if (!counter.found_existing) counter.value_ptr.* = 0;
         counter.value_ptr.* += 1;
@@ -487,10 +498,25 @@ const Lowerer = struct {
 
     /// Lays out the bodies' code in body order, resolving labels.
     fn finish(l: *Lowerer) Allocator.Error!Unit {
+        var instructions: usize = 0;
+        var unwinds: usize = 0;
+        var records: usize = 0;
+        for (l.bodies.items) |maybe| {
+            const b = maybe.?;
+            instructions += b.code.items.len;
+            unwinds += b.unwind.items.len;
+            records += b.offers.items.len;
+        }
         var code: std.ArrayList(Instruction) = .empty;
         var bodies: std.ArrayList(Body) = .empty;
         var unwind: std.ArrayList(Unwind) = .empty;
         var offers: std.ArrayList(OfferRecord) = .empty;
+        // The sizes are known now. Growing these buffers in an arena would
+        // retain each superseded allocation alongside the bodies' buffers.
+        try code.ensureTotalCapacityPrecise(l.a, instructions);
+        try bodies.ensureTotalCapacityPrecise(l.a, l.bodies.items.len);
+        try unwind.ensureTotalCapacityPrecise(l.a, unwinds);
+        try offers.ensureTotalCapacityPrecise(l.a, records);
         for (l.bodies.items, 0..) |maybe, body_index| {
             const b = maybe.?;
             const base: u32 = @intCast(code.items.len);
@@ -584,6 +610,7 @@ const Frame = struct {
     body: *BodyCode,
     kind: BodyKind,
     checker: ?*const check.Body,
+    scratch: std.heap.ArenaAllocator,
     slots: std.ArrayList([]const u8) = .empty,
     names: std.StringHashMapUnmanaged(u32) = .empty,
     first_temp: u32 = 0,
@@ -604,16 +631,25 @@ const Frame = struct {
 
     fn init(l: *Lowerer, kind: BodyKind, name: []const u8, checker: ?*const check.Body) Allocator.Error!Frame {
         const b = try l.newBody(.{ .kind = kind, .name = name, .params = &.{}, .locals = 0, .may_suspend = false, .first = 0, .last = 0 });
-        var f: Frame = .{ .l = l, .body = b, .kind = kind, .checker = checker };
+        var f: Frame = .{ .l = l, .body = b, .kind = kind, .checker = checker, .scratch = .init(l.options.scratch orelse l.a) };
+        errdefer f.scratch.deinit();
         _ = try f.addSlot("it");
         return f;
+    }
+
+    fn a(f: *Frame) Allocator {
+        return f.scratch.allocator();
+    }
+
+    fn deinit(f: *Frame) void {
+        f.scratch.deinit();
     }
 
     fn addSlot(f: *Frame, name: []const u8) Allocator.Error!u32 {
         if (f.names.get(name)) |s| return s;
         const s: u32 = @intCast(f.slots.items.len);
-        try f.slots.append(f.l.a, name);
-        try f.names.put(f.l.a, name, s);
+        try f.slots.append(f.a(), name);
+        try f.names.put(f.a(), name, s);
         return s;
     }
 
@@ -627,7 +663,7 @@ const Frame = struct {
                 try shown.append(f.l.a, f.l.text(p.data.name));
             } else {
                 const s: u32 = @intCast(f.slots.items.len);
-                try f.slots.append(f.l.a, try f.l.print("({d})", .{s}));
+                try f.slots.append(f.a(), try f.l.print("({d})", .{s}));
                 try shown.append(f.l.a, "…");
             }
         }
@@ -648,7 +684,7 @@ const Frame = struct {
             f.body.info.capture_slot = @intCast(f.slots.items.len);
             for (cb.captures) |c| _ = try f.addSlot(c);
             f.body.info.captures = @intCast(cb.captures.len);
-            const order = try f.l.a.alloc(usize, cb.locals.len);
+            const order = try f.a().alloc(usize, cb.locals.len);
             for (order, 0..) |*o, i| o.* = i;
             std.mem.sort(usize, order, cb, struct {
                 fn less(b: *const check.Body, x: usize, y: usize) bool {
@@ -667,9 +703,9 @@ const Frame = struct {
             const i = s - f.first_temp;
             if (i < f.in_use.items.len and !f.in_use.items[i]) break;
         }
-        if (s == f.slots.items.len) try f.slots.append(f.l.a, try f.l.print("({d})", .{s}));
+        if (s == f.slots.items.len) try f.slots.append(f.a(), try f.l.print("({d})", .{s}));
         const i = s - f.first_temp;
-        while (f.in_use.items.len <= i) try f.in_use.append(f.l.a, false);
+        while (f.in_use.items.len <= i) try f.in_use.append(f.a(), false);
         f.in_use.items[i] = true;
         return s;
     }
@@ -821,7 +857,7 @@ const Frame = struct {
                 try f.expr(t.duration);
                 try f.emit(.timeout_start, &.{}, first, "");
                 f.depth += 1;
-                try f.exits.append(f.l.a, .timeout);
+                try f.exits.append(f.a(), .timeout);
                 try f.block(t.body);
                 _ = f.exits.pop();
                 f.depth -= 1;
@@ -893,7 +929,7 @@ const Frame = struct {
                 .finally => |fin| if (fin.block) |b| {
                     // The copy runs with only the constructs outside it open.
                     const all = f.exits;
-                    const exits = try f.l.a.dupe(Exit, f.exits.items[0..i]);
+                    const exits = try f.a().dupe(Exit, f.exits.items[0..i]);
                     f.exits = .fromOwnedSlice(exits);
                     try f.block(b);
                     f.exits = all;
@@ -908,7 +944,7 @@ const Frame = struct {
     /// `try` from `exits` index `outer` in.
     fn exclude(f: *Frame, outer: usize, start: u32) void {
         for (f.exits.items[outer..]) |e| switch (e) {
-            .finally => |fin| f.tries.items[fin.try_index].exclusions.append(f.l.a, .{ start, f.pc() }) catch {},
+            .finally => |fin| f.tries.items[fin.try_index].exclusions.append(f.a(), .{ start, f.pc() }) catch {},
             else => {},
         };
     }
@@ -997,7 +1033,7 @@ const Frame = struct {
             },
             .forever => try f.mark(top),
         }
-        try f.exits.append(f.l.a, .{ .loop = .{ .next = top, .exit = exit, .iterator = iterator } });
+        try f.exits.append(f.a(), .{ .loop = .{ .next = top, .exit = exit, .iterator = iterator } });
         try f.block(r.body);
         _ = f.exits.pop();
         if (r.collecting) |c| {
@@ -1068,11 +1104,11 @@ const Frame = struct {
     fn tryStatement(f: *Frame, t: ast.Try, at: Tok) Allocator.Error!void {
         const l = f.l;
         const index = f.tries.items.len;
-        try f.tries.append(l.a, .{});
+        try f.tries.append(f.a(), .{});
         const fin: ?ast.Block = if (t.finally) |x| x.body else null;
         const after = try f.newLabel();
         // The protected body, with this `try` open.
-        try f.exits.append(l.a, .{ .finally = .{ .block = fin, .try_index = index } });
+        try f.exits.append(f.a(), .{ .finally = .{ .block = fin, .try_index = index } });
         const body_start = f.pc();
         try f.block(t.body);
         const body_end = f.pc();
@@ -1156,10 +1192,10 @@ const Frame = struct {
         if (fin) |b| {
             const open = f.exits.pop().?;
             try f.block(b);
-            try f.exits.append(f.l.a, open);
+            try f.exits.append(f.a(), open);
         }
         try f.jump(.jump, after, at);
-        try f.tries.items[index].exclusions.append(f.l.a, .{ start, f.pc() });
+        try f.tries.items[index].exclusions.append(f.a(), .{ start, f.pc() });
     }
 
     /// Entries for `[from, to)` less the excluded ranges, one per span.
@@ -1342,6 +1378,7 @@ const Frame = struct {
         for (captured.items) |name| try f.load(f.names.get(name).?, at);
         const body_index = try l.reserve();
         var e = try Frame.init(l, .event, message, null);
+        defer e.deinit();
         const params = try e.parameters(ev.patterns);
         e.capture_names = captured.items;
         e.body.info.capture_names = captured.items;
@@ -1898,7 +1935,7 @@ const Frame = struct {
             .temps => {
                 const t = try f.temp();
                 try f.store(t, at);
-                try f.pending.append(f.l.a, .{ .name = n, .temp = t });
+                try f.pending.append(f.a(), .{ .name = n, .temp = t });
             },
         }
     }
@@ -2473,6 +2510,7 @@ const Frame = struct {
         // Number the body now, so nested Lambdas follow it.
         const index = try l.reserve();
         var inner = try Frame.init(l, .lambda, name, cb);
+        defer inner.deinit();
         const params = try inner.parameters(lam.params);
         try inner.finishSlots();
         const fail = try inner.newLabel();

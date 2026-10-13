@@ -117,6 +117,62 @@ test "a Group past its cap refuses mid-Pump and gives back every byte" {
     try std.testing.expect(memory.refused);
 }
 
+test "large loads retain source and code, not compiler working storage" {
+    const machine = @import("machine.zig");
+    const gpa = std.testing.allocator;
+    var memory: GroupAllocator = .init(gpa, 64 << 20);
+    var group: machine.Group = .init(memory.allocator(), null);
+    defer group.deinit();
+    const blank = try gpa.alloc(u8, 100_000);
+    defer gpa.free(blank);
+    @memset(blank, '\n');
+    const before = memory.used;
+    _ = try group.load("blank", blank, .{});
+    try std.testing.expect(memory.used - before < blank.len * 2 + (64 << 10));
+
+    var source: std.ArrayList(u8) = .empty;
+    defer source.deinit(gpa);
+    const count = 1000;
+    for (0..count) |i| {
+        const handler = try std.fmt.allocPrint(gpa, "on h{d}\nend h{d}\n", .{ i, i });
+        defer gpa.free(handler);
+        try source.appendSlice(gpa, handler);
+    }
+    const loaded = memory.used;
+    _ = try group.load("handlers", source.items, .{});
+    try std.testing.expect(memory.used - loaded < source.items.len * 2 + count * 768);
+    // Dispatch both ends of the body table after temporary storage is gone.
+    _ = try group.deliver("handlers", "h0", &.{}, false);
+    _ = try group.deliver("handlers", "h999", &.{}, false);
+    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+
+    const script = group.script("handlers").?;
+    const extending = memory.used;
+    try std.testing.expectEqual(machine.Group.ExtendResult.extended, try group.extend(script, blank));
+    try std.testing.expect(memory.used - extending < blank.len * 2 + (64 << 10));
+    const reloading = memory.used;
+    try std.testing.expectEqual(machine.Group.ReloadResult.reloaded, try group.reload(script, blank, false, false));
+    try std.testing.expect(memory.used <= reloading);
+
+    // Libraries use the same compiler storage policy, including a retained
+    // source for replacement and save/restore.
+    var libraries: GroupAllocator = .init(gpa, 64 << 20);
+    const compiled = try machine.compileLibrary(libraries.allocator(), "lib", "1", blank, &.{}, null);
+    const library = compiled.library;
+    defer library.destroy();
+    try std.testing.expect(libraries.used < blank.len * 2 + (64 << 10));
+}
+
+fn compileAllocations(a: Allocator) !void {
+    const machine = @import("machine.zig");
+    const compiled = try machine.compileLibrary(a, "lib", "1", "constant k = [1, 2]\nfunction twice x\n  return x * 2\nend twice\n", &.{}, null);
+    defer compiled.library.destroy();
+}
+
+test "Library compilation frees code and Values on every allocation refusal" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, compileAllocations, .{});
+}
+
 test "a refusal at any allocation leaves nothing behind" {
     const machine = @import("machine.zig");
     const caller =

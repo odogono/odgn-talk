@@ -468,7 +468,7 @@ pub const Script = struct {
     identity: [32]u8,
     /// The arena that owns its name, Grants and objects.
     arena: std.heap.ArenaAllocator,
-    /// The arena that owns its source, tree and code unit, which a Reload
+    /// The arena that owns its source and code unit, which a Reload
     /// replaces.
     code: std.heap.ArenaAllocator,
     source: []const u8 = "",
@@ -673,9 +673,13 @@ pub const Diagnostic = struct { code: []const u8, line: u32, column: u32 };
 /// every one its `use` lines name besides the stdlib's.
 pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, source: []const u8, given: []const *Library, declarations: ?[]const NamedGrant) !Compiled {
     var arena: std.heap.ArenaAllocator = .init(gpa);
-    errdefer arena.deinit();
-    const a = arena.allocator();
-    const src = try a.dupe(u8, source);
+    var owns_arena = true;
+    defer if (owns_arena) arena.deinit();
+    const kept = arena.allocator();
+    var scratch: std.heap.ArenaAllocator = .init(gpa);
+    defer scratch.deinit();
+    const a = scratch.allocator();
+    const src = try kept.dupe(u8, source);
     var lines: lexer.Lines = try .init(a, src);
     const refused = struct {
         fn one(al: Allocator, ls: *lexer.Lines, code: []const u8, offset: usize) ![]const Diagnostic {
@@ -685,17 +689,16 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
             return out;
         }
     };
-    const tree = switch (try parser.parse(a, src)) {
+    const tree = switch (try parser.parseWithScratch(a, gpa, src)) {
         .failure => |d| {
             const diags = try refused.one(gpa, &lines, d.code.spelling(), d.offset);
-            arena.deinit();
             return .{ .refused = diags };
         },
         .tree => |t| t,
     };
     const t = try a.create(ast.Tree);
     t.* = tree;
-    const imports = try resolveImports(a, t, given);
+    const imports = try resolveImports(kept, t, given);
     var views: std.ArrayList(check.Library) = .empty;
     for (given) |l| try views.append(a, .{ .name = l.name, .exports = l.exports });
     var context: check.Context = .{ .library = true, .libraries = views.items };
@@ -713,42 +716,57 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
             const p = lines.position(d.offset);
             x.* = .{ .code = d.code.spelling(), .line = @intCast(p.line), .column = @intCast(p.column) };
         }
-        arena.deinit();
         return .{ .refused = diags };
     }
-    const own_name = try a.dupe(u8, name);
-    const unit = try lower.lower(a, t, &checked, .{ .name = own_name, .context = context, .values = gpa });
+    const own_name = try kept.dupe(u8, name);
+    const temporary = try lower.lower(a, t, &checked, .{ .name = own_name, .context = context, .values = gpa, .scratch = gpa });
+    var owns_values = true;
+    errdefer if (owns_values) for (temporary.values) |v| if (v == .value) v.value.release();
+    const storage = @import("../lower/storage.zig");
+    const unit = try storage.copy(kept, temporary);
+    const exports_view = try check.exportsWithScratch(gpa, gpa, t, &checked);
+    defer gpa.free(exports_view);
+    const exported = try storage.copy(kept, exports_view);
     var needs: std.ArrayList(check.Need) = .empty;
     try needs.appendSlice(a, checked.needs);
     for (imports) |l| try needs.appendSlice(a, l.needs);
+    const held_needs = try storage.copy(kept, needs.items);
+    const version_label = try kept.dupe(u8, label);
+    const grant_declarations: ?[]const NamedGrant = if (declarations) |named| blk: {
+        const declared = try kept.alloc(NamedGrant, named.len);
+        for (named, declared) |n, *k| k.* = .{ .name = try kept.dupe(u8, n.name), .grant = n.grant };
+        break :blk declared;
+    } else null;
     const l = try gpa.create(Library);
     l.* = .{
         .gpa = gpa,
         .arena = arena,
         .name = own_name,
-        .version = try a.dupe(u8, label),
+        .version = version_label,
         .source = src,
         .identity = codeIdentity(name, source, .library, imports),
         .unit = unit,
         .definitions = &.{},
         .imports = imports,
-        .exports = try check.exports(a, t, &checked),
-        .needs = needs.items,
+        .exports = exported,
+        .needs = held_needs,
+        .declarations = grant_declarations,
     };
-    if (declarations) |named| {
-        const kept = try a.alloc(NamedGrant, named.len);
-        for (named, kept) |n, *k| k.* = .{ .name = try a.dupe(u8, n.name), .grant = n.grant };
-        l.declarations = kept;
-    }
+    owns_arena = false;
+    owns_values = false;
+    errdefer l.destroy();
     // Its Constants and defaults: its initialiser, which may use only
     // literals, Constants and Built-ins, run once.
-    l.definitions = try gpa.alloc(*Value, unit.definitions.len);
-    for (l.definitions, unit.definitions) |*v, d| v.* = try importedDefinition(imports, d) orelse try nothing(gpa);
     var group: Group = .init(gpa, null);
     defer group.deinit();
+    l.definitions = try group.newValues(unit.definitions.len, unit.definitions, imports);
     var host: Script = .{ .name = own_name, .identity = l.identity, .arena = .init(gpa), .code = .init(gpa), .unit = unit, .variables = &.{}, .definitions = l.definitions };
     var run: Run = .{ .id = "", .script = &host, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
-    defer run.frames.deinit(gpa);
+    defer {
+        group.abandonUnwinding(&run);
+        while (run.frames.items.len > 0) group.popFrame(&run);
+        run.frames.deinit(gpa);
+    }
     try group.pushFrame(&run, 0, &.{});
     switch (try group.execute(&run, false)) {
         .returned => |v| v.release(),
@@ -1416,13 +1434,15 @@ pub const Group = struct {
         s.name = try a.dupe(u8, name);
         s.source = try ca.dupe(u8, source);
         var parsed = try g.parseCode(ca, s.source);
+        defer parsed.deinit();
         s.imports = parsed.imports;
         s.identity = codeIdentity(name, source, .script, s.imports);
         g.write("> load {s} identity={x}\n", .{ name, s.identity });
-        var context = try g.codeContext(ca, options.context, options.objects, options.owner);
+        const pa = parsed.arena.allocator();
+        var context = try g.codeContext(pa, options.context, options.objects, options.owner);
         if (options.grants) |named| {
-            const viewed = try ca.alloc(check.Grant, named.len);
-            for (named, viewed) |n, *v| v.* = .{ .name = try ca.dupe(u8, n.name), .operations = try capabilities.checkOperations(ca, n.grant) };
+            const viewed = try pa.alloc(check.Grant, named.len);
+            for (named, viewed) |n, *v| v.* = .{ .name = try pa.dupe(u8, n.name), .operations = try capabilities.checkOperations(pa, n.grant) };
             context.grants = viewed;
         }
         var refused: usize = 0;
@@ -1469,16 +1489,30 @@ pub const Group = struct {
         return .{ .loaded = s };
     }
 
-    /// A Script's or extension's source, parsed in `a`: its tree or its
-    /// syntax error, and the Libraries its `use` lines import that the Group
-    /// holds, which its identity covers. One that doesn't parse names none.
-    pub const Parsed = struct { lines: lexer.Lines, result: parser.Result, imports: []*Library };
+    /// A Script's or extension's temporary parse, and the Libraries its
+    /// `use` lines import. The import slice lives in the caller's code
+    /// storage; the tree and line index live only until `deinit`.
+    pub const Parsed = struct {
+        arena: std.heap.ArenaAllocator,
+        lines: lexer.Lines,
+        result: parser.Result,
+        imports: []*Library,
+
+        pub fn deinit(self: *Parsed) void {
+            var arena = self.arena;
+            self.arena = .init(arena.child_allocator);
+            arena.deinit();
+        }
+    };
 
     pub fn parseCode(g: *Group, a: Allocator, source: []const u8) !Parsed {
-        const lines: lexer.Lines = try .init(a, source);
-        const result = try parser.parse(a, source);
+        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        errdefer arena.deinit();
+        const scratch = arena.allocator();
+        const lines: lexer.Lines = try .init(scratch, source);
+        const result = try parser.parseWithScratch(scratch, g.gpa, source);
         const imports: []*Library = if (result == .tree) try resolveImports(a, &result.tree, g.libraries.items) else &.{};
-        return .{ .lines = lines, .result = result, .imports = imports };
+        return .{ .arena = arena, .lines = lines, .result = result, .imports = imports };
     }
 
     /// What a Script's code is checked against, from `base`: its well-known
@@ -1503,8 +1537,14 @@ pub const Group = struct {
     pub const Lowered = struct { unit: lower.Unit, names: []const check.Inherited };
 
     /// Checks and lowers parsed code in `a`, writing its `diag` records
-    /// under `label`: null when refused, with how many in `refused`.
-    pub fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *const Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
+    /// under `label`: null when refused, with how many in `refused`. A
+    /// successful lowering releases the parse storage before keeping code.
+    pub fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
+        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        defer arena.deinit();
+        const scratch = arena.allocator();
+        var checking: std.heap.ArenaAllocator = .init(g.gpa);
+        defer checking.deinit();
         var lines = parsed.lines;
         const tree = switch (parsed.result) {
             .failure => |d| {
@@ -1515,12 +1555,12 @@ pub const Group = struct {
             },
             .tree => |t| t,
         };
-        const t = try a.create(ast.Tree);
+        const t = try scratch.create(ast.Tree);
         t.* = tree;
-        const checked = try check.check(a, t, context);
+        const checked = try check.check(checking.allocator(), t, context);
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
-        try diagnostics.appendSlice(a, checked.diagnostics);
-        try g.libraryNeeds(a, t, context.grants orelse &.{}, &diagnostics);
+        try diagnostics.appendSlice(scratch, checked.diagnostics);
+        try g.libraryNeeds(scratch, t, context.grants orelse &.{}, &diagnostics);
         std.mem.sort(check.Diagnostic, diagnostics.items, {}, struct {
             fn less(_: void, x: check.Diagnostic, y: check.Diagnostic) bool {
                 return x.offset < y.offset;
@@ -1534,13 +1574,13 @@ pub const Group = struct {
             refused.* = diagnostics.items.len;
             return null;
         }
-        const unit = try lower.lower(a, t, &checked, .{ .name = unit_name, .context = context, .values = g.gpa });
+        const unit = try lower.lower(scratch, t, &checked, .{ .name = unit_name, .context = context, .values = g.gpa, .scratch = g.gpa });
         // Its constant pool's values are the Group's until the caller holds
         // the unit.
         errdefer for (unit.values) |v| if (v == .value) v.value.release();
         // A Text Pattern literal over the Script's `patternSize` is a load
         // error, at its opening `<`.
-        const oversized = try oversizedPatterns(a, &unit, pattern_size);
+        const oversized = try oversizedPatterns(scratch, &unit, pattern_size);
         if (oversized.len > 0) {
             for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ label, p.line, p.column });
             for (unit.values) |v| if (v == .value) v.value.release();
@@ -1550,17 +1590,24 @@ pub const Group = struct {
         // What it declares, linked from `@<unit>`, and what its `use` lines
         // import, linked from their Libraries.
         var names: std.ArrayList(check.Inherited) = .empty;
-        const link = try std.fmt.allocPrint(a, "@{s}", .{unit_name});
-        for (try check.exports(a, t, &checked)) |e| try names.append(a, .{ .name = e.name, .unit = link, .export_ = e });
+        defer names.deinit(g.gpa);
+        const link = try std.fmt.allocPrint(scratch, "@{s}", .{unit_name});
+        const exported = try check.exportsWithScratch(g.gpa, g.gpa, t, &checked);
+        defer g.gpa.free(exported);
+        for (exported) |e| try names.append(g.gpa, .{ .name = e.name, .unit = link, .export_ = e });
         for (t.declarations) |d| if (d.data == .use) {
             const u = d.data.use;
             const library = t.text(u.library);
             for (u.names) |n| {
                 const ex = check.libraryExport(context, library, t.text(n)) orelse continue;
-                try names.append(a, .{ .name = t.text(u.rename orelse n), .unit = library, .export_ = ex });
+                try names.append(g.gpa, .{ .name = t.text(u.rename orelse n), .unit = library, .export_ = ex });
             }
         };
-        return .{ .unit = unit, .names = names.items };
+        // Lowered code and names borrow only the source or the checker
+        // and lowering storage now. Drop the tree before retaining code.
+        parsed.deinit();
+        const held = try @import("../lower/storage.zig").copy(a, Lowered{ .unit = unit, .names = names.items });
+        return held;
     }
 
     /// Runs a unit's initialiser once, uncharged: false, with its
@@ -1660,7 +1707,8 @@ pub const Group = struct {
         const a = l.arena.allocator();
         l.name = try std.fmt.allocPrint(a, "{s}+{d}", .{ s.name, number });
         l.source = try a.dupe(u8, source);
-        const parsed = try g.parseCode(a, l.source);
+        var parsed = try g.parseCode(a, l.source);
+        defer parsed.deinit();
         l.identity = codeIdentity(s.name, source, .extension, parsed.imports);
         const identity = extendedIdentity(s.identity, l.identity);
         if (input) if (g.trace) |out| {
@@ -1688,11 +1736,12 @@ pub const Group = struct {
                 }
             }
         }
+        const pa = parsed.arena.allocator();
         var inherited: std.ArrayList(check.Inherited) = .empty;
-        for (s.variableNames()) |n| try inherited.append(a, .{ .name = n, .variable = true });
-        try inherited.appendSlice(a, s.names.items);
-        var context = try g.codeContext(a, .{}, s.objects, s.owner);
-        context.grants = try keptView(a, s.grants, how == .restore or how == .rebuild_restored);
+        for (s.variableNames()) |n| try inherited.append(pa, .{ .name = n, .variable = true });
+        try inherited.appendSlice(pa, s.names.items);
+        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        context.grants = try keptView(pa, s.grants, how == .restore or how == .rebuild_restored);
         context.inherited = inherited.items;
         var refused: usize = 0;
         const code = try g.lowerCode(a, l.name, l.name, &parsed, context, s.limits.pattern_size, &refused) orelse return .refused;
@@ -1776,6 +1825,7 @@ pub const Group = struct {
         const ca = fresh.code.allocator();
         fresh.source = try ca.dupe(u8, source);
         var parsed = try g.parseCode(ca, fresh.source);
+        defer parsed.deinit();
         fresh.imports = parsed.imports;
         fresh.identity = codeIdentity(s.name, source, .script, fresh.imports);
         if (g.trace) |out| {
@@ -1819,10 +1869,11 @@ pub const Group = struct {
     /// refuses.
     /// A variables-only restore checks against its revoked Grants too, which
     /// still bind their names.
-    pub fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *const Parsed, extensions: []const []const u8, revoked: bool) !bool {
+    pub fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *Parsed, extensions: []const []const u8, revoked: bool) !bool {
         const ca = fresh.code.allocator();
-        var context = try g.codeContext(ca, .{}, s.objects, s.owner);
-        context.grants = try keptView(ca, s.grants, revoked);
+        const pa = parsed.arena.allocator();
+        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        context.grants = try keptView(pa, s.grants, revoked);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, parsed, context, s.limits.pattern_size, &refused) orelse return false;
         fresh.unit = code.unit;
@@ -1842,11 +1893,13 @@ pub const Group = struct {
         g.trace = null;
         defer g.trace = trace;
         const ca = s.code.allocator();
-        const parsed = try g.parseCode(ca, s.source);
+        var parsed = try g.parseCode(ca, s.source);
+        defer parsed.deinit();
         s.imports = parsed.imports;
         s.identity = codeIdentity(s.name, s.source, .script, s.imports);
-        var context = try g.codeContext(ca, .{}, s.objects, s.owner);
-        context.grants = try keptView(ca, s.grants, true);
+        const pa = parsed.arena.allocator();
+        var context = try g.codeContext(pa, .{}, s.objects, s.owner);
+        context.grants = try keptView(pa, s.grants, true);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, &parsed, context, s.limits.pattern_size, &refused) orelse return false;
         s.unit = code.unit;
@@ -2022,6 +2075,7 @@ pub const Group = struct {
                 const ca = fresh.code.allocator();
                 fresh.source = try ca.dupe(u8, s.source);
                 var parsed = try g.parseCode(ca, fresh.source);
+                defer parsed.deinit();
                 fresh.imports = parsed.imports;
                 const sources = try ca.alloc([]const u8, s.extensions.items.len);
                 for (s.extensions.items, sources) |x, *src| src.* = try ca.dupe(u8, x.source);
