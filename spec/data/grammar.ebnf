@@ -104,7 +104,7 @@ Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* only chunks and keys on the path to a root Name, or else `not a container` */
-PropertyTarget ::= ChunkLevel  /* a key target with only chunks and keys on the path to a root Name, me, it or the target; see chapter 4 */
+PropertyTarget ::= ChunkLevel  /* a Container, or a key target with only chunks and keys on the path to me, it or the target; see chapter 4 */
 Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?

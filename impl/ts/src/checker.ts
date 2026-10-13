@@ -695,6 +695,7 @@ export const checkSyntax = (
     }
   }
   // Follow a Container to its Name; implicit set roots remain value reads.
+  // `the target` has no child nodes, so the walk stops without marking a write.
   const containers: { node: SyntaxNode; root: Site }[] = [];
   for (const { element } of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Container') {

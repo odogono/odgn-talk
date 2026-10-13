@@ -470,8 +470,8 @@ A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first ite
 - **`set c to e`** writes a whole property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
 
 A `set` property target may be rooted in a Name, `me`, `it` or `the target`,
-with only keys and chunks along the path and a key as its final step.
-Parentheses, quoted keys and computed keys follow the same rules for every
+with only keys and chunks along the path. Rooted in `me`, `it` or `the target`,
+its final step must be a key. Parentheses, quoted keys and computed keys follow the same rules for every
 root. Intermediate keys and chunks read the receiving Object: for example,
 `set the label of item 2 of it to "Open"` works when that item is a Host Object.
 `set item 2 of the tags of it to "new"` is `not a container`: `set` does not

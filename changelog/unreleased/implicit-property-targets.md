@@ -1,5 +1,5 @@
 ---
-type: fix
+type: feat
 scope: spec
 breaking: true
 ---

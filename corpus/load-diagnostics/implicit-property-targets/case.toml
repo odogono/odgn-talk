@@ -34,6 +34,10 @@ name = "me-put-key"
 source = "me-put-key.talk"
 
 [[scripts]]
+name = "me-delete-key"
+source = "me-delete-key.talk"
+
+[[scripts]]
 name = "me-chunk"
 source = "me-chunk.talk"
 
@@ -54,6 +58,10 @@ name = "it-put-key"
 source = "it-put-key.talk"
 
 [[scripts]]
+name = "it-add-key"
+source = "it-add-key.talk"
+
+[[scripts]]
 name = "it-chunk"
 source = "it-chunk.talk"
 
@@ -72,6 +80,10 @@ source = "target-bare-put.talk"
 [[scripts]]
 name = "target-put-key"
 source = "target-put-key.talk"
+
+[[scripts]]
+name = "target-multiply-key"
+source = "target-multiply-key.talk"
 
 [[scripts]]
 name = "target-chunk"

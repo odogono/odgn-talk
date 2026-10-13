@@ -1,4 +1,4 @@
-# Unblessed: implicit property target diagnostics (#744); first blessing awaits human review.
+# First blessing approved for #744 on 2026-10-13; see docs/reviews/implicit-property-targets/README.md.
 > load readonly identity=f27f2f34180cd5f00c59f45bef5a96aeea4878a5bdaa449557863164fd63faa2
 diag readonly code="can't write" pos=2:3
 > load readonly-computed identity=a061cc77b68d9194e13855c5f8fdf5f0dae41a923fcb3555cd2e55a94b0350d3
@@ -9,6 +9,8 @@ diag me-bare-set code="not a container" pos=2:7
 diag me-bare-put code="not a container" pos=2:14
 > load me-put-key identity=19d4112d7b9c487a0daccfa04b30a39865b151aaa1924b2bd2735af60b995da9
 diag me-put-key code="not a container" pos=2:14
+> load me-delete-key identity=86ce368a0cdd618aa4d268a37b4fa11bb501b993b01fbfc74ba0b09ec4b8718e
+diag me-delete-key code="not a container" pos=2:10
 > load me-chunk identity=d146517310bd52ac1d2bef3b520e26d854c3f37bdfa1ff21d1a360e76f8c295a
 diag me-chunk code="not a container" pos=2:7
 > load me-builtin identity=7848e4f1be5032e0ee3b51cfc4c25a29b028d0f8f4928637edd8ec20b68262f2
@@ -19,6 +21,8 @@ diag it-bare-set code="not a container" pos=2:7
 diag it-bare-put code="not a container" pos=2:14
 > load it-put-key identity=bc8f4a1720b6fe4fc6501b16700dc37dd17fed807c2a7fcbb39ee9458548f4f9
 diag it-put-key code="not a container" pos=2:14
+> load it-add-key identity=4a0bbbf11e18bbfa8261bb4dd97016ebeaba86d23e7a802c778570ac58785a76
+diag it-add-key code="not a container" pos=2:12
 > load it-chunk identity=4b51f82d474be2825b1fe829ca69dfbadfc8ea0481d8cb3d5de0368c92165852
 diag it-chunk code="not a container" pos=2:7
 > load it-builtin identity=86ce9c410515f973094455fa7203c29404cdde6cd1d65e0877394cee10bf8d3e
@@ -29,6 +33,8 @@ diag target-bare-set code="not a container" pos=2:7
 diag target-bare-put code="not a container" pos=2:14
 > load target-put-key identity=cad90d332bd62998627ae7695c527cd8615172f081af1b3f375e32992800a017
 diag target-put-key code="not a container" pos=2:14
+> load target-multiply-key identity=d77373a511fbf8620555ea8458973f87fce97c054457e767ca9e01648b50332a
+diag target-multiply-key code="not a container" pos=2:12
 > load target-chunk identity=7ba935df8d171d2f92b77b6b09b958541277e3fdd2750e3b5d773c641e894977
 diag target-chunk code="not a container" pos=2:7
 > load target-builtin identity=65a8f1386147f7fdb7fb8821e25abe2dd73f08314ff89a3c3cb67ebd7119459d

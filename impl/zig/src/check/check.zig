@@ -2339,7 +2339,8 @@ test "every corpus unit gives the diagnostics its case expects" {
         const case = std.fs.path.dirname(entry.path) orelse continue;
         // Cases whose diagnostics need an Operation's Shapes, a Text Pattern
         // program, a run, a Library's calls held to its importer's Grants, or
-        // a Grant revoked before a Reload: the runner's.
+        // a Grant revoked before a Reload: the runner's. Object-kind
+        // declarations (`*-properties`, `implicit-property-targets`) are too.
         if (among(case, &.{
             "load-diagnostics/object-properties",       "load-diagnostics/pattern-too-large",         "load-diagnostics/initialiser-failed",
             "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",           "capabilities/effect-replace-library",

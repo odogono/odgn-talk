@@ -1,5 +1,5 @@
-# Unblessed: implicit property targets (#744); first blessing awaits human review.
-> load s identity=d81d7ddaec49face59d2953907cd80809daf8322512b4528280a334eeb5a6a34
+# First blessing approved for #744 on 2026-10-13; see docs/reviews/implicit-property-targets/README.md.
+> load s identity=cdc21d11fb7cde04f95487ef91fa695852280bed0c8169ded06573110af961a2
 > load unowned identity=98b9c0eb0f23458883bae9e27f60c34bb067c88a2fe48f8229c475df9eae2cf2
 > set-parent object=<object light "child"> parent=<object light "parent">
 > deliver d1 to=<object light "child"> message=go
@@ -22,15 +22,16 @@ prop s/r1 object=<object light "parent"> name=label op=get value="map result"
 prop s/r1 object=<object light "child"> name=label op=get value="computed target"
 raise s/r1 code="read only" at=s:83 pos=22:5
 raise s/r1 code="read only" at=s:100 pos=27:5
-raise s/r1 code="wrong kind" at=s:119 pos=33:5
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=389 alloc=2057 state=1568 end=return
-run s/r1 outcome=completed delivery=d1 handler=go fuel=389 alloc=2057
+raise s/r1 code="read only" at=s:120 pos=33:5
+raise s/r1 code="wrong kind" at=s:139 pos=39:5
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=419 alloc=2433 state=1944 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=419 alloc=2433
 raise unowned/r1 code="wrong kind" at=unowned:6 pos=4:5
 raise unowned/r1 code="wrong kind" at=unowned:23 pos=9:5
 raise unowned/r1 code="wrong kind" at=unowned:40 pos=14:5
 seg unowned/r1 start delivery=d2 handler=go clause=1 fuel=88 alloc=1629 state=1645 end=return
 run unowned/r1 outcome=completed delivery=d2 handler=go fuel=88 alloc=1629
-pumped state=idle fuel=477
+pumped state=idle fuel=507
 > vars
-vars s log=[["computed", "target"], [true, "computed result"], ["map result", "computed target"], {code: "read only", at: {unit: "s", handler: "go", line: 22, column: 5}}, {code: "read only", at: {unit: "s", handler: "go", line: 27, column: 5}}, {code: "wrong kind", expected: "object", got: "number", value: 42, at: {unit: "s", handler: "go", line: 33, column: 5}}]
+vars s log=[["computed", "target"], [true, "computed result"], ["map result", "computed target"], {code: "read only", at: {unit: "s", handler: "go", line: 22, column: 5}}, {code: "read only", at: {unit: "s", handler: "go", line: 27, column: 5}}, {code: "read only", at: {unit: "s", handler: "go", line: 33, column: 5}}, {code: "wrong kind", expected: "object", got: "number", value: 42, at: {unit: "s", handler: "go", line: 39, column: 5}}]
 vars unowned log=[{code: "wrong kind", expected: "object", got: "nothing", value: nothing, at: {unit: "unowned", handler: "go", line: 4, column: 5}}, {code: "wrong kind", expected: "object", got: "nothing", value: nothing, at: {unit: "unowned", handler: "go", line: 9, column: 5}}, {code: "wrong kind", expected: "object", got: "nothing", value: nothing, at: {unit: "unowned", handler: "go", line: 14, column: 5}}]

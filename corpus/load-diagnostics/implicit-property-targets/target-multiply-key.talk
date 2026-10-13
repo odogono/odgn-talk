@@ -1,0 +1,3 @@
+on go
+  multiply the label of the target by 2
+end go

@@ -28,6 +28,12 @@ on go
   catch e
     put e after log
   end try
+  put "watts" into w
+  try
+    set the (w) of me to 1
+  catch e
+    put e after log
+  end try
   scalarResult
   try
     set the label of it to "bad"
