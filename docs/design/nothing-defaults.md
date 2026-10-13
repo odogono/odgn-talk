@@ -289,7 +289,7 @@ These are required observations, not blessed expectation files yet.
 
 - **Required base:** design PR #718, merged as `77301a6e`, present in this
   implementation checkout (base `e98c4870`).
-- **Implemented in:** the uncommitted #719 draft on `fix/issue-719`: shared
+- **Implemented in:** the #719 draft on `fix/issue-719` (`48f89987`): shared
   grammar, instruction and cost declarations; normative chapters; reference
   parser/compiler; TS parser, lowering, runtime, Guard checks and tooling;
   generated TS/Go/Zig tables; focused tests and migration guidance.

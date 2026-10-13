@@ -170,6 +170,7 @@ export type {
   SemanticTree,
   SourceSpan,
 } from './semantic';
+export { isOptionalRead } from './semantic';
 export {
   syntaxText,
   syntaxSelector,

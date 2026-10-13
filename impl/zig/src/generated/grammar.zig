@@ -880,6 +880,10 @@ pub const grammar: GrammarTable = .{
             .rule = "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call",
         },
         .{
+            .name = "optional-key",
+            .rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read",
+        },
+        .{
             .name = "ordinal",
             .rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
         },
@@ -914,10 +918,6 @@ pub const grammar: GrammarTable = .{
         .{
             .name = "with-timeout",
             .rule = "at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call",
-        },
-        .{
-            .name = "optional-key",
-            .rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read",
         },
     },
     .advanced = &.{

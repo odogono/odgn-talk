@@ -158,6 +158,7 @@ export const grammar = {
     "kind",
     "map-key",
     "next-repeat",
+    "optional-key",
     "ordinal",
     "ordering-words",
     "pattern-anchor",
@@ -166,8 +167,7 @@ export const grammar = {
     "target",
     "wait-from",
     "when-contains",
-    "with-timeout",
-    "optional-key"
+    "with-timeout"
   ],
   "text_patterns": {
     "keywords": [

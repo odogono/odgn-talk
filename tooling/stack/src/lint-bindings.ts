@@ -1,10 +1,11 @@
 // Advice over the Core's recovered bindings. Never execute Script or Host code.
-import type {
-  SemanticElement,
-  SemanticName,
-  SemanticNode,
-  SemanticTree,
-  SourceSpan,
+import {
+  isOptionalRead,
+  type SemanticElement,
+  type SemanticName,
+  type SemanticNode,
+  type SemanticTree,
+  type SourceSpan,
 } from '@odgn/northtalk';
 import { builtins, properties } from './generated/lints';
 import type { LintId } from './lint';
@@ -208,7 +209,7 @@ const keyRead = (root: SemanticNode): KeyRead | undefined => {
   }
   if (e.rule === 'The') {
     // Optional map reads deliberately tolerate absent keys and Nothing.
-    if (e.children[1]?.kind === 'token' && e.children[1].text === 'optional') {
+    if (isOptionalRead(e)) {
       return;
     }
     const direct = leaves(e);

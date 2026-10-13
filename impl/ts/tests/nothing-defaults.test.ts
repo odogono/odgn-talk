@@ -282,6 +282,13 @@ catch e
 return e
 end try
 end go
+on goId x
+try
+return the optional id of x
+catch e
+return e
+end try
+end goId
 on known
 try
 return the optional id of obj
@@ -289,6 +296,13 @@ catch e
 return e
 end try
 end known
+on knownTitle
+try
+return the optional title of obj
+catch e
+return e
+end try
+end knownTitle
 on stored
 return the optional x of {x: obj}
 end stored`,
@@ -300,7 +314,9 @@ end stored`,
       }
       for (const message of [
         { name: 'go', args: [object.value] },
+        { name: 'goId', args: [object.value] },
         { name: 'known' },
+        { name: 'knownTitle' },
       ]) {
         const request = script.request(message);
         const result = request.result;
@@ -391,6 +407,21 @@ test('compatibility: labels reject, commands change Selector, grouped indexes su
   );
   expect(output).toContain('call-handler choose 1');
   expect(output).not.toContain('choose:otherwise:');
+  const sent = disassemble(
+    compile(
+      'on choose x\nreturn x\nend choose\non go\nsend to me: choose nothing otherwise 4\nend go',
+    ),
+  );
+  expect(sent).toContain('send choose 1');
+  expect(sent).not.toContain('choose:otherwise:');
+  // A migrated label sits beside `otherwise` in the same message.
+  const renamed = disassemble(
+    compile(
+      'on choose x fallback y\nreturn x otherwise y\nend choose\non go\nchoose nothing fallback 4\nsend to me: choose nothing fallback 4\nend go',
+    ),
+  );
+  expect(renamed).toContain('call-handler choose:fallback: 2');
+  expect(renamed).toContain('send choose:fallback: 2');
   expect(value('item (otherwise) of [7]', 'constant otherwise = 1')).toBe('7');
   expect(
     parseSource('on go xs, otherwise\nreturn item otherwise of xs\nend go')
@@ -475,4 +506,27 @@ test('Guard fallback selection and forbidden calls are independent of reachabili
       ).diagnostics.map(d => d.code),
     ).toContain('not in a guard');
   }
+});
+
+test.each([
+  ['return 1 otherwise', 3, 1],
+  ['return otherwise 1', 2, 18],
+  ['return the optional of', 2, 23],
+])(
+  'missing operands report the same position in both parsers: %s',
+  (line, l, c) => {
+    const source = `on go\n${line}\nend go`;
+    for (const error of [parseSource(source).error, parse(source).error]) {
+      expect(error).toMatchObject({ tok: { line: l, col: c } });
+    }
+  },
+);
+
+test('Whose conditions reject calls on either side of otherwise', () => {
+  const diagnostics = checkSource(
+    'function f\nreturn true\nend f\non go xs\nreturn the first item of xs whose f() otherwise true\nend go',
+  ).diagnostics;
+  expect(diagnostics).toMatchObject([
+    { code: 'not in a whose', span: { line: 5, col: 35 } },
+  ]);
 });

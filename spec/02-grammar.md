@@ -402,7 +402,7 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 ```ebnf
 Expression     ::= Lambda | EveryHead Whose | Default Whose?
 Default        ::= Or ( 'otherwise' Or )*
-                   /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
+                   /* `Whose` after `Default` only when the Default is an ordinal Chunk Expression, with or without its `delimited by` */
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
@@ -696,6 +696,7 @@ These are the only places where the parser reads a second token before it choose
 | `kind` | `civil` followed by `date` is the kind `civil date` |
 | `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |
+| `optional-key` | after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read |
 | `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key |
 | `ordering-words` | after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
@@ -705,7 +706,6 @@ These are the only places where the parser reads a second token before it choose
 | `wait-from` | in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns |
 | `when-contains` | after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name |
 | `with-timeout` | at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call |
-| `optional-key` | after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read |
 
 <!-- end -->
 

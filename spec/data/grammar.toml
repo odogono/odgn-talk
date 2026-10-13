@@ -530,6 +530,10 @@ name = "next-repeat"
 rule = "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call"
 
 [[decision]]
+name = "optional-key"
+rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read"
+
+[[decision]]
 name = "ordinal"
 rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key"
 
@@ -658,7 +662,3 @@ raised_when = "Fenced text does not match its closing margin"
 [[syntax_error]]
 code = "invalid text delimiter"
 raised_when = "A raw closing quote run is longer than its opening fence"
-
-[[decision]]
-name = "optional-key"
-rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read"

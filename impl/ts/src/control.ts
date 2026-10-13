@@ -1,11 +1,12 @@
 import { recoveryBody } from './recovery';
 import type { CheckOptions, DiagnosticCode } from './checker';
 import { grammar } from './generated/syntax';
-import type {
-  SemanticElement,
-  SemanticName,
-  SemanticNode,
-  SemanticToken,
+import {
+  isOptionalRead,
+  type SemanticElement,
+  type SemanticName,
+  type SemanticNode,
+  type SemanticToken,
 } from './semantic';
 
 type Leaf = SemanticName | SemanticToken;
@@ -254,10 +255,7 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
     }
     if (
       node.rule === 'The' &&
-      !(
-        node.children[1]?.kind === 'token' &&
-        node.children[1].text === 'optional'
-      ) &&
+      !isOptionalRead(node) &&
       isHostObject(node.children.at(-1))
     ) {
       const key = node.children.find(

@@ -593,7 +593,7 @@ The Script a Function Value was made in, and the only one it ever runs in: a cal
 _Avoid_: owner, origin, owning script (that's for Host Objects)
 
 **Container**:
-Somewhere a value can be put: a variable, or a chain of chunks and keys rooted in one, with no Built-in property along that path. Putting into a Container rebinds its root variable.
+Somewhere a value can be put: a variable, or a chain of chunks and keys rooted in one, with no Built-in property along that path. Putting into a Container rebinds its root variable. An Optional Map-Key Read is never a Container.
 _Avoid_: slot, lvalue, reference
 
 **Value Path**:
@@ -659,6 +659,14 @@ _Avoid_: interval, span, slice
 **Nothing**:
 The single value meaning "no value here", distinct from empty text, an empty list or an empty map.
 _Avoid_: null, nil, undefined, empty
+
+**Nothing Default**:
+`a otherwise b`: `a`'s value, unless it is Nothing, in which case `b` is evaluated and returned. False, zero and empty values are present, and errors still propagate.
+_Avoid_: null coalescing, `??`, fallback (unqualified)
+
+**Optional Map-Key Read**:
+`the optional k of x`: a map key's value, or Nothing when the key is missing or `x` is Nothing. Any other receiver, Host Objects included, raises `wrong kind`.
+_Avoid_: safe navigation, optional chaining, `?.`
 
 **Instant**:
 A point on the global timeline, independent of any time zone.

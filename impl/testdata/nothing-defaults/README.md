@@ -1,10 +1,9 @@
 # Nothing defaults: staged acceptance for #719
 
 This is a draft integration handoff, based on `e98c4870` with design #718
-(`77301a6e`) already merged. The implementation is uncommitted on
-`fix/issue-719` in worktree `/Users/alex/.t3/worktrees/odgn-talk/t3-ee70bfab`.
-The exact changed-file inventory is `git status --short` in that worktree;
-there is no committed implementation handoff yet.
+(`77301a6e`) already merged. The implementation is committed on
+`fix/issue-719` as `48f89987`; `git diff e98c4870 48f89987 --stat` gives its
+changed-file inventory.
 
 `main.talk` and `main.dis` stage a Disassembly case outside the shared Corpus.
 `case.toml` marks it Unblessed. TS reproduces it; a focused test also compares
@@ -48,18 +47,11 @@ debugger tests under `tooling/stack/tests/`.
 - Runtime Trace expectations have not been generated or blessed. The native
   tests are evidence of TS behavior, not cross-Core parity or blessing.
 
-## Validation
+## Known failing gates
 
-The repository Spec/check suite, reference grammar and machine checks,
-generator checks, TS typechecking, build, lint and formatting pass. All 61
-focused feature tests and all 394 existing TS Corpus cases pass. The broad TS/tooling run before the
-final staged-case addition passed 7,375 tests, with only the unchanged shared
-Disassembly instruction-coverage gate failing. A subsequent focused run
-reproduced the staged case and passed the new verifier test; its only failure
-was that same coverage gate. Go parser tests pass; Go lowering fails only its
-shared instruction-coverage gate for the same three opcodes. Zig cannot
-compile its exhaustive runtime switch until #721 implements the three new
-Opcode enum values. The existing TS Corpus replays without divergence.
+Until #720 and #721 land, the TS and Go shared-opcode coverage checks fail for
+the three new opcodes, and Zig cannot compile its exhaustive runtime switch
+over the new Opcode enum values. Run results for this draft belong in the PR.
 
 See the [TS support guide](../../ts/README.md#nothing-defaults-and-optional-map-reads)
 and [migration guide](../../../docs/migrations/nothing-defaults.md).

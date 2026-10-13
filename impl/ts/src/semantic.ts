@@ -82,6 +82,15 @@ export type SemanticNode = {
   span: SourceSpan;
 };
 export type SemanticElement = SemanticNode | SemanticName | SemanticToken;
+/** Whether a `The` node is an optional map-key read, `the optional k of x`. */
+export const isOptionalRead = (node: SemanticNode): boolean => {
+  const second = node.children[1];
+  return (
+    node.rule === 'The' &&
+    second?.kind === 'token' &&
+    second.text === 'optional'
+  );
+};
 /**
  * The `tell` block lines the checker called as `tell`, because their
  * Operation is fire-and-forget (ADR 0063). Every other line is an `ask`.

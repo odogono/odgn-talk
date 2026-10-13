@@ -881,6 +881,10 @@ var Grammar = GrammarTable{
 			Rule: "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call",
 		},
 		GrammarTableDecisionEntry{
+			Name: "optional-key",
+			Rule: "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read",
+		},
+		GrammarTableDecisionEntry{
 			Name: "ordinal",
 			Rule: "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
 		},
@@ -915,10 +919,6 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "with-timeout",
 			Rule: "at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call",
-		},
-		GrammarTableDecisionEntry{
-			Name: "optional-key",
-			Rule: "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read",
 		},
 	},
 	Advanced: []GrammarTableAdvancedEntry{

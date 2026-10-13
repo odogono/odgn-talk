@@ -154,7 +154,7 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 
 Expression     ::= Lambda | EveryHead Whose | Default Whose?
 Default        ::= Or ( 'otherwise' Or )*
-                   /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
+                   /* `Whose` after `Default` only when the Default is an ordinal Chunk Expression, with or without its `delimited by` */
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
 And            ::= Not ( 'and' Not )*  /* never `and` before `wait` */
