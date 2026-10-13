@@ -1,0 +1,39 @@
+# Pins one `not constant` at the first disallowed token per initialiser or
+# parameter default, while retaining later `unknown name` diagnostics (#768).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "repeated"
+source = "repeated.talk"
+
+[[scripts]]
+name = "unknown-later"
+source = "unknown-later.talk"
+
+[[scripts]]
+name = "unknown-first"
+source = "unknown-first.talk"
+
+[[scripts]]
+name = "script-variable"
+source = "script-variable.talk"
+
+[[scripts]]
+name = "parameter-default"
+source = "parameter-default.talk"
+
+[[scripts]]
+name = "call"
+source = "call.talk"
+
+[[scripts]]
+name = "implicit-values"
+source = "implicit-values.talk"
+
+[[scripts]]
+name = "target"
+source = "target.talk"

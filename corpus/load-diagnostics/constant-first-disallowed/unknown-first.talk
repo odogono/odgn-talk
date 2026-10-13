@@ -1,0 +1,2 @@
+script variable v = 1
+constant x = unknown + v

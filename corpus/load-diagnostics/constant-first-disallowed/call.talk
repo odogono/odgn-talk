@@ -1,0 +1,6 @@
+script variable v = 1
+function f a
+  return a
+end f
+constant x = f(v) + f(v)
+constant y = min([v, v])

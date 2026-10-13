@@ -1142,21 +1142,25 @@ func (u *Unit) unknownName(n *syntax.Node, ctx context) {
 	u.addMessage("unknown name", n.BindingPos(), message)
 }
 func (u *Unit) constant(n *syntax.Node, available map[string]bool) {
+	// validate has already checked every name. This walk reports only the
+	// first disallowed token in this initialiser or parameter default.
+	reported := false
 	syntax.Walk(n, func(x *syntax.Node) bool {
-		if x.Kind == "name" {
-			s, ok := u.Resolve(nil, x.Text)
-			if !ok || s.Kind != "builtin-constant" && !available[x.Text] && s.Import == "" {
-				u.add("not constant", x.Pos())
-			}
+		if reported {
+			return false
 		}
-		if x.Kind == "call" {
+		disallowed := x.Kind == "target" || x.Kind == "literal" && (x.Text == "it" || x.Text == "me")
+		switch x.Kind {
+		case "name":
 			s, ok := u.Resolve(nil, x.Text)
-			if !ok || s.Kind != "builtin" {
-				u.add("not constant", x.Pos())
-			}
+			disallowed = !ok || s.Kind != "builtin-constant" && !available[x.Text] && s.Import == ""
+		case "call":
+			s, ok := u.Resolve(nil, x.Text)
+			disallowed = !ok || s.Kind != "builtin"
 		}
-		if x.Kind == "target" || x.Kind == "literal" && (x.Text == "it" || x.Text == "me") {
+		if disallowed {
 			u.add("not constant", x.Pos())
+			reported = true
 			return false
 		}
 		if x.Kind == "lambda" {

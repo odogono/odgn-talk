@@ -1,0 +1,2 @@
+script variable v = 1
+script variable x = v + v
