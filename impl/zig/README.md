@@ -207,6 +207,20 @@ From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 the declaration is marked `C only`, and lists the `talk.go` names `talk.h`
 doesn't declare yet. Those fail only from step 6's conformance gate.
 
+## The Notification router
+
+[`src/notify/router.zig`](src/notify/router.zig) is the router chapter 7
+describes for `store` watches, declared in `talk.h` as `talk_router_*`. It is
+Host code over `talk.h`, as talk.go's `notify` package is: the Core takes no
+part in it. A Host's `store` implementation forwards `watch`, `unwatch` and
+its Grant release hook to it, calls `talk_router_commit` with each commit's
+changed keys under the Store's synchronization, and calls
+`talk_router_pumped` after each Pump. `talk_router_save` and
+`talk_router_restore` take and restore checkpoints, which hold the Group's
+save and the routing state tied to it by its digest. C has no way to read a
+Store's name out of an opaque binding, so the router's options include
+`store_of`, which does that.
+
 ## The machine
 
 **Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. See [#472](https://github.com/odogono/odgn-talk/issues/472).

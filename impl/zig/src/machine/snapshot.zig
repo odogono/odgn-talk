@@ -2154,7 +2154,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             a.free(id);
             return e;
         };
-        x.* = .{ .id = id, .script = "", .grant = "", .binding = null, .now = g.clock, .left = null, .starting = false, .group = g, .gpa = a };
+        x.* = .{ .id = id, .script = "", .grant = "", .binding = null, .now = g.clock, .left = null, .starting = false, .group = g, .owner = g, .gpa = a };
         g.calls.append(a, x) catch |e| {
             a.free(id);
             a.destroy(x);

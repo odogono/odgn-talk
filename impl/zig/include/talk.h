@@ -56,6 +56,7 @@ typedef enum talk_host_error_code {
     TALK_STATE_TOO_LARGE,
     TALK_EFFECTS_PENDING,
     TALK_EFFECT_STATE_UNKNOWN,
+    TALK_INVALID_CHECKPOINT,
     /* Call.Charge's refusal: the Run can't cover the charge. */
     TALK_ERR_LIMIT,
     /* Load shedding, not a bug: the Script's mailbox, counting the
@@ -605,6 +606,8 @@ void talk_call_scope_name(const talk_call *c, const char **s, size_t *len);
 /* True only when the Core abandons a scope its Run left open. Such a call
  * may not charge, and only a normal return counts as success. */
 bool talk_call_automatic(const talk_call *c);
+/* The Group that made the call, whatever its mode. */
+talk_group *talk_call_group(const talk_call *c);
 /* Answer, AnswerWithCost and Fail settle a suspending call. Its talk_call
  * stays valid until its Group is released. Each queues a Host Input, which
  * the next Pump drains; one for a call that no longer waits is recorded and
@@ -1344,6 +1347,10 @@ talk_host_error_code talk_settle(talk_group *g, const char *id, size_t len, cons
 /* The handle of the Group's Script with that name, or NULL; a restored
  * Group's Scripts are reached this way. */
 talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
+/* Group.ScriptNames: the Scripts' names in load order, in *out, borrowed
+ * from the Group until the next call of this function. Safe inside a Pump,
+ * it is no Host Input and writes nothing to the Trace. */
+size_t talk_script_names(talk_group *g, const talk_id **out);
 
 /* The Group Fingerprint, which covers the Group's Libraries and each
  * Script's code identity, Grants and limits, never its state. A worker call. */
@@ -1406,6 +1413,75 @@ typedef struct talk_inspection {
 talk_host_error_code talk_inspect(talk_group *g, talk_inspection **out);
 /* C only */
 void talk_inspection_release(talk_inspection *i);
+
+/* ---------------------------------------------------------------- Notification router
+ *
+ * Host code over talk.h, as talk.go's notify package is over talk.go: it
+ * holds store watches, routes each commit's changed keys to them, retries
+ * what a full mailbox refused after each Pump, and saves its routing with a
+ * Group as a checkpoint (chapter 7, Store Notification routing; chapter 10,
+ * Store Notification checkpoints). The Core takes no part in it. */
+
+typedef struct talk_watch_limits {
+    int64_t watches, watch_size, pending, pending_size;
+} talk_watch_limits;
+
+typedef struct talk_router_options {
+    void *context;
+    /* Told after each admitted Notification; must not call the router. May
+     * be NULL. */
+    void (*admitted)(void *context, talk_group *g);
+    talk_watch_limits (*limits)(void *context, const char *store, size_t len);
+    /* The Store's revision, read under its synchronization; *out is
+     * borrowed until the next call. */
+    void (*revision)(void *context, const char *store, size_t len, const char **out, size_t *out_len);
+    /* C only: the Store a store Grant's binding names, which talk.go reads
+     * from the binding itself. */
+    bool (*store_of)(void *context, void *binding, const char **out, size_t *out_len);
+} talk_router_options;
+
+/* Which watches a restore registered again, dropped and resynced, each as
+ * "<script>.<grant>.<watch>", in the order of watches. */
+typedef struct talk_routing_result {
+    const talk_id *restored;
+    size_t restored_len;
+    const talk_id *dropped;
+    size_t dropped_len;
+    const talk_id *resynced;
+    size_t resynced_len;
+} talk_routing_result;
+
+typedef struct talk_router talk_router;
+
+/* C only: talk.go's notify.New. NULL if it can't allocate. */
+talk_router *talk_router_new(const talk_router_options *o);
+/* C only */
+void talk_router_free(talk_router *r);
+/* Registers a watch through the call's Group, Script and Grant, or replaces
+ * one with other parameters. False when a limit refuses it, with *refused
+ * the `watch limit` error to fail the call with; the caller releases its
+ * data. */
+bool talk_router_watch(talk_router *r, const talk_call *c, const char *name, size_t name_len, const char *prefix, size_t prefix_len, const char *message, size_t message_len, talk_script_error *refused);
+void talk_router_unwatch(talk_router *r, const talk_call *c, const char *name, size_t name_len);
+/* A store Grant's release hook forwards here. */
+void talk_router_release(talk_router *r, const talk_grant_context *g);
+/* Routes a commit's changed keys, once the Host has applied it, under the
+ * Store's synchronization. talk.go applies the commit through a callback. */
+talk_host_error_code talk_router_commit(talk_router *r, const char *store, size_t store_len, const talk_id *changed, size_t changed_len);
+/* After each Pump returns; true while the Group still has pending work. */
+bool talk_router_pumped(talk_router *r, talk_group *g);
+void talk_router_detach(talk_router *r, talk_group *g);
+/* A checkpoint, which the caller releases with talk_owned_bytes_release;
+ * TALK_EFFECTS_PENDING as talk_save. */
+talk_host_error_code talk_router_save(talk_router *r, talk_group *g, talk_owned_bytes *out);
+/* Restores a checkpoint, as talk_restore and then its routing, before the
+ * first Pump. A checkpoint the router can't read is TALK_INVALID_CHECKPOINT. */
+talk_host_error_code talk_router_restore(talk_router *r, talk_core *core, const uint8_t *checkpoint, size_t len, const talk_restore_options *o, talk_group **out, talk_restore_result **result, talk_routing_result **routing);
+/* C only */
+void talk_routing_result_release(talk_routing_result *r);
+/* Whether a key's committed value changed, by the bytes of the Value
+ * Encoding. Nothing, or NULL, also stands for a missing key. */
+bool talk_changed(const talk_value *before, const talk_value *after);
 
 #ifdef __cplusplus
 }

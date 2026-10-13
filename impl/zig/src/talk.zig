@@ -274,7 +274,7 @@ export fn talk_free(p: ?[*]u8, size: usize) void {
     allocator.free(memory);
 }
 
-export fn talk_owned_bytes_release(b: *Buffer) void {
+pub export fn talk_owned_bytes_release(b: *Buffer) void {
     if (b.data) |p| allocator.free(p[0..b.len]);
     b.* = .{};
 }
@@ -298,6 +298,7 @@ pub const HostErrorCode = enum(c_int) {
     state_too_large,
     effects_pending,
     effect_state_unknown,
+    invalid_checkpoint,
     err_limit,
     err_mailbox_full,
     load_refused,
@@ -480,6 +481,8 @@ pub const Group = struct {
     scripts: std.ArrayList(*Script) = .empty,
     pending: std.ArrayList(*Pending) = .empty,
     deciding: std.ArrayList(*Deciding) = .empty,
+    /// The last ScriptNames, which the Host borrows.
+    names: std.ArrayList(Id) = .empty,
 
     fn owns(g: *Group, o: *const objects.Object) bool {
         for (g.group.objects.items) |x| if (x == o) return true;
@@ -941,6 +944,7 @@ export fn talk_group_release(g: ?*Group) void {
         gpa.destroy(d);
     }
     group.deciding.deinit(gpa);
+    group.names.deinit(gpa);
     gpa.destroy(group);
 }
 
@@ -1023,7 +1027,7 @@ export fn talk_script_counters(s: *Script, out: *Counters) void {
     out.* = .{ .fuel_total = @intCast(read.fuel_total), .alloc_total = @intCast(read.alloc_total), .runs = @intCast(read.runs), .faults = @intCast(read.faults), .persistent_state = @intCast(read.persistent_state), .mailbox_len = @intCast(read.mailbox_len) };
 }
 
-export fn talk_script_deliver(s: *Script, m: *const Message, id: ?*Buffer) HostErrorCode {
+pub export fn talk_script_deliver(s: *Script, m: *const Message, id: ?*Buffer) HostErrorCode {
     var n: u64 = 0;
     return queue(s, m, .deliver, id, &n);
 }
@@ -1203,7 +1207,7 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver,
 /// Saves the Group between Pumps (chapter 10), a worker call: its bytes,
 /// which the caller releases, or `effects pending` with no snapshot. Either
 /// way the attempt takes the next save id, and its `save` record.
-export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
+pub export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
     out.* = .{};
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
@@ -1296,7 +1300,7 @@ const Bridges = struct {
 /// been pumped, its restore record in its Trace. Bytes this Core can't
 /// read are `invalid save`, and a save that doesn't match `save mismatch`;
 /// either way nothing is made.
-export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const RestoreOptions, out: *?*Group, restored: *?*RestoreResult) HostErrorCode {
+pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const RestoreOptions, out: *?*Group, restored: *?*RestoreResult) HostErrorCode {
     out.* = null;
     restored.* = null;
     const bytes_in: []const u8 = if (len == 0) &.{} else (save orelse return .invalid_value)[0..len];
@@ -1379,7 +1383,7 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
     return .ok;
 }
 
-export fn talk_restore_result_variables_only(r: *const RestoreResult) bool {
+pub export fn talk_restore_result_variables_only(r: *const RestoreResult) bool {
     return r.variables_only;
 }
 
@@ -1408,7 +1412,7 @@ export fn talk_restore_result_ids(r: *const RestoreResult, which: c_int, out: *?
     return ids.len;
 }
 
-export fn talk_restore_result_release(r: ?*RestoreResult) void {
+pub export fn talk_restore_result_release(r: ?*RestoreResult) void {
     const x = r orelse return;
     x.gpa.free(x.pending);
     x.gpa.free(x.disposed);
@@ -1478,7 +1482,20 @@ export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settle
 }
 
 /// The handle of the Group's Script with that name, or NULL.
-export fn talk_group_script(g: *Group, name: ?[*]const u8, len: usize) ?*Script {
+/// Group.ScriptNames: the Scripts' names in load order, borrowed from the
+/// Group until its next call that loads or restores. Safe inside a Pump; it
+/// writes nothing to the Trace.
+pub export fn talk_script_names(g: *Group, out: *[*]const Id) usize {
+    g.names.clearRetainingCapacity();
+    for (g.group.scripts.items) |s| g.names.append(g.core.gpa, .{ .data = s.name.ptr, .len = s.name.len }) catch {
+        out.* = g.names.items.ptr;
+        return g.names.items.len;
+    };
+    out.* = g.names.items.ptr;
+    return g.names.items.len;
+}
+
+pub export fn talk_group_script(g: *Group, name: ?[*]const u8, len: usize) ?*Script {
     const n = bytes(name, len) catch return null;
     for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, n)) return s;
     return null;
@@ -2333,6 +2350,12 @@ export fn talk_call_scope_name(c: *const Call, s: *[*]const u8, len: *usize) voi
     s.* = c.scope.ptr;
     len.* = c.scope.len;
 }
+/// The Group that made the call.
+pub export fn talk_call_group(c: *const Call) ?*Group {
+    const g: *machine.Group = @ptrCast(@alignCast(c.owner orelse c.group orelse return null));
+    return @fieldParentPtr("group", g);
+}
+
 export fn talk_call_automatic(c: *const Call) bool {
     return c.automatic;
 }
