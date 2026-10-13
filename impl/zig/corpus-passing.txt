@@ -216,6 +216,7 @@ load-diagnostics/bits-not-whole-bytes
 load-diagnostics/cant-suspend-here
 load-diagnostics/cant-write
 load-diagnostics/capture-in-repetition
+load-diagnostics/constant-unknown-name
 load-diagnostics/container-properties
 load-diagnostics/default-order
 load-diagnostics/duplicate-key
