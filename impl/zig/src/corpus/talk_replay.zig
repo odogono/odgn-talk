@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -985,6 +985,12 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_pump(group, seconds, nanos, null, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
+        } else if (std.mem.eql(u8, name, "revoke")) {
+            const rest = input[name_end + 1 ..];
+            const script_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase;
+            const script = scripts.get(rest[0..script_end]) orelse return error.UnknownScript;
+            const grant = field(input, "grant") orelse return error.MalformedCase;
+            try check(c.talk_script_revoke(script, grant.ptr, grant.len));
         } else if (std.mem.eql(u8, name, "counters")) {
             const script = scripts.get(input[name_end + 1 ..]) orelse return error.UnknownScript;
             var read: c.talk_counters = undefined;

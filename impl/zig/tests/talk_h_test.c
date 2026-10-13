@@ -157,6 +157,59 @@ static int capability_test(void) {
     return bad;
 }
 
+/* A release hook: counts its calls and keeps what the last one was told. */
+static int released = 0;
+static talk_release_reason released_reason = TALK_RELEASE_STOP;
+static char released_grant[16];
+static void release(void *context, const talk_grant_context *g) {
+    (void)context;
+    released++;
+    released_reason = g->reason;
+    snprintf(released_grant, sizeof released_grant, "%.*s", (int)g->grant_name_len, g->grant_name);
+}
+
+/* revoke releases a Grant once, and later calls through it raise
+ * capability revoked before reaching the Host. */
+static int revoke_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const talk_shape *args[] = {talk_text_shape()};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
+    bad |= talk_with_release_hook(core, def, NULL, NULL) != TALK_INVALID_VALUE;
+    bad |= talk_with_release_hook(core, def, release, NULL) != TALK_OK;
+    bad |= talk_with_release_hook(core, def, release, NULL) != TALK_INVALID_VALUE;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"echo", 4, grant}};
+    const char *source = "script variable said\non go\n  try\n    ask echo to twice \"ab\"\n  catch e\n    put e's code into said\n  end try\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    released = 0;
+    bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
+    bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
+    bad |= talk_script_revoke(script, "other", 5) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= released != 1 || released_reason != TALK_RELEASE_REVOKE || strcmp(released_grant, "echo") != 0;
+    bad |= strstr(trace, "> revoke s grant=echo\n> revoke s grant=echo\n> revoke s grant=other\n") == NULL;
+    bad |= strstr(trace, "call s/r1.c1") != NULL;
+    bad |= strstr(trace, "vars s said=\"capability revoked\"\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A lifecycle Operation's Do: what each call saw, as "<scope> <run>
  * <segment> <automatic>" lines. */
 static char lifecycle_seen[512];
@@ -410,7 +463,7 @@ static int store_test(void) {
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost entries[] = {{"get", 3, {1, 0}}, {"set", 3, {1, 0}}, {"delete", 6, {1, 0}}, {"keys", 4, {1, 0}}, {"increment", 9, {1, 0}}, {"swap", 4, {1, 0}}, {"watch", 5, {1, 0}}, {"unwatch", 7, {1, 0}}};
     talk_costs costs = {entries, 8};
-    talk_store_impl impl = {NULL, store_get, unused, unused, unused, unused, unused, unused, unused, {NULL, NULL, NULL, NULL}};
+    talk_store_impl impl = {NULL, store_get, unused, unused, unused, unused, unused, unused, unused, {NULL, NULL, NULL, NULL}, NULL};
     talk_capability_def *def = NULL;
     int bad = talk_store_capability(core, &impl, &costs, &def) != TALK_INVALID_VALUE;
     impl.coordinator = (talk_segment_lifecycle){begin_hook, commit_hook, rollback_hook, NULL};
@@ -904,6 +957,7 @@ int main(void) {
     talk_value_release(NULL);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");
     expect(sqlite_test() == 0, "sqlite refuses a malformed binding, charges max per row and gives rows as maps");
     expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
