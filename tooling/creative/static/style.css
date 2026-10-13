@@ -565,3 +565,14 @@ button:disabled {
   max-height: 8rem;
   overflow: auto;
 }
+
+/* Edit controls cannot mutate or switch the authored Project during Play. */
+.playing #desk, .playing #strip, .playing #tools-window,
+.playing #info-window, .playing #projects-window, .playing #versions-window,
+.playing #edit-menu, .playing #show-projects, .playing #show-versions {
+  display: none;
+}
+#reader { padding: 16px; overflow: auto; flex: 1; }
+#reader .page { position: relative; }
+#reader .el[hidden] { display: none; }
+#reader .button { cursor: pointer; }

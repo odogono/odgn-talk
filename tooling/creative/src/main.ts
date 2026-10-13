@@ -10,6 +10,7 @@ import {
   type LockDelegate,
 } from './projects';
 import { mountStack } from './stack';
+import { mountPlay } from './play-view';
 import { openProjectStorage, type ProjectStorage } from './storage';
 
 const element = (id: string) => {
@@ -50,6 +51,7 @@ const boot = async (): Promise<void> => {
   });
   const editing = await lock.acquire(initial.id);
   const shell = mountStack(initial.project, { readOnly: !editing });
+  mountPlay(shell);
   mountProjects({
     channel,
     initial,
