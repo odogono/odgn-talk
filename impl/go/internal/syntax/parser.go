@@ -541,7 +541,7 @@ func (p *parser) statement(inline bool) *Node {
 		p.expect("be")
 		n.Children = append(n.Children, p.expression())
 	case "set":
-		n.Children = append(n.Children, p.container())
+		n.Children = append(n.Children, p.containerPath(true))
 		p.expect("to")
 		n.Children = append(n.Children, p.expression())
 	case "add", "subtract":
@@ -663,6 +663,11 @@ func (p *parser) statement(inline bool) *Node {
 	return n
 }
 func (p *parser) container() *Node {
+	return p.containerPath(false)
+}
+
+// set may read implicit Object roots without making them assignable Containers.
+func (p *parser) containerPath(propertyTarget bool) *Node {
 	t := p.peek(Operand)
 	n := p.chunkLevel()
 	root := n
@@ -680,7 +685,12 @@ func (p *parser) container() *Node {
 			break
 		}
 	}
-	if root.Kind != "name" && !(root.Kind == "literal" && root.Text == "it") && !(root.Kind == "literal" && root.Text == "me" && n.Kind == "key") {
+	outer := n
+	for outer.Kind == "paren" {
+		outer = outer.Children[0]
+	}
+	implicitRoot := root.Kind == "target" || root.Kind == "literal" && (root.Text == "me" || root.Text == "it")
+	if root.Kind != "name" && !(propertyTarget && (outer.Kind == "key" || outer.Kind == "key-computed") && implicitRoot) {
 		panic(&Error{Code: "not a container", Pos: t.Pos})
 	}
 	return n

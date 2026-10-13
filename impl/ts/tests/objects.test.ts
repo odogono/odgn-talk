@@ -260,14 +260,37 @@ describe('Object property Load checks', () => {
         objects: { bulb },
       }),
     ).toThrow(LoadError);
-    const owned = g.object(readonly, 'owned', null);
-    expect(() =>
-      g.load({
-        name: 'owned',
-        source: 'on go\n set the label of me to "off"\nend go',
-        owner: owned,
-      }),
-    ).toThrow(LoadError);
+    for (const target of [
+      'the label of me',
+      'the "label" of me',
+      '((the ("label") of (me)))',
+    ]) {
+      for (const kind of [readonly, writable]) {
+        const group = newGroup({ name: 'owned' });
+        const owner = group.object(kind, 'owned', null);
+        const options = {
+          name: 'owned',
+          source: `on go\n set ${target} to "off"\nend go`,
+          owner,
+        };
+        if (kind === writable) {
+          expect(() => group.load(options)).not.toThrow();
+        } else {
+          try {
+            group.load(options);
+            throw new Error('expected a read-only load error');
+          } catch (error) {
+            expect(error).toBeInstanceOf(LoadError);
+            if (!(error instanceof LoadError)) {
+              throw error;
+            }
+            expect(error.diagnostics).toMatchObject([
+              { code: "can't write", unit: 'owned', line: 2, col: 2 },
+            ]);
+          }
+        }
+      }
+    }
   });
 });
 

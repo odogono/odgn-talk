@@ -694,7 +694,7 @@ export const checkSyntax = (
       }
     }
   }
-  // Container grammar always follows its base operand down to a bare Primary.
+  // Follow a Container to its Name; implicit set roots remain value reads.
   const containers: { node: SyntaxNode; root: Site }[] = [];
   for (const { element } of ordered) {
     if (element.kind !== 'node' || element.rule !== 'Container') {
@@ -705,6 +705,9 @@ export const checkSyntax = (
       const children = nodes(base);
       if (base.rule === 'Primary' && !children.length) {
         const root = context.get(base)!.first!;
+        if (root.v === 'me' || root.v === 'it') {
+          break;
+        }
         containers.push({ node: element, root: mark(root, 'write', true) });
         break;
       }

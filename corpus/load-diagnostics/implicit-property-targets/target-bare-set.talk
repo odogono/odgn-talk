@@ -1,0 +1,3 @@
+on go
+  set the target to 1
+end go

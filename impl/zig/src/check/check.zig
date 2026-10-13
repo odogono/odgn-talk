@@ -2341,11 +2341,11 @@ test "every corpus unit gives the diagnostics its case expects" {
         // program, a run, a Library's calls held to its importer's Grants, or
         // a Grant revoked before a Reload: the runner's.
         if (among(case, &.{
-            "load-diagnostics/object-properties",       "load-diagnostics/pattern-too-large", "load-diagnostics/initialiser-failed",
-            "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",   "capabilities/effect-replace-library",
-            "capabilities/load-checks",                 "capabilities/revoke-in-flight",      "libraries/caller-capabilities",
-            "libraries/needs-transitive",               "reload/replacement-transitive",      "tell-block/library",
-            "examples/tenants-globex",
+            "load-diagnostics/object-properties",       "load-diagnostics/pattern-too-large",         "load-diagnostics/initialiser-failed",
+            "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",           "capabilities/effect-replace-library",
+            "capabilities/load-checks",                 "capabilities/revoke-in-flight",              "libraries/caller-capabilities",
+            "libraries/needs-transitive",               "reload/replacement-transitive",              "tell-block/library",
+            "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";

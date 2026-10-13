@@ -97,13 +97,14 @@ Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
 Put            ::= 'put' ( Expression ( 'into' | 'after' | 'before' )
                          | '...' Expression ( 'after' | 'before' ) ) Container
 Let            ::= 'let' Pattern 'be' Expression
-Set            ::= 'set' Container 'to' Expression
+Set            ::= 'set' PropertyTarget 'to' Expression
 Add            ::= 'add' Expression 'to' Container
 Subtract       ::= 'subtract' Expression 'from' Container
 Multiply       ::= 'multiply' Container 'by' Expression
 Divide         ::= 'divide' Container 'by' Expression
 Delete         ::= 'delete' Container
 Container      ::= ChunkLevel  /* only chunks and keys on the path to a root Name, or else `not a container` */
+PropertyTarget ::= ChunkLevel  /* a key target with only chunks and keys on the path to a root Name, me, it or the target; see chapter 4 */
 Send           ::= 'send' ( ( MessageName | '(' Expression ')' ) ( 'with' SendList )? 'to' Expression
                           | 'to' Expression ':' CommandPhrase ) AndWait?
 Ask            ::= 'ask' Expression 'to' Word ExpressionList? AndWait?

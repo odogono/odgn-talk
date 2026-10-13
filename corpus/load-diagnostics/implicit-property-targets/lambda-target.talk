@@ -1,0 +1,5 @@
+on go
+  put given
+    set the label of the target to "bad"
+  end given into f
+end go

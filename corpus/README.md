@@ -110,6 +110,13 @@ received human first-blessing approval on 2026-10-09
 
 ## Seed blessing
 
+The `objects/implicit-property-targets` and
+`load-diagnostics/implicit-property-targets` cases (#744) cover whole-property
+`set` through `me`, `it` and `the target`, receiver traversal, unchanged implicit
+bindings, and exact static/runtime refusals. TS, Go and Zig replay both cases;
+their `case.trace` files retain Unblessed headers pending human first-blessing
+review. Current support is described in each Core's implementation guide.
+
 The `load-diagnostics/container-properties` Trace, introduced in #680 for #670,
 received human first-blessing approval on 2026-10-12 for #681. It pins direct,
 intermediate and possessive Built-in property refusals and valid key/property

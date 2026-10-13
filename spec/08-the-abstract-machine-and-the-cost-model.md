@@ -520,7 +520,7 @@ The new part depends on the statement:
 The leaf's old value is its index or key temp, the whole above it and its `chunk-get` or `get-key`. A Container that is only a name skips steps 2 to 5, and its old value is its `load`: `add e to x` is ⟦e⟧ `store v`, the `load` of `x`, `load v`, `add` and the `store` of `x`. `put e into x` needs no temp: it is ⟦e⟧ and the `store` of `x`.
 
 - **`delete c`** of a chunk or key is the write above for the Container one level up, with the chain's delimiter. The leaf's index or computed key is evaluated first, into a temp, as step 1. In step 4 every level, the last included, is first tested with `test-chunk`, `test-chunk-delimited`, `test-key` or `test-key-computed`, which jump to a label S after the root's `store` when the level isn't there, so nothing changes ([chapter 4](04-expressions-and-statements.md#delete)). The new part is `load` of the leaf's index temp, `load` of the last level's whole, then ⟦d⟧ for an `item` with `delimited by d`, and `chunk-delete`, `chunk-delete-delimited`, `delete-key` or `delete-key-computed`. `delete x` of a name is `const nothing` and its `store`.
-- **`set the k of o to e`** is ⟦o⟧ ⟦e⟧ `set-property k`, and `set the (k) of o to e` is ⟦k⟧ ⟦o⟧ ⟦e⟧ `set-property-computed`.
+- **`set the k of o to e`** is ⟦o⟧ ⟦e⟧ `set-property k`, and `set the (k) of o to e` is ⟦k⟧ ⟦o⟧ ⟦e⟧ `set-property-computed`. Parentheses do not change this lowering. The receiver `o` may read `me`, `it` or `the target` and any intermediate keys/chunks; no root store or property-content writeback occurs.
 
 #### `replace`
 

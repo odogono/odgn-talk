@@ -1356,3 +1356,13 @@ describe('Whose Clauses', () => {
     ).toEqual([]);
   });
 });
+
+test('implicit property targets preserve Library restrictions', () => {
+  for (const root of ['me', 'the target']) {
+    const result = checkSource(
+      `on go\n  set the label of ${root} to "bad"\nend go`,
+      { unit: 'library' },
+    );
+    expect(result.diagnostics.map(d => d.code)).toEqual(['not in a library']);
+  }
+});

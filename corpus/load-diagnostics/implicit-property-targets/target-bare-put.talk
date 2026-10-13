@@ -1,0 +1,3 @@
+on go
+  put 1 into the target
+end go

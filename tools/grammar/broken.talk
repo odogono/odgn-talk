@@ -936,3 +936,543 @@ end t
 on t
   put line does of s into x
 end t
+
+-- case: property target the label of me (#744)
+-- expect: parses
+on t
+  set the label of me to "Open"
+end t
+
+-- case: property target the "label" of me (#744)
+-- expect: parses
+on t
+  set the "label" of me to "Open"
+end t
+
+-- case: property target ((the ("label") of (me))) (#744)
+-- expect: parses
+on t
+  set ((the ("label") of (me))) to "Open"
+end t
+
+-- case: property target the label of item 2 of me (#744)
+-- expect: parses
+on t
+  set the label of item 2 of me to "Open"
+end t
+
+-- case: property target the label of the child of me (#744)
+-- expect: parses
+on t
+  set the label of the child of me to "Open"
+end t
+
+-- case: property target (me)'s label (#744)
+-- expect: parses
+on t
+  set (me)'s label to "Open"
+end t
+
+-- case: reject set me to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set me to 1
+end t
+
+-- case: reject set item 2 of the tags of me to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set item 2 of the tags of me to 1
+end t
+
+-- case: reject set the length of me to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the length of me to 1
+end t
+
+-- case: reject set the label of the items of me to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the label of the items of me to 1
+end t
+
+-- case: reject put 1 into me (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into me
+end t
+
+-- case: reject put 1 into the label of me (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into the label of me
+end t
+
+-- case: reject put 1 after me (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after me
+end t
+
+-- case: reject put 1 after the label of me (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after the label of me
+end t
+
+-- case: reject put 1 before me (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before me
+end t
+
+-- case: reject put 1 before the label of me (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before the label of me
+end t
+
+-- case: reject put ...[1] after me (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after me
+end t
+
+-- case: reject put ...[1] after the label of me (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after the label of me
+end t
+
+-- case: reject add 1 to me (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to me
+end t
+
+-- case: reject add 1 to the label of me (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to the label of me
+end t
+
+-- case: reject subtract 1 from me (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from me
+end t
+
+-- case: reject subtract 1 from the label of me (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from the label of me
+end t
+
+-- case: reject multiply me by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply me by 2
+end t
+
+-- case: reject multiply the label of me by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply the label of me by 2
+end t
+
+-- case: reject divide me by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide me by 2
+end t
+
+-- case: reject divide the label of me by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide the label of me by 2
+end t
+
+-- case: reject delete me (#744)
+-- expect: not a container at 2:10
+on t
+  delete me
+end t
+
+-- case: reject delete the label of me (#744)
+-- expect: not a container at 2:10
+on t
+  delete the label of me
+end t
+
+-- case: reject replace "a" in me with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in me with "b"
+end t
+
+-- case: reject replace "a" in the label of me with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in the label of me with "b"
+end t
+
+-- case: property target the label of it (#744)
+-- expect: parses
+on t
+  set the label of it to "Open"
+end t
+
+-- case: property target the "label" of it (#744)
+-- expect: parses
+on t
+  set the "label" of it to "Open"
+end t
+
+-- case: property target ((the ("label") of (it))) (#744)
+-- expect: parses
+on t
+  set ((the ("label") of (it))) to "Open"
+end t
+
+-- case: property target the label of item 2 of it (#744)
+-- expect: parses
+on t
+  set the label of item 2 of it to "Open"
+end t
+
+-- case: property target the label of the child of it (#744)
+-- expect: parses
+on t
+  set the label of the child of it to "Open"
+end t
+
+-- case: property target (it)'s label (#744)
+-- expect: parses
+on t
+  set (it)'s label to "Open"
+end t
+
+-- case: reject set it to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set it to 1
+end t
+
+-- case: reject set item 2 of the tags of it to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set item 2 of the tags of it to 1
+end t
+
+-- case: reject set the length of it to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the length of it to 1
+end t
+
+-- case: reject set the label of the items of it to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the label of the items of it to 1
+end t
+
+-- case: reject put 1 into it (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into it
+end t
+
+-- case: reject put 1 into the label of it (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into the label of it
+end t
+
+-- case: reject put 1 after it (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after it
+end t
+
+-- case: reject put 1 after the label of it (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after the label of it
+end t
+
+-- case: reject put 1 before it (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before it
+end t
+
+-- case: reject put 1 before the label of it (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before the label of it
+end t
+
+-- case: reject put ...[1] after it (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after it
+end t
+
+-- case: reject put ...[1] after the label of it (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after the label of it
+end t
+
+-- case: reject add 1 to it (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to it
+end t
+
+-- case: reject add 1 to the label of it (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to the label of it
+end t
+
+-- case: reject subtract 1 from it (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from it
+end t
+
+-- case: reject subtract 1 from the label of it (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from the label of it
+end t
+
+-- case: reject multiply it by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply it by 2
+end t
+
+-- case: reject multiply the label of it by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply the label of it by 2
+end t
+
+-- case: reject divide it by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide it by 2
+end t
+
+-- case: reject divide the label of it by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide the label of it by 2
+end t
+
+-- case: reject delete it (#744)
+-- expect: not a container at 2:10
+on t
+  delete it
+end t
+
+-- case: reject delete the label of it (#744)
+-- expect: not a container at 2:10
+on t
+  delete the label of it
+end t
+
+-- case: reject replace "a" in it with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in it with "b"
+end t
+
+-- case: reject replace "a" in the label of it with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in the label of it with "b"
+end t
+
+-- case: property target the label of the target (#744)
+-- expect: parses
+on t
+  set the label of the target to "Open"
+end t
+
+-- case: property target the "label" of the target (#744)
+-- expect: parses
+on t
+  set the "label" of the target to "Open"
+end t
+
+-- case: property target ((the ("label") of (the target))) (#744)
+-- expect: parses
+on t
+  set ((the ("label") of (the target))) to "Open"
+end t
+
+-- case: property target the label of item 2 of the target (#744)
+-- expect: parses
+on t
+  set the label of item 2 of the target to "Open"
+end t
+
+-- case: property target the label of the child of the target (#744)
+-- expect: parses
+on t
+  set the label of the child of the target to "Open"
+end t
+
+-- case: property target (the target)'s label (#744)
+-- expect: parses
+on t
+  set (the target)'s label to "Open"
+end t
+
+-- case: reject set the target to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the target to 1
+end t
+
+-- case: reject set item 2 of the tags of the target to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set item 2 of the tags of the target to 1
+end t
+
+-- case: reject set the length of the target to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the length of the target to 1
+end t
+
+-- case: reject set the label of the items of the target to 1 (#744)
+-- expect: not a container at 2:7
+on t
+  set the label of the items of the target to 1
+end t
+
+-- case: reject put 1 into the target (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into the target
+end t
+
+-- case: reject put 1 into the label of the target (#744)
+-- expect: not a container at 2:14
+on t
+  put 1 into the label of the target
+end t
+
+-- case: reject put 1 after the target (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after the target
+end t
+
+-- case: reject put 1 after the label of the target (#744)
+-- expect: not a container at 2:15
+on t
+  put 1 after the label of the target
+end t
+
+-- case: reject put 1 before the target (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before the target
+end t
+
+-- case: reject put 1 before the label of the target (#744)
+-- expect: not a container at 2:16
+on t
+  put 1 before the label of the target
+end t
+
+-- case: reject put ...[1] after the target (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after the target
+end t
+
+-- case: reject put ...[1] after the label of the target (#744)
+-- expect: not a container at 2:20
+on t
+  put ...[1] after the label of the target
+end t
+
+-- case: reject add 1 to the target (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to the target
+end t
+
+-- case: reject add 1 to the label of the target (#744)
+-- expect: not a container at 2:12
+on t
+  add 1 to the label of the target
+end t
+
+-- case: reject subtract 1 from the target (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from the target
+end t
+
+-- case: reject subtract 1 from the label of the target (#744)
+-- expect: not a container at 2:19
+on t
+  subtract 1 from the label of the target
+end t
+
+-- case: reject multiply the target by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply the target by 2
+end t
+
+-- case: reject multiply the label of the target by 2 (#744)
+-- expect: not a container at 2:12
+on t
+  multiply the label of the target by 2
+end t
+
+-- case: reject divide the target by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide the target by 2
+end t
+
+-- case: reject divide the label of the target by 2 (#744)
+-- expect: not a container at 2:10
+on t
+  divide the label of the target by 2
+end t
+
+-- case: reject delete the target (#744)
+-- expect: not a container at 2:10
+on t
+  delete the target
+end t
+
+-- case: reject delete the label of the target (#744)
+-- expect: not a container at 2:10
+on t
+  delete the label of the target
+end t
+
+-- case: reject replace "a" in the target with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in the target with "b"
+end t
+
+-- case: reject replace "a" in the label of the target with "b" (#744)
+-- expect: not a container at 2:18
+on t
+  replace "a" in the label of the target with "b"
+end t

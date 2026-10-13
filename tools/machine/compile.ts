@@ -1657,7 +1657,10 @@ export class BodyCompiler {
   }
 
   setStatement(s: Node) {
-    const t = s.target;
+    let t = s.target;
+    while (t.k === 'Group') {
+      t = t.e;
+    }
     if (t.k !== 'Key') {
       this.fail(t, "`set` writes a Host Object's property");
     }

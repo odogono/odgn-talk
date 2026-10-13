@@ -30,6 +30,13 @@ charging the full result size for `collecting`. Save/Restore uses the same value
 format and reconstructs independent storage.
 
 
+Whole Host Object properties can be assigned with `set` through `me`, `it`
+or `the target`, including intermediate keys/chunks that locate the Object.
+These implicit bindings cannot be replaced or used as roots for ordinary
+Container mutations. `set` does not modify chunks inside a property's value.
+Direct known-owner read-only properties are checked at load; `it` and Target
+properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
+
 ## Task navigation
 
 **Recovery Offers:** this Core parses, checks, lowers and executes offers and two-phase catch search. Ordinary catches test before cleanup; recovery policy can choose a retained local/Library/same-Run action. `offerAvailable`, canonical metadata, costs and choice/entry Trace records are implemented. Nested policy searches stay within their selection boundary; escaping policy Errors carry `during` outward, transfer cleanup preserves or cancels choices as appropriate, and cancellation enumerates dispatch-local and retained scopes once. Dispatch saves retain control stacks, shared owner locals, pending transfers, cleanup progress and attempt numbers. Restore validates every retained code/body/PC, ownership chain, target and cleanup reference before resuming; search and lookup preempt only at the following instruction boundary. [Save/restore evidence](../../docs/reviews/recovery-offers-saves/README.md) covers ordinary catches, nested policy, transfer cleanup, action entry and cancellation. Session Scripts can choose Library offers and replay their Transcripts. The shared TS debugger and Playground follow active dispatch control and display retained frames with shared owner locals; Go reproduces their execution Traces through its replay backend. See the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [language rules](../../spec/04-expressions-and-statements.md#recovery-offers).

@@ -425,7 +425,7 @@ In operand position, `<< … >>` builds Bytes from its fields, in order:
 
 A Container is a variable, or a chain of chunks and keys rooted in one: `item 2 of totals`, `the age of person` ([chapter 2](02-grammar.md#statements) has the syntax).
 
-Built-in properties are read-only: a Container cannot end in or pass through one. Such a target is `not a container` at its first token, including in `set`. A quoted key such as `the "length" of x` or a computed key remains a key; property reads inside computed keys, chunk indexes, delimiters and value expressions remain allowed.
+Built-in properties are read-only: a Container cannot end in or pass through one. Such a target is `not a container` at its first token, including on a `set` property target. A quoted key such as `the "length" of x` or a computed key remains a key; property reads inside computed keys, chunk indexes, delimiters and value expressions remain allowed.
 
 A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first item of xs whose it < 0` is a syntax error at `whose`, and `put 0 into every item of xs whose it < 0` one at `item`. A `repeat for each` over the positions writes chunks one by one.
 
@@ -467,7 +467,23 @@ A [Whose Clause](#whose-clauses) is never a Container: `put 0 into the first ite
 - **`put e after c`** and **`put e before c`**: if `c` holds a list, `e` becomes its last or first element, as one element. If `c` holds text, the text form of `e` is joined on, as `&` does. Anything else raises `wrong kind` with `expected` `"text"`.
 - **`put ...e after c`** and **`before`** splice the elements of the list `e` into the list `c`. Either one not being a list raises `wrong kind` with `expected` `"list"`.
 - **`let p be e`** matches `e` against the pattern `p` and binds its names, or raises `no match`.
-- **`set c to e`** writes a property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
+- **`set c to e`** writes a whole property of a Host Object: the last step of `c` must be a key of a value that is a Host Object, or `wrong kind` is raised with `expected` `"object"`. The Host's `Set` runs ([chapter 9](09-embedding.md)). A read-only property is a load error where the object's kind and the key are known at load, and otherwise raises `read only`. A well-known Object binding and an Owning Script's `me` supply the kind; an unquoted or quoted literal key, including a parenthesized text literal, supplies the key. The check uses the binding's declaration, without inferring kinds through locals, aliases or property results. A missing property has no `Set` and is read-only for this check. A computed key that is not a text literal is checked at run time. A disposed object raises `object gone`. `set` on a bare variable is a load error.
+
+A `set` property target may be rooted in a Name, `me`, `it` or `the target`,
+with only keys and chunks along the path and a key as its final step.
+Parentheses, quoted keys and computed keys follow the same rules for every
+root. Intermediate keys and chunks read the receiving Object: for example,
+`set the label of item 2 of it to "Open"` works when that item is a Host Object.
+`set item 2 of the tags of it to "new"` is `not a container`: `set` does not
+read, modify and write back a property's contents.
+
+These property writes do not replace the root binding. Bare `me`, `it` and
+`the target`, and Containers rooted in them for `put`, arithmetic, `delete`
+or statement `replace`, are `not a container` at the target's first token.
+Only the result-setting statements described above change `it`. `it` and
+`the target` do not supply a statically known Object Kind; their property
+checks happen at run time. The existing Library and Lambda restrictions on
+`me` and `the target` still apply. See [ADR 0085](../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md).
 
 ### Arithmetic statements
 

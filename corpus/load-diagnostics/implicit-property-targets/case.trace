@@ -1,0 +1,38 @@
+# Unblessed: implicit property target diagnostics (#744); first blessing awaits human review.
+> load readonly identity=f27f2f34180cd5f00c59f45bef5a96aeea4878a5bdaa449557863164fd63faa2
+diag readonly code="can't write" pos=2:3
+> load readonly-computed identity=a061cc77b68d9194e13855c5f8fdf5f0dae41a923fcb3555cd2e55a94b0350d3
+diag readonly-computed code="can't write" pos=2:3
+> load me-bare-set identity=bd2872958bcde9c448c487e8a9d282f368c297afcd11db694ea296fab4327cfb
+diag me-bare-set code="not a container" pos=2:7
+> load me-bare-put identity=63703a9773ac0e164dd1d7b53add379d25181f928cc58440e2cd8983eb3c1d66
+diag me-bare-put code="not a container" pos=2:14
+> load me-put-key identity=19d4112d7b9c487a0daccfa04b30a39865b151aaa1924b2bd2735af60b995da9
+diag me-put-key code="not a container" pos=2:14
+> load me-chunk identity=d146517310bd52ac1d2bef3b520e26d854c3f37bdfa1ff21d1a360e76f8c295a
+diag me-chunk code="not a container" pos=2:7
+> load me-builtin identity=7848e4f1be5032e0ee3b51cfc4c25a29b028d0f8f4928637edd8ec20b68262f2
+diag me-builtin code="not a container" pos=2:7
+> load it-bare-set identity=5b27188b36da1ecd173f3085d733a4328205467c6bc3ba3d6c5c96af397f12c2
+diag it-bare-set code="not a container" pos=2:7
+> load it-bare-put identity=8a88cf9c61c234f6de3f2852fd9246cf7a62ead03a121e5d09f405656c69d8b0
+diag it-bare-put code="not a container" pos=2:14
+> load it-put-key identity=bc8f4a1720b6fe4fc6501b16700dc37dd17fed807c2a7fcbb39ee9458548f4f9
+diag it-put-key code="not a container" pos=2:14
+> load it-chunk identity=4b51f82d474be2825b1fe829ca69dfbadfc8ea0481d8cb3d5de0368c92165852
+diag it-chunk code="not a container" pos=2:7
+> load it-builtin identity=86ce9c410515f973094455fa7203c29404cdde6cd1d65e0877394cee10bf8d3e
+diag it-builtin code="not a container" pos=2:7
+> load target-bare-set identity=5fbdd79b8651b228fca8c9f02f775f450529664f7e0dd16b14965fd2729525a2
+diag target-bare-set code="not a container" pos=2:7
+> load target-bare-put identity=96fa9dbdc7cc0b00087ae70cfba442130b36531cedf0dcc4f10bc6ac28fe21ea
+diag target-bare-put code="not a container" pos=2:14
+> load target-put-key identity=cad90d332bd62998627ae7695c527cd8615172f081af1b3f375e32992800a017
+diag target-put-key code="not a container" pos=2:14
+> load target-chunk identity=7ba935df8d171d2f92b77b6b09b958541277e3fdd2750e3b5d773c641e894977
+diag target-chunk code="not a container" pos=2:7
+> load target-builtin identity=65a8f1386147f7fdb7fb8821e25abe2dd73f08314ff89a3c3cb67ebd7119459d
+diag target-builtin code="not a container" pos=2:7
+> load lambda-target identity=34ce5b1c86a2bf01ab0fbb0e32fb99a6b24b47d082f7ec9941d03b156e7fdc00
+diag lambda-target code="not in a lambda" pos=3:22
+> vars

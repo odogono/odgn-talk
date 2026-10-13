@@ -1,0 +1,3 @@
+on go
+  set the length of me to 1
+end go
