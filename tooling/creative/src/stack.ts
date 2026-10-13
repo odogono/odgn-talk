@@ -262,7 +262,7 @@ export const mountStack = (
   options: { readOnly?: boolean } = {},
 ): StackShell => {
   const editor = new StackEditor(project);
-  let readOnly = options.readOnly ?? false;
+  editor.readOnly = options.readOnly ?? false;
   const desk = byId('desk');
   const stage = byId('stage');
   const pageNode = byId('page');
@@ -307,7 +307,7 @@ export const mountStack = (
         ?.classList.add('selected');
     }
     const [single] = selected;
-    if (single && selected.length === 1 && !readOnly) {
+    if (single && selected.length === 1 && !editor.readOnly) {
       // Handles sit over the Element rather than in it, which may clip them.
       const box = h(
         'div',
@@ -575,7 +575,7 @@ export const mountStack = (
             ]
           : pageInfo(editor.page)),
     );
-    if (readOnly) {
+    if (editor.readOnly) {
       for (const control of info.querySelectorAll<
         | HTMLButtonElement
         | HTMLInputElement
@@ -594,7 +594,10 @@ export const mountStack = (
   const drawTextControls = () => {
     const [element, ...others] = editor.selected;
     const target =
-      !readOnly && !activeText && !others.length && element?.kind === 'text'
+      !editor.readOnly &&
+      !activeText &&
+      !others.length &&
+      element?.kind === 'text'
         ? element
         : undefined;
     if (textControls?.history.element !== target) {
@@ -610,10 +613,10 @@ export const mountStack = (
 
   const draw = () => {
     byId('project-title').textContent = project.name;
-    pageNode.classList.toggle('edit', !readOnly);
-    (byId('add-page') as HTMLButtonElement).disabled = readOnly;
+    pageNode.classList.toggle('edit', !editor.readOnly);
+    (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
-      button.disabled = readOnly;
+      button.disabled = editor.readOnly;
     }
     drawPage();
     drawStrip();
@@ -631,9 +634,6 @@ export const mountStack = (
   };
 
   const rename = (name: string) => {
-    if (readOnly) {
-      return;
-    }
     closeText();
     const [element] = editor.selected;
     const check =
@@ -647,7 +647,7 @@ export const mountStack = (
   // A form field changed: write it to the selected Element, or to the Page.
   const write = (target: HTMLInputElement, live: boolean) => {
     const key = target.dataset.field;
-    if (readOnly || !key || key === 'name') {
+    if (!key || key === 'name') {
       return;
     }
     closeText();
@@ -747,7 +747,7 @@ export const mountStack = (
     const name = target.closest<HTMLElement>('[data-element]')?.dataset.element;
     pointerElement = name;
     let gesture: Gesture | undefined;
-    if (readOnly) {
+    if (editor.readOnly) {
       edit(() => editor.click(name, { shift: down.shiftKey }));
       return;
     }
@@ -799,7 +799,7 @@ export const mountStack = (
     pageNode.addEventListener('pointercancel', up, { once: true });
   });
   const openText = (name: string) => {
-    if (readOnly) {
+    if (editor.readOnly) {
       return;
     }
     const element = editor.element(name);
@@ -866,7 +866,7 @@ export const mountStack = (
   byId('tools').addEventListener('click', event => {
     const kind = (event.target as HTMLElement).closest('button')?.dataset
       .kind as ElementKind | undefined;
-    if (kind && !readOnly) {
+    if (kind) {
       edit(() => editor.addElement(kind));
     }
   });
@@ -878,11 +878,9 @@ export const mountStack = (
   byId('next-page').addEventListener('click', () =>
     edit(() => editor.nextPage()),
   );
-  byId('add-page').addEventListener('click', () => {
-    if (!readOnly) {
-      edit(() => editor.addPage());
-    }
-  });
+  byId('add-page').addEventListener('click', () =>
+    edit(() => editor.addPage()),
+  );
   thumbnails.addEventListener('click', event => {
     const index = pageIndexOf(event);
     if (index !== undefined) {
@@ -890,7 +888,7 @@ export const mountStack = (
     }
   });
   thumbnails.addEventListener('dragstart', event => {
-    if (readOnly) {
+    if (editor.readOnly) {
       event.preventDefault();
       return;
     }
@@ -936,13 +934,10 @@ export const mountStack = (
         duplicate: true,
       };
       button.disabled =
-        readOnly || !(enabled[command] ?? editor.selection.length > 0);
+        editor.readOnly || !(enabled[command] ?? editor.selection.length > 0);
     }
   };
   const runCommand = (command: EditingCommand) => {
-    if (readOnly) {
-      return;
-    }
     finishFieldEdit();
     edit(commands[command]);
     byId('edit-menu').removeAttribute('open');
@@ -983,7 +978,7 @@ export const mountStack = (
       ArrowUp: [0, -step],
       ArrowDown: [0, step],
     }[event.key];
-    if (nudge && editor.selection.length && !readOnly) {
+    if (nudge && editor.selection.length && !editor.readOnly) {
       event.preventDefault();
       edit(() => {
         const gesture = editor.startMove();
@@ -999,16 +994,16 @@ export const mountStack = (
   return {
     editor,
     get readOnly() {
-      return readOnly;
+      return editor.readOnly;
     },
     redraw: draw,
     setReadOnly(value: boolean) {
-      if (value === readOnly) {
+      if (value === editor.readOnly) {
         return;
       }
       finishFieldEdit();
       closeText();
-      readOnly = value;
+      editor.readOnly = value;
       draw();
     },
   };

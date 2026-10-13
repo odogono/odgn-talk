@@ -55,11 +55,17 @@
         </details>
       </div>
       <div id="readonly-banner" class="banner" role="status" hidden>
-        <span>Another tab is editing this Project. You're viewing it read-only.</span>
+        <span
+          >Another tab is editing this Project. You're viewing it
+          read-only.</span
+        >
         <button id="edit-here" type="button">Edit here instead</button>
       </div>
       <div id="orphan-banner" class="banner" role="alert" hidden>
-        <span>This Project was deleted in another tab. Your copy is still here.</span>
+        <span
+          >This Project was deleted in another tab. Your copy is still
+          here.</span
+        >
         <button id="keep-as-new" type="button">Keep as a new Project</button>
         <button type="button" data-export-now>Export now</button>
       </div>
@@ -99,12 +105,55 @@
     >
       <div class="bar"><span id="info-title">Info</span></div>
       <div id="text-toolbar" role="toolbar" aria-label="Text formatting" hidden>
-        <button type="button" data-text-command="paragraph" title="Insert a paragraph" aria-label="Paragraph">¶</button>
-        <button type="button" data-text-command="bold" aria-pressed="false" title="Bold" aria-label="Bold"><b>B</b></button>
-        <button type="button" data-text-command="italic" aria-pressed="false" title="Italic" aria-label="Italic"><i>I</i></button>
-        <button type="button" data-text-command="underline" aria-pressed="false" title="Underline" aria-label="Underline"><u>U</u></button>
-        <label>Colour <input type="color" value="#1d1d1f" aria-label="Selection text colour" /></label>
-        <button type="button" data-text-command="clear" title="Clear formatting">Clear</button>
+        <button
+          type="button"
+          data-text-command="paragraph"
+          title="Insert a paragraph"
+          aria-label="Paragraph"
+        >
+          ¶
+        </button>
+        <button
+          type="button"
+          data-text-command="bold"
+          aria-pressed="false"
+          title="Bold"
+          aria-label="Bold"
+        >
+          <b>B</b>
+        </button>
+        <button
+          type="button"
+          data-text-command="italic"
+          aria-pressed="false"
+          title="Italic"
+          aria-label="Italic"
+        >
+          <i>I</i>
+        </button>
+        <button
+          type="button"
+          data-text-command="underline"
+          aria-pressed="false"
+          title="Underline"
+          aria-label="Underline"
+        >
+          <u>U</u>
+        </button>
+        <label
+          >Colour
+          <input
+            type="color"
+            value="#1d1d1f"
+            aria-label="Selection text colour"
+        /></label>
+        <button
+          type="button"
+          data-text-command="clear"
+          title="Clear formatting"
+        >
+          Clear
+        </button>
         <button type="button" data-text-command="undo">Undo</button>
         <button type="button" data-text-command="redo">Redo</button>
         <button type="button" data-text-command="done">Done</button>
@@ -120,7 +169,12 @@
       hidden
     >
       <div class="bar">
-        <button id="close-projects" type="button" class="close" title="Close"></button>
+        <button
+          id="close-projects"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
         <span id="projects-title">Projects</span>
       </div>
       <div id="projects-panel">
@@ -130,8 +184,8 @@
           <p id="persist-status"></p>
           <p id="storage-use" class="muted"></p>
           <p id="export-reminder" hidden>
-            This Project has changed since its last export, and the browser
-            may clear what it keeps here.
+            This Project has changed since its last export, and the browser may
+            clear what it keeps here.
             <button type="button" data-export-now>Export a copy</button>
           </p>
         </div>
@@ -146,13 +200,20 @@
       hidden
     >
       <div class="bar">
-        <button id="close-versions" type="button" class="close" title="Close"></button>
+        <button
+          id="close-versions"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
         <span id="versions-title">Earlier versions</span>
       </div>
       <div id="versions-panel">
         <p id="preview-note" hidden>
           <span id="preview-text"></span>
-          <button id="restore-version" type="button">Restore this version</button>
+          <button id="restore-version" type="button">
+            Restore this version
+          </button>
           <button id="back-to-latest" type="button">Back to latest</button>
         </p>
         <ul id="version-list"></ul>

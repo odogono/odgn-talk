@@ -225,17 +225,16 @@ const checkedModel = (project: Project): Record<string, unknown> => {
  * Deletes stored assets no kept version of any Project refers to. Runs
  * inside the caller's transaction, after versions have been trimmed.
  */
+const assetHashesOf = (version: StoredVersion): string[] =>
+  ((version.model.assets as { hash: string }[] | undefined) ?? []).map(
+    asset => asset.hash,
+  );
+
 const collectGarbage = async (tx: IDBTransaction): Promise<void> => {
   const versions = (await request(
     store(tx, 'versions').getAll(),
   )) as StoredVersion[];
-  const used = new Set<string>();
-  for (const version of versions) {
-    const assets = version.model.assets as { hash: string }[] | undefined;
-    for (const asset of assets ?? []) {
-      used.add(asset.hash);
-    }
-  }
+  const used = new Set(versions.flatMap(assetHashesOf));
   const assets = store(tx, 'assets');
   const keys = (await request(assets.getAllKeys())) as string[];
   for (const hash of keys) {
@@ -348,12 +347,22 @@ export class ProjectStorage {
           versions.getAll(versionRange(projectId)),
         )) as StoredVersion[];
         const keep = versionsToKeep(kept, now);
-        for (const version of kept) {
-          if (!keep.has(version.seq)) {
-            await request(versions.delete([projectId, version.seq]));
-          }
+        const trimmed = kept.filter(version => !keep.has(version.seq));
+        for (const version of trimmed) {
+          await request(versions.delete([projectId, version.seq]));
         }
-        await collectGarbage(tx);
+        // Only assets a trimmed version used, or new ones the model leaves
+        // out, can be unused now, so most saves skip scanning every Project.
+        const keptHashes = new Set(
+          kept.filter(version => keep.has(version.seq)).flatMap(assetHashesOf),
+        );
+        if (
+          [...trimmed.flatMap(assetHashesOf), ...assets.keys()].some(
+            hash => !keptHashes.has(hash),
+          )
+        ) {
+          await collectGarbage(tx);
+        }
         return record;
       },
     );

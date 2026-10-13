@@ -326,3 +326,30 @@ test('replaceProject loads another Project without history or a change notice', 
   expect(editor.selection).toEqual([]);
   expect(notices).toBe(0);
 });
+
+test('a read-only editor rolls back every change but still navigates', () => {
+  const editor = makeEditor();
+  editor.addPage();
+  const before = structuredClone(editor.project);
+  let notices = 0;
+  editor.onChange = () => notices++;
+  editor.readOnly = true;
+
+  select(editor, 'a');
+  editor.addElement('button');
+  editor.duplicate();
+  editor.delete();
+  const gesture = editor.startMove();
+  gesture.to(10, 10);
+  gesture.finish();
+  editor.undo();
+  expect(editor.project).toEqual(before);
+  expect(editor.canUndo).toBe(false);
+  expect(notices).toBe(0);
+
+  editor.goToPage(1);
+  expect(editor.pageIndex).toBe(1);
+
+  editor.readOnly = false;
+  expect(editor.canUndo).toBe(true);
+});

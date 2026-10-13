@@ -186,6 +186,13 @@ export class StackEditor {
    */
   onChange: (() => void) | undefined;
 
+  /**
+   * While set, the Project cannot change: undo and redo do nothing, and
+   * any edit is rolled back when it finishes. Selection and the showing
+   * Page still change, so a read-only tab can look around.
+   */
+  readOnly = false;
+
   constructor(readonly project: Project) {}
 
   #snapshot(): Snapshot {
@@ -247,7 +254,9 @@ export class StackEditor {
     const pending = this.#pending;
     const changed = this.#pendingChanged;
     this.#pending = undefined;
-    if (pending && changed) {
+    if (pending && changed && this.readOnly) {
+      this.#restore(pending.before);
+    } else if (pending && changed) {
       this.#past.push({ before: pending.before, after: this.#snapshot() });
       this.#future = [];
       this.onChange?.();
@@ -255,11 +264,11 @@ export class StackEditor {
   }
 
   get canUndo(): boolean {
-    return this.#past.length > 0 || this.#pendingChanged;
+    return !this.readOnly && (this.#past.length > 0 || this.#pendingChanged);
   }
 
   get canRedo(): boolean {
-    return this.#future.length > 0 && !this.#pendingChanged;
+    return !this.readOnly && this.#future.length > 0 && !this.#pendingChanged;
   }
 
   /** Records any authored Project change, including Info and future Script edits. */
@@ -287,7 +296,7 @@ export class StackEditor {
           // A live notice once the Project really changed, so autosave
           // can cap how long a continuous drag goes unsaved.
           changed ||= pending.json !== JSON.stringify(this.project);
-          if (changed) {
+          if (changed && !this.readOnly) {
             this.onChange?.();
           }
         }
@@ -302,7 +311,7 @@ export class StackEditor {
 
   undo(): void {
     this.#finish();
-    const entry = this.#past.pop();
+    const entry = this.readOnly ? undefined : this.#past.pop();
     if (entry) {
       this.#restore(entry.before);
       this.#future.push(entry);
@@ -312,7 +321,7 @@ export class StackEditor {
 
   redo(): void {
     this.#finish();
-    const entry = this.#future.pop();
+    const entry = this.readOnly ? undefined : this.#future.pop();
     if (entry) {
       this.#restore(entry.after);
       this.#past.push(entry);

@@ -214,7 +214,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (firstSave) {
         firstSave = false;
         void askPersist();
-      } else {
+      } else if (!byId('projects-window').hidden) {
         void drawStorageStatus();
       }
       void drawList();
@@ -244,6 +244,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       void autosave.flush();
+    } else if (behind) {
+      void followLatest();
     }
   });
 
@@ -423,7 +425,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       : newProject());
   };
 
+  /** Draws the Project list; a hidden window is drawn when it opens. */
   const drawList = async (): Promise<void> => {
+    if (byId('projects-window').hidden) {
+      return;
+    }
     const list = byId('project-list');
     if (!storage) {
       list.replaceChildren(
@@ -537,7 +543,12 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void drawVersions();
   };
 
+  /** Draws the version list; a hidden window is drawn when it opens. */
   const drawVersions = async (): Promise<void> => {
+    (byId('restore-version') as HTMLButtonElement).disabled = !lock.editing;
+    if (byId('versions-window').hidden) {
+      return;
+    }
     const list = byId('version-list');
     if (!storage || orphaned) {
       list.replaceChildren(h('li', {}, 'No earlier versions are kept.'));
@@ -576,7 +587,6 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         );
       }),
     );
-    (byId('restore-version') as HTMLButtonElement).disabled = !lock.editing;
   };
 
   const previewVersion = async (
@@ -696,14 +706,28 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     // Unsaved work in this tab is never replaced; it keeps its banner.
-    if (
-      message.type === 'saved' &&
-      !lock.editing &&
-      !preview &&
-      !autosave.dirty &&
-      storage
-    ) {
-      void storage
+    if (message.type === 'saved') {
+      void followLatest();
+    }
+  };
+
+  // A read-only tab follows the editing tab's saves: one load at a time,
+  // and none while the tab is hidden; the latest is loaded when it shows.
+  let behind = false;
+  let following = false;
+  const followLatest = async (): Promise<void> => {
+    behind = true;
+    if (following || document.hidden) {
+      return;
+    }
+    following = true;
+    while (behind) {
+      behind = false;
+      // Unsaved work in this tab is never replaced; it keeps its banner.
+      if (lock.editing || preview || autosave.dirty || !storage) {
+        break;
+      }
+      await storage
         .loadProject(currentId)
         .then(loaded => {
           record = loaded.record;
@@ -713,6 +737,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         })
         .catch(() => {});
     }
+    following = false;
   };
   channel?.listen(onChannelMessage);
 
