@@ -1,0 +1,86 @@
+# Unblessed: Nothing-default and optional-read Fuel totals and budget boundaries (#722); first blessing awaits human review.
+#
+# totals: `one` is dispatch 4, `const` 1 and `return` 2, so 7. Each other
+# handler's Fuel less 6 is its expression's Fuel, as the design lists them:
+# `1 otherwise 2` 2, `nothing otherwise 2` 4, `1 otherwise 2 otherwise 3` 3,
+# `nothing otherwise nothing otherwise 3` 7. An optional read is 3 beyond its
+# operands, whether it finds Nothing or fails.
+#
+# default.talk lowers to (`bun tools/machine/check.ts --dis`):
+#   0002 3:10 const nothing                 1
+#   0003 3:18 branch-not-nothing 0007       1
+#   0004 3:18 pop                           1
+#   0005 3:46 const nothing                 1
+#   0006 3:28 get-optional-key x            3
+#   0007 3:3  return                        2
+# so 4 + 9 = 13, which `default` spends exactly. A budget of 5 faults at the
+# branch, 6 at the pop and 8 at the read, each before it does anything.
+#
+# computed.talk: dispatch 4, two consts 2, `get-optional-key-computed` 3 and
+# `return` 2 make 11; a budget of 6 faults at the read.
+
+> load totals identity=7db1f3e5a3f05e04c7603a09092c6c9e9478c870de6b3a28122665c21dafb4ed
+> load default identity=407bca7c21d72a7569552b16da8c908f96d4f5e35d71709c4c053f5bf5c30898
+> load beforeBranch identity=ae2500140cbc1b35635b36bb36209409f7060edecbdbfcc7df1200e12e0fb3d8
+> load beforePop identity=ed40c1819e4e90ef8d1aba7828932ec9101ce36b0fd73234cf174e016778a967
+> load beforeRead identity=0a111da0f148af98966470a62ccf24cb66cb8201a0454b74332558ea901ee73a
+> load computed identity=62ffc6d40fadf667ca276cbde0fb86ec2baf959e2bad4b96a938542cf4f4b198
+> load beforeComputedRead identity=9766f2c8b4cc0509b800484500d91add299cf6eaaf6a8f61ea188bc3930a927e
+> deliver d1 to=totals message=one
+> deliver d2 to=totals message=present
+> deliver d3 to=totals message=absent
+> deliver d4 to=totals message=presentChain
+> deliver d5 to=totals message=absentChain
+> deliver d6 to=totals message=literalRead
+> deliver d7 to=totals message=computedRead
+> deliver d8 to=totals message=failedRead
+> deliver d9 to=default message=go
+> deliver d10 to=beforeBranch message=go
+> deliver d11 to=beforePop message=go
+> deliver d12 to=beforeRead message=go
+> deliver d13 to=computed message=go
+> deliver d14 to=beforeComputedRead message=go
+> pump clock=2026-10-13T09:00:00Z
+seg totals/r1 start delivery=d1 handler=one clause=1 fuel=7 alloc=0 state=224 end=return
+run totals/r1 outcome=completed delivery=d1 handler=one value=1 fuel=7 alloc=0
+seg default/r1 start delivery=d9 handler=go clause=1 fuel=13 alloc=0 state=0 end=return
+run default/r1 outcome=completed delivery=d9 handler=go fuel=13 alloc=0
+fault beforeBranch/r1 limit=fuel at=beforeBranch:3 pos=3:18
+seg beforeBranch/r1 start delivery=d10 handler=go clause=1 fuel=5 alloc=0 state=0 end=fault
+run beforeBranch/r1 outcome=limit-fault delivery=d10 handler=go limit=fuel fuel=5 alloc=0
+fault beforePop/r1 limit=fuel at=beforePop:4 pos=3:18
+seg beforePop/r1 start delivery=d11 handler=go clause=1 fuel=6 alloc=0 state=0 end=fault
+run beforePop/r1 outcome=limit-fault delivery=d11 handler=go limit=fuel fuel=6 alloc=0
+fault beforeRead/r1 limit=fuel at=beforeRead:6 pos=3:28
+seg beforeRead/r1 start delivery=d12 handler=go clause=1 fuel=8 alloc=0 state=0 end=fault
+run beforeRead/r1 outcome=limit-fault delivery=d12 handler=go limit=fuel fuel=8 alloc=0
+seg computed/r1 start delivery=d13 handler=go clause=1 fuel=11 alloc=0 state=0 end=return
+run computed/r1 outcome=completed delivery=d13 handler=go fuel=11 alloc=0
+fault beforeComputedRead/r1 limit=fuel at=beforeComputedRead:4 pos=3:10
+seg beforeComputedRead/r1 start delivery=d14 handler=go clause=1 fuel=6 alloc=0 state=0 end=fault
+run beforeComputedRead/r1 outcome=limit-fault delivery=d14 handler=go limit=fuel fuel=6 alloc=0
+seg totals/r2 start delivery=d2 handler=present clause=1 fuel=8 alloc=0 state=192 end=return
+run totals/r2 outcome=completed delivery=d2 handler=present value=1 fuel=8 alloc=0
+seg totals/r3 start delivery=d3 handler=absent clause=1 fuel=10 alloc=0 state=160 end=return
+run totals/r3 outcome=completed delivery=d3 handler=absent value=2 fuel=10 alloc=0
+seg totals/r4 start delivery=d4 handler=presentChain clause=1 fuel=9 alloc=0 state=128 end=return
+run totals/r4 outcome=completed delivery=d4 handler=presentChain value=1 fuel=9 alloc=0
+seg totals/r5 start delivery=d5 handler=absentChain clause=1 fuel=13 alloc=0 state=96 end=return
+run totals/r5 outcome=completed delivery=d5 handler=absentChain value=3 fuel=13 alloc=0
+seg totals/r6 start delivery=d6 handler=literalRead clause=1 fuel=10 alloc=0 state=64 end=return
+run totals/r6 outcome=completed delivery=d6 handler=literalRead fuel=10 alloc=0
+seg totals/r7 start delivery=d7 handler=computedRead clause=1 fuel=11 alloc=0 state=32 end=return
+run totals/r7 outcome=completed delivery=d7 handler=computedRead fuel=11 alloc=0
+raise totals/r8 code="wrong kind" at=totals:59 pos=33:10
+seg totals/r8 start delivery=d8 handler=failedRead clause=1 fuel=12 alloc=0 state=0 end=error
+run totals/r8 outcome=errored delivery=d8 handler=failedRead error={code: "wrong kind", expected: "map", got: "number", value: 1, at: {unit: "totals", handler: "failedRead", line: 33, column: 10}} fuel=12 alloc=0
+pumped state=idle fuel=129
+
+> vars
+vars totals
+vars default
+vars beforeBranch
+vars beforePop
+vars beforeRead
+vars computed
+vars beforeComputedRead

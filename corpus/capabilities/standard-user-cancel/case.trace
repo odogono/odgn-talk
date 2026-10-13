@@ -1,5 +1,5 @@
 # Unblessed: user cancels (#527); first blessing awaits human review.
-> load s identity=59d882c7f66f67f7cefdd9975dd659a3ccc74b162983afc975688990078af418
+> load s identity=6e2fb5c5308f6a4ac66d82f31fcd3dfb9476928d45201b958614cbd6f4310a57
 > deliver d1 to=s message=confirmIt
 > deliver d2 to=s message=chooseOne
 > deliver d3 to=s message=enterName

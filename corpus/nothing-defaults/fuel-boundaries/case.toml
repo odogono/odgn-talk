@@ -1,0 +1,45 @@
+# fuel-boundaries: Cost Model 0's exact Fuel for Nothing defaults and
+# optional reads, and the exact Fuel per Run budgets at which a Run faults
+# immediately before `branch-not-nothing`, `pop`, `get-optional-key` and
+# `get-optional-key-computed`, each at its own pc and source position (spec
+# chapter 8, the lowering and Charging; design acceptance groups 2 and 10).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "totals"
+source = "totals.talk"
+
+[[scripts]]
+name = "default"
+source = "default.talk"
+limits = { fuelPerRun = 13 }
+
+[[scripts]]
+name = "beforeBranch"
+source = "default.talk"
+limits = { fuelPerRun = 5 }
+
+[[scripts]]
+name = "beforePop"
+source = "default.talk"
+limits = { fuelPerRun = 6 }
+
+[[scripts]]
+name = "beforeRead"
+source = "default.talk"
+limits = { fuelPerRun = 8 }
+
+[[scripts]]
+name = "computed"
+source = "computed.talk"
+limits = { fuelPerRun = 11 }
+
+[[scripts]]
+name = "beforeComputedRead"
+source = "computed.talk"
+limits = { fuelPerRun = 6 }

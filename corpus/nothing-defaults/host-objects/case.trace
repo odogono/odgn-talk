@@ -1,0 +1,44 @@
+# Unblessed: optional reads reject live and disposed Host Objects with no Host call (#722); first blessing awaits human review.
+
+> load h identity=e47b0c4a8c7b67eb2d1aa1b9640fa42098e546f0b9edb9fb9be739ef5808bcee
+> deliver d1 to=h message=known
+> deliver d2 to=h message=viaHandler
+> deliver d3 to=h message=inMap
+> deliver d4 to=h message=ordinary
+> pump clock=2026-10-13T09:00:00Z
+raise h/r1 code="wrong kind" at=h:5 pos=9:9
+raise h/r1 code="wrong kind" at=h:22 pos=14:9
+seg h/r1 start delivery=d1 handler=known clause=1 fuel=45 alloc=1112 state=1232 end=return
+run h/r1 outcome=completed delivery=d1 handler=known fuel=45 alloc=1112
+raise h/r2 code="wrong kind" at=h:43 pos=22:9
+raise h/r2 code="wrong kind" at=h:61 pos=27:9
+seg h/r2 start delivery=d2 handler=viaHandler clause=1 fuel=64 alloc=1116 state=2316 end=return
+run h/r2 outcome=completed delivery=d2 handler=viaHandler fuel=64 alloc=1116
+raise h/r3 code="wrong kind" at=h:94 pos=40:9
+seg h/r3 start delivery=d3 handler=inMap clause=1 fuel=41 alloc=616 state=2848 end=return
+run h/r3 outcome=completed delivery=d3 handler=inMap fuel=41 alloc=616
+prop h/r4 object=<object light "bulb-1"> name=label op=get value="on"
+seg h/r4 start delivery=d4 handler=ordinary clause=1 fuel=22 alloc=44 state=2842 end=return
+run h/r4 outcome=completed delivery=d4 handler=ordinary fuel=22 alloc=44
+pumped state=idle fuel=172
+
+> dispose object=<object light "bulb-1">
+> deliver d5 to=h message=known
+> deliver d6 to=h message=viaHandler
+> deliver d7 to=h message=inMap
+> pump clock=2026-10-13T09:00:01Z
+raise h/r5 code="wrong kind" at=h:5 pos=9:9
+raise h/r5 code="wrong kind" at=h:22 pos=14:9
+seg h/r5 start delivery=d5 handler=known clause=1 fuel=45 alloc=1112 state=4018 end=return
+run h/r5 outcome=completed delivery=d5 handler=known fuel=45 alloc=1112
+raise h/r6 code="wrong kind" at=h:43 pos=22:9
+raise h/r6 code="wrong kind" at=h:61 pos=27:9
+seg h/r6 start delivery=d6 handler=viaHandler clause=1 fuel=64 alloc=1116 state=5102 end=return
+run h/r6 outcome=completed delivery=d6 handler=viaHandler fuel=64 alloc=1116
+raise h/r7 code="wrong kind" at=h:94 pos=40:9
+seg h/r7 start delivery=d7 handler=inMap clause=1 fuel=41 alloc=616 state=5626 end=return
+run h/r7 outcome=completed delivery=d7 handler=inMap fuel=41 alloc=616
+pumped state=idle fuel=150
+
+> vars
+vars h log=[{code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 9, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 14, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 22, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 27, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "inMap", line: 40, column: 9}}, "on", {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 9, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "known", line: 14, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 22, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "dynamic", line: 27, column: 9}}, {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">, at: {unit: "h", handler: "inMap", line: 40, column: 9}}] stored=<object light "bulb-1">

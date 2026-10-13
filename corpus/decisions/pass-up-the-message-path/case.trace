@@ -5,8 +5,8 @@
 # Verdict is sealed. A Decision to a piece with no Script of its own is
 # dispatched to the board directly.
 
-> load board identity=86af9f9253cb38b2ee9deafdbd705e7567ad4c9d99da68e0dd4dd92469934f1c
-> load knight identity=09313b8fbd1b1ea6fd6c97e82fbd4d33cc362d2d65cdc05987ca92be8eaa5e45
+> load board identity=6d453d82275c14b186b67d2e02ba54f273b26577988e487c8ec54c93184b6292
+> load knight identity=0877f3bd9940e3c495955e5c37a7908de0fa46a4b8e73ab7f31861f18e7d1099
 > set-parent object=<object piece "knight"> parent=<object board "board">
 > set-parent object=<object piece "pawn"> parent=<object board "board">
 

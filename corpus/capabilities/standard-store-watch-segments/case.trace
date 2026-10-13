@@ -1,6 +1,6 @@
 # Unblessed: Store watch Operations (#620); first blessing awaits human review.
 # Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
-> load s identity=9dab07e7dc74b9310af9ca697a16204d7d8b4d2499be40a9cc1ce1b62d7ca875
+> load s identity=c8e2bb707a8ed0913e26cc11abcf6644c2df92314d3b48584ef4fadf715aa5ac
 > stub-effect s.writer phase=begin status=ok
 > stub store.set value=nothing
 > stub store.watch value=nothing

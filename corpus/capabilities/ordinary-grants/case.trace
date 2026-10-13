@@ -1,5 +1,5 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
-> load s identity=ba6ef8fba0318da2b51a6b97e72ef37776630090adf50b81dd09b2261d41d014
+> load s identity=4ea89ce7ea989ff75f627143da5156caaaa2eb05426ab6c3e88f30048b930850
 > stub api.read value=7
 > stub api.read value=8
 > deliver d1 to=s message=optional

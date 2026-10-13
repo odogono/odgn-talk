@@ -1,0 +1,27 @@
+# guards: a Guard may default an optional read. An absent or Nothing key with
+# `otherwise false` skips the clause normally, a present `true` chooses it,
+# and a nonboolean result skips it. A runtime `wrong kind` from an optional
+# read, on a number or on a known or dynamic Host Object, live or disposed,
+# skips the clause with a `guard-skip` record and no Host call, while an
+# ordinary Guard `id` read still selects (spec chapter 5, Guards; design
+# acceptance groups 6 and 7).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "label", shape = "text", readOnly = true, getCost = { fuel = 2 } }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { label = '"on"' }
+
+[[scripts]]
+name = "g"
+source = "g.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

@@ -2,7 +2,7 @@
 # Chapter 7's worked example. In d1 both updates commit with the Segment. In
 # d2 the debit changes no row, so the throw abandons the open transaction,
 # whose rollback discards the scope, and the Segment commits the log insert.
-> load s identity=da32060eafdddf9be01318e0a01744ce12a38cde3e6edd0758ccb03eb59811d9
+> load s identity=6b7723bddaa79efb32498a62101caa4aa837850a4515cfe4b4dde78b0fa3255d
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.change value={columns: [], rows: [], changes: 1}
 > stub sqlite.begin value=nothing

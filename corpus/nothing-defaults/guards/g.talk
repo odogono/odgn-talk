@@ -1,0 +1,37 @@
+-- g.talk: the guards case's Script.
+
+script variable log = []
+
+on check m where the optional active of m otherwise false
+  put "chosen" after log
+end check
+on check m
+  put "skipped" after log
+end check
+
+on known where the optional id of bulb otherwise false
+  put "known chosen" after log
+end known
+on known
+  put "known skipped" after log
+end known
+
+on dynamic o where the optional ("label") of o otherwise false
+  put "dynamic chosen" after log
+end dynamic
+on dynamic o
+  put "dynamic skipped" after log
+end dynamic
+on viaHandler
+  dynamic bulb
+end viaHandler
+
+on ordinary o where the id of o = "bulb-1"
+  put "ordinary id chosen" after log
+end ordinary
+on ordinary o
+  put "ordinary id skipped" after log
+end ordinary
+on ordinaryCall
+  ordinary bulb
+end ordinaryCall

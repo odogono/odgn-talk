@@ -1,8 +1,8 @@
 # A suspending Library Handler has no Grant of its own. The call uses the
 # caller's Grant and call id, suspends its Run, and resumes with its answer.
 # The corpus runner also restores this pending call and its Library frame.
-> add-library helper identity=e072f33223559b8ad701f1deabed000355c95fbde68f6ace05940dee15a1b0c1
-> load s identity=39da19f7fd85a9d4659d9295892fb86b0afa64cf69b83b9ad4c64bd0106133b7
+> add-library helper identity=454eafa199196573c075df8f62f218b8e3607179e08a579b2a5b77b50d8d36a3
+> load s identity=571aafb8f7dc235e3385b85a7937963d4d1811465dbd647ab33f3cba4667f62d
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T10:00:00Z
 call s/r1.c1 op=io.pause args=[]

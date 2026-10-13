@@ -42,11 +42,11 @@ const readSetup = (dir: string): Setup =>
   Bun.TOML.parse(readFileSync(resolve(dir, 'case.toml'), 'utf8')) as Setup;
 const checkVersions = (setup: Setup) => {
   if (
-    setup.versions.language !== '1.0-rc.2' ||
+    setup.versions.language !== '1.0-rc.3' ||
     setup.versions.costModel !== '0'
   ) {
     throw new Error(
-      'Unsupported case versions; expected language 1.0-rc.2 / Cost Model 0',
+      'Unsupported case versions; expected language 1.0-rc.3 / Cost Model 0',
     );
   }
 };
@@ -301,7 +301,7 @@ export const runCorpus = (args: string[]): number => {
         if (result.divergence) {
           const d = result.divergence;
           console.error(
-            `FAIL ${name} (TS lowering 1.0-rc.2 / Cost Model 0)\n  ${d.file}:${d.line}, first differing UTF-8 byte ${d.byte}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
+            `FAIL ${name} (TS lowering 1.0-rc.3 / Cost Model 0)\n  ${d.file}:${d.line}, first differing UTF-8 byte ${d.byte}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
           );
           failed.add(name);
         } else {
@@ -319,7 +319,7 @@ export const runCorpus = (args: string[]): number => {
           const d = result.divergence;
           console.error(
             [
-              `FAIL ${name} (TS Core 1.0-rc.2 / Cost Model 0)`,
+              `FAIL ${name} (TS Core 1.0-rc.3 / Cost Model 0)`,
               `  case.trace:${d.line}, after ${result.lines} matching lines`,
               ...d.context.map(line => `    ${line}`),
               `  expected: ${d.expected}`,
@@ -341,7 +341,7 @@ export const runCorpus = (args: string[]): number => {
           const d = result.divergence;
           console.error(
             [
-              `FAIL ${name} (TS Session Host 1.0-rc.2 / Cost Model 0)`,
+              `FAIL ${name} (TS Session Host 1.0-rc.3 / Cost Model 0)`,
               `  ${d.file}:${d.line}`,
               ...d.context.map(line => `    ${line}`),
               `  expected: ${d.expected}`,
@@ -365,7 +365,7 @@ export const runCorpus = (args: string[]): number => {
       if (result.divergence) {
         const d = result.divergence;
         console.error(
-          `FAIL ${name} (TS values 1.0-rc.2 / Cost Model 0)\n  case.encoding:${d.line}, first differing UTF-8 byte ${d.byte}\n  value: ${d.source}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
+          `FAIL ${name} (TS values 1.0-rc.3 / Cost Model 0)\n  case.encoding:${d.line}, first differing UTF-8 byte ${d.byte}\n  value: ${d.source}\n  expected: ${d.expected}\n  actual:   ${d.actual}`,
         );
         failed.add(name);
       } else {

@@ -2,7 +2,7 @@
 # leaves the Decision undecided. A later plain Delivery runs the same veto
 # and finally, completes with Nothing, and records no-verdict.
 
-> load decider identity=c50485118ed6f176d01edfcc585aa34589c3ded9e88777914b43cafae528d77f
+> load decider identity=81cde39d6b6e0c5146f5a0e5f8012122d1ea6150e0b006a69b03d56abb44f08e
 > decide d1 to=decider message=move limits={fuelPerRun: 20}
 > pump clock=2026-09-30T10:00:00Z
 fault decider/r1 limit=fuel at=decider:16 pos=7:5 rollback=[checked]

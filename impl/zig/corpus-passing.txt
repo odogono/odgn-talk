@@ -240,6 +240,7 @@ load-diagnostics/not-in-a-join-try
 load-diagnostics/not-in-a-lambda
 load-diagnostics/not-in-a-script
 load-diagnostics/not-in-a-timeout
+load-diagnostics/nothing-defaults
 load-diagnostics/nothing-to-fold
 load-diagnostics/object-properties
 load-diagnostics/outside-a-loop
@@ -255,6 +256,13 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+nothing-defaults/compatibility
+nothing-defaults/evaluation-order
+nothing-defaults/fuel-boundaries
+nothing-defaults/guards
+nothing-defaults/host-objects
+nothing-defaults/stdlib-attribution
+nothing-defaults/values
 objects/argument-labels
 objects/guard-keys
 objects/implicit-property-targets

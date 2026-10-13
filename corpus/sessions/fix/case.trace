@@ -1,8 +1,8 @@
 # Unblessed: `:fix` Fix and Continue between Pumps (#444); first blessing awaits human review.
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="script variable n = 0" identity=d3ea10622f36ae89eb9c1206574cc8dea4a391a6d85f686f3d08e9b5f11e8481
-> extend session source="on tick, queued" & newline & "  add 1 to n" & newline & "  ask api to later and wait" & newline & "  say " & quote & "tick " & quote & " & n" & newline & "end tick" identity=7c64aabb76bb8f3b2991bd717a410835b29de32c35e68fd40c84c3b8626e9d87
-> extend session source="on entry1" & newline & "send tick to session" & newline & "end entry1" & newline identity=c03f98eb41540f71b96126f33642318e2ba2a1b389fa5b646a0fc489f6c6d505
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable n = 0" identity=69ed7e1353df2315560fce6e9f683d4eea28e5ebc5d6609f1cbcbeceff7ccdd6
+> extend session source="on tick, queued" & newline & "  add 1 to n" & newline & "  ask api to later and wait" & newline & "  say " & quote & "tick " & quote & " & n" & newline & "end tick" identity=fc8d74f88c0c0ceac92da25b423876afd6b375e2d9e9160cf2ff1d6230ba3a74
+> extend session source="on entry1" & newline & "send tick to session" & newline & "end entry1" & newline identity=09482247064c86e957c76e52accc84e0f51291ddeeb34fc61e5bf2039f6b6c01
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 send session/r1 to=session message=tick
@@ -11,7 +11,7 @@ run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=29 alloc=32
 call session/r2.c1 op=api.later args=[]
 seg session/r2 start from=session/r1 handler=tick clause=1 fuel=24 alloc=16 state=264 end=ask-wait
 pumped state=idle fuel=53 next=2026-09-30T10:00:30Z
-> extend session source="on entry2" & newline & "send tick to session" & newline & "end entry2" & newline identity=87ad09a78c06e565ba1ae10ec9a512ffcae7ddb7bc156889006e5e73585c1c93
+> extend session source="on entry2" & newline & "send tick to session" & newline & "end entry2" & newline identity=35b00e5caeeb72812fb011eacbda723b331a08391026a7f9c51d3f3bf014ddc3
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 send session/r3 to=session message=tick
@@ -28,7 +28,7 @@ pumped state=idle fuel=0 next=2026-09-30T10:00:30Z
 > rewind-run session/r4
 > pump clock=2026-09-30T10:00:00Z
 pumped state=rewound fuel=0 next=2026-09-30T10:00:30Z
-> reload session carry=yes mailbox=keep source="script variable n = 10" & newline & "--| Says the count, then waits." & newline & "on tick, queued" & newline & "  add 10 to n" & newline & "  say " & quote & "fixed " & quote & " & n" & newline & "  ask api to later and wait" & newline & "end tick" & newline identity=651ff96a0fe4d362c9b7b567377196a3ce5ed49d1922768fca0a832805b9972a
+> reload session carry=yes mailbox=keep source="script variable n = 10" & newline & "--| Says the count, then waits." & newline & "on tick, queued" & newline & "  add 10 to n" & newline & "  say " & quote & "fixed " & quote & " & n" & newline & "  ask api to later and wait" & newline & "end tick" & newline identity=e5a73ec468ecf07b2ceb2042b947036bcdd2669fdb91e0e1f403c80d6aba37d0
 stopped session reason="reload" discarded=[session/r2] abandoned=[session/r2.c1]
 > pump clock=2026-09-30T10:00:00Z
 call session/r5.c1 op=console.write args=["fixed 11"]
@@ -39,7 +39,7 @@ pumped state=idle fuel=40 next=2026-09-30T10:00:30Z
 vars session n=11
 > vars
 vars session n=11
-> extend session source="on entry3" & newline & "send tick to session" & newline & "end entry3" & newline identity=bc95ac6bd1366dfc9d28fa4835a70ced3c9282d731cf206d503b34b1be41f6c7
+> extend session source="on entry3" & newline & "send tick to session" & newline & "end entry3" & newline identity=90e570f1dcfbd2647f256a52eed03471d8f6756b734afbc73e4233e169d5c974
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 send session/r6 to=session message=tick
@@ -50,7 +50,7 @@ pumped state=idle fuel=33 next=2026-09-30T10:00:30Z
 > rewind-run session/r7
 > pump clock=2026-09-30T10:00:00Z
 pumped state=rewound fuel=0 next=2026-09-30T10:00:30Z
-> reload session carry=yes mailbox=keep source="script variable n = 10" & newline & "on tick, queued" & newline & "  say missing" & newline & "end tick" & newline identity=6cb306d66eea0d088da054d140a4e932d1f72c632f04ae42f2e9028ed4c027f1
+> reload session carry=yes mailbox=keep source="script variable n = 10" & newline & "on tick, queued" & newline & "  say missing" & newline & "end tick" & newline identity=882f0530327d87783c772b962940f22cd476210c9411d6ab31a0976fdad79d91
 diag session code="unknown name" pos=3:7
 > pump clock=2026-09-30T10:00:00Z
 seg session/r8 start from=session/r6 handler=tick clause=1 fuel=4 alloc=0 state=456 end=park

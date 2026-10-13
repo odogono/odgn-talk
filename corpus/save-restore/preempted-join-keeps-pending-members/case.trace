@@ -12,7 +12,7 @@
 # - The Run continues its preempted Segment to the Join's closing `end`, where
 #   the member failure fails the Join fast and is raised, and caught.
 
-> load shop identity=1a21c7a58885ad431d8210c17576202a7e82f965bd243e43ed68ad450c58755c
+> load shop identity=7b808e944b95a9937613c98d310428da4fcfb309e6d29ec73604f16f767b7c72
 
 > deliver d1 to=shop message=gather
 > pump clock=2026-10-06T10:00:00Z fuel-slice=30
@@ -22,7 +22,7 @@ preempt shop/r1 start delivery=d1 handler=gather clause=1 by=slice fuel=38 alloc
 pumped state=sliced fuel=38
 
 > save s1
-> restore from=s1 fingerprint=31d82f7bb21848764aaf8191cb16445fe442bbb14c565edaad3099637050d08a mode=full pending=[shop/r1.c1, shop/r1.c2]
+> restore from=s1 fingerprint=e1a2165adeacf7c11c25eb97cdd3372d2f7440daf73598ad89c25fa0eee2d255 mode=full pending=[shop/r1.c1, shop/r1.c2]
 
 > settle shop/r1.c1 how=answer value=12
 > pump clock=2026-10-06T10:00:01Z

@@ -3,9 +3,9 @@
 # placed `shelf:deco:10:10`. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> add-library fmt identity=3ec9c268405d17bfe2a35f6490261fd2b02160a5ae2abcf43e5de4afe6c2ab52
-> add-library deco identity=47857ed011536b68ddf121b5ae6c0c27edab89e3fb9b3f00957f0034cadd7d5f
-> load shelf identity=08c96b140b92edea6f860a9cb0d3e2a2f4171c27c3eb1aed432940a51aaab6df
+> add-library fmt identity=640e00aea91058d33bd1c838daf83c35e1363f75c90e4928c8887cf2246b565b
+> add-library deco identity=40d099d83300bfbe71d7c699402e40dad6a08440ab4b627d083657ea7ee46249
+> load shelf identity=cebdc96013f109b1239ce8e828a39be0e2f7f8dc7bc9a56da17c3253a869c62f
 > deliver d1 to=shelf message=go
 > pump clock=2026-09-30T09:00:00Z
 seg shelf/r1 start delivery=d1 handler=go clause=1 fuel=831 alloc=1562 state=477 end=return

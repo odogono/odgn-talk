@@ -1,0 +1,3 @@
+on move x
+  pass move otherwise
+end move

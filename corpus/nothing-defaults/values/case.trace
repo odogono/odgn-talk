@@ -1,0 +1,27 @@
+# Unblessed: Nothing-default and optional map-key values, precedence and load-time evaluation (#722); first blessing awaits human review.
+
+> load values identity=2f6f2d161d4251fa8085f8115bbad83d4b9eaa63e13456cada6dd5bbdcd327be
+> deliver d1 to=values message=onlyNothing
+> deliver d2 to=values message=optionalReads
+> deliver d3 to=values message=mixedChains
+> deliver d4 to=values message=precedence
+> deliver d5 to=values message=loadTime
+> deliver d6 to=values message=ordinaryReads
+> pump clock=2026-10-13T09:00:00Z
+seg values/r1 start delivery=d1 handler=onlyNothing clause=1 fuel=83 alloc=356 state=484 end=return
+run values/r1 outcome=completed delivery=d1 handler=onlyNothing fuel=83 alloc=356
+seg values/r2 start delivery=d2 handler=optionalReads clause=1 fuel=158 alloc=1164 state=864 end=return
+run values/r2 outcome=completed delivery=d2 handler=optionalReads fuel=158 alloc=1164
+seg values/r3 start delivery=d3 handler=mixedChains clause=1 fuel=108 alloc=661 state=1038 end=return
+run values/r3 outcome=completed delivery=d3 handler=mixedChains fuel=108 alloc=661
+seg values/r4 start delivery=d4 handler=precedence clause=1 fuel=273 alloc=1599 state=1467 end=return
+run values/r4 outcome=completed delivery=d4 handler=precedence fuel=273 alloc=1599
+seg values/r5 start delivery=d5 handler=loadTime clause=1 fuel=100 alloc=420 state=1679 end=return
+run values/r5 outcome=completed delivery=d5 handler=loadTime fuel=100 alloc=420
+raise values/r6 code="wrong kind" at=values:418 pos=68:9
+seg values/r6 start delivery=d6 handler=ordinaryReads clause=1 fuel=66 alloc=887 state=2278 end=return
+run values/r6 outcome=completed delivery=d6 handler=ordinaryReads fuel=66 alloc=887
+pumped state=idle fuel=788
+
+> vars
+vars values initial=4 defaults=[9, 9, false, 0, "", [], {}, nothing, "text", [1]] reads=["London", nothing, nothing, nothing, [4, 5, 6, 7], [8, 9, 10, 8], ["London", nothing, nothing]] chains=["Paris", nothing, nothing, ["Paris", "Paris", 2], "unknown"] shapes=[true, 3, true, false, [1, 3, [5, 6], 7], [0, 8], {active: true}, "none", "zbc", 10] ordinary=[3, "Rome", 5, {code: "wrong kind", expected: "map", got: "nothing", value: nothing, at: {unit: "values", handler: "ordinaryReads", line: 68, column: 9}}] named=[4, "Oslo", 4, 4, nothing, 11, [2, 9, 12]]

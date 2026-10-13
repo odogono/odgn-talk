@@ -1,0 +1,4 @@
+script variable y = 1
+function f a = nothing otherwise y
+  return a
+end f

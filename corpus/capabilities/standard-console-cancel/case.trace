@@ -1,5 +1,5 @@
 # A cancelled Console read abandons its Call. A late answer is ignored.
-> load s identity=a95d3b4e928404dbd5db056876f81d64f76e9df6eae7e31b27b3c7f11d2206e1
+> load s identity=19887f2c547651f017e768fd9dff386a276fc8d14ec358dbe97ac057f8f688e4
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T12:00:00Z
 call s/r1.c1 op=console.read args=[]

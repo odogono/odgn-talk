@@ -1,7 +1,7 @@
 # scope-reverse-abandonment: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> load s identity=c23b2ca56e3ef2ccca7fc6377bae6c12377f4dcc1c90961206bd36fc7b81e2fb
+> load s identity=929dbce032023faeaf6db0b9341ce0641a6be41f516959eea05d1f04b5973c62
 > stub resource.open value=nothing
 > stub resource.open value=nothing
 > stub resource.openlock value=nothing

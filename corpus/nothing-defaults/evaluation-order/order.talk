@@ -1,0 +1,78 @@
+-- order.talk: the evaluation-order case's Script. `note` logs its label and
+-- returns its value, so `log` shows which operands ran, and in what order.
+
+script variable log = ""
+script variable results = []
+
+function note label, value
+  put log & label into log
+  return value
+end note
+
+on presentLeft
+  put "|" after log
+  put note("a", 1) otherwise note("b", 2) after results
+end presentLeft
+
+on nothingLeft
+  put "|" after log
+  put note("a", nothing) otherwise note("b", nothing) after results
+end nothingLeft
+
+on chains
+  put "|" after log
+  put note("a", nothing) otherwise note("b", nothing) otherwise note("c", 3) after results
+  put "|" after log
+  put note("a", nothing) otherwise note("b", 2) otherwise note("c", 3) after results
+end chains
+
+on unselectedError
+  put "|" after log
+  put note("a", 1) otherwise note("b", 1 / 0) after results
+end unselectedError
+
+on leftError
+  put "|" after log
+  put note("a", 1 / 0) otherwise note("b", 2) after results
+end leftError
+
+on computedKey
+  put "|" after log
+  put the optional (note("k", "city")) of note("r", {city: "Lima"}) otherwise note("f", "none") after results
+  put "|" after log
+  put the optional (note("k", "town")) of note("r", {city: "Lima"}) otherwise note("f", "none") after results
+end computedKey
+
+on invalidKeyThenReceiverError
+  put "|" after log
+  put the optional (note("k", 1)) of note("r", 1 / 0) after results
+end invalidKeyThenReceiverError
+
+on invalidKeyNothingReceiver
+  put "|" after log
+  put the optional (note("k", 1)) of note("r", nothing) after results
+end invalidKeyNothingReceiver
+
+on numberReceiver
+  put the optional x of 1 after results
+end numberReceiver
+
+on listReceiver
+  put the optional x of [1] after results
+end listReceiver
+
+on textReceiver
+  put the optional ("x") of "x" after results
+end textReceiver
+
+on bytesReceiver
+  put the optional ("x") of << 1 >> after results
+end bytesReceiver
+
+on caught
+  try
+    put the optional x of 1 into x
+  catch e
+    put e after results
+  end try
+end caught

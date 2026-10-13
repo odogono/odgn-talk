@@ -1,8 +1,8 @@
 # `relay` waits for `note` or `move:to:` and forwards what it saw by
 # `the name of it`; `relay2` forwards a Selector the same way. `a` has no
 # Handler for either, so each Delivery also ends `unhandled` in its own Run.
-> load a identity=69d1d8771fc075980f293a4630290f3ba0e56eb296de6971c565ddc5341b02d4
-> load b identity=9b076b9325da56efd3e1e6cd1314925e86d5745d4ec9caa287bf52479bbe40a7
+> load a identity=e87f07901cf321a471eacdc9f006cc2f2b703bfc875647e859f7012e6ae1f435
+> load b identity=4d84794bbaf906e49f2b7b50ed8bb0c1f40875cf661daf22b4f8e904c073a8bb
 > deliver d1 to=a message=relay
 > pump clock=2026-10-05T09:00:00Z
 seg a/r1 start delivery=d1 handler=relay clause=1 fuel=14 alloc=0 state=288 end=wait-for-any

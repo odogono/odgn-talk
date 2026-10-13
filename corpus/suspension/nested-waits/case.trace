@@ -4,8 +4,8 @@
 # back. Its Fuel, allocation and state figures are Cost Model 0's, as the TS
 # Core blessed them.
 
-> load napper identity=499e7127a5bb28cdb0963675e389b068f554751526768be84133ed88237b190b
-> load hoarder identity=10217548347cb21d5d06d3c46d75e1cf8cf5a5832502ff3e0a2a147a7191fbe8
+> load napper identity=32e31220a4c11a92b0923e521a15b61772a1ffd340e6f55ccf8d8b1a956d108e
+> load hoarder identity=1b2f33f07a1265d4273974f1b0da1fa515b1723384a7de5e75fb531f4127fef5
 > deliver d1 to=napper message=go
 > deliver d2 to=napper message=each
 > deliver d3 to=napper message=month

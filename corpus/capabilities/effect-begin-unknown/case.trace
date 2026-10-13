@@ -2,7 +2,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #326.
 # Go and TS ordinary Traces agree; Go save/restore replay remains #136.
 
-> load s identity=f7fbc4444d015b6e10ac6e26888035f38df30e16998cc280f65760e4892d5fb9
+> load s identity=456acaa0f2cd8bf99b6a2189a56660597caa5d209b06048ff2b72d9332b7ee01
 > stub-effect s.r phase=begin status=unknown
 > stub-effect s.r phase=rollback status=ok
 > deliver d1 to=s message=go

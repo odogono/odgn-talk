@@ -2,11 +2,11 @@
 # no Capability directly. A missing Grant rejects at the Script's use line.
 # With the Grant, the Library executes inside the caller's Run and pays its
 # declared Operation cost once.
-> add-library base identity=57e81095be86cc0acc3a8158b1a2b4c4d1274771a67c4b9234ac097526eba4a7
-> add-library wrapper identity=4c792057648499f79157b945d79a7362d62f036c4b7c23ca60cc6732d9ba4cbc
-> load missing identity=f954c4888bb608f80750e3845fff6e76880f4c2131b26f6b84ac989b13818c30
+> add-library base identity=2dc1e226eb6cff82fd64f3665edbdfc323d6545654b8c29f1e3237ef70c7d96a
+> add-library wrapper identity=2cd806cb407348fd924073e7c305acf819f5d7632aeef7044b880f4605f4b690
+> load missing identity=0041e3180ca3bb2ccfa340f9fd2e0f33ee2997c5450b1dfd3d99910131e7bc46
 diag missing code="missing grant" pos=1:1
-> load s identity=d13ebe5708bff545074c9b34fb89987868a9f6adc4657e5ad56a6a8f27497162
+> load s identity=a7b5cc28bc1e383bacd10ef5ed72c6be09b50f5cb19627b6c0da52934a3df7dd
 > stub io.read value=7
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T10:00:00Z

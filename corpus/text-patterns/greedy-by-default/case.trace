@@ -4,7 +4,7 @@
 # pair. The match is pinned. Its Fuel, allocation and state figures are
 # Cost Model 0's, as the TS Core blessed them.
 
-> load search identity=2df57d6186fdaa297f72a0ab750cd495e3b22e77c76341fcae81db09371c4f77
+> load search identity=fc2aa0003f7f6af7da9b03b8796b1675d42ec1e5917122bbfc09b8087e1ddfae
 
 # 21 steps: 20 for the search that finds "<a> <b>", and 1 for the one from
 # the end, which finds nothing.

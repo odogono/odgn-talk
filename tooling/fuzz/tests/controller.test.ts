@@ -53,7 +53,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   const request = JSON.parse(line);
   if (request.type === 'capabilities') {
     setTimeout(() => console.log(JSON.stringify({
-      version: 1, features: ['compute'], languageVersion: '1.0-rc.2', costModel: '0'
+      version: 1, features: ['compute'], languageVersion: '1.0-rc.3', costModel: '0'
     })), 200);
   } else {
     setTimeout(() => {

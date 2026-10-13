@@ -1,0 +1,48 @@
+-- h.talk: the host-objects case's Script. Each `try` catches one optional
+-- read's error into `log`.
+
+script variable log = []
+script variable stored
+
+on known
+  try
+    put the optional id of bulb into x
+  catch e
+    put e after log
+  end try
+  try
+    put the optional label of bulb into x
+  catch e
+    put e after log
+  end try
+end known
+
+on dynamic o
+  try
+    put the optional ("id") of o into x
+  catch e
+    put e after log
+  end try
+  try
+    put the optional ("label") of o into x
+  catch e
+    put e after log
+  end try
+end dynamic
+on viaHandler
+  dynamic bulb
+end viaHandler
+
+on inMap
+  put {lamp: bulb} into m
+  put the optional lamp of m into stored
+  try
+    put the optional label of the optional lamp of m into x
+  catch e
+    put e after log
+  end try
+end inMap
+
+on ordinary
+  put the label of bulb after log
+end ordinary

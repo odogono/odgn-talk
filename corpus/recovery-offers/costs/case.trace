@@ -1,6 +1,6 @@
 # Before choice: Fuel 20 and exact retained dispatch state; lookup is atomic.
 # The 13-Fuel choice exceeds a 5-Fuel slice, enters once, and leaves 8 debt.
-> load s identity=8601d7825855a6b542adc7198c25524257d4d8bad8ce0c7e2df51cb44718af5f
+> load s identity=021226e363dbb765f706eeadfcba384b1b9cb5b3a1a7c5f4aabb097a33f845cd
 > request d1 to=s message=go
 > pump clock=2026-09-30T09:00:00Z fuel-cap=20
 raise s/r1 code="bad" at=s:3 pos=3:5

@@ -1,5 +1,5 @@
 # First blessing approved by the maintainer on 2026-10-05 for #275.
 # Both Cores report the first non-whitespace source scalar.
-> load bad identity=e26f0a4a8b96c771cdbd02848e9a4dfb5b73e795ce24703622a991fa44c1e34d
+> load bad identity=831f6b50813945f9ed9ce6390c16150660ee78050d7c5ab0e3ada1c02bd464a9
 diag bad code="invalid text indentation" pos=3:3
 > vars

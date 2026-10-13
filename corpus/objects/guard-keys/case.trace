@@ -1,5 +1,5 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
-> load s identity=9647981b6629e1d860d1329251a8985d5d846406821002538b354257c321b9e9
+> load s identity=b46823af5b8144b2b8d4e7d0b6ec54ec4b3870fbc80d66f25448c1ba8c0dcaf7
 > deliver d1 to=s message=literal args=[{label: "on"}]
 > pump clock=2026-10-05T09:00:00Z
 seg s/r1 start delivery=d1 handler=literal clause=1 fuel=25 alloc=27 state=43 end=return

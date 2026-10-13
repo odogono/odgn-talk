@@ -9,7 +9,7 @@
 # leaves the root unchanged. Its Fuel, allocation and state figures are Cost
 # Model 0's, as the TS Core blessed them.
 
-> load writes identity=12377c96835fd5e15b219ee1fe9813a8240580c6084b5e005d68dfa64654be9a
+> load writes identity=7c7d30a2d6b092c95fe3659fbaf83cadd382213f00f8e2c74a6dfb7500b47015
 > deliver d1 to=writes message=go
 > pump clock=2026-09-30T09:00:00Z
 raise writes/r1 code="out of range" at=writes:13 pos=16:18

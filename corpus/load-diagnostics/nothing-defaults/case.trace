@@ -1,0 +1,43 @@
+# Unblessed: load diagnostics for Nothing defaults and optional reads (#722); first blessing awaits human review.
+
+> load missing identity=30eb7e0566349cc48c25117cadf324a7e99d9f3c0bfef98ed6d96bf7a3b3d5a7
+diag missing code="unexpected token" pos=3:1
+> load lambda-fallback identity=e60ab7c0570d2e6fedbe3c84acad31d7daa71056524d5c15a530fdbd275d3698
+diag lambda-fallback code="unexpected token" pos=2:28
+> load replace-subject identity=fc21482f47589f540cbe3c1979de8f05bd4f4e3733ff9f03f41854a4bb64c0c9
+diag replace-subject code="unexpected token" pos=2:33
+> load put-target identity=f756d82096763115c84376c08f8872c6cb5dcd1e02ada3e03097fcfd48f2c62e
+diag put-target code="not a container" pos=2:14
+> load set-target identity=bb4b2c7861ec80ce7878e2d0d1e159a3ee7b841787651f1a4571b58faaf61ca0
+diag set-target code="not a container" pos=2:7
+> load add-target identity=29563b24b9bb352c90d39efd5d9752d30a143f90920224905cdce79f8c29c0d5
+diag add-target code="not a container" pos=2:12
+> load delete-target identity=fe5c69184f342b66f6be41f78967bb0b923f28353fecf38a84ad113f6bbf135f
+diag delete-target code="not a container" pos=2:10
+> load nested-target identity=ed9040587dc085701d84b695830b518cb76970305fee6d9fa8ed1e167ff0dfb5
+diag nested-target code="not a container" pos=2:14
+> load guard-left identity=f365b36adca17d0e9656164b2f6f8db2704bc01caab58b7326056fbed4438ab5
+diag guard-left code="not in a guard" pos=4:13
+> load guard-fallback identity=e932d6fe5805ddf7b3aee9a1f957b0f5fb8ef16d3961f9d2dd9e20f32e3c11de
+diag guard-fallback code="not in a guard" pos=4:28
+> load guard-key identity=fb1d25813e79000530790340a2f79dd0ead5a857ceb4dadc5df3e22555600565
+diag guard-key code="not in a guard" pos=4:27
+> load whose-fallback identity=5eafe8202f0bcfe8da66f5c85b7c9ae9952f2f6f772e21ceabee1fa487e7614a
+diag whose-fallback code="not in a whose" pos=5:48
+> load constant-fallback identity=1a9e23c1017d9e94c95e34bf4dc394d321611fe2c8e6020f1eb2e5c204a42526
+diag constant-fallback code="not constant" pos=2:26
+> load unresolved-fallback identity=61936ab7ba558a6c6521858057ddb9dd31201debfecfbebaffbe6420fcc852c1
+diag unresolved-fallback code="unknown name" pos=2:22
+> load constant-call identity=7e27568859c7bff57b44bcea05ae8befc7e51c9a904e8b38fa6f891251e872d5
+diag constant-call code="not constant" pos=4:32
+> load parameter-default identity=7de44b7349267e59928baad3d30399f3cf2ede5fe9e3f15593c1e23e2fc45f46
+diag parameter-default code="not constant" pos=2:34
+> load old-label identity=6f3ad384971ce28d6d0a56c3d4843f5588c55e09d41d9524ae2bdd02b7c69525
+diag old-label code="unexpected token" pos=1:11
+> load old-event identity=2f67473697c210603000539e003b3b352d89123f765437fa309dc0822337a686
+diag old-event code="unexpected token" pos=2:19
+> load old-pass identity=8d4901c39f31a2e757f47b5970b2810f199bdec6c20e761f1ed3029717d5d732
+diag old-pass code="unexpected token" pos=2:13
+> load ungrouped-index identity=764b50efe55f5b43d1752ce6dfa1ab267984be7f9e86d89dadc48c3d156870e5
+diag ungrouped-index code="unexpected token" pos=3:25
+> vars

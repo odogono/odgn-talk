@@ -1,6 +1,6 @@
 kind = "trace"
 [versions]
-language = "1.0-rc.2"
+language = "1.0-rc.3"
 costModel = "0"
 # Synthetic scoped Store declaration: the standard factory has no scope to
 # abandon. This fixture reaches a disabled Grant through real Core cleanup.

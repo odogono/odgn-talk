@@ -37,7 +37,7 @@ describe('loading', () => {
     g.load({ name: 'a', source });
     const identity = createHash('sha256')
       .update(
-        `odgn-talk code identity 1\n1.0-rc.2\n0\nscript\na\nsource\n${source}`,
+        `odgn-talk code identity 1\n1.0-rc.3\n0\nscript\na\nsource\n${source}`,
       )
       .digest('hex');
     expect(codeIdentity('script', 'a', source)).toBe(identity);

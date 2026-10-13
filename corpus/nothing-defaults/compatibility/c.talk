@@ -1,0 +1,28 @@
+-- c.talk: the compatibility case's Script.
+
+script variable log = []
+
+on move a instead b
+  put ["move:instead:", a otherwise b] after log
+end move
+
+on move x
+  put ["move", x] after log
+end move
+
+on oldCommand a, b
+  move a otherwise b
+end oldCommand
+
+on oldSend a, b
+  send to me: move a otherwise b
+end oldSend
+
+on otherwise n
+  put ["otherwise", n] after log
+end otherwise
+
+on lineStart
+  put nothing into x
+  otherwise 5
+end lineStart

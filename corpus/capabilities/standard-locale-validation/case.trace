@@ -1,6 +1,6 @@
 # Tag, option-domain and Shape checks run before call costs or Stubs.
 # Wrong name counts and Host attempts to raise bad locale become host error.
-> load s identity=2c21224129bb22f4033417a50d3984ab1e336563393dc42149f8b6d79549186d
+> load s identity=7251903c31166996ce537fb13a144ca0d5b6cb224bfb8ac6e2bc2797a624cd51
 > deliver d1 to=s message=badTag
 > pump clock=2026-10-02T12:00:00Z
 raise s/r1 code="bad locale" at=s:3 pos=2:3

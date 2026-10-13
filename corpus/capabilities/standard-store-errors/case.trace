@@ -1,7 +1,7 @@
 # The store Standard Capability (#226). First blessing approved by the maintainer on 2026-10-07; see docs/reviews/store-blessings.
 # The Host fails with the codes each Operation declares, checked against the
 # catalogue's fields; anything else is `host error`.
-> load s identity=0f2981b98026e3059ea952e8575736f1b0995bad847c97ddcbe8b1f6a4e0748f
+> load s identity=86bd9f390e7a226141844813406d3b540765e93644cf7f12dd9b78399cffaf53
 > stub-effect s.st phase=begin status=ok
 > stub store.set error={code: "store busy", key: "k"}
 > stub-effect s.st phase=commit status=ok

@@ -1,8 +1,8 @@
 # Unblessed: `not in a join` for a Join member inside a `try` (#423); first blessing awaits human review.
-> load bad identity=bde12411d9290eb99e5c3c692d12f78aed6e84e7d2dd0e415aa43ed047089c4c
+> load bad identity=bf46e5149bda516c9e641548e801d3c3814dfd313cfa5c1ebde89151e674d74d
 diag bad code="not in a join" pos=4:1
 diag bad code="not in a join" pos=5:1
 diag bad code="not in a join" pos=7:1
-> load good identity=554e4fcf7d86b3a55a462f8cd7cae0ec073dd2a7294bd54b0aa46f0d05a9732f
+> load good identity=ba1737329f9a537c02fb0d777c8676a4f2cc40bb91b33a01585c6df4856a73a7
 > vars
 vars good

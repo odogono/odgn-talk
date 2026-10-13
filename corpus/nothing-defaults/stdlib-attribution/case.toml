@@ -1,0 +1,16 @@
+# stdlib-attribution: an error raised in stdlib code that is an operand of a
+# Nothing default or an optional read keeps chapter 6's attribution: its `at`
+# names the Script's call into the stdlib, and the left side's error
+# propagates through `otherwise`. An optional-read error in a Lambda the
+# stdlib calls points into the Lambda, at the read's `the`; a default in such
+# a Lambda runs per call (spec chapter 6, Errors; design acceptance group 5).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "lib"
+source = "lib.talk"

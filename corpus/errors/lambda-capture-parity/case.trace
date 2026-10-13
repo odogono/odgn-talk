@@ -1,8 +1,8 @@
 # Lambda Join failure, timeout and nested-Lambda errors retain enclosing Handler
 # attribution and charge captured Values according to Cost Model 0.
 # First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
-> load a identity=61c93dddad44891d17c40441e7f25300e3a184d366ee61808ec6bfb3939d47df
-> load b identity=577cfad0fb58083ac6b5e81557ba95564019411039828b51d169641e51d9d002
+> load a identity=068d0aa4f4903854f1f37216b6ecdaa34859b3a150b033529ce08e2589b29dab
+> load b identity=e8984ee1272bf02408a31bd10721d47bdc10d61fef7eddfa5168c93d6203dafc
 > deliver d1 to=a message=go args=[2]
 > deliver d2 to=a message=timeout args=[3]
 > deliver d3 to=a message=nested args=[4]

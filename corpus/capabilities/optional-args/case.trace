@@ -1,8 +1,8 @@
 # A Library omits both trailing Optional positions; later calls supply
 # one and two. Explicit Nothing is distinct from an absent argument.
 # Every call pays its declared cost, including a zero-argument tell.
-> add-library helper identity=c039ac1b2f3ebcf9219142f2a7270160ce0c2826c6117bd98847c81fbdb32eb2
-> load s identity=832d6b08bc822dc4848e15cfff66531ff5c71f29de8c31fa352a3ff30ded38a1
+> add-library helper identity=98737d9699a2d13d8daa9ee078a00d77635c090d6d7b4e1e923ea7e039920619
+> load s identity=974ef034b95509404a67b6c71a765d8141dea048680c31d12c9a6b5097bc7253
 > stub api.count value=1
 > stub api.count value=2
 > stub api.count value=3

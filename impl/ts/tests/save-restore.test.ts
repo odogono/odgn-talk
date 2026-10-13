@@ -15,6 +15,7 @@ import {
   type Value,
   list,
 } from '../src/index';
+import { languageVersion } from '../src/generated/machine';
 import { sha256 } from '../src/sha256';
 
 const options = (trace: string[]) => ({
@@ -217,6 +218,35 @@ describe('pending calls after restore', () => {
 });
 
 describe('restore compatibility and durable values', () => {
+  test('a save from language 1.0-rc.2 rejects or restores variables only', () => {
+    const g = newGroup({ name: 'g' });
+    g.load({
+      name: 's',
+      source: 'script variable n = 0\non go\n  add 1 to n\n  wait 10 s\nend go',
+    });
+    g.script('s')!.deliver({ name: 'go' });
+    g.pump(0n);
+    g.script('s')!.deliver({ name: 'go' });
+    const outer = JSON.parse(new TextDecoder().decode(g.save()));
+    const saved = JSON.parse(outer.payload);
+    expect(saved.language).toBe(languageVersion);
+    saved.language = '1.0-rc.2';
+    outer.payload = JSON.stringify(saved);
+    outer.hash = sha256(outer.payload);
+    const old = new TextEncoder().encode(JSON.stringify(outer));
+    expect(() => restore(old, options([]))).toThrow('save mismatch');
+    const { group: copy, result } = restore(old, {
+      ...options([]),
+      onMismatch: 'variables only',
+    });
+    expect(result).toMatchObject({
+      variablesOnly: true,
+      discardedRuns: ['s/r1'],
+      droppedMessages: ['d2'],
+    });
+    expect(copy.inspect().scripts[0]!.vars[0]![1].toString()).toBe('1');
+  });
+
   test('a withheld Library rejects or restores variables only, dropping work and keeping ids', () => {
     const library = compileLibrary({
       name: 'fmt',

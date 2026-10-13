@@ -1,0 +1,4 @@
+-- default.talk: a default whose fallback is a literal optional read.
+on go
+  return nothing otherwise the optional x of nothing
+end go

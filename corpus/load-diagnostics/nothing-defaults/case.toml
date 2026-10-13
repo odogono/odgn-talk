@@ -1,0 +1,95 @@
+# nothing-defaults: the load diagnostics of Nothing defaults and optional
+# reads. A missing or unparenthesized operand; optional reads as Containers
+# in `put`, `set`, `add`, `delete` and a nested Container; forbidden calls on
+# either side of a default or in a computed key, in a Guard or a Whose
+# condition, and unresolved names, even where they would not run;
+# non-constant Constant and parameter-default operands; and the 1.0-rc.2 sources that no longer parse,
+# `otherwise` as an Argument Label and as an ungrouped index (spec chapter 2,
+# Load-time diagnostics; design acceptance groups 3, 7, 8 and 9).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+
+[[scripts]]
+name = "missing"
+source = "missing.talk"
+
+[[scripts]]
+name = "lambda-fallback"
+source = "lambda-fallback.talk"
+
+[[scripts]]
+name = "replace-subject"
+source = "replace-subject.talk"
+
+[[scripts]]
+name = "put-target"
+source = "put-target.talk"
+
+[[scripts]]
+name = "set-target"
+source = "set-target.talk"
+
+[[scripts]]
+name = "add-target"
+source = "add-target.talk"
+
+[[scripts]]
+name = "delete-target"
+source = "delete-target.talk"
+
+[[scripts]]
+name = "nested-target"
+source = "nested-target.talk"
+
+[[scripts]]
+name = "guard-left"
+source = "guard-left.talk"
+
+[[scripts]]
+name = "guard-fallback"
+source = "guard-fallback.talk"
+
+[[scripts]]
+name = "guard-key"
+source = "guard-key.talk"
+
+[[scripts]]
+name = "whose-fallback"
+source = "whose-fallback.talk"
+
+[[scripts]]
+name = "constant-fallback"
+source = "constant-fallback.talk"
+
+[[scripts]]
+name = "unresolved-fallback"
+source = "unresolved-fallback.talk"
+
+[[scripts]]
+name = "constant-call"
+source = "constant-call.talk"
+
+[[scripts]]
+name = "parameter-default"
+source = "parameter-default.talk"
+
+[[scripts]]
+name = "old-label"
+source = "old-label.talk"
+
+[[scripts]]
+name = "old-event"
+source = "old-event.talk"
+
+[[scripts]]
+name = "old-pass"
+source = "old-pass.talk"
+
+[[scripts]]
+name = "ungrouped-index"
+source = "ungrouped-index.talk"

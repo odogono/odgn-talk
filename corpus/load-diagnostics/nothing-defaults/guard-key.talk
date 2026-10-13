@@ -1,0 +1,5 @@
+function f
+  return "k"
+end f
+on go where the optional (f()) of {} otherwise false
+end go

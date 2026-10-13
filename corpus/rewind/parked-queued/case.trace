@@ -4,7 +4,7 @@
 # the mailbox. It is ahead of s/r1's resumption, so it dispatches again as
 # s/r3 and parks, then runs once s/r1 ends. n counts s/r1 and s/r3 only.
 
-> load s identity=c0ec17a1763cdc141948003d3563f9bb1bc38e25c6a8bd41e1bf8c5c47622cca
+> load s identity=2eabadf0793260cd42369e407410f4524aa695c9866bd6ffd4be347e28a9b428
 > deliver d1 to=s message=tick
 > deliver d2 to=s message=tick
 > pump clock=2026-10-01T09:00:00Z

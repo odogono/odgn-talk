@@ -1,11 +1,11 @@
 # First blessing approved for #681 on 2026-10-12; see docs/reviews/container-properties/README.md.
-> load leaf identity=f61241ed67dd6f50b2a71915422541c60e1d56e2f28cabe792ec2db85b769e2a
+> load leaf identity=44e92955cee97d840e68400f9e37115b50bcfa947dccd64f33ceaad5b03eaa27
 diag leaf code="not a container" pos=2:14
-> load intermediate identity=4e82e98586d6b1ba967a5441e263aa73ec7e9f79920e1429bfd64c8a7c7876b2
+> load intermediate identity=35f667b3fece718a8456f7f84bfa0c1c67d76b6a92e96dc9db403802da3bfdbe
 diag intermediate code="not a container" pos=2:10
-> load possessive identity=459ad47253a4082b9cd71010051a3a09893cde2348a5714cf0df7922dbcad5cd
+> load possessive identity=8d5d0305943e2916ed1bbc223ace788efd93e68a5b6b89bb6bda6d9c5733ead1
 diag possessive code="not a container" pos=2:7
-> load keys identity=cc418dcd99d4a9c4b987ea45074b2e5db1e3ddce1a06763c1186490a683331f6
+> load keys identity=b239ab490fb5c8876800b46bb54bfc71e71843815fa801ba94154cda6694dd81
 > deliver d1 to=keys message=go
 > pump clock=2026-10-12T09:00:00Z
 seg keys/r1 start delivery=d1 handler=go clause=1 fuel=59 alloc=97 state=127 end=return

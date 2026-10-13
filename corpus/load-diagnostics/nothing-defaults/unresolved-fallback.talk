@@ -1,0 +1,3 @@
+on go
+  return 1 otherwise unknown
+end go

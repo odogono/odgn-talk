@@ -1,4 +1,4 @@
 # Pins `empty join` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
-> load bad identity=aee220ebcd5841327f5accf8e423499be482289974e6e812d26099af767f0b53
+> load bad identity=82b7796b70013e8563640bf7802dd8075a4ab52e28eabc0ecee84ae96d3b6b67
 diag bad code="empty join" pos=2:1
 > vars

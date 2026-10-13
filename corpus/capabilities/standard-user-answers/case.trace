@@ -1,5 +1,5 @@
 # Unblessed: user answer checks (#527); first blessing awaits human review.
-> load s identity=4f733bf96ad834c2646b97a13db4b6280f5d471eb15e4dd5f1fb652c113bd91f
+> load s identity=f9ad38fc96c4d4e3377d5f9f44469de03922b6388f6fdd328e5092a759c30636
 > deliver d1 to=s message=pick args=[[], nothing]
 > deliver d2 to=s message=pick args=[["S", "M"], nothing]
 > deliver d3 to=s message=pick args=[["S", "M"], {multiple: true}]

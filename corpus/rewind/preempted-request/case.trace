@@ -4,7 +4,7 @@
 # `rewound` at once. The Request's asker keeps waiting on d1: the next Pump
 # dispatches d1 again, as s/r2, which answers it. n counts one Run, not two.
 
-> load s identity=61bef16f2e11e1984f1faa90421b26565cdc9ac289a4837c3a85618dcf361d24
+> load s identity=97d3a88c17d3aa0bc30d3d4a9076e536e613d8d31d2df9923038df0283b3ccf3
 > request d1 to=s message=work args=[21]
 > pump clock=2026-10-01T09:00:00Z fuel-slice=10
 preempt s/r1 start delivery=d1 handler=work clause=1 by=slice fuel=12 alloc=16

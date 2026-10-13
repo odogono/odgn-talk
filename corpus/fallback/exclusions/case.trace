@@ -4,8 +4,8 @@
 # The Decision `beforeOpen` skips `s`'s Fallback, reaches the end of its
 # path, and is allowed. `fail` errors, and the `error` message it sends is
 # dropped without reaching the Fallback. Only `hello` reaches it.
-> load s identity=80f31bcc4c5db3b036e835a62342a487c37777fb4a0868e12977163bc493e735
-> load t identity=0d5ee02cfc9f66bdbbb905c244f37c4b692470de3fee1c70d021ec19df025eff
+> load s identity=1cc88359bf7bbfefa46a822ca3ec432aea309443afc620676e6c26bad6ef477b
+> load t identity=1fe5c2ef32f46530ea91ec4c5226e8c312df57512f4a970927c04bcdcd3d606a
 > broadcast b1 message=ping args=[1] recipients=[s:d1]
 > broadcast b2 message=zap recipients=[t:d2]
 > pump clock=2026-10-07T09:00:00Z

@@ -1,4 +1,4 @@
 # Pins `can't write` and its source position. First blessing approved by the maintainer on 2026-10-07 for #141.
-> load bad identity=6fecf1a9fafe4eda71f4b7e5d4e94a9776a3d7c61c03037f1fa051bb41254f04
+> load bad identity=9683f1cc8d4c7e73ea2bc5e8587ad1e5333d614ef87100ebb8e4ab1dd6979ad6
 diag bad code="can't write" pos=3:12
 > vars

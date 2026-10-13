@@ -1,13 +1,13 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134; correction approved on 2026-10-07 for #392.
 # Missing transitive/private needs, caller calls and charges, sequential suspending
 # answers, Library cleanup after cancellation, late answers and revocation.
-> add-library helper identity=ffc627371a9cf81d1cf1398481fc3760976500b638eb62574908ca69b61b73ee
-> add-library wrapper identity=f7da82f64078365a208757c0b5bc8b1ed4c366823ca77bb7c94ba08a41cd715f
-> load missing identity=5fd3c72b86e5f8e6cb7d4a9d7fe3521266e1ad9bf60bc19e8e1cd23abbaed09f
+> add-library helper identity=9b2afceff971a422ad808641c08b470413d37ab90f41be0bb1a9d10dd3e5d13a
+> add-library wrapper identity=b83d7093843c230ef2063fb95536b83591db4bd3e1e8827e89ae4acf9fb85f1a
+> load missing identity=512040eb5d3845c43879af3cbe61ec70e4fa19351862812c32f949eaa740d0aa
 diag missing code="missing grant" pos=1:1
 diag missing code="missing grant" pos=1:1
 diag missing code="missing grant" pos=1:1
-> load s identity=af906e4de2a1f1619aa97b726af086e087fcc9bb009099a47758165da8d1bc09
+> load s identity=d44a2fb4ebcf49dc5b590676011b2836260534df6388cad332ad633b02afa508
 > stub io.read value=7
 > deliver d1 to=s message=immediate
 > pump clock=2026-10-04T12:00:00Z

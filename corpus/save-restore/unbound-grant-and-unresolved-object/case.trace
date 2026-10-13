@@ -12,7 +12,7 @@
 #   its property raises `object gone` (lamp:30, pos 15:9), with no `prop`
 #   record, since nothing crosses to the Host.
 
-> load lamp identity=671ce720a0560f36c690ce84fe3b8272b80a4cae65fc5353090a89a39f0b0cf0
+> load lamp identity=d036da74e58cdfaa7af8c4c3ce189089d8c48242929aa688a751adb7d7cb9600
 
 # Before the save, both work.
 > deliver d1 to=lamp message=poke
@@ -24,7 +24,7 @@ run lamp/r1 outcome=completed delivery=d1 handler=poke fuel=67 alloc=75
 pumped state=idle fuel=67
 
 > save s1
-> restore from=s1 unbound=[lamp.log] fingerprint=9e03cad2436f29eeaa2b076f8c73a7f0787ffc7a703f466807ca3f9d1248a37f mode=full disposed=[<object light "bulb-1">]
+> restore from=s1 unbound=[lamp.log] fingerprint=683fd26abf25eb40d81e9ea7e17ae99f724306a6aa394f5bef028e31179f5d6e mode=full disposed=[<object light "bulb-1">]
 
 # After it, neither does, and lamp catches both errors.
 > deliver d2 to=lamp message=poke

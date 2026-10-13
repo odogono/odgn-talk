@@ -1,5 +1,5 @@
 # Declared Calendar failures are checked against catalogue fields.
-> load s identity=1181e44c5ab7326c514a97d6b3fa951addda821068612991ce35e6948fc455c8
+> load s identity=e16886d51d8cd7700872d646a0b9a74c36b770ecb8aeb500ef1bb38bca47c21a
 > stub calendar.toInstant error={code: "ambiguous time", civil: 2026-10-25T01:30:00, zone: "Europe/London"}
 > deliver d1 to=s message=go
 > pump clock=2026-10-02T12:00:00Z

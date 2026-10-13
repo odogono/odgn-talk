@@ -1,8 +1,8 @@
 # effect-replace-library: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> add-library user identity=82e71f84bc526e24d744a868fb416e7a66910bab719bdd38cc96de7abbebcd7e
-> load s identity=b0c71986421917d636293b254b378064c68571dea02c29972442ab6d34267a9b
+> add-library user identity=bc50d73e41bbce92993702e20fb8d41df5ab40a562ac9298e7c4ed32fe53d3a3
+> load s identity=e4115ba3b9b4e2ad0af6fa0f1a4c7549f312e05e3a0a7fcb8b6551cfb0a2ce4b
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > stub-effect s.r phase=begin status=ok
@@ -14,10 +14,10 @@ call s/r1.c1 op=r.open args=[] result=nothing
 scope s/r1.c1 grant=r name=file action=opened
 preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=40 alloc=8
 pumped state=sliced fuel=40
-> replace-library user carry=yes source="function other" & newline & "return 1" & newline & "end other" identity=06f47d39033a5e925a3cff72287a6578332a2f9ffc4b0bbc21eb08f45bc4ba27
+> replace-library user carry=yes source="function other" & newline & "return 1" & newline & "end other" identity=550ad6e72d34a1fbd75b4f5e8562a969d792ea70e52107aa4d287647833da511
 diag s code="unknown import" pos=1:5
 diag s code="unknown name" pos=5:5
-> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=64abb39061cd00a83abf2e7b1a8546f3c699cf4f03b51410df33e5c8272b9dc8
+> replace-library user carry=yes source="function one" & newline & "return 2" & newline & "end one" identity=56037a115d109e5669e4e1d31d0feb39f4a95a833b500ebad964c0bab79d8e7c
 call s/r1.c2 op=r.close args=[] result=nothing automatic=yes
 scope s/r1.c2 grant=r name=file action=abandoned
 effect s/r1.s1 grant=r phase=rollback status=ok

@@ -1,17 +1,21 @@
-# Specification draft: Nothing defaults and optional map-key reads
+# Design: Nothing defaults and optional map-key reads
 
 For [#687](https://github.com/odogono/odgn-talk/issues/687), based on
 `0ea3a15c`, 2026-10-13. The selected design is **`otherwise` plus optional
 map-key reads**. The word spelling is selected for xTalk style, with its source-compatibility
 cost accepted. `??` is not part of this design.
 
-This is a complete behavior and lowering draft for review, not an active
-language declaration. It deliberately stages the grammar and instruction
-catalogue edits with implementation, as permitted by the
-[Spec change-impact guide](../agents/spec-changes.md#splitting-delivery).
-This records the design-review baseline. For current support and integration
-constraints, see the [migration guide](../migrations/nothing-defaults.md).
-The [exploration](../research/nothing-default-syntax.md) records alternatives.
+This design is integrated and active in language **1.0-rc.3**. The Spec is
+normative: [chapter 4](../../spec/04-expressions-and-statements.md#nothing-defaults)
+for behavior, [chapter 2](../../spec/02-grammar.md) and
+[chapter 1](../../spec/01-lexical-structure.md) for grammar and continuation,
+[chapter 6](../../spec/06-errors-and-limits.md#errors) for errors,
+[chapter 8](../../spec/08-the-abstract-machine-and-the-cost-model.md) for
+instructions, lowering and Fuel, and [chapter 0](../../spec/00-introduction.md#versions)
+for the version. This file keeps the design rationale and the acceptance
+groups the corpus covers. For migration, see the
+[migration guide](../migrations/nothing-defaults.md). The
+[exploration](../research/nothing-default-syntax.md) records alternatives.
 
 ## Behavior
 
@@ -119,7 +123,7 @@ rules, with initializer errors handled as existing load errors.
 
 ## Grammar and lexical changes
 
-Apply these changes to `spec/data/grammar.ebnf` at integration:
+These changes are in `spec/data/grammar.ebnf`:
 
 ```ebnf
 Expression     ::= Lambda | EveryHead Whose | Default Whose?
@@ -138,12 +142,12 @@ expression is an ordinal Chunk Expression. The apparent overlap between
 old meaning. Use `the optional optional of m` for an optional read of that
 key, and quote the key `of`: `the optional "of" of m`.
 
-In `grammar.toml`, add `otherwise` as a contextual operator, lowest ordinary
-binary precedence, left-associative; add it to FOLLOW and excluded Argument
-Labels. Add `optional` as contextual only after `the`, and register the
-`optional-key` two-token decision. Add neither word to Reserved Words.
-Neither feature is designated an Advanced Construct by this draft; both
-belong to the ordinary expression surface.
+`grammar.toml` adds `otherwise` as a contextual operator, lowest ordinary
+binary precedence, left-associative, in FOLLOW and among the excluded
+Argument Labels. `optional` is contextual only after `the`, with the
+registered `optional-key` two-token decision. Neither word is a Reserved
+Word, and neither feature is an Advanced Construct; both belong to the
+ordinary expression surface.
 
 A trailing `otherwise` in operator position continues the line, including
 across a trailing comment. An operand named `otherwise` does not. Starting
@@ -153,7 +157,7 @@ Both changes use existing tokens and require no lexer backtracking.
 
 ## Abstract Machine, lowering and Fuel
 
-Add three instructions to `machine.toml` at integration. All are synchronous,
+`machine.toml` declares three instructions. All are synchronous,
 allocate no result storage of their own, and obey existing instruction Fuel
 charging and Limit Fault behavior.
 
@@ -173,7 +177,7 @@ Pop the receiver and the key below it. Validate the key before receiver-kind
 dispatch, using the computed optional-read rules above.
 Errors: `wrong kind` only.
 
-Normative lowering proposed for chapter 8:
+The lowering, normative in chapter 8:
 
 ```text
 ⟦a otherwise b⟧ = ⟦a⟧ branch-not-nothing done; pop; ⟦b⟧; done:
@@ -222,16 +226,19 @@ This is intentionally source-breaking despite both words being contextual:
 - Variables, functions, Handlers and map keys named `otherwise` remain legal.
   The ordinary key `optional` retains its syntax and behavior.
 
-Release the integration as language **1.0-rc.3**, retaining provisional
+The integration is released as language **1.0-rc.3**, retaining provisional
 **Cost Model 0** under the existing
-[prerelease exception](../../spec/08-the-abstract-machine-and-the-cost-model.md#prerelease-cost-model-exception).
-Record the lowering change in `costs.toml`'s change history and regenerate
-version declarations, Trace headers and Group Fingerprints. Re-bless affected
-expectations under the corpus approval workflow. Cost Model 1 remains reserved
-for calibration. This design-only PR does not activate either version change.
-No dual grammar or automatic source migration is proposed.
-Existing save mismatch handling applies; no automatic snapshot migration
-or preservation of renamed message Selectors is promised.
+[prerelease exception](../../spec/08-the-abstract-machine-and-the-cost-model.md#prerelease-cost-model-exception)
+([#722](https://github.com/odogono/odgn-talk/issues/722)). `costs.toml`'s
+change history records the lowering change; version declarations, Trace
+headers and Group Fingerprints were regenerated, and affected expectations
+re-blessed under the corpus approval workflow. Cost Model 1 remains reserved
+for calibration. There is no dual grammar or automatic source migration.
+Existing save mismatch handling applies: a 1.0-rc.2 save is a mismatch, so
+`RejectMismatch` refuses it with `save mismatch` and `VariablesOnly` keeps
+only its Script Variables ([chapter 10](../../spec/10-save-and-restore.md#restoring)).
+No automatic snapshot migration or preservation of renamed message
+Selectors is promised.
 
 The library `lookup` remains supported and unchanged. Both forms agree on
 missing/Nothing map steps and rejection of non-map receivers, including
@@ -240,9 +247,31 @@ its default argument eagerly and validates an entire path before traversal;
 `otherwise` is lazy and optional expressions evaluate their own key and
 receiver. `lookup` also handles list positions and reports cumulative paths.
 
-## Acceptance cases to move into the corpus
+## Acceptance cases
 
-These are required observations, not blessed expectation files yet.
+The ten groups below are required observations. The corpus covers them on
+TS, Go and Zig, in ordinary and Save/Restore replay; first blessing is a
+separate human review ([corpus guide](../../corpus/README.md#seed-blessing)).
+
+| Group | Corpus cases |
+| --- | --- |
+| 1 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/) |
+| 2 | [`nothing-defaults/evaluation-order`](../../corpus/nothing-defaults/evaluation-order/), [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/) |
+| 3 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/) |
+| 4 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/) |
+| 5 | [`nothing-defaults/evaluation-order`](../../corpus/nothing-defaults/evaluation-order/), [`nothing-defaults/stdlib-attribution`](../../corpus/nothing-defaults/stdlib-attribution/) |
+| 6 | [`nothing-defaults/host-objects`](../../corpus/nothing-defaults/host-objects/), [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/) |
+| 7 | [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
+| 8 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
+| 9 | [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
+| 10 | [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/); the empty-stack verifier check is a TS unit test ([lowering tests](../../impl/ts/tests/lowering.test.ts)) |
+
+Two cross-Core findings narrowed the cases. Go refuses a local named like a
+Handler ([#764](https://github.com/odogono/odgn-talk/issues/764)), so
+`compatibility` doesn't pair a Handler and a local named `otherwise`. Zig
+omits `not constant` after `unknown name` in an initializer
+([#765](https://github.com/odogono/odgn-talk/issues/765)), so the unresolved
+fallback is checked in a Handler.
 
 1. Default only Nothing: explicit Nothing and absent map keys use the
    fallback; false, zero, empty text, list and map do not. A fallback may
@@ -286,28 +315,19 @@ These are required observations, not blessed expectation files yet.
     budget exhaustion immediately before branch/pop/read faults consistently,
     and TS/Go/Zig agree on values, errors, Fuel and Trace observations.
 
-## Implementation handoff
+No stdlib source contains these expressions, so the corpus checks the
+stdlib attribution rule through stdlib calls as operands and Lambdas the
+stdlib calls. A TS unit test ([Library tests](../../impl/ts/tests/libraries.test.ts))
+checks reads compiled as stdlib-attributed code.
 
-- **Required base:** the design PR containing this file and
-  `docs/research/nothing-default-syntax.md`, based on `0ea3a15c`.
-  Implementation issues pin the PR and exact specification commit; while
-  that PR is unmerged, they depend on it. Confirm both files are present
-  before starting implementation.
-- **Implemented in:** parser experiments only, on local branch
-  `prototype/issue-687-default`. No Core runtime or checker implements this.
-- **Remaining work:** integrate the grammar/keyword changes, three instruction
-  declarations and lowering, source maps, error/cost descriptions and the release
-  revision above. Update chapters 1, 2, 4, 6 (key error description), 7 (`lookup`
-  cross-reference) and 8; generate their Data File regions. Update the
-  reference parser/compiler, TS/Go/Zig parsers, checkers, constant evaluators,
-  runtimes and cost paths. Update formatter/parentheses, highlighting,
-  completion, LSP and debugger consumers, plus Core guides and migration
-  documentation. Add a breaking `feat(spec)` changelog fragment on adoption.
-- **Acceptance still needed:** all ten groups above, with generated
-  Disassembly and Trace expectations kept separate from first blessing.
-  No new expectation file is awaiting approval yet.
-- **Validation at integration:** follow each Core's task map and the Spec
-  change-impact guide; regenerate Spec/syntax/Go/Zig tables, run grammar and
-  machine checks, focused parser/checker/runtime/tooling tests and cross-Core
-  corpus cases, then required repository checks. A clean prototype scan is
-  not evidence of runtime parity or expectation approval.
+## Implementation record
+
+- **Implemented in:** design [#718](https://github.com/odogono/odgn-talk/pull/718);
+  TS Core and shared tooling [#755](https://github.com/odogono/odgn-talk/pull/755),
+  including Go [#757](https://github.com/odogono/odgn-talk/pull/757) and
+  Zig [#760](https://github.com/odogono/odgn-talk/pull/760); language
+  1.0-rc.3 activation and cross-Core Trace cases for
+  [#722](https://github.com/odogono/odgn-talk/issues/722).
+- **Approval still needed:** first blessing of every expectation the
+  acceptance table names. Each carries an `Unblessed` header, which the
+  reviewer removes on approval.

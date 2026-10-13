@@ -1,7 +1,7 @@
 # scope-preemption-save: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> load s identity=342771b9f8304d463d3d1b8abed29d61ced0efd37a57c37aba252f4e926a5b25
+> load s identity=a860236fa0f62b59b07912cd72fdfab9df26c8f012a160cff1413142dfdc10a5
 > stub resource.open value=nothing
 > stub resource.close value=nothing
 > deliver d1 to=s message=go
@@ -22,6 +22,6 @@ seg s/r1 continue fuel=73 alloc=8 state=16 end=return
 run s/r1 outcome=completed delivery=d1 handler=go fuel=109 alloc=40
 pumped state=idle fuel=73
 > save s2
-> restore from=s2 fingerprint=42e8a24ecca54aea5905de7964ecd842ac6e0e1b5caf2156f5b1dc82f6cdadb2 mode=full
+> restore from=s2 fingerprint=01f473e445a1f8b2de1342711f00b36607b4bf7eee799f5d53ae8b936dfb65b4 mode=full
 > vars
 vars s count=2

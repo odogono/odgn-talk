@@ -1,6 +1,6 @@
 # Unblessed: Store watch Operations (#620); first blessing awaits human review.
 # Expected behavior derived from Store Notifications, Core scenarios; see docs/reviews/store-watch-blessings.
-> load s identity=7bb0e4a4ac457e9343871506bd58ae1e7bbcb105c5ffbe84095c47c816e81a6b
+> load s identity=190844768fe4f854106aa05a34d97233cbac2e290403f70ffaacab43a86e8a7e
 > deliver d1 to=s message=watch args=["", "", "put"]
 > pump clock=2026-10-11T12:00:00Z
 raise s/r1 code="invalid watch" at=s:7 pos=4:5

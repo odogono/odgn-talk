@@ -1,7 +1,7 @@
 # First blessing approved by the maintainer on 2026-10-07 for #141.
 # Labelled Selectors follow the Message Path and preserve the Target.
-> load board identity=41f90bf4739ac3f35d03125a7f5e37fd763573ece09c89bdb10819d0f9ce566c
-> load knight identity=ee7315a47d071454471e4ecb04c32302fa0c0b2003a3af05c23094f9cdef60f2
+> load board identity=c66fb22f6e57a39906d36544ba2a00a795a6fe0a8d04d9ce07db488ffd8f8217
+> load knight identity=1eb04300b0545fe63cd4ad4e5f47e1276811fcef8e7a81714ddf1c79e54910f5
 > decide to=<object piece "knight"> message=move:with: args=[1, 2]
 refused code="invalid value"
 > request to=<object piece "knight"> message=move:to: args=[1]

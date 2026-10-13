@@ -1,0 +1,27 @@
+-- lib.talk: the stdlib-attribution case's Script.
+
+use pad from text
+use map from list
+
+script variable results = []
+
+on leftOperand
+  put pad("x", -1) otherwise "fallback" after results
+end leftOperand
+
+on keyOperand
+  put the optional (pad("x", -1)) of nothing after results
+end keyOperand
+
+on receiverOperand
+  put the optional x of pad("x", -1) after results
+end receiverOperand
+
+on lambdaRead
+  put map([{k: 1}, 2], given x: the optional k of x) after results
+end lambdaRead
+
+on lambdaDefault
+  put map([nothing, 2], given x: x otherwise 0) after results
+  put map([{k: 1}, {}, nothing], given x: the optional k of x otherwise 0) after results
+end lambdaDefault

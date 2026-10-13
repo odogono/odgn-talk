@@ -1,0 +1,34 @@
+-- totals.talk: each handler returns one expression, so its Run's Fuel less
+-- `one`'s is the expression's Fuel less one `const`.
+
+on one
+  return 1
+end one
+
+on present
+  return 1 otherwise 2
+end present
+
+on absent
+  return nothing otherwise 2
+end absent
+
+on presentChain
+  return 1 otherwise 2 otherwise 3
+end presentChain
+
+on absentChain
+  return nothing otherwise nothing otherwise 3
+end absentChain
+
+on literalRead
+  return the optional x of nothing
+end literalRead
+
+on computedRead
+  return the optional ("x") of nothing
+end computedRead
+
+on failedRead
+  return the optional x of 1
+end failedRead

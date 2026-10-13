@@ -1,6 +1,6 @@
 # Unblessed: items property list reads and wrong-kind fields (#565); first blessing awaits human review.
 # Pins chapter 4's items results and Cost Model 0 charges on both Cores.
-> load items identity=d79e25178ccb0346bda4824f7d9fcebfa35038872b50abdfa31b566c7223a1f7
+> load items identity=c94e81a247b8fd4dd8c7f15082ef9185dca7c8f5c716d0236d1c838e55f53ff2
 > deliver d1 to=items message=go
 > pump clock=2026-09-30T09:00:00Z
 raise items/r1 code="wrong kind" at=items:57 pos=11:11

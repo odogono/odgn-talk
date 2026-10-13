@@ -1,7 +1,7 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
 # Exact durations round to nanoseconds, half even. Negative and zero waits
 # still await a later Pump. A 60-billion-second wait exceeds time.Duration.
-> load s identity=411ab64b7d6d7e1366c912f23b881359e950e13b5d9e3b963ad4d2f3acc7065b
+> load s identity=46ae5732d2c46bb44e984ceafa5f7b4be133e18c572411394acd1c64d7e42bb4
 > request d1 to=s message=nap args=[1, 0.0000000005 s]
 > deliver d2 to=s message=nap args=[2, 0.0000000015 s]
 > deliver d3 to=s message=nap args=[3, 0.0000000025 s]

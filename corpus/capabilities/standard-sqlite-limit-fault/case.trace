@@ -2,7 +2,7 @@
 # The scope's commit only releases its savepoint, so a Limit Fault later in
 # the Segment rolls back everything, the committed scope included, with one
 # rollback hook and no abandonment call, since no scope is open.
-> load s identity=26137cf51e661efc6d8f18c11ea22f6677b42380c6f345bbb8474b0472f1feae
+> load s identity=357bcf9a6e8a9b98b38547ebbb14919b637b6fd1a0962232a76671a27e607190
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.begin value=nothing
 > stub sqlite.change value={columns: [], rows: [], changes: 1}

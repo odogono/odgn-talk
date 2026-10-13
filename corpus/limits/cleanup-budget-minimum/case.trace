@@ -25,7 +25,7 @@
 # allocation is `iterate-times`'s 24 and the concat's text, 16 + 14. The
 # state figures are Cost Model 0's.
 
-> load holder identity=c4326474c45bc12b7cf58421457bde48ffcb83697a34c69b3b034bf6a1c90ba1
+> load holder identity=e1c2d2a958ad2fb3f71184482466d76c44d19572b50793276f4fd280d3789926
 
 > deliver d1 to=holder message=hold args=[249994]
 > deliver d2 to=holder message=hold args=[249995]

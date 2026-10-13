@@ -3,7 +3,7 @@
 # (host error), then its column names (sql), then each value row by row
 # (unrepresentable), and raises the first failure. The last few show Host
 # failures passed through, and one with a code query does not declare.
-> load s identity=68b277254f8e0ffafcff475faa8025b3b4afef013a2487022928206eeb1a1424
+> load s identity=dba21225ba8d589dfd37de7bd27b016161805633e264a91bb2148132f089c2aa
 > stub sqlite.query value={columns: ["a", "b"], rows: [[{real: "NaN"}, 1]]}
 > deliver d1 to=s message=read
 > pump clock=2026-10-09T12:00:00Z

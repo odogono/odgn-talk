@@ -1,7 +1,7 @@
 # Unblessed: queued Host Function cancellation labels (#490); first blessing awaits human review.
 # Named functions and Lambdas cancelled before dispatch keep fn, have no Run id,
 # spend no Fuel or allocation, and never execute their bodies.
-> load home identity=dea40665e5866e6f8e67c4ce41d226cccbc3a91decb3ce3a27a84f606efb6465
+> load home identity=84b55f070d80661f808e3504c166f27d7a82fb5fb836c4ad4572c4e45dee4ebb
 > request d1 to=home message=named
 > pump clock=2026-09-30T09:00:00Z
 seg home/r1 start delivery=d1 handler=named clause=1 fuel=10 alloc=32 state=8 end=return

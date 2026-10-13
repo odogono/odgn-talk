@@ -1,7 +1,7 @@
 # The foreign call uses call (8 Fuel), creates a concurrent Home Script Run,
 # and resumes with no additional call charge. The caller owns its MaxWait.
-> load home identity=d9c223e5aa2ccd380a8cbe1bac05651ae7353d10c29b4097e9c4721e68b1465b
-> load caller identity=ea206088af5eb8330601931a9c689451b6f395de9e8172dc5221943d6ba7b8ca
+> load home identity=60631b9328844bb5f93b89cdd12eaa41fe0b532f8bf3a3f393965be634fba11c
+> load caller identity=4d2ed14c5391baa5471311843fe8d5ee9ed5432f3aa7126218f1fb5bb16321ad
 > deliver d1 to=home message=begin
 > pump clock=2026-09-30T09:00:00Z
 send home/r1 to=caller message=execute args=[<function home:3:7>]

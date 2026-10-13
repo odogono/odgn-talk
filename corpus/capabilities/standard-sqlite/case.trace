@@ -4,7 +4,7 @@
 # round-trip digits, TEXT to text and a BLOB to Bytes, each row a map in
 # column order. A query never enrolls. An omitted or Nothing max is the
 # binding's row cap, and each call charges max times perRow, 2, after its cost.
-> load s identity=511a9eb9de6ccb90eb8792bfbea532dff8c138eaa886d0759e7c1384fa1bf795
+> load s identity=9c3c041b0de7e44837a8170d0d2e5874e4f3dd750a318b55a839947cae3ec5c1
 > stub sqlite.query value={columns: ["id", "name", "score", "ratio", "photo", "active"], rows: [[1, "Zoë", nothing, 0.5, <<0x01, 0xFF>>, 1], [9223372036854775807, "", -12, {real: "0.1"}, <<>>, 1], [-9223372036854775808, "x", 2.50, {real: "-0"}, nothing, 0]]}
 > deliver d1 to=s message=list
 > pump clock=2026-10-09T12:00:00Z

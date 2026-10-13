@@ -2,7 +2,7 @@
 # The second `tick` arrives while the first waits, so the `, dropping`
 # clause drops it. `jump` and `hop` take the `, queued` clause, so `hop`
 # parks until `jump` ends.
-> load s identity=06911220586c38acd6a67ccd16f47a89c9d1c3174d400c2fef02eefc8dbb53af
+> load s identity=1651ee9761d928d6ddd1d5fa64f38b7e27537ccac643b1c6a8877473a2450252
 > deliver d1 to=s message=tick
 > deliver d2 to=s message=tick
 > deliver d3 to=s message=jump

@@ -1,7 +1,7 @@
 # A catch-body Error reaches cleanup, then cleanup's Error replaces it.
 # Transparent Restore reconnects pending cleanup to the retained original Error.
 # A fresh on-error Run has no offers from the failed Run.
-> load s identity=aa68da9ec5b9ac74fa68aee28ef1e8498d0d9d7c4fc999ccac82a0bef8c67294
+> load s identity=056937824d73fe3dcf153cc9b17da05bc75712761d5cbb638bada023309da184
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T09:00:00Z fuel-cap=28
 raise s/r1 code="bad" at=s:7 pos=5:5

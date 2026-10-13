@@ -4,8 +4,8 @@
 # the knight's first Fallback clause. `jump` reaches the knight's second
 # Fallback clause, which passes it up unchanged to the board's Fallback, so
 # the Request's reply comes from the board.
-> load board identity=54971a989830c6223f5d7676912e1703f7d172510000d2a203e0629c81e0ddee
-> load piece identity=a576bbffa633b764df5fa46152045e5947a96e485d515dad6efd0154b29b49b0
+> load board identity=432fbd3d741b303337337f8488962ad1d738cedbc3bae69ded60a03cb0c3546b
+> load piece identity=98b112adc36d717d8eb26be2e1edcffc83189517ab2f47408aac886df3ef36f3
 > set-parent object=<object piece "knight"> parent=<object board "board">
 > deliver d1 to=<object piece "knight"> message=keypress args=["x"]
 > deliver d2 to=<object piece "knight"> message=keypress args=["escape"]

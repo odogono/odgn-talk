@@ -1,91 +1,91 @@
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="script variable price" & newline & "on entry1" & newline & "put 2.50 GBP into price" & newline & "end entry1" & newline identity=9dee71ce74c5a685a06464ad78d372d83c8831a6234bae4a181decaba7ff4c02
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable price" & newline & "on entry1" & newline & "put 2.50 GBP into price" & newline & "end entry1" & newline identity=75f24ccf4377a9bbe4a15886fd78d98a8b5096d8edd76a1868cc3c9c23310c11
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=24 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
 pumped state=idle fuel=10
-> extend session source="on entry2" & newline & "return price * 3" & newline & "end entry2" & newline identity=061edc3a199586e0920ba837c0949e2000b9b071b9dd941c7455f7f598a5fbac
+> extend session source="on entry2" & newline & "return price * 3" & newline & "end entry2" & newline identity=1265337c57ac1353adfca028d684ef08ad836ed53bc41c9f1ee3ded90d89efea
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:01Z
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=12 alloc=24 state=24 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 value=7.50 GBP fuel=12 alloc=24
 pumped state=idle fuel=12
-> extend session source="on entry3" & newline & "return " & quote & "5" & quote & newline & "end entry3" & newline identity=b877735532fe8f306ff394983d2009571b1852ea90a0e906e4abcbdd05b58b6c
+> extend session source="on entry3" & newline & "return " & quote & "5" & quote & newline & "end entry3" & newline identity=de40f436d4a3954464800b15a7eed2c9b09dc87cb2f5804997d1ceaf643f8e10
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:02Z
 seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=7 alloc=0 state=24 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 value="5" fuel=7 alloc=0
 pumped state=idle fuel=7
-> extend session source="on greet name" & newline & "  say " & quote & "hello " & quote & " & name" & newline & "end greet" identity=1c20fa51a35d9c60b1438ac75e68cb2586a6b4ae8dc036b62d4d30a866c2b106
-> extend session source="on entry4" & newline & "greet " & quote & "Ann" & quote & newline & "end entry4" & newline identity=127efbb28db5eed9d5b55041b0149b4c391e01747b0786686a1d14d2a9ad71aa
+> extend session source="on greet name" & newline & "  say " & quote & "hello " & quote & " & name" & newline & "end greet" identity=c24e728f8de9cafcb4e605aff76c076bdd48a5d3035eea37a739a0f673df64f5
+> extend session source="on entry4" & newline & "greet " & quote & "Ann" & quote & newline & "end entry4" & newline identity=307abb858a0ef54577ff2f58d82ef21534a10d3f0bdd932d7d1ae363fff7914f
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:03Z
 call session/r4.c1 op=console.write args=["hello Ann"]
 seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=40 alloc=25 state=24 end=return
 run session/r4 outcome=completed delivery=d4 handler=entry4 fuel=40 alloc=25
 pumped state=idle fuel=40
-> extend session source="on entry5" & newline & "say " & quote & "a" & quote & " & newline & " & quote & "> b" & quote & newline & "end entry5" & newline identity=ecbc2553bbdd4920affa90cb151b2bf0d0994c3f68e44e137af872df5cab760b
+> extend session source="on entry5" & newline & "say " & quote & "a" & quote & " & newline & " & quote & "> b" & quote & newline & "end entry5" & newline identity=d4fcf9699cb213bda454822b5de2251800fb722f452e9efdf258a94a2f585360
 > request d5 to=session message=entry5
 > pump clock=2026-09-30T10:00:04Z
 call session/r5.c1 op=console.write args=["a" & newline & "> b"]
 seg session/r5 start delivery=d5 handler=entry5 clause=1 fuel=28 alloc=39 state=24 end=return
 run session/r5 outcome=completed delivery=d5 handler=entry5 fuel=28 alloc=39
 pumped state=idle fuel=28
-> extend session source="on entry6" & newline & "say " & quote & quote & newline & "end entry6" & newline identity=011c86ea46814a91e38367e9e26ce561cbd45d87cdda137b008f9e55c15c1c06
+> extend session source="on entry6" & newline & "say " & quote & quote & newline & "end entry6" & newline identity=1eedfa0f8dd42131f3df9f031511ea6be62cdd2e8e3f853a8246b32ca511e845
 > request d6 to=session message=entry6
 > pump clock=2026-09-30T10:00:05Z
 call session/r6.c1 op=console.write args=[""]
 seg session/r6 start delivery=d6 handler=entry6 clause=1 fuel=18 alloc=0 state=24 end=return
 run session/r6 outcome=completed delivery=d6 handler=entry6 fuel=18 alloc=0
 pumped state=idle fuel=18
-> extend session source="on entry7" & newline & "return 1 / 0" & newline & "end entry7" & newline identity=0d80320ca80bf069aa410e48b417d5503268615ff0b1dd048e645a079996b43a
+> extend session source="on entry7" & newline & "return 1 / 0" & newline & "end entry7" & newline identity=7df74da0f70540e7583e4b36c8e233b9ef866208dc5eb98a8ef01650aba2ed4c
 > request d7 to=session message=entry7
 > pump clock=2026-09-30T10:00:06Z
 raise session/r7 code="division by zero" at=session+8:4 pos=2:10
 seg session/r7 start delivery=d7 handler=entry7 clause=1 fuel=13 alloc=0 state=24 end=error
 run session/r7 outcome=errored delivery=d7 handler=entry7 error={code: "division by zero", at: {unit: "session+8", handler: "entry7", line: 2, column: 10}} fuel=13 alloc=0
 pumped state=idle fuel=13
-> extend session source="on entry8" & newline & "return nope + 1" & newline & "end entry8" & newline identity=f1b64d07f34cc26f8de5b9d7cf7a4eaf53fad1a4d01668ae79d7c86f59bbd0f3
+> extend session source="on entry8" & newline & "return nope + 1" & newline & "end entry8" & newline identity=0605ab0c188daf39ec44fba61637b1c3bc62fe5761a2ea3a6c298f42099978c3
 diag session+9 code="unknown name" pos=2:8
-> extend session source="script variable y" & newline & "on entry8" & newline & "if true then" & newline & "  put nope into y" & newline & "end if" & newline & "end entry8" & newline identity=e4cae11d4d1f3d878d22b5386e3c314041e7c259494612a7f9b70ecfb47f0d8a
+> extend session source="script variable y" & newline & "on entry8" & newline & "if true then" & newline & "  put nope into y" & newline & "end if" & newline & "end entry8" & newline identity=2943d1f6d60741b909648cddc42761d799239e4354da8ab686009b2846cf47c0
 diag session+9 code="unknown name" pos=4:7
-> extend session source="function tax amount" & newline & "  return amount * 0.2" & newline & "end tax" identity=41f456979f20c165ba96852628ef8b2f65c7374efe271a493d2dd33f6f8a0a8b
-> extend session source="on entry8" & newline & "return tax(price)" & newline & "end entry8" & newline identity=06705cfc863fd24ffbe90077b6b2ab2fea78c169f03a8935efee5bb2fdcb217a
+> extend session source="function tax amount" & newline & "  return amount * 0.2" & newline & "end tax" identity=8494255757cebd229c50f20db20e432416651bb4f7fec1dc429d811cf4064182
+> extend session source="on entry8" & newline & "return tax(price)" & newline & "end entry8" & newline identity=a5046b77ce4d729a687109d6f179a7b2951c6ef9a483a7a80d0111439d72d9ee
 > request d8 to=session message=entry8
 > pump clock=2026-09-30T10:00:07Z
 seg session/r8 start delivery=d8 handler=entry8 clause=1 fuel=23 alloc=24 state=24 end=return
 run session/r8 outcome=completed delivery=d8 handler=entry8 value=0.500 GBP fuel=23 alloc=24
 pumped state=idle fuel=23
-> reload session carry=yes source="script variable price" & newline & "on greet name" & newline & "  say " & quote & "hello " & quote & " & name" & newline & "end greet" & newline & "function tax amount" & newline & "  return amount * 0.1" & newline & "end tax" & newline identity=5512ee71546f2ff1c8a25db76eedead3df5b75e2cf211c12f08f7a39c43518db
+> reload session carry=yes source="script variable price" & newline & "on greet name" & newline & "  say " & quote & "hello " & quote & " & name" & newline & "end greet" & newline & "function tax amount" & newline & "  return amount * 0.1" & newline & "end tax" & newline identity=551f02523101d632c3f1a868382c33479db5ea18ad0864d2fc2c39c4bf53e196
 stopped session reason="reload"
-> extend session source="on entry9" & newline & "return tax(price)" & newline & "end entry9" & newline identity=de3be65c9a2fdee6333c3bd007f5c6a663a10d12dfc24bc8481d41b8c7eebafb
+> extend session source="on entry9" & newline & "return tax(price)" & newline & "end entry9" & newline identity=b4098e227cff4b30fe47876ca7b9efb81bd42cf3d2475605134c2f679e718a50
 > request d9 to=session message=entry9
 > pump clock=2026-09-30T10:00:08Z
 seg session/r9 start delivery=d9 handler=entry9 clause=1 fuel=23 alloc=24 state=24 end=return
 run session/r9 outcome=completed delivery=d9 handler=entry9 value=0.250 GBP fuel=23 alloc=24
 pumped state=idle fuel=23
-> extend session source="script variable count = 10" identity=e59dd75bdcb0fd419318cc2eee827e9b53107e5b93cfdc10b7d6675fe20dcc98
-> extend session source="on entry10" & newline & "return count" & newline & "end entry10" & newline identity=b7af792c2dacebccf7ffc80915e2062cd63a125e09aaa2844c22b8d8e82c38c5
+> extend session source="script variable count = 10" identity=708c33537b21f33cff08f65da34b75157114179cc3d8a6ced4539fac4fc4dbfc
+> extend session source="on entry10" & newline & "return count" & newline & "end entry10" & newline identity=894fedd401a98a615d2591b3a14fd982d65f066229cf7284c3a739aecf799d3a
 > request d10 to=session message=entry10
 > pump clock=2026-09-30T10:00:09Z
 seg session/r10 start delivery=d10 handler=entry10 clause=1 fuel=7 alloc=0 state=40 end=return
 run session/r10 outcome=completed delivery=d10 handler=entry10 value=10 fuel=7 alloc=0
 pumped state=idle fuel=7
-> extend session source="on entry11" & newline & "put  count + 1 into count" & newline & "end entry11" & newline identity=0bff2d5c868d0757f01c4d51c5594a89215516b915abe22644db8bafc699c57e
+> extend session source="on entry11" & newline & "put  count + 1 into count" & newline & "end entry11" & newline identity=aac4375fa0beba7cb2a4e0c72a5f5f7110b45380478b9b7fec1a0193ed8f0f96
 > request d11 to=session message=entry11
 > pump clock=2026-09-30T10:00:10Z
 seg session/r11 start delivery=d11 handler=entry11 clause=1 fuel=15 alloc=16 state=40 end=return
 run session/r11 outcome=completed delivery=d11 handler=entry11 fuel=15 alloc=16
 pumped state=idle fuel=15
-> extend session source="on entry12" & newline & "return count" & newline & "end entry12" & newline identity=fd3d5002f87c832a730730efc20971cf486e2cf6b0e97a11761fb39b4b0b9a96
+> extend session source="on entry12" & newline & "return count" & newline & "end entry12" & newline identity=f86514b9d6c8b8938a1bddce0aaeeb8c4901ef26370280c0bbcbd1e0fcb98f2e
 > request d12 to=session message=entry12
 > pump clock=2026-09-30T10:00:11Z
 seg session/r12 start delivery=d12 handler=entry12 clause=1 fuel=7 alloc=0 state=40 end=return
 run session/r12 outcome=completed delivery=d12 handler=entry12 value=11 fuel=7 alloc=0
 pumped state=idle fuel=7
-> extend session source="on ping" & newline & "  say " & quote & "pong" & quote & newline & "end ping" identity=78e6ff16eaaf9d59808d66b08adeac45f039e1bf0c319335f332aa586a077f3e
-> extend session source="on entry13" & newline & "send ping to session" & newline & "end entry13" & newline identity=08b2a239e4823ec923901d8332399316bd5f3c31ce5810e468c78b916dc1ea97
+> extend session source="on ping" & newline & "  say " & quote & "pong" & quote & newline & "end ping" identity=882d29145a261174160814d92aba5a96da15c857d5908b53ac1d77f31cd18e15
+> extend session source="on entry13" & newline & "send ping to session" & newline & "end entry13" & newline identity=151d3d76c63551315fd85452200701e044987ccdda5abac6737ee8455ee3a1a1
 > request d13 to=session message=entry13
 > pump clock=2026-09-30T10:00:12Z
 send session/r13 to=session message=ping
@@ -95,7 +95,7 @@ call session/r14.c1 op=console.write args=["pong"]
 seg session/r14 start from=session/r13 handler=ping clause=1 fuel=18 alloc=0 state=40 end=return
 run session/r14 outcome=completed handler=ping fuel=18 alloc=0
 pumped state=idle fuel=47
-> extend session source="on entry14" & newline & "send nobody to session" & newline & "end entry14" & newline identity=f16262986acd7155b5616ce1e44f7a28b0fa2adf3123bda2dc03ae4d35c048ee
+> extend session source="on entry14" & newline & "send nobody to session" & newline & "end entry14" & newline identity=bdc657bfeea11eb47ec6165a8a526e546c7cd2c9b850967397135b1172e1a726
 > request d14 to=session message=entry14
 > pump clock=2026-09-30T10:00:13Z
 send session/r15 to=session message=nobody

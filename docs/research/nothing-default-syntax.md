@@ -7,11 +7,15 @@ issue's latest reopen check found neither trigger; exploring a design does not
 supply that missing usage evidence. Hypothetical examples use `text` fences,
 as in the [pipeline exploration](pipeline-operator.md).
 
+> **Status.** The selected direction is now normative in language 1.0-rc.3
+> ([chapter 4](../../spec/04-expressions-and-statements.md#nothing-defaults)).
+> This exploration is kept as a record of the alternatives considered.
+
 ## Selected direction
 
 The user selected **`otherwise` and explicit optional map-key reads** after
-reviewing the compatibility findings and xTalk precedent. The current
-[specification draft](../design/nothing-defaults.md) defines their behavior,
+reviewing the compatibility findings and xTalk precedent. The
+[design](../design/nothing-defaults.md) defines their behavior,
 grammar, lowering, Fuel and acceptance cases. It supersedes this exploration's
 earlier preference for `??` and its recommendation to defer optional reads.
 The prototype's compatibility findings remain valid; the tradeoff is accepted.
@@ -276,9 +280,8 @@ invalid. The new `optional-key` two-token decision preserves the old
 `the optional of m` read. There are zero relexes and the same 609 unchanged
 baseline-accepted repository files. No runtime behavior was implemented.
 
-The [specification draft](../design/nothing-defaults.md) is the current design
-handoff for both features. It keeps live generated grammar/instruction
-catalogues unchanged until implementation can satisfy their consumer checks.
+The [design](../design/nothing-defaults.md) records the integrated features;
+the Spec is normative.
 
 ## Evidence and remaining validation
 

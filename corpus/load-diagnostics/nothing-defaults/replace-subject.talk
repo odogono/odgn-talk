@@ -1,0 +1,3 @@
+on go
+  return replace "a" in nothing otherwise "a" with "b"
+end go

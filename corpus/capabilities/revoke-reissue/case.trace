@@ -1,7 +1,7 @@
 # A saved pending call remains in flight after its Grant is revoked.
 # With its Host implementation rebound, Reissue starts that same call,
 # without paying its declared cost twice. Later Script calls stay revoked.
-> load s identity=73e5bcd81a635e8214c46537f24bacc5c3bcd2413ec37d115218d1e3a3d477ba
+> load s identity=f295033a52f24efcefe565a6ab7d08f62ea717ad6f7f420aaeb51be9cdeaf2ac
 > deliver d1 to=s message=go
 > pump clock=2026-09-30T10:00:00Z
 call s/r1.c1 op=io.pause args=[]
@@ -11,7 +11,7 @@ pumped state=idle fuel=24 next=2026-09-30T10:00:30Z
 > pump clock=2026-09-30T10:00:01Z
 pumped state=idle fuel=0 next=2026-09-30T10:00:30Z
 > save s1
-> restore from=s1 fingerprint=a918076f1a99fce5f160b429fd3c32bacebd4956036355a81cdd1efeaab6e642 mode=full pending=[s/r1.c1]
+> restore from=s1 fingerprint=86a42e1b1220c1c4f2b88b5bb3462e00dbb10cd31e32864baa96f93b82c3f04b mode=full pending=[s/r1.c1]
 > settle s/r1.c1 how=reissue
 > pump clock=2026-09-30T10:00:02Z
 call s/r1.c1 op=io.pause args=[]

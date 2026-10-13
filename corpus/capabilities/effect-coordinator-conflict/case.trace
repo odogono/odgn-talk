@@ -3,7 +3,7 @@
 # binding matches. In d1, alias enrolls first and r joins with no hook; other's
 # write conflicts, naming alias. In d2, lone's write conflicts the same way.
 
-> load s identity=cec6f4994833b1556d5e5d338897cc10463dcf9676bd8c1ca391b8c4345a0bc3
+> load s identity=54ff3af49360b862b0004f50f8fce452af54f3f3bc8657bebf59c74a52bc0d52
 > stub resource.write value=nothing
 > stub resource.write value=nothing
 > stub-effect s.alias phase=begin status=ok

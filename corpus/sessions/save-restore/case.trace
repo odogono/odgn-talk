@@ -1,12 +1,12 @@
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="script variable n" & newline & "on entry1" & newline & "put 1 into n" & newline & "end entry1" & newline identity=21d85265429dcc1c512b3a5e196bc51e8965cc572e1f1da092991a1f796d2cae
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="script variable n" & newline & "on entry1" & newline & "put 1 into n" & newline & "end entry1" & newline identity=5961771c3b6a7b9246fa03e36ddd8f0a7fcd690138fd9b8c773905925b1ef9da
 > request d1 to=session message=entry1
 > pump clock=2026-09-30T10:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=0 state=16 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 fuel=10 alloc=0
 pumped state=idle fuel=10
-> extend session source="on fetch" & newline & "  ask http to fetch and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end fetch" identity=9a9c4a55eef7aed1047c97bd80f1dc4c4049bdc9f3ccf14baa9f5a31861def9d
-> extend session source="on entry2" & newline & "send fetch to session" & newline & "end entry2" & newline identity=62b6e312db80e02ea8012ab12eb66a9250e6ce5c26a9b7cd4a866c1b34fabcc4
+> extend session source="on fetch" & newline & "  ask http to fetch and wait" & newline & "  say " & quote & "got " & quote & " & it" & newline & "end fetch" identity=7c811bd804ad9fbf90a1d4c56f894debd9963c1b20572a871b063fd7357c2084
+> extend session source="on entry2" & newline & "send fetch to session" & newline & "end entry2" & newline identity=ffa95830fcbb623a8228ddc16c418096fc751256068109aa222b767089d6fa91
 > request d2 to=session message=entry2
 > pump clock=2026-09-30T10:00:00Z
 send session/r2 to=session message=fetch
@@ -15,8 +15,8 @@ run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=29 alloc=32
 call session/r3.c1 op=http.fetch args=[]
 seg session/r3 start from=session/r2 handler=fetch clause=1 fuel=14 alloc=0 state=240 end=ask-wait
 pumped state=idle fuel=43 next=2026-09-30T10:00:30Z
-> extend session source="on nap" & newline & "  wait 5 s" & newline & "  say " & quote & "woke " & quote & " & n" & newline & "end nap" identity=67020065883bc19b71940d2f2f2d8946957d691a9436438ede81198915b0d432
-> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=af79777628a756fd7dbf01f63782e782cd5a37c5697e40a4294c668d7c882904
+> extend session source="on nap" & newline & "  wait 5 s" & newline & "  say " & quote & "woke " & quote & " & n" & newline & "end nap" identity=58f556a593899e85dfa525ff8148f6f6190bc45e0234931439c31b216bd0d87e
+> extend session source="on entry3" & newline & "send nap to session" & newline & "end entry3" & newline identity=8ab602866be0ef88891c0dda0c65a98c3cd5bf5941cfbe3f0182e97bb29ebd0e
 > request d3 to=session message=entry3
 > pump clock=2026-09-30T10:00:00Z
 send session/r4 to=session message=nap
@@ -25,24 +25,24 @@ run session/r4 outcome=completed delivery=d3 handler=entry3 fuel=29 alloc=32
 seg session/r5 start from=session/r4 handler=nap clause=1 fuel=15 alloc=0 state=416 end=wait until=2026-09-30T10:00:05Z
 pumped state=idle fuel=44 next=2026-09-30T10:00:05Z
 > save s1
-> extend session source="on entry4" & newline & "put 99 into n" & newline & "end entry4" & newline identity=d131d5b4187891e52f07bdc2b3a3bcc1c5fb5b359a7dc950356910a117d92a81
+> extend session source="on entry4" & newline & "put 99 into n" & newline & "end entry4" & newline identity=597d12e8d4daa5453556e570ec4869f6118072c23d80374c867453936ba5e7ae
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:00Z
 seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=10 alloc=0 state=416 end=return
 run session/r6 outcome=completed delivery=d4 handler=entry4 fuel=10 alloc=0
 pumped state=idle fuel=10 next=2026-09-30T10:00:05Z
-> extend session source="function late" & newline & "  return 0" & newline & "end late" identity=a08a4fc0959410641376936d6b38d7280748dd194cad73b48b204d8109145bd7
-> restore from=s1 fingerprint=3d26ed3eca4a95aa860ad4916abe957cdfaebd4b41c28cf0d97e9042b329c9d8 mode=full pending=[session/r3.c1]
+> extend session source="function late" & newline & "  return 0" & newline & "end late" identity=fb88e99ab2b6f85df57aebc7e5cbce895e0d9ad45d9bf646b18399c5e6a16ac8
+> restore from=s1 fingerprint=64cba09dc46a92ae29a817b5d729e9710c1a0646bbd885c490c7bed6b54dfb96 mode=full pending=[session/r3.c1]
 > settle session/r3.c1 how=adopt
 > pump clock=2026-09-30T10:00:00Z
 pumped state=idle fuel=0 next=2026-09-30T10:00:05Z
-> extend session source="on entry4" & newline & "return n" & newline & "end entry4" & newline identity=4943a4bc08f0ecec5824a6cc5c1c6ffcbf7fbf7429ed38b6a6b48266cbab6747
+> extend session source="on entry4" & newline & "return n" & newline & "end entry4" & newline identity=daa0e447dc5251e5faf01eb7470c0708d8d4f9e0fdf9b97c0b0e33bc60c3b7a3
 > request d4 to=session message=entry4
 > pump clock=2026-09-30T10:00:00Z
 seg session/r6 start delivery=d4 handler=entry4 clause=1 fuel=7 alloc=0 state=416 end=return
 run session/r6 outcome=completed delivery=d4 handler=entry4 value=1 fuel=7 alloc=0
 pumped state=idle fuel=7 next=2026-09-30T10:00:05Z
-> extend session source="on entry5" & newline & "return late()" & newline & "end entry5" & newline identity=76427b8eb5fddf370776ac830eea729200b4a883a7c241e212b3e06613b94e34
+> extend session source="on entry5" & newline & "return late()" & newline & "end entry5" & newline identity=402e6e2a19189b90da6a61603abb390e50036e49c578d03f475e1b6235e2bfca
 diag session+7 code="unknown name" pos=2:8
 > vars
 vars session n=1
@@ -58,6 +58,6 @@ seg session/r5 resume fuel=19 alloc=22 state=16 end=return
 run session/r5 outcome=completed handler=nap fuel=34 alloc=22
 pumped state=idle fuel=19
 > save s2
-> restore from=s2 fingerprint=368cae86ad80f85da3273fd30613c75138c5c0c0c120d496a4641f8884c46489 mode=full
+> restore from=s2 fingerprint=abea8a90cc4e8048c2205966f4e448b808a64c7eb2010df808825a10c464cfd3 mode=full
 > vars
 vars session n=1

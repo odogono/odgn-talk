@@ -6,7 +6,7 @@
 # Matching; ADR 0007). The matches and the boolean are pinned. Its Fuel,
 # allocation and state figures are Cost Model 0's, as the TS Core blessed them.
 
-> load search identity=c2b8568b42fc161c700886672bbb921f0e627abb5058515f8ff09565f25c70cc
+> load search identity=ea2677efb0c7742d81e1d2e07f74934a3a6dfef1b90d946223a8eebf16eba1e0
 
 # Steps: 22 for the first Match Search, 20 for the second, and 5 for the
 # whole-text match, which stops at its first match.

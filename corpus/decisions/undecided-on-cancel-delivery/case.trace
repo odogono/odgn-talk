@@ -11,7 +11,7 @@
 # no Host Input, so it cannot appear in a canonical Trace. Fuel, allocation
 # and state figures are Cost Model 0's.
 
-> load board identity=f65b3a6ee8409eff04e452bcac58eff62060ced5f3b370f1f4aac608db90182a
+> load board identity=04d2574cb1b77ebe78fbb9e5b5616a05275bc9c339b708b9154b9d7f1d637d04
 
 # The recount's first stretch spends the board's 100-Fuel slice, and d2
 # stays in the mailbox behind it.

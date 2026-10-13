@@ -1,5 +1,5 @@
 # Dispatch charges once; parked work resumes FIFO while other clauses flow.
-> load s identity=3eaf115c7968e7f5c5be591b81f126798f539bcf96806f61ee980e2302b29d46
+> load s identity=086b17e2c45a53bf32ff3fff2d34aef08b9a509d3e33625b4bd84031ac658288
 > deliver d1 to=s message=queued args=[1]
 > deliver d2 to=s message=queued args=[2]
 > deliver d3 to=s message=dropping args=[3]

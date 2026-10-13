@@ -3,7 +3,7 @@
 # locals are pinned at registration; Script Variables are read at observation.
 # Guard errors skip a branch, source order breaks matches and timer ties, and
 # internal errors are observed even without an error Handler.
-> load s identity=a1094fc4ec5bd43879486013908043bb593abcff7040d718162b108a08ae4033
+> load s identity=70d25fdaeba3063c33c6c06fcab6e01905582273c1cccd525da126ee3d38d91e
 > deliver d1 to=s message=ping args=[0]
 > deliver d2 to=s message=watch args=[7]
 > deliver d3 to=s message=choose

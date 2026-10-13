@@ -2,7 +2,7 @@
 # Failed automatic abandonment disables st. Its watch and unwatch calls
 # must fail before Shapes, invalid names/messages, and unaffordable costs;
 # a later revocation does not change disabled-first precedence.
-> load s identity=54eb9569582d764e43c4a6a51043c3ab82585bbee90fe6d339f9a01f97c520b8
+> load s identity=6c68c7a4f0d7761f1f9c01be6d530fe1dc1a46a50549a21a1a04644dd05320f4
 > stub store.open value=nothing
 > stub store.close error={}
 > deliver d1 to=s message=open

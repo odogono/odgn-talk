@@ -2,8 +2,8 @@
 # timeout-block-join: d1's deadline fires at 09:00:02 with r1.c3 pending; d2
 # answers within its deadline.
 
-> load board identity=535c2229e6c85313be304731f8a27cc9d5a4cbf297845007f0e1ae0345c70bfd
-> load shop identity=238417d7c722c51febad5bf2beb61cf691d54346309696d042906583756dbee7
+> load board identity=b9aa74dac3bb9fb02dc7acd8c480c1bbdb430219987ec1e83b995a4150daeee4
+> load shop identity=d2299532360f30da254204ab73ae26bf5fc6de8a80cd70798a53fb50f53a7eb9
 > deliver d1 to=board message=gather args=[["a", "b"]]
 > pump clock=2026-10-09T09:00:00Z
 call board/r1.c1 op=feed.fetch args=["a"]

@@ -1,6 +1,6 @@
 # First blessing approved by the maintainer on 2026-10-08 (#457).
 # Both changes pass admission; the second becomes a cycle at drain.
-> load root identity=0132ff40330ade79aba38e1100c7ad1e1ef26166d3543e216c81540f204e4509
+> load root identity=3ec95d3e31b7db69a0930f8f5b02645d66339efa990ee8eca5af7fb3e983f70b
 > set-parent object=<object room "a"> parent=<object room "b">
 > set-parent object=<object room "b"> parent=<object room "a">
 > set-parent object=<object room "c"> parent=<object room "b">

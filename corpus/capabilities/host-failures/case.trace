@@ -3,7 +3,7 @@
 # Stub, and d7's result is text. Its Fuel, allocation and state figures are
 # Cost Model 0's, as the TS Core blessed them.
 
-> load shop identity=ca95e2cf0b84f9b638241102094ec095c2469fa438abc2534691ebb5226a5c01
+> load shop identity=8c83556612901d2dcb5b094e6cb88d11f8fe1b2ea3d2db266bbfa76e97b27c80
 > stub stock.level error={code: "out of stock", message: "none left", due: "Friday"}
 > stub stock.level error={code: "timeout"}
 > stub stock.level error={code: "x", at: 1}

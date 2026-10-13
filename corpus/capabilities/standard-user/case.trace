@@ -1,5 +1,5 @@
 # Unblessed: user answers (#527); first blessing awaits human review.
-> load s identity=49854587d98d30df1079a43a3fe4f617858446a565d8bfb8fe5cc99574587575
+> load s identity=fa8b20fa11db2a3b282c35c552fb72dd4fa63658908d0304979eac891d47d89e
 > deliver d1 to=s message=confirmIt
 > deliver d2 to=s message=chooseOne
 > deliver d3 to=s message=chooseMany

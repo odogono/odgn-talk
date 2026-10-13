@@ -8,7 +8,7 @@
 # Its Fuel, allocation and state figures are Cost Model 0's, as the TS Core
 # blessed them.
 
-> load reads identity=948ec900441f6ca3f083ad0ad7f634bf0f35a4fc0212464bb0f5f8b8a6671481
+> load reads identity=bc24eff96fa105cb9ae546273eb2f725df52181ea5b4eba887f2094d57d09eeb
 > deliver d1 to=reads message=go
 > pump clock=2026-09-30T09:00:00Z
 seg reads/r1 start delivery=d1 handler=go clause=1 fuel=131 alloc=640 state=172 end=return

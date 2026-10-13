@@ -2,7 +2,7 @@
 # timeout-block-waits: every block starts at 09:00:00; the 1 s deadlines fire
 # at 09:00:01, then `inner`'s 3 s wait would have ended at 09:00:03.
 
-> load poll identity=edb22ec7f6178a5daf61d59594100eef52a8886ae77808d5a7ca725e9e31cc84
+> load poll identity=d551158ebad83d1229a8dd08e21ccd97c46a2827202cc25cbcabd5acff2369e1
 > deliver d1 to=poll message=nested
 > deliver d2 to=poll message=tie
 > deliver d3 to=poll message=again

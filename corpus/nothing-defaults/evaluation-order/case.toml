@@ -1,0 +1,18 @@
+# evaluation-order: `a otherwise b` runs `a` once and `b` once only when `a`
+# is Nothing; an error in `a` propagates, and an unselected `b` never runs.
+# A computed optional read runs its key, then its receiver, once each, and
+# validates the key only after both: a receiver error wins over an invalid
+# key, an invalid key with a Nothing receiver is `wrong kind` expecting text,
+# and a non-map receiver is `wrong kind` expecting a map. Each error's `at` is
+# the read's `the`, with no `path` (spec chapter 4; design acceptance groups
+# 2 and 5).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "order"
+source = "order.talk"

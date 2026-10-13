@@ -1,0 +1,18 @@
+# values: `a otherwise b` defaults only Nothing, and `the optional k of m`
+# reads a map key, Nothing for an absent key or a Nothing receiver. Literal,
+# quoted and computed keys; contextual key spellings; mixed chains; operator
+# precedence and boundaries; trailing continuation; and Constants, Script
+# Variable initializers and parameter defaults. Ordinary reads keep their
+# Built-in properties and their error on a Nothing receiver (spec chapter 4,
+# Nothing defaults and Optional map-key reads; design acceptance groups 1, 3,
+# 4 and 8).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "values"
+source = "values.talk"

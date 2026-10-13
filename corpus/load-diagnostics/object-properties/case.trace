@@ -1,12 +1,12 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
-> load bad identity=a1f97eb2477eb46eb1695ecc1fbbd59a30717299abf3788ce526cdb4e75254bd
+> load bad identity=4557ebf2b1f14a24a292a46bd1c57d6e692aaa163aec3f168a5d4e4e550c6b9c
 diag bad code="can't write" pos=2:3
 diag bad code="can't write" pos=3:3
 diag bad code="can't write" pos=4:3
 diag bad code="can't write" pos=5:3
 diag bad code="can't write" pos=6:3
 diag bad code="can't write" pos=7:3
-> load guard identity=963b5072c79b14584e2fbc3d700065286dee75902035837683fee4fb909f2297
+> load guard identity=90f4e4b4c06fa118ef6df7460d40cbfc3d78347918466908d48c54f50252a940
 diag guard code="not in a guard" pos=1:15
 diag guard code="not in a guard" pos=3:17
 diag guard code="not in a guard" pos=5:16

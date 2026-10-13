@@ -1,26 +1,26 @@
-> load session identity=a029ef28781dc6b151a7df27c970e7624d48ceb93268714bf251e4532512da21
-> extend session source="on notice" & newline & "say " & quote & "%notice" & quote & newline & "end notice" identity=e7095da6f16425ba1bea5464a4e47febcda665c8e90b39d2d8576bd83a8a667e
-> extend session source="--| Original." & newline & "function plus x = 1" & newline & "return x + 1" & newline & "end plus" identity=3f8d13012012ff4fe49d689c98a7628b39d35ebf76e927ad3b36ff128fa89e8b
-> extend session source="on entry1" & newline & "return plus" & newline & "end entry1" & newline identity=b21bdd5d3141de7734cb1e758385f5caaa51b192993de6b2579c963b3f1efd95
+> load session identity=bbefe6a30bcfc3d8ea6e7b0d9938ad18a5f8d41649523f5a1b892d3d3b4ec4c6
+> extend session source="on notice" & newline & "say " & quote & "%notice" & quote & newline & "end notice" identity=ec29b5efdd43c17f6af45fc3adcf4d4ca1b4baf9c31c2486067dd03689002073
+> extend session source="--| Original." & newline & "function plus x = 1" & newline & "return x + 1" & newline & "end plus" identity=bc997f737999213f375d6a90471cd1ab745fdf5fddaeacf077f372b831f97b60
+> extend session source="on entry1" & newline & "return plus" & newline & "end entry1" & newline identity=e529131290692f5bbc89cb011b96db1201e0208a85ae7d7711f6f05a7b6e7354
 > request d1 to=session message=entry1
 > pump clock=1970-01-01T00:00:00Z
 seg session/r1 start delivery=d1 handler=entry1 clause=1 fuel=10 alloc=32 state=0 end=return
 run session/r1 outcome=completed delivery=d1 handler=entry1 value=<function session:plus> fuel=10 alloc=32
 pumped state=idle fuel=10
-> extend session source="on entry2" & newline & "set the callback of root to {z: [plus], a: 7}" & newline & "end entry2" & newline identity=fb3fb69a48353963c1eaf8a016643a441458e931c3fd134d53c10f4c3afe8c1e
+> extend session source="on entry2" & newline & "set the callback of root to {z: [plus], a: 7}" & newline & "end entry2" & newline identity=7b4ae3df6954e70f8e6f4582819199cf58ad77fb9c03e2c08533a71bcb35a590
 > request d2 to=session message=entry2
 > pump clock=1970-01-01T00:00:00Z
 prop session/r2 object=<object InspectRoot "root"> name=callback op=set value={z: [<function session:plus>], a: 7}
 seg session/r2 start delivery=d2 handler=entry2 clause=1 fuel=41 alloc=226 state=0 end=return
 run session/r2 outcome=completed delivery=d2 handler=entry2 fuel=41 alloc=226
 pumped state=idle fuel=41
-> extend session source="on entry3" & newline & "return root" & newline & "end entry3" & newline identity=d987f35e8b1ae336af97c774f3efca3bc045a9c1d70e46a9ad449942f359bec6
+> extend session source="on entry3" & newline & "return root" & newline & "end entry3" & newline identity=6827b38310dce6168ea05edcec58113c21f32ac62cfc0362e2f6a9d427f843a6
 > request d3 to=session message=entry3
 > pump clock=1970-01-01T00:00:00Z
 seg session/r3 start delivery=d3 handler=entry3 clause=1 fuel=7 alloc=0 state=0 end=return
 run session/r3 outcome=completed delivery=d3 handler=entry3 value=<object InspectRoot "root"> fuel=7 alloc=0
 pumped state=idle fuel=7
-> extend session source="on entry4 entry4Object to entry4Names" & newline & "  repeat for each entry4Name in entry4Names" & newline & "    try" & newline & "      put {name: entry4Name, value: the (entry4Name) of entry4Object} into entry4Row" & newline & "    catch entry4Error" & newline & "      put {} into entry4Clean" & newline & "      repeat for each entry4Key in the keys of entry4Error" & newline & "        if entry4Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry4Key) of entry4Error into the (entry4Key) of entry4Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry4Name, error: entry4Clean} into entry4Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry4Row" & newline & "  end repeat" & newline & "end entry4" & newline identity=b77a69637835d32a545e8f4229a315cea9ff69562eacb95bc011103d486911b4
+> extend session source="on entry4 entry4Object to entry4Names" & newline & "  repeat for each entry4Name in entry4Names" & newline & "    try" & newline & "      put {name: entry4Name, value: the (entry4Name) of entry4Object} into entry4Row" & newline & "    catch entry4Error" & newline & "      put {} into entry4Clean" & newline & "      repeat for each entry4Key in the keys of entry4Error" & newline & "        if entry4Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry4Key) of entry4Error into the (entry4Key) of entry4Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry4Name, error: entry4Clean} into entry4Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry4Row" & newline & "  end repeat" & newline & "end entry4" & newline identity=5917a5e00d7c4f69147caa2b9f1699266db10aab64b1eb545f49e98d7fe4d579
 > request d4 to=session message=entry4:to: args=[<object InspectRoot "root">, ["callback", "child", "error", "shape", "z"]]
 > pump clock=1970-01-01T00:00:00Z
 prop session/r4 object=<object InspectRoot "root"> name=callback op=get value={z: [<function session:plus>], a: 7}
@@ -58,14 +58,14 @@ pumped state=idle fuel=0
 > vars
 vars session
 > save s1
-> extend session source="on entry5" & newline & "return the child of root" & newline & "end entry5" & newline identity=4f4dd726671814f6b0de983d109301561d7b89abd1e1b6beafd81eac638ab564
+> extend session source="on entry5" & newline & "return the child of root" & newline & "end entry5" & newline identity=7d465b3349805c17f6b461ae0110769903add5860820efb32053980da5fa35fe
 > request d7 to=session message=entry5
 > pump clock=1970-01-01T00:00:00Z
 prop session/r7 object=<object InspectRoot "root"> name=child op=get value=<object InspectChild "dynamic">
 seg session/r7 start delivery=d7 handler=entry5 clause=1 fuel=11 alloc=16 state=0 end=return
 run session/r7 outcome=completed delivery=d7 handler=entry5 value=<object InspectChild "dynamic"> fuel=11 alloc=16
 pumped state=idle fuel=11
-> extend session source="on entry6 entry6Object to entry6Names" & newline & "  repeat for each entry6Name in entry6Names" & newline & "    try" & newline & "      put {name: entry6Name, value: the (entry6Name) of entry6Object} into entry6Row" & newline & "    catch entry6Error" & newline & "      put {} into entry6Clean" & newline & "      repeat for each entry6Key in the keys of entry6Error" & newline & "        if entry6Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry6Key) of entry6Error into the (entry6Key) of entry6Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry6Name, error: entry6Clean} into entry6Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry6Row" & newline & "  end repeat" & newline & "end entry6" & newline identity=f0c2abe0f572303f1386d467bf92cb271c2a57455e2abb291d3a7b11ecf95b05
+> extend session source="on entry6 entry6Object to entry6Names" & newline & "  repeat for each entry6Name in entry6Names" & newline & "    try" & newline & "      put {name: entry6Name, value: the (entry6Name) of entry6Object} into entry6Row" & newline & "    catch entry6Error" & newline & "      put {} into entry6Clean" & newline & "      repeat for each entry6Key in the keys of entry6Error" & newline & "        if entry6Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry6Key) of entry6Error into the (entry6Key) of entry6Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry6Name, error: entry6Clean} into entry6Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry6Row" & newline & "  end repeat" & newline & "end entry6" & newline identity=ea39f59a9414f014b29c2c5b1e852237f436dfe358ad4f99fc722b4bb2c5282d
 > request d8 to=session message=entry6:to: args=[<object InspectChild "dynamic">, ["value"]]
 > pump clock=1970-01-01T00:00:00Z
 prop session/r8 object=<object InspectChild "dynamic"> name=value op=get value=9
@@ -76,14 +76,14 @@ pumped state=idle fuel=49
 > dispose object=<object InspectChild "dynamic">
 > pump clock=1970-01-01T00:00:00Z
 pumped state=idle fuel=0
-> restore from=s1 fingerprint=243acf9d220f74eda303dfa728066c123d2b4d72cb876f59710c5744a9fcedd7 mode=full disposed=[<object InspectChild "dynamic">]
-> extend session source="on entry5" & newline & "return root" & newline & "end entry5" & newline identity=9b82da83960fab50deecd778168af9fbb9993c294e9d6556873f6643bac49dbd
+> restore from=s1 fingerprint=752fafd95ac6bc62f626522ef5853d5cb1701f76daf32e4d10d4eab09162d1af mode=full disposed=[<object InspectChild "dynamic">]
+> extend session source="on entry5" & newline & "return root" & newline & "end entry5" & newline identity=cac914bb3391470243c3a3659aaa8f51c2d080fd21441149e015a946b5246e4d
 > request d7 to=session message=entry5
 > pump clock=1970-01-01T00:00:00Z
 seg session/r7 start delivery=d7 handler=entry5 clause=1 fuel=7 alloc=0 state=0 end=return
 run session/r7 outcome=completed delivery=d7 handler=entry5 value=<object InspectRoot "root"> fuel=7 alloc=0
 pumped state=idle fuel=7
-> extend session source="on entry6 entry6Object to entry6Names" & newline & "  repeat for each entry6Name in entry6Names" & newline & "    try" & newline & "      put {name: entry6Name, value: the (entry6Name) of entry6Object} into entry6Row" & newline & "    catch entry6Error" & newline & "      put {} into entry6Clean" & newline & "      repeat for each entry6Key in the keys of entry6Error" & newline & "        if entry6Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry6Key) of entry6Error into the (entry6Key) of entry6Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry6Name, error: entry6Clean} into entry6Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry6Row" & newline & "  end repeat" & newline & "end entry6" & newline identity=54b834f6479644b968a09ee7cb9dac76b17a6ce8a11de1c597b8079c16ca74a5
+> extend session source="on entry6 entry6Object to entry6Names" & newline & "  repeat for each entry6Name in entry6Names" & newline & "    try" & newline & "      put {name: entry6Name, value: the (entry6Name) of entry6Object} into entry6Row" & newline & "    catch entry6Error" & newline & "      put {} into entry6Clean" & newline & "      repeat for each entry6Key in the keys of entry6Error" & newline & "        if entry6Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry6Key) of entry6Error into the (entry6Key) of entry6Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry6Name, error: entry6Clean} into entry6Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry6Row" & newline & "  end repeat" & newline & "end entry6" & newline identity=32ae8820786cda6f4028499c1dab1d71f0d27d908eff6950240a3d5cc0254516
 > request d8 to=session message=entry6:to: args=[<object InspectRoot "root">, ["callback", "child", "error", "shape", "z"]]
 > pump clock=1970-01-01T00:00:00Z
 prop session/r8 object=<object InspectRoot "root"> name=callback op=get error={}
@@ -110,14 +110,14 @@ call session/r9.c1 op=console.write args=["%notice"]
 seg session/r9 start delivery=d9 handler=notice clause=1 fuel=18 alloc=0 state=0 end=return
 run session/r9 outcome=completed delivery=d9 handler=notice fuel=18 alloc=0
 pumped state=idle fuel=18
-> extend session source="on entry7" & newline & "return the child of root" & newline & "end entry7" & newline identity=98ae5aed2e504c780eb8477aa5d2fb30a734ac52acb2727a0582e23f84092b9c
+> extend session source="on entry7" & newline & "return the child of root" & newline & "end entry7" & newline identity=9b054f14a9f72c5ff930f2a390168759002f62906cc192dc9acedacbd785e3f4
 > request d10 to=session message=entry7
 > pump clock=1970-01-01T00:00:00Z
 prop session/r10 object=<object InspectRoot "root"> name=child op=get value=<object InspectChild "dynamic">
 seg session/r10 start delivery=d10 handler=entry7 clause=1 fuel=11 alloc=16 state=0 end=return
 run session/r10 outcome=completed delivery=d10 handler=entry7 value=<object InspectChild "dynamic"> fuel=11 alloc=16
 pumped state=idle fuel=11
-> extend session source="on entry8 entry8Object to entry8Names" & newline & "  repeat for each entry8Name in entry8Names" & newline & "    try" & newline & "      put {name: entry8Name, value: the (entry8Name) of entry8Object} into entry8Row" & newline & "    catch entry8Error" & newline & "      put {} into entry8Clean" & newline & "      repeat for each entry8Key in the keys of entry8Error" & newline & "        if entry8Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry8Key) of entry8Error into the (entry8Key) of entry8Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry8Name, error: entry8Clean} into entry8Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry8Row" & newline & "  end repeat" & newline & "end entry8" & newline identity=70659056a2b7b48bdb75ced9f34a5effb684014c92680bcfdc53b7f0dcaaf46d
+> extend session source="on entry8 entry8Object to entry8Names" & newline & "  repeat for each entry8Name in entry8Names" & newline & "    try" & newline & "      put {name: entry8Name, value: the (entry8Name) of entry8Object} into entry8Row" & newline & "    catch entry8Error" & newline & "      put {} into entry8Clean" & newline & "      repeat for each entry8Key in the keys of entry8Error" & newline & "        if entry8Key is not in [" & quote & "message" & quote & ", " & quote & "at" & quote & "] then" & newline & "          put the (entry8Key) of entry8Error into the (entry8Key) of entry8Clean" & newline & "        end if" & newline & "      end repeat" & newline & "      put {name: entry8Name, error: entry8Clean} into entry8Row" & newline & "    end try" & newline & "    say " & quote & "read " & quote & " & entry8Row" & newline & "  end repeat" & newline & "end entry8" & newline identity=320f4b46929faa3c9510834550e8667b4c3616227ff658f67c5b769ac3ace276
 > request d11 to=session message=entry8:to: args=[<object InspectChild "dynamic">, ["value"]]
 > pump clock=1970-01-01T00:00:00Z
 raise session/r11 code="object gone" at=session+10:9 pos=4:37
@@ -128,19 +128,19 @@ pumped state=idle fuel=188
 > dispose object=<object InspectChild "dynamic">
 > pump clock=1970-01-01T00:00:00Z
 pumped state=idle fuel=0
-> extend session source="on entry9" & newline & "return {z: 1, a: 2}" & newline & "end entry9" & newline identity=727bfd548c02946c6534e1b7b1a3c05a1f7ebb728ca3b4926a3f8f827eae436b
+> extend session source="on entry9" & newline & "return {z: 1, a: 2}" & newline & "end entry9" & newline identity=5b06a57d344fb5f4b383ec1f7b8949832eb599236d285b5681810d48a67317e3
 > request d12 to=session message=entry9
 > pump clock=1970-01-01T00:00:00Z
 seg session/r12 start delivery=d12 handler=entry9 clause=1 fuel=14 alloc=98 state=0 end=return
 run session/r12 outcome=completed delivery=d12 handler=entry9 value={z: 1, a: 2} fuel=14 alloc=98
 pumped state=idle fuel=14
-> extend session source="on entry10" & newline & "return given x: x" & newline & "end entry10" & newline identity=ade86c69d337d41b327cf8c5aba979419af948ce329ddda2216ea9650c244537
+> extend session source="on entry10" & newline & "return given x: x" & newline & "end entry10" & newline identity=b76a1a1bd29212aaf1c44b2bb39c8de796316163a3e74b886a14f7c6f2c1e983
 > request d13 to=session message=entry10
 > pump clock=1970-01-01T00:00:00Z
 seg session/r13 start delivery=d13 handler=entry10 clause=1 fuel=10 alloc=32 state=0 end=return
 run session/r13 outcome=completed delivery=d13 handler=entry10 value=<function session+12:2:8> fuel=10 alloc=32
 pumped state=idle fuel=10
-> extend session source="on entry11" & newline & "return " & quote & "é" & quote & newline & "end entry11" & newline identity=626cecb36c39d4033bc7d23606e2b3e2aa6546f73c0ee6e59eee10fcd1268a02
+> extend session source="on entry11" & newline & "return " & quote & "é" & quote & newline & "end entry11" & newline identity=45599ab58e9e73da5477c09d0275cd6841bd693417fd4191ea45df3360f1e185
 > request d14 to=session message=entry11
 > pump clock=1970-01-01T00:00:00Z
 seg session/r14 start delivery=d14 handler=entry11 clause=1 fuel=7 alloc=0 state=0 end=return
@@ -148,7 +148,7 @@ run session/r14 outcome=completed delivery=d14 handler=entry11 value="é" fuel=7
 pumped state=idle fuel=7
 > vars
 vars session
-> extend session source="on entry12" & newline & "say " & quote & "%output" & quote & newline & "end entry12" & newline identity=c4337b7f7d0eead02cf25bea4089bc4875b97b30360b2cd16d7903254eb9da02
+> extend session source="on entry12" & newline & "say " & quote & "%output" & quote & newline & "end entry12" & newline identity=37246891b330356034ce9caf21ca44a807d827cd3e5ac2798d8c8781f2d45257
 > request d15 to=session message=entry12
 > pump clock=1970-01-01T00:00:00Z
 call session/r15.c1 op=console.write args=["%output"]

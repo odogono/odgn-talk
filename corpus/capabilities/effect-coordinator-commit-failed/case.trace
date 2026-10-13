@@ -2,7 +2,7 @@
 # The one commit fails, so one rollback covers both Grants' writes and count
 # returns to its Segment base.
 
-> load s identity=501151251be69313be545b17782d3fdab6a51e8c2064ffcf496217578c85e2ec
+> load s identity=7c41234d3ad46349bdce3b14ff1cef495ec8b67e641c8f29914f95051935e96e
 > stub resource.write value=nothing
 > stub resource.write value=nothing
 > stub-effect s.r phase=begin status=ok

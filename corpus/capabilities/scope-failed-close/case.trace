@@ -1,7 +1,7 @@
 # scope-failed-close: lifecycle ordering and results specified by chapter 11.
 # First blessing approved by the maintainer on 2026-10-07 for #141. Go and TS agree.
 
-> load s identity=bbd59526950b85da124b3f6824d9ea654a68ecea7f1440fa88fc20223053ae34
+> load s identity=b44a3fbf43a918540cd99ccf35100b36b5dc8a23018720dbd92cf1741498d317
 > stub resource.open value=nothing
 > stub resource.close error={}
 > stub resource.close value=nothing

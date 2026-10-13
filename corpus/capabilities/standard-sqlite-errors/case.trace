@@ -3,7 +3,7 @@
 # `too many rows` are caught like any Script error. A failed call still
 # enrolls its Grant, so the Segment commits; a begin that fails opens no scope.
 # A constraint kind outside the list becomes host error.
-> load s identity=5519afd7bff28d480f3ed7bb28f798227e087ed9986c99518af30d326aefe293
+> load s identity=2adf08bda7283613c4121c923b74610e76500193c6ebe56adc9631b24d97cde6
 > stub-effect s.db phase=begin status=ok
 > stub sqlite.change error={code: "sqlite busy"}
 > stub-effect s.db phase=commit status=ok

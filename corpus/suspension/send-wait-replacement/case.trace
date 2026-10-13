@@ -1,8 +1,8 @@
 # First blessing approved by the maintainer on 2026-10-05 for #134.
 # Replacing a sender abandons its reply and runs cleanup; the receiver keeps
 # running. Only the second sender receives its answer when both receivers end.
-> load a identity=52b1f9e5034f4f8d8edc5ae220acff2629b011da21398ef2d7be848ef6cc591f
-> load b identity=e6811a89c68b6f688bde252d732bd5e04113eb59ecf41244bfecfb9d959fb921
+> load a identity=06536cbb600e0ab3920d0a1349f194812f48bde94cbe3112627248fbb600d39a
+> load b identity=b27c012e67fe81788d70cd0e8d1a2a5a2d38af074f30373f3b0c2486054c13ba
 > deliver d1 to=a message=go args=[1]
 > deliver d2 to=a message=go args=[2]
 > pump clock=2026-10-04T12:00:00Z

@@ -5,7 +5,7 @@
 # between Pumps, lands at the next drain on the ended Run and is noted too.
 # Neither took effect, so neither Pump returns `rewound`.
 
-> load s identity=d575f54c5ff725f10ddd4c30dfa3ef9e7c4ddbed900a911a2a6c4327b7689c7c
+> load s identity=4d6559d9674ba158e55921fd7df97fb5a7d3f0ccff932a08e22a8cb07a8234b2
 > stub api.ping value=1
 > deliver d1 to=s message=go
 > pump clock=2026-10-01T09:00:00Z

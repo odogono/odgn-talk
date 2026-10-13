@@ -192,8 +192,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | --- | --- | --- | --- | --- | --- |
 | `get-key` | `key` | 1 | 1 | `the k of x`: a map's value, or a Host Object's property | `wrong kind`, `object gone` |
 | `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone` |
-| `get-optional-key` | `key` | 1 | 1 | Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text | `wrong kind` |
-| `get-optional-key-computed` |  | 2 | 1 | Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text | `wrong kind` |
+| `get-optional-key` | `key` | 1 | 1 | `the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind` | `wrong kind` |
+| `get-optional-key-computed` |  | 2 | 1 | `the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does | `wrong kind` |
 | `property` | `property` | 1 | 1 | `the p of x`, for a Built-in property | `wrong kind` |
 | `property-delimited` | `property` | 2 | 1 | `the items of x delimited by d`, with the delimiter on top | `wrong kind`, `out of range` |
 | `chunk-get` | `chunk` | 2 | 1 | One chunk level: pops the value, then its index, and pushes the chunk | `wrong kind` |
@@ -1053,6 +1053,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#126](https://github.com/odogono/odgn-talk/issues/126) | The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit |
 | [#388](https://github.com/odogono/odgn-talk/issues/388) | Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes |
 | [#719](https://github.com/odogono/odgn-talk/issues/719) | Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional. |
+| [#722](https://github.com/odogono/odgn-talk/issues/722) | Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration. |
 
 <!-- end -->
 
