@@ -24,34 +24,9 @@ import {
 } from './model';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
+import { type Attributes, byId, h } from './dom';
 import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
-
-type Attributes = Record<string, string | number | boolean | undefined>;
-
-/** A DOM element with attributes and children; `false` attributes are left out. */
-const h = <K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attributes: Attributes = {},
-  ...children: (Node | string | undefined)[]
-): HTMLElementTagNameMap[K] => {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attributes)) {
-    if (value !== undefined && value !== false) {
-      node.setAttribute(key, value === true ? '' : String(value));
-    }
-  }
-  node.append(...children.filter(c => c !== undefined));
-  return node;
-};
-
-const byId = (id: string): HTMLElement => {
-  const found = document.getElementById(id);
-  if (!found) {
-    throw new Error(`The page has no #${id}`);
-  }
-  return found;
-};
 
 const KIND_NAMES: Record<ElementKind, string> = {
   text: 'Text',
@@ -268,9 +243,26 @@ const pageIndexOf = (event: Event) => {
 /** A refused name: what the author typed, and why it was refused. */
 type Refusal = { attempted: string; check: NameCheck & { ok: false } };
 
-/** Mounts the editor shell on the page's desk, strip and windows. */
-export const mountStack = (project: Project): StackEditor => {
+/** The mounted shell: the editor, a redraw, and read-only switching. */
+export type StackShell = {
+  editor: StackEditor;
+  readOnly: boolean;
+  redraw(): void;
+  setReadOnly(readOnly: boolean): void;
+};
+
+/**
+ * Mounts the editor shell on the page's desk, strip and windows. A
+ * read-only shell still selects and navigates, but every way of changing
+ * the Project is closed off: another tab holds its edit lock (#752), or an
+ * earlier version is being previewed.
+ */
+export const mountStack = (
+  project: Project,
+  options: { readOnly?: boolean } = {},
+): StackShell => {
   const editor = new StackEditor(project);
+  editor.readOnly = options.readOnly ?? false;
   const desk = byId('desk');
   const stage = byId('stage');
   const pageNode = byId('page');
@@ -315,7 +307,7 @@ export const mountStack = (project: Project): StackEditor => {
         ?.classList.add('selected');
     }
     const [single] = selected;
-    if (single && selected.length === 1) {
+    if (single && selected.length === 1 && !editor.readOnly) {
       // Handles sit over the Element rather than in it, which may clip them.
       const box = h(
         'div',
@@ -583,7 +575,16 @@ export const mountStack = (project: Project): StackEditor => {
             ]
           : pageInfo(editor.page)),
     );
-    if (focused) {
+    if (editor.readOnly) {
+      for (const control of info.querySelectorAll<
+        | HTMLButtonElement
+        | HTMLInputElement
+        | HTMLSelectElement
+        | HTMLTextAreaElement
+      >('button, input, select, textarea')) {
+        control.disabled = true;
+      }
+    } else if (focused) {
       info.querySelector<HTMLElement>(`[data-field="${focused}"]`)?.focus();
     }
   };
@@ -593,7 +594,10 @@ export const mountStack = (project: Project): StackEditor => {
   const drawTextControls = () => {
     const [element, ...others] = editor.selected;
     const target =
-      !activeText && !others.length && element?.kind === 'text'
+      !editor.readOnly &&
+      !activeText &&
+      !others.length &&
+      element?.kind === 'text'
         ? element
         : undefined;
     if (textControls?.history.element !== target) {
@@ -609,6 +613,11 @@ export const mountStack = (project: Project): StackEditor => {
 
   const draw = () => {
     byId('project-title').textContent = project.name;
+    pageNode.classList.toggle('edit', !editor.readOnly);
+    (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
+    for (const button of byId('tools').querySelectorAll('button')) {
+      button.disabled = editor.readOnly;
+    }
     drawPage();
     drawStrip();
     drawInfo();
@@ -738,6 +747,10 @@ export const mountStack = (project: Project): StackEditor => {
     const name = target.closest<HTMLElement>('[data-element]')?.dataset.element;
     pointerElement = name;
     let gesture: Gesture | undefined;
+    if (editor.readOnly) {
+      edit(() => editor.click(name, { shift: down.shiftKey }));
+      return;
+    }
     if (handle) {
       gesture = editor.startResize(handle);
     } else {
@@ -786,6 +799,9 @@ export const mountStack = (project: Project): StackEditor => {
     pageNode.addEventListener('pointercancel', up, { once: true });
   });
   const openText = (name: string) => {
+    if (editor.readOnly) {
+      return;
+    }
     const element = editor.element(name);
     if (element?.kind !== 'text') {
       return;
@@ -872,6 +888,10 @@ export const mountStack = (project: Project): StackEditor => {
     }
   });
   thumbnails.addEventListener('dragstart', event => {
+    if (editor.readOnly) {
+      event.preventDefault();
+      return;
+    }
     const index = pageIndexOf(event);
     if (index !== undefined) {
       event.dataTransfer?.setData('application/x-page', String(index));
@@ -913,7 +933,8 @@ export const mountStack = (project: Project): StackEditor => {
         delete: editor.canDelete,
         duplicate: true,
       };
-      button.disabled = !(enabled[command] ?? editor.selection.length > 0);
+      button.disabled =
+        editor.readOnly || !(enabled[command] ?? editor.selection.length > 0);
     }
   };
   const runCommand = (command: EditingCommand) => {
@@ -957,7 +978,7 @@ export const mountStack = (project: Project): StackEditor => {
       ArrowUp: [0, -step],
       ArrowDown: [0, step],
     }[event.key];
-    if (nudge && editor.selection.length) {
+    if (nudge && editor.selection.length && !editor.readOnly) {
       event.preventDefault();
       edit(() => {
         const gesture = editor.startMove();
@@ -970,5 +991,20 @@ export const mountStack = (project: Project): StackEditor => {
   new ResizeObserver(fit).observe(desk);
   floatWindows();
   draw();
-  return editor;
+  return {
+    editor,
+    get readOnly() {
+      return editor.readOnly;
+    },
+    redraw: draw,
+    setReadOnly(value: boolean) {
+      if (value === editor.readOnly) {
+        return;
+      }
+      finishFieldEdit();
+      closeText();
+      editor.readOnly = value;
+      draw();
+    },
+  };
 };

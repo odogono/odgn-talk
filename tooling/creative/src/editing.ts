@@ -179,6 +179,20 @@ export class StackEditor {
   // identity. `json` caches the serialised Project for change checks.
   #pending: { before: Snapshot; json: string } | undefined;
 
+  /**
+   * Told after every authored change to the Project: a finished undoable
+   * edit, a live change inside one, and undo and redo. Autosave listens
+   * here (#752). Loading a different Project is not a change.
+   */
+  onChange: (() => void) | undefined;
+
+  /**
+   * While set, the Project cannot change: undo and redo do nothing, and
+   * any edit is rolled back when it finishes. Selection and the showing
+   * Page still change, so a read-only tab can look around.
+   */
+  readOnly = false;
+
   constructor(readonly project: Project) {}
 
   #snapshot(): Snapshot {
@@ -192,16 +206,42 @@ export class StackEditor {
 
   #restore(snapshot: Snapshot): void {
     const copy = structuredClone(snapshot);
-    // Preserve the Project reference held by the shell and storage clients.
-    for (const key of Object.keys(this.project)) {
-      if (!(key in copy.project)) {
-        delete (this.project as Partial<Project>)[key as keyof Project];
-      }
-    }
-    Object.assign(this.project, copy.project);
+    this.#assignProject(copy.project);
     this.#pageIndex = copy.pageIndex;
     this.#selection = copy.selection;
     this.#pageSelected = copy.pageSelected;
+  }
+
+  /** Replaces the Project's contents, preserving its object reference. */
+  #assignProject(project: Project): void {
+    // Preserve the Project reference held by the shell and storage clients.
+    for (const key of Object.keys(this.project)) {
+      if (!(key in project)) {
+        delete (this.project as Partial<Project>)[key as keyof Project];
+      }
+    }
+    Object.assign(this.project, project);
+  }
+
+  /**
+   * Loads a different Project into this editor: opening one from the
+   * Project list, previewing or restoring an earlier version, or following
+   * another tab's save. History starts over; this is not an authored edit,
+   * so `onChange` is not told.
+   */
+  replaceProject(project: Project): void {
+    this.#pending = undefined;
+    this.#assignProject(structuredClone(project));
+    this.#past = [];
+    this.#future = [];
+    this.#pageIndex = 0;
+    this.#selection = [];
+    this.#pageSelected = false;
+  }
+
+  /** Finishes any live edit, recording it as one undo step. */
+  finishPendingEdit(): void {
+    this.#finish();
   }
 
   get #pendingChanged(): boolean {
@@ -214,18 +254,21 @@ export class StackEditor {
     const pending = this.#pending;
     const changed = this.#pendingChanged;
     this.#pending = undefined;
-    if (pending && changed) {
+    if (pending && changed && this.readOnly) {
+      this.#restore(pending.before);
+    } else if (pending && changed) {
       this.#past.push({ before: pending.before, after: this.#snapshot() });
       this.#future = [];
+      this.onChange?.();
     }
   }
 
   get canUndo(): boolean {
-    return this.#past.length > 0 || this.#pendingChanged;
+    return !this.readOnly && (this.#past.length > 0 || this.#pendingChanged);
   }
 
   get canRedo(): boolean {
-    return this.#future.length > 0 && !this.#pendingChanged;
+    return !this.readOnly && this.#future.length > 0 && !this.#pendingChanged;
   }
 
   /** Records any authored Project change, including Info and future Script edits. */
@@ -245,10 +288,17 @@ export class StackEditor {
     const before = this.#snapshot();
     const pending = { before, json: JSON.stringify(before.project) };
     this.#pending = pending;
+    let changed = false;
     return {
       change: update => {
         if (this.#pending === pending) {
           update();
+          // A live notice once the Project really changed, so autosave
+          // can cap how long a continuous drag goes unsaved.
+          changed ||= pending.json !== JSON.stringify(this.project);
+          if (changed && !this.readOnly) {
+            this.onChange?.();
+          }
         }
       },
       finish: () => {
@@ -261,19 +311,21 @@ export class StackEditor {
 
   undo(): void {
     this.#finish();
-    const entry = this.#past.pop();
+    const entry = this.readOnly ? undefined : this.#past.pop();
     if (entry) {
       this.#restore(entry.before);
       this.#future.push(entry);
+      this.onChange?.();
     }
   }
 
   redo(): void {
     this.#finish();
-    const entry = this.#future.pop();
+    const entry = this.readOnly ? undefined : this.#future.pop();
     if (entry) {
       this.#restore(entry.after);
       this.#past.push(entry);
+      this.onChange?.();
     }
   }
 
