@@ -1484,6 +1484,29 @@ export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settle
 }
 
 /// The handle of the Group's Script with that name, or NULL.
+pub const FunctionInfo = extern struct { home: [*]const u8, home_len: usize, name: [*]const u8, name_len: usize, required: i64, total: i64, unit: [32]u8, stale: bool };
+
+export fn talk_function_info_of(g: *Group, v: *const Value, out: *FunctionInfo) bool {
+    const f = g.group.codeOfValue(v) orelse return false;
+    const stale = if (g.group.script(f.home)) |h| h.generation != f.generation else true;
+    out.* = .{ .home = f.home.ptr, .home_len = f.home.len, .name = f.name.ptr, .name_len = f.name.len, .required = @intCast(f.required), .total = @intCast(f.total), .unit = f.unit, .stale = stale };
+    return true;
+}
+
+pub const UnitInfo = extern struct { name: [*]const u8, name_len: usize, source: [*]const u8, source_len: usize, identity: [32]u8 };
+
+export fn talk_script_unit(s: *Script, index: usize, out: *UnitInfo) bool {
+    const script = s.group.group.script(s.name) orelse return false;
+    if (index == 0) {
+        out.* = .{ .name = script.name.ptr, .name_len = script.name.len, .source = script.source.ptr, .source_len = script.source.len, .identity = machine.codeIdentity(script.name, script.source, .script, script.imports) };
+        return true;
+    }
+    if (index > script.extensions.items.len) return false;
+    const l = script.extensions.items[index - 1];
+    out.* = .{ .name = l.name.ptr, .name_len = l.name.len, .source = l.source.ptr, .source_len = l.source.len, .identity = l.identity };
+    return true;
+}
+
 /// Group.ScriptNames: the Scripts' names in load order, borrowed from the
 /// Group until its next call that loads or restores. Safe inside a Pump; it
 /// writes nothing to the Trace.

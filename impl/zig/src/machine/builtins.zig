@@ -273,7 +273,7 @@ fn extreme(gpa: Allocator, name: []const u8, xs: *Value, raised: *Raised, m: *co
 
 /// Unicode full default case mapping; `lower` maps a capital sigma that
 /// ends a word to the final sigma (Final_Sigma).
-fn caseMapped(a: Allocator, s: []const u8, upper: bool) ![]u8 {
+pub fn caseMapped(a: Allocator, s: []const u8, upper: bool) ![]u8 {
     const props = unicode.properties;
     var scalars: std.ArrayList(u21) = .empty;
     var i: usize = 0;

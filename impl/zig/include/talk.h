@@ -1370,6 +1370,36 @@ talk_host_error_code talk_settle(talk_group *g, const char *id, size_t len, cons
 /* The handle of the Group's Script with that name, or NULL; a restored
  * Group's Scripts are reached this way. */
 talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
+/* C only: what tooling reads of a Function Value without running it: its
+ * Home Script, name (empty for a Lambda), arity, and the code identity of
+ * the unit that defines it, stale or not. Its text is borrowed from the
+ * Group. */
+typedef struct talk_function_info {
+    const char *home;
+    size_t home_len;
+    const char *name;
+    size_t name_len;
+    int64_t required;
+    int64_t total;
+    uint8_t unit[32];
+    bool stale;
+} talk_function_info;
+/* C only: false unless v is a Function Value the Group made. */
+bool talk_function_info_of(talk_group *g, const talk_value *v, talk_function_info *out);
+
+/* C only: one of a Script's code units, for tooling: index 0 is its own,
+ * then each extension in the order made. Its name, source and code identity
+ * are borrowed until the Script's code next changes. */
+typedef struct talk_unit_info {
+    const char *name;
+    size_t name_len;
+    const char *source;
+    size_t source_len;
+    uint8_t identity[32];
+} talk_unit_info;
+/* C only: false past the last unit. */
+bool talk_script_unit(talk_script *s, size_t index, talk_unit_info *out);
+
 /* Group.ScriptNames: the Scripts' names in load order, in *out, borrowed
  * from the Group until the next call of this function. Safe inside a Pump,
  * it is no Host Input and writes nothing to the Trace. */
