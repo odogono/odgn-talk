@@ -426,6 +426,12 @@ const Lowerer = struct {
         const start = f.pc();
         for (h.params, 0..) |p, i| {
             if (p.data == .name and p.bind_as == null) continue;
+            // `on error "timeout"` is short for `on error {code: "timeout"}`,
+            // as in `catch`.
+            if (i == 0 and !h.fallback and std.mem.eql(u8, name, "error") and f.isCodeShorthand(p)) {
+                try f.codeShorthand(p, 1, fail);
+                continue;
+            }
             try f.testPattern(p, @intCast(i + 1), fail, .direct, false);
         }
         if (h.guard) |g| try f.guard(g, fail);
@@ -1028,6 +1034,26 @@ const Frame = struct {
 
     // ------------------------------------------------------------ try
 
+    /// Whether an error pattern is a text literal, short for `{code: "…"}`.
+    fn isCodeShorthand(f: *Frame, p: *const ast.Pattern) bool {
+        return p.data == .literal and f.l.tree.tokens[p.data.literal.value].kind == .text;
+    }
+
+    /// Tests the error in `slot` as `{code: "…"}`, for a text literal head.
+    fn codeShorthand(f: *Frame, p: *const ast.Pattern, slot: u32, fail: u32) Allocator.Error!void {
+        const l = f.l;
+        try f.load(slot, p.first);
+        try f.jump(.test_map, fail, p.first);
+        try f.load(slot, p.first);
+        try f.emit(.map_get, &.{ .{ .text = "\"code\"" }, .{ .label = fail } }, p.first, "");
+        const tmp = try f.temp();
+        try f.store(tmp, p.first);
+        try f.load(tmp, p.first);
+        const k = try f.literalConstant(p.data.literal);
+        try f.emit(.test_constant, &.{ .{ .int = k }, .{ .label = fail } }, p.first, l.constants.items[k]);
+        f.release(tmp);
+    }
+
     fn tryStatement(f: *Frame, t: ast.Try, at: Tok) Allocator.Error!void {
         const l = f.l;
         const index = f.tries.items.len;
@@ -1055,19 +1081,8 @@ const Frame = struct {
             for (t.catches) |c| {
                 const fail = try f.newLabel();
                 const start = f.pc();
-                if (c.pattern.data == .literal and l.tree.tokens[c.pattern.data.literal.value].kind == .text) {
-                    // A text head is `{code: "…"}`.
-                    const p = c.pattern;
-                    try f.load(err, p.first);
-                    try f.jump(.test_map, fail, p.first);
-                    try f.load(err, p.first);
-                    try f.emit(.map_get, &.{ .{ .text = "\"code\"" }, .{ .label = fail } }, p.first, "");
-                    const tmp = try f.temp();
-                    try f.store(tmp, p.first);
-                    try f.load(tmp, p.first);
-                    const k = try f.literalConstant(p.data.literal);
-                    try f.emit(.test_constant, &.{ .{ .int = k }, .{ .label = fail } }, p.first, l.constants.items[k]);
-                    f.release(tmp);
+                if (f.isCodeShorthand(c.pattern)) {
+                    try f.codeShorthand(c.pattern, err, fail);
                 } else try f.testPattern(c.pattern, err, fail, .temps, false);
                 if (c.guard) |g| try f.guard(g, fail);
                 try guards.append(l.a, .{ .first = start, .last = f.pc() - 1, .kind = .guard, .target = 0, .depth = f.depth });
