@@ -787,7 +787,7 @@ const Saving = struct {
                 try s.o.str(r.script);
                 try s.o.str(r.grant);
             },
-            .cancel_run => |id| try s.o.str(id),
+            .cancel_run, .rewind_run => |id| try s.o.str(id),
             .stop => |st| {
                 try s.o.str(st.script);
                 try s.o.str(st.reason);
@@ -1762,6 +1762,7 @@ const Restoring = struct {
                 break :blk .{ .revoke = .{ .script = script, .grant = try r.owned() } };
             },
             .cancel_run => .{ .cancel_run = try r.owned() },
+            .rewind_run => .{ .rewind_run = try r.owned() },
             .stop => blk: {
                 const script = try r.owned();
                 errdefer a.free(script);

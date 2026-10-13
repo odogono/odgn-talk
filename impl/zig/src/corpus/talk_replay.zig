@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "reload", "extend", "replace-library", "save", "restore", "settle" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "rewind-run", "call-value", "reload", "extend", "replace-library", "save", "restore", "settle" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -178,6 +178,7 @@ const PropHost = struct { store: *ObjectStore, name: []const u8 };
 
 fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
     _ = err;
+    cross();
     const h: *PropHost = @ptrCast(@alignCast(context.?));
     const props = h.store.values.getPtr(@intFromPtr(o.?)) orelse return c.TALK_CALL_BROKEN;
     const v = props.get(h.name) orelse return c.TALK_CALL_BROKEN;
@@ -188,6 +189,7 @@ fn propGet(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value,
 
 fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
     _ = err;
+    cross();
     const h: *PropHost = @ptrCast(@alignCast(context.?));
     const props = h.store.values.getPtr(@intFromPtr(o.?)) orelse return c.TALK_CALL_BROKEN;
     c.talk_value_retain(@constCast(v));
@@ -200,11 +202,19 @@ fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, er
 /// objects from `[[objects]]`, with their initial property values.
 fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_group, all: []const case_setup.Table, store: *ObjectStore) !void {
     var kinds: std.StringHashMapUnmanaged(?*c.talk_object_kind) = .empty;
-    for (all) |t| {
+    for (all, 0..) |t, at| {
         if (!std.mem.eql(u8, t.header, "[[objectKinds]]")) continue;
         const name = case_setup.field(t, "name").?.string;
+        // Its properties: an inline list, or `[[objectKinds.props]]` tables
+        // right after it.
+        var declared: std.ArrayList(case_setup.Value) = .empty;
+        if (case_setup.field(t, "props")) |list| try declared.appendSlice(a, list.array);
+        for (all[at + 1 ..]) |x| {
+            if (!std.mem.eql(u8, x.header, "[[objectKinds.props]]")) break;
+            try declared.append(a, .{ .table = x.entries });
+        }
         var props: std.ArrayList(c.talk_prop) = .empty;
-        if (case_setup.field(t, "props")) |list| for (list.array) |p| {
+        for (declared.items) |p| {
             const prop_name = p.get("name").?.string;
             const prop_host = try a.create(PropHost);
             prop_host.* = .{ .store = store, .name = prop_name };
@@ -214,14 +224,14 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
             try props.append(a, .{
                 .name = prop_name.ptr,
                 .name_len = prop_name.len,
-                .shape = try shapeOf(p.get("shape").?),
+                .shape = try shapeOf(p.get("shape") orelse .{ .string = "any" }),
                 .get = propGet,
                 .set = if (read_only) null else propSet,
                 .context = prop_host,
                 .get_cost = .{ .fuel = number(if (get_cost) |x| x.get("fuel") else null), .alloc = number(if (get_cost) |x| x.get("alloc") else null) },
                 .set_cost = .{ .fuel = number(if (set_cost) |x| x.get("fuel") else null), .alloc = number(if (set_cost) |x| x.get("alloc") else null) },
             });
-        };
+        }
         defer for (props.items) |p| c.talk_shape_release(p.shape);
         const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.items.ptr, .props_len = props.items.len };
         var kind: ?*c.talk_object_kind = null;
@@ -341,6 +351,80 @@ fn check(code: c.talk_host_error_code) !void {
 const Stub = struct { value: ?[]const u8 = null, err: ?[]const u8 = null, charge: ?i64 = null };
 
 /// The runner's Host function for one Operation: its Stubs, in order.
+/// The Host Inputs a case makes during a Pump, from inside a Host
+/// function: each after the Host crossing whose `call` or `prop` record it
+/// follows in the Pump's output, so that it lands there.
+const Crossing = struct {
+    group: ?*c.talk_group,
+    scripts: *std.StringHashMapUnmanaged(*c.talk_script),
+    store: *ObjectStore,
+    inputs: []const struct { at: usize, line: []const u8 },
+    count: usize = 0,
+    next: usize = 0,
+    failed: bool = false,
+};
+
+var crossing: ?*Crossing = null;
+
+/// Counts a Host crossing, and makes the inputs that follow it.
+fn cross() void {
+    const x = crossing orelse return;
+    x.count += 1;
+    while (x.next < x.inputs.len and x.inputs[x.next].at == x.count) : (x.next += 1) {
+        crossInput(x, x.inputs[x.next].line) catch {
+            x.failed = true;
+        };
+    }
+}
+
+/// A Stop, CancelRun or RewindRun made inside a Host function.
+fn crossInput(x: *Crossing, line: []const u8) !void {
+    const input = line[2..];
+    const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse return error.MalformedCase;
+    const name = input[0..name_end];
+    const rest = input[name_end + 1 ..];
+    if (std.mem.eql(u8, name, "set-parent")) {
+        const o = x.store.named(field(input, "object") orelse return error.MalformedCase) orelse return error.MalformedCase;
+        const shown = field(input, "parent") orelse return error.MalformedCase;
+        const parent: ?*c.talk_object = if (std.mem.eql(u8, shown, "nothing")) null else x.store.named(shown) orelse return error.MalformedCase;
+        // A refusal at the call is in the Trace as a `refused` record.
+        const code = c.talk_set_parent(x.group, o, parent);
+        if (code != c.TALK_PARENT_CYCLE and code != c.TALK_INVALID_VALUE) try check(code);
+        return;
+    }
+    if (std.mem.eql(u8, name, "stop")) {
+        const script = x.scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+        var reason: ?*c.talk_value = null;
+        const shown = field(input, "reason") orelse return error.MalformedCase;
+        try check(c.talk_parse_display(shown.ptr, shown.len, &reason));
+        defer c.talk_value_release(reason);
+        var text: [*c]const u8 = null;
+        var text_len: usize = 0;
+        if (!c.talk_value_as_text(reason, &text, &text_len)) return error.MalformedCase;
+        return check(c.talk_script_stop(script, text, text_len));
+    }
+    const script = x.scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, '/') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+    if (std.mem.eql(u8, name, "cancel-run")) return check(c.talk_script_cancel_run(script, rest.ptr, rest.len));
+    if (std.mem.eql(u8, name, "rewind-run")) return check(c.talk_script_rewind_run(script, rest.ptr, rest.len));
+    return error.Unsupported;
+}
+
+/// The inputs inside a Pump's output in the case, each with the number of
+/// Host crossings before it.
+fn crossings(a: std.mem.Allocator, trace: []const u8, pump: []const u8) ![]const @typeInfo(@FieldType(Crossing, "inputs")).pointer.child {
+    var out: std.ArrayList(@typeInfo(@FieldType(Crossing, "inputs")).pointer.child) = .empty;
+    const from = @intFromPtr(pump.ptr) - @intFromPtr(trace.ptr) + pump.len;
+    var lines = std.mem.splitScalar(u8, trace[from..], '\n');
+    var count: usize = 0;
+    while (lines.next()) |l| {
+        // A refused Pump has no `pumped` record: the next Pump ends it too.
+        if (std.mem.startsWith(u8, l, "pumped ") or std.mem.startsWith(u8, l, "> pump")) break;
+        if (std.mem.startsWith(u8, l, "call ") or std.mem.startsWith(u8, l, "prop ")) count += 1;
+        if (std.mem.startsWith(u8, l, "> ")) try out.append(a, .{ .at = count, .line = l });
+    }
+    return out.items;
+}
+
 const OperationHost = struct {
     /// Holds what the Host function gives the Core, until the case ends.
     a: std.mem.Allocator,
@@ -359,6 +443,7 @@ fn parsed(shown: []const u8) ?*c.talk_value {
 }
 
 fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    cross();
     _ = args;
     _ = len;
     const h: *OperationHost = @ptrCast(@alignCast(context.?));
@@ -797,6 +882,7 @@ fn sqlRowsOf(a: std.mem.Allocator, shown: []const u8, rows: *c.talk_sql_rows) bo
 fn sqlHost(comptime key: []const u8) c.talk_sql_fn {
     return struct {
         fn f(context: ?*anyopaque, call: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+            cross();
             _ = call;
             _ = sql;
             _ = sql_len;
@@ -994,6 +1080,25 @@ const Resolving = struct {
     }
 };
 
+/// A Function Value a Request gave the Host, by its display form, owned.
+fn heldFunction(a: std.mem.Allocator, requests: []const *c.talk_pending, shown: []const u8) !?*c.talk_value {
+    _ = a;
+    for (requests) |p| {
+        var v: ?*c.talk_value = null;
+        try check(c.talk_pending_result(p, &v));
+        if (c.talk_value_kind(v) != c.TALK_KIND_FUNCTION) {
+            c.talk_value_release(v);
+            continue;
+        }
+        var text: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+        try check(c.talk_value_string(v, &text));
+        defer c.talk_owned_bytes_release(&text);
+        if (std.mem.eql(u8, text.data[0..text.len], shown)) return v;
+        c.talk_value_release(v);
+    }
+    return null;
+}
+
 const Restored = struct { group: ?*c.talk_group, adopted: []const struct { id: []const u8, call: ?*c.talk_call } };
 
 /// Saves and restores between two Pumps (chapter 11, Save and restore
@@ -1011,6 +1116,8 @@ fn roundTrip(a: std.mem.Allocator, core: ?*c.talk_core, sink: *Sink, group: ?*c.
     if (later.len > 0) for ([_][]const u8{ "> save", "> restore", "> settle" }) |x| {
         if (std.mem.startsWith(u8, later[0], x)) return null;
     };
+    // A Function Value the Host holds belongs to the original Group.
+    for (later) |l| if (std.mem.startsWith(u8, l, "> call-value")) return null;
     sink.hidden = true;
     defer sink.hidden = false;
     var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };
@@ -1121,10 +1228,16 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var latest: ?[]const u8 = null;
     var script_grants: std.StringHashMapUnmanaged([]c.talk_load_grant) = .empty;
     var retired: std.ArrayList(?*c.talk_group) = .empty;
+    // Each Request's future, whose result the Host may hold.
+    var requests: std.ArrayList(*c.talk_pending) = .empty;
     defer for (retired.items) |x| c.talk_group_release(x);
     try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries, &declarations);
     const order = (try hostOrder(a, trace)).items;
+    // The inputs a Host function makes during a Pump, which the main order
+    // skips.
+    var crossed: std.AutoHashMapUnmanaged(usize, void) = .empty;
     for (order, 0..) |line, at| {
+        if (crossed.contains(@intFromPtr(line.ptr))) continue;
         const input = line[2..];
         const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse input.len;
         const name = input[0..name_end];
@@ -1315,6 +1428,29 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                 c.talk_script_request(to, &m, null, &pending);
             // A refusal at the call is in the Trace, as a `refused` record.
             if (code != c.TALK_INVALID_VALUE and code != c.TALK_ERR_MAILBOX_FULL) try check(code);
+            if (pending) |p| try requests.append(a, p);
+        } else if (std.mem.eql(u8, name, "call-value")) {
+            // The Function Value is one a Request earlier gave the Host.
+            const shown = field(input, "fn") orelse return error.MalformedCase;
+            const f = try heldFunction(a, requests.items, shown) orelse return error.MalformedCase;
+            defer c.talk_value_release(f);
+            var args: std.ArrayList(?*c.talk_value) = .empty;
+            defer for (args.items) |v| c.talk_value_release(v);
+            if (field(input, "args")) |list_shown| {
+                var list: ?*c.talk_value = null;
+                try check(c.talk_parse_display(list_shown.ptr, list_shown.len, &list));
+                defer c.talk_value_release(list);
+                for (0..c.talk_value_len(list)) |i| {
+                    var item: ?*c.talk_value = null;
+                    try check(c.talk_value_index(list, i + 1, &item));
+                    try args.append(a, item);
+                }
+            }
+            var override: c.talk_limit_override = std.mem.zeroes(c.talk_limit_override);
+            const has_override = try overrideOf(input, &override);
+            var pending: ?*c.talk_pending = null;
+            try check(c.talk_group_call(group, f, @ptrCast(args.items.ptr), args.items.len, if (has_override) &override else null, null, &pending));
+            try requests.append(a, pending.?);
         } else if (std.mem.eql(u8, name, "broadcast") or std.mem.eql(u8, name, "decide-broadcast")) {
             // The Core writes the recipients, when the queue is drained.
             const message = field(input, "message").?;
@@ -1346,7 +1482,14 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (!c.talk_value_as_instant(instant, &seconds, &nanos)) return error.BadClock;
             const pump_options: c.talk_pump_options = .{ .fuel_slice = if (field(input, "fuel-slice")) |x| try std.fmt.parseInt(i64, x, 10) else 0, .fuel_cap = if (field(input, "fuel-cap")) |x| try std.fmt.parseInt(i64, x, 10) else 0 };
             // A refusal is in the Trace as a `refused` record.
+            var made: Crossing = .{ .group = group, .scripts = &scripts, .store = &store, .inputs = try crossings(a, trace, line) };
+            for (made.inputs) |x| try crossed.put(a, @intFromPtr(x.line.ptr), {});
+            crossing = &made;
             const code = c.talk_pump(group, seconds, nanos, &pump_options, null);
+            crossing = null;
+            if (made.failed or made.next != made.inputs.len) {
+                return error.CrossingInput;
+            }
             if (code != c.TALK_CLOCK_BACKWARDS) try check(code);
             if (round_trip) if (try roundTrip(a, core, &sink, group, order[at + 1 ..], &libraries, &script_grants)) |restored| {
                 try retired.append(a, group);
@@ -1368,6 +1511,10 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var text_len: usize = 0;
             if (!c.talk_value_as_text(reason, &text, &text_len)) return error.MalformedCase;
             try check(c.talk_script_stop(script, text, text_len));
+        } else if (std.mem.eql(u8, name, "rewind-run")) {
+            const id = input[name_end + 1 ..];
+            const script = scripts.get(id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse return error.MalformedCase]) orelse return error.UnknownScript;
+            try check(c.talk_script_rewind_run(script, id.ptr, id.len));
         } else if (std.mem.eql(u8, name, "cancel-run")) {
             const id = input[name_end + 1 ..];
             const script = scripts.get(id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse return error.MalformedCase]) orelse return error.UnknownScript;

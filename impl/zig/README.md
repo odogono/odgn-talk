@@ -648,6 +648,36 @@ ends `cancelled`, and its cleanup Segment's participant commits unless a limit
 ended it. A Delivery still in a mailbox is removed and reported as a `run`
 with no Run, and its Decision settles undecided.
 
+`talk_script_stop`, `talk_script_cancel_run` and `talk_script_rewind_run`
+made between Pumps wait for the next one's drain. Made during a Pump, from
+a Host function, they land at that Host crossing (chapter 9, Threads and the
+input queue): right after the crossing's `call` or `prop` records, and its
+`scope` record, and before its result is converted, which isn't charged.
+What a Host function writes while it runs, such as a refused `set-parent`,
+is held and written there too, in the order made, and a Stop, cancellation
+or Rewind of the running Run ends its Stretch there: a Stop with
+`end=stop`, a cancellation rolling the Segment back before its cleanup, and
+a Rewind with `end=rewind`. Anything else made during a Pump lands between
+turns, or at its end.
+
+`talk_script_rewind_run` is RewindRun (ADR 0068): a Run still in its first
+Segment, or parked at dispatch, ends as if it had never started. Its Segment
+rolls back as at a Limit Fault, its Script Variables too unless it was
+parked, its scopes are abandoned and its participant rolled back, and its
+message goes back to the head of its Script's mailbox as it left it, its ids,
+its place on its Message Path and an open Decision kept. Its Fuel stays in
+its Script's counters. The Pump it lands in returns `rewound` at once, so the
+Host can Reload before the message is dispatched again. One that lands on a
+Run that has passed a Suspension Point, or has ended, writes `note … kind=
+not-rewindable` and does nothing.
+
+`talk_group_call` calls a Function Value from the Host, the Host Input
+`call-value`: a Request to its Home Script, whose Run writes `fn=` in place
+of a Handler. A value whose Home Script is stopped, or that is stale, writes
+`note d<n> kind=function-gone` when the queue is drained and runs nothing,
+and one called with the wrong number of arguments raises `wrong arity` at
+its function's first instruction, charging nothing.
+
 `talk_script_stop` queues Stop Script, which is sticky; disposing a Script's
 owner stops it within that input, with reason `owner disposed`. Each of the
 Script's Runs, in start order, has its scopes abandoned and its participant
@@ -723,6 +753,11 @@ restores with the Libraries it compiled last but those `withheld`, the
 Grants it loaded each Script with but those `unbound`, and every Host Object
 but those `disposed`, and goes on with the restored Group's handles.
 
+A Stop, CancelRun, RewindRun or `set-parent` written inside a Pump's output
+is made from the Host function of the crossing whose `call` or `prop` record
+it follows, counting from the Pump, so that it lands there. A `call-value`
+calls the Function Value a Request earlier gave the Host.
+
 Every Trace Case runs twice: as written, and with a save and restore between
 each pair of Pumps (chapter 11, Save and restore replays), which must give
 the same Trace. After each Pump that another follows, the runner saves; a
@@ -732,8 +767,10 @@ adopts each pending call, and goes on in the restored Group. The lines it
 causes are left out of the Trace, the `settle` lines its adoptions make when
 the next Pump drains them included, and the case's own save ids keep the
 numbers they would have had. It skips the round trip where the case saves,
-restores or settles next itself, and where a later `answer` or `fail` is for
-a call the save doesn't hold, whose handle belongs to the original Group. A
+restores or settles next itself, before any later `call-value`, whose
+Function Value the original Group made, and where a later `answer` or `fail`
+is for a call the save doesn't hold, whose handle belongs to the original
+Group. A
 failure in this replay says so. Transcript replay and
 encoding cases that register Host Objects are not supported.
 
