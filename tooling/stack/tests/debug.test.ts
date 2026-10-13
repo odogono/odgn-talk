@@ -317,3 +317,18 @@ test('a Rewind landed at a live breakpoint replays at the same instruction', () 
     rmSync(dir, { recursive: true });
   }
 });
+
+test('breakpoints on Nothing defaults and optional reads preserve lazy execution', () => {
+  const { script, debug } = setup(
+    'on go\nreturn the optional x of nothing otherwise 7\nend go',
+  );
+  const points = debug.setBreakpoints([
+    { unit: 's', line: 2, col: 8 },
+    { unit: 's', line: 2, col: 34 },
+  ]);
+  expect(points.every(point => point.verified)).toBe(true);
+  script.deliver({ name: 'go' });
+  expect(debug.pump().state).toBe('paused');
+  expect(debug.resume().state).toBe('paused');
+  expect(debug.resume().state).toBe('idle');
+});

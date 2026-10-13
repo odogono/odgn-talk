@@ -21,6 +21,11 @@ part of the Abstract Machine, driven through `talk.h`.
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
 
+The `otherwise` operator and optional map-key reads are not implemented in
+this Core. The [TS guide](../ts/README.md#nothing-defaults-and-optional-map-reads)
+describes its support; [migration guidance](../../docs/migrations/nothing-defaults.md)
+explains the source compatibility changes.
+
 ## Layout
 
 - `build.zig`, `build.zig.zon`: one Zig package, `northtalk`, pinned to Zig

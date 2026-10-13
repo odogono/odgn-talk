@@ -2076,5 +2076,46 @@ pub const machine: MachineTable = .{
             .cost = "send",
             .does = "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`",
         },
+        .{
+            .name = "branch-not-nothing",
+            .group = "control",
+            .operands = &.{
+                "label",
+            },
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "branch",
+            .does = "Preserves the top value and continues at the label unless it is Nothing",
+            .jumps = 1,
+        },
+        .{
+            .name = "get-optional-key",
+            .group = "access",
+            .operands = &.{
+                "key",
+            },
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "get-key",
+            .does = "Reads a map key, returning Nothing for a Nothing receiver; rejects all other receivers including Host Objects",
+            .errors = &.{
+                "wrong kind",
+            },
+        },
+        .{
+            .name = "get-optional-key-computed",
+            .group = "access",
+            .operands = &.{},
+            .pops = .{ .int = 2 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "get-key",
+            .does = "Validates the text key below the receiver, then performs an optional map-key read",
+            .errors = &.{
+                "wrong kind",
+            },
+        },
     },
 };

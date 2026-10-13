@@ -107,6 +107,7 @@ const OPERAND_WORDS = new Set([
 ]);
 // Words that end a line in operator position and so continue it.
 const CONTINUING_WORDS = new Set([
+  'otherwise',
   'and',
   'or',
   'is',
@@ -1976,7 +1977,7 @@ class Parser {
         }
       }
     }
-    const e = (yield this.or()) as Node;
+    const e = (yield this.defaultExpression()) as Node;
     if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
       const frame = this.enter('Whose', 1);
       try {
@@ -2083,6 +2084,20 @@ class Parser {
       body,
       end: { line: end.line, col: end.col },
     };
+  }
+
+  *defaultExpression(): ParseTask<Node> {
+    const frame = this.enter('Default');
+    try {
+      let l = (yield this.or()) as Node;
+      while (this.atOperatorWord('otherwise')) {
+        const op = this.next('operator');
+        l = this.at(op, { k: 'otherwise', l, r: (yield this.or()) as Node });
+      }
+      return l;
+    } finally {
+      this.leave(frame);
+    }
   }
 
   *or(): ParseTask<Node> {
@@ -2690,6 +2705,30 @@ class Parser {
     try {
       this.next();
       const t = this.peek(0);
+      if (
+        this.isWord(t, 'optional') &&
+        !this.isWord(this.la2('optional-key', 'operator'), 'of')
+      ) {
+        this.next();
+        let key: Node | string;
+        const computed = this.isOp(this.peek(0), '(');
+        if (computed) {
+          this.next();
+          key = (yield this.nested(() => this.expr())) as Node;
+          this.expectOp(')');
+        } else if (this.peek(0).t === 'str') {
+          key = this.next().v;
+        } else {
+          key = (yield this.propertyOrKey('an optional map key')) as string;
+        }
+        this.expectWord('of', 'operator');
+        return {
+          k: 'OptionalKey',
+          key,
+          computed,
+          base: (yield this.postfix()) as Node,
+        };
+      }
       if (this.isOp(t, '(')) {
         this.next();
         const key = (yield this.nested(() => this.expr())) as Node;

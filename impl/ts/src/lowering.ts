@@ -2085,6 +2085,21 @@ class BodyLowering {
       case 'negate':
         yield this.expr(e.e);
         return void this.emit(at, e.k);
+      case 'otherwise': {
+        const end = this.label();
+        yield this.expr(e.l);
+        this.emit(at, 'branch-not-nothing', end);
+        this.emit(at, 'pop');
+        yield this.expr(e.r);
+        return void this.place(end);
+      }
+      case 'optional-key':
+        yield this.expr(e.base);
+        return void this.emit(at, 'get-optional-key', e.key);
+      case 'optional-computed':
+        yield this.expr(e.key);
+        yield this.expr(e.base);
+        return void this.emit(at, 'get-optional-key-computed');
       case 'and':
       case 'or': {
         const short = this.label();

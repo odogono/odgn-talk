@@ -1359,6 +1359,35 @@ export const instructions = [
     "pops": 0,
     "pushes": 0,
     "suspends": false
+  },
+  {
+    "name": "branch-not-nothing",
+    "cost": "branch",
+    "operands": [
+      "label"
+    ],
+    "pops": 1,
+    "pushes": 1,
+    "jumps": 1,
+    "suspends": false
+  },
+  {
+    "name": "get-optional-key",
+    "cost": "get-key",
+    "operands": [
+      "key"
+    ],
+    "pops": 1,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
+    "name": "get-optional-key-computed",
+    "cost": "get-key",
+    "operands": [],
+    "pops": 2,
+    "pushes": 1,
+    "suspends": false
   }
 ] as const;
 export const languageVersion = "1.0-rc.2";

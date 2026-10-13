@@ -140,3 +140,6 @@ export const TimeoutStart = 137;
 export const TimeoutEnd = 138;
 export const Veto = 139;
 export const Pass = 140;
+export const BranchNotNothing = 141;
+export const GetOptionalKey = 142;
+export const GetOptionalKeyComputed = 143;

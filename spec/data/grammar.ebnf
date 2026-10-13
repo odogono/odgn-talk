@@ -152,7 +152,8 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 
 /* ## expressions */
 
-Expression     ::= Lambda | EveryHead Whose | Or Whose?
+Expression     ::= Lambda | EveryHead Whose | Default Whose?
+Default        ::= Or ( 'otherwise' Or )*
                    /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
@@ -189,7 +190,9 @@ Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | Binary
 Call           ::= Name CallOpen ExpressionList? ')'
 Chunk          ::= ChunkWord Range 'of' Postfix
 ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
-The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
+OptionalKey    ::= Key | Text | '(' Expression ')'
+The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
+                         | '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
                          | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */

@@ -1583,3 +1583,36 @@ pushes = 0
 suspends = false
 cost = "send"
 does = "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`"
+
+[[instruction]]
+name = "branch-not-nothing"
+group = "control"
+operands = ["label"]
+pops = 1
+pushes = 1
+jumps = 1
+suspends = false
+cost = "branch"
+does = "Preserves the top value and continues at the label unless it is Nothing"
+
+[[instruction]]
+name = "get-optional-key"
+group = "access"
+operands = ["key"]
+pops = 1
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "Reads a map key, returning Nothing for a Nothing receiver; rejects all other receivers including Host Objects"
+
+[[instruction]]
+name = "get-optional-key-computed"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "get-key"
+errors = ["wrong kind"]
+does = "Validates the text key below the receiver, then performs an optional map-key read"

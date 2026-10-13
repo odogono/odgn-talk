@@ -1,0 +1,33 @@
+script variable observed = []
+
+function mark value
+  put [...observed, value] into observed
+  return value
+end mark
+
+on defaults
+  return [false otherwise 1, 0 otherwise 1, "" otherwise 1, [] otherwise 1, {} otherwise 1,
+          1 otherwise 2 otherwise 3, nothing otherwise nothing otherwise 3]
+end defaults
+
+on reads m
+  return [the optional city of m,
+          the optional ("city") of m,
+          the optional length of m,
+          the optional code points of m,
+          the optional optional of m,
+          the optional of m,
+          the optional city of the optional address of m otherwise "unknown"]
+end reads
+
+on order
+  return the optional (mark("city")) of mark(nothing) otherwise mark(7)
+end order
+
+on guarded m where the optional active of m otherwise false
+  return true
+end guarded
+
+on guarded m
+  return false
+end guarded

@@ -1,0 +1,133 @@
+unit main script
+constants
+  0 nothing
+  1 false
+  2 1
+  3 0
+  4 ""
+  5 []
+  6 2
+  7 3
+  8 "city"
+  9 "unknown"
+  10 7
+  11 true
+variables
+  0 observed
+bodies
+  0 init initialiser () locals 1 0000..0003
+  1 function mark (value) locals 2 0004..0013
+  2 handler defaults clause 1 () locals 1 0014..0052
+  3 handler reads clause 1 (m) locals 2 0053..0076
+  4 handler order clause 1 () locals 1 0077..0089
+  5 handler guarded clause 1 (m) locals 2 0090..0100
+  6 handler guarded clause 2 (m) locals 2 0101..0105
+code
+  0000 1:28 list 0
+  0001 1:1 store-var 0 ; observed
+  0002 1:1 const 0 ; nothing
+  0003 1:1 return
+  0004 4:7 list 0
+  0005 4:11 load-var 0 ; observed
+  0006 4:7 list-extend
+  0007 4:21 load 1 ; value
+  0008 4:7 list-append
+  0009 4:3 store-var 0 ; observed
+  0010 5:10 load 1 ; value
+  0011 5:3 return
+  0012 6:1 const 0 ; nothing
+  0013 6:1 return
+  0014 9:11 const 1 ; false
+  0015 9:17 branch-not-nothing 0018
+  0016 9:17 pop
+  0017 9:27 const 2 ; 1
+  0018 9:30 const 3 ; 0
+  0019 9:32 branch-not-nothing 0022
+  0020 9:32 pop
+  0021 9:42 const 2 ; 1
+  0022 9:45 const 4 ; ""
+  0023 9:48 branch-not-nothing 0026
+  0024 9:48 pop
+  0025 9:58 const 2 ; 1
+  0026 9:61 list 0
+  0027 9:64 branch-not-nothing 0030
+  0028 9:64 pop
+  0029 9:74 const 2 ; 1
+  0030 9:77 map 5 0 ; []
+  0031 9:80 branch-not-nothing 0034
+  0032 9:80 pop
+  0033 9:90 const 2 ; 1
+  0034 10:11 const 2 ; 1
+  0035 10:13 branch-not-nothing 0038
+  0036 10:13 pop
+  0037 10:23 const 6 ; 2
+  0038 10:25 branch-not-nothing 0041
+  0039 10:25 pop
+  0040 10:35 const 7 ; 3
+  0041 10:38 const 0 ; nothing
+  0042 10:46 branch-not-nothing 0045
+  0043 10:46 pop
+  0044 10:56 const 0 ; nothing
+  0045 10:64 branch-not-nothing 0048
+  0046 10:64 pop
+  0047 10:74 const 7 ; 3
+  0048 9:10 list 7
+  0049 9:3 return
+  0050 11:1 const 0 ; nothing
+  0051 11:1 return
+  0052 11:1 clause-fail
+  0053 14:32 load 1 ; m
+  0054 14:11 get-optional-key "city"
+  0055 15:25 const 8 ; "city"
+  0056 15:36 load 1 ; m
+  0057 15:11 get-optional-key-computed
+  0058 16:34 load 1 ; m
+  0059 16:11 get-optional-key "length"
+  0060 17:39 load 1 ; m
+  0061 17:11 get-optional-key "code points"
+  0062 18:36 load 1 ; m
+  0063 18:11 get-optional-key "optional"
+  0064 19:27 load 1 ; m
+  0065 19:11 get-key "optional"
+  0066 20:56 load 1 ; m
+  0067 20:32 get-optional-key "address"
+  0068 20:11 get-optional-key "city"
+  0069 20:58 branch-not-nothing 0072
+  0070 20:58 pop
+  0071 20:68 const 9 ; "unknown"
+  0072 14:10 list 7
+  0073 14:3 return
+  0074 21:1 const 0 ; nothing
+  0075 21:1 return
+  0076 21:1 clause-fail
+  0077 24:29 const 8 ; "city"
+  0078 24:24 call 1 1 ; mark
+  0079 24:46 const 0 ; nothing
+  0080 24:41 call 1 1 ; mark
+  0081 24:10 get-optional-key-computed
+  0082 24:55 branch-not-nothing 0086
+  0083 24:55 pop
+  0084 24:70 const 10 ; 7
+  0085 24:65 call 1 1 ; mark
+  0086 24:3 return
+  0087 25:1 const 0 ; nothing
+  0088 25:1 return
+  0089 25:1 clause-fail
+  0090 27:43 load 1 ; m
+  0091 27:20 get-optional-key "active"
+  0092 27:45 branch-not-nothing 0095
+  0093 27:45 pop
+  0094 27:55 const 1 ; false
+  0095 27:20 branch-false 0100
+  0096 28:10 const 11 ; true
+  0097 28:3 return
+  0098 29:1 const 0 ; nothing
+  0099 29:1 return
+  0100 29:1 clause-fail
+  0101 32:10 const 1 ; false
+  0102 32:3 return
+  0103 33:1 const 0 ; nothing
+  0104 33:1 return
+  0105 33:1 clause-fail
+unwind
+  0090..0095 guard -> 0100 depth 0

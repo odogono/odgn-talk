@@ -5,13 +5,12 @@ For [#687](https://github.com/odogono/odgn-talk/issues/687), based on
 map-key reads**. The word spelling is selected for xTalk style, with its source-compatibility
 cost accepted. `??` is not part of this design.
 
-This is a complete behavior and lowering draft for review, not an active
-language declaration. It deliberately stages the grammar and instruction
-catalogue edits with implementation, as permitted by the
-[Spec change-impact guide](../agents/spec-changes.md#splitting-delivery).
-Current Cores do not support this syntax. The existing Spec and generated
-Data Files continue describing the implemented language until integration.
-The [exploration](../research/nothing-default-syntax.md) records alternatives.
+This design was approved in #718. Its normative rules are integrated into
+chapters 1, 2, 4, 6, 7 and 8 by the draft TS/shared implementation for #719.
+The TS Core supports these forms; Go and Zig integration and cross-Core
+acceptance remain tracked by #720, #721 and #722. Release/version activation
+and first blessing are not implied by the implementation. The
+[exploration](../research/nothing-default-syntax.md) records alternatives.
 
 ## Behavior
 
@@ -288,26 +287,18 @@ These are required observations, not blessed expectation files yet.
 
 ## Implementation handoff
 
-- **Required base:** the design PR containing this file and
-  `docs/research/nothing-default-syntax.md`, based on `0ea3a15c`.
-  Implementation issues pin the PR and exact specification commit; while
-  that PR is unmerged, they depend on it. Confirm both files are present
-  before starting implementation.
-- **Implemented in:** parser experiments only, on local branch
-  `prototype/issue-687-default`. No Core runtime or checker implements this.
-- **Remaining work:** integrate the grammar/keyword changes, three instruction
-  declarations and lowering, source maps, error/cost descriptions and the release
-  revision above. Update chapters 1, 2, 4, 6 (key error description), 7 (`lookup`
-  cross-reference) and 8; generate their Data File regions. Update the
-  reference parser/compiler, TS/Go/Zig parsers, checkers, constant evaluators,
-  runtimes and cost paths. Update formatter/parentheses, highlighting,
-  completion, LSP and debugger consumers, plus Core guides and migration
-  documentation. Add a breaking `feat(spec)` changelog fragment on adoption.
-- **Acceptance still needed:** all ten groups above, with generated
-  Disassembly and Trace expectations kept separate from first blessing.
-  No new expectation file is awaiting approval yet.
-- **Validation at integration:** follow each Core's task map and the Spec
-  change-impact guide; regenerate Spec/syntax/Go/Zig tables, run grammar and
-  machine checks, focused parser/checker/runtime/tooling tests and cross-Core
-  corpus cases, then required repository checks. A clean prototype scan is
-  not evidence of runtime parity or expectation approval.
+- **Required base:** design PR #718, merged as `77301a6e`, present in this
+  implementation checkout (base `e98c4870`).
+- **Implemented in:** the uncommitted #719 draft on `fix/issue-719`: shared
+  grammar, instruction and cost declarations; normative chapters; reference
+  parser/compiler; TS parser, lowering, runtime, Guard checks and tooling;
+  generated TS/Go/Zig tables; focused tests and migration guidance.
+- **Remaining work:** Go #720 and Zig #721 implementation, shared instruction
+  coverage, cross-Core acceptance/Trace observations, and #722 release
+  activation at language 1.0-rc.3 with Cost Model 0. Move staged cases into the
+  shared Corpus only with peer support. Do not merge this draft alone.
+- **Approval still needed:** the staged candidate
+  [`main.dis`](../../impl/testdata/nothing-defaults/main.dis) is Unblessed.
+  No first-blessing review has been requested or approved. The
+  [handoff record](../../impl/testdata/nothing-defaults/README.md) lists exact
+  paths, checks, remaining acceptance and the integration gate.

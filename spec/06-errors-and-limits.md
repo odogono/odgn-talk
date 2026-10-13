@@ -6,6 +6,13 @@ A Run can end badly in three ways, and they don't mix. An Error is an ordinary v
 
 ## Errors
 
+An optional map-key read raises `wrong kind` with `expected: "text"` for a
+non-text computed key, or `expected: "map"` for a receiver other than a map
+or Nothing. It supplies the offending `value` and no cumulative `path`.
+The read's position is its `the` token; operand errors keep their own positions.
+The Standard Library attribution rule below still points to the entering call.
+
+
 - **An Error is a plain map** with a text `code` ([ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md)). It follows Value Semantics, like any map, and needs no value kind of its own.
 - **Codes** are lowercase words separated by spaces, such as `"capability revoked"`, and a word may be hyphenated, as in `"not read-only"`. Every code the Core raises is in [the catalogue](#the-error-code-catalogue). The codes a Script throws are free-form.
 - **A Core-raised error** carries `code`, `message`, `at` and the fields its catalogue entry lists. Parity covers the code and every field exactly, but not the wording of `message`.

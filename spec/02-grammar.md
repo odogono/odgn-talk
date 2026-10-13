@@ -87,6 +87,8 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `mod` | operator position |
 | `most` | after `is at` or `is not at` |
 | `next` | at the start of a statement, before `repeat` |
+| `optional` | after `the`, unless followed by `of` (optional map-key read) |
+| `otherwise` | operator position (Nothing default) |
 | `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
 | `queued` | after a comma in a Handler head |
 | `replacing` | after a comma in a Handler head |
@@ -105,11 +107,19 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 
 The chunk kinds, the ordinals, the Built-in property names, the Text Pattern keywords and the Binary Pattern words below are contextual too. Each has its meaning only where the grammar gives it one.
 
+`otherwise` is contextual in operator position and begins the lowest-precedence
+ordinary binary operation. It is excluded from Argument Labels. `optional` is
+contextual after `the`: two tokens distinguish ordinary `the optional of m`
+from the optional key branch. Neither word is reserved; both may still name
+variables, functions, Handlers and map keys. See the
+[migration guide](../docs/migrations/nothing-defaults.md) for the breaking label
+and ungrouped chunk-index changes.
+
 ### The FOLLOW set
 
 <!-- generated: grammar.follow -->
 
-`as`, `before`, `begins`, `by`, `can`, `collecting`, `comes`, `contains`, `delimited`, `div`, `does`, `ends`, `from`, `ignoring`, `matches`, `mod`, `times`, `whose`, `with`
+`as`, `before`, `begins`, `by`, `can`, `collecting`, `comes`, `contains`, `delimited`, `div`, `does`, `ends`, `from`, `ignoring`, `matches`, `mod`, `otherwise`, `times`, `whose`, `with`
 
 <!-- end -->
 
@@ -122,7 +132,7 @@ Any Name may be an [Argument Label](#argument-labels), except these. Of the Rese
 <!-- generated: grammar.labels -->
 
 - **Reserved Words that may be labels:** `to`.
-- **Names that may not be labels:** `from`, `with`.
+- **Names that may not be labels:** `from`, `otherwise`, `with`.
 
 <!-- end -->
 
@@ -390,7 +400,8 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 <!-- generated: ebnf.expressions -->
 
 ```ebnf
-Expression     ::= Lambda | EveryHead Whose | Or Whose?
+Expression     ::= Lambda | EveryHead Whose | Default Whose?
+Default        ::= Or ( 'otherwise' Or )*
                    /* `Whose` after `Or` only when the Or is an ordinal Chunk Expression, with or without its `delimited by` */
 Lambda         ::= 'given' ( Pattern ( ',' Pattern )* )? ( ':' Expression | NL Block 'end' 'given'? )
 Or             ::= And ( 'or' And )*
@@ -424,18 +435,19 @@ The operators, lowest precedence first:
 
 | Level | Associativity | Operators |
 | --- | --- | --- |
-| 1 | left | `or` |
-| 2 | left | `and` |
-| 3 | prefix | `not` |
-| 4 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches`, `does not contain`, `does not begin with`, `does not end with`, `does not match`, `is greater than`, `is not greater than`, `is less than`, `is not less than`, `is at least`, `is not at least`, `is at most`, `is not at most`, `comes before`, `comes after` |
-| 5 | left | `&` |
-| 6 | none | `..` |
-| 7 | left | `+`, `-` |
-| 8 | left | `*`, `/`, `mod`, `div` |
-| 9 | right | `^` |
-| 10 | prefix | `-` |
-| 11 | postfix | `as` |
-| 12 | postfix | `of`, `'s`, `f(…)` |
+| 1 | left | `otherwise` |
+| 2 | left | `or` |
+| 3 | left | `and` |
+| 4 | prefix | `not` |
+| 5 | none | `=`, `<>`, `<`, `>`, `<=`, `>=`, `is`, `is not`, `is in`, `is not in`, `is a`, `is not a`, `is empty`, `is not empty`, `can be`, `contains`, `begins with`, `ends with`, `matches`, `does not contain`, `does not begin with`, `does not end with`, `does not match`, `is greater than`, `is not greater than`, `is less than`, `is not less than`, `is at least`, `is not at least`, `is at most`, `is not at most`, `comes before`, `comes after` |
+| 6 | left | `&` |
+| 7 | none | `..` |
+| 8 | left | `+`, `-` |
+| 9 | left | `*`, `/`, `mod`, `div` |
+| 10 | right | `^` |
+| 11 | prefix | `-` |
+| 12 | postfix | `as` |
+| 13 | postfix | `of`, `'s`, `f(…)` |
 
 <!-- end -->
 
@@ -482,7 +494,9 @@ Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | Binary
 Call           ::= Name CallOpen ExpressionList? ')'
 Chunk          ::= ChunkWord Range 'of' Postfix
 ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
-The            ::= 'the' ( '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
+OptionalKey    ::= Key | Text | '(' Expression ')'
+The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
+                         | '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
                          | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
                    /* the Name after an Ordinal is a chunk kind's singular */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
@@ -691,6 +705,7 @@ These are the only places where the parser reads a second token before it choose
 | `wait-from` | in an event, `from` followed by a token that can start an operand is the sender; otherwise it is a name in the event's patterns |
 | `when-contains` | after `when` in a `match`, `contains` followed by `<` is a search; otherwise `contains` is a name |
 | `with-timeout` | at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call |
+| `optional-key` | after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read |
 
 <!-- end -->
 

@@ -30,7 +30,9 @@ export type Expr =
   | { k: 'is-empty'; l: Expr; neg: boolean; pos: Pos }
   | { e: Expr; k: 'can-convert' | 'convert'; kind: string; pos: Pos }
   | { e: Expr; k: 'not' | 'negate'; pos: Pos }
-  | { k: 'and' | 'or'; l: Expr; pos: Pos; r: Expr }
+  | { k: 'and' | 'or' | 'otherwise'; l: Expr; pos: Pos; r: Expr }
+  | { base: Expr; k: 'optional-key'; key: string; pos: Pos }
+  | { base: Expr; k: 'optional-computed'; key: Expr; pos: Pos }
   | { base: Expr; k: 'key'; key: string; pos: Pos }
   | { base: Expr; k: 'computed'; key: Expr; pos: Pos }
   | {
@@ -750,6 +752,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         ? { k: 'property', pos: at, name: key, base, delimiter: null }
         : { k: 'key', pos: at, key, base };
     }
+    case 'Default':
     case 'Or':
     case 'And':
     case 'Concat':
@@ -763,7 +766,7 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         const op = children[i] as SemanticToken;
         const right = of<Expr>(children[i + 1]);
         left =
-          op.text === 'and' || op.text === 'or'
+          op.text === 'and' || op.text === 'or' || op.text === 'otherwise'
             ? { k: op.text, pos: pos(op), l: left, r: right }
             : {
                 k: 'binary',
@@ -1601,6 +1604,23 @@ const the = (node: SemanticNode, of: Of): Expr => {
   const at = pos(node);
   const second = children[1]!;
   const base = () => of<Expr>(children.at(-1));
+  if (isToken(second, 'optional')) {
+    const key = children[2]!;
+    if (isToken(key, '(')) {
+      return {
+        k: 'optional-computed',
+        pos: at,
+        key: of<Expr>(children[3]),
+        base: base(),
+      };
+    }
+    return {
+      k: 'optional-key',
+      pos: at,
+      key: key.kind === 'node' ? of<string>(key) : key.text,
+      base: base(),
+    };
+  }
   if (isToken(second, '(')) {
     return { k: 'computed', pos: at, key: of<Expr>(children[2]), base: base() };
   }

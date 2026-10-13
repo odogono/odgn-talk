@@ -277,7 +277,7 @@
         },
         {
           "name": "keyword.operator.word.northtalk",
-          "match": "(?<![A-Za-z0-9_])(?:contains|matches|begins|comes|does|ends|and|div|mod|not|in|is|of|or)(?![A-Za-z0-9_])"
+          "match": "(?<![A-Za-z0-9_])(?:otherwise|contains|matches|begins|comes|does|ends|and|div|mod|not|in|is|of|or)(?![A-Za-z0-9_])"
         },
         {
           "name": "storage.modifier.northtalk",
@@ -285,7 +285,7 @@
         },
         {
           "name": "keyword.other.northtalk",
-          "match": "(?<![A-Za-z0-9_])(?:collecting|delimited|ignoring|multiply|subtract|replace|before|delete|divide|times|whose|case|each|from|into|send|tell|with|add|all|any|ask|can|let|put|say|set|the|as|be|by|to)(?![A-Za-z0-9_])"
+          "match": "(?<![A-Za-z0-9_])(?:collecting|delimited|ignoring|multiply|optional|subtract|replace|before|delete|divide|times|whose|case|each|from|into|send|tell|with|add|all|any|ask|can|let|put|say|set|the|as|be|by|to)(?![A-Za-z0-9_])"
         }
       ]
     },

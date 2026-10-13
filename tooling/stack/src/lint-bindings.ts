@@ -51,6 +51,7 @@ const unwrap = (root: SemanticNode): SemanticElement => {
   let e: SemanticElement = root;
   const wrappers = new Set([
     'Expression',
+    'Default',
     'Or',
     'And',
     'Not',
@@ -206,6 +207,10 @@ const keyRead = (root: SemanticNode): KeyRead | undefined => {
     return;
   }
   if (e.rule === 'The') {
+    // Optional map reads deliberately tolerate absent keys and Nothing.
+    if (e.children[1]?.kind === 'token' && e.children[1].text === 'optional') {
+      return;
+    }
     const direct = leaves(e);
     const base = nodes(e).at(-1);
     if (!base || !direct.some(t => t.text === 'of')) {
@@ -438,6 +443,7 @@ const mayFail = (root: SemanticNode): boolean =>
         'Concat',
         'Comparison',
         'And',
+        'Default',
         'Or',
         'Not',
       ].includes(e.rule) &&

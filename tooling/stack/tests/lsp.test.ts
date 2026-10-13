@@ -1027,3 +1027,15 @@ test('Session Store watch Operations are accepted and offered by LSP completion'
   expect(completion.map(c => c.label)).toContain('watch');
   expect(completion.map(c => c.label)).toContain('unwatch');
 });
+
+test('completes Nothing default and optional map read keywords', () => {
+  for (const [line, keyword] of [
+    ['return nothing other', 'otherwise'],
+    ['return the opt', 'optional'],
+  ]) {
+    const { request } = setup(`on demo\n${line}\nend demo`);
+    expect(
+      request('textDocument/completion', at(1, line!.length)).map(c => c.label),
+    ).toContain(keyword!);
+  }
+});

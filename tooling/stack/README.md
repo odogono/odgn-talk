@@ -8,6 +8,14 @@
 belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
+## Nothing defaults and optional map reads
+
+The TS Core and its formatter, language server and debugger support lazy
+`otherwise` defaults and map-only `the optional k of x` reads, including
+computed keys. Optional reads tolerate Nothing and missing keys, reject Host
+Objects, and cannot be assigned to. See the
+[migration guide](../../docs/migrations/nothing-defaults.md).
+
 ## Built-in Capabilities
 
 **Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Both Cores lower and execute these forms, including nested recovery and cancellation; see the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) support guides. Live and replay stepping follow the active dispatch path, with retained/dispatch frame roles, shared owner locals and an owning-frame index in the tooling-only snapshot. Sessions, CLI and Playground run Library offers chosen by a Session Script and replay their Transcripts; see the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [tooling contract](../../spec/12-sessions-and-tooling.md#the-debugger).

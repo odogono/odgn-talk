@@ -60,6 +60,7 @@ export const grammar = {
     ],
     "excluded": [
       "from",
+      "otherwise",
       "with"
     ]
   },
@@ -130,6 +131,7 @@ export const grammar = {
     "ignoring",
     "matches",
     "mod",
+    "otherwise",
     "times",
     "whose",
     "with"
@@ -164,7 +166,8 @@ export const grammar = {
     "target",
     "wait-from",
     "when-contains",
-    "with-timeout"
+    "with-timeout",
+    "optional-key"
   ],
   "text_patterns": {
     "keywords": [

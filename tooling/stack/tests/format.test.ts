@@ -257,3 +257,14 @@ test('marked comments preserve documentation and executable disassembly across f
     expect(canonical(disassemble(after))).toBe(canonical(disassemble(before)));
   }
 });
+
+test('formats Nothing defaults and optional reads without changing grouping', () => {
+  const source =
+    'on go m\nreturn (the optional ("x") of m otherwise 0)>3\nend go\n';
+  const formatted = formatSource(source);
+  expect(formatted.error).toBeNull();
+  expect(formatted.source).toContain(
+    '(the optional ("x") of m otherwise 0) > 3',
+  );
+  expect(formatSource(formatted.source).source).toBe(formatted.source);
+});

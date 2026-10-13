@@ -146,4 +146,7 @@ const (
 	OpTimeoutEnd
 	OpVeto
 	OpPass
+	OpBranchNotNothing
+	OpGetOptionalKey
+	OpGetOptionalKeyComputed
 )

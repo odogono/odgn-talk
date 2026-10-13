@@ -681,3 +681,20 @@ for (const ending of ['end', 'end wait']) {
     });
   }
 }
+
+test('Nothing default branches preserve equal depths and require an incoming value', () => {
+  const unit = compile('on go\nreturn nothing otherwise 2\nend go');
+  expect(verify(unit)).toEqual([]);
+  const branch = unit.code.findIndex(ins => ins.op === 'branch-not-nothing');
+  const malformed = {
+    ...unit,
+    bodies: unit.bodies.map(body =>
+      body.kind === 'handler' ? { ...body, start: branch } : body,
+    ),
+  };
+  expect(
+    verify(malformed).some(problem =>
+      problem.includes('branch-not-nothing pops 1 of 0'),
+    ),
+  ).toBe(true);
+});

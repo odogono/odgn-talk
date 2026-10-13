@@ -22,6 +22,8 @@ const KEYWORDS = new Set([
   'ignoring',
   'case',
   'contains',
+  'otherwise',
+  'optional',
 ]);
 
 type Region =

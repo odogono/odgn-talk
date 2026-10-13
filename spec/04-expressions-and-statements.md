@@ -66,6 +66,25 @@ Inside a [Whose Clause](#whose-clauses)'s condition, `it` is the chunk being tes
 - **`and` and `or` short-circuit:** `a and b` evaluates `b` only if `a` is `true`, and `a or b` only if `a` is `false`. Each operand they evaluate, and the operand of `not`, must be a boolean, or `wrong kind` is raised with `expected` `"boolean"`.
 - **Conditions** of `if`, `repeat while` and `repeat until` must be booleans too, so `if 0 then …` raises `wrong kind`. A Guard's must be `true` for its clause to be chosen ([Guards](#guards)).
 
+### Nothing defaults
+
+`a otherwise b` evaluates `a` once and returns that same value unless it is
+Nothing. Only then is `b` evaluated, once; its result may also be Nothing.
+False, zero, empty text, lists and maps are present values. Errors and Limit
+Faults propagate; `otherwise` does not catch them or call the Host.
+
+`otherwise` is left-associative and binds less tightly than `or` and every
+other ordinary binary operator. Lambdas and Whose conditions retain their
+whole-expression boundaries: `given x: x otherwise d` defaults the result,
+and `the first item of xs whose active otherwise false` defaults the condition.
+Parenthesize a selection to default the selection itself. Restricted replace
+subjects and replacements require parentheses around defaults.
+
+Both operands are checked, including an unselected fallback. Guards permit
+both forms under the existing restrictions; a forbidden call in either operand
+is rejected. Constants, initializers, parameter defaults and Whose conditions
+keep their existing eligibility rules.
+
 ## Operators
 
 | Operator | Meaning |
@@ -129,6 +148,38 @@ The Built-in properties:
 | `code points` | text | its code points, as a list of one-code-point texts |
 
 A property of any other value raises `wrong kind`. `the items of s delimited by ";"` splits at `;` ([below](#delimited-by)).
+
+### Optional map-key reads
+
+`the optional k of x` reads a map key, or returns Nothing if `x` is Nothing.
+A missing key and a key holding Nothing both return Nothing. Every other
+receiver, including live and disposed Host Objects, raises `wrong kind` with
+`expected: "map"` and `value` the receiver. No Host getter is called, even for
+`id`. A Host Object stored in a map can be returned, but not stepped into by
+another optional read.
+
+The key is a Word, text literal, `code points`, or a parenthesized expression.
+Bare `length`, `target`, `first` and reserved words are literal keys here.
+`the optional of m` remains an ordinary read of `optional`; use
+`the optional optional of m` for its optional form and quote the key `"of"`.
+
+A computed key runs before the receiver, once each. After both finish, the
+key must be text, even for a Nothing receiver; otherwise `wrong kind` has
+`expected: "text"` and `value` the key. A receiver expression error therefore
+wins over an invalid key value. Read errors point at `the`, without a `path`;
+operand errors retain their positions, subject to Standard Library call
+attribution. Known Host Objects in Guards use this same runtime rejection,
+which skips the clause, rather than the ordinary Host-property load check.
+
+Each nullable step must be explicit. Ordinary steps keep their existing errors,
+and outer computed keys still run when an inner optional read returns Nothing.
+Optional reads are never Containers and have no possessive, chunk, call or
+assignment form. They do not create maps or keys.
+
+```talk
+put the optional city of the optional address of customer otherwise "unknown" into city
+put the optional ("city") of customer otherwise "unknown" into city
+```
 
 ## Chunk Expressions
 

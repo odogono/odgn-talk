@@ -150,6 +150,7 @@ var Grammar = GrammarTable{
 		"ignoring",
 		"matches",
 		"mod",
+		"otherwise",
 		"times",
 		"whose",
 		"with",
@@ -184,10 +185,23 @@ var Grammar = GrammarTable{
 		},
 		Excluded: []string{
 			"from",
+			"otherwise",
 			"with",
 		},
 	},
 	Contextual: []GrammarTableContextualEntry{
+		GrammarTableContextualEntry{
+			Word: "otherwise",
+			Positions: []string{
+				"operator position (Nothing default)",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "optional",
+			Positions: []string{
+				"after `the`, unless followed by `of` (optional map-key read)",
+			},
+		},
 		GrammarTableContextualEntry{
 			Word: "a",
 			Positions: []string{
@@ -625,25 +639,32 @@ var Grammar = GrammarTable{
 			Level: 1,
 			Assoc: "left",
 			Ops: []string{
-				"or",
+				"otherwise",
 			},
 		},
 		GrammarTableOperatorEntry{
 			Level: 2,
 			Assoc: "left",
 			Ops: []string{
-				"and",
+				"or",
 			},
 		},
 		GrammarTableOperatorEntry{
 			Level: 3,
+			Assoc: "left",
+			Ops: []string{
+				"and",
+			},
+		},
+		GrammarTableOperatorEntry{
+			Level: 4,
 			Assoc: "prefix",
 			Ops: []string{
 				"not",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 4,
+			Level: 5,
 			Assoc: "none",
 			Ops: []string{
 				"=",
@@ -682,21 +703,21 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 5,
+			Level: 6,
 			Assoc: "left",
 			Ops: []string{
 				"&",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 6,
+			Level: 7,
 			Assoc: "none",
 			Ops: []string{
 				"..",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 7,
+			Level: 8,
 			Assoc: "left",
 			Ops: []string{
 				"+",
@@ -704,7 +725,7 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 8,
+			Level: 9,
 			Assoc: "left",
 			Ops: []string{
 				"*",
@@ -714,28 +735,28 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 9,
+			Level: 10,
 			Assoc: "right",
 			Ops: []string{
 				"^",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 10,
+			Level: 11,
 			Assoc: "prefix",
 			Ops: []string{
 				"-",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 11,
+			Level: 12,
 			Assoc: "postfix",
 			Ops: []string{
 				"as",
 			},
 		},
 		GrammarTableOperatorEntry{
-			Level: 12,
+			Level: 13,
 			Assoc: "postfix",
 			Ops: []string{
 				"of",
@@ -894,6 +915,10 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "with-timeout",
 			Rule: "at the start of a statement, `with` followed by `timeout` opens a Timeout Block; otherwise `with` starts a Command Call",
+		},
+		GrammarTableDecisionEntry{
+			Name: "optional-key",
+			Rule: "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read",
 		},
 	},
 	Advanced: []GrammarTableAdvancedEntry{

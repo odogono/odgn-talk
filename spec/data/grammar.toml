@@ -59,7 +59,7 @@ reserved = [
 follow = [
   "as", "before", "begins", "by", "can", "collecting", "comes", "contains",
   "delimited", "div", "does", "ends", "from", "ignoring", "matches", "mod",
-  "times", "whose", "with",
+  "otherwise", "times", "whose", "with",
 ]
 
 ordinals = [
@@ -76,7 +76,15 @@ properties = [
 reserved = ["to"]
 # `from` and an operand in `wait for` is the event's source; `with` follows the
 # message name in `send` and continues a line.
-excluded = ["from", "with"]
+excluded = ["from", "otherwise", "with"]
+
+[[contextual]]
+word = "otherwise"
+positions = ["operator position (Nothing default)"]
+
+[[contextual]]
+word = "optional"
+positions = ["after `the`, unless followed by `of` (optional map-key read)"]
 
 [[contextual]]
 word = "a"
@@ -339,20 +347,25 @@ byte_orders = ["big", "little"]
 [[operator]]
 level = 1
 assoc = "left"
-ops = ["or"]
+ops = ["otherwise"]
 
 [[operator]]
 level = 2
 assoc = "left"
-ops = ["and"]
+ops = ["or"]
 
 [[operator]]
 level = 3
+assoc = "left"
+ops = ["and"]
+
+[[operator]]
+level = 4
 assoc = "prefix"
 ops = ["not"]
 
 [[operator]]
-level = 4
+level = 5
 assoc = "none"
 ops = [
   "=", "<>", "<", ">", "<=", ">=", "is", "is not", "is in", "is not in",
@@ -365,42 +378,42 @@ ops = [
 ]
 
 [[operator]]
-level = 5
+level = 6
 assoc = "left"
 ops = ["&"]
 
 [[operator]]
-level = 6
+level = 7
 assoc = "none"
 ops = [".."]
 
 [[operator]]
-level = 7
+level = 8
 assoc = "left"
 ops = ["+", "-"]
 
 [[operator]]
-level = 8
+level = 9
 assoc = "left"
 ops = ["*", "/", "mod", "div"]
 
 [[operator]]
-level = 9
+level = 10
 assoc = "right"
 ops = ["^"]
 
 [[operator]]
-level = 10
+level = 11
 assoc = "prefix"
 ops = ["-"]
 
 [[operator]]
-level = 11
+level = 12
 assoc = "postfix"
 ops = ["as"]
 
 [[operator]]
-level = 12
+level = 13
 assoc = "postfix"
 ops = ["of", "'s", "f(…)"]
 
@@ -645,3 +658,7 @@ raised_when = "Fenced text does not match its closing margin"
 [[syntax_error]]
 code = "invalid text delimiter"
 raised_when = "A raw closing quote run is longer than its opening fence"
+
+[[decision]]
+name = "optional-key"
+rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it begins an optional map-key read"

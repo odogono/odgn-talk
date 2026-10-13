@@ -143,4 +143,7 @@ pub const Opcode = enum(u8) {
     timeout_end,
     veto,
     pass,
+    branch_not_nothing,
+    get_optional_key,
+    get_optional_key_computed,
 };

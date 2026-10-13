@@ -252,7 +252,14 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
     ) {
       report('not in a guard', head);
     }
-    if (node.rule === 'The' && isHostObject(node.children.at(-1))) {
+    if (
+      node.rule === 'The' &&
+      !(
+        node.children[1]?.kind === 'token' &&
+        node.children[1].text === 'optional'
+      ) &&
+      isHostObject(node.children.at(-1))
+    ) {
       const key = node.children.find(
         (child): child is SemanticNode =>
           child.kind === 'node' && child.rule === 'Key',

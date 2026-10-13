@@ -2070,5 +2070,46 @@ var Machine = MachineTable{
 			Cost:     "send",
 			Does:     "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`",
 		},
+		MachineTableInstructionEntry{
+			Name:  "branch-not-nothing",
+			Group: "control",
+			Operands: []string{
+				"label",
+			},
+			Pops:     1,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "branch",
+			Does:     "Preserves the top value and continues at the label unless it is Nothing",
+			Jumps:    1,
+		},
+		MachineTableInstructionEntry{
+			Name:  "get-optional-key",
+			Group: "access",
+			Operands: []string{
+				"key",
+			},
+			Pops:     1,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "get-key",
+			Does:     "Reads a map key, returning Nothing for a Nothing receiver; rejects all other receivers including Host Objects",
+			Errors: []string{
+				"wrong kind",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:     "get-optional-key-computed",
+			Group:    "access",
+			Operands: []string{},
+			Pops:     2,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "get-key",
+			Does:     "Validates the text key below the receiver, then performs an optional map-key read",
+			Errors: []string{
+				"wrong kind",
+			},
+		},
 	},
 }

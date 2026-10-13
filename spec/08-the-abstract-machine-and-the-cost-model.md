@@ -144,6 +144,7 @@ The operand kinds:
 | `branch-true` | `label` | 1 | 0 | Pops a boolean and continues at the label if it is true | `wrong kind` |
 | `check-boolean` |  | 1 | 1 | Raises `wrong kind` unless the top value is a boolean | `wrong kind` |
 | `not` |  | 1 | 1 | Negates a boolean | `wrong kind` |
+| `branch-not-nothing` | `label` | 1 | 1, 1 on a jump | Preserves the top value and continues at the label unless it is Nothing |  |
 
 <!-- end -->
 
@@ -213,6 +214,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `prepend-all` |  | 2 | 1 | `put ...e before c` | `wrong kind` |
 | `set-property` | `key` | 2 | 0 | `set the p of o to e`: pops the value and the Host Object, and calls the Host's `Set` | `wrong kind`, `read only`, `object gone` |
 | `set-property-computed` |  | 3 | 0 | `set the (k) of o to e`: pops the value, the Host Object and the key | `wrong kind`, `read only`, `object gone` |
+| `get-optional-key` | `key` | 1 | 1 | Reads a map key, returning Nothing for a Nothing receiver; rejects all other receivers including Host Objects | `wrong kind` |
+| `get-optional-key-computed` |  | 2 | 1 | Validates the text key below the receiver, then performs an optional map-key read | `wrong kind` |
 
 <!-- end -->
 
@@ -374,6 +377,17 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 
 ### Expressions
 
+For Nothing defaults, both `branch-not-nothing` and `pop` are positioned at
+`otherwise`. The branch consumes and restores the same value (pops 1, pushes
+1, branch-edge depth 1), without conversion or allocation. Lower chains as
+left-associated trees: a present value still pays every subsequent branch.
+The expression Fuel totals for `1 otherwise 2`, `nothing otherwise 2`,
+`1 otherwise 2 otherwise 3`, and `nothing otherwise nothing otherwise 3`
+are respectively 2, 4, 3 and 7, excluding surrounding instructions.
+Optional-read instructions point at `the` and cost 3 Fuel beyond their
+operands, including failures and Nothing receivers, with no Host conversion.
+Unselected operands use no Fuel or allocation budget.
+
 | Construct | Lowers to |
 | --- | --- |
 | a number, a Quantity, a text, `true`, `false`, `nothing` | `const` of it |
@@ -396,6 +410,9 @@ In the rules, ⟦e⟧ is the lowering of `e`. For an expression, it pushes one v
 | `a can be K` | ⟦a⟧ `can-convert K` |
 | `a as K` | ⟦a⟧ `convert K` |
 | `not a`, `-a` | ⟦a⟧ `not`, or `negate` |
+| `a otherwise b` | ⟦a⟧ `branch-not-nothing L`; `pop`; ⟦b⟧; L: |
+| `the optional k of x` | ⟦x⟧ `get-optional-key k` |
+| `the optional (k) of x` | ⟦k⟧ ⟦x⟧ `get-optional-key-computed` |
 | `a and b` | ⟦a⟧ `branch-false L1` ⟦b⟧ `check-boolean` `jump L2`, L1: `const false`, L2: |
 | `a or b` | ⟦a⟧ `branch-true L1` ⟦b⟧ `check-boolean` `jump L2`, L1: `const true`, L2: |
 | `the k of x`, `x's k` | ⟦x⟧ `get-key k` |
@@ -920,7 +937,7 @@ Cost Model **0**.
 | `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, through the first equal one, or 2 for a range |
 | `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
 | `search` | `4 + steps` | 0 | the text searched |
-| `get-key` | `3` | 0 | the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
+| `get-key` | `3` | 0 | the map, optional Nothing receiver, or Host Object (ordinary reads only); a Host Object's property also charges the value's conversion, as a Capability result does |
 | `property` | `3 + scalars(input) / 8 + items(result)` | `size(result)` | the value whose property is read |
 | `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk, code points for a `code point` chunk, and all of them when the chunk isn't there; `test-chunk` measures as a read of the chunk it tests |
 | `chunk-set` | `4 + scalars(result) / 8 + items(result) / 8` | `size(input)` | the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010) |
@@ -1031,6 +1048,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |
 | [#126](https://github.com/odogono/odgn-talk/issues/126) | The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit |
 | [#388](https://github.com/odogono/odgn-talk/issues/388) | Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes |
+| [#719](https://github.com/odogono/odgn-talk/issues/719) | Nothing defaults preserve their operand with branch-not-nothing (1 Fuel), discard Nothing with pop (1 Fuel), and optional map-key reads reuse get-key (3 Fuel), without Host conversion; language 1.0-rc.3 activation is coordinated by #722. |
 
 <!-- end -->
 

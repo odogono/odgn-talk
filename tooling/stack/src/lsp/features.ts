@@ -624,6 +624,30 @@ export const completion = (
   }
   const partial = /[\p{L}\p{N}_]*$/u.exec(line)![0];
   const commandPosition = /^\s*[\p{L}\p{N}_]*$/u.test(line);
+  const keywords = [];
+  if ('optional'.startsWith(partial) && /\bthe\s+[\p{L}]*$/u.test(line)) {
+    keywords.push(
+      item(
+        'optional',
+        14,
+        'Read a map key, tolerating Nothing and absent keys',
+      ),
+    );
+  }
+  if (
+    partial &&
+    'otherwise'.startsWith(partial) &&
+    /\S\s+[\p{L}]+$/u.test(line)
+  ) {
+    keywords.push(
+      item(
+        'otherwise',
+        14,
+        'Evaluate the fallback only when the left value is Nothing',
+      ),
+    );
+  }
+
   const messages = commandPosition
     ? (manifest?.messages ?? [])
         .filter(name => name.startsWith(partial))
@@ -653,6 +677,7 @@ export const completion = (
   return [
     ...bindings,
     ...messages.filter(m => !bindings.some(b => b.label === m.label)),
+    ...keywords.filter(k => !bindings.some(b => b.label === k.label)),
   ];
 };
 
