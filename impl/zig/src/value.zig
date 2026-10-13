@@ -48,6 +48,9 @@ pub const Value = struct {
     /// (chapter 11): its wording is outside parity. It sits beside `depth`
     /// so that a Value's size doesn't grow.
     core_message: bool = false,
+    /// A Script's name as `load-object` pushes it: a Script is not a
+    /// value, so retained state doesn't count it (chapter 8).
+    script_name: bool = false,
     data: Data,
     /// The kind of the value's payload.
     pub fn kind(self: *const Value) Kind {

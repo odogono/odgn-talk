@@ -20,7 +20,6 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         for (step1_inputs) |known| {
             if (std.mem.eql(u8, known, name)) break;
         } else return "a Host Input talk.h doesn't make yet";
-        if (std.mem.indexOf(u8, input, " fuel-slice=") != null or std.mem.indexOf(u8, input, " fuel-cap=") != null) return "Fuel Slices are not implemented";
         // An uncertain effect outcome stops the Group, which comes with
         // Stop in step 4.
         if (std.mem.eql(u8, name, "stub-effect")) {
@@ -1065,7 +1064,8 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var seconds: i64 = 0;
             var nanos: i32 = 0;
             if (!c.talk_value_as_instant(instant, &seconds, &nanos)) return error.BadClock;
-            try check(c.talk_pump(group, seconds, nanos, null, null));
+            const pump_options: c.talk_pump_options = .{ .fuel_slice = if (field(input, "fuel-slice")) |x| try std.fmt.parseInt(i64, x, 10) else 0, .fuel_cap = if (field(input, "fuel-cap")) |x| try std.fmt.parseInt(i64, x, 10) else 0 };
+            try check(c.talk_pump(group, seconds, nanos, &pump_options, null));
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
         } else if (std.mem.eql(u8, name, "revoke")) {

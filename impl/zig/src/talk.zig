@@ -796,13 +796,14 @@ export fn talk_pending_release(p: ?*Pending) void {
 }
 
 export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
-    _ = o;
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
     model.dates.validateInstant(clock) catch return .invalid_value;
-    g.group.pump(clock) catch |err| return status(err);
-    if (out) |r| r.* = .{ .state = .idle, .fuel_used = @intCast(g.group.pump_fuel) };
+    const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
+    if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
+    g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
+    if (out) |r| r.* = .{ .state = if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
     return .ok;
 }
 

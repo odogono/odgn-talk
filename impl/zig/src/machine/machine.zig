@@ -144,6 +144,10 @@ pub const Delivery = struct {
     broadcast: u64 = 0,
     /// The Host's override of the per-Run limits, for a Host Delivery.
     limits: ?Override = null,
+    /// After a climb, the object whose Owning Script passed it on: its
+    /// parent, read when the message reaches the head of a mailbox, is
+    /// where it goes next.
+    passed_by: ?*objects.Object = null,
 };
 
 /// A Decision's Verdict (chapter 5, Decisions).
@@ -188,6 +192,13 @@ pub const Run = struct {
     limits: Limits = .{},
     /// The `clause` rate dispatch charges with the next instruction.
     clause_fuel: u64 = 0,
+    /// Preempted in a clause's patterns or Guard: the clause, and whether it
+    /// is a Fallback's, from which dispatch goes on.
+    preempted_in: ?struct { body: u32, fallback: bool } = null,
+    /// Whether its next Stretch continues it after a preemption.
+    continuing: bool = false,
+    /// Named clauses dispatch has counted so far.
+    clauses_seen: u32 = 0,
     /// Its error control: catch dispatches and cleanups, innermost last.
     controls: std.ArrayList(Control) = .empty,
     /// Recovery Offer choices made, which number their records.
@@ -436,6 +447,11 @@ pub const Script = struct {
     /// The Libraries its `use` lines import.
     imports: []*Library = &.{},
     limits: Limits = .{},
+    /// This Pump's Fuel Slice, less the debt it pays, and the Fuel its Runs
+    /// have spent in this Pump; the overrun it carries to its next Pump.
+    allowance: u64 = 0,
+    spent: u64 = 0,
+    debt: u64 = 0,
 
     fn object(s: *const Script, name: []const u8) ?*objects.Object {
         for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
@@ -647,6 +663,25 @@ pub const FunctionCode = struct {
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
+/// A retained frame's size: its slots, their values and its operand stack.
+fn frameSize(f: *const Frame) u64 {
+    var total: u64 = 64 + 8 * f.locals.len;
+    for (f.locals) |v| total += costs.size(v);
+    return total + stackSize(f.stack.items);
+}
+
+fn stackSize(stack: []const Slot) u64 {
+    var total: u64 = 0;
+    for (stack) |slot| total += switch (slot) {
+        .value => |v| if (v.script_name) 0 else costs.size(v),
+        .iterator => |it| 24 + if (it.subject) |v| costs.size(v) else 0,
+        .reader => |r| 24 + costs.size(r.subject),
+        .replacement => |r| 32 + costs.size(r.text) + costs.contents(r.matches),
+        .deadline => 40,
+    };
+    return total;
+}
+
 fn mailboxLen(s: *const Script) u64 {
     var n: u64 = 0;
     for (s.work.items) |w| if (w == .message) {
@@ -714,6 +749,9 @@ pub const Override = struct {
         w.writeAll("}") catch {};
     }
 };
+
+/// What preempted a Run: its Script's Fuel Slice or the Group's Fuel cap.
+pub const Preemption = enum { slice, cap };
 
 /// The limit a Limit Fault names.
 pub const Fault = enum { fuel, alloc, persistent, depth, pattern, join };
@@ -800,6 +838,11 @@ const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
     gpa: Allocator,
+    /// This Pump's Fuel Slice and Fuel cap; 0 for none.
+    slice: u64 = 0,
+    cap: u64 = 0,
+    /// Whether this Pump ended with work its slices or cap left undone.
+    sliced: bool = false,
     /// The override the next queued Host Delivery or Broadcast takes.
     override: ?Override = null,
     /// The limit an instruction found passed, with `error.LimitFault`.
@@ -1496,14 +1539,34 @@ pub const Group = struct {
     /// A Pump: the queued inputs are written and drained, due timers fire,
     /// then Scripts take turns until none has work.
     pub fn pump(g: *Group, clock: model.dates.Instant) !void {
+        return g.pumpWith(clock, 0, 0);
+    }
+
+    /// A Pump with a Fuel Slice per Script and a Fuel cap for the Group, 0
+    /// for none (chapter 5, Fuel Slices).
+    pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
         g.clock = clock;
+        g.slice = slice;
+        g.cap = cap;
+        g.sliced = false;
         // A Broadcast's recipients are those that want it now, as the queue
         // is drained.
         for (g.inputs.items) |*input| if (input.* == .broadcast) try g.resolveBroadcast(&input.broadcast);
         for (g.inputs.items) |input| g.writeInput(input);
         const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
-        g.write("> pump clock={s}\n", .{shown});
+        g.write("> pump clock={s}", .{shown});
+        if (slice > 0) g.write(" fuel-slice={d}", .{slice});
+        if (cap > 0) g.write(" fuel-cap={d}", .{cap});
+        g.write("\n", .{});
         g.pump_fuel = 0;
+        // Each Script's slice in this Pump is what its debt leaves of it.
+        for (g.scripts.items) |x| {
+            x.spent = 0;
+            if (slice == 0) continue;
+            const paid = @min(x.debt, slice);
+            x.allowance = slice - paid;
+            x.debt -= paid;
+        }
         // Refused partway, the inputs already taken are gone from the queue,
         // and the rest stay for `deinit`.
         var consumed: usize = 0;
@@ -1577,17 +1640,33 @@ pub const Group = struct {
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
             try g.ready(p, with);
         }
-        // Turns: each Script with work, in load order, round and round.
+        // Turns: each Script with work, in load order, round and round,
+        // until the work is done, every Script with work has spent its slice
+        // or the Group has spent its cap.
         var busy = true;
-        while (busy) {
+        turns: while (busy) {
             busy = false;
             for (g.scripts.items) |s| {
                 if (s.work.items.len == 0) continue;
+                if (g.cap > 0 and g.pump_fuel >= g.cap) {
+                    g.sliced = true;
+                    break :turns;
+                }
+                if (g.slice > 0 and s.spent >= s.allowance) {
+                    g.sliced = true;
+                    continue;
+                }
                 busy = true;
                 switch (s.work.orderedRemove(0)) {
-                    .message => |d| {
+                    .message => |head| {
                         // The path is walked when the message reaches the
-                        // head of the mailbox: it may have moved.
+                        // head of the mailbox: it may have moved, and a
+                        // climb reads the parent it climbs to now.
+                        var d = head;
+                        if (d.passed_by) |p| d.at = p.parent orelse {
+                            try g.unhandled(d);
+                            continue;
+                        };
                         if (d.at) |at| {
                             const owner = at.owned() orelse {
                                 try g.unhandled(d);
@@ -1611,7 +1690,11 @@ pub const Group = struct {
                 }
             }
         }
-        g.write("pumped state=idle fuel={d}", .{g.pump_fuel});
+        // A slice overrun is carried to the Script's next Pump as debt.
+        if (slice > 0) for (g.scripts.items) |x| {
+            if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
+        };
+        g.write("pumped state={s} fuel={d}", .{ if (g.sliced) "sliced" else "idle", g.pump_fuel });
         if (g.next()) |deadline| {
             const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
             const text = try model.dates.string(g.scratch.allocator(), model.dates.fields(at), true);
@@ -1624,6 +1707,9 @@ pub const Group = struct {
     fn next(g: *Group) ?i128 {
         var best: ?i128 = null;
         for (g.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
+            // A preempted Run's Join hasn't reached its end, so its members'
+            // waits aren't timers yet.
+            if (p.member != null and p.run.continuing) continue;
             best = p.deadline;
         };
         return best;
@@ -1746,6 +1832,7 @@ pub const Group = struct {
             g.destroyRun(run);
             return e;
         };
+        if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
         try g.endSegment(s, run, outcome);
     }
 
@@ -1764,34 +1851,45 @@ pub const Group = struct {
             }
             return g.execute(run, true);
         }
-        var clause: u32 = 0;
-        var outcome: Outcome = .unhandled;
-        for (s.unit.bodies, 0..) |b, i| {
-            if (b.kind != .handler or !std.mem.eql(u8, b.name, d.message)) continue;
-            clause += 1;
-            if (b.params.len != d.args.len) continue;
-            run.clause = clause;
-            if (try g.tryClause(s, run, @intCast(i), d.args, d.during)) |end| {
-                outcome = end;
-                break;
+        return g.dispatchFrom(s, run, d, 0, false);
+    }
+
+    /// Tries the Handler's clauses from body `from`, then the Fallback's, or
+    /// with `fallback` the Fallback's from `from`. A Run preempted in a
+    /// clause's patterns or Guard goes on from the next one.
+    fn dispatchFrom(g: *Group, s: *Script, run: *Run, d: Delivery, from: usize, fallback: bool) !Outcome {
+        if (!fallback) {
+            for (s.unit.bodies[from..], from..) |b, i| {
+                if (b.kind != .handler or !std.mem.eql(u8, b.name, d.message)) continue;
+                run.clauses_seen += 1;
+                if (b.params.len != d.args.len) continue;
+                run.clause = run.clauses_seen;
+                if (try g.tryClause(s, run, @intCast(i), d.args, d.during, false)) |end| return end;
             }
-        } else if (!d.internal_error and !d.decides and d.broadcast == 0) {
             // No named clause took it: the Fallback's clauses, with the
             // message map, built without charge. A Broadcast, a Decision and
             // an `error` message never reach them.
-            const message = try g.messageMap(d);
-            defer message.release();
-            for (s.unit.bodies, 0..) |b, i| {
-                if (b.kind != .fallback) continue;
-                run.fallback = true;
-                run.clause = b.clause orelse 1;
-                if (try g.tryClause(s, run, @intCast(i), &.{message}, null)) |end| {
-                    outcome = end;
-                    break;
-                }
-            }
+            if (d.internal_error or d.decides or d.broadcast != 0) return .unhandled;
         }
-        return outcome;
+        const message = try g.messageMap(d);
+        defer message.release();
+        for (s.unit.bodies[if (fallback) from else 0..], if (fallback) from else 0..) |b, i| {
+            if (b.kind != .fallback) continue;
+            run.fallback = true;
+            run.clause = b.clause orelse 1;
+            if (try g.tryClause(s, run, @intCast(i), &.{message}, null, true)) |end| return end;
+        }
+        return .unhandled;
+    }
+
+    /// Goes on with a preempted Run: its dispatch, if a clause's patterns or
+    /// Guard were running, or else its body.
+    fn continueRun(g: *Group, s: *Script, run: *Run) !Outcome {
+        const in = run.preempted_in orelse return g.execute(run, true);
+        run.preempted_in = null;
+        const outcome = try g.execute(run, true);
+        if (try g.afterGuard(s, run, in.body, outcome, in.fallback)) |end| return end;
+        return g.dispatchFrom(s, run, run.delivery, in.body + 1, in.fallback);
     }
 
     /// Tries one clause for a Run being dispatched, charging it: null if
@@ -1805,7 +1903,7 @@ pub const Group = struct {
         if (deciding) run.verdict = true else try g.takePart(run.delivery, .allowed);
     }
 
-    fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value) !?Outcome {
+    fn tryClause(g: *Group, s: *Script, run: *Run, body: u32, args: []const *Value, during: ?*Value, fallback: bool) !?Outcome {
         const b = s.unit.bodies[body];
         run.clause_body = body;
         try g.pushFrame(run, body, args);
@@ -1821,22 +1919,55 @@ pub const Group = struct {
         for (s.unit.unwind) |e| if (e.kind == .guard and e.first == b.first) {
             run.select_at = e.last + 1;
         };
-        var outcome = try g.execute(run, true);
+        return g.afterGuard(s, run, body, try g.execute(run, true), fallback);
+    }
+
+    /// What follows a clause's patterns and Guard: its Queueing Policy and
+    /// its body once they pass, or null when they fail.
+    fn afterGuard(g: *Group, s: *Script, run: *Run, body: u32, first: Outcome, fallback: bool) !?Outcome {
+        const b = s.unit.bodies[body];
+        var outcome = first;
+        if (outcome == .preempted and run.select_at != null) run.preempted_in = .{ .body = body, .fallback = fallback };
         if (outcome == .selected) {
-            // A Run that parks or is dropped here runs no instruction to
-            // pay the `clause` rate with, so it pays it now.
-            if (g.clauseBusy(s, body) and (b.policy == .queued or b.policy == .dropping)) {
+            // A clause with no patterns or Guard is tried at its body's first
+            // instruction, which pays the `clause` rate. A Run that parks or
+            // is dropped here pays it now; one that goes on pays it with that
+            // instruction's fixed rate. A Run that can't faults there, before
+            // the clause is taken.
+            const waits = g.clauseBusy(s, body) and (b.policy == .queued or b.policy == .dropping);
+            if (run.clause_fuel > 0) {
+                const f = &run.frames.items[run.frames.items.len - 1];
+                const head = unitOf(run, f).code[f.pc];
+                var none: costs.Measures = .{};
+                const need = run.clause_fuel + if (waits) 0 else costs.charge(costKey(head, &none), &none).fuel;
+                if (run.fuel + need > run.limits.fuel_per_run) return g.limitFault(run, .fuel, unitName(run, f), f.pc, head);
+            }
+            if (waits) {
                 run.fuel += run.clause_fuel;
                 run.clause_fuel = 0;
             }
             if (g.clauseBusy(s, body)) switch (b.policy) {
                 .queued => {
+                    // Parking is a suspension, which measures the Script's
+                    // Persistent State with the Run.
+                    if (g.persistentState(s) + g.runSize(run) > s.limits.persistent_state) {
+                        const f = &run.frames.items[run.frames.items.len - 1];
+                        return g.limitFault(run, .persistent, unitName(run, f), f.pc, unitOf(run, f).code[f.pc]);
+                    }
                     try g.takeVerdict(run, b.deciding);
                     run.parked = true;
                     run.suspended_at = "park";
                     return .suspended;
                 },
-                .dropping => return .dropped,
+                .dropping => {
+                    // A dropped Run ends, which measures the Script's
+                    // Persistent State without it.
+                    if (g.persistentState(s) > s.limits.persistent_state) {
+                        const f = &run.frames.items[run.frames.items.len - 1];
+                        return g.limitFault(run, .persistent, unitName(run, f), f.pc, unitOf(run, f).code[f.pc]);
+                    }
+                    return .dropped;
+                },
                 .replacing => try g.cancelClause(s, body),
                 .none => {},
             };
@@ -1850,6 +1981,56 @@ pub const Group = struct {
         return outcome;
     }
 
+    /// Whether the running Run must stop before its next instruction: its
+    /// Script's slice spent, or else the Group's cap.
+    fn preemption(g: *Group, run: *const Run) ?Preemption {
+        const stretch = run.fuel - run.segment_fuel;
+        if (g.slice > 0 and run.script.spent + stretch >= run.script.allowance) return .slice;
+        if (g.cap > 0 and g.pump_fuel + stretch >= g.cap) return .cap;
+        return null;
+    }
+
+    /// Ends a preempted Run's Stretch with its `preempt` record. It stays at
+    /// the head of its Script's work, in the middle of its Segment.
+    fn preempt(g: *Group, s: *Script, run: *Run, by: Preemption) !void {
+        const fuel = run.fuel - run.segment_fuel;
+        const alloc = run.alloc - run.segment_alloc;
+        g.pump_fuel += fuel;
+        s.spent += fuel;
+        if (g.trace) |out| {
+            out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
+            if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
+            out.print(" by={s} fuel={d} alloc={d}\n", .{ @tagName(by), fuel, alloc }) catch {};
+        }
+        run.started = true;
+        run.continuing = true;
+        run.segment_fuel = run.fuel;
+        run.segment_alloc = run.alloc;
+        s.live.append(g.gpa, run) catch |e| {
+            g.destroyRun(run);
+            return e;
+        };
+        s.work.insert(g.gpa, 0, .{ .run = run }) catch |e| {
+            _ = s.live.pop();
+            g.destroyRun(run);
+            return e;
+        };
+    }
+
+    /// A first Stretch's start keys.
+    fn writeStart(g: *Group, out: *std.Io.Writer, s: *Script, run: *const Run, clause: bool) void {
+        const d = run.delivery;
+        writeOrigin(out, d);
+        // An unhandled Run names its Handler only if the Script has one.
+        if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
+        if (run.fallback) out.writeAll(" fallback=yes") catch {};
+        if (d.function) |f| {
+            out.writeAll(" fn=") catch {};
+            display.writeTrace(out, f) catch {};
+        }
+        if (d.function == null and clause) out.print(" clause={d}", .{run.clause}) catch {};
+    }
+
     /// Resumes a ready Run with what settled its wait.
     fn resumeRun(g: *Group, s: *Script, run: *Run) !void {
         for (s.live.items, 0..) |r, i| if (r == run) {
@@ -1858,14 +2039,21 @@ pub const Group = struct {
         };
         run.segment_fuel = run.fuel;
         run.segment_alloc = run.alloc;
-        g.takeBase(run) catch |e| {
+        // A preempted Run goes on in the same Segment.
+        const outcome = if (run.continuing) g.continueRun(s, run) catch |e| {
             g.destroyRun(run);
             return e;
+        } else blk: {
+            g.takeBase(run) catch |e| {
+                g.destroyRun(run);
+                return e;
+            };
+            break :blk g.resumed(run) catch |e| {
+                g.destroyRun(run);
+                return e;
+            };
         };
-        const outcome = g.resumed(run) catch |e| {
-            g.destroyRun(run);
-            return e;
-        };
+        if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
         try g.endSegment(s, run, outcome);
     }
 
@@ -2514,6 +2702,7 @@ pub const Group = struct {
         defer run.base = 0;
         const outcome = try g.execute(run, true);
         g.pump_fuel += run.fuel - fuel;
+        run.script.spent += run.fuel - fuel;
         return switch (outcome) {
             .returned => |v| v,
             .errored => |e| blk: {
@@ -2801,6 +2990,7 @@ pub const Group = struct {
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
+        s.spent += fuel;
         if (outcome == .suspended) s.live.append(g.gpa, run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -2808,19 +2998,8 @@ pub const Group = struct {
         const state = g.persistentState(s);
         const d = run.delivery;
         if (g.trace) |out| {
-            out.print("seg {s} {s}", .{ run.id, if (run.started) "resume" else "start" }) catch {};
-            if (!run.started) {
-                writeOrigin(out, d);
-                // An unhandled Run names its Handler only if the Script has
-                // one.
-                if (run.fallback or g.hasHandler(s, run.handler)) out.print(" handler={s}", .{run.handler}) catch {};
-                if (run.fallback) out.writeAll(" fallback=yes") catch {};
-                if (d.function) |f| {
-                    out.writeAll(" fn=") catch {};
-                    display.writeTrace(out, f) catch {};
-                }
-                if (d.function == null and outcome != .unhandled and outcome != .clause_failed) out.print(" clause={d}", .{run.clause}) catch {};
-            }
+            out.print("seg {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
+            if (!run.started) g.writeStart(out, s, run, outcome != .unhandled and outcome != .clause_failed);
             const end: []const u8 = switch (outcome) {
                 .returned => "return",
                 .errored => "error",
@@ -2832,7 +3011,7 @@ pub const Group = struct {
                 .passed => "pass",
                 .effect_failed => "effect-failed",
                 .vetoed => "veto",
-                .selected => unreachable,
+                .selected, .preempted => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
             if (outcome == .vetoed and outcome.vetoed.data != .nothing) {
@@ -2861,6 +3040,7 @@ pub const Group = struct {
             else => {},
         };
         run.started = true;
+        run.continuing = false;
         run.segments += 1;
         if (outcome == .suspended) {
             run.segment_fuel = run.fuel;
@@ -2876,7 +3056,7 @@ pub const Group = struct {
                 .dropped => "dropped",
                 .cancelled => "cancelled",
                 .effect_failed => "effect-failed",
-                .suspended, .selected => unreachable,
+                .suspended, .selected, .preempted => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
             // A `run` record names a Host Delivery, never a sender.
@@ -2909,7 +3089,7 @@ pub const Group = struct {
         }
         // A Run that ends before sealing its Verdict, or a dropped
         // Decision, leaves it undecided.
-        if (run.verdict or (outcome == .dropped and d.decision)) {
+        if (run.verdict or (d.decision and (outcome == .dropped or outcome == .faulted))) {
             const how: []const u8 = switch (outcome) {
                 .errored => "errored",
                 .faulted => "limit fault",
@@ -3036,6 +3216,7 @@ pub const Group = struct {
         const parent = (handled orelse return g.unhandled(copy)).parent orelse return g.unhandled(copy);
         var moved = copy;
         moved.at = parent;
+        moved.passed_by = handled;
         try g.route(moved);
     }
 
@@ -3122,17 +3303,7 @@ pub const Group = struct {
     fn runSize(g: *Group, run: *const Run) u64 {
         _ = g;
         var total: u64 = 96;
-        for (run.frames.items) |f| {
-            total += 64 + 8 * f.locals.len;
-            for (f.locals) |v| total += costs.size(v);
-            for (f.stack.items) |slot| total += switch (slot) {
-                .value => |v| costs.size(v),
-                .iterator => |it| 24 + if (it.subject) |v| costs.size(v) else 0,
-                .reader => |r| 24 + costs.size(r.subject),
-                .replacement => |r| 32 + costs.size(r.text) + costs.contents(r.matches),
-                .deadline => 40,
-            };
-        }
+        for (run.frames.items) |*f| total += frameSize(f);
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
             total += 48;
         };
@@ -3159,6 +3330,17 @@ pub const Group = struct {
         }
         // A ready Run retains what it resumes with in place of its call.
         if (run.resume_with) |r| total += retained(r);
+        // A preempted Run's catch dispatches: each context with its Error,
+        // its activation, the owner's own stack and the failed frames it
+        // holds aside.
+        for (run.controls.items) |c| switch (c) {
+            .dispatch => |d| {
+                total += 96 + costs.size(d.err) + 48;
+                total += stackSize(d.owner_stack.items);
+                for (d.held) |*f| total += frameSize(f);
+            },
+            .cleanup => {},
+        };
         return total;
     }
 
@@ -3342,6 +3524,9 @@ pub const Group = struct {
         effect_failed: EffectFailure,
         /// It reached `veto`, with its reason.
         vetoed: *Value,
+        /// Its Script's Fuel Slice or the Group's Fuel cap is spent, so it
+        /// stops before its next instruction, in the middle of its Segment.
+        preempted: Preemption,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -3355,6 +3540,8 @@ pub const Group = struct {
                 run.select_at = null;
                 return .selected;
             };
+            // Preemption, only between instructions.
+            if (run.base == 0) if (g.preemption(run)) |by| return .{ .preempted = by };
             const ins = unitOf(run, frame).code[pc];
             // The instruction may move the frames, so its unit's name is
             // taken first.
@@ -4775,7 +4962,14 @@ pub const Group = struct {
             },
             // A Script named as a receiver is its name; Host Objects come
             // later.
-            .load_object => try g.push(frame, if (run.script.object(ops[0].text)) |o| o.value.retain() else try model.text(gpa, ops[0].text)),
+            .load_object => {
+                const v = if (run.script.object(ops[0].text)) |o| o.value.retain() else blk: {
+                    const name = try model.text(gpa, ops[0].text);
+                    name.script_name = true;
+                    break :blk name;
+                };
+                try g.push(frame, v);
+            },
 
             .wait_for, .wait_for_any => return g.waitFor(run, frame, ins, m),
             .wait => {

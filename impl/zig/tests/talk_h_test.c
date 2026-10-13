@@ -635,6 +635,41 @@ static int limits_test(void) {
     return bad;
 }
 
+/* Fuel Slices: a Run preempted by its slice continues in a later Pump, and
+ * its overrun is carried as debt. */
+static int slice_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable n = 0\non count\n  repeat 5 times\n    add 1 to n\n  end repeat\nend count\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_message count = {"count", 5, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &count, NULL) != TALK_OK;
+    talk_pump_options negative = {-1, 0};
+    bad |= talk_pump(group, 1790000000, 0, &negative, NULL) != TALK_INVALID_VALUE;
+    talk_pump_options sliced = {20, 0};
+    talk_pump_result result = {TALK_IDLE, 0};
+    bad |= talk_pump(group, 1790000000, 0, &sliced, &result) != TALK_OK;
+    bad |= result.state != TALK_SLICED || result.fuel_used < 20;
+    bad |= strstr(trace, "> pump clock=2026-09-21T14:13:20Z fuel-slice=20\n") == NULL;
+    bad |= strstr(trace, "preempt s/r1 start delivery=d1 handler=count clause=1 by=slice fuel=") == NULL;
+    bad |= strstr(trace, "pumped state=sliced fuel=") == NULL;
+    bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
+    bad |= result.state != TALK_IDLE;
+    talk_inspect(group);
+    bad |= strstr(trace, "seg s/r1 continue fuel=") == NULL || strstr(trace, "vars s n=5\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A suspending Operation's Start: it keeps the call, to answer later. */
 static talk_call *started = NULL;
 static talk_call_end start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -1009,6 +1044,7 @@ int main(void) {
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
+    expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
