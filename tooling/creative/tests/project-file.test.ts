@@ -1,0 +1,253 @@
+import { expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  createElement,
+  createProject,
+  type ButtonElement,
+  type TextElement,
+} from '../src/model';
+import {
+  migrateProjectJson,
+  PROJECT_MIMETYPE,
+  ProjectFileError,
+  readProjectFile,
+  serializeProject,
+  sha256Hex,
+  writeProjectFile,
+} from '../src/project-file';
+import { readZip, writeZip } from '../src/zip';
+
+const encode = (text: string) => new TextEncoder().encode(text);
+
+/** A Project using every Element kind, Scripts at every level and assets. */
+const sampleProject = async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const mp3 = encode('fake mp3 frames');
+  const project = createProject('The Cellar Mystery');
+  project.script = 'on startPlay\n  put 0 into clues\nend startPlay\n';
+  const cellar = project.pages[0]!;
+  cellar.name = 'cellar';
+  cellar.height = 900;
+  cellar.background = '#101018';
+  cellar.script = 'on openPage\nend openPage\n';
+
+  const note = createElement('text', 'verdict') as TextElement;
+  note.richText = [
+    {
+      runs: [
+        { text: 'It was ' },
+        { text: 'you', bold: true, italic: true, color: '#ff0000' },
+        { text: ' all along.', underline: true },
+      ],
+    },
+    { runs: [{ text: 'Sign here:' }] },
+  ];
+  note.editable = true;
+  note.script = 'on textChanged\nend textChanged\n';
+  const lamp = createElement('image', 'lamp');
+  if (lamp.kind === 'image') {
+    lamp.image = 'lampPng';
+  }
+  const button = createElement('button', 'climbButton') as ButtonElement;
+  button.label = 'Climb the stairs →';
+  button.script = 'on click\n  tell pages to show cellar\nend click\n';
+  cellar.elements.push(
+    note,
+    lamp,
+    button,
+    createElement('rectangle', 'door'),
+    createElement('ellipse', 'moon'),
+    createElement('line', 'crack'),
+  );
+  project.assets.push(
+    {
+      name: 'lampPng',
+      hash: await sha256Hex(png),
+      mediaType: 'image/png',
+      size: png.length,
+      fileName: 'lamp.png',
+    },
+    {
+      // A second name for the same bytes: stored once in the file.
+      name: 'lampCopy',
+      hash: await sha256Hex(png),
+      mediaType: 'image/png',
+      size: png.length,
+      fileName: 'lamp.png',
+    },
+    {
+      name: 'waves',
+      hash: await sha256Hex(mp3),
+      mediaType: 'audio/mpeg',
+      size: mp3.length,
+      fileName: 'waves.mp3',
+    },
+  );
+  const assetBytes = new Map<string, Uint8Array>([
+    [await sha256Hex(png), png],
+    [await sha256Hex(mp3), mp3],
+  ]);
+  return { project, assetBytes, png, mp3 };
+};
+
+test('writing a Project and reading it back gives an equal Project', async () => {
+  const { project, assetBytes, png } = await sampleProject();
+  const file = await writeProjectFile(project, assetBytes);
+  const read = await readProjectFile(file);
+  expect(read.project).toEqual(project);
+  expect(read.missingAssets).toEqual([]);
+  expect([...read.assets.get([...assetBytes.keys()][0]!)!]).toEqual([...png]);
+  // Two names share one hash, so the bytes are stored once.
+  const entries = await readZip(file);
+  expect([...entries.keys()].filter(n => n.startsWith('assets/'))).toHaveLength(
+    2,
+  );
+  expect([...entries.keys()][0]).toBe('mimetype');
+  expect(new TextDecoder().decode(entries.get('mimetype')!)).toBe(
+    PROJECT_MIMETYPE,
+  );
+  const json = JSON.parse(
+    new TextDecoder().decode(entries.get('project.json')!),
+  );
+  expect(json.format).toBe(1);
+  expect(json.pages[0].elements.map((e: { kind: string }) => e.kind)).toEqual([
+    'text',
+    'image',
+    'button',
+    'rectangle',
+    'ellipse',
+    'line',
+  ]);
+});
+
+test('a zip written by another tool, reordered and deflated, reads correctly', async () => {
+  // tests/fixtures/foreign-project.zip was written by Python's zipfile
+  // with every entry deflated and `mimetype` last.
+  const bytes = new Uint8Array(
+    readFileSync(resolve(import.meta.dir, 'fixtures/foreign-project.zip')),
+  );
+  const { project, assets, missingAssets } = await readProjectFile(bytes);
+  expect(project.name).toBe('Foreign');
+  expect(project.pages[0]!.elements.map(e => e.name)).toEqual([
+    'verdict',
+    'lamp',
+  ]);
+  expect(missingAssets).toEqual([]);
+  expect(assets.size).toBe(1);
+});
+
+const fileWithJson = async (json: unknown) =>
+  writeZip([
+    { name: 'mimetype', data: encode(PROJECT_MIMETYPE) },
+    {
+      name: 'project.json',
+      data: encode(typeof json === 'string' ? json : JSON.stringify(json)),
+      method: 8,
+    },
+  ]);
+
+test('a newer format is refused with a clear error', async () => {
+  const { project } = await sampleProject();
+  const file = await fileWithJson({ ...serializeProject(project), format: 99 });
+  await expect(readProjectFile(file)).rejects.toThrow(
+    'newer version of the app (format 99; this app reads up to 1)',
+  );
+});
+
+test('damaged JSON reports the path of what is wrong', async () => {
+  const { project } = await sampleProject();
+  const json = serializeProject(project) as {
+    pages: { elements: Record<string, unknown>[] }[];
+  };
+  json.pages[0]!.elements[2]!.left = 'near the door';
+  json.pages[0]!.elements[0]!.name = 'not an identifier';
+  const error = await readProjectFile(await fileWithJson(json)).catch(
+    (error_: unknown) => error_,
+  );
+  expect(error).toBeInstanceOf(ProjectFileError);
+  const issues = (error as ProjectFileError).issues!;
+  expect(issues.map(i => i.path)).toContain('pages[0].elements[2].left');
+  expect(issues.map(i => i.path)).toContain('pages[0].elements[0].name');
+  expect((error as Error).message).toContain('damaged at');
+});
+
+test('invalid JSON and a missing project.json are errors, never a half-read Project', async () => {
+  await expect(readProjectFile(await fileWithJson('{oops'))).rejects.toThrow(
+    'project.json: not valid JSON',
+  );
+  const bare = await writeZip([
+    { name: 'mimetype', data: encode(PROJECT_MIMETYPE) },
+  ]);
+  await expect(readProjectFile(bare)).rejects.toThrow('no project.json');
+});
+
+test('a corrupt zip and a CRC mismatch are errors', async () => {
+  const { project, assetBytes } = await sampleProject();
+  const file = await writeProjectFile(project, assetBytes);
+  await expect(readProjectFile(file.subarray(0, 40))).rejects.toThrow(
+    ProjectFileError,
+  );
+  const damaged = new Uint8Array(file);
+  // Damage the stored mimetype bytes, which follow their local header.
+  const at = new TextDecoder().decode(damaged).indexOf('application/vnd');
+  damaged[at] = damaged[at]! ^ 0xff;
+  await expect(readProjectFile(damaged)).rejects.toThrow('CRC-32');
+});
+
+test('duplicate Element names on a Page are reported by path', async () => {
+  const { project } = await sampleProject();
+  const json = serializeProject(project) as {
+    pages: { elements: Record<string, unknown>[] }[];
+  };
+  json.pages[0]!.elements[1]!.name = 'verdict';
+  const error = await readProjectFile(await fileWithJson(json)).catch(
+    (error_: unknown) => error_,
+  );
+  expect((error as ProjectFileError).issues?.map(i => i.path)).toContain(
+    'pages[0].elements[1].name',
+  );
+});
+
+test('a missing asset file opens as missing, not as an error', async () => {
+  const { project } = await sampleProject();
+  const read = await readProjectFile(
+    await fileWithJson(serializeProject(project)),
+  );
+  expect(read.project).toEqual(project);
+  expect(read.missingAssets.map(a => a.name)).toEqual([
+    'lampPng',
+    'lampCopy',
+    'waves',
+  ]);
+  expect(read.assets.size).toBe(0);
+});
+
+test('writing refuses asset bytes that do not match the table', async () => {
+  const { project } = await sampleProject();
+  await expect(writeProjectFile(project, new Map())).rejects.toThrow(
+    'has no bytes',
+  );
+  const wrong = new Map([[project.assets[0]!.hash, new Uint8Array([9])]]);
+  await expect(writeProjectFile(project, wrong)).rejects.toThrow(
+    'do not match',
+  );
+});
+
+test('older formats migrate one step at a time', () => {
+  const steps: string[] = [];
+  const migrated = migrateProjectJson(
+    { format: 1, name: 'Old' },
+    {
+      1: d => (steps.push('1→2'), { ...d, two: true }),
+      2: d => (steps.push('2→3'), { ...d, three: true }),
+    },
+    3,
+  );
+  expect(steps).toEqual(['1→2', '2→3']);
+  expect(migrated).toEqual({ format: 3, name: 'Old', two: true, three: true });
+  expect(() => migrateProjectJson({ format: 4 }, {}, 3)).toThrow(
+    'newer version',
+  );
+  expect(() => migrateProjectJson({ name: 'x' })).toThrow('format');
+});
