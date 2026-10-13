@@ -256,7 +256,19 @@ pays its rate. A
 raised error unwinds in two phases: the catch search walks the Unwind Table
 outward, charging `unwind` per frame it leaves and running each catch test in
 a dispatch activation over the owner's locals, then the exited `finally`
-blocks run, innermost first. An uncaught error ends the Run and queues an
+blocks run, innermost first. A Run keeps its error control as a stack of
+dispatches and cleanups, so a catch's tests and a Recovery policy run in the
+ordinary run loop and may call functions; the failed frames above the owner
+are held aside meanwhile. An error inside a policy, or inside a `finally`
+block a cleanup is running, first searches only inside it, then escapes as
+chapter 6 says: an escaping policy runs its own and the failure's `finally`
+blocks and goes on outward from the catching `try`, past its other catches,
+from where the policy failed. `choose-offer` looks the name up in the failure
+chain, charging `4 * frames` for the frames it scans, and transfers after the
+policy's `finally` blocks and then the failure's down to the offering `try`,
+with `offer-chosen` and `offer-entered` records. `offerAvailable` searches the
+innermost dispatch's chain, or a pending transfer's until its action is
+entered. An uncaught error ends the Run and queues an
 `error` message to the Script's own mailbox, for its `on error` Handler. Core
 messages are left out of the Trace, since their wording is outside parity.
 
