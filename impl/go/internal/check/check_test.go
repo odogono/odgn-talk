@@ -387,3 +387,40 @@ func TestErrorDuringBindingAndSuffixDiagnostics(t *testing.T) {
 		})
 	}
 }
+
+// A local, parameter or pattern binding may share a local Handler's name, while
+// a Command Call still reaches the Handler (#764).
+func TestLocalsShadowHandlers(t *testing.T) {
+	for _, source := range []string{
+		"on foo n\nput n into x\nend foo\non go\nput 2 into foo\nreturn item (foo) of [8, 9]\nend go",
+		"on foo\nend foo\non go foo\nreturn foo\nend go",
+		"on foo\nend foo\non go\nlet [foo] be [1]\nreturn foo\nend go",
+		"on foo\nend foo\non error e, during foo\nend error",
+		"on foo\nend foo\non go\nreturn given foo: foo\nend go",
+		"on otherwise n\nreturn n\nend otherwise\non go\nput 1 into otherwise\notherwise 2\nreturn it + otherwise\nend go",
+	} {
+		tree, err := syntax.Parse(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Check(tree, Options{}).Diagnostics; len(got) > 0 {
+			t.Errorf("%q: %v", source, got)
+		}
+	}
+	tree, err := syntax.Parse("on foo\nend foo\non go\nreturn foo\nend go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Check(tree, Options{}).Diagnostics; len(got) != 1 || got[0].String() != "not a value at 4:8" {
+		t.Fatal(got)
+	}
+	tree, err = syntax.Parse("use h from lib\non go\nput 1 into h\nend go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	imports := map[string]map[string]Symbol{"lib": {"h": {Kind: "handler", Name: "h"}}}
+	got := Check(tree, Options{Imports: imports}).Diagnostics
+	if !slices.ContainsFunc(got, func(d Diagnostic) bool { return d.String() == "name clash at 3:12" }) {
+		t.Fatal(got)
+	}
+}
