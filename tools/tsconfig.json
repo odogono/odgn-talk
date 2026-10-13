@@ -3,6 +3,7 @@
   "include": [
     "unicode",
     "go",
+    "grammar/function-contract.test.ts",
     "syntax",
     "../impl/ts/types",
     "spec/commands.ts",

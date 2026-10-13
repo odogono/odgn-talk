@@ -1972,7 +1972,12 @@ const Checker = struct {
         try c.refs.put(c.a, call.name, r);
         const name = c.text(call.name);
         switch (r) {
-            .builtin_function => {},
+            .builtin_function => |index| {
+                const b = stdlib.builtin[index];
+                const required: usize = @intCast(b.required.?);
+                const total: usize = @intCast(b.total.?);
+                if (call.args.len < required or call.args.len > total) try c.report(.wrong_argument_count, call.name);
+            },
             .function => {
                 const f = c.functions.get(name).?;
                 if (call.args.len < f.required or call.args.len > f.total) try c.report(.wrong_argument_count, call.name);
@@ -2219,6 +2224,27 @@ fn expectDiagnostics(source: []const u8, context: Context, expected: []const u8)
     const got = try diagnose(testing.allocator, source, context);
     defer testing.allocator.free(got);
     try testing.expectEqualStrings(expected, got);
+}
+
+test "Built-in calls check arity but shadowing variables remain dynamic" {
+    try expectDiagnostics("constant x = min(1, 2)", .{}, "wrong argument count at 1:14\n");
+    try expectDiagnostics(
+        \\on t
+        \\  return [min(), min(1, 2), round(), round(1, 2, 3, 4)]
+        \\end t
+    , .{}, "wrong argument count at 2:11\nwrong argument count at 2:18\nwrong argument count at 2:29\nwrong argument count at 2:38\n");
+    try expectDiagnostics(
+        \\on t
+        \\  return [min([1, 2]), round(1), round(1, 2), round(1, 2, "half up")]
+        \\end t
+    , .{}, "");
+    try expectDiagnostics(
+        \\script variable round = nothing
+        \\on t min
+        \\  let max be given a, b: a + b
+        \\  return [min(), max(1, 2), round(), given: min(1, 2)]
+        \\end t
+    , .{}, "");
 }
 
 test "names resolve, and unknown ones are reported" {

@@ -26,6 +26,11 @@ parameter default, each unbound `it` reports `unknown name`, alongside
 `not constant` at only the first disallowed token. Handler, function and
 Lambda bodies retain their own `it`, including Lambdas created at load.
 
+Statically resolved Built-in calls check the required and total parameter
+counts from chapter 7 at load, including trailing defaults. Invalid counts
+report `wrong argument count` at the Built-in name; calls through shadowing
+variables remain dynamic.
+
 Whole Host Object properties can be assigned with `set` through `me`, `it`
 or `the target`, including intermediate keys/chunks that locate the Object.
 These implicit bindings cannot be replaced or used as roots for ordinary

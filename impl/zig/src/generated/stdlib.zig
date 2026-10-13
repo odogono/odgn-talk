@@ -16,6 +16,8 @@ pub const StdlibTableBuiltinEntry = struct {
     call: []const u8,
     gives: []const u8,
     errors: ?[]const []const u8 = null,
+    required: ?i64 = null,
+    total: ?i64 = null,
 };
 
 pub const StdlibTableExportEntry = struct {
@@ -74,6 +76,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "can't compare",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "max",
@@ -84,6 +88,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "can't compare",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "codePoint",
@@ -93,6 +99,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "fromCodePoint",
@@ -102,90 +110,120 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "upper",
             .group = "values",
             .call = "upper(s)",
             .gives = "`s` under Unicode full default uppercase mapping, then NFC",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "lower",
             .group = "values",
             .call = "lower(s)",
             .gives = "`s` under Unicode full default lowercase mapping, then NFC",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "offset",
             .group = "values",
             .call = "offset(needle, s)",
             .gives = "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none",
+            .required = 2,
+            .total = 2,
         },
         .{
             .name = "isDisposed",
             .group = "values",
             .call = "isDisposed(o)",
             .gives = "Whether the Host Object `o` has been disposed",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "objectKind",
             .group = "values",
             .call = "objectKind(o)",
             .gives = "The name of the Object Kind of the Host Object `o`, as text",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "rangeStart",
             .group = "values",
             .call = "rangeStart(r)",
             .gives = "The first end of the range `r`, as written",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "rangeEnd",
             .group = "values",
             .call = "rangeEnd(r)",
             .gives = "The second end of the range `r`, as written",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "kindOf",
             .group = "values",
             .call = "kindOf(x)",
             .gives = "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "functionArity",
             .group = "values",
             .call = "functionArity(f)",
             .gives = "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "functionName",
             .group = "values",
             .call = "functionName(f)",
             .gives = "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "abs",
             .group = "numbers",
             .call = "abs(x)",
             .gives = "`x` without its sign",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "floor",
             .group = "numbers",
             .call = "floor(x)",
             .gives = "The greatest integer at or below `x`",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "ceiling",
             .group = "numbers",
             .call = "ceiling(x)",
             .gives = "The least integer at or above `x`",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "truncate",
             .group = "numbers",
             .call = "truncate(x)",
             .gives = "`x` with its fraction dropped, toward zero",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "round",
@@ -195,6 +233,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 3,
         },
         .{
             .name = "sqrt",
@@ -204,6 +244,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "exp",
@@ -213,6 +255,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "overflow",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "ln",
@@ -222,6 +266,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "log10",
@@ -231,6 +277,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "power",
@@ -241,24 +289,32 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "overflow",
             },
+            .required = 2,
+            .total = 2,
         },
         .{
             .name = "sin",
             .group = "numbers",
             .call = "sin(x)",
             .gives = "The sine of `x` radians",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "cos",
             .group = "numbers",
             .call = "cos(x)",
             .gives = "The cosine of `x` radians",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "tan",
             .group = "numbers",
             .call = "tan(x)",
             .gives = "The tangent of `x` radians",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "asin",
@@ -268,6 +324,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "acos",
@@ -277,12 +335,16 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "atan",
             .group = "numbers",
             .call = "atan(x)",
             .gives = "The arctangent of `x`, in radians between -pi/2 and pi/2",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "atan2",
@@ -292,6 +354,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 2,
+            .total = 2,
         },
         .{
             .name = "fromFloat64",
@@ -302,6 +366,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "can't convert",
             },
+            .required = 1,
+            .total = 2,
         },
         .{
             .name = "fromFloat32",
@@ -312,6 +378,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "can't convert",
             },
+            .required = 1,
+            .total = 2,
         },
         .{
             .name = "toFloat64",
@@ -321,6 +389,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 2,
         },
         .{
             .name = "toFloat32",
@@ -330,24 +400,32 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 2,
         },
         .{
             .name = "year",
             .group = "dates",
             .call = "year(d)",
             .gives = "The year of the Civil Date `d`, from 1 to 9999",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "month",
             .group = "dates",
             .call = "month(d)",
             .gives = "The month of `d`, from 1 to 12",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "day",
             .group = "dates",
             .call = "day(d)",
             .gives = "The day of the month of `d`, from 1 to 31",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "hour",
@@ -357,6 +435,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "minute",
@@ -366,6 +446,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "second",
@@ -375,6 +457,8 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "nanosecond",
@@ -384,36 +468,48 @@ pub const stdlib: StdlibTable = .{
             .errors = &.{
                 "out of domain",
             },
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "weekday",
             .group = "dates",
             .call = "weekday(d)",
             .gives = "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "dayOfYear",
             .group = "dates",
             .call = "dayOfYear(d)",
             .gives = "The day of the year of `d`, from 1 to 366",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "isoWeek",
             .group = "dates",
             .call = "isoWeek(d)",
             .gives = "The ISO 8601 week number of `d`, from 1 to 53",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "isoWeekYear",
             .group = "dates",
             .call = "isoWeekYear(d)",
             .gives = "The ISO 8601 week-numbering year of `d`",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "hasTime",
             .group = "dates",
             .call = "hasTime(d)",
             .gives = "Whether the Civil Date `d` has a time of day",
+            .required = 1,
+            .total = 1,
         },
         .{
             .name = "toCivil",
@@ -424,6 +520,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "out of range",
             },
+            .required = 2,
+            .total = 2,
         },
         .{
             .name = "toInstant",
@@ -434,6 +532,8 @@ pub const stdlib: StdlibTable = .{
                 "out of domain",
                 "out of range",
             },
+            .required = 2,
+            .total = 2,
         },
         .{
             .name = "pi",
@@ -464,6 +564,8 @@ pub const stdlib: StdlibTable = .{
             .group = "values",
             .call = "offerAvailable(textName)",
             .gives = "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name",
+            .required = 1,
+            .total = 1,
         },
     },
     .@"export" = &.{

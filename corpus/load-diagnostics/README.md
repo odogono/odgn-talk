@@ -21,6 +21,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | --- | --- | --- |
 | [bad-number](bad-number/bad.talk) | `bad number` at `1:14` | [Trace](bad-number/case.trace) |
 | [bits-not-whole-bytes](bits-not-whole-bytes/bad.talk) | `bits not whole bytes` at `2:10` | [Trace](bits-not-whole-bytes/case.trace) |
+| [builtin-argument-count](builtin-argument-count/constant-too-many.talk) | `wrong argument count` at `1:14` for `min(1, 2)`, at `2:10` for `min()`, and for too few or too many arguments with trailing defaults in Script Variable initialisers and parameter defaults; valid defaults and shadowing calls load and run (first blessing pending, #773; Zig counterpart [#780](https://github.com/odogono/odgn-talk/issues/780)) | [Trace](builtin-argument-count/case.trace) |
 | [cant-suspend-here](cant-suspend-here/bad.talk) | `can't suspend here` at `2:1` | [Trace](cant-suspend-here/case.trace) |
 | [cant-write](cant-write/bad.talk) | `can't write` at `3:12` | [Trace](cant-write/case.trace) |
 | [capture-in-repetition](capture-in-repetition/bad.talk) | `capture in repetition` at `2:18` | [Trace](capture-in-repetition/case.trace) |

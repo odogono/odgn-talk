@@ -214,6 +214,7 @@ limits/wait-zero-next-pump
 load-diagnostics/argument-labels
 load-diagnostics/bad-number
 load-diagnostics/bits-not-whole-bytes
+load-diagnostics/builtin-argument-count
 load-diagnostics/cant-suspend-here
 load-diagnostics/cant-write
 load-diagnostics/capture-in-repetition

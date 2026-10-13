@@ -1,0 +1,31 @@
+# Built-in calls obey the required and total counts in chapter 7, including
+# trailing defaults. Calls through shadowing variables remain dynamic (#773).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "constant-too-many"
+source = "constant-too-many.talk"
+
+[[scripts]]
+name = "too-few"
+source = "too-few.talk"
+
+[[scripts]]
+name = "defaults-too-few"
+source = "defaults-too-few.talk"
+
+[[scripts]]
+name = "defaults-too-many"
+source = "defaults-too-many.talk"
+
+[[scripts]]
+name = "valid"
+source = "valid.talk"
+
+[[scripts]]
+name = "shadowing"
+source = "shadowing.talk"

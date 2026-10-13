@@ -64,6 +64,44 @@ func TestLoadDiagnostics(t *testing.T) {
 	}
 }
 
+func TestBuiltinArgumentCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		line, column int
+	}{
+		{"constant too many", "constant x = min(1, 2)", 1, 14},
+		{"too few", "on t\nreturn min()\nend", 2, 8},
+		{"too many", "on t\nreturn min(1, 2)\nend", 2, 8},
+		{"defaults too few", "on t\nreturn round()\nend", 2, 8},
+		{"defaults too many", "on t\nreturn round(1, 2, 3, 4)\nend", 2, 8},
+		{"valid fixed count", "on t\nreturn min([1, 2])\nend", 0, 0},
+		{"omit both defaults", "on t\nreturn round(1)\nend", 0, 0},
+		{"omit last default", "on t\nreturn round(1, 2)\nend", 0, 0},
+		{"supply all defaults", "on t\nreturn round(1, 2, \"half up\")\nend", 0, 0},
+		{"local shadow", "on t\nlet min be given a, b: a + b\nreturn min(1, 2)\nend", 0, 0},
+		{"parameter shadow", "on t min\nreturn min()\nend", 0, 0},
+		{"script variable shadow", "script variable min = nothing\non t\nreturn min(1, 2)\nend", 0, 0},
+		{"captured shadow", "on t min\nreturn given: min()\nend", 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tree, err := syntax.Parse(tc.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := Check(tree, Options{}).Diagnostics
+			if tc.line == 0 {
+				if len(got) != 0 {
+					t.Fatalf("unexpected diagnostics: %v", got)
+				}
+				return
+			}
+			if len(got) != 1 || got[0].Code != "wrong argument count" || got[0].Pos != (syntax.Position{Line: tc.line, Column: tc.column}) {
+				t.Fatalf("got %v, want wrong argument count at %d:%d", got, tc.line, tc.column)
+			}
+		})
+	}
+}
+
 func TestBodySlotsAndCaptures(t *testing.T) {
 	tree, err := syntax.Parse("on t [x, y], limit\nput given z: x + z + limit into f\nreturn f\nend")
 	if err != nil {

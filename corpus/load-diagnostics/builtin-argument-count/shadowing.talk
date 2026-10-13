@@ -1,0 +1,12 @@
+script variable min = nothing
+script variable seen = []
+on t
+  put given a, b: a + b into min
+  let round be given a, b, c, d: a + b + c + d
+  put [min(1, 2), round(1, 2, 3, 4)] into seen
+  parameter (given: 23)
+end t
+on parameter max
+  let f be given: max()
+  put [max(), f()] after seen
+end parameter

@@ -226,6 +226,12 @@ Help and quit are terminal actions and are not recorded.
 
 ## Front-end and lowering checks
 
+Statically resolved Function and Built-in calls are checked at load against
+their required and total parameter counts. Built-ins accept omitted trailing
+defaults from chapter 7; invalid counts report `wrong argument count` at the
+callee's name. Calls through shadowing variables remain dynamic and check
+arity when they run.
+
 Command Call arguments may start with any Name, including contextual words in
 the FOLLOW set such as `times`, `before` and `whose`, as
 [chapter 2](../../spec/02-grammar.md#statements) specifies. These words still
