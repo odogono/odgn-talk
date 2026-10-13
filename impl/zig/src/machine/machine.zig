@@ -22,6 +22,8 @@ const conversions = @import("convert.zig");
 const matcher = @import("matcher.zig");
 const units = @import("../units.zig");
 pub const capabilities = @import("capabilities.zig");
+pub const fingerprint = @import("fingerprint.zig");
+pub const snapshot = @import("snapshot.zig");
 pub const objects = @import("objects.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
@@ -44,7 +46,7 @@ pub const Slot = union(enum) {
     /// A Timeout Block's deadline, below the block's body.
     deadline: Deadline,
 
-    fn release(self: Slot, gpa: Allocator) void {
+    pub fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
             .value => |v| v.release(),
             .iterator => |it| {
@@ -325,6 +327,13 @@ pub const Resume = union(enum) {
     unparked,
     /// It was cancelled, and runs its `finally` blocks.
     cancelled,
+    /// A restored call no settlement reached by the first Pump.
+    lost,
+    /// A reissued call whose `Charge` the Run couldn't cover: it faults at
+    /// the call.
+    limited,
+    /// A reissued call through a Grant the restore couldn't re-bind.
+    revoked,
 };
 
 pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Value };
@@ -482,38 +491,38 @@ pub const Script = struct {
     /// Why it was stopped, once it has been; Stop is sticky.
     stopped: ?[]const u8 = null,
 
-    fn object(s: *const Script, name: []const u8) ?*objects.Object {
+    pub fn object(s: *const Script, name: []const u8) ?*objects.Object {
         for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
         return null;
     }
 
-    fn grant(s: *const Script, name: []const u8) ?*ScriptGrant {
+    pub fn grant(s: *const Script, name: []const u8) ?*ScriptGrant {
         for (s.grants) |*g| if (std.mem.eql(u8, g.name, name)) return g;
         return null;
     }
 
     /// Every Script Variable's name, in its variables table's order: the
     /// newest unit's table, since an extension's starts with the Script's.
-    fn variableNames(s: *const Script) []const []const u8 {
+    pub fn variableNames(s: *const Script) []const []const u8 {
         if (s.extensions.items.len > 0) return s.extensions.items[s.extensions.items.len - 1].unit.variables;
         return s.unit.variables;
     }
 
     /// The unit holding the Handler or Fallback `name`, null for the
     /// Script's own: none, or its first.
-    fn handlerUnit(s: *const Script, name: []const u8, kind: lower.BodyKind) ?Place {
+    pub fn handlerUnit(s: *const Script, name: []const u8, kind: lower.BodyKind) ?Place {
         for (s.unit.bodies) |b| if (b.kind == kind and std.mem.eql(u8, b.name, name)) return .{ .library = null };
         for (s.extensions.items) |x| for (x.unit.bodies) |b| if (b.kind == kind and std.mem.eql(u8, b.name, name)) return .{ .library = x };
         return null;
     }
 
     /// One of its units: its own for null, or an extension.
-    fn unitIn(s: *const Script, library: ?*Library) *const lower.Unit {
+    pub fn unitIn(s: *const Script, library: ?*Library) *const lower.Unit {
         return if (library) |l| &l.unit else &s.unit;
     }
 
     /// Whether one of its units declares or imports the name.
-    fn hasName(s: *const Script, name: []const u8) bool {
+    pub fn hasName(s: *const Script, name: []const u8) bool {
         for (s.variableNames()) |n| if (std.mem.eql(u8, n, name)) return true;
         for (s.names.items) |n| if (std.mem.eql(u8, n.name, name)) return true;
         return false;
@@ -542,7 +551,7 @@ fn changed(imports: []const *Library, old: []const *Library, given: []const *Lib
 
 /// Call id order: Script name first, then the numeric Run counter, then the
 /// numeric call counter, as in `shop/r2.c10`.
-fn callOrder(x: []const u8, y: []const u8) bool {
+pub fn callOrder(x: []const u8, y: []const u8) bool {
     const Parts = struct {
         script: []const u8,
         run: u64,
@@ -870,6 +879,13 @@ pub const Limits = struct {
     cleanup_budget: u64 = limitDefault("cleanupBudget"),
 };
 
+/// A Script's limits in `limits.toml`'s order.
+fn limitValues(l: Limits) [limits_table.limit.len]u64 {
+    var out: [limits_table.limit.len]u64 = undefined;
+    inline for (@typeInfo(Limits).@"struct".field_names, 0..) |f, i| out[i] = @field(l, f);
+    return out;
+}
+
 /// A Delivery's override of the per-Run limits it may tighten.
 pub const Override = struct {
     fuel_per_run: ?u64 = null,
@@ -899,7 +915,7 @@ pub const Override = struct {
 
     /// Its Trace form: a map from each limit's `ts` name, in
     /// `limits.toml`'s order.
-    fn write(o: Override, w: *std.Io.Writer) void {
+    pub fn write(o: Override, w: *std.Io.Writer) void {
         w.writeAll(" limits={") catch {};
         var first = true;
         inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
@@ -944,7 +960,16 @@ pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 /// through it fails, and refuses later calls with `capability disabled`;
 /// `revoked` is set by a `revoke` Host Input, and refuses them with
 /// `capability revoked`.
-pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool, disabled: bool = false, revoked: bool = false };
+pub const ScriptGrant = struct {
+    name: []const u8,
+    grant: *capabilities.Grant,
+    kept: []bool,
+    disabled: bool = false,
+    revoked: bool = false,
+    /// For a Grant a restore couldn't re-bind, its saved Capability and
+    /// declarations as the Group Fingerprint writes them.
+    declarations: ?[]const u8 = null,
+};
 
 /// An occupied Capability Scope slot: its named Grant, its scope and the
 /// index of its abandonment Operation.
@@ -970,7 +995,27 @@ pub const LoadResult = union(enum) {
     refused: usize,
 };
 
-const Input = union(enum) {
+/// What a restored Group keeps until its first Pump (chapter 10, Settling
+/// pending calls): the calls still pending, in call id order, and those
+/// already settled.
+pub const Restored = struct {
+    pending: std.ArrayList([]const u8) = .empty,
+    settled: std.ArrayList([]const u8) = .empty,
+    clock: model.dates.Instant,
+
+    pub fn deinit(r: *Restored, gpa: Allocator) void {
+        r.pending.deinit(gpa);
+        r.settled.deinit(gpa);
+    }
+};
+
+/// How the Host settles a restored pending call.
+pub const How = enum { answer, fail, reissue, adopt };
+
+pub const Input = union(enum) {
+    /// A restored pending call's settlement, by its owned id; an answer's or
+    /// failure's Resume.
+    settlement: struct { id: []const u8, how: How, with: ?Resume },
     /// A Delivery to a Script, or with an empty name, to its Target.
     deliver: struct { script: []const u8, delivery: Delivery },
     set_parent: struct { object: *objects.Object, parent: ?*objects.Object },
@@ -991,7 +1036,7 @@ const Input = union(enum) {
     cancel_delivery: u64,
 };
 
-const Broadcast = struct {
+pub const Broadcast = struct {
     id: u64,
     message: []const u8,
     args: []*Value,
@@ -1001,7 +1046,7 @@ const Broadcast = struct {
 };
 
 /// A Broadcast's recipient: its Script and its own delivery id.
-const Recipient = struct { script: *Script, delivery: u64 };
+pub const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
     gpa: Allocator,
@@ -1057,34 +1102,21 @@ pub const Group = struct {
     functions: std.ArrayList(*FunctionCode) = .empty,
     /// The code generations given out, so that each is new.
     generations: u64 = 0,
+    /// The save attempts made, which number them `s1`, `s2`, …
+    saves: u64 = 0,
+    /// For a restored Group until its first Pump: its pending calls, and the
+    /// Clock reading that Pump must not go back before.
+    restored: ?Restored = null,
+    /// Text a restore rebuilt that the Group's parts borrow, and the
+    /// placeholder Capabilities of Grants it couldn't re-bind.
+    keep: std.heap.ArenaAllocator,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
-        return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa) };
+        return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa) };
     }
 
     pub fn deinit(g: *Group) void {
-        for (g.inputs.items) |input| switch (input) {
-            .deliver => |d| {
-                releaseAll(d.delivery.args, g.gpa);
-                g.gpa.free(d.script);
-                g.gpa.free(d.delivery.message);
-            },
-            .settle => |x| {
-                g.gpa.free(x.id);
-                g.releaseResume(x.with);
-            },
-            .broadcast => |b| g.releaseBroadcast(b),
-            .revoke => |x| {
-                g.gpa.free(x.script);
-                g.gpa.free(x.grant);
-            },
-            .cancel_run => |id| g.gpa.free(id),
-            .stop => |x| {
-                g.gpa.free(x.script);
-                g.gpa.free(x.reason);
-            },
-            .set_parent, .dispose, .cancel_delivery => {},
-        };
+        g.releaseInputs(g.inputs.items);
         g.inputs.deinit(g.gpa);
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
@@ -1121,10 +1153,41 @@ pub const Group = struct {
         var open = g.open_broadcasts.valueIterator();
         while (open.next()) |x| g.releaseOpen(x.*);
         g.open_broadcasts.deinit(g.gpa);
+        if (g.restored) |*r| r.deinit(g.gpa);
         g.scratch.deinit();
+        g.keep.deinit();
     }
 
-    fn write(g: *Group, comptime fmt: []const u8, args: anytype) void {
+    /// Releases queued Host Inputs never drained.
+    pub fn releaseInputs(g: *Group, inputs: []const Input) void {
+        for (inputs) |input| switch (input) {
+            .deliver => |d| {
+                g.releaseDelivery(d.delivery);
+                g.gpa.free(d.script);
+            },
+            .settle => |x| {
+                g.gpa.free(x.id);
+                g.releaseResume(x.with);
+            },
+            .broadcast => |b| g.releaseBroadcast(b),
+            .revoke => |x| {
+                g.gpa.free(x.script);
+                g.gpa.free(x.grant);
+            },
+            .cancel_run => |id| g.gpa.free(id),
+            .settlement => |x| {
+                g.gpa.free(x.id);
+                if (x.with) |w| g.releaseResume(w);
+            },
+            .stop => |x| {
+                g.gpa.free(x.script);
+                g.gpa.free(x.reason);
+            },
+            .set_parent, .dispose, .cancel_delivery => {},
+        };
+    }
+
+    pub fn write(g: *Group, comptime fmt: []const u8, args: anytype) void {
         const w = g.trace orelse return;
         w.print(fmt, args) catch {};
     }
@@ -1206,9 +1269,9 @@ pub const Group = struct {
     /// A Script's or extension's source, parsed in `a`: its tree or its
     /// syntax error, and the Libraries its `use` lines import that the Group
     /// holds, which its identity covers. One that doesn't parse names none.
-    const Parsed = struct { lines: lexer.Lines, result: parser.Result, imports: []*Library };
+    pub const Parsed = struct { lines: lexer.Lines, result: parser.Result, imports: []*Library };
 
-    fn parseCode(g: *Group, a: Allocator, source: []const u8) !Parsed {
+    pub fn parseCode(g: *Group, a: Allocator, source: []const u8) !Parsed {
         const lines: lexer.Lines = try .init(a, source);
         const result = try parser.parse(a, source);
         const imports: []*Library = if (result == .tree) try resolveImports(a, &result.tree, g.libraries.items) else &.{};
@@ -1217,7 +1280,7 @@ pub const Group = struct {
 
     /// What a Script's code is checked against, from `base`: its well-known
     /// objects and owner, and the Libraries the Group holds.
-    fn codeContext(g: *Group, a: Allocator, base: check.Context, bound: []const NamedObject, owner: ?*objects.Object) !check.Context {
+    pub fn codeContext(g: *Group, a: Allocator, base: check.Context, bound: []const NamedObject, owner: ?*objects.Object) !check.Context {
         var context = base;
         var held: std.ArrayList(check.Library) = .empty;
         for (g.libraries.items) |l| try held.append(a, .{ .name = l.name, .exports = l.exports });
@@ -1234,11 +1297,11 @@ pub const Group = struct {
 
     /// A lowered unit, and the names it declares or imports, as an
     /// extension inherits them.
-    const Lowered = struct { unit: lower.Unit, names: []const check.Inherited };
+    pub const Lowered = struct { unit: lower.Unit, names: []const check.Inherited };
 
     /// Checks and lowers parsed code in `a`, writing its `diag` records
     /// under `label`: null when refused, with how many in `refused`.
-    fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *const Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
+    pub fn lowerCode(g: *Group, a: Allocator, label: []const u8, unit_name: []const u8, parsed: *const Parsed, context: check.Context, pattern_size: u64, refused: *usize) !?Lowered {
         var lines = parsed.lines;
         const tree = switch (parsed.result) {
             .failure => |d| {
@@ -1331,10 +1394,11 @@ pub const Group = struct {
     /// The Grants an extension or a Reload is checked against: the
     /// Script's unrevoked ones, each with only the Operations it keeps
     /// (chapter 9, Revoking).
-    fn keptView(a: Allocator, grants: []const ScriptGrant) ![]check.Grant {
+    /// A restore sees the revoked ones too, as the code was checked first.
+    pub fn keptView(a: Allocator, grants: []const ScriptGrant, revoked: bool) ![]check.Grant {
         var out: std.ArrayList(check.Grant) = .empty;
         for (grants) |sg| {
-            if (sg.revoked) continue;
+            if (sg.revoked and !revoked) continue;
             const v = try out.addOne(a);
             var ops: std.ArrayList(check.Operation) = .empty;
             const all = try capabilities.checkOperations(a, sg.grant);
@@ -1351,7 +1415,7 @@ pub const Group = struct {
 
     /// Releases a Script's code: its unit's constants, its extensions and
     /// the arena that holds them.
-    fn dropCode(g: *Group, s: *Script) void {
+    pub fn dropCode(g: *Group, s: *Script) void {
         for (s.extensions.items) |x| x.destroy();
         s.extensions.deinit(g.gpa);
         for (s.unit.values) |v| if (v == .value) v.value.release();
@@ -1365,13 +1429,19 @@ pub const Group = struct {
     /// and runs its initialiser. A LoadError, a name the Script already has,
     /// or a Persistent State over its cap leaves the Script unchanged.
     pub fn extend(g: *Group, s: *Script, source: []const u8) !ExtendResult {
-        return g.addExtension(s, source, true);
+        return g.addExtension(s, source, .input);
     }
 
-    /// Adds an extension to `s`; with `input`, as the Host Input `extend`,
-    /// writing its record and refusing a reused name or a Persistent State
-    /// over the cap, or else rebuilding a Script whose cap is checked later.
-    fn addExtension(g: *Group, s: *Script, source: []const u8, input: bool) !ExtendResult {
+    /// How an extension is added: as the Host Input `extend`, rebuilding a
+    /// Script whose cap is checked later, or restoring one whose values come
+    /// from a save.
+    pub const Adding = enum { input, rebuild, restore };
+
+    /// Adds an extension to `s`. As an input it writes its record and
+    /// refuses a reused name or a Persistent State over the cap; restoring
+    /// runs no initialiser and leaves its definitions to the save.
+    pub fn addExtension(g: *Group, s: *Script, source: []const u8, how: Adding) !ExtendResult {
+        const input = how == .input;
         const number: u32 = @intCast(s.extensions.items.len + 1);
         const l = try g.gpa.create(Library);
         l.* = .{ .gpa = g.gpa, .arena = .init(g.gpa), .name = "", .version = "", .source = "", .identity = undefined, .unit = undefined, .definitions = &.{}, .imports = &.{}, .exports = &.{}, .needs = &.{}, .extension = number };
@@ -1419,7 +1489,7 @@ pub const Group = struct {
         for (s.variableNames()) |n| try inherited.append(a, .{ .name = n, .variable = true });
         try inherited.appendSlice(a, s.names.items);
         var context = try g.codeContext(a, .{}, s.objects, s.owner);
-        context.grants = try keptView(a, s.grants);
+        context.grants = try keptView(a, s.grants, how == .restore);
         context.inherited = inherited.items;
         var refused: usize = 0;
         const code = try g.lowerCode(a, l.name, l.name, &parsed, context, s.limits.pattern_size, &refused) orelse return .refused;
@@ -1435,6 +1505,14 @@ pub const Group = struct {
             if (std.mem.indexOfScalar(*Library, imports.items, y) == null) try imports.append(a, y);
         };
         l.imports = imports.items;
+        if (how == .restore) {
+            try s.names.ensureUnusedCapacity(s.code.allocator(), code.names.len);
+            try s.extensions.append(g.gpa, l);
+            s.names.appendSliceAssumeCapacity(code.names);
+            s.identity = identity;
+            kept = true;
+            return .extended;
+        }
         l.definitions = try g.gpa.alloc(*Value, l.unit.definitions.len);
         var made: usize = 0;
         errdefer {
@@ -1539,7 +1617,7 @@ pub const Group = struct {
     fn buildCode(g: *Group, s: *Script, fresh: *Script, parsed: *const Parsed, extensions: []const []const u8) !bool {
         const ca = fresh.code.allocator();
         var context = try g.codeContext(ca, .{}, s.objects, s.owner);
-        context.grants = try keptView(ca, s.grants);
+        context.grants = try keptView(ca, s.grants, false);
         var refused: usize = 0;
         const code = try g.lowerCode(ca, s.name, s.name, parsed, context, s.limits.pattern_size, &refused) orelse return false;
         fresh.unit = code.unit;
@@ -1547,7 +1625,28 @@ pub const Group = struct {
         fresh.variables = try g.newValues(fresh.unit.variables.len, &.{}, &.{});
         fresh.definitions = try g.newValues(fresh.unit.definitions.len, fresh.unit.definitions, fresh.imports);
         if (!try g.initialise(fresh, null, s.name)) return false;
-        for (extensions) |x| if (try g.addExtension(fresh, x, false) != .extended) return false;
+        for (extensions) |x| if (try g.addExtension(fresh, x, .rebuild) != .extended) return false;
+        return true;
+    }
+
+    /// Compiles a restored Script's source and extensions as they were
+    /// first compiled, against all its Grants, without running an
+    /// initialiser or writing the Trace: false if any no longer compiles.
+    pub fn compileSaved(g: *Group, s: *Script, extensions: []const []const u8) !bool {
+        const trace = g.trace;
+        g.trace = null;
+        defer g.trace = trace;
+        const ca = s.code.allocator();
+        const parsed = try g.parseCode(ca, s.source);
+        s.imports = parsed.imports;
+        s.identity = codeIdentity(s.name, s.source, .script, s.imports);
+        var context = try g.codeContext(ca, .{}, s.objects, s.owner);
+        context.grants = try keptView(ca, s.grants, true);
+        var refused: usize = 0;
+        const code = try g.lowerCode(ca, s.name, s.name, &parsed, context, s.limits.pattern_size, &refused) orelse return false;
+        s.unit = code.unit;
+        try s.names.appendSlice(ca, code.names);
+        for (extensions) |x| if (try g.addExtension(s, x, .restore) != .extended) return false;
         return true;
     }
 
@@ -1599,18 +1698,16 @@ pub const Group = struct {
     /// Script Variables in place of the old, all at once: false if the stop
     /// stopped the Group, which prevents replacing it.
     fn replaceCode(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) !bool {
-        // Reload isn't sticky: a stopped Script is stopped again, and then
-        // takes new messages.
-        if (s.stopped) |reason| {
-            g.gpa.free(reason);
-            s.stopped = null;
-        }
-        try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload });
-        if (s.stopped) |reason| {
-            g.gpa.free(reason);
-            s.stopped = null;
-        }
+        // A stopped Script has nothing left to stop; Reload isn't sticky, so
+        // it takes new messages after.
+        if (s.stopped == null) try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload });
+        // A stop that left an effect's state unknown stopped the Group, and
+        // prevents replacing it.
         if (g.fatal) return false;
+        if (s.stopped) |reason| {
+            g.gpa.free(reason);
+            s.stopped = null;
+        }
         // The revoked Grants the new code was checked without go.
         var kept: usize = 0;
         for (s.grants) |sg| if (!sg.revoked) {
@@ -1747,7 +1844,7 @@ pub const Group = struct {
 
     /// `n` Script values: Nothing, or for a definition named
     /// `<library>:<name>`, that imported Constant's value. All or none.
-    fn newValues(g: *Group, n: usize, names: []const []const u8, imports: []const *Library) ![]*Value {
+    pub fn newValues(g: *Group, n: usize, names: []const []const u8, imports: []const *Library) ![]*Value {
         const out = try g.gpa.alloc(*Value, n);
         var made: usize = 0;
         errdefer {
@@ -2061,7 +2158,7 @@ pub const Group = struct {
         g.write("refused code=\"{s}\"\n", .{code});
     }
 
-    fn releaseBroadcast(g: *Group, b: Broadcast) void {
+    pub fn releaseBroadcast(g: *Group, b: Broadcast) void {
         g.gpa.free(b.message);
         releaseAll(b.args, g.gpa);
         if (b.recipients) |r| g.gpa.free(r);
@@ -2149,7 +2246,7 @@ pub const Group = struct {
         try g.inputs.append(g.gpa, .{ .settle = .{ .id = copy, .with = with } });
     }
 
-    fn releaseResume(g: *Group, with: Resume) void {
+    pub fn releaseResume(g: *Group, with: Resume) void {
         switch (with) {
             .answer => |x| x.value.release(),
             .failed => |f| {
@@ -2164,7 +2261,7 @@ pub const Group = struct {
         }
     }
 
-    fn releaseDelivery(g: *Group, d: Delivery) void {
+    pub fn releaseDelivery(g: *Group, d: Delivery) void {
         if (d.function) |f| f.release();
         releaseAll(d.args, g.gpa);
         g.gpa.free(d.message);
@@ -2172,7 +2269,7 @@ pub const Group = struct {
         if (d.from) |x| g.gpa.free(x);
     }
 
-    fn destroyScript(g: *Group, s: *Script) void {
+    pub fn destroyScript(g: *Group, s: *Script) void {
         for (s.variables) |v| v.release();
         g.gpa.free(s.variables);
         for (s.definitions) |v| v.release();
@@ -2190,12 +2287,12 @@ pub const Group = struct {
         g.gpa.destroy(s);
     }
 
-    fn destroyPending(g: *Group, p: *Pending) void {
+    pub fn destroyPending(g: *Group, p: *Pending) void {
         if (p.event) |e| g.releaseEvent(e);
         g.gpa.destroy(p);
     }
 
-    fn releaseEvent(g: *Group, e: *EventWait) void {
+    pub fn releaseEvent(g: *Group, e: *EventWait) void {
         g.releaseBranches(e.branches);
         g.gpa.destroy(e);
     }
@@ -2206,7 +2303,7 @@ pub const Group = struct {
     }
 
     /// What each branch holds, without the branches themselves.
-    fn releaseHeld(g: *Group, branches: []const EventBranch) void {
+    pub fn releaseHeld(g: *Group, branches: []const EventBranch) void {
         for (branches) |b| switch (b) {
             .when => |x| {
                 if (x.from) |v| v.release();
@@ -2216,7 +2313,7 @@ pub const Group = struct {
         };
     }
 
-    fn destroyRun(g: *Group, run: *Run) void {
+    pub fn destroyRun(g: *Group, run: *Run) void {
         if (run.waiting) |p| {
             for (g.pending.items, 0..) |x, i| if (x == p) {
                 _ = g.pending.orderedRemove(i);
@@ -2272,6 +2369,22 @@ pub const Group = struct {
                     if (shown) |v| display.writeTrace(out, v) catch {};
                 },
                 else => out.print("> fail {s} error={{}}", .{x.id}) catch {},
+            },
+            .settlement => |x| {
+                out.print("> settle {s} how={s}", .{ x.id, @tagName(x.how) }) catch {};
+                if (x.with) |w| switch (w) {
+                    .answer => |a| {
+                        out.writeAll(" value=") catch {};
+                        display.writeTrace(out, a.value) catch {};
+                    },
+                    .failed => |f| {
+                        out.writeAll(" error=") catch {};
+                        const shown = failureMap(g.gpa, f) catch null;
+                        defer if (shown) |v| v.release();
+                        if (shown) |v| display.writeTrace(out, v) catch {};
+                    },
+                    else => {},
+                };
             },
             .set_parent => |x| {
                 out.writeAll("> set-parent object=") catch {};
@@ -2424,9 +2537,44 @@ pub const Group = struct {
                 try g.ready(p, x.with);
             },
             .broadcast => |b| try g.drainBroadcast(b),
+            .settlement => |x| {
+                defer g.gpa.free(x.id);
+                switch (x.how) {
+                    .answer, .fail => {
+                        const index = for (g.pending.items, 0..) |p, i| {
+                            if (p.call) |c| if (std.mem.eql(u8, c.id, x.id)) break i;
+                        } else null;
+                        const i = index orelse {
+                            g.releaseResume(x.with.?);
+                            continue;
+                        };
+                        try g.ready(g.pending.orderedRemove(i), x.with.?);
+                    },
+                    .reissue => try g.reissue(x.id),
+                    .adopt => {},
+                }
+            },
         };
         g.inputs.clearRetainingCapacity();
         consumed = 0;
+        // After a restore's settlements, every call still unsettled is
+        // lost, in call id order, before any timer fires.
+        if (g.restored) |*r| {
+            defer {
+                r.deinit(g.gpa);
+                g.restored = null;
+            }
+            for (r.pending.items) |id| {
+                for (r.settled.items) |x| {
+                    if (std.mem.eql(u8, x, id)) break;
+                } else for (g.pending.items, 0..) |p, i| {
+                    const c = p.call orelse continue;
+                    if (!std.mem.eql(u8, c.id, id)) continue;
+                    try g.ready(g.pending.orderedRemove(i), .lost);
+                    break;
+                }
+            }
+        }
         // Due timers, in deadline order, then the order they were set.
         const now = nanos(clock);
         while (true) {
@@ -2518,7 +2666,7 @@ pub const Group = struct {
 
     /// A settled wait: its Run becomes ready, at the back of its Script's
     /// work.
-    fn ready(g: *Group, p: *Pending, with: Resume) !void {
+    pub fn ready(g: *Group, p: *Pending, with: Resume) !void {
         const run = p.run;
         if (p.member) |index| {
             // A Join Member: the Run is ready when every member has
@@ -2588,6 +2736,110 @@ pub const Group = struct {
         };
         g.write("> counters {s}\ncounters {s} fuel={d} alloc={d} runs={d} faults={d} state={d} mailbox={d}\n", .{ s.name, s.name, out.fuel_total, out.alloc_total, out.runs, out.faults, out.persistent_state, out.mailbox_len });
         return out;
+    }
+
+    /// The Group Fingerprint (chapter 9): its Libraries, and each Script's
+    /// identity, Grants and limits.
+    pub fn groupFingerprint(g: *Group) ![32]u8 {
+        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const libraries = try a.alloc(fingerprint.Library, g.libraries.items.len);
+        for (g.libraries.items, libraries) |l, *x| x.* = .{ .name = l.name, .identity = l.identity };
+        const scripts = try a.alloc(fingerprint.Script, g.scripts.items.len);
+        for (g.scripts.items, scripts) |s, *x| {
+            const grants = try a.alloc(fingerprint.Grant, s.grants.len);
+            for (s.grants, grants) |sg, *y| y.* = .{ .name = sg.name, .json = sg.declarations orelse try fingerprint.grantJson(a, sg.grant.capability, sg.kept) };
+            x.* = .{ .name = s.name, .identity = s.identity, .grants = grants, .limits = limitValues(s.limits) };
+        }
+        return fingerprint.compute(libraries, scripts);
+    }
+
+    pub const SettleError = error{ UnknownCall, NotAdoptable, OutOfMemory };
+
+    /// Queues a restored pending call's settlement (chapter 10, Settling
+    /// pending calls). A call id that isn't pending, one settled already, or
+    /// any once the first Pump has started, is `unknown call` at the call,
+    /// and queues nothing. Takes `with`, an answer's or failure's Resume.
+    pub fn settleRestored(g: *Group, id: []const u8, how: How, with: ?Resume) SettleError!void {
+        errdefer if (with) |w| g.releaseResume(w);
+        const r = if (g.restored) |*x| x else return error.UnknownCall;
+        for (r.pending.items) |p| {
+            if (std.mem.eql(u8, p, id)) break;
+        } else return error.UnknownCall;
+        for (r.settled.items) |x| if (std.mem.eql(u8, x, id)) return error.UnknownCall;
+        const own = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(own);
+        try r.settled.ensureUnusedCapacity(g.gpa, 1);
+        try g.inputs.append(g.gpa, .{ .settlement = .{ .id = own, .how = how, .with = with } });
+        // The settled list borrows the pending list's id.
+        for (r.pending.items) |p| if (std.mem.eql(u8, p, id)) r.settled.appendAssumeCapacity(p);
+    }
+
+    /// A refused settlement, with its record: written at the call, with the
+    /// ids the Host supplied.
+    pub fn refuseSettlement(g: *Group, id: []const u8, how: How, value: ?*const Value) void {
+        const out = g.trace orelse return;
+        out.print("> settle {s} how={s}", .{ id, @tagName(how) }) catch {};
+        if (value) |v| {
+            out.writeAll(if (how == .answer) " value=" else " error=") catch {};
+            display.writeTrace(out, v) catch {};
+        }
+        out.writeAll("\nrefused code=\"unknown call\"\n") catch {};
+    }
+
+    /// Reissue (chapter 10): runs the pending call's Operation's Start again,
+    /// with its saved arguments and its Grant's binding, under the same call
+    /// id and this Pump's Clock. Its declared cost isn't charged again; a
+    /// `Charge` draws Fuel from the Run as it would at the call.
+    fn reissue(g: *Group, id: []const u8) !void {
+        const index = for (g.pending.items, 0..) |p, i| {
+            if (p.call) |c| if (std.mem.eql(u8, c.id, id)) break i;
+        } else return;
+        const p = g.pending.items[index];
+        const run = p.run;
+        const c = p.call.?;
+        // A Grant the restore couldn't re-bind fails it, never reaching a
+        // Host; a revocation since doesn't, since the call was in flight.
+        const sg = run.script.grant(p.grant) orelse return g.ready(g.pending.orderedRemove(index), .revoked);
+        if (sg.declarations != null) return g.ready(g.pending.orderedRemove(index), .revoked);
+        const decl = p.decl.?;
+        c.starting = true;
+        c.charged = 0;
+        c.now = g.clock;
+        c.binding = sg.grant.binding;
+        c.left = run.limits.fuel_per_run -| run.fuel;
+        const outcome = decl.host.call(decl.host.context, c, c.args);
+        c.starting = false;
+        run.fuel += c.charged;
+        g.pump_fuel += c.charged;
+        run.script.spent += c.charged;
+        if (g.trace) |w| {
+            w.print("call {s} op={s}.{s} args=[", .{ id, p.grant, p.operation }) catch {};
+            for (c.args, 0..) |v, k| {
+                if (k > 0) w.writeAll(", ") catch {};
+                display.writeTrace(w, v) catch {};
+            }
+            w.writeAll("]") catch {};
+            if (c.charged > 0) w.print(" charged={d}", .{c.charged}) catch {};
+            w.writeAll("\n") catch {};
+        }
+        switch (outcome) {
+            .started => {},
+            .value => |v| try g.ready(g.pending.orderedRemove(index), .{ .answer = .{ .value = v, .fuel = 0 } }),
+            .failed => |f| try g.ready(g.pending.orderedRemove(index), .{ .failed = .{ .code = f.code, .message = f.message, .data = f.data } }),
+            .limited => try g.ready(g.pending.orderedRemove(index), .limited),
+            else => try g.ready(g.pending.orderedRemove(index), .broken),
+        }
+    }
+
+    /// A Pump refused at the call, with its record, which drains nothing.
+    pub fn refusePump(g: *Group, clock: model.dates.Instant, slice: i64, cap: i64) void {
+        const shown = model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true) catch return;
+        g.write("> pump clock={s}", .{shown});
+        if (slice > 0) g.write(" fuel-slice={d}", .{slice});
+        if (cap > 0) g.write(" fuel-cap={d}", .{cap});
+        g.write("\nrefused code=\"clock backwards\"\n", .{});
     }
 
     /// Writes a `vars` record for each Script.
@@ -2897,6 +3149,13 @@ pub const Group = struct {
         const frame = &run.frames.items[run.frames.items.len - 1];
         const pc = frame.pc - 1;
         const ins = unitOf(run, frame).code[pc];
+        // A reissue the Run couldn't pay for faults at its call, which is
+        // abandoned.
+        if (with == .limited) {
+            const end = g.limitFault(run, .fuel, unitName(run, frame), pc, ins);
+            g.write("abandon {s}\n", .{waited.id});
+            return end;
+        }
         const fuel = run.fuel;
         const alloc = run.alloc;
         const raised: ?*Value = try g.resumeWith(run, frame, with, waited, pc, ins);
@@ -2921,7 +3180,16 @@ pub const Group = struct {
         switch (with) {
             .woke => return null,
             // resumeRun handles these before any wait's value.
-            .unparked, .cancelled => unreachable,
+            .unparked, .cancelled, .limited => unreachable,
+            .lost => return try g.resumeRaise(run, pc, ins, g.raise("call lost", &.{})),
+            .revoked => {
+                const where = [_]model.Pair{
+                    .{ .key = "capability", .value = try model.text(gpa, waited.grant) },
+                    .{ .key = "operation", .value = try model.text(gpa, waited.operation) },
+                };
+                defer for (where) |p| p.value.release();
+                return try g.resumeRaise(run, pc, ins, g.raise("capability revoked", &where));
+            },
             .joined => {
                 // Each answer, converted and charged in start order, then
                 // the list of them.
@@ -3361,14 +3629,14 @@ pub const Group = struct {
         if (m.reason) |v| v.release();
     }
 
-    fn releaseDecided(g: *Group, x: Decided) void {
+    pub fn releaseDecided(g: *Group, x: Decided) void {
         for (x.vetoes) |m| g.releaseMark(m);
         for (x.undecided) |m| g.releaseMark(m);
         g.gpa.free(x.vetoes);
         g.gpa.free(x.undecided);
     }
 
-    fn releaseOpen(g: *Group, x: OpenBroadcast) void {
+    pub fn releaseOpen(g: *Group, x: OpenBroadcast) void {
         for (x.parts) |part| if (part) |q| switch (q) {
             .allowed => {},
             .vetoed, .undecided => |m| g.releaseMark(m),
@@ -4094,9 +4362,17 @@ pub const Group = struct {
             }
         }.less);
         for (order) |sg| g.releaseGrant(s, sg, how.release);
+        // A rollback that failed leaves an effect's state unknown, which
+        // stops the Group: this Script with that reason.
+        const fatal = g.fatal and !std.mem.eql(u8, reason, "effect state unknown");
+        if (fatal) {
+            g.gpa.free(s.stopped.?);
+            s.stopped = try g.gpa.dupe(u8, "effect state unknown");
+        }
+        const why = s.stopped.?;
         if (g.trace) |out| {
             out.print("stopped {s} reason=", .{s.name}) catch {};
-            writeText(out, reason);
+            writeText(out, why);
             if (discarded.items.len > 0) out.print(" discarded=[{s}]", .{discarded.items}) catch {};
             if (dropped.items.len > 0) out.print(" dropped=[{s}]", .{dropped.items}) catch {};
             for (abandoned.items, 0..) |id, i| out.print("{s}{s}", .{ if (i == 0) " abandoned=[" else ", ", id }) catch {};
@@ -4125,6 +4401,7 @@ pub const Group = struct {
             s.work.clearRetainingCapacity();
         }
         for (runs.items) |r| if (r != running) g.destroyRun(r);
+        if (fatal) for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
     }
 
     /// A message a stopped Script won't run: its sender gets `send failed`,
@@ -4338,7 +4615,7 @@ pub const Group = struct {
     }
 
     /// The Group's record of a Function Value's code, made once.
-    fn functionCode(g: *Group, home: *const Script, library: ?*Library, body: u32) !*FunctionCode {
+    pub fn functionCode(g: *Group, home: *const Script, library: ?*Library, body: u32) !*FunctionCode {
         for (g.functions.items) |f| if (f.library == library and f.body == body and f.generation == home.generation and std.mem.eql(u8, f.home, home.name)) return f;
         const b = home.unitIn(library).bodies[body];
         var required: usize = 0;
@@ -7010,10 +7287,10 @@ pub const Group = struct {
                 gpa.destroy(c);
                 return err;
             };
-            if (decl.after != null) {
-                c.args = try gpa.dupe(*Value, args);
-                for (c.args) |v| _ = v.retain();
-            }
+            // Its arguments, for the answer's check and for a save, which
+            // a restore may reissue it with.
+            c.args = try gpa.dupe(*Value, args);
+            for (c.args) |v| _ = v.retain();
             break :blk c;
         } else &local;
         const outcome = decl.host.call(decl.host.context, call, args);
@@ -7580,6 +7857,8 @@ fn boolean(gpa: Allocator, b: bool) !*Value {
     return model.scalar(gpa, .{ .bool = b });
 }
 
+pub const releaseValues = releaseAll;
+
 fn releaseAll(values: []*Value, gpa: Allocator) void {
     for (values) |v| v.release();
     gpa.free(values);
@@ -7640,6 +7919,8 @@ fn waitMillis(d: *const Value) ?i128 {
 }
 
 /// A `Fail`'s error as the Trace shows it: code, message, then its Data.
+pub const failureValue = failureMap;
+
 fn failureMap(gpa: Allocator, f: Failure) !*Value {
     var pairs: std.ArrayList(model.Pair) = .empty;
     defer pairs.deinit(gpa);

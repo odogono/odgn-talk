@@ -1000,6 +1000,94 @@ talk_host_error_code talk_add_library(talk_group *g, talk_library *l);
  * Core. */
 talk_host_error_code talk_replace_library(talk_group *g, talk_library *l, talk_carry_over carry);
 
+/* Save and restore (chapter 10). A save restores only on the Zig Core.
+ * Save is a worker call between Pumps: the save's bytes, which the caller
+ * releases with talk_owned_bytes_release, or TALK_EFFECTS_PENDING, with no
+ * snapshot, while a Capability Scope or Segment participant is live or an
+ * effect's state is unknown. Either way the attempt takes the next save id
+ * and its save record. */
+talk_host_error_code talk_save(talk_group *g, talk_owned_bytes *out);
+typedef enum talk_mismatch_policy {
+    TALK_REJECT_MISMATCH,
+    TALK_VARIABLES_ONLY
+} talk_mismatch_policy;
+/* C only: talk.go's Grants function, a Script's named Grant re-bound, or
+ * NULL to restore it revoked. */
+typedef talk_grant *(*talk_rebind_fn)(void *context, const char *script, size_t script_len, const char *name, size_t name_len);
+/* C only: talk.go's Resolve function. False restores the object disposed. */
+typedef bool (*talk_resolve_fn)(void *context, const char *kind, size_t kind_len, const char *id, size_t id_len, void **native);
+typedef struct talk_restore_options {
+    const char *name;
+    size_t name_len;
+    talk_trace_sink trace;
+    void *trace_context;
+    /* The compiled Libraries matching the saved identities. */
+    talk_library *const *libraries;
+    size_t libraries_len;
+    talk_rebind_fn grants;
+    void *grants_context;
+    talk_resolve_fn resolve;
+    void *resolve_context;
+    /* TALK_VARIABLES_ONLY isn't supported yet, and refuses a mismatch as
+     * TALK_REJECT_MISMATCH does. */
+    talk_mismatch_policy mismatch;
+    /* C only: as talk_group_options. */
+    const talk_allocator *allocator;
+    size_t memory_cap;
+} talk_restore_options;
+typedef struct talk_restore_result talk_restore_result;
+/* A pending call, for the Host to settle. Its text borrows from the Group. */
+typedef struct talk_pending_call {
+    const char *id;
+    size_t id_len;
+    const char *script;
+    size_t script_len;
+    const char *grant;
+    size_t grant_len;
+    const char *operation;
+    size_t operation_len;
+} talk_pending_call;
+/* A Host Object by kind and id, borrowing from the Group. */
+typedef struct talk_object_ref {
+    const char *kind;
+    size_t kind_len;
+    const char *id;
+    size_t id_len;
+} talk_object_ref;
+/* Builds a new Group from a save, which hasn't been pumped; its restore
+ * record is in its Trace. A save this Core can't read is TALK_INVALID_SAVE,
+ * and one that doesn't match TALK_SAVE_MISMATCH; either way nothing is made.
+ * The first Pump reads a Clock at or after the saved one, or it is
+ * TALK_CLOCK_BACKWARDS. */
+talk_host_error_code talk_restore(talk_core *c, const uint8_t *save, size_t len, const talk_restore_options *o, talk_group **out, talk_restore_result **result);
+/* C only: the result's parts. */
+bool talk_restore_result_variables_only(const talk_restore_result *r);
+/* C only: the pending calls, in call id order; *out borrows from r. */
+size_t talk_restore_result_pending(const talk_restore_result *r, const talk_pending_call **out);
+/* C only: the Host Objects that didn't resolve; *out borrows from r. */
+size_t talk_restore_result_disposed(const talk_restore_result *r, const talk_object_ref **out);
+/* C only: ends the caller's result. */
+void talk_restore_result_release(talk_restore_result *r);
+/* Exactly one of these. */
+typedef struct talk_settlement {
+    talk_value *answer;
+    const talk_script_error *fail;
+    bool reissue; /* run Start again; its declared cost isn't charged twice */
+    bool adopt;   /* the Host still has it and will answer it; costs nothing */
+} talk_settlement;
+/* Settles a restored pending call before the first Pump, queued. A call
+ * that isn't pending, one settled already, or any once the first Pump has
+ * started, is TALK_UNKNOWN_CALL, with a refused record. For adopt, *adopted
+ * receives the call, which the Host answers or fails through; adopted may be
+ * NULL. A call still unsettled at the first Pump fails as `call lost`. */
+talk_host_error_code talk_settle(talk_group *g, const char *id, size_t len, const talk_settlement *s, talk_call **adopted);
+/* The handle of the Group's Script with that name, or NULL; a restored
+ * Group's Scripts are reached this way. */
+talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
+
+/* The Group Fingerprint, which covers the Group's Libraries and each
+ * Script's code identity, Grants and limits, never its state. A worker call. */
+talk_host_error_code talk_fingerprint(talk_group *g, uint8_t out[32]);
 /* Inspects the Group. In step 1 it writes a vars record for each Script to
  * the Trace, as the Host Input vars does. */
 void talk_inspect(talk_group *g);

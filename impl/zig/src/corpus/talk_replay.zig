@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "reload", "extend", "replace-library" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "reload", "extend", "replace-library", "save", "restore", "settle" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -146,6 +146,20 @@ const ObjectStore = struct {
         while (it.next()) |props| {
             var vs = props.valueIterator();
             while (vs.next()) |v| c.talk_value_release(v.*);
+        }
+    }
+
+    /// Moves every handle, and the values its properties hold, to the
+    /// restored Group's handle with the same kind and id.
+    fn moveTo(store: *ObjectStore, group: ?*c.talk_group) !void {
+        var it = store.handles.iterator();
+        while (it.next()) |e| {
+            const key = e.key_ptr.*;
+            const slash = std.mem.indexOfScalar(u8, key, '/').?;
+            var o: ?*c.talk_object = null;
+            if (!c.talk_object_by_id(group, key.ptr, slash, key[slash + 1 ..].ptr, key.len - slash - 1, &o)) continue;
+            if (store.values.fetchRemove(@intFromPtr(e.value_ptr.*))) |kv| try store.values.put(store.a, @intFromPtr(o.?), kv.value);
+            e.value_ptr.* = o.?;
         }
     }
 
@@ -909,6 +923,60 @@ fn grantsOf(a: std.mem.Allocator, t: case_setup.Table, defs: *std.StringHashMapU
     return out.items;
 }
 
+/// The runner's `Grants` function: each Script's Grants as it loaded them,
+/// but those `unbound` names.
+const Rebinding = struct {
+    grants: *std.StringHashMapUnmanaged([]c.talk_load_grant),
+    unbound: []const []const u8,
+
+    fn call(context: ?*anyopaque, script: [*c]const u8, script_len: usize, name: [*c]const u8, name_len: usize) callconv(.c) ?*c.talk_grant {
+        const r: *Rebinding = @ptrCast(@alignCast(context.?));
+        const s = script[0..script_len];
+        const n = name[0..name_len];
+        for (r.unbound) |u| {
+            if (u.len == s.len + 1 + n.len and std.mem.startsWith(u8, u, s) and u[s.len] == '.' and std.mem.endsWith(u8, u, n)) return null;
+        }
+        const grants = r.grants.get(s) orelse return null;
+        for (grants) |g| if (std.mem.eql(u8, g.name[0..g.name_len], n)) return g.grant;
+        return null;
+    }
+};
+
+/// The runner's `Resolve` function: every object but those `disposed`.
+const Resolving = struct {
+    refused: []const [2][]const u8,
+
+    fn call(context: ?*anyopaque, kind: [*c]const u8, kind_len: usize, id: [*c]const u8, id_len: usize, native: [*c]?*anyopaque) callconv(.c) bool {
+        const r: *Resolving = @ptrCast(@alignCast(context.?));
+        native.* = null;
+        for (r.refused) |x| if (std.mem.eql(u8, x[0], kind[0..kind_len]) and std.mem.eql(u8, x[1], id[0..id_len])) return false;
+        return true;
+    }
+};
+
+/// The ids of a Trace's `[a, b]` list.
+fn idList(a: std.mem.Allocator, shown: []const u8) ![]const []const u8 {
+    if (shown.len < 2 or shown[0] != '[') return error.MalformedCase;
+    var out: std.ArrayList([]const u8) = .empty;
+    var it = std.mem.tokenizeSequence(u8, shown[1 .. shown.len - 1], ", ");
+    while (it.next()) |x| try out.append(a, x);
+    return out.items;
+}
+
+/// The kinds and ids of a list of `<object kind "id">`.
+fn objectList(a: std.mem.Allocator, shown: []const u8) ![]const [2][]const u8 {
+    var out: std.ArrayList([2][]const u8) = .empty;
+    var rest = shown;
+    while (std.mem.indexOf(u8, rest, "<object ")) |at| {
+        const body = rest[at + "<object ".len ..];
+        const sp = std.mem.indexOfScalar(u8, body, ' ') orelse return error.MalformedCase;
+        const close = std.mem.indexOfScalar(u8, body[sp + 2 ..], '"') orelse return error.MalformedCase;
+        try out.append(a, .{ body[0..sp], body[sp + 2 .. sp + 2 + close] });
+        rest = body[sp + 2 + close ..];
+    }
+    return out.items;
+}
+
 /// Replays the case in `dir` and returns the Trace the Core wrote.
 pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8) ![]u8 {
     var arena: std.heap.ArenaAllocator = .init(gpa);
@@ -939,6 +1007,13 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     // The version of each Library the runner compiled last, by name.
     var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
     var declarations: std.ArrayList(c.talk_load_grant) = .empty;
+    // Saves by id, each Script's Grants as loaded, which a restore re-binds,
+    // and the Groups a restore replaced.
+    var saves: std.StringHashMapUnmanaged([]const u8) = .empty;
+    var latest: ?[]const u8 = null;
+    var script_grants: std.StringHashMapUnmanaged([]c.talk_load_grant) = .empty;
+    var retired: std.ArrayList(?*c.talk_group) = .empty;
+    defer for (retired.items) |x| c.talk_group_release(x);
     try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries, &declarations);
     for ((try hostOrder(a, trace)).items) |line| {
         const input = line[2..];
@@ -955,6 +1030,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                 if (std.mem.eql(u8, t.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(t, "name").?.string, script)) break t;
             } else return error.UnknownScript;
             const grants = try grantsOf(a, table, &defs, &effects);
+            try script_grants.put(a, script, grants);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
             const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(&store, a, x) else null;
             var bound: std.ArrayList(c.talk_load_object) = .empty;
@@ -1014,6 +1090,85 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
             } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
+        } else if (std.mem.eql(u8, name, "save")) {
+            // The save is kept under the id the Core gives it.
+            var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+            const code = c.talk_save(group, &saved);
+            if (code == c.TALK_EFFECTS_PENDING) continue;
+            try check(code);
+            defer c.talk_owned_bytes_release(&saved);
+            const id = try a.dupe(u8, input[name_end + 1 ..]);
+            try saves.put(a, id, try a.dupe(u8, saved.data[0..saved.len]));
+            latest = id;
+        } else if (std.mem.eql(u8, name, "restore")) {
+            const bytes_saved = saves.get(field(input, "from") orelse latest orelse return error.MalformedCase) orelse return error.MalformedCase;
+            var withheld: []const []const u8 = &.{};
+            if (field(input, "withheld")) |x| withheld = try idList(a, x);
+            var given: std.ArrayList(?*c.talk_library) = .empty;
+            var it = libraries.iterator();
+            while (it.next()) |e| {
+                for (withheld) |w| {
+                    if (std.mem.eql(u8, w, e.key_ptr.*)) break;
+                } else try given.append(a, e.value_ptr.*);
+            }
+            var rebinding: Rebinding = .{ .grants = &script_grants, .unbound = if (field(input, "unbound")) |x| try idList(a, x) else &.{} };
+            var resolving: Resolving = .{ .refused = if (field(input, "disposed")) |x| try objectList(a, x) else &.{} };
+            const restore_options: c.talk_restore_options = .{
+                .name = "corpus",
+                .name_len = 6,
+                .trace = record,
+                .trace_context = &sink,
+                .libraries = @ptrCast(given.items.ptr),
+                .libraries_len = given.items.len,
+                .grants = Rebinding.call,
+                .grants_context = &rebinding,
+                .resolve = Resolving.call,
+                .resolve_context = &resolving,
+                .mismatch = if (std.mem.eql(u8, field(input, "mismatch") orelse "", "variables-only")) c.TALK_VARIABLES_ONLY else c.TALK_REJECT_MISMATCH,
+                .allocator = null,
+                .memory_cap = 1 << 30,
+            };
+            var restored: ?*c.talk_group = null;
+            var result: ?*c.talk_restore_result = null;
+            const code = c.talk_restore(core, bytes_saved.ptr, bytes_saved.len, &restore_options, &restored, &result);
+            if (code == c.TALK_SAVE_MISMATCH) continue;
+            try check(code);
+            c.talk_restore_result_release(result);
+            // The runner goes on with the restored Group; the old one lives
+            // until the end, since its handles may still be read.
+            try retired.append(a, group);
+            group = restored;
+            var names = scripts.keyIterator();
+            while (names.next()) |n| {
+                const h = c.talk_group_script(group, n.ptr, n.len) orelse return error.UnknownScript;
+                try scripts.put(a, n.*, h);
+            }
+            try store.moveTo(group);
+        } else if (std.mem.eql(u8, name, "settle")) {
+            const rest = input[name_end + 1 ..];
+            const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase];
+            const how = field(input, "how") orelse return error.MalformedCase;
+            var st: c.talk_settlement = .{ .answer = null, .fail = null, .reissue = false, .adopt = false };
+            var e: c.talk_script_error = undefined;
+            var owned_value: ?*c.talk_value = null;
+            defer if (owned_value) |v| c.talk_value_release(v);
+            if (std.mem.eql(u8, how, "answer")) {
+                owned_value = parsed(field(input, "value") orelse return error.MalformedCase) orelse return error.MalformedCase;
+                st.answer = owned_value;
+            } else if (std.mem.eql(u8, how, "fail")) {
+                if (!scriptError(a, field(input, "error") orelse return error.MalformedCase, &e)) return error.MalformedCase;
+                st.fail = &e;
+            } else if (std.mem.eql(u8, how, "reissue")) {
+                st.reissue = true;
+            } else if (std.mem.eql(u8, how, "adopt")) {
+                st.adopt = true;
+            } else return error.MalformedCase;
+            defer if (st.fail != null) if (e.data) |d| c.talk_value_release(d);
+            var adopted: ?*c.talk_call = null;
+            const code = c.talk_settle(group, id.ptr, id.len, &st, &adopted);
+            // A refusal is in the Trace as a `refused` record.
+            if (code != c.TALK_UNKNOWN_CALL) try check(code);
+            if (adopted) |x| try calls.put(a, try a.dupe(u8, id), x);
         } else if (std.mem.eql(u8, name, "set-parent")) {
             const o = store.named(field(input, "object").?) orelse return error.MalformedCase;
             const shown = field(input, "parent").?;
@@ -1085,7 +1240,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var nanos: i32 = 0;
             if (!c.talk_value_as_instant(instant, &seconds, &nanos)) return error.BadClock;
             const pump_options: c.talk_pump_options = .{ .fuel_slice = if (field(input, "fuel-slice")) |x| try std.fmt.parseInt(i64, x, 10) else 0, .fuel_cap = if (field(input, "fuel-cap")) |x| try std.fmt.parseInt(i64, x, 10) else 0 };
-            try check(c.talk_pump(group, seconds, nanos, &pump_options, null));
+            // A refusal is in the Trace as a `refused` record.
+            const code = c.talk_pump(group, seconds, nanos, &pump_options, null);
+            if (code != c.TALK_CLOCK_BACKWARDS) try check(code);
         } else if (std.mem.eql(u8, name, "vars")) {
             c.talk_inspect(group);
         } else if (std.mem.eql(u8, name, "stop")) {
