@@ -1048,6 +1048,14 @@ fn effectFields(o: *Out, e: machine.report.EffectFailure) Allocator.Error!void {
     try optionalText(o, "scope", e.scope);
 }
 
+/// Where a Run's work came from, as fields after the caller's others.
+fn ancestryFields(o: *Out, a: machine.report.Ancestry) Allocator.Error!void {
+    try o.raw(",\"rootDelivery\":");
+    try o.text(a.root);
+    try optionalText(o, "parentRun", a.parent_run);
+    try optionalText(o, "parentCall", a.parent_call);
+}
+
 fn writeReport(o: *Out, report: machine.report.Report) Allocator.Error!void {
     switch (report) {
         .run_end => |r| {
@@ -1181,6 +1189,59 @@ fn writeReport(o: *Out, report: machine.report.Report) Allocator.Error!void {
                 try o.raw("}");
             }
             try o.raw("]}");
+        },
+        .run_started => |r| {
+            try o.raw("{\"kind\":\"run started\",\"script\":");
+            try o.text(r.script);
+            try o.raw(",\"run\":");
+            try o.text(r.run);
+            try o.raw(",\"args\":[");
+            for (r.args, 0..) |v, i| {
+                if (i > 0) try o.raw(",");
+                try reportValue(o, v);
+            }
+            try o.raw("]");
+            try ancestryFields(o, r.ancestry);
+            try optionalText(o, "delivery", r.delivery);
+            try optionalText(o, "selector", r.selector);
+            if (r.function) |f| {
+                try o.raw(",\"fn\":");
+                try reportValue(o, f);
+            }
+            try o.raw("}");
+        },
+        .run_discarded => |r| {
+            try o.raw("{\"kind\":\"run discarded\",\"script\":");
+            try o.text(r.script);
+            try o.raw(",\"run\":");
+            try o.text(r.run);
+            try o.raw(",\"reason\":");
+            try o.text(r.reason);
+            try ancestryFields(o, r.ancestry);
+            try o.raw("}");
+        },
+        .run_accounting => |r| {
+            try o.raw("{\"kind\":\"run accounting\",\"script\":");
+            try o.text(r.script);
+            try o.raw(",\"run\":");
+            try o.text(r.run);
+            try o.raw(",\"fuel\":");
+            try o.int(r.fuel);
+            try o.raw(",\"state\":");
+            try o.text(@tagName(r.state));
+            try ancestryFields(o, r.ancestry);
+            try o.raw("}");
+        },
+        .causal_work => |r| {
+            try o.raw("{\"kind\":\"causal work\",\"rootDelivery\":");
+            try o.text(r.root);
+            try o.raw(",\"liveRuns\":");
+            try o.int(r.live_runs);
+            try o.raw(",\"queuedMessages\":");
+            try o.int(r.queued_messages);
+            try o.raw(",\"discardedMessages\":");
+            try o.int(r.discarded_messages);
+            try o.raw("}");
         },
         .host_error => |r| {
             try o.raw("{\"kind\":\"host error\",\"code\":");
@@ -1971,7 +2032,9 @@ test "a suspending op starts, is answered, and completes on the next Pump" {
     try std.testing.expectEqualStrings("suspending", need.object.get("mode").?.string);
     const call = need.object.get("call").?.string;
     const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{6}));
-    try std.testing.expectEqual(@as(usize, 0), parked.object.get("reports").?.array.items.len);
+    // Parked, the Run has started but not ended.
+    for (parked.object.get("reports").?.array.items) |r|
+        try std.testing.expect(!std.mem.eql(u8, "run end", r.object.get("kind").?.string));
     _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":37}}", .{ 7, call }));
     const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8}));
     try std.testing.expectEqual(@as(i64, 37), end.object.get("result").?.integer);
