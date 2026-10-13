@@ -332,11 +332,10 @@ abandonment, the participant commits, unless the Segment faulted or was
 cancelled, or abandonment failed on a participating Grant, when it rolls back.
 A failed commit rolls back too, restores the Script Variables to the
 Segment's base, which a Script with Segment-bound Grants keeps at each
-Segment's start, and ends the Run `effect failed`. An `unknown` outcome or a
-failed rollback should stop the Group with `effect state unknown`; until
-Stop arrives in step 4, an `unknown` begin raises `host error` after a
-rollback attempt, an `unknown` commit ends the Run `effect failed` as a failed
-one does, and a failed rollback is reported but stops nothing.
+Segment's start, and ends the Run `effect failed`. An `unknown` begin or
+commit, after a rollback attempt, or a rollback that doesn't succeed, stops the
+Group: the running Run's Stretch ends `stop`, keeping the call's charge, and
+every Script is stopped with reason `effect state unknown`.
 
 `clock`, `calendar`, `locale` and `console` come from factories with chapter
 7's fixed declarations ([standard](src/machine/standard.zig)). `clock.now`
@@ -523,7 +522,20 @@ cleanup ends it with `cleanup-failed … code=`, keeping its writes; a limit
 ends it with `cleanup-failed … limit=`, rolling them back. Either way the Run
 ends `cancelled`, and its cleanup Segment's participant commits unless a limit
 ended it. A Delivery still in a mailbox is removed and reported as a `run`
-with no Run, and its Decision settles undecided. Stop comes next.
+with no Run, and its Decision settles undecided.
+
+`talk_script_stop` queues Stop Script, which is sticky; disposing a Script's
+owner stops it within that input, with reason `owner disposed`. Each of the
+Script's Runs, in start order, has its scopes abandoned and its participant
+rolled back, and one in the middle of its Segment its Script Variables too;
+then they are discarded with no `finally` and the mailbox is dropped. Senders
+waiting on them get `send failed`, reason `stopped`. The Script's named Grants
+are released with reason `stop`, in code-point order, then its `stopped`
+record lists what was discarded and dropped, and its open Decisions settle
+undecided, `cancelled`. A Delivery that reaches a stopped Script later is
+dropped with another `stopped` record, a Script's `send` to it is dropped, and
+a Broadcast leaves it out, as it does a Script a Stop or disposal queued ahead
+of it will stop. A Group whose Scripts are all stopped pumps as `stopped`.
 
 ## Values and ownership
 
