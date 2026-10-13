@@ -116,7 +116,7 @@ func (p *parser) look(index int, mode Mode) Token {
 		} else {
 			p.tokens = append(p.tokens, token)
 		}
-		pendingContinuation := len(p.pending) > 0 && slices.Contains([]string{"and", "or", "+", "-", "*", "/", "^", "&", "=", ",", "..", "is", "contains", "matches", "mod", "div", "with", "be"}, p.pending[len(p.pending)-1].Raw)
+		pendingContinuation := len(p.pending) > 0 && slices.Contains([]string{"and", "or", "otherwise", "+", "-", "*", "/", "^", "&", "=", ",", "..", "is", "contains", "matches", "mod", "div", "with", "be"}, p.pending[len(p.pending)-1].Raw)
 		if token.Kind == LineBreak && (p.depth > p.base[len(p.base)-1] || p.continuation || pendingContinuation) {
 			continue
 		}
@@ -154,7 +154,7 @@ func (p *parser) take(mode Mode) Token {
 	}
 	// The last words of `does not contain`, `does not match`, `is greater than`,
 	// `is less than`, `is at least` and `is at most` continue too (ADR 0075).
-	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "is", "mod", "div", "contains", "matches", "with", "be", "contain", "match", "than", "least", "most"}, token.Raw)
+	p.continuation = token.Raw == "," || mode == Operator && slices.Contains([]string{"+", "-", "*", "/", "^", "&", "=", "<>", "<", ">", "<=", ">=", "..", "and", "or", "otherwise", "is", "mod", "div", "contains", "matches", "with", "be", "contain", "match", "than", "least", "most"}, token.Raw)
 	return token
 }
 func (p *parser) fail(t Token) {
@@ -954,7 +954,7 @@ func (p *parser) expression() *Node {
 			return p.everyHead()
 		}
 	}
-	e := p.binary(1)
+	e := p.binary(0)
 	if ordinalChunk(e) && p.at("whose") {
 		return p.whose(e)
 	}
@@ -1064,6 +1064,10 @@ func (p *parser) binary(level int) *Node {
 	left := p.binary(level + 1)
 	var ops []string
 	switch level {
+	case 0:
+		// `otherwise` is the lowest binary operator (level 1 in
+		// grammar.toml; the levels here keep their established numbering).
+		ops = []string{"otherwise"}
 	case 1:
 		ops = []string{"or"}
 	case 2:
@@ -1359,6 +1363,30 @@ func (p *parser) the() *Node {
 	if p.at("target") && p.second(Operator).Raw != "of" {
 		p.take(Operand)
 		return node("target", t)
+	}
+	// The `optional-key` decision: `optional` followed by `of` is the
+	// ordinary key read; otherwise it begins an optional key read.
+	if p.at("optional") && spelling(p.second(Operator)) != "of" {
+		p.take(Operand)
+		if p.accept("(") {
+			key := p.expression()
+			p.expect(")")
+			p.expect("of")
+			return node("optional-key-computed", t, key, p.postfix())
+		}
+		var key *Node
+		if k := p.peek(Operand); k.Kind == Text {
+			p.take(Operand)
+			key = node("key-name", k)
+			key.Text = k.Value
+		} else {
+			key = p.key()
+		}
+		p.expect("of")
+		n := node("optional-key", t, p.postfix())
+		n.Text = key.Text
+		n.Params = []*Node{key}
+		return n
 	}
 	if p.accept("(") {
 		key := p.expression()

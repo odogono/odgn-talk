@@ -149,6 +149,7 @@ disassembly/errors-and-loops
 disassembly/expressions
 disassembly/fenced-text
 disassembly/messages-and-waiting
+disassembly/nothing-defaults
 disassembly/recovery-offers
 disassembly/tell-block
 disassembly/timeout-block

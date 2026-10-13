@@ -38,13 +38,13 @@ func Supported(i lower.Instruction) bool {
 	switch i.Op {
 	case generated.OpCallImport, generated.OpMakeImportedFunction, generated.OpAskWait, generated.OpJoinAsk, generated.OpAsk, generated.OpTell, generated.OpConst, generated.OpPop, generated.OpLoad, generated.OpStore, generated.OpMove, generated.OpLoadVar, generated.OpStoreVar, generated.OpLoadDefinition, generated.OpStoreDefinition, generated.OpLoadObject:
 		return true
-	case generated.OpJump, generated.OpBranchFalse, generated.OpBranchTrue, generated.OpCheckBoolean, generated.OpNot, generated.OpReturn, generated.OpVeto, generated.OpPass, generated.OpCall, generated.OpCallHandler, generated.OpCallHandlerWait, generated.OpCallValueWait, generated.OpWait, generated.OpWaitFor, generated.OpWaitForAny, generated.OpSend, generated.OpSendWait, generated.OpSendUp, generated.OpSendUpWait, generated.OpJoinStart, generated.OpJoinSend, generated.OpJoinEnd, generated.OpSendNamed, generated.OpSendNamedWait, generated.OpJoinSendNamed, generated.OpSendSpread, generated.OpSendSpreadWait, generated.OpJoinSendSpread:
+	case generated.OpJump, generated.OpBranchFalse, generated.OpBranchTrue, generated.OpBranchNotNothing, generated.OpCheckBoolean, generated.OpNot, generated.OpReturn, generated.OpVeto, generated.OpPass, generated.OpCall, generated.OpCallHandler, generated.OpCallHandlerWait, generated.OpCallValueWait, generated.OpWait, generated.OpWaitFor, generated.OpWaitForAny, generated.OpSend, generated.OpSendWait, generated.OpSendUp, generated.OpSendUpWait, generated.OpJoinStart, generated.OpJoinSend, generated.OpJoinEnd, generated.OpSendNamed, generated.OpSendNamedWait, generated.OpJoinSendNamed, generated.OpSendSpread, generated.OpSendSpreadWait, generated.OpJoinSendSpread:
 		return true
 	case generated.OpAdd, generated.OpSubtract, generated.OpMultiply, generated.OpDivide, generated.OpDiv, generated.OpMod, generated.OpPower, generated.OpNegate, generated.OpConcat, generated.OpRange:
 		return true
 	case generated.OpEqual, generated.OpNotEqual, generated.OpLess, generated.OpGreater, generated.OpLessOrEqual, generated.OpGreaterOrEqual:
 		return true
-	case generated.OpList, generated.OpListAppend, generated.OpListExtend, generated.OpMap, generated.OpGetKey, generated.OpGetKeyComputed, generated.OpSetProperty, generated.OpSetPropertyComputed, generated.OpProperty, generated.OpPropertyDelimited:
+	case generated.OpList, generated.OpListAppend, generated.OpListExtend, generated.OpMap, generated.OpGetKey, generated.OpGetKeyComputed, generated.OpGetOptionalKey, generated.OpGetOptionalKeyComputed, generated.OpSetProperty, generated.OpSetPropertyComputed, generated.OpProperty, generated.OpPropertyDelimited:
 		return true
 	case generated.OpChunkGet, generated.OpChunkGetDelimited, generated.OpChunkSet, generated.OpChunkSetDelimited, generated.OpChunkDelete, generated.OpChunkDeleteDelimited, generated.OpTestChunk, generated.OpTestChunkDelimited:
 		return true

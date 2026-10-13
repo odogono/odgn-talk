@@ -229,6 +229,12 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		push(r.Target)
 	case generated.OpJump:
 		jump()
+	case generated.OpBranchNotNothing:
+		v := pop()
+		push(v)
+		if v.Kind != value.Nothing {
+			jump()
+		}
 	case generated.OpBranchFalse, generated.OpBranchTrue, generated.OpCheckBoolean, generated.OpNot:
 		v := pop()
 		if v.Kind != value.Boolean {
@@ -591,6 +597,28 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		if v.Kind == value.Object && k == "id" {
 			push(text(v.Object().ID))
+		} else if v.Kind != value.Map {
+			bad(wrong("map", v))
+		} else {
+			push(v.Get(k))
+		}
+	case generated.OpGetOptionalKey, generated.OpGetOptionalKeyComputed:
+		v := pop()
+		k := nameOrEmpty(args)
+		if i.Op == generated.OpGetOptionalKeyComputed {
+			x := pop()
+			if x.Kind != value.Text {
+				bad(wrong("text", x))
+				break
+			}
+			k = x.Text()
+		} else {
+			k = key(k)
+		}
+		// Optional reads reject every Host Object, even for `id`, and
+		// tolerate only Nothing beside a map.
+		if v.Kind == value.Nothing {
+			push(value.Value{})
 		} else if v.Kind != value.Map {
 			bad(wrong("map", v))
 		} else {

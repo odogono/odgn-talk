@@ -225,6 +225,14 @@ func (u *Unit) expression(n *syntax.Node) {
 		u.expression(n.Children[0])
 		u.expression(n.Children[1])
 		u.emit(pos, "get-key-computed")
+	case "optional-key":
+		// An optional read's key is always literal, never a Built-in property.
+		u.expression(n.Children[0])
+		u.emit(pos, "get-optional-key", text(quote(n.Text)))
+	case "optional-key-computed":
+		u.expression(n.Children[0])
+		u.expression(n.Children[1])
+		u.emit(pos, "get-optional-key-computed")
 	case "chunk":
 		u.chunk(n, nil, false)
 	case "whose":
@@ -595,7 +603,13 @@ func (u *Unit) binaryExpression(n *syntax.Node) {
 				stack = append(stack, action{node: n, stage: 1}, action{node: n.Children[0]})
 			}
 		case 1:
-			if n.Text == "and" || n.Text == "or" {
+			if n.Text == "otherwise" {
+				// ⟦a otherwise b⟧ = ⟦a⟧ branch-not-nothing done; pop; ⟦b⟧; done:
+				end := &label{}
+				u.emit(pos, "branch-not-nothing", target(end))
+				u.emit(pos, "pop")
+				stack = append(stack, action{node: n, stage: 4, end: end}, action{node: n.Children[1]})
+			} else if n.Text == "and" || n.Text == "or" {
 				short, end := &label{}, &label{}
 				branch := "branch-false"
 				if n.Text == "or" {
@@ -625,6 +639,8 @@ func (u *Unit) binaryExpression(n *syntax.Node) {
 			if strings.HasPrefix(n.Text, "is not ") || strings.HasPrefix(n.Text, "does not ") {
 				u.emit(pos, "not")
 			}
+		case 4:
+			u.mark(a.end)
 		}
 	}
 }

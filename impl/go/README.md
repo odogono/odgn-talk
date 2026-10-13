@@ -1,7 +1,5 @@
 # Go Core
 
-The GO Core does not yet implement `otherwise` or optional map-key reads. See the [migration and integration constraints](../../docs/migrations/nothing-defaults.md).
-
 The Go Core is module `github.com/odogono/odgn-talk/impl/go`, with public root
 package `northtalk`. It provides immutable values, decimal arithmetic, pinned
 Unicode text, a front end and standalone Abstract Machine execution. Its Group
@@ -18,6 +16,8 @@ A `tell g` block calls each line's Operation of the Grant `g` ([ADR 0063](../../
 Any `repeat` head accepts `collecting e into v` ([ADR 0059](../../docs/adr/0059-a-repeat-may-collect-its-results.md)). The target is a local initialized to `[]` before the head is evaluated. Each completed pass appends one value after the body; `next repeat` and `exit repeat` skip it, and an error keeps the partial list. Bodies may read the target and suspend, but Container writes, pattern bindings and inner collecting clauses cannot write that target. Targets clash with Script Variables, Constants, well-known objects and the loop's own iteration bindings.
 
 Whose Clauses ([ADR 0074](../../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md)) parse as a whole Expression into a `whose` node, whose `NameToken` is the chunk word: an Every Head is a `chunk` node with an `every` ordinal, and either head sits in a `delimited` node when it has `delimited by`, so `no item chunk` covers it. A Whose Key is a `key` node on a synthetic `it`, never a name. The checker reports `not in a whose` at a condition's non-Built-in call or Lambda, and an `unknown name` in a condition suggests `it's` in its message. Lowering walks the plural property with `iterate` and `next`, and `it` in the condition loads the innermost clause's temp, as chapter 8 lays out. `the items of` a list is the list itself, as chapter 4's property table says.
+
+`a otherwise b` and `the optional k of x` follow [the Nothing-defaults design](../../docs/design/nothing-defaults.md). `otherwise` parses as the lowest `binary` operator and lowers to `branch-not-nothing` and `pop` at its own token, so the left side runs once and the fallback only on Nothing. Optional reads parse into `optional-key` and `optional-key-computed` nodes — `the optional of m` stays the ordinary key read by the `optional-key` decision — and lower to `get-optional-key` instructions at their `the`, which read maps and Nothing only, reject every Host Object with no Host crossing, and are never Containers. Both forms are checked in every operand in Guards, Constants and other restricted expressions. The shared Disassembly corpus coverage and cross-Core cases land with the coordinated integration ([#722](https://github.com/odogono/odgn-talk/issues/722)).
 
 Maps use persistent balanced trees for key lookup and insertion order. Lists
 use persistent balanced trees of at most 32 values per chunk. A Map key write,
