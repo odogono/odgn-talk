@@ -1,4 +1,5 @@
 // A Play Session owns its Group and a disposable copy of the authored Project.
+import { scriptNameProblems } from './script-names';
 import {
   bool,
   defineObjectKind,
@@ -77,6 +78,10 @@ export class PlaySession {
     project: Project,
     public pageIndex = 0,
   ) {
+    const names = scriptNameProblems(project);
+    if (names.length) {
+      throw new Error(names.map(p => p.message).join('\n'));
+    }
     this.project = structuredClone(project);
     const originals = [
       project,

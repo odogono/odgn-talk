@@ -2,6 +2,11 @@
 // Elements are selected, and the moves, resizes, renames and Page edits the
 // shell makes. Pure TS over the Project model, so it is tested without a DOM.
 import {
+  elementNamesTaken,
+  pageNamesTaken,
+  reservedScriptNames,
+} from './script-names';
+import {
   createElement,
   createPage,
   duplicateElement,
@@ -37,10 +42,12 @@ const checkName = (
       suggestion: freshName(suggestName(name), taken),
     };
   }
-  if (taken.has(name)) {
+  if (reservedScriptNames.has(name) || taken.has(name)) {
     return {
       ok: false,
-      message: `Another ${noun} is already named “${name}”.`,
+      message: reservedScriptNames.has(name)
+        ? `“${name}” is reserved for Scripts.`
+        : `Another ${noun} is already named “${name}”.`,
       // Past the current name too, which the author is moving away from.
       suggestion: freshName(name, new Set([...taken, current ?? ''])),
     };
@@ -54,6 +61,12 @@ const namesExcept = (
 ): Set<string> =>
   new Set(items.map(i => i.name).filter(name => name !== except));
 
+// Without a Project, only the Page's own Elements and reserved names are known.
+const elementNamesNear = (page: Page, current?: string, project?: Project) =>
+  project
+    ? elementNamesTaken(project, page, current)
+    : new Set([...reservedScriptNames, ...namesExcept(page.elements, current)]);
+
 /**
  * Checks `name` for an Element on `page`: an identifier, unique within the
  * Page. `current` is the Element's own name, which it may keep.
@@ -62,10 +75,11 @@ export const checkElementName = (
   page: Page,
   name: string,
   current?: string,
+  project?: Project,
 ): NameCheck =>
   checkName(
     name,
-    namesExcept(page.elements, current),
+    elementNamesNear(page, current, project),
     'Element on this Page',
     current,
   );
@@ -76,7 +90,7 @@ export const checkPageName = (
   name: string,
   current?: string,
 ): NameCheck =>
-  checkName(name, namesExcept(project.pages, current), 'Page', current);
+  checkName(name, pageNamesTaken(project, current), 'Page or Element', current);
 
 /**
  * The name suggested from a button's label, or `undefined` when the button
@@ -85,10 +99,11 @@ export const checkPageName = (
 export const labelSuggestion = (
   page: Page,
   button: ButtonElement,
+  project?: Project,
 ): string | undefined => {
   const suggestion = freshName(
     suggestName(button.label),
-    namesExcept(page.elements, button.name),
+    elementNamesNear(page, button.name, project),
   );
   return suggestion === button.name ? undefined : suggestion;
 };
@@ -421,7 +436,7 @@ export class StackEditor {
       const page = this.page;
       const element = createElement(
         kind,
-        freshName(`${kind}1`, namesExcept(page.elements)),
+        freshName(`${kind}1`, elementNamesTaken(this.project, page)),
       );
       const step = (page.elements.length % 10) * CASCADE;
       element.left += step;
@@ -460,7 +475,7 @@ export class StackEditor {
       } else {
         const element = createElement(
           'image',
-          freshName('image1', namesExcept(this.page.elements)),
+          freshName('image1', elementNamesTaken(this.project, this.page)),
         );
         if (element.kind !== 'image') {
           return;
@@ -520,7 +535,7 @@ export class StackEditor {
     if (!element) {
       throw new Error(`No Element is named “${current}”`);
     }
-    const check = checkElementName(this.page, name, current);
+    const check = checkElementName(this.page, name, current, this.project);
     if (check.ok) {
       this.edit(() => {
         element.name = name;
@@ -566,7 +581,7 @@ export class StackEditor {
       const page = createPage(
         freshName(
           `page${this.project.pages.length + 1}`,
-          namesExcept(this.project.pages),
+          pageNamesTaken(this.project),
         ),
       );
       this.project.pages.splice(this.#pageIndex + 1, 0, page);
@@ -596,7 +611,7 @@ export class StackEditor {
     this.edit(() => {
       this.#pageSelected = false;
       if (this.#selection.length) {
-        const taken = namesExcept(this.page.elements);
+        const taken = elementNamesTaken(this.project, this.page);
         const copies = this.selected.map(element => {
           const copy = duplicateElement(element, taken);
           taken.add(copy.name);
@@ -607,7 +622,7 @@ export class StackEditor {
         this.page.elements.push(...copies);
         this.#selection = copies.map(e => e.name);
       } else {
-        const copy = duplicatePage(this.page, namesExcept(this.project.pages));
+        const copy = duplicatePage(this.page, pageNamesTaken(this.project));
         this.project.pages.splice(++this.#pageIndex, 0, copy);
       }
     });

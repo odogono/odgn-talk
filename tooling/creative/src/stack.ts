@@ -191,6 +191,7 @@ const floatWindows = () => {
     const clampedTop = Math.min(Math.max(header, top), window.innerHeight - 24);
     win.style.left = `${clampedLeft}px`;
     win.style.top = `${clampedTop}px`;
+    win.style.setProperty('--window-top', `${clampedTop}px`);
   };
   const register = (win: HTMLElement) => {
     const saved = positions[win.id];
@@ -559,10 +560,15 @@ export const mountStack = (
         { type: 'button', 'data-script': 'element', 'data-view-only': '' },
         'Edit Script',
       ),
+      h(
+        'button',
+        { type: 'button', 'data-script': 'element', 'data-recipe': '' },
+        'Add action…',
+      ),
       ...nameField(
         element.name,
         element.kind === 'button'
-          ? labelSuggestion(editor.page, element)
+          ? labelSuggestion(editor.page, element, project)
           : undefined,
       ),
       h(
@@ -587,6 +593,11 @@ export const mountStack = (
       'button',
       { type: 'button', 'data-script': 'page', 'data-view-only': '' },
       'Edit Page Script',
+    ),
+    h(
+      'button',
+      { type: 'button', 'data-script': 'page', 'data-recipe': '' },
+      'Add action…',
     ),
     h(
       'div',
@@ -621,6 +632,11 @@ export const mountStack = (
       'button',
       { type: 'button', 'data-script': 'project', 'data-view-only': '' },
       'Edit Project Script',
+    ),
+    h(
+      'button',
+      { type: 'button', 'data-script': 'project', 'data-recipe': '' },
+      'Add action…',
     ),
     field('Title', input('projectName', project.name)),
     field(
@@ -804,7 +820,11 @@ export const mountStack = (
         page: () => editor.page,
         element: () => editor.selected[0]!,
       };
-      openScript(owners[button.dataset.script as keyof typeof owners]());
+      const owner = owners[button.dataset.script as keyof typeof owners]();
+      openScript(owner);
+      if (button.hasAttribute('data-recipe')) {
+        scripts.addAction(owner);
+      }
     } else if (button?.dataset.replaceImage) {
       chooseImage(button.dataset.replaceImage);
     } else if (button?.dataset.editText) {

@@ -378,6 +378,8 @@ button:disabled {
 }
 .script-window {
   width: min(28rem, 100vw);
+  max-height: calc(100dvh - var(--window-top, 140px) - 8px);
+  overflow: auto;
 }
 .script-editor .cm-editor {
   height: 18rem;
@@ -545,7 +547,10 @@ button:disabled {
   margin: 0 0 0.6rem;
 }
 
-.el.image:has(img) { border: 0; background: transparent; }
+.el.image:has(img) {
+  border: 0;
+  background: transparent;
+}
 .el.image img {
   width: 100%;
   height: 100%;
@@ -567,12 +572,57 @@ button:disabled {
 }
 
 /* Edit controls cannot mutate or switch the authored Project during Play. */
-.playing #desk, .playing #strip, .playing #tools-window,
-.playing #info-window, .playing #projects-window, .playing #versions-window,
-.playing #edit-menu, .playing #show-projects, .playing #show-versions {
+.playing #desk,
+.playing #strip,
+.playing #tools-window,
+.playing #info-window,
+.playing #projects-window,
+.playing #versions-window,
+.playing #edit-menu,
+.playing #show-projects,
+.playing #show-versions {
   display: none;
 }
-#reader { padding: 16px; overflow: auto; flex: 1; }
-#reader .page { position: relative; }
-#reader .el[hidden] { display: none; }
-#reader .button { cursor: pointer; }
+#reader {
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+}
+#reader .page {
+  position: relative;
+}
+#reader .el[hidden] {
+  display: none;
+}
+#reader .button {
+  cursor: pointer;
+}
+
+.recipe-picker {
+  padding: 12px;
+  max-height: 340px;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+}
+.recipe-picker label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+.recipe-picker textarea {
+  flex: 1;
+}
+.recipe-preview {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.script-window > .add-action {
+  margin: 6px 12px;
+  align-self: flex-start;
+}
+.recipe-picker [hidden] {
+  display: none;
+}
