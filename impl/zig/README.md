@@ -693,7 +693,20 @@ their Grant declarations, and `reload`, `extend` and `replace-library`, whose
 the version of each Library it compiled last. It keeps each `save` by its id,
 restores with the Libraries it compiled last but those `withheld`, the
 Grants it loaded each Script with but those `unbound`, and every Host Object
-but those `disposed`, and goes on with the restored Group's handles. Transcript replay and
+but those `disposed`, and goes on with the restored Group's handles.
+
+Every Trace Case runs twice: as written, and with a save and restore between
+each pair of Pumps (chapter 11, Save and restore replays), which must give
+the same Trace. After each Pump that another follows, the runner saves; a
+save refused with `effects pending` leaves the original Group going on.
+Otherwise it restores with every Library, Grant and Host Object given back,
+adopts each pending call, and goes on in the restored Group. The lines it
+causes are left out of the Trace, the `settle` lines its adoptions make when
+the next Pump drains them included, and the case's own save ids keep the
+numbers they would have had. It skips the round trip where the case saves,
+restores or settles next itself, and where a later `answer` or `fail` is for
+a call the save doesn't hold, whose handle belongs to the original Group. A
+failure in this replay says so. Transcript replay and
 encoding cases that register Host Objects are not supported.
 
 `--check-passing` takes no selection. `corpus-passing.txt` lists the cases the

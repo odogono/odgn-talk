@@ -2328,6 +2328,18 @@ fn busyGroup(gpa: Allocator) !Group {
     return g;
 }
 
+test "a save that doesn't match is refused under RejectMismatch, and nothing is made" {
+    const gpa = testing.allocator;
+    var g = try busyGroup(gpa);
+    defer g.deinit();
+    const other = try save(&g, gpa, @splat(0));
+    defer gpa.free(other);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    try testing.expectEqual(Outcome.mismatch, try restore(&restored, other, .{}, &result));
+}
+
 test "a variables-only restore keeps Script Variables and discards the rest" {
     const gpa = testing.allocator;
     var g = try busyGroup(gpa);

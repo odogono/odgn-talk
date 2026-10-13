@@ -166,8 +166,10 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
 pub const Replay = struct {
     /// Why the backend can't replay a case, or null when it can.
     supports: *const fn (a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8,
-    /// Replays a case from its directory, returning the Trace written.
-    run: *const fn (gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8) anyerror![]u8,
+    /// Replays a case from its directory, returning the Trace written; with
+    /// `round_trip`, saving and restoring between each pair of Pumps
+    /// (chapter 11, Save and restore replays).
+    run: *const fn (gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8, round_trip: bool) anyerror![]u8,
 };
 
 test "filled input keys and values followed by Trace keys" {
