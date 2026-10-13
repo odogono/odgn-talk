@@ -8,6 +8,9 @@ Both Cores parse and check source, run Scripts through the embedding API, and pr
 
 Notable implementation changes are recorded in the [changelog](impl/ts/CHANGELOG.md).
 
+For SQL-backed Scripts, see [Using SQLite](docs/sqlite.md): queries, transactions,
+Host setup and how the implementation works.
+
 ## Layout
 
 The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md) records why the repository is arranged this way.
