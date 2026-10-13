@@ -22,6 +22,7 @@ import {
   type TextElement,
   textOf,
 } from './model';
+import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
 import { type Attributes, byId, h } from './dom';
@@ -51,7 +52,7 @@ const FONTS = ['sans-serif', 'serif', 'monospace', 'cursive'];
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** An Element as the reader would see it, positioned in design pixels. */
-const renderElement = (element: Element): HTMLElement => {
+const renderElement = (element: Element, imageUrl?: string): HTMLElement => {
   const node = h('div', {
     class: `el ${element.kind}${element.visible ? '' : ' hidden'}`,
     'data-element': element.name,
@@ -72,8 +73,25 @@ const renderElement = (element: Element): HTMLElement => {
       renderRichText(node, element.richText);
       break;
     case 'image':
-      // A placeholder until image assets arrive (#753).
-      node.append(h('span', {}, element.image || 'Image'));
+      if (imageUrl) {
+        node.append(
+          h('img', { src: imageUrl, alt: element.image, draggable: 'false' }),
+        );
+        node.addEventListener('contextmenu', event => event.preventDefault());
+      } else {
+        node.append(
+          h(
+            'span',
+            {},
+            element.image ? `Missing image: ${element.image}` : 'Image',
+          ),
+          h(
+            'button',
+            { type: 'button', 'data-replace-image': element.name },
+            'Replace…',
+          ),
+        );
+      }
       break;
     case 'button':
       Object.assign(node.style, {
@@ -116,8 +134,23 @@ const renderElement = (element: Element): HTMLElement => {
 };
 
 /** A Page at design size, unscaled. */
-const renderPage = (page: Page, designWidth: number, into: HTMLElement) => {
-  into.replaceChildren(...page.elements.map(renderElement));
+const renderPage = (
+  page: Page,
+  designWidth: number,
+  into: HTMLElement,
+  project: Project,
+  images: ImageAssets,
+) => {
+  into.replaceChildren(
+    ...page.elements.map(element =>
+      renderElement(
+        element,
+        element.kind === 'image'
+          ? images.url(project.assets.find(a => a.name === element.image))
+          : undefined,
+      ),
+    ),
+  );
   Object.assign(into.style, {
     width: `${designWidth}px`,
     height: `${page.height}px`,
@@ -246,6 +279,7 @@ type Refusal = { attempted: string; check: NameCheck & { ok: false } };
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
   editor: StackEditor;
+  images: ImageAssets;
   readOnly: boolean;
   redraw(): void;
   setReadOnly(readOnly: boolean): void;
@@ -262,6 +296,12 @@ export const mountStack = (
   options: { readOnly?: boolean } = {},
 ): StackShell => {
   const editor = new StackEditor(project);
+  const images = new ImageAssets();
+  window.addEventListener('pagehide', event => {
+    if (!event.persisted) {
+      images.dispose();
+    }
+  });
   editor.readOnly = options.readOnly ?? false;
   const desk = byId('desk');
   const stage = byId('stage');
@@ -299,7 +339,7 @@ export const mountStack = (
   };
 
   const drawPage = () => {
-    renderPage(editor.page, project.designWidth, pageNode);
+    renderPage(editor.page, project.designWidth, pageNode, project, images);
     const selected = editor.selected;
     for (const element of selected) {
       pageNode
@@ -335,7 +375,7 @@ export const mountStack = (
     thumbnails.replaceChildren(
       ...project.pages.map((page, index) => {
         const miniature = h('div', { class: 'page' });
-        renderPage(page, project.designWidth, miniature);
+        renderPage(page, project.designWidth, miniature, project, images);
         miniature.style.transform = `scale(${scaleDown})`;
         const frame = h('div', { class: 'thumbnail' }, miniature);
         frame.style.height = `${Math.min(72, page.height * scaleDown)}px`;
@@ -451,9 +491,9 @@ export const mountStack = (
       case 'image':
         kind.push(
           h(
-            'p',
-            { class: 'muted' },
-            'Choosing a picture comes with image assets.',
+            'button',
+            { type: 'button', 'data-replace-image': element.name },
+            'Replace image…',
           ),
         );
         break;
@@ -720,7 +760,9 @@ export const mountStack = (
   });
   info.addEventListener('click', event => {
     const button = (event.target as HTMLElement).closest('button');
-    if (button?.dataset.editText) {
+    if (button?.dataset.replaceImage) {
+      chooseImage(button.dataset.replaceImage);
+    } else if (button?.dataset.editText) {
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {
       rename(button.dataset.rename);
@@ -739,7 +781,7 @@ export const mountStack = (
     // take the detached target for empty space.
     down.stopPropagation();
     const target = down.target as HTMLElement;
-    if (target.closest('[contenteditable="true"]')) {
+    if (target.closest('[data-replace-image], [contenteditable="true"]')) {
       return;
     }
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset
@@ -848,6 +890,83 @@ export const mountStack = (
     }
   });
 
+  const imageNotice = (message: string) => {
+    byId('notice-text').textContent = message;
+    byId('notice-banner').hidden = false;
+  };
+  const addImages = async (
+    files: File[],
+    replacement?: string,
+    position?: { left: number; top: number },
+  ) => {
+    if (editor.readOnly) {
+      return;
+    }
+    const page = editor.page;
+    const target = replacement ? editor.element(replacement) : undefined;
+    const messages: string[] = [];
+    for (const file of files) {
+      try {
+        const imported = await importImage(file);
+        // The picker/decoder may outlive a Page switch or edit-lock loss.
+        if (
+          editor.readOnly ||
+          editor.page !== page ||
+          (target && !page.elements.includes(target))
+        ) {
+          return;
+        }
+        images.add(imported);
+        edit(() => editor.setImage(imported.asset, replacement, position));
+        messages.push(...imported.warnings);
+      } catch (error) {
+        messages.push(String(error));
+      }
+    }
+    if (messages.length) {
+      imageNotice(messages.join(' '));
+    }
+  };
+  const chooseImage = (replacement?: string) => {
+    if (editor.readOnly) {
+      return;
+    }
+    const picker = h('input', {
+      type: 'file',
+      accept: IMAGE_ACCEPT,
+      multiple: !replacement,
+    }) as HTMLInputElement;
+    picker.addEventListener(
+      'change',
+      () => void addImages([...(picker.files ?? [])], replacement),
+    );
+    picker.click();
+  };
+  pageNode.addEventListener('click', event => {
+    const name = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-replace-image]',
+    )?.dataset.replaceImage;
+    if (name) {
+      chooseImage(name);
+    }
+  });
+  pageNode.addEventListener('dragover', event => {
+    if (event.dataTransfer?.types.includes('Files')) {
+      event.preventDefault();
+    }
+  });
+  pageNode.addEventListener('drop', event => {
+    if (!event.dataTransfer?.files.length) {
+      return;
+    }
+    event.preventDefault();
+    const rect = pageNode.getBoundingClientRect();
+    void addImages([...event.dataTransfer.files], undefined, {
+      left: (event.clientX - rect.left) / scale,
+      top: (event.clientY - rect.top) / scale,
+    });
+  });
+
   // The Tools window adds Elements.
   byId('tools').replaceChildren(
     ...ELEMENT_KINDS.map(kind =>
@@ -866,7 +985,9 @@ export const mountStack = (
   byId('tools').addEventListener('click', event => {
     const kind = (event.target as HTMLElement).closest('button')?.dataset
       .kind as ElementKind | undefined;
-    if (kind) {
+    if (kind === 'image') {
+      chooseImage();
+    } else if (kind) {
       edit(() => editor.addElement(kind));
     }
   });
@@ -993,6 +1114,7 @@ export const mountStack = (
   draw();
   return {
     editor,
+    images,
     get readOnly() {
       return editor.readOnly;
     },

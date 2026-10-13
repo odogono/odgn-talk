@@ -9,7 +9,12 @@ import {
   type ProjectMessage,
 } from './edit-lock';
 import { createProject, type Project } from './model';
-import { PROJECT_MIMETYPE, writeProjectFile } from './project-file';
+import { importImage, projectForExport, storageAsset } from './images';
+import {
+  PROJECT_MIMETYPE,
+  readProjectFile,
+  writeProjectFile,
+} from './project-file';
 import type { StackShell } from './stack';
 import {
   errorNameOf,
@@ -117,6 +122,12 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   let firstSave = true;
   let renamingId: string | undefined;
   let confirmingDeleteId: string | undefined;
+  // Autosave is disabled without storage; still protect in-memory edits when
+  // importing or switching Projects. An export makes that exact revision safe.
+  let safeProject = JSON.stringify(editor.project);
+  const hasUnsafeChanges = () =>
+    (autosave.dirty || !storage || orphaned) &&
+    JSON.stringify(editor.project) !== safeProject;
 
   const notice = (text: string): void => {
     byId('notice-text').textContent = text;
@@ -191,9 +202,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       lock.release();
       throw new StorageError('Another tab took over editing.', LOST_EDITORSHIP);
     }
-    // Asset bytes arrive with image assets (#753); the model and any new
-    // assets are already written together in one transaction.
-    record = await storage.saveProject(currentId, editor.project);
+    record = await storage.saveProject(currentId, editor.project, {
+      assets: shell.images.forStorage(editor.project),
+    });
     channel?.post({ type: 'saved', projectId: currentId, seq: record.seq });
   };
 
@@ -259,26 +270,55 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   drawReadonly();
   drawSaveStatus(autosave.state);
 
-  /** Downloads the in-memory Project as a Project file (#753 settles import). */
+  /** Downloads a stable copy of the in-memory Project and its image bytes. */
   const exportNow = async (): Promise<void> => {
     try {
-      const hashes = [...new Set(editor.project.assets.map(a => a.hash))];
-      const bytes = storage
-        ? await storage.assetBytes(hashes)
-        : new Map<string, Uint8Array>();
-      const file = await writeProjectFile(editor.project, bytes);
+      editor.finishPendingEdit();
+      const source = JSON.stringify(editor.project);
+      const project = projectForExport(editor.project);
+      const id = currentId;
+      // Session bytes cover most assets; read only the rest from storage.
+      const missing = [...new Set(project.assets.map(a => a.hash))].filter(
+        hash => !shell.images.bytes.has(hash),
+      );
+      const bytes =
+        storage && missing.length
+          ? await storage.assetBytes(missing)
+          : new Map<string, Uint8Array>();
+      for (const [hash, data] of shell.images.bytes) {
+        bytes.set(hash, data);
+      }
+      const file = await writeProjectFile(project, bytes, {
+        allowMissing: true,
+      });
       const url = URL.createObjectURL(
         new Blob([file as Uint8Array<ArrayBuffer>], { type: PROJECT_MIMETYPE }),
       );
       const link = h('a', {
         href: url,
-        download: `${editor.project.name || 'Project'}.zip`,
+        download: `${project.name || 'Project'}.zip`,
       });
       link.click();
-      URL.revokeObjectURL(url);
-      if (storage && record && !orphaned) {
+      if (currentId === id && JSON.stringify(editor.project) === source) {
+        safeProject = source;
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const missingNames = project.assets
+        .filter(a => !bytes.has(a.hash))
+        .map(a => a.name);
+      notice(
+        `Exported ${project.name} (${byteSize(file.length)}).${missingNames.length ? ` Missing images kept as placeholders: ${missingNames.join(', ')}.` : ''}`,
+      );
+      if (
+        storage &&
+        record &&
+        !orphaned &&
+        currentId === id &&
+        JSON.stringify(projectForExport(editor.project)) ===
+          JSON.stringify(project)
+      ) {
         const now = Date.now();
-        await storage.markExported(currentId, now);
+        await storage.markExported(currentId, now).catch(() => {});
         record = { ...record, exportedAt: now };
         await drawStorageStatus();
       }
@@ -302,33 +342,196 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void drawStorageStatus();
   });
 
+  const loadImages = async (project: Project): Promise<void> => {
+    if (!storage) {
+      return;
+    }
+    const assets = project.assets.filter(a => !shell.images.bytes.has(a.hash));
+    if (!assets.length) {
+      return;
+    }
+    const bytes = await storage.assetBytes(assets.map(a => a.hash));
+    for (const asset of assets) {
+      const data = bytes.get(asset.hash);
+      if (!data || shell.images.bytes.has(asset.hash)) {
+        continue;
+      }
+      try {
+        const image = await importImage(
+          new File([data as Uint8Array<ArrayBuffer>], asset.fileName),
+        );
+        shell.images.add(image);
+      } catch {
+        /* Invalid images render as missing, with Replace. */
+      }
+    }
+  };
+  void loadImages(editor.project)
+    .then(() => shell.redraw())
+    .catch(error => notice(String(error)));
+
+  /** Fully validate before saving under a fresh ID; never overwrite a Project. */
+  const importProject = async (file: File): Promise<void> => {
+    try {
+      const loaded = await readProjectFile(
+        new Uint8Array(await file.arrayBuffer()),
+      );
+      if (!loaded.project.pages.length) {
+        throw new Error('The Project is damaged: it has no Pages.');
+      }
+      const messages = loaded.missingAssets.map(
+        a => `Missing image: ${a.name}. Use Replace on the Page or in Info.`,
+      );
+      const accepted = [];
+      for (const asset of loaded.project.assets) {
+        const data = loaded.assets.get(asset.hash);
+        if (!data) {
+          continue;
+        }
+        try {
+          const image = await importImage(
+            new File([data as Uint8Array<ArrayBuffer>], asset.fileName),
+          );
+          asset.mediaType = image.asset.mediaType;
+          accepted.push(image);
+          messages.push(...image.warnings);
+        } catch (error) {
+          loaded.assets.delete(asset.hash);
+          messages.push(
+            `${asset.name}: ${String(error)} Use Replace on the Page or in Info.`,
+          );
+        }
+      }
+      editor.finishPendingEdit();
+      await autosave.flush();
+      if (hasUnsafeChanges()) {
+        throw new Error(
+          "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
+        );
+      }
+      // Stage bytes separately until the new Project's transaction succeeds.
+      const assets = new Map(
+        accepted.map(image => [
+          image.asset.hash,
+          storageAsset(image.bytes, image.asset.mediaType),
+        ]),
+      );
+      const previousId = currentId;
+      const previousModel = JSON.stringify(editor.project);
+      const created = storage
+        ? await storage.saveProject(undefined, loaded.project, { assets })
+        : undefined;
+      if (
+        currentId !== previousId ||
+        JSON.stringify(editor.project) !== previousModel
+      ) {
+        channel?.post({ type: 'list-changed' });
+        await drawList();
+        notice(
+          'The imported Project is in Projects. Your current edits stay on the desk.',
+        );
+        return;
+      }
+      for (const image of accepted) {
+        shell.images.add(image);
+      }
+      await showLoaded(
+        { project: loaded.project, migrated: false, record: created },
+        created?.id ?? `unsaved-${crypto.randomUUID()}`,
+      );
+      channel?.post({ type: 'list-changed' });
+      if (messages.length) {
+        notice(messages.join(' '));
+      }
+    } catch (error) {
+      notice(`Couldn't import: ${String(error)}`);
+    }
+  };
+  let importing = false;
+  const importFiles = async (files: File[]) => {
+    if (importing) {
+      return;
+    }
+    importing = true;
+    try {
+      for (const file of files) {
+        await importProject(file);
+      }
+    } finally {
+      importing = false;
+    }
+  };
+  const importButton = h('button', { type: 'button' }, 'Import Project…');
+  byId('new-project').after(importButton);
+  importButton.addEventListener('click', () => {
+    // No accept filter: custom Project extensions must remain pickable on iOS.
+    const picker = h('input', { type: 'file' }) as HTMLInputElement;
+    picker.addEventListener(
+      'change',
+      () => void importFiles([...(picker.files ?? [])]),
+    );
+    picker.click();
+  });
+  byId('projects-window').addEventListener('dragover', event => {
+    if (event.dataTransfer?.types.includes('Files')) {
+      event.preventDefault();
+    }
+  });
+  byId('projects-window').addEventListener('drop', event => {
+    if (!event.dataTransfer?.files.length) {
+      return;
+    }
+    event.preventDefault();
+    void importFiles([...event.dataTransfer.files]);
+  });
+
+  let switching = false;
   /** Puts a loaded Project on the desk and makes it the one being edited. */
   const showLoaded = async (
     loaded: Omit<LoadedProject, 'record'> & { record?: ProjectRecord },
     id: string,
   ): Promise<void> => {
-    preview = undefined;
-    byId('preview-note').hidden = true;
-    orphaned = false;
-    byId('orphan-banner').hidden = true;
-    currentId = id;
-    record = loaded.record;
-    const editingNow = await lock.acquire(id);
-    editor.replaceProject(loaded.project);
-    shell.setReadOnly(!editingNow);
-    autosave.setEnabled(editingNow && !!storage);
-    shell.redraw();
-    drawReadonly();
-    drawSaveStatus(autosave.state);
-    await storage?.setLastProjectId(id).catch(() => {});
-    if (loaded.migrated && editingNow) {
-      // Keep the pre-migration record as an earlier version.
-      autosave.markDirty();
-      await autosave.flush();
+    if (switching) {
+      return;
     }
-    await drawList();
-    await drawVersions();
-    await drawStorageStatus();
+    switching = true;
+    const before = JSON.stringify(editor.project);
+    try {
+      await loadImages(loaded.project);
+      if (JSON.stringify(editor.project) !== before) {
+        notice(
+          'Your current edits stay on the desk. Open the other Project from Projects when ready.',
+        );
+        return;
+      }
+      shell.setReadOnly(true);
+      const editingNow = await lock.acquire(id);
+      preview = undefined;
+      byId('preview-note').hidden = true;
+      orphaned = false;
+      byId('orphan-banner').hidden = true;
+      currentId = id;
+      record = loaded.record;
+      editor.replaceProject(loaded.project);
+      safeProject = JSON.stringify(editor.project);
+      shell.setReadOnly(!editingNow);
+      autosave.setEnabled(editingNow && !!storage);
+      shell.redraw();
+      drawReadonly();
+      drawSaveStatus(autosave.state);
+      await storage?.setLastProjectId(id).catch(() => {});
+      if (loaded.migrated && editingNow) {
+        // Keep the pre-migration record as an earlier version.
+        autosave.markDirty();
+        await autosave.flush();
+      }
+      await drawList();
+      await drawVersions();
+      await drawStorageStatus();
+    } finally {
+      switching = false;
+      shell.setReadOnly(!!preview || !lock.editing);
+    }
   };
 
   /** Opens a stored Project, flushing the current one first. */
@@ -338,7 +541,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     editor.finishPendingEdit();
     await autosave.flush();
-    if (autosave.dirty) {
+    if (hasUnsafeChanges()) {
       notice(
         "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
       );
@@ -359,7 +562,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const newProject = async (): Promise<void> => {
     editor.finishPendingEdit();
     await autosave.flush();
-    if (autosave.dirty) {
+    if (hasUnsafeChanges()) {
       notice(
         "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
       );
@@ -613,6 +816,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       );
       return;
     }
+    await loadImages(loaded.project);
     preview = {
       seq,
       savedAt,
@@ -680,7 +884,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (!storage) {
         return;
       }
-      const created = await storage.saveProject(undefined, editor.project);
+      const created = await storage.saveProject(undefined, editor.project, {
+        assets: shell.images.forStorage(editor.project),
+      });
       channel?.post({ type: 'list-changed' });
       await showLoaded(
         { project: editor.project, migrated: false, record: created },
@@ -729,7 +935,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       await storage
         .loadProject(currentId)
-        .then(loaded => {
+        .then(async loaded => {
+          await loadImages(loaded.project);
           record = loaded.record;
           editor.replaceProject(loaded.project);
           shell.redraw();

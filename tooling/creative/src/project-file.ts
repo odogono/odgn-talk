@@ -435,6 +435,7 @@ const bytesMatch = async (asset: Asset, bytes: Uint8Array): Promise<boolean> =>
 export const writeProjectFile = async (
   project: Project,
   assetBytes: ReadonlyMap<string, Uint8Array>,
+  { allowMissing = false }: { allowMissing?: boolean } = {},
 ): Promise<Uint8Array> => {
   const result = validateProjectJson(project);
   if ('issues' in result) {
@@ -467,6 +468,9 @@ export const writeProjectFile = async (
   for (const [n, [i, asset]] of toWrite.entries()) {
     const bytes = assetBytes.get(asset.hash);
     if (!bytes) {
+      if (allowMissing) {
+        continue;
+      }
       throw new ProjectFileError(
         `The asset "${asset.name}" has no bytes to write.`,
         [{ path: `assets[${i}].hash`, message: 'no bytes for this hash' }],
