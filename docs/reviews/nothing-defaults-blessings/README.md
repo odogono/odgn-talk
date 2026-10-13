@@ -29,10 +29,14 @@ the Go and Zig passing gates. The
 [design's acceptance table](../../design/nothing-defaults.md#acceptance-cases)
 maps each case to its acceptance groups.
 
-Two cases avoid known Core gaps. `nothing-defaults/compatibility` has no local
-named like a Handler until #764, and `load-diagnostics/nothing-defaults` tests
-the unknown-name fallback inside a Handler, not a Constant, until #765. Each fix
-adds its witness, which needs its own first blessing.
+Two cases avoid Core gaps that have since been fixed.
+`nothing-defaults/compatibility` has no local named like a Handler because of
+#764, whose witness is
+[`nothing-defaults/handler-name-locals`](../../../corpus/nothing-defaults/handler-name-locals/).
+`load-diagnostics/nothing-defaults` tests the unknown-name fallback inside a
+Handler, not a Constant, because of #765, whose witness is
+[`load-diagnostics/constant-unknown-name`](../../../corpus/load-diagnostics/constant-unknown-name/).
+Each witness needs its own first blessing.
 
 The expectation review follows
 [chapter 11](../../../spec/11-the-trace-and-conformance.md#bless).

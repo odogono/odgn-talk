@@ -1812,7 +1812,10 @@ const Checker = struct {
                     try c.refs.put(c.a, t, r);
                     try c.nameValue(t, r);
                     if (in == .initialiser) c.constantName(t, r);
-                } else try c.report(.unknown_name, t);
+                } else {
+                    try c.report(.unknown_name, t);
+                    if (in == .initialiser) c.notConstant(t);
+                }
             },
             .whose_key => {},
             .group => |g| try c.expr(s, g, in),
@@ -1960,6 +1963,7 @@ const Checker = struct {
         for (call.args) |arg| try c.expr(s, arg, in);
         const r = try c.resolve(s, call.name) orelse {
             try c.report(.unknown_name, call.name);
+            if (in == .initialiser) c.notConstant(call.name);
             return;
         };
         try c.refs.put(c.a, call.name, r);
@@ -2307,6 +2311,18 @@ test "both sides of otherwise and an optional read's operands are checked" {
     try expectDiagnostics("on t\nreturn 1 otherwise absent\nend\n", .{}, "unknown name at 2:20\n");
     try expectDiagnostics("on t\nreturn the optional k of absent\nend\n", .{}, "unknown name at 2:26\n");
     try expectDiagnostics("on t\nreturn the optional (absent) of nothing\nend\n", .{}, "unknown name at 2:22\n");
+}
+
+test "an unknown name in an initialiser is also not constant" {
+    try expectDiagnostics("constant x = unknown\n", .{}, "unknown name at 1:14\nnot constant at 1:14\n");
+    try expectDiagnostics("constant x = 1 + unknown\n", .{}, "unknown name at 1:18\nnot constant at 1:18\n");
+    try expectDiagnostics("constant x = [unknown]\n", .{}, "unknown name at 1:15\nnot constant at 1:15\n");
+    try expectDiagnostics("constant x = 1 otherwise unknown\n", .{}, "unknown name at 1:26\nnot constant at 1:26\n");
+    try expectDiagnostics("constant x = unknown(1)\n", .{}, "unknown name at 1:14\nnot constant at 1:14\n");
+    try expectDiagnostics("script variable v = unknown\n", .{}, "unknown name at 1:21\nnot constant at 1:21\n");
+    try expectDiagnostics("function f a = unknown\nreturn a\nend\n", .{}, "unknown name at 1:16\nnot constant at 1:16\n");
+    // `not constant` names only the first token that isn't allowed.
+    try expectDiagnostics("script variable v = 1\nconstant x = v + unknown\n", .{}, "not constant at 2:14\nunknown name at 2:18\n");
 }
 
 test "otherwise and optional reads are eligible where their operands are" {

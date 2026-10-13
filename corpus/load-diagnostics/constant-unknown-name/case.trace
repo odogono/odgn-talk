@@ -1,0 +1,26 @@
+# Unblessed: an unknown name in a Constant initialiser is also not constant (#765); first blessing awaits human review.
+> load name identity=1370507ef458c2fb20f9991b7591490c3c0df0aa642fc5634b78022866a9b4cf
+diag name code="unknown name" pos=1:14
+diag name code="not constant" pos=1:14
+> load operand identity=46dec499de410628fe51d619326507b1bca2238be8522689c78566f74851dc73
+diag operand code="unknown name" pos=1:18
+diag operand code="not constant" pos=1:18
+> load element identity=7fe5478bf35a1da459cbe8ed14772642b0dc5a0d0724dc2b84dcc17c88f34a99
+diag element code="unknown name" pos=1:15
+diag element code="not constant" pos=1:15
+> load fallback identity=6953f6aa543a6ef244b023f26aaa13b1f6fa96305db203079de6f4c03059b860
+diag fallback code="unknown name" pos=1:26
+diag fallback code="not constant" pos=1:26
+> load defaulted identity=110a5fb17fc8a897728dd53a15aa2a387af14fd8bcb16a72287bb36acc95589d
+diag defaulted code="unknown name" pos=1:14
+diag defaulted code="not constant" pos=1:14
+> load call identity=ff6fddb6ee492d203cc8d039bcf5d450ab4449f7628362b8e918fc0d7ac979d9
+diag call code="unknown name" pos=1:14
+diag call code="not constant" pos=1:14
+> load script-variable identity=9d5dcc310cbe46f575a8489bda9e3808ec542fd07b798aabf81aeb6c78a0c24e
+diag script-variable code="unknown name" pos=1:33
+diag script-variable code="not constant" pos=1:33
+> load parameter-default identity=c90cdc911d9e2ecd9e7dfddc76d5093fc3015e93355ca99910427a5586a518c4
+diag parameter-default code="unknown name" pos=1:34
+diag parameter-default code="not constant" pos=1:34
+> vars

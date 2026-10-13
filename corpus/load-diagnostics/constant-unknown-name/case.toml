@@ -1,0 +1,42 @@
+# constant-unknown-name: an unknown name in a Constant initialiser, a Script
+# Variable initialiser or a parameter default is both `unknown name` and
+# `not constant`, at the same token, including as an `otherwise` fallback that
+# would not run (spec chapter 2, Load-time diagnostics; #765).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "name"
+source = "name.talk"
+
+[[scripts]]
+name = "operand"
+source = "operand.talk"
+
+[[scripts]]
+name = "element"
+source = "element.talk"
+
+[[scripts]]
+name = "fallback"
+source = "fallback.talk"
+
+[[scripts]]
+name = "defaulted"
+source = "defaulted.talk"
+
+[[scripts]]
+name = "call"
+source = "call.talk"
+
+[[scripts]]
+name = "script-variable"
+source = "script-variable.talk"
+
+[[scripts]]
+name = "parameter-default"
+source = "parameter-default.talk"

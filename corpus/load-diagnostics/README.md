@@ -1,9 +1,10 @@
 # Load diagnostics
 
-These 31 Trace Cases pin the diagnostic families the Go step 1 front end emits
-(#250). Each rejected `load` is followed by its diagnostics in source order.
-`> vars` then confirms that a refused load installed no Script. The TS Core
-blessed only these new cases; existing blessed expectations were not changed.
+These 36 Trace Cases pin load diagnostics, starting with the families the Go
+step 1 front end emits (#250). Each rejected `load` is followed by its
+diagnostics in source order. `> vars` then confirms that a refused load
+installed no Script. The TS Core blessed only these new cases; existing blessed
+expectations were not changed.
 
 **Human review is pending.** #250 and the decisions on #132 require a human to
 review each new case's source and blessed records. This table presents that
@@ -23,6 +24,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [cant-suspend-here](cant-suspend-here/bad.talk) | `can't suspend here` at `2:1` | [Trace](cant-suspend-here/case.trace) |
 | [cant-write](cant-write/bad.talk) | `can't write` at `3:12` | [Trace](cant-write/case.trace) |
 | [capture-in-repetition](capture-in-repetition/bad.talk) | `capture in repetition` at `2:18` | [Trace](capture-in-repetition/case.trace) |
+| [constant-unknown-name](constant-unknown-name/name.talk) | `unknown name` and then `not constant` at the same token, for an unknown name in a Constant initialiser (alone, as an operand, as a list element, as a call, and on either side of `otherwise`), a [Script Variable initialiser](constant-unknown-name/script-variable.talk) and a [parameter default](constant-unknown-name/parameter-default.talk) (first blessing pending, #765) | [Trace](constant-unknown-name/case.trace) |
 | [container-properties](container-properties/leaf.talk) | `not a container` at `2:14` for a Built-in property ending the Container, [`2:10`](container-properties/intermediate.talk) for one on its path and [`2:7`](container-properties/possessive.talk) after `'s` in `set`; [quoted and computed keys and property reads](container-properties/keys.talk) load and run (first blessing pending, #670) | [Trace](container-properties/case.trace) |
 | [default-order](default-order/bad.talk) | `default order` at `1:19` | [Trace](default-order/case.trace) |
 | [duplicate-key](duplicate-key/bad.talk) | `duplicate key` at `2:15` | [Trace](duplicate-key/case.trace) |

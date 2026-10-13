@@ -262,17 +262,19 @@ blessings ([record](../reviews/nothing-defaults-blessings/README.md)).
 | 5 | [`nothing-defaults/evaluation-order`](../../corpus/nothing-defaults/evaluation-order/), [`nothing-defaults/stdlib-attribution`](../../corpus/nothing-defaults/stdlib-attribution/) |
 | 6 | [`nothing-defaults/host-objects`](../../corpus/nothing-defaults/host-objects/), [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/) |
 | 7 | [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
-| 8 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
+| 8 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/), [`load-diagnostics/constant-unknown-name`](../../corpus/load-diagnostics/constant-unknown-name/) |
 | 9 | [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
 | 10 | [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/); the empty-stack verifier check is a TS unit test ([lowering tests](../../impl/ts/tests/lowering.test.ts)) |
 
-Zig omits `not constant` after `unknown name` in an initializer
-([#765](https://github.com/odogono/odgn-talk/issues/765)), so the unresolved
-fallback is checked in a Handler. Go refused a local named like a Handler until
+Go refused a local named like a Handler until
 [#764](https://github.com/odogono/odgn-talk/issues/764), so `compatibility`
 doesn't pair them; [`nothing-defaults/handler-name-locals`](../../corpus/nothing-defaults/handler-name-locals/)
 covers a local `otherwise` beside `on otherwise`, and its first blessing awaits
-review.
+review. An unresolved fallback in a Constant is `unknown name` and
+`not constant` at the same token;
+[`load-diagnostics/constant-unknown-name`](../../corpus/load-diagnostics/constant-unknown-name/)
+checks it ([#765](https://github.com/odogono/odgn-talk/issues/765)), and its
+first blessing awaits review.
 
 1. Default only Nothing: explicit Nothing and absent map keys use the
    fallback; false, zero, empty text, list and map do not. A fallback may
