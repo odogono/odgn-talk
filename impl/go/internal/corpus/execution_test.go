@@ -25,8 +25,8 @@ func TestExecutionBackends(t *testing.T) {
 			})
 		}
 	}
-	if count != 61 {
-		t.Fatalf("expected 61 Trace cases, got %d", count)
+	if count != 62 {
+		t.Fatalf("expected 62 Trace cases, got %d", count)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 79 {
-		t.Fatalf("required set: %d cases, want 79", count)
+	if count != 80 {
+		t.Fatalf("required set: %d cases, want 80", count)
 	}
 }
 

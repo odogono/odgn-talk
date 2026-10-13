@@ -21,6 +21,11 @@ part of the Abstract Machine, driven through `talk.h`.
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
 
+`it` is a body local. In a Constant or Script Variable initialiser or a
+parameter default, each unbound `it` reports `unknown name`, alongside
+`not constant` at only the first disallowed token. Handler, function and
+Lambda bodies retain their own `it`, including Lambdas created at load.
+
 Whole Host Object properties can be assigned with `set` through `me`, `it`
 or `the target`, including intermediate keys/chunks that locate the Object.
 These implicit bindings cannot be replaced or used as roots for ordinary

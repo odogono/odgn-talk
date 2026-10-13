@@ -268,8 +268,11 @@ The shared `stdlib/template-migration` regression checks `${…}` placeholders,
 `formatDate` and `parseDate`, including error fields, caller positions and costs.
 All load-diagnostic Trace Cases replay through public `Load`, including
 `initialiser failed` at the raising instruction's source-map position.
-Constant and Script Variable initialisers and parameter defaults report one
-`not constant` at their first disallowed token; later names are still checked.
+
+`it` is a body local. In a Constant or Script Variable initialiser or a
+parameter default, each unbound `it` reports `unknown name`, alongside
+`not constant` at only the first disallowed token. Handler, function and
+Lambda bodies retain their own `it`, including Lambdas created at load.
 
 Raw Text Literals preserve backslashes and placeholders. Backticks decode
 escapes and accept nested multiline Interpolation Holes. Both forms support

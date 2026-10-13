@@ -290,6 +290,11 @@ if (!parsed.error) checkSyntax(parsed.tree); // check an existing lossless tree
 
 Container parsing rejects Built-in properties anywhere on the target path, including in `set`, with `not a container` at the target's first token. Parentheses preserve that path. Quoted/computed keys and property reads in key, index, delimiter and value expressions remain allowed.
 
+`it` is a body local. In a Constant or Script Variable initialiser or a
+parameter default, each unbound `it` reports `unknown name`, alongside
+`not constant` at only the first disallowed token. Handler, function and
+Lambda bodies retain their own `it`, including Lambdas created at load.
+
 On a recovered tree, `checkSyntax` treats `Error` regions as opaque and omits constructs with malformed operands or heads. Blocks keep their other statements, so parsed declarations, scopes, bindings and load diagnostics remain available to tooling. The lossless syntax tree is unchanged. These diagnostics are recovery output; `ok` only describes the retained semantic checks and does not mean the original source is valid. Consult the recovering parser's `error` as well.
 
 The typed semantic tree retains grammar productions and operator/literal tokens for later lowering, omits trivia and empty productions, and replaces declaration, binding and reference tokens with `SemanticName` nodes. Every node has a half-open UTF-16 source span and a 1-based scalar start position. Name nodes identify their role and resolved `Binding`; body nodes identify their scope. Scopes expose parameters, locals (including `it`), and Lambda captures in first-use order. Local bindings record their Nothing initialization. The input lossless tree remains unchanged. Conversion and traversal use explicit work stacks, including for deeply nested expressions.

@@ -1,0 +1,4 @@
+script variable v = 1
+function f x = v + it
+  return it
+end

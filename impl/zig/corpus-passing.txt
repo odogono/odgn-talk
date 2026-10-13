@@ -234,6 +234,7 @@ load-diagnostics/invalid-text-closing-margin
 load-diagnostics/invalid-text-delimiter
 load-diagnostics/invalid-text-escape
 load-diagnostics/invalid-text-indentation
+load-diagnostics/it-outside-body
 load-diagnostics/leaves-finally
 load-diagnostics/missing-handler-wait
 load-diagnostics/name-clash

@@ -601,6 +601,25 @@ describe('Core binding and function contracts', () => {
     ]);
   });
 
+  test('it in defaults has no function body binding', () => {
+    expect(diagnostics('function f x = it\nreturn it\nend')).toEqual([
+      ['unknown name', 1, 16],
+      ['not constant', 1, 16],
+    ]);
+    expect(
+      diagnostics(
+        'script variable v = 1\nfunction f x = v + it + it\nreturn it\nend',
+      ),
+    ).toEqual([
+      ['not constant', 2, 16],
+      ['unknown name', 2, 20],
+      ['unknown name', 2, 25],
+    ]);
+    expect(
+      diagnostics('function f x = given: given: it\nreturn it\nend'),
+    ).toEqual([]);
+  });
+
   test('contract diagnostics retain scalar columns, UTF-16 spans and catalogue ordering', () => {
     const source =
       'constant c = 1\r\non t\r\n\tput ["😀", f()] into c\r\nend t\r\nfunction f a = me, b\r\nend f';
