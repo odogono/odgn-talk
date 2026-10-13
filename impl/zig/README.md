@@ -74,7 +74,11 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
   has so far, Trace writing, the Group Fingerprint, and saving and restoring.
 - `tests/`: C programs that use `talk.h` as a Host would.
 
-`session` and the REPL join `src/` in step 6.
+- `src/session/`: the Session Host of chapter 12, an ordinary Host over
+  `talk.h`, and Session Transcripts.
+- `src/notify/`: the Notification router `store` watches use.
+
+The REPL joins `src/` in step 6.
 
 ## Syntax
 
@@ -228,6 +232,36 @@ From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless
 the declaration is marked `C only`, and lists the `talk.go` names `talk.h`
 doesn't declare yet. Those fail only from step 6's conformance gate.
+
+## The Session Host
+
+[`src/session/session.zig`](src/session/session.zig) is chapter 12's Session
+Host. It is an ordinary Host: it drives a Group named `session`, holding one
+Script, through `talk.h` alone, using the front end only to read Entries. It
+follows its Runs through their reports, placed by the Group's Trace records,
+and never inserts `Inspect()` to do so. A Driver gives it everything from
+outside: Clock readings, typed lines, prompt answers, and where its output and
+Trace go.
+
+- **Entries** are decided on their first token. A declaration with new names
+  extends the Script, and a redefinition reloads it from the session source,
+  carrying Script Variables over. A statement or an expression becomes
+  `entry<n>`, with the names it binds as Container roots or Captures as new
+  Script Variables. The checker gives these as each body's `roots`.
+- **Positions** of an Entry's diagnostics and errors are shown in its own
+  lines: the extension's lines before the Entry's first, and `return ` before
+  an expression's first line, are taken off.
+- **Output** of a Pump is placed by its Trace: a Host function's lines at its
+  `call` record, a Run's end at its `run` record, and `unhandled` at its
+  record. A Run other than the current Entry's has `[<run>] ` before its lines.
+- **The corpus runner** replays `session.transcript` through it, and compares
+  the Transcript it writes, its `@`, `<` and `~` lines included where it read
+  them, and the Group's Trace with `case.trace`.
+
+Not implemented yet: the Session Store and Store Notifications, the
+observation commands (`:describe`, `:inspect`, `:apropos`, `:trace`,
+`:untrace`, `:fuel`) and object crossings. The Transcripts that need them
+aren't on the passing list.
 
 ## The Notification router
 
