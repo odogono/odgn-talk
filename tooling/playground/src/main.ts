@@ -11,20 +11,22 @@ import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { planApply, splitDeclarations } from './declarations';
 import {
-  breakpointLines,
-  createEditorState,
   diagnosticsSpec,
-  markVerified,
   offsetOf,
   onEdits,
+  refreshHints,
+} from '@odgn/northtalk-editor/editor';
+import { LspClient } from '@odgn/northtalk-editor/lsp-client';
+import {
+  breakpointLines,
+  createEditorState,
+  markVerified,
   pausedAt,
   printedAt,
-  refreshHints,
   selectionToRun,
 } from './editor';
 import { EXAMPLES, exampleById, type Example } from './examples';
 import { decodeLink, encodeLink, type Shared } from './link';
-import { LspClient } from './lsp-client';
 import type {
   ConsoleLine,
   FromSession,

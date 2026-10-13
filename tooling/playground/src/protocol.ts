@@ -1,15 +1,11 @@
 // Messages between the page and its workers. The session worker runs the
-// Core, the Session Host and the debuggers; the LSP worker runs the language
-// server, the formatter and the Lints.
+// Core, the Session Host and the debuggers. The LSP worker's messages are in
+// `@odgn/northtalk-editor/lsp-protocol`.
 import type {
   DebugAction,
   TranscriptItem,
   UserPrompt,
 } from '@odgn/northtalk/session';
-import type {
-  RpcMessage,
-  WorkspaceConfiguration,
-} from '@odgn/northtalk-tooling/lsp';
 import type { Shared } from './link';
 import type {
   ApplyResult,
@@ -152,11 +148,6 @@ export type SessionResponse =
 /** A message to the page: a reply to request `id`, or an unprompted state. */
 export type FromSession = { id?: number; response: SessionResponse };
 export type ToSession = { id: number; request: SessionRequest };
-
-export type ToLsp =
-  | { message: RpcMessage; t: 'rpc' }
-  | { configuration: WorkspaceConfiguration; t: 'configure' };
-export type FromLsp = { message: RpcMessage };
 
 export type SyntaxRequest = { revision: number; source: string };
 export type SyntaxResponse = { revision: number } & (

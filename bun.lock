@@ -34,6 +34,29 @@
         "@odgn/northtalk-tooling": "workspace:*",
       },
     },
+    "tooling/creative": {
+      "name": "@odgn/northtalk-creative",
+      "dependencies": {
+        "@codemirror/state": "^6.7.6",
+        "@codemirror/view": "^6.43.13",
+        "@odgn/northtalk": "workspace:*",
+        "@odgn/northtalk-editor": "workspace:*",
+      },
+    },
+    "tooling/editor": {
+      "name": "@odgn/northtalk-editor",
+      "dependencies": {
+        "@codemirror/autocomplete": "^6.20.3",
+        "@codemirror/commands": "^6.11.1",
+        "@codemirror/language": "^6.12.4",
+        "@codemirror/lint": "^6.9.7",
+        "@codemirror/state": "^6.7.6",
+        "@codemirror/view": "^6.43.13",
+        "@lezer/highlight": "^1.2.5",
+        "@odgn/northtalk": "workspace:*",
+        "@odgn/northtalk-tooling": "workspace:*",
+      },
+    },
     "tooling/fuzz": {
       "name": "@odgn/northtalk-fuzz",
       "dependencies": {
@@ -52,6 +75,7 @@
         "@codemirror/view": "^6.43.13",
         "@lezer/highlight": "^1.2.5",
         "@odgn/northtalk": "workspace:*",
+        "@odgn/northtalk-editor": "workspace:*",
         "@odgn/northtalk-tooling": "workspace:*",
       },
     },
@@ -201,6 +225,10 @@
     "@odgn/northtalk-bench": ["@odgn/northtalk-bench@workspace:bench/ts"],
 
     "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
+
+    "@odgn/northtalk-creative": ["@odgn/northtalk-creative@workspace:tooling/creative"],
+
+    "@odgn/northtalk-editor": ["@odgn/northtalk-editor@workspace:tooling/editor"],
 
     "@odgn/northtalk-fuzz": ["@odgn/northtalk-fuzz@workspace:tooling/fuzz"],
 

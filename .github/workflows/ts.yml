@@ -98,6 +98,11 @@ jobs:
       # Runs the same stdio LSP workspace under Node.
       - run: bun run build && bun run test:node
         working-directory: tooling/cli
+      # The shared browser editor, and the creative tool's build.
+      - run: bun test tests
+        working-directory: tooling/editor
+      - run: bun test tests
+        working-directory: tooling/creative
       # The editor extension's grammar tests, and its bundled client and server.
       - run: bun test tests && bun run build
         working-directory: tooling/vscode
