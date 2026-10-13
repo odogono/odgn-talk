@@ -977,6 +977,9 @@ required and copied; the implementation must be non-nil.
 
 ### sqlite Standard Capability
 
+For Script examples, transaction behavior and the implementation overview, see
+[Using SQLite](../../docs/sqlite.md).
+
 `Core.SqliteCapability(SqliteImpl, Costs, perRow)` supplies the optional
 `sqlite` Operations (ADR 0070): immediate `query sql, params [, max]` and
 Segment-bound `change`, plus `begin`, `commit` and `rollback`, which open and
