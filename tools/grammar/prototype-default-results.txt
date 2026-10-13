@@ -1,0 +1,211 @@
+THROWAWAY #687; base 0ea3a15c; full trees omit positions except errors. No runtime semantics implemented.
+
+CASE basic
+baseline: {"error":"unexpected token","line":2,"col":28,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Key","key":"second","base":{"k":"Name","name":"found"}},"r":{"k":"Num","v":"0"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Key","key":"second","base":{"k":"Name","name":"found"}},"r":{"k":"Num","v":"0"}}}],"finally":null}]
+
+CASE left association
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},"r":{"k":"Name","name":"c"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},"r":{"k":"Name","name":"c"}}}],"finally":null}]
+
+CASE below or
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"or","l":{"k":"Name","name":"b"},"r":{"k":"Name","name":"c"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"or","l":{"k":"Name","name":"b"},"r":{"k":"Name","name":"c"}}}}],"finally":null}]
+
+CASE below arithmetic
+baseline: {"error":"unexpected token","line":2,"col":14,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"+","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},"r":{"k":"Num","v":"0"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"+","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},"r":{"k":"Num","v":"0"}}}],"finally":null}]
+
+CASE grouped comparison
+baseline: {"error":"unexpected token","line":2,"col":11,"message":"expected `)`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":">","l":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Num","v":"0"}}},"r":{"k":"Num","v":"3"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":">","l":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Num","v":"0"}}},"r":{"k":"Num","v":"3"}}}],"finally":null}]
+
+CASE mixed comparison
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":">","l":{"k":"Name","name":"b"},"r":{"k":"Num","v":"3"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":">","l":{"k":"Name","name":"b"},"r":{"k":"Num","v":"3"}}}}],"finally":null}]
+
+CASE lambda body
+baseline: {"error":"unexpected token","line":2,"col":19,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Lambda","params":[{"k":"Bind","name":"x"}],"body":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Name","name":"d"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Lambda","params":[{"k":"Bind","name":"x"}],"body":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Name","name":"d"}}}}],"finally":null}]
+
+CASE lambda fallback
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Group","e":{"k":"Lambda","params":[{"k":"Bind","name":"x"}],"body":{"k":"Name","name":"x"}}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Group","e":{"k":"Lambda","params":[{"k":"Bind","name":"x"}],"body":{"k":"Name","name":"x"}}}}}],"finally":null}]
+
+CASE unparenthesized lambda fallback
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: {"error":"unexpected token","line":2,"col":20,"message":"expected an expression, found `given`"}
+??: {"error":"unexpected token","line":2,"col":13,"message":"expected an expression, found `given`"}
+
+CASE whose condition
+baseline: {"error":"unexpected token","line":2,"col":42,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Whose","of":{"k":"OrdinalChunk","ord":"first","kind":"item","of":{"k":"Name","name":"xs"}},"cond":{"k":"Default","l":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}},"r":{"k":"Const","v":"false"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Whose","of":{"k":"OrdinalChunk","ord":"first","kind":"item","of":{"k":"Name","name":"xs"}},"cond":{"k":"Default","l":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}},"r":{"k":"Const","v":"false"}}}}],"finally":null}]
+
+CASE whose result
+baseline: {"error":"unexpected token","line":2,"col":44,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Group","e":{"k":"Whose","of":{"k":"OrdinalChunk","ord":"first","kind":"item","of":{"k":"Name","name":"xs"}},"cond":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}}}},"r":{"k":"Name","name":"fallback"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Group","e":{"k":"Whose","of":{"k":"OrdinalChunk","ord":"first","kind":"item","of":{"k":"Name","name":"xs"}},"cond":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}}}},"r":{"k":"Name","name":"fallback"}}}],"finally":null}]
+
+CASE every condition
+baseline: {"error":"unexpected token","line":2,"col":38,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Whose","every":true,"at":{},"kind":"item","src":{"k":"Name","name":"xs"},"cond":{"k":"Default","l":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}},"r":{"k":"Const","v":"false"}}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Whose","every":true,"at":{},"kind":"item","src":{"k":"Name","name":"xs"},"cond":{"k":"Default","l":{"k":"Key","key":"active","base":{"k":"Const","v":"it"}},"r":{"k":"Const","v":"false"}}}}],"finally":null}]
+
+CASE trailing continuation
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"d"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"d"}}}],"finally":null}]
+
+CASE leading operator
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"a"}},{"k":"Command","name":"otherwise","args":[{"k":"Name","name":"d"}],"wait":false}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"a"}},{"k":"Command","name":"otherwise","args":[{"k":"Name","name":"d"}],"wait":false}],"finally":null}]
+??: {"error":"unexpected token","line":3,"col":2,"message":"expected a statement, found `??`"}
+
+CASE name at end of line
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Put","spread":false,"value":{"k":"Name","name":"otherwise"},"prep":"into","target":{"k":"Name","name":"x"}},{"k":"return","value":{"k":"Name","name":"otherwise"}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Put","spread":false,"value":{"k":"Name","name":"otherwise"},"prep":"into","target":{"k":"Name","name":"x"}},{"k":"return","value":{"k":"Name","name":"otherwise"}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Put","spread":false,"value":{"k":"Name","name":"otherwise"},"prep":"into","target":{"k":"Name","name":"x"}},{"k":"return","value":{"k":"Name","name":"otherwise"}}],"finally":null}]
+
+CASE function called otherwise
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Call","fn":"otherwise","args":[{"k":"Name","name":"x"}]}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Call","fn":"otherwise","args":[{"k":"Name","name":"x"}]}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Call","fn":"otherwise","args":[{"k":"Name","name":"x"}]}}],"finally":null}]
+
+CASE chunk-word variable
+baseline: {"error":"unexpected token","line":2,"col":23,"message":"expected `of`, found ``"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"line"},"r":{"k":"Text","v":""}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"line"},"r":{"k":"Text","v":""}}}],"finally":null}]
+
+CASE old chunk index
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Chunk","kind":"item","index":{"k":"Name","name":"otherwise"},"of":{"k":"Name","name":"xs"}}}],"finally":null}]
+otherwise: {"error":"unexpected token","line":2,"col":23,"message":"expected an expression, found `of`"}
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Chunk","kind":"item","index":{"k":"Name","name":"otherwise"},"of":{"k":"Name","name":"xs"}}}],"finally":null}]
+
+CASE grouped old index
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Chunk","kind":"item","index":{"k":"Group","e":{"k":"Name","name":"otherwise"}},"of":{"k":"Name","name":"xs"}}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Chunk","kind":"item","index":{"k":"Group","e":{"k":"Name","name":"otherwise"}},"of":{"k":"Name","name":"xs"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Chunk","kind":"item","index":{"k":"Group","e":{"k":"Name","name":"otherwise"}},"of":{"k":"Name","name":"xs"}}}],"finally":null}]
+
+CASE old label declaration
+baseline: [{"k":"Handler","fallback":false,"name":"demo:otherwise:","params":[{"k":"Bind","name":"x"},{"k":"Bind","name":"d"}],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"d"}}],"finally":null}]
+otherwise: {"error":"unexpected token","line":1,"col":11,"message":"expected end of line, found `otherwise`"}
+??: [{"k":"Handler","fallback":false,"name":"demo:otherwise:","params":[{"k":"Bind","name":"x"},{"k":"Bind","name":"d"}],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"d"}}],"finally":null}]
+
+CASE old labelled call
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:otherwise:","args":[{"k":"Num","v":"1"},{"k":"Num","v":"2"}],"wait":false}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo","args":[{"k":"Default","l":{"k":"Num","v":"1"},"r":{"k":"Num","v":"2"}}],"wait":false}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:otherwise:","args":[{"k":"Num","v":"1"},{"k":"Num","v":"2"}],"wait":false}],"finally":null}]
+
+CASE old labelled send
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Send","msg":"foo:otherwise:","args":[{"k":"Num","v":"1"},{"k":"Num","v":"2"}],"target":{"k":"Name","name":"receiver"},"wait":false}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Send","msg":"foo","args":[{"k":"Default","l":{"k":"Num","v":"1"},"r":{"k":"Num","v":"2"}}],"target":{"k":"Name","name":"receiver"},"wait":false}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Send","msg":"foo:otherwise:","args":[{"k":"Num","v":"1"},{"k":"Num","v":"2"}],"target":{"k":"Name","name":"receiver"},"wait":false}],"finally":null}]
+
+CASE old labelled event
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"WaitFor","name":"foo:otherwise:","pats":[{"k":"Bind","name":"x"},{"k":"Bind","name":"d"}],"from":null,"timeout":null}],"finally":null}]
+otherwise: {"error":"unexpected token","line":2,"col":16,"message":"expected end of line, found `otherwise`"}
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"WaitFor","name":"foo:otherwise:","pats":[{"k":"Bind","name":"x"},{"k":"Bind","name":"d"}],"from":null,"timeout":null}],"finally":null}]
+
+CASE ordinary label
+baseline: {"error":"unexpected token","line":2,"col":8,"message":"expected `)`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:to:","args":[{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}}},{"k":"Name","name":"c"}],"wait":false}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:to:","args":[{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}}},{"k":"Name","name":"c"}],"wait":false}],"finally":null}]
+
+CASE operator before label
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:otherwise:to:","args":[{"k":"Name","name":"a"},{"k":"Name","name":"b"},{"k":"Name","name":"c"}],"wait":false}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:to:","args":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}],"wait":false}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"Command","name":"foo:to:","args":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}],"wait":false}],"finally":null}]
+
+CASE guard
+baseline: {"error":"unexpected token","line":1,"col":20,"message":"expected `)`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[{"k":"Bind","name":"x"}],"guard":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Const","v":"false"}}},"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[{"k":"Bind","name":"x"}],"guard":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Const","v":"false"}}},"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+
+CASE replace restricted slot
+baseline: {"error":"unexpected token","line":2,"col":25,"message":"expected `with`, found `otherwise`"}
+otherwise: {"error":"unexpected token","line":2,"col":25,"message":"expected `with`, found `otherwise`"}
+??: {"error":"unexpected token","line":2,"col":25,"message":"expected `with`, found `??`"}
+
+CASE replace grouped slot
+baseline: {"error":"unexpected token","line":2,"col":26,"message":"expected `)`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Replace","first":false,"pat":{"k":"Text","v":"a"},"target":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Text","v":""}}},"value":{"k":"Text","v":"b"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Replace","first":false,"pat":{"k":"Text","v":"a"},"target":{"k":"Group","e":{"k":"Default","l":{"k":"Name","name":"x"},"r":{"k":"Text","v":""}}},"value":{"k":"Text","v":"b"}}}],"finally":null}]
+
+CASE missing rhs
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: {"error":"unexpected token","line":3,"col":1,"message":"expected an expression, found `end`"}
+??: {"error":"unexpected token","line":3,"col":1,"message":"expected an expression, found `end`"}
+
+CASE rhs text pattern
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"TextPattern","els":[{"k":"Keyword","v":"digit"}]}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"TextPattern","els":[{"k":"Keyword","v":"digit"}]}}}],"finally":null}]
+
+CASE rhs binary build
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"BinaryBuild","fields":[{"k":"BuildField","value":{"k":"Num","v":"1"},"type":{"k":"Int","type":"uint8","order":null}}]}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"BinaryBuild","fields":[{"k":"BuildField","value":{"k":"Num","v":"1"},"type":{"k":"Int","type":"uint8","order":null}}]}}}],"finally":null}]
+
+CASE numeric operand
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Num","v":"1"},"r":{"k":"Num","v":"2"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Num","v":"1"},"r":{"k":"Num","v":"2"}}}],"finally":null}]
+
+CASE rhs default name
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"otherwise"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"otherwise"}}}],"finally":null}]
+
+CASE handler named otherwise
+baseline: [{"k":"Handler","fallback":false,"name":"otherwise","params":[{"k":"Bind","name":"x"}],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"otherwise","params":[{"k":"Bind","name":"x"}],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"otherwise","params":[{"k":"Bind","name":"x"}],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Name","name":"x"}}],"finally":null}]
+
+CASE trailing comment continuation
+baseline: {"error":"unexpected token","line":2,"col":10,"message":"expected end of line, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"d"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"d"}}}],"finally":null}]
+
+CASE no-space symbol
+baseline: {"error":"bad character","line":2,"col":9,"message":"\"?\" starts no token"}
+otherwise: {"error":"bad character","line":2,"col":9,"message":"\"?\" starts no token"}
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}}}],"finally":null}]
+
+CASE single question mark
+baseline: {"error":"bad character","line":2,"col":10,"message":"\"?\" starts no token"}
+otherwise: {"error":"bad character","line":2,"col":10,"message":"\"?\" starts no token"}
+??: {"error":"bad character","line":2,"col":10,"message":"\"?\" starts no token"}
+
+CASE fallback grouping in list
+baseline: {"error":"unexpected token","line":2,"col":11,"message":"expected `]`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"List","items":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}]}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"List","items":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}]}}],"finally":null}]
+
+CASE fallback grouping in call
+baseline: {"error":"unexpected token","line":2,"col":12,"message":"expected `)`, found `otherwise`"}
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Call","fn":"f","args":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}]}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Call","fn":"f","args":[{"k":"Default","l":{"k":"Name","name":"a"},"r":{"k":"Name","name":"b"}},{"k":"Name","name":"c"}]}}],"finally":null}]
+
+CASE key named otherwise
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"otherwise","base":{"k":"Name","name":"m"}}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"otherwise","base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"otherwise","base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+CASE key named optional
+baseline: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"optional","base":{"k":"Name","name":"m"}}}],"finally":null}]
+otherwise: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"optional","base":{"k":"Name","name":"m"}}}],"finally":null}]
+??: [{"k":"Handler","fallback":false,"name":"demo","params":[],"guard":null,"suffixes":[],"during":null,"body":[{"k":"return","value":{"k":"Key","key":"optional","base":{"k":"Name","name":"m"}}}],"finally":null}]
+
+SCAN {"files":624,"baselineAccepted":609,"baselineRejected":15,"wordChanges":0,"symbolChanges":0}
+RELEXES 0
+DECISIONS ["and-wait","any-message","as-in-build","begins-with","binary-field","can-be","capture","choose-offer","chunk-word","code-point","comes","delimited-by","does-not","during","every-chunk","every-match","ignoring-case","is-a","kind","map-key","next-repeat","ordering-words","ordinal","pattern-anchor","replace-first","script-variable","target","wait-from","when-contains","with-timeout"]
+The parser throws on third-token lookahead and undeclared second-token decisions; neither guard was changed.
