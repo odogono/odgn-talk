@@ -1269,6 +1269,9 @@ pub const Group = struct {
             return null;
         }
         const unit = try lower.lower(a, t, &checked, .{ .name = unit_name, .context = context, .values = g.gpa });
+        // Its constant pool's values are the Group's until the caller holds
+        // the unit.
+        errdefer for (unit.values) |v| if (v == .value) v.value.release();
         // A Text Pattern literal over the Script's `patternSize` is a load
         // error, at its opening `<`.
         const oversized = try oversizedPatterns(a, &unit, pattern_size);
