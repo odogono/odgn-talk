@@ -58,6 +58,10 @@ typedef enum talk_host_error_code {
     TALK_EFFECT_STATE_UNKNOWN,
     /* Call.Charge's refusal: the Run can't cover the charge. */
     TALK_ERR_LIMIT,
+    /* Load shedding, not a bug: the Script's mailbox, counting the
+     * Deliveries already queued to it, is full. A Delivery accepted at the
+     * call is never refused later. */
+    TALK_ERR_MAILBOX_FULL,
     /* C only: a Load refused with diagnostics, which talk.go reports as a
      * LoadError. The Trace has a diag record for each. */
     TALK_LOAD_REFUSED,
@@ -692,6 +696,43 @@ typedef struct talk_load_grant {
     talk_grant *grant;
 } talk_load_grant;
 
+/* A Script's limits (chapter 6): max_wait_ms in whole milliseconds, and
+ * every other limit in its own unit. A zero field takes its default, and a
+ * negative one is TALK_INVALID_VALUE. */
+typedef struct talk_limits {
+    int64_t fuel_per_run;
+    int64_t alloc_per_run;
+    int64_t persistent_state;
+    int64_t call_depth;
+    int64_t pattern_size;
+    int64_t mailbox_depth;
+    int64_t max_wait_ms;
+    int64_t max_join;
+    int64_t cleanup_budget;
+} talk_limits;
+
+/* The default limit profile. */
+void talk_default_limits(talk_limits *out);
+
+/* Which of a talk_limit_override's fields are supplied, zero ones included. */
+typedef enum talk_limit_override_fields {
+    TALK_OVERRIDE_FUEL_PER_RUN = 1,
+    TALK_OVERRIDE_ALLOC_PER_RUN = 2,
+    TALK_OVERRIDE_MAX_WAIT = 4,
+    TALK_OVERRIDE_MAX_JOIN = 8
+} talk_limit_override_fields;
+
+/* Tightens a Script's per-Run limits for one Delivery. A nonzero field is
+ * always supplied, a zero one only when set marks it, and one that would
+ * loosen a limit is TALK_INVALID_VALUE. */
+typedef struct talk_limit_override {
+    uint8_t set;
+    int64_t fuel_per_run;
+    int64_t alloc_per_run;
+    int64_t max_wait_ms;
+    int64_t max_join;
+} talk_limit_override;
+
 typedef struct talk_load_options {
     const char *name;
     size_t name_len;
@@ -703,6 +744,7 @@ typedef struct talk_load_options {
     talk_object *owner; /* NULL: the Script owns no object */
     const struct talk_load_object *objects;
     size_t objects_len;
+    const talk_limits *limits; /* NULL: the default limit profile */
 } talk_load_options;
 
 /* C only: a well-known object bound to a name at load. */
@@ -717,6 +759,7 @@ typedef struct talk_message {
     size_t name_len;
     talk_value *const *args; /* borrowed; the Core retains what it keeps */
     size_t args_len;
+    const talk_limit_override *limits; /* NULL: no override */
 } talk_message;
 
 /* A Request's result, settled by a Pump. */

@@ -57,14 +57,14 @@ static int group_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
-    talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     if (talk_load(group, &load, &script) != TALK_OK) return 1;
     int bad = 0;
     talk_value *n = NULL;
     talk_int(41, &n);
     talk_value *args[] = {n};
-    talk_message message = {"bump", 4, args, 1};
+    talk_message message = {"bump", 4, args, 1, NULL};
     talk_pending *pending = NULL;
     talk_owned_bytes id = {0};
     bad |= talk_script_request(script, &message, &id, &pending) != TALK_OK;
@@ -82,7 +82,7 @@ static int group_test(void) {
     talk_value_release(result);
     talk_inspect(group);
     bad |= strstr(trace, "vars adder total=41\n") == NULL;
-    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false, NULL, NULL, 0};
+    talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *refused = NULL;
     bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
     bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
@@ -128,7 +128,7 @@ static int capability_test(void) {
     bad |= talk_grant_capability(grant) != def;
     talk_load_grant grants[] = {{"echo", 4, grant}};
     const char *source = "script variable said\non go s\n  try\n    ask echo to twice s\n    put it into said\n  catch e\n    put e's code into said\n  end try\nend go\n";
-    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     const char *inputs[] = {"ab", ""};
@@ -136,7 +136,7 @@ static int capability_test(void) {
         talk_value *text = NULL;
         talk_text(inputs[i], strlen(inputs[i]), &text);
         talk_value *message_args[] = {text};
-        talk_message message = {"go", 2, message_args, 1};
+        talk_message message = {"go", 2, message_args, 1, NULL};
         bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
         talk_value_release(text);
         bad |= talk_pump(group, 1790000000 + i, 0, NULL, NULL) != TALK_OK;
@@ -147,7 +147,7 @@ static int capability_test(void) {
     bad |= strstr(trace, "call caller/r2.c1 op=echo.twice args=[\"\"] error={code: \"empty\", message: \"nothing to echo\"}\n") == NULL;
     bad |= strstr(trace, "vars caller said=\"empty\"\n") == NULL;
     const char *wrong_source = "on go\n  ask echo to twice 5\nend go\n";
-    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
     bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
@@ -189,14 +189,14 @@ static int revoke_test(void) {
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"echo", 4, grant}};
     const char *source = "script variable said\non go\n  try\n    ask echo to twice \"ab\"\n  catch e\n    put e's code into said\n  end try\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     released = 0;
     bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
     bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
     bad |= talk_script_revoke(script, "other", 5) != TALK_OK;
-    talk_message go = {"go", 2, NULL, 0};
+    talk_message go = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     talk_inspect(group);
@@ -284,10 +284,10 @@ static int scope_test(void) {
     bad |= talk_capability_def_grant(def, both, both_lens, 2, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"out", 3, grant}};
     const char *source = "on go\n  ask out to open\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"go", 2, NULL, 0};
+    talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     /* The opener, then the Core's abandonment, which can't charge. */
@@ -354,10 +354,10 @@ static int segment_test(void) {
     bad |= talk_capability_def_grant_all(def, "shared", &two) != TALK_OK;
     talk_load_grant grants[] = {{"a", 1, one}, {"b", 1, two}};
     const char *source = "script variable n = 0\non go\n  ask a to write\n  ask b to write\n  add 1 to n\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"go", 2, NULL, 0};
+    talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     /* One begin for the first Grant; the commit sees both. */
@@ -388,7 +388,7 @@ static int decision_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "on move n, deciding\n  if n is 1 then veto \"blocked\"\nend move\n";
-    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     int bad = talk_load(group, &load, &script) != TALK_OK;
     talk_deciding *vetoed = NULL, *allowed = NULL, *refused = NULL;
@@ -396,12 +396,12 @@ static int decision_test(void) {
         talk_value *n = NULL;
         talk_int(i, &n);
         talk_value *args[] = {n};
-        talk_message m = {"move", 4, args, 1};
+        talk_message m = {"move", 4, args, 1, NULL};
         bad |= talk_script_decide(script, &m, NULL, i == 1 ? &vetoed : &allowed) != TALK_OK;
         talk_value_release(n);
     }
     bad |= talk_deciding_done(vetoed) || talk_deciding_decided(vetoed) != NULL;
-    talk_message selector = {"move:with:", 10, NULL, 0};
+    talk_message selector = {"move:with:", 10, NULL, 0, NULL};
     bad |= talk_script_decide(script, &selector, NULL, &refused) != TALK_INVALID_VALUE || refused != NULL;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     const talk_decided *no = talk_deciding_decided(vetoed);
@@ -420,12 +420,12 @@ static int decision_test(void) {
     talk_value *one = NULL;
     talk_int(1, &one);
     talk_value *one_args[] = {one};
-    talk_message move = {"move", 4, one_args, 1};
+    talk_message move = {"move", 4, one_args, 1, NULL};
     bad |= talk_decide_broadcast(group, &move, &broadcast_id, &everyone) != TALK_OK;
     bad |= broadcast_id.len != 2 || memcmp(broadcast_id.data, "b1", 2) != 0;
     talk_owned_bytes_release(&broadcast_id);
     talk_value_release(one);
-    talk_message absent = {"absent", 6, NULL, 0};
+    talk_message absent = {"absent", 6, NULL, 0, NULL};
     bad |= talk_decide_broadcast(group, &absent, NULL, &nobody) != TALK_OK;
     bad |= talk_broadcast(group, &absent, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
@@ -472,10 +472,10 @@ static int store_test(void) {
     bad |= talk_capability_def_grant_all(def, "scores", &grant) != TALK_OK;
     talk_load_grant grants[] = {{"st", 2, grant}};
     const char *source = "on go\n  ask st to get \"k\"\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message go = {"go", 2, NULL, 0};
+    talk_message go = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= strstr(trace, "call s/r1.c1 op=st.get args=[\"k\"] result=nothing\n") == NULL;
@@ -527,10 +527,10 @@ static int sqlite_test(void) {
     bad |= talk_capability_def_grant_all(def, &app, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"db", 2, grant}};
     const char *source = "on go\n  ask db to query \"SELECT ?\", [1, true]\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message go = {"go", 2, NULL, 0};
+    talk_message go = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= sql_max != 4;
@@ -578,14 +578,57 @@ static int standard_test(void) {
     bad |= talk_capability_def_grant_all(console, NULL, &console_grant) != TALK_OK;
     talk_load_grant grants[] = {{"clock", 5, clock_grant}, {"console", 7, console_grant}};
     const char *source = "script variable at\non go\n  ask clock to now\n  put it into at\n  say at\nend go\n";
-    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false, NULL, NULL, 0};
+    talk_load_options load = {"timed", 5, source, strlen(source), grants, 2, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"go", 2, NULL, 0};
+    talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= strstr(trace, "call timed/r1.c1 op=clock.now args=[] result=2026-09-21T14:13:20Z\n") == NULL;
     bad |= shown != 1;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* Limits: the default profile, a Script's Fuel per Run faulting a loop and
+ * rolling it back, an override that loosens refused, and a full mailbox
+ * refusing a Host Delivery. */
+static int limits_test(void) {
+    talk_limits defaults;
+    talk_default_limits(&defaults);
+    int bad = defaults.fuel_per_run != 10000000 || defaults.mailbox_depth != 1000 || defaults.max_wait_ms != 30000;
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_limits negative = {0};
+    negative.fuel_per_run = -1;
+    const char *source = "script variable n = 0\non spin\n  repeat forever\n    add 1 to n\n  end repeat\nend spin\n";
+    talk_load_options refused = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &negative};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &refused, &script) != TALK_INVALID_VALUE;
+    talk_limits limits = {0};
+    limits.fuel_per_run = 100;
+    limits.mailbox_depth = 1;
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &limits};
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_limit_override looser = {TALK_OVERRIDE_FUEL_PER_RUN, 200, 0, 0, 0};
+    talk_message loose = {"spin", 4, NULL, 0, &looser};
+    bad |= talk_script_deliver(script, &loose, NULL) != TALK_INVALID_VALUE;
+    talk_message spin = {"spin", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &spin, NULL) != TALK_OK;
+    bad |= talk_script_deliver(script, &spin, NULL) != TALK_ERR_MAILBOX_FULL;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "refused code=\"invalid value\"\n") == NULL || strstr(trace, "refused code=\"mailbox full\"\n") == NULL;
+    bad |= strstr(trace, "fault s/r1 limit=fuel ") == NULL || strstr(trace, " rollback=[n]\n") == NULL;
+    bad |= strstr(trace, "run s/r1 outcome=limit-fault delivery=d1 handler=spin limit=fuel fuel=") == NULL;
+    bad |= strstr(trace, "vars s n=0\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -646,10 +689,10 @@ static int user_test(void) {
     talk_load_grant grants[] = {{"timer", 5, timer_grant}, {"user", 4, user_grant}};
     const char *source = "script variable got\non go\n  tell timer to schedule \"t\", \"2026-10-02T10:00:00Z\" as instant, \"tick\", [1]\n"
                          "  try\n    ask user to choose [\"S\", \"M\"], {prompt: \"Pick\"} and wait\n  catch {code: code}\n    put code into got\n  end try\nend go\n";
-    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0};
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message go = {"go", 2, NULL, 0};
+    talk_message go = {"go", 2, NULL, 0, NULL};
     started = NULL;
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
@@ -684,10 +727,10 @@ static int suspension_test(void) {
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"feed", 4, grant}};
     const char *source = "script variable got\non go\n  ask feed to fetch and wait\n  put it into got\nend go\n";
-    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0};
+    talk_load_options load = {"waiter", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"go", 2, NULL, 0};
+    talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= started == NULL;
@@ -756,10 +799,10 @@ static int object_test(void) {
     bad |= talk_set_parent(group, light, hall) != TALK_OK;
     const char *source = "on toggle\n  set the state of light to \"on\"\n  return [the id of the target, the state of light]\nend toggle\n";
     talk_load_object bound[] = {{"light", 5, light}};
-    talk_load_options load = {"hall", 4, source, strlen(source), NULL, 0, false, hall, bound, 1};
+    talk_load_options load = {"hall", 4, source, strlen(source), NULL, 0, false, hall, bound, 1, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"toggle", 6, NULL, 0};
+    talk_message message = {"toggle", 6, NULL, 0, NULL};
     talk_pending *pending = NULL;
     bad |= talk_request(group, light, &message, NULL, &pending) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
@@ -817,10 +860,10 @@ static int library_test(void) {
     talk_library_name(top, &name, &len);
     bad |= len != 3 || memcmp(name, "top", 3) != 0;
     const char *source = "use label from top\nscript variable got\non go\n  put label(5) into got\nend go\n";
-    talk_load_options load = {"user", 4, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_load_options load = {"user", 4, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"go", 2, NULL, 0};
+    talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     talk_inspect(group);
@@ -865,10 +908,10 @@ static int memory_test(void) {
     /* Each turn of the loop doubles the text, far past the cap long before
      * the logical budgets: the Group refuses, and the process goes on. */
     const char *source = "script variable s\non grow\n  put \"x\" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n";
-    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0};
+    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
-    talk_message message = {"grow", 4, NULL, 0};
+    talk_message message = {"grow", 4, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OUT_OF_MEMORY;
     talk_memory memory;
@@ -965,6 +1008,7 @@ int main(void) {
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");

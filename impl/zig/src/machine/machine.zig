@@ -142,6 +142,8 @@ pub const Delivery = struct {
     /// The broadcast id of a Broadcast's recipient, or 0. A Broadcast never
     /// climbs, never reaches a Fallback and is never `unhandled`.
     broadcast: u64 = 0,
+    /// The Host's override of the per-Run limits, for a Host Delivery.
+    limits: ?Override = null,
 };
 
 /// A Decision's Verdict (chapter 5, Decisions).
@@ -182,6 +184,10 @@ pub const Run = struct {
     delivery: Delivery,
     handler: []const u8 = "",
     clause: u32 = 0,
+    /// Its limits: its Script's, tightened by its Delivery's override.
+    limits: Limits = .{},
+    /// The `clause` rate dispatch charges with the next instruction.
+    clause_fuel: u64 = 0,
     /// Its error control: catch dispatches and cleanups, innermost last.
     controls: std.ArrayList(Control) = .empty,
     /// Recovery Offer choices made, which number their records.
@@ -429,6 +435,7 @@ pub const Script = struct {
     objects: []NamedObject = &.{},
     /// The Libraries its `use` lines import.
     imports: []*Library = &.{},
+    limits: Limits = .{},
 
     fn object(s: *const Script, name: []const u8) ?*objects.Object {
         for (s.objects) |o| if (std.mem.eql(u8, o.name, name)) return o.object;
@@ -639,11 +646,77 @@ pub const FunctionCode = struct {
     body: u32,
 };
 
-/// The default `patternSize`, since a Script's limits come with step 4.
-fn patternSize() u64 {
-    for (limits_table.limit) |l| if (std.mem.eql(u8, l.ts, "patternSize")) return @intCast(l.default);
+/// The messages waiting in a Script's mailbox; its Runs don't count.
+fn mailboxLen(s: *const Script) u64 {
+    var n: u64 = 0;
+    for (s.work.items) |w| if (w == .message) {
+        n += 1;
+    };
+    return n;
+}
+
+/// A limit's default, by its `ts` name in `limits.toml`.
+fn limitDefault(comptime ts: []const u8) u64 {
+    for (limits_table.limit) |l| if (std.mem.eql(u8, l.ts, ts)) return @intCast(l.default);
     unreachable;
 }
+
+/// A Script's limits (chapter 6, Limits): MaxWait in whole milliseconds,
+/// and every other limit in its own unit.
+pub const Limits = struct {
+    fuel_per_run: u64 = limitDefault("fuelPerRun"),
+    alloc_per_run: u64 = limitDefault("allocPerRun"),
+    persistent_state: u64 = limitDefault("persistentState"),
+    call_depth: u64 = limitDefault("callDepth"),
+    pattern_size: u64 = limitDefault("patternSize"),
+    mailbox_depth: u64 = limitDefault("mailboxDepth"),
+    max_wait_ms: u64 = limitDefault("maxWaitMs"),
+    max_join: u64 = limitDefault("maxJoin"),
+    cleanup_budget: u64 = limitDefault("cleanupBudget"),
+};
+
+/// A Delivery's override of the per-Run limits it may tighten.
+pub const Override = struct {
+    fuel_per_run: ?u64 = null,
+    alloc_per_run: ?u64 = null,
+    max_wait_ms: ?u64 = null,
+    max_join: ?u64 = null,
+
+    /// Whether it would loosen one of `l`.
+    pub fn loosens(o: Override, l: Limits) bool {
+        if (o.fuel_per_run) |x| if (x > l.fuel_per_run) return true;
+        if (o.alloc_per_run) |x| if (x > l.alloc_per_run) return true;
+        if (o.max_wait_ms) |x| if (x > l.max_wait_ms) return true;
+        if (o.max_join) |x| if (x > l.max_join) return true;
+        return false;
+    }
+
+    /// `l` tightened by it.
+    fn apply(o: ?Override, l: Limits) Limits {
+        var out = l;
+        const x = o orelse return out;
+        if (x.fuel_per_run) |v| out.fuel_per_run = v;
+        if (x.alloc_per_run) |v| out.alloc_per_run = v;
+        if (x.max_wait_ms) |v| out.max_wait_ms = v;
+        if (x.max_join) |v| out.max_join = v;
+        return out;
+    }
+
+    /// Its Trace form: a map from each limit's `ts` name, in
+    /// `limits.toml`'s order.
+    fn write(o: Override, w: *std.Io.Writer) void {
+        w.writeAll(" limits={") catch {};
+        var first = true;
+        inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
+            w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f[0], v }) catch {};
+            first = false;
+        };
+        w.writeAll("}") catch {};
+    }
+};
+
+/// The limit a Limit Fault names.
+pub const Fault = enum { fuel, alloc, persistent, depth, pattern, join };
 
 /// The positions of a unit's Text Pattern literals, those with no splices,
 /// whose programs run over `limit` instructions, counting every copy of a
@@ -690,6 +763,7 @@ pub const LoadOptions = struct {
     owner: ?*objects.Object = null,
     /// Its well-known objects, which also give the checker their kinds.
     objects: []const NamedObject = &.{},
+    limits: Limits = .{},
 };
 
 pub const LoadResult = union(enum) {
@@ -718,6 +792,7 @@ const Broadcast = struct {
     args: []*Value,
     decision: bool,
     recipients: ?[]Recipient = null,
+    limits: ?Override = null,
 };
 
 /// A Broadcast's recipient: its Script and its own delivery id.
@@ -725,6 +800,12 @@ const Recipient = struct { script: *Script, delivery: u64 };
 
 pub const Group = struct {
     gpa: Allocator,
+    /// The override the next queued Host Delivery or Broadcast takes.
+    override: ?Override = null,
+    /// The limit an instruction found passed, with `error.LimitFault`.
+    pending_fault: ?Fault = null,
+    /// The instruction the run loop is at, where a search it drives faults.
+    driving: struct { unit: []const u8 = "", pc: u32 = 0, ins: lower.Instruction = undefined } = .{},
     scripts: std.ArrayList(*Script) = .empty,
     inputs: std.ArrayList(Input) = .empty,
     deliveries: u64 = 0,
@@ -831,7 +912,7 @@ pub const Group = struct {
     /// initialiser. Writes the `load` record and any `diag` records.
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
         const s = try g.gpa.create(Script);
-        s.* = .{ .name = undefined, .identity = codeIdentity(name, source, .script, &.{}), .arena = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{} };
+        s.* = .{ .name = undefined, .identity = codeIdentity(name, source, .script, &.{}), .arena = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
         // Until it joins the Group, a refusal leaves nothing of it behind.
         var lowered = false;
         var joined = false;
@@ -904,7 +985,7 @@ pub const Group = struct {
         lowered = true;
         // A Text Pattern literal over the Script's `patternSize` is a load
         // error, at its opening `<`.
-        const oversized = try oversizedPatterns(a, &s.unit, patternSize());
+        const oversized = try oversizedPatterns(a, &s.unit, s.limits.pattern_size);
         if (oversized.len > 0) {
             for (oversized) |p| g.write("diag {s} code=\"pattern too large\" pos={d}:{d}\n", .{ name, p.line, p.column });
             for (s.unit.values) |v| if (v == .value) v.value.release();
@@ -1118,11 +1199,26 @@ pub const Group = struct {
         const script_name = try g.gpa.dupe(u8, to);
         errdefer g.gpa.free(script_name);
         var copy = d;
+        copy.limits = g.override;
+        g.override = null;
         copy.message = try g.gpa.dupe(u8, d.message);
         errdefer g.gpa.free(copy.message);
         copy.args = try g.gpa.dupe(*Value, d.args);
         errdefer g.gpa.free(copy.args);
         try g.inputs.append(g.gpa, .{ .deliver = .{ .script = script_name, .delivery = copy } });
+    }
+
+    /// Whether a Host Delivery to `s` would overfill its mailbox, counting
+    /// the Deliveries already queued to it.
+    pub fn mailboxFull(g: *Group, s: *const Script) bool {
+        var n = mailboxLen(s);
+        for (g.inputs.items) |input| switch (input) {
+            .deliver => |d| if (d.delivery.target == null and std.mem.eql(u8, d.script, s.name)) {
+                n += 1;
+            },
+            else => {},
+        };
+        return n >= s.limits.mailbox_depth;
     }
 
     pub fn script(g: *Group, name: []const u8) ?*Script {
@@ -1146,7 +1242,8 @@ pub const Group = struct {
         const copy = try g.gpa.dupe(*Value, args);
         errdefer g.gpa.free(copy);
         g.broadcasts += 1;
-        try g.inputs.append(g.gpa, .{ .broadcast = .{ .id = g.broadcasts, .message = name, .args = copy, .decision = decision } });
+        try g.inputs.append(g.gpa, .{ .broadcast = .{ .id = g.broadcasts, .message = name, .args = copy, .decision = decision, .limits = g.override } });
+        g.override = null;
         return g.broadcasts;
     }
 
@@ -1211,7 +1308,7 @@ pub const Group = struct {
             errdefer g.gpa.free(message);
             const args = try g.gpa.dupe(*Value, b.args);
             for (args) |v| _ = v.retain();
-            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id });
+            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = b.limits });
         }
     }
 
@@ -1351,6 +1448,7 @@ pub const Group = struct {
                     }
                     out.writeAll("]") catch {};
                 }
+                if (d.delivery.limits) |o| o.write(out);
             },
             .settle => |x| switch (x.with) {
                 .answer => |a| {
@@ -1383,6 +1481,7 @@ pub const Group = struct {
                 if (b.id > 0) out.print(" b{d}", .{b.id}) catch {};
                 out.print(" message={s}", .{b.message}) catch {};
                 writeArgs(out, b.args);
+                if (b.limits) |o| o.write(out);
                 const recipients = b.recipients orelse &.{};
                 if (recipients.len > 0) {
                     out.writeAll(" recipients=[") catch {};
@@ -1636,7 +1735,7 @@ pub const Group = struct {
             g.releaseDelivery(d);
             return e;
         };
-        run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message };
+        run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message, .limits = Override.apply(d.limits, s.limits) };
         g.takeBase(run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -1715,14 +1814,21 @@ pub const Group = struct {
             f.locals[slot].release();
             f.locals[slot] = x.retain();
         };
-        // Dispatch charges the clause at the body's first instruction.
-        run.fuel += 4;
+        // Dispatch charges the clause at the body's first instruction,
+        // together with that instruction's own charge.
+        run.clause_fuel = 4;
         run.select_at = b.first;
         for (s.unit.unwind) |e| if (e.kind == .guard and e.first == b.first) {
             run.select_at = e.last + 1;
         };
         var outcome = try g.execute(run, true);
         if (outcome == .selected) {
+            // A Run that parks or is dropped here runs no instruction to
+            // pay the `clause` rate with, so it pays it now.
+            if (g.clauseBusy(s, body) and (b.policy == .queued or b.policy == .dropping)) {
+                run.fuel += run.clause_fuel;
+                run.clause_fuel = 0;
+            }
             if (g.clauseBusy(s, body)) switch (b.policy) {
                 .queued => {
                     try g.takeVerdict(run, b.deciding);
@@ -2044,6 +2150,12 @@ pub const Group = struct {
             defer reason.release();
             return g.raise("send failed", &.{.{ .key = "reason", .value = reason }});
         };
+        // A full mailbox refuses the send, which starts no call.
+        if (mailboxLen(dest) >= dest.limits.mailbox_depth) {
+            const shown = try model.text(gpa, dest.name);
+            defer shown.release();
+            return g.raise("mailbox full", &.{.{ .key = "to", .value = shown }});
+        }
         const from: []const u8 = if (waits) blk: {
             run.calls += 1;
             const id = try std.fmt.allocPrint(gpa, "{s}.c{d}", .{ run.id, run.calls });
@@ -2070,10 +2182,10 @@ pub const Group = struct {
         try g.post(dest, d);
         if (!waits) return .next;
         if (member) {
-            try g.startMember(run, .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
+            try g.startMember(run, .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
             return .next;
         }
-        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
+        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
         return .suspended;
     }
 
@@ -2429,10 +2541,21 @@ pub const Group = struct {
 
     /// Abandons a Join's members still pending, or timed out, in start
     /// order, writing an `abandon` record for each, and ends the Join.
+    /// MaxJoin: a Join Member past it faults at its statement.
+    fn checkJoin(g: *Group, run: *Run) error{LimitFault}!void {
+        const join = run.join orelse return;
+        if (join.members.items.len >= run.limits.max_join) return g.faultOn(.join);
+    }
+
     fn abandonJoin(g: *Group, run: *Run) void {
         const join = run.join orelse return;
         for (join.members.items) |x| {
-            const abandoned = x.pending != null or (x.with != null and x.with.? == .timeout);
+            // A member still pending, or one whose failure the fail-fast
+            // raise didn't take, is abandoned.
+            const abandoned = x.pending != null or (x.with != null and switch (x.with.?) {
+                .answer, .reply => false,
+                else => true,
+            });
             if (abandoned) g.write("abandon {s}\n", .{x.waited.id});
         }
         g.dropJoin(run);
@@ -2503,7 +2626,6 @@ pub const Group = struct {
     /// with Segment-bound Operations.
     fn takeBase(g: *Group, run: *Run) !void {
         g.dropBase(run);
-        if (!run.script.effects) return;
         const base = try g.gpa.dupe(*Value, run.script.variables);
         for (base) |v| _ = v.retain();
         run.segment_base = base;
@@ -2775,7 +2897,7 @@ pub const Group = struct {
                     out.writeAll(" error=") catch {};
                     display.writeTrace(out, e) catch {};
                 },
-                .faulted => out.writeAll(" limit=fuel") catch {},
+                .faulted => |l| out.print(" limit={s}", .{@tagName(l)}) catch {},
                 .effect_failed => |f| {
                     out.print(" effect={{grant: \"{s}\", segment: \"{s}\", phase: \"{s}\", status: \"{s}\"", .{ f.grant, segment, f.phase, f.status }) catch {};
                     if (f.scope) |n| out.print(", scope: \"{s}\"", .{n}) catch {};
@@ -3127,7 +3249,7 @@ pub const Group = struct {
             d.waits = true;
             d.function = fv.retain();
             try g.post(home, d);
-            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = nanos(g.clock) + @as(i128, default_max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = default_max_wait_ms });
+            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
             return .suspended;
         }
         try g.callFunction(run, code.library, code.body, args);
@@ -3174,6 +3296,8 @@ pub const Group = struct {
     /// Pushes a frame for a body of a Library's code, or with none, of the
     /// Run's Script.
     fn pushFrameIn(g: *Group, run: *Run, library: ?*Library, body: u32, args: []const *Value) !void {
+        // A call that would pass the call depth faults at the call.
+        if (run.frames.items.len >= run.script.limits.call_depth) return g.faultOn(.depth);
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
         const locals = try g.gpa.alloc(*Value, b.locals);
         var made: usize = 0;
@@ -3203,7 +3327,7 @@ pub const Group = struct {
         errored: *Value,
         clause_failed,
         unhandled,
-        faulted,
+        faulted: Fault,
         /// It suspended, at `run.suspended_at`.
         suspended,
         /// Its `, dropping` clause was busy.
@@ -3232,6 +3356,10 @@ pub const Group = struct {
                 return .selected;
             };
             const ins = unitOf(run, frame).code[pc];
+            // The instruction may move the frames, so its unit's name is
+            // taken first.
+            const at_unit = unitName(run, frame);
+            g.driving = .{ .unit = at_unit, .pc = pc, .ins = ins };
             frame.pc += 1;
             var charge: costs.Measures = .{};
             const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
@@ -3242,30 +3370,76 @@ pub const Group = struct {
                     };
                     break :blk Step{ .raised = err };
                 },
+                error.LimitFault => {
+                    // The instruction's own limit, checked before its charge.
+                    charge.release();
+                    const limit = g.pending_fault.?;
+                    g.pending_fault = null;
+                    return g.limitFault(run, limit, at_unit, pc, ins);
+                },
                 else => |other| {
                     // Refused: the values the measures hold go too.
                     charge.release();
                     return other;
                 },
             };
+            // An error is raised, with its record and its Join abandoned,
+            // before the raising instruction's charge, which may fault.
+            const recorded = done == .raised and g.guardEntry(run, pc) == null;
+            if (recorded) g.raiseRecord(run, done.raised, pc, ins);
+            // An instruction charged nothing still pays dispatch's `clause`
+            // rate.
+            if (charged and charge.uncharged) {
+                run.fuel += run.clause_fuel;
+                run.clause_fuel = 0;
+            }
             if (charged and !charge.uncharged) {
                 const key = costKey(ins, &charge);
-                const cost = costs.charge(key, &charge);
-                run.fuel += cost.fuel;
-                run.alloc += cost.alloc;
-                // The default Fuel per Run. Limits and their rollback are
-                // step 4's; this bound keeps every Run finite until then.
-                if (run.fuel > fuel_per_run and run.base == 0) {
+                var cost = costs.charge(key, &charge);
+                const clause_fuel = run.clause_fuel;
+                cost.fuel += clause_fuel;
+                run.clause_fuel = 0;
+                // A Run-ending `return`, `pass` or `veto` measures the
+                // Script's Persistent State, without the Run, before its
+                // charge; any instruction faults on a charge it can't cover.
+                const ending = switch (done) {
+                    .returned => run.frames.items.len - 1 == run.base,
+                    .passed, .vetoed => true,
+                    else => false,
+                };
+                const over: ?Fault = if (run.base > 0)
+                    null
+                else if (ending and g.persistentState(run.script) > run.script.limits.persistent_state)
+                    .persistent
+                else if (run.fuel + cost.fuel > run.limits.fuel_per_run)
+                    .fuel
+                else if (run.alloc + cost.alloc > run.limits.alloc_per_run)
+                    .alloc
+                else
+                    null;
+                if (over) |limit| {
+                    // A Capability call that reached the Host keeps its
+                    // charge before its result's conversion.
+                    if (limit == .alloc and charge.reached_host) {
+                        var before = charge;
+                        before.result = null;
+                        run.fuel += costs.charge(key, &before).fuel + clause_fuel;
+                    }
                     charge.release();
                     switch (done) {
-                        .returned, .raised => |v| v.release(),
+                        .returned, .raised, .vetoed => |v| v.release(),
                         .transfer => |t| releaseAll(t.args, g.gpa),
                         else => {},
                     }
-                    g.write("fault {s} limit=fuel at={s}:{d} pos={d}:{d}\n", .{ run.id, unitName(run, frame), pc, ins.position.line, ins.position.column });
-                    g.abandonUnwinding(run);
-                    while (run.frames.items.len > 0) g.popFrame(run);
-                    return .faulted;
+                    return g.limitFault(run, limit, at_unit, pc, ins);
+                }
+                run.fuel += cost.fuel;
+                run.alloc += cost.alloc;
+                // A suspension measures it with the Run, after the charge
+                // and any Host effect.
+                if (done == .suspended and run.base == 0 and g.persistentState(run.script) + g.runSize(run) > run.script.limits.persistent_state) {
+                    charge.release();
+                    return g.limitFault(run, .persistent, at_unit, pc, ins);
                 }
             }
             charge.release();
@@ -3305,9 +3479,20 @@ pub const Group = struct {
                     if (try g.unwind(run, err, call_pc, call_ins, charged)) |end| return end;
                 },
                 .raised => |err| {
-                    if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
+                    if (recorded) {
+                        const top = run.frames.items.len - 1;
+                        if (try g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged)) |end| return end;
+                    } else if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
                 },
-                .end_cleanup => if (try g.nextCleanup(run, charged)) |end| return end,
+                .end_cleanup => {
+                    // A `finally` block an uncaught error ran raises it
+                    // again as it goes on.
+                    if (run.controls.items.len > 0) switch (run.controls.items[run.controls.items.len - 1]) {
+                        .cleanup => |u| if (u.then == .end) g.writeRaise(run, u.err, pc, ins),
+                        .dispatch => {},
+                    };
+                    if (try g.nextCleanup(run, charged)) |end| return end;
+                },
                 .catch_accept => if (try g.catchAccept(run, charged)) |end| return end,
                 .catch_next => if (try g.catchNext(run, charged)) |end| return end,
                 .transfer => |t| if (try g.startTransfer(run, t, pc, charged)) |end| return end,
@@ -3512,10 +3697,26 @@ pub const Group = struct {
             run.frames.items[top].pc = entry.target;
             return null;
         }
-        g.writeRaise(run, err, pc, ins);
-        // An error leaving a Join abandons its members still pending.
-        g.abandonJoin(run);
+        g.raiseRecord(run, err, pc, ins);
         return g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged);
+    }
+
+    /// Charges `unwind` for frames a search leaves, as part of the charge of
+    /// the instruction driving it, which faults if the Run can't cover it.
+    fn chargeUnwind(g: *Group, run: *Run, fuel: u64) ?Outcome {
+        if (run.base == 0 and run.fuel + fuel > run.limits.fuel_per_run) {
+            const d = g.driving;
+            return g.limitFault(run, .fuel, d.unit, d.pc, d.ins);
+        }
+        run.fuel += fuel;
+        return null;
+    }
+
+    /// A raise's record, and its Join's members abandoned: an error leaving
+    /// a Join abandons the members still pending.
+    fn raiseRecord(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
+        g.writeRaise(run, err, pc, ins);
+        g.abandonJoin(run);
     }
 
     /// Searches for a catch from `s`'s frame and entry outward, within its
@@ -3534,14 +3735,20 @@ pub const Group = struct {
                 if (index == s.frame and ei < s.entry) continue;
                 if (!usable(run, index, e, ei, s.limit, null)) continue;
                 // Each search step charges the frames it leaves.
-                if (charged) run.fuel += 4 * (position -| (index + 1));
+                if (charged) if (g.chargeUnwind(run, 4 * (position -| (index + 1)))) |end| {
+                    err.release();
+                    return end;
+                };
                 position = index + 1;
                 try g.beginDispatch(run, err, index, e, .{ .frame = index, .entry = ei + 1, .raised = s.raised, .limit = s.limit, .position = position, .skip = s.skip });
                 return null;
             }
         }
         if (s.limit == null) {
-            if (charged) run.fuel += 4 * position;
+            if (charged) if (g.chargeUnwind(run, 4 * position)) |end| {
+                err.release();
+                return end;
+            };
             var cleanups: std.ArrayList(Cleanup) = .empty;
             errdefer cleanups.deinit(g.gpa);
             try g.collect(run, &cleanups, 0, null, s.skip, s.raised);
@@ -3556,7 +3763,10 @@ pub const Group = struct {
                 const at = u.cleanups.items[u.next - 1];
                 // An aborted policy's own `finally` blocks run in its
                 // activation, which this search leaves as a frame.
-                if (charged and u.then == .search and !u.left) run.fuel += 4;
+                if (charged and u.then == .search and !u.left) if (g.chargeUnwind(run, 4)) |end| {
+                    err.release();
+                    return end;
+                };
                 const replaced = try withDuring(g.gpa, err, u.err);
                 err.release();
                 var popped = run.controls.pop().?;
@@ -3983,6 +4193,51 @@ pub const Group = struct {
         return boolean(g.gpa, found != null);
     }
 
+    /// A Limit Fault at an instruction: its `fault` record, naming the
+    /// Script Variables the rollback changes back, then the Segment's
+    /// bindings restored, its pending calls abandoned and its frames gone.
+    /// Nothing of the instruction's charge is made.
+    fn limitFault(g: *Group, run: *Run, limit: Fault, unit: []const u8, pc: u32, ins: lower.Instruction) Outcome {
+        if (g.trace) |w| {
+            w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
+            if (run.segment_base) |base| {
+                var first = true;
+                for (run.script.variables, base, run.script.unit.variables) |v, b, name| {
+                    if (v == b or (v.equal(b) catch false)) continue;
+                    w.print("{s}{s}", .{ if (first) " rollback=[" else ", ", name }) catch {};
+                    first = false;
+                }
+                if (!first) w.writeAll("]") catch {};
+            }
+            w.writeAll("\n") catch {};
+        }
+        g.restoreBase(run);
+        // A suspension's wait goes with the Run.
+        if (run.waiting) |p| {
+            // A call or a send that waits for a reply is abandoned.
+            if (run.join == null) {
+                const call_id = if (p.call) |c| c.id else p.id;
+                if (call_id.len > 0) g.write("abandon {s}\n", .{call_id});
+            }
+            for (g.pending.items, 0..) |x, i| if (x == p) {
+                _ = g.pending.orderedRemove(i);
+                break;
+            };
+            g.destroyPending(p);
+            run.waiting = null;
+        }
+        g.abandonJoin(run);
+        g.abandonUnwinding(run);
+        while (run.frames.items.len > 0) g.popFrame(run);
+        return .{ .faulted = limit };
+    }
+
+    /// Faults the current instruction on its own limit.
+    fn faultOn(g: *Group, limit: Fault) error{LimitFault} {
+        g.pending_fault = limit;
+        return error.LimitFault;
+    }
+
     const Step = union(enum) {
         next,
         returned: *Value,
@@ -4072,6 +4327,10 @@ pub const Group = struct {
             },
             .load_var => try g.push(frame, run.script.variables[@intCast(ops[0].int)].retain()),
             .store_var => {
+                // A write it can't pay for faults before it writes, so the
+                // rollback doesn't see it.
+                var none: costs.Measures = .{};
+                if (run.base == 0 and run.fuel + run.clause_fuel + costs.charge("store-var", &none).fuel > run.limits.fuel_per_run) return g.faultOn(.fuel);
                 const s: usize = @intCast(ops[0].int);
                 run.script.variables[s].release();
                 run.script.variables[s] = pop(frame);
@@ -4381,6 +4640,12 @@ pub const Group = struct {
                 };
                 const source = matcher.write(a, elements) catch return error.OutOfMemory;
                 const r = model.scalar(gpa, .{ .pattern = try gpa.dupe(u8, source) }) catch return error.OutOfMemory;
+                // Its own limit: a program over the Text Pattern size
+                // faults, uncharged.
+                if (matcher.programSize(r) > run.script.limits.pattern_size) {
+                    r.release();
+                    return g.faultOn(.pattern);
+                }
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -4436,7 +4701,11 @@ pub const Group = struct {
                 m.result = out.retain();
                 try g.push(frame, out);
             },
-            .ask, .tell, .ask_wait, .join_ask => return g.operation(run, frame, ins, m),
+            .ask, .tell, .ask_wait => return g.operation(run, frame, ins, m),
+            .join_ask => {
+                try g.checkJoin(run);
+                return g.operation(run, frame, ins, m);
+            },
             .timeout_start => {
                 const d = pop(frame);
                 defer d.release();
@@ -4499,7 +4768,11 @@ pub const Group = struct {
                 }
                 return .suspended;
             },
-            .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .join_send, .join_send_named, .join_send_spread => return g.send(run, frame, ins, m),
+            .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait => return g.send(run, frame, ins, m),
+            .join_send, .join_send_named, .join_send_spread => {
+                try g.checkJoin(run);
+                return g.send(run, frame, ins, m);
+            },
             // A Script named as a receiver is its name; Host Objects come
             // later.
             .load_object => try g.push(frame, if (run.script.object(ops[0].text)) |o| o.value.retain() else try model.text(gpa, ops[0].text)),
@@ -5483,9 +5756,13 @@ pub const Group = struct {
             try g.enroll(run, granted, &where);
         }
 
+        // A Run that can't cover the declared cost faults before the Host
+        // is called.
+        if (run.base == 0 and (run.fuel + decl.cost.fuel > run.limits.fuel_per_run)) return g.faultOn(.fuel);
+        if (run.base == 0 and (run.alloc + decl.cost.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
-        const left: ?u64 = if (run.fuel + decl.cost.fuel >= fuel_per_run) 0 else fuel_per_run - run.fuel - decl.cost.fuel;
+        const left: ?u64 = if (run.fuel + decl.cost.fuel >= run.limits.fuel_per_run) 0 else run.limits.fuel_per_run - run.fuel - decl.cost.fuel;
         var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
@@ -5511,6 +5788,7 @@ pub const Group = struct {
         } else &local;
         const outcome = decl.host.call(decl.host.context, call, args);
         call.starting = false;
+        m.reached_host = true;
         m.declared = decl.cost.fuel;
         m.fuel_extra = call.charged;
         m.alloc_extra = decl.cost.alloc;
@@ -5539,7 +5817,7 @@ pub const Group = struct {
             .value, .started => {
                 if (outcome == .value) outcome.value.release();
                 record(g, id, grant_name, op_name, args, "", null, call.charged);
-                const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else default_max_wait_ms;
+                const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
                 if (ins.op == .join_ask) {
                     try g.startMember(run, .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms });
                     return .next;
@@ -5612,8 +5890,13 @@ pub const Group = struct {
                 return g.hostError(id, grant_name, op_name, &where);
             },
             .limited => {
+                // The call's own charge, with its declared cost, is spent;
+                // the `Charge` past the limit faults it.
                 record(g, id, grant_name, op_name, args, "", null, 0);
-                m.fuel_extra = fuel_per_run;
+                const spent = costs.charge(costKey(ins, m), m);
+                run.fuel += spent.fuel;
+                run.alloc += spent.alloc;
+                return g.faultOn(.fuel);
             },
         }
         return .next;
@@ -6072,8 +6355,6 @@ fn releaseAll(values: []*Value, gpa: Allocator) void {
     gpa.free(values);
 }
 
-const fuel_per_run = 10_000_000;
-
 /// A Script's code identity (chapter 9).
 pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, library }, imports: []const *const Library) [32]u8 {
     var h = std.crypto.hash.sha2.Sha256.init(.{});
@@ -6095,8 +6376,6 @@ pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, l
 
 /// MaxWait's default, for a suspending call whose Operation sets no
 /// `maxPending`, until step 4 brings per-Script limits.
-const default_max_wait_ms = 30_000;
-
 /// An Instant in nanoseconds since the epoch.
 fn nanos(t: model.dates.Instant) i128 {
     return @as(i128, t.seconds) * std.time.ns_per_s + t.nanos;
