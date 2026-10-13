@@ -24,6 +24,7 @@ const units = @import("../units.zig");
 pub const capabilities = @import("capabilities.zig");
 pub const fingerprint = @import("fingerprint.zig");
 pub const snapshot = @import("snapshot.zig");
+pub const verify = @import("verify.zig");
 pub const objects = @import("objects.zig");
 const machine_table = @import("../generated/machine.zig").machine;
 const version = @import("../generated/version.zig").version;
