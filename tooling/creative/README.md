@@ -2,7 +2,7 @@
 
 The browser creative tool planned in [#154](https://github.com/odogono/odgn-talk/issues/154): a HyperCard-inspired tool for making illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk. "Creative tool" is a working name until the application is named.
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window adds text, image, button, rectangle, ellipse and line Elements; images are placeholders until image assets arrive. The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It refuses a name that isn't an identifier or that another Element on the Page already has, and offers one instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). A sample Script window on the [shared editor](../editor/) shows the language server's diagnostics, completion and hover; Script windows for the Project's own Scripts come with stage 2.
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It refuses a name that isn't an identifier or that another Element on the Page already has, and offers one instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). A sample Script window on the [shared editor](../editor/) shows the language server's diagnostics, completion and hover; Script windows for the Project's own Scripts come with stage 2.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -47,9 +47,11 @@ each Project's newest version and unused assets), **Show storage use** and
 Project couldn't be saved, opening another refuses until it is exported.
 If the browser won't keep data at all, a banner says so and editing still
 works in memory. Export now downloads a Project file as `.zip` until the
-application is named and gets its own extension; image assets and importing
-files come with [#753](https://github.com/odogono/odgn-talk/issues/753), so
-there are no asset bytes to write from the editor yet.
+application is named and gets its own extension, and reports the file size.
+**Import Project…** in Projects opens a file picker; dropping a Project file
+onto that window also imports it. Import always creates a fresh Project,
+including when a copy already exists. Damaged files and newer formats report
+why they cannot open and leave the current Project intact.
 
 The design is sections 4–6 of
 [the storage research](../../docs/research/creative-tool-project-storage.md).
@@ -72,6 +74,49 @@ Then run `await import('/storage.browser.js').then(m => m.runBrowserTests())`
 in the browser console on the creative tool page. Every result must have
 `passed: true`. As with the rich-text bundle below, rebuild it after the
 watch server rebuilds the app.
+
+## Images and portable Projects
+
+Choose **Image** in Tools or drop files onto the Page. PNG, JPEG, WebP, GIF
+and SVG are accepted; AVIF carries a warning about older browsers. The app
+identifies the format from bytes and decodes every image before changing the
+Project, regardless of its extension. Files above 10 MB warn, and above
+50 MB are refused. Audio import waits for sound playback.
+
+Select an image and choose **Replace image…** in Info to change it without
+changing its position or size. Adding and replacing images are undoable.
+Identical bytes share one SHA-256 asset, even under different file names.
+SVG is decoded and displayed only through `<img>`; image dragging and the
+image context menu are disabled. The app shell also has a Content Security
+Policy that disallows embedded documents and inline scripts.
+
+Autosave writes image bytes and the model in one transaction. The session
+retains bytes for undo and export after a failed save. Export drops unused
+image assets without changing the editor; Projects containing Scripts retain
+all assets because a Script can choose an asset by name dynamically. Import
+checks image decoding too: missing or undecodable images open as named
+placeholders with **Replace…**, and a notice explains the problem. Exporting
+such a Project keeps its missing references so it can still be shared or
+repaired.
+
+[`src/images.ts`](src/images.ts) owns image intake and the session's bytes;
+[`src/editing.ts`](src/editing.ts) records the authored image edits. Unit tests
+cover detection, decode rejection, size boundaries, deduplication and undo.
+Browser checks exercise real decoders, the picker and drop handlers, and an
+export/delete/import round trip. Run the server, then create a dedicated test
+page without the normal app boot (the suite mounts the real UI itself):
+
+```sh
+bun build tooling/creative/tests/images.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/images-test.html
+```
+
+Open `/images-test.html` and run
+`await import('/images.browser.js').then(m => m.runBrowserTests())`.
+Every result must have `passed: true`. Reload before repeating, and rebuild
+both files after an app rebuild. The suite creates and removes only its own
+Projects. iOS's native file picker still needs a device check; the Project
+picker deliberately has no extension filter.
 
 ## Rich text
 

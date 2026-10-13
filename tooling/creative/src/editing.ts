@@ -9,6 +9,7 @@ import {
   freshName,
   isIdentifierName,
   suggestName,
+  type Asset,
   type ButtonElement,
   type Element,
   type ElementKind,
@@ -402,6 +403,49 @@ export class StackEditor {
       this.#selection = [element.name];
       this.#pageSelected = false;
       return element;
+    });
+  }
+
+  /** Adds or replaces a picture and its asset name as one undoable edit. */
+  setImage(
+    imported: Asset,
+    replacement?: string,
+    position?: { left: number; top: number },
+  ): void {
+    if (this.readOnly) {
+      return;
+    }
+    const target = replacement ? this.element(replacement) : undefined;
+    if (replacement && target?.kind !== 'image') {
+      return;
+    }
+    this.edit(() => {
+      let asset = this.project.assets.find(a => a.hash === imported.hash);
+      if (!asset) {
+        asset = {
+          ...imported,
+          name: freshName(imported.name, namesExcept(this.project.assets)),
+        };
+        this.project.assets.push(asset);
+      }
+      if (target?.kind === 'image') {
+        target.image = asset.name;
+      } else {
+        const element = createElement(
+          'image',
+          freshName('image1', namesExcept(this.page.elements)),
+        );
+        if (element.kind !== 'image') {
+          return;
+        }
+        element.image = asset.name;
+        if (position) {
+          Object.assign(element, position);
+        }
+        this.page.elements.push(element);
+        this.#selection = [element.name];
+        this.#pageSelected = false;
+      }
     });
   }
 
