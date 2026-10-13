@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 3;
+pub const format_version: u32 = 4;
 
 pub const Error = error{
     InvalidSave,
@@ -552,6 +552,9 @@ const Saving = struct {
                 }
                 try s.o.int(u.next);
                 try s.o.flag(u.left);
+                try s.o.int(u.failed);
+                try s.o.flag(u.failed_frame != null);
+                if (u.failed_frame) |f| try s.o.int(f);
                 switch (u.then) {
                     .accept => |a| {
                         try s.o.byte(0);
@@ -1484,6 +1487,8 @@ const Restoring = struct {
                 u.next = try r.i.small(usize);
                 if (u.next > n) return error.InvalidSave;
                 u.left = try r.i.flag();
+                u.failed = try r.i.int();
+                if (try r.i.flag()) u.failed_frame = try r.i.small(usize);
                 switch (try r.i.byte()) {
                     0 => {
                         u.then = .{ .accept = .{ .frame = try r.i.small(usize), .pc = try r.i.small(u32), .stack = .empty } };
@@ -1606,6 +1611,13 @@ const Restoring = struct {
             if (!r.skim and base.len > s.variables.len) return error.InvalidSave;
         }
         try r.frames(x, &x.frames);
+        // Each dispatch's held frames return to the Run's, which keeps
+        // room for them.
+        var room = x.frames.items.len;
+        for (x.controls.items) |c| if (c == .dispatch) {
+            room = @max(room, c.dispatch.owner + 1 + c.dispatch.held.len);
+        };
+        try x.frames.ensureTotalCapacity(a, room);
         // A nonzero base is only an event test's, inside a Pump.
         if (x.base != 0) return error.InvalidSave;
         if (x.waiting != null and x.frames.items.len == 0) return error.InvalidSave;
@@ -1735,8 +1747,10 @@ const Restoring = struct {
                         if (!kinds(acc.stack.items, try r.expectedRaised(code, acc.pc), true)) return error.InvalidSave;
                     },
                     .transfer => |t| {
-                        if (t.frame >= fs.len) return error.InvalidSave;
-                        const code = run.script.unitIn(fs[t.frame].library);
+                        // The offering frame may be held aside by the
+                        // dispatch whose policy chose it.
+                        const offering = heldFrame(run, t.frame) orelse return error.InvalidSave;
+                        const code = run.script.unitIn(offering.library);
                         if (t.offer_entry >= code.unwind.len or t.record >= code.offers.len or t.offer >= code.offers[t.record].offers.len) return error.InvalidSave;
                     },
                     .search => |x| {
@@ -1747,6 +1761,17 @@ const Restoring = struct {
                 }
             },
         };
+    }
+
+    /// The Run's frame at `index`, counting the frames each dispatch holds
+    /// aside above its owner.
+    fn heldFrame(run: *const Run, index: usize) ?*const Frame {
+        if (index < run.frames.items.len) return &run.frames.items[index];
+        for (run.controls.items) |*c| if (c.* == .dispatch) {
+            const d = &c.dispatch;
+            if (index > d.owner and index - d.owner - 1 < d.held.len) return &d.held[index - d.owner - 1];
+        };
+        return null;
     }
 
     /// A queued Host Input the caller owns.

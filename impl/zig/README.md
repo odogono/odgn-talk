@@ -663,7 +663,7 @@ suspended Run's top frame's less what its Suspension Point pushes on
 resuming. Inside a catch dispatch or cleanup, where frames are held aside
 and stacks cut back, each stack must be a prefix of its code's, and its
 search, cleanups and transfer must point at frames and Unwind Table entries
-that exist. A Run's own wait is no Join Member's, a Run queued in its
+that exist, counting the frames a dispatch holds aside. A Run's own wait is no Join Member's, a Run queued in its
 Script's work is ready or preempted, and a saved iterator stays within what
 it iterates. A test holds every corpus unit to one stack shape at each
 instruction, and the decoder is fuzzed: every byte of two busy Groups'
@@ -710,7 +710,14 @@ its dispatch from that clause. A Script that has spent its slice takes no
 more turns, a spent cap ends the turns, and either leaves the Pump `sliced`.
 A preempted Run's Persistent State counts its catch dispatches: each context
 and Error, its activation, the owner's own stack and the frames it holds
-aside. Dispatch's `clause` rate is paid at the clause's first instruction,
+aside. Its pending cleanup has no size of its own, as chapter 8's Pending
+cleanup state gives it: an Error-mode cleanup counts its Error's context and
+the failed continuation's operand stack, which keeps the failed
+instruction's operands; an acceptance its context and activation; a transfer
+its pending arguments. A cancellation's cleanup drops the dispatch contexts
+it interrupted and keeps only the frames and activations its remaining
+`finally` blocks need, their stacks cut to the iterator prefixes those
+blocks use. Dispatch's `clause` rate is paid at the clause's first instruction,
 with that instruction's fixed rate for a clause with no patterns or Guard, or
 alone for one that parks or is dropped; parking and dropping measure
 Persistent State.
