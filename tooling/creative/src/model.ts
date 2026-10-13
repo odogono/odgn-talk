@@ -166,7 +166,17 @@ export const plainTextOf = (richText: RichText): string =>
 
 /** Rich text holding plain text with no mixed formatting. */
 export const richTextFromPlainText = (text: string): RichText =>
-  text.split('\n').map(line => ({ runs: [{ text: line }] }));
+  text
+    .replaceAll(/\r\n?/gu, '\n')
+    .split('\n')
+    .map(line => ({ runs: [{ text: line }] }));
+
+/** Script-facing plain text; replacing it clears every run's formatting. */
+export const textOf = (element: TextElement): string =>
+  plainTextOf(element.richText);
+export const replacePlainText = (element: TextElement, text: string): void => {
+  element.richText = richTextFromPlainText(text);
+};
 
 const base = (name: string): ElementBase => ({
   name,

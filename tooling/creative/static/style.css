@@ -436,3 +436,22 @@ button:disabled {
   font: inherit;
   color: var(--muted);
 }
+
+/* In-place rich text; its formatting controls head the Info window while editing. */
+#text-toolbar:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+#text-toolbar[data-scope='element'] :is([data-text-command='paragraph'], [data-text-command='done']) {
+  display: none;
+}
+#text-toolbar label { display: flex; align-items: center; gap: 0.3rem; }
+#text-toolbar input { width: 2rem; height: 1.7rem; }
+#text-toolbar [aria-pressed='true'] { background: var(--accent); color: white; }
+.page.edit .el.text-editing { cursor: text; user-select: text; overflow: auto; }
+.el.text p { min-height: 1.35em; }
