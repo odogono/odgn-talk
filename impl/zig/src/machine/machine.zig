@@ -182,8 +182,10 @@ pub const Run = struct {
     delivery: Delivery,
     handler: []const u8 = "",
     clause: u32 = 0,
-    /// The error being unwound, with the `finally` blocks still to run.
-    unwinding: ?Unwinding = null,
+    /// Its error control: catch dispatches and cleanups, innermost last.
+    controls: std.ArrayList(Control) = .empty,
+    /// Recovery Offer choices made, which number their records.
+    attempts: u64 = 0,
     /// Capability calls made, which number their ids.
     calls: u32 = 0,
     /// The Fuel and allocation when its current Segment began.
@@ -349,15 +351,52 @@ pub const Work = union(enum) { message: Delivery, run: *Run };
 /// activation's stack, which becomes the frame's.
 pub const Accept = struct { frame: usize, pc: u32, stack: std.ArrayList(Slot) };
 
-pub const Cleanup = struct { frame: usize, target: u32, depth: u32 };
+/// A `finally` block a cleanup runs: its frame, its cleanup copy, the
+/// stack depth it starts at and its entry. `leave` ends the dispatch under
+/// the cleanup, once a policy's own `finally` blocks have run.
+pub const Cleanup = struct { frame: usize = 0, target: u32 = 0, depth: u32 = 0, entry: usize = 0, leave: bool = false };
 
-pub const Then = union(enum) { accept: Accept, end, cancel };
+/// A chosen Recovery Offer, entered once the cleanup it waits on ends:
+/// the offering frame, its `offer` entry, its record and its place in it.
+pub const Transfer = struct { frame: usize, offer_entry: usize, record: u32, offer: u32, args: []*Value, attempt: u64, limit: ?Limit };
+
+/// What a cleanup does after its last `finally` block.
+pub const Then = union(enum) { accept: Accept, end, cancel, transfer: Transfer, search: Search };
+
+/// A search bound: down to `frame`, and in it only the entries before
+/// `entry`, which lie inside the policy or `finally` block that bounds it.
+pub const Limit = struct { frame: usize, entry: usize };
+
+/// Where a catch search is: the frame and the first entry in it still to
+/// test, the top frame's place, its bound, the frames below `position`
+/// it has yet to charge for leaving, and the entries `skip` says already
+/// ran their `finally` blocks.
+pub const Search = struct { frame: usize, entry: usize, raised: u32, limit: ?Limit, position: usize, skip: ?Limit = null };
+
+/// A catch's tests, or a Recovery policy, running in a dispatch activation
+/// of frame `owner`. The failed frames above it are held aside; the owner's
+/// own stack and pc wait in `owner_stack` and `owner_pc`. `search` goes on
+/// from the next entry when the catch declines.
+pub const Dispatch = struct {
+    err: *Value,
+    owner: usize,
+    place: u32,
+    held: []Frame,
+    owner_stack: std.ArrayList(Slot),
+    owner_pc: u32,
+    search: Search,
+};
+
+/// A Run's error control, innermost last (chapter 8, The Unwind Table).
+pub const Control = union(enum) { dispatch: Dispatch, cleanup: Unwinding };
 
 pub const Unwinding = struct {
     err: *Value,
     cleanups: std.ArrayList(Cleanup),
     next: usize = 0,
     then: Then,
+    /// Whether its `leave` has ended the dispatch under it.
+    left: bool = false,
 };
 
 pub const Script = struct {
@@ -1734,8 +1773,11 @@ pub const Group = struct {
                 // Its `finally` blocks run once, innermost first; nothing is
                 // unwound.
                 const top = &run.frames.items[run.frames.items.len - 1];
-                try g.startCleanup(run, try nothing(g.gpa), null, 0, 0, top.pc -| 1, .cancel);
-                return (try g.nextCleanup(run)) orelse try g.execute(run, true);
+                var cleanups: std.ArrayList(Cleanup) = .empty;
+                errdefer cleanups.deinit(g.gpa);
+                try g.collect(run, &cleanups, 0, null, null, top.pc -| 1);
+                try g.startCleanup(run, try nothing(g.gpa), cleanups, .cancel);
+                return (try g.nextCleanup(run, true)) orelse try g.execute(run, true);
             },
             else => {},
         }
@@ -3217,6 +3259,7 @@ pub const Group = struct {
                     charge.release();
                     switch (done) {
                         .returned, .raised => |v| v.release(),
+                        .transfer => |t| releaseAll(t.args, g.gpa),
                         else => {},
                     }
                     g.write("fault {s} limit=fuel at={s}:{d} pos={d}:{d}\n", .{ run.id, unitName(run, frame), pc, ins.position.line, ins.position.column });
@@ -3264,7 +3307,10 @@ pub const Group = struct {
                 .raised => |err| {
                     if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
                 },
-                .end_cleanup => if (try g.nextCleanup(run)) |end| return end,
+                .end_cleanup => if (try g.nextCleanup(run, charged)) |end| return end,
+                .catch_accept => if (try g.catchAccept(run, charged)) |end| return end,
+                .catch_next => if (try g.catchNext(run, charged)) |end| return end,
+                .transfer => |t| if (try g.startTransfer(run, t, pc, charged)) |end| return end,
                 .guard_value => |v| {
                     defer v.release();
                     if (g.guardEntry(run, pc)) |entry| {
@@ -3286,7 +3332,6 @@ pub const Group = struct {
                     while (run.frames.items.len > 0) g.popFrame(run);
                     return .{ .vetoed = v };
                 },
-                .catch_accept, .catch_next => unreachable,
             }
         }
     }
@@ -3423,10 +3468,37 @@ pub const Group = struct {
         while (f.stack.items.len > depth) f.stack.pop().?.release(g.gpa);
     }
 
+    /// Whether entry `ei` of frame `index`'s unit is one a search or a
+    /// cleanup may use: in the frame's own body, inside `limit` at its
+    /// frame, and not one `skip` has already done.
+    fn usable(run: *Run, index: usize, e: lower.Unwind, ei: usize, limit: ?Limit, skip: ?Limit) bool {
+        const unit = unitOf(run, &run.frames.items[index]);
+        const body = unit.bodies[run.frames.items[index].body];
+        if (e.first < body.first or e.last > body.last) return false;
+        if (limit) |l| if (index == l.frame and ei >= l.entry) return false;
+        if (skip) |s| if (index == s.frame and ei < s.entry) return false;
+        return true;
+    }
+
+    /// The innermost control bounding an error raised now: a dispatch's
+    /// policy, or the `finally` block a cleanup is running.
+    fn limitOf(run: *Run) ?Limit {
+        const c = if (run.controls.items.len > 0) &run.controls.items[run.controls.items.len - 1] else return null;
+        return switch (c.*) {
+            .dispatch => |d| .{ .frame = d.owner, .entry = d.search.entry - 1 },
+            .cleanup => |u| if (u.next > 0 and !u.cleanups.items[u.next - 1].leave)
+                .{ .frame = u.cleanups.items[u.next - 1].frame, .entry = u.cleanups.items[u.next - 1].entry }
+            else
+                null,
+        };
+    }
+
     /// Takes a raised error: a guard region skips its clause; otherwise a
     /// two-phase catch search runs each catch's tests before anything is
     /// discarded, then the exited `finally` blocks run, innermost first.
-    /// Returns the Run's end, if the error ends it.
+    /// An error inside a Recovery policy or a `finally` block a cleanup is
+    /// running searches only inside it first. Returns the Run's end, if the
+    /// error ends it.
     fn unwind(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction, charged: bool) !?Outcome {
         const top = run.frames.items.len - 1;
         if (g.guardEntry(run, pc)) |entry| {
@@ -3440,230 +3512,475 @@ pub const Group = struct {
             run.frames.items[top].pc = entry.target;
             return null;
         }
-        // An error raised while unwinding replaces the one in flight, which
-        // becomes its `during`.
-        var current = err;
-        if (run.unwinding) |*u| {
-            if (current.get("during") == null) {
-                const with = try withKey(g.gpa, current, "during", u.err);
-                current.release();
-                current = with;
-            }
-            g.abandonUnwinding(run);
-        }
-        g.writeRaise(run, current, pc, ins);
+        g.writeRaise(run, err, pc, ins);
         // An error leaving a Join abandons its members still pending.
         g.abandonJoin(run);
-        return g.search(run, current, pc, top, charged);
+        return g.search(run, err, .{ .frame = top, .entry = 0, .raised = pc, .limit = limitOf(run), .position = top + 1 }, charged);
     }
 
-    fn search(g: *Group, run: *Run, err: *Value, pc: u32, from: usize, charged: bool) !?Outcome {
-        var position: usize = from + 1;
-        var index: usize = from + 1;
-        while (index > 0) {
-            index -= 1;
-            const unit = unitOf(run, &run.frames.items[index]);
-            const fpc = framePc(run, index, pc);
-            const body = unit.bodies[run.frames.items[index].body];
-            for (unit.unwind, 0..) |e, ei| {
-                if (e.kind != .@"catch" or !covers(e, fpc) or e.first < body.first or e.last > body.last) continue;
-                // Each search step charges the frames it leaves.
-                if (charged) run.fuel += 4 * (position - 1 - index);
-                position = index + 1;
-                switch (try g.dispatchCatch(run, index, e, err, charged)) {
-                    .declined => continue,
-                    .accepted => |acc| {
-                        try g.startCleanup(run, err, index, fpc, ei, pc, .{ .accept = acc });
-                        return g.nextCleanup(run);
-                    },
-                }
-            }
-        }
-        if (charged) run.fuel += 4 * position;
-        try g.startCleanup(run, err, null, 0, 0, pc, .end);
-        return g.nextCleanup(run);
-    }
-
-    const Dispatch = union(enum) { accepted: Accept, declined };
-
-    /// Runs a catch's tests in a dispatch activation of frame `index`: its
-    /// own operand stack, the owner's iterator prefix and the error, over the
-    /// owner's locals. Frames above it are held aside meanwhile.
-    fn dispatchCatch(g: *Group, run: *Run, index: usize, entry: lower.Unwind, err: *Value, charged: bool) !Dispatch {
-        const held_len = run.frames.items.len - index - 1;
-        const held = try g.gpa.dupe(Frame, run.frames.items[index + 1 ..]);
-        defer g.gpa.free(held);
-        run.frames.shrinkRetainingCapacity(index + 1);
-        // Refused partway, the frames held aside come back, so the Run that
-        // is dropped still owns them.
-        errdefer run.frames.appendSliceAssumeCapacity(held);
-        const owner = &run.frames.items[index];
-        const owner_stack = owner.stack;
-        const owner_pc = owner.pc;
-        var activation: std.ArrayList(Slot) = .empty;
-        {
-            errdefer {
-                for (activation.items) |slot| slot.release(g.gpa);
-                activation.deinit(g.gpa);
-            }
-            for (owner_stack.items[0..@min(entry.depth, owner_stack.items.len)]) |slot| try activation.append(g.gpa, retainSlot(slot));
-            try activation.append(g.gpa, .{ .value = err.retain() });
-        }
-        owner.stack = activation;
-        owner.pc = entry.target;
-        errdefer {
-            const o = &run.frames.items[index];
-            for (o.stack.items) |slot| slot.release(g.gpa);
-            o.stack.deinit(g.gpa);
-            o.stack = owner_stack;
-            o.pc = owner_pc;
-        }
-        const result: Dispatch = while (true) {
-            _ = g.scratch.reset(.retain_capacity);
-            const f = &run.frames.items[index];
-            const pc = f.pc;
-            const ins = unitOf(run, f).code[pc];
-            f.pc += 1;
-            var charge: costs.Measures = .{};
-            const done = g.instruction(run, f, ins, &charge) catch |e| switch (e) {
-                error.Raised => blk: {
-                    const raised = g.completeError(run, pc, ins) catch |other| {
-                        charge.release();
-                        return other;
-                    };
-                    break :blk Step{ .raised = raised };
-                },
-                else => |other| {
-                    charge.release();
-                    return other;
-                },
-            };
-            if (charged) {
-                const cost = costs.charge(costKey(ins, &charge), &charge);
-                run.fuel += cost.fuel;
-                run.alloc += cost.alloc;
-            }
-            charge.release();
-            switch (done) {
-                .next => {},
-                .catch_accept => break .{ .accepted = .{ .frame = index, .pc = f.pc, .stack = f.stack } },
-                .catch_next => {
-                    for (f.stack.items) |slot| slot.release(g.gpa);
-                    f.stack.deinit(g.gpa);
-                    break .declined;
-                },
-                .raised => |raised| {
-                    // An error in a clause's tests skips the clause.
-                    defer raised.release();
-                    if (g.guardEntry(run, pc)) |guard| {
-                        if (g.trace) |w| {
-                            w.print("guard-skip {s} at={s}:{d} pos={d}:{d} code=", .{ run.id, topName(run), pc, ins.position.line, ins.position.column }) catch {};
-                            display.writeTrace(w, raised.get("code").?) catch {};
-                            w.writeAll("\n") catch {};
-                        }
-                        try g.cutStack(run, index, guard.depth + 1);
-                        f.pc = guard.target;
-                    } else {
-                        for (f.stack.items) |slot| slot.release(g.gpa);
-                        f.stack.deinit(g.gpa);
-                        break .declined;
-                    }
-                },
-                .guard_value => |v| {
-                    defer v.release();
-                    if (g.guardEntry(run, pc)) |guard| {
-                        if (g.trace) |w| {
-                            w.print("guard-skip {s} at={s}:{d} pos={d}:{d} value=", .{ run.id, topName(run), pc, ins.position.line, ins.position.column }) catch {};
-                            display.writeTrace(w, v) catch {};
-                            w.writeAll("\n") catch {};
-                        }
-                        try g.cutStack(run, index, guard.depth + 1);
-                        f.pc = guard.target;
-                    }
-                },
-                .returned, .clause_failed, .end_cleanup, .suspended, .passed, .vetoed => unreachable,
-            }
-        };
-        // The owner keeps its own stack until acceptance moves it on.
-        const f = &run.frames.items[index];
-        f.stack = owner_stack;
-        f.pc = owner_pc;
-        try run.frames.appendSlice(g.gpa, held[0..held_len]);
-        return result;
-    }
-
-    /// Schedules the `finally` blocks an error leaves: every one covering the
-    /// held frames' places, innermost first, then the ones nested in the
-    /// catching `try` of its own frame, then what follows.
-    fn startCleanup(g: *Group, run: *Run, err: *Value, catching: ?usize, catch_pc: u32, catch_entry: usize, raised: u32, then: Then) !void {
-        var cleanups: std.ArrayList(Cleanup) = .empty;
-        var index = run.frames.items.len;
-        const lowest = catching orelse 0;
+    /// Searches for a catch from `s`'s frame and entry outward, within its
+    /// limit. A covering catch starts its dispatch, and the run loop runs
+    /// its tests. Takes `err`.
+    fn search(g: *Group, run: *Run, err: *Value, s: Search, charged: bool) Allocator.Error!?Outcome {
+        var position = s.position;
+        const lowest = if (s.limit) |l| l.frame else 0;
+        var index = s.frame + 1;
         while (index > lowest) {
             index -= 1;
             const unit = unitOf(run, &run.frames.items[index]);
-            const fpc = if (catching != null and index == catching.?) catch_pc else framePc(run, index, raised);
-            const body = unit.bodies[run.frames.items[index].body];
+            const fpc = framePc(run, index, s.raised);
             for (unit.unwind, 0..) |e, ei| {
-                if (e.kind != .finally or !covers(e, fpc) or e.first < body.first or e.last > body.last) continue;
-                if (catching != null and index == catching.? and ei > catch_entry) continue;
-                try cleanups.append(g.gpa, .{ .frame = index, .target = e.target, .depth = e.depth });
+                if (e.kind != .@"catch" or !covers(e, fpc)) continue;
+                if (index == s.frame and ei < s.entry) continue;
+                if (!usable(run, index, e, ei, s.limit, null)) continue;
+                // Each search step charges the frames it leaves.
+                if (charged) run.fuel += 4 * (position -| (index + 1));
+                position = index + 1;
+                try g.beginDispatch(run, err, index, e, .{ .frame = index, .entry = ei + 1, .raised = s.raised, .limit = s.limit, .position = position, .skip = s.skip });
+                return null;
             }
         }
-        run.unwinding = .{ .err = err, .cleanups = cleanups, .then = then };
+        if (s.limit == null) {
+            if (charged) run.fuel += 4 * position;
+            var cleanups: std.ArrayList(Cleanup) = .empty;
+            errdefer cleanups.deinit(g.gpa);
+            try g.collect(run, &cleanups, 0, null, s.skip, s.raised);
+            try g.startCleanup(run, err, cleanups, .end);
+            return g.nextCleanup(run, charged);
+        }
+        // It escapes the control that bounds it.
+        const bound = &run.controls.items[run.controls.items.len - 1];
+        switch (bound.*) {
+            .dispatch => return g.abortRecovery(run, err, s.raised, position, s.skip, charged),
+            .cleanup => |*u| {
+                const at = u.cleanups.items[u.next - 1];
+                // An aborted policy's own `finally` blocks run in its
+                // activation, which this search leaves as a frame.
+                if (charged and u.then == .search and !u.left) run.fuel += 4;
+                const replaced = try withDuring(g.gpa, err, u.err);
+                err.release();
+                var popped = run.controls.pop().?;
+                g.disposeControl(&popped);
+                return g.search(run, replaced, .{ .frame = at.frame, .entry = at.entry, .raised = s.raised, .limit = limitOf(run), .position = position }, charged);
+            },
+        }
+    }
+
+    /// Starts a catch's tests in a dispatch activation of frame `owner`: its
+    /// own operand stack, the owner's iterator prefix and the error, over
+    /// the owner's locals. The failed frames above it are held aside, and
+    /// stay retained, until the dispatch ends.
+    fn beginDispatch(g: *Group, run: *Run, err: *Value, owner: usize, entry: lower.Unwind, s: Search) !void {
+        errdefer err.release();
+        const held = try g.gpa.dupe(Frame, run.frames.items[owner + 1 ..]);
+        errdefer g.gpa.free(held);
+        try run.controls.ensureUnusedCapacity(g.gpa, 1);
+        var activation: std.ArrayList(Slot) = .empty;
+        errdefer {
+            for (activation.items) |slot| slot.release(g.gpa);
+            activation.deinit(g.gpa);
+        }
+        const f = &run.frames.items[owner];
+        for (f.stack.items[0..@min(entry.depth, f.stack.items.len)]) |slot| try activation.append(g.gpa, retainSlot(slot));
+        try activation.append(g.gpa, .{ .value = err.retain() });
+        run.frames.shrinkRetainingCapacity(owner + 1);
+        run.controls.appendAssumeCapacity(.{ .dispatch = .{ .err = err, .owner = owner, .place = framePcHeld(run, owner, held, s.raised), .held = held, .owner_stack = f.stack, .owner_pc = f.pc, .search = s } });
+        f.stack = activation;
+        f.pc = entry.target;
+    }
+
+    /// An owner's place, with the frames above it held aside.
+    fn framePcHeld(run: *Run, owner: usize, held: []const Frame, raised: u32) u32 {
+        if (held.len == 0) return raised;
+        return run.frames.items[owner].pc - 1;
+    }
+
+    /// Ends the top dispatch: the owner gets its own stack and place back,
+    /// and the held frames return. Returns it, the caller owning its error.
+    fn endDispatch(g: *Group, run: *Run) Dispatch {
+        const d = run.controls.pop().?.dispatch;
+        const f = &run.frames.items[d.owner];
+        for (f.stack.items) |slot| slot.release(g.gpa);
+        f.stack.deinit(g.gpa);
+        f.stack = d.owner_stack;
+        f.pc = d.owner_pc;
+        // The frames were held from this list, so there is room.
+        run.frames.appendSliceAssumeCapacity(d.held);
+        g.gpa.free(d.held);
+        return d;
+    }
+
+    /// `catch-next`: the search goes on outward from the next entry.
+    fn catchNext(g: *Group, run: *Run, charged: bool) !?Outcome {
+        const d = g.endDispatch(run);
+        return g.search(run, d.err, d.search, charged);
+    }
+
+    /// `catch-accept`: the exited `finally` blocks run, innermost first,
+    /// then the owner goes on at the binding moves with the activation's
+    /// stack.
+    fn catchAccept(g: *Group, run: *Run, charged: bool) !?Outcome {
+        const d = &run.controls.items[run.controls.items.len - 1].dispatch;
+        const f = &run.frames.items[d.owner];
+        const accept: Accept = .{ .frame = d.owner, .pc = f.pc, .stack = f.stack };
+        // The activation's stack goes with the acceptance.
+        f.stack = .empty;
+        const ended = g.endDispatch(run);
+        var cleanups: std.ArrayList(Cleanup) = .empty;
+        errdefer cleanups.deinit(g.gpa);
+        try g.collect(run, &cleanups, ended.owner, ended.search.entry - 1, ended.search.skip, ended.search.raised);
+        try g.startCleanup(run, ended.err, cleanups, .{ .accept = accept });
+        return g.nextCleanup(run, charged);
+    }
+
+    /// An error escaping a Recovery policy: its original error becomes the
+    /// new one's `during`, the policy's exited `finally` blocks and then
+    /// the failure's run, and the search goes on outward from the catching
+    /// `try`, past its other catches.
+    fn abortRecovery(g: *Group, run: *Run, err: *Value, raised: u32, position: usize, skip: ?Limit, charged: bool) Allocator.Error!?Outcome {
+        const d = &run.controls.items[run.controls.items.len - 1].dispatch;
+        const replaced = try withDuring(g.gpa, err, d.err);
+        err.release();
+        errdefer replaced.release();
+        var cleanups: std.ArrayList(Cleanup) = .empty;
+        errdefer cleanups.deinit(g.gpa);
+        try g.collect(run, &cleanups, d.owner, d.search.entry - 1, skip, raised);
+        try cleanups.append(g.gpa, .{ .leave = true });
+        // The search goes on from where the policy failed, which is outside
+        // the catching `try`'s own offers.
+        var then = d.search;
+        then.position = position;
+        then.raised = if (run.frames.items.len - 1 == d.owner) raised else run.frames.items[d.owner].pc - 1;
+        try g.startCleanup(run, replaced, cleanups, .{ .search = then });
+        return g.nextCleanup(run, charged);
+    }
+
+    /// Appends the `finally` entries covering each frame's place from the
+    /// top down to `low`, innermost first: in `low`, only those before
+    /// `before`, and none `skip` has run.
+    fn collect(g: *Group, run: *Run, list: *std.ArrayList(Cleanup), low: usize, before: ?usize, skip: ?Limit, raised: u32) !void {
+        var index = run.frames.items.len;
+        const limit: ?Limit = if (before) |b| .{ .frame = low, .entry = b } else null;
+        while (index > low) {
+            index -= 1;
+            const unit = unitOf(run, &run.frames.items[index]);
+            const fpc = framePc(run, index, raised);
+            for (unit.unwind, 0..) |e, ei| {
+                if (e.kind != .finally or !covers(e, fpc)) continue;
+                if (!usable(run, index, e, ei, limit, skip)) continue;
+                try list.append(g.gpa, .{ .frame = index, .target = e.target, .depth = e.depth, .entry = ei });
+            }
+        }
+    }
+
+    /// Pushes a cleanup: its `finally` blocks run for `err`, then `then`.
+    /// Takes `err` and `cleanups`.
+    fn startCleanup(g: *Group, run: *Run, err: *Value, cleanups: std.ArrayList(Cleanup), then: Then) !void {
+        run.controls.append(g.gpa, .{ .cleanup = .{ .err = err, .cleanups = cleanups, .then = then } }) catch |e| {
+            var c: Control = .{ .cleanup = .{ .err = err, .cleanups = cleanups, .then = then } };
+            g.disposeControl(&c);
+            return e;
+        };
     }
 
     /// Runs the next scheduled `finally` block, or what follows the last.
-    fn nextCleanup(g: *Group, run: *Run) !?Outcome {
-        var u = &(run.unwinding orelse return null);
-        if (u.next < u.cleanups.items.len) {
-            const c = u.cleanups.items[u.next];
-            u.next += 1;
-            while (run.frames.items.len > c.frame + 1) g.popFrame(run);
-            try g.cutStack(run, c.frame, c.depth);
-            run.frames.items[c.frame].pc = c.target;
-            return null;
-        }
-        const then = u.then;
-        const err = u.err;
-        u.cleanups.deinit(g.gpa);
-        run.unwinding = null;
-        switch (then) {
-            .accept => |acc| {
-                err.release();
-                while (run.frames.items.len > acc.frame + 1) g.popFrame(run);
-                const f = &run.frames.items[acc.frame];
-                for (f.stack.items) |slot| slot.release(g.gpa);
-                f.stack.deinit(g.gpa);
-                f.stack = acc.stack;
-                f.pc = acc.pc;
+    fn nextCleanup(g: *Group, run: *Run, charged: bool) Allocator.Error!?Outcome {
+        while (true) {
+            if (run.controls.items.len == 0) return null;
+            const u = &run.controls.items[run.controls.items.len - 1].cleanup;
+            if (u.next < u.cleanups.items.len) {
+                const c = u.cleanups.items[u.next];
+                u.next += 1;
+                if (c.leave) {
+                    try g.leaveDispatch(run);
+                    continue;
+                }
+                while (run.frames.items.len > c.frame + 1) g.popFrame(run);
+                try g.cutStack(run, c.frame, c.depth);
+                run.frames.items[c.frame].pc = c.target;
                 return null;
+            }
+            var done = run.controls.pop().?.cleanup;
+            done.cleanups.deinit(g.gpa);
+            switch (done.then) {
+                .accept => |acc| {
+                    done.err.release();
+                    while (run.frames.items.len > acc.frame + 1) g.popFrame(run);
+                    const f = &run.frames.items[acc.frame];
+                    for (f.stack.items) |slot| slot.release(g.gpa);
+                    f.stack.deinit(g.gpa);
+                    f.stack = acc.stack;
+                    f.pc = acc.pc;
+                    return null;
+                },
+                .end => {
+                    while (run.frames.items.len > 0) g.popFrame(run);
+                    return .{ .errored = done.err };
+                },
+                .cancel => {
+                    done.err.release();
+                    while (run.frames.items.len > 0) g.popFrame(run);
+                    return .cancelled;
+                },
+                .transfer => |t| {
+                    done.err.release();
+                    defer releaseAll(t.args, g.gpa);
+                    try g.enterOffer(run, t);
+                    return null;
+                },
+                .search => |s| {
+                    // The frames above the catching one are gone; it goes on
+                    // from its own place.
+                    while (run.frames.items.len > s.frame + 1) g.popFrame(run);
+                    return g.search(run, done.err, .{ .frame = s.frame, .entry = s.entry, .raised = s.raised, .limit = s.limit, .position = s.position, .skip = .{ .frame = s.frame, .entry = s.entry } }, charged);
+                },
+            }
+        }
+    }
+
+    /// Ends the dispatch under the running cleanup once its policy's own
+    /// `finally` blocks have run, and schedules the failure's: down to the
+    /// offering frame for a transfer, or to the catching one for an abort.
+    fn leaveDispatch(g: *Group, run: *Run) !void {
+        const u_index = run.controls.items.len - 1;
+        const d_index = u_index - 1;
+        // Moved to the top, so the dispatch can end as the top control.
+        std.mem.swap(Control, &run.controls.items[u_index], &run.controls.items[d_index]);
+        const raised = run.controls.items[u_index].dispatch.search.raised;
+        const ended = g.endDispatch(run);
+        const u = &run.controls.items[d_index].cleanup;
+        u.left = true;
+        var more: std.ArrayList(Cleanup) = .empty;
+        defer more.deinit(g.gpa);
+        switch (u.then) {
+            .transfer => |t| try g.collect(run, &more, t.frame, t.offer_entry, null, raised),
+            else => try g.collect(run, &more, ended.owner, ended.search.entry - 1, null, raised),
+        }
+        // The cleanup holds its own error.
+        ended.err.release();
+        try u.cleanups.insertSlice(g.gpa, u.next, more.items);
+    }
+
+    /// Releases a control's own resources, for a Run that is dropped or a
+    /// control that is abandoned.
+    fn disposeControl(g: *Group, c: *Control) void {
+        switch (c.*) {
+            .dispatch => |*d| {
+                d.err.release();
+                for (d.owner_stack.items) |slot| slot.release(g.gpa);
+                d.owner_stack.deinit(g.gpa);
+                for (d.held) |*f| {
+                    for (f.locals) |v| v.release();
+                    g.gpa.free(f.locals);
+                    for (f.stack.items) |slot| slot.release(g.gpa);
+                    f.stack.deinit(g.gpa);
+                }
+                g.gpa.free(d.held);
             },
-            .end => {
-                while (run.frames.items.len > 0) g.popFrame(run);
-                return .{ .errored = err };
-            },
-            .cancel => {
-                err.release();
-                while (run.frames.items.len > 0) g.popFrame(run);
-                return .cancelled;
+            .cleanup => |*u| {
+                switch (u.then) {
+                    .accept => |acc| {
+                        var stack = acc.stack;
+                        for (stack.items) |slot| slot.release(g.gpa);
+                        stack.deinit(g.gpa);
+                    },
+                    .transfer => |t| releaseAll(t.args, g.gpa),
+                    .end, .cancel, .search => {},
+                }
+                u.err.release();
+                u.cleanups.deinit(g.gpa);
             },
         }
     }
 
+    /// Drops every control, innermost first, for a Run that ends without
+    /// them.
     fn abandonUnwinding(g: *Group, run: *Run) void {
-        var u = run.unwinding orelse return;
-        switch (u.then) {
-            .accept => |acc| {
-                var stack = acc.stack;
-                for (stack.items) |slot| slot.release(g.gpa);
-                stack.deinit(g.gpa);
-            },
-            .end, .cancel => {},
+        while (run.controls.pop()) |c| {
+            var x = c;
+            g.disposeControl(&x);
         }
-        u.err.release();
-        u.cleanups.deinit(g.gpa);
-        run.unwinding = null;
+        run.controls.deinit(g.gpa);
+        run.controls = .empty;
+    }
+
+    // ------------------------------------------------------------ offers
+
+    /// The innermost dispatch, whose failure chain offers are chosen from.
+    fn recovery(run: *Run) ?*Dispatch {
+        var i = run.controls.items.len;
+        while (i > 0) {
+            i -= 1;
+            switch (run.controls.items[i]) {
+                .dispatch => |*d| return d,
+                .cleanup => {},
+            }
+        }
+        return null;
+    }
+
+    /// The current recovery's failure chain: the innermost dispatch's, or
+    /// once a transfer's dispatch has ended, the frames its cleanup is
+    /// leaving, whose offers stay eligible until the action is entered.
+    const Chain = union(enum) { dispatch: *const Dispatch, frames: ?Limit };
+
+    fn chainOf(run: *Run) ?Chain {
+        var i = run.controls.items.len;
+        while (i > 0) {
+            i -= 1;
+            switch (run.controls.items[i]) {
+                .dispatch => |*d| return .{ .dispatch = d },
+                .cleanup => |u| if (u.left and u.then == .transfer) return .{ .frames = u.then.transfer.limit },
+            }
+        }
+        return null;
+    }
+
+    /// A found offer: its frame, counted with the held frames back in
+    /// place, its `offer` entry and record, and its place in the record.
+    const Found = struct { frame: usize, entry: usize, record: u32, offer: u32 };
+
+    /// Looks `name` up in a dispatch's failure chain: the held frames, the
+    /// owner at its place, then the frames below it within its limit,
+    /// innermost first, each try's offers in source order. `examined`
+    /// counts the frames scanned.
+    fn lookupOffer(run: *Run, chain: Chain, name: []const u8, examined: *u64) ?Found {
+        const d = switch (chain) {
+            .dispatch => |d| d,
+            .frames => |limit| return lookupFrames(run, limit, name, examined),
+        };
+        const lowest = if (d.search.limit) |l| l.frame else 0;
+        var level: usize = d.owner + d.held.len + 1;
+        while (level > lowest) {
+            level -= 1;
+            examined.* += 1;
+            // The frame at this level, and its place in the failure.
+            const frame: *const Frame = if (level > d.owner) &d.held[level - d.owner - 1] else &run.frames.items[level];
+            const place: u32 = if (level == d.owner + d.held.len) d.search.raised else if (level >= d.owner) (if (level == d.owner) d.place else frame.pc - 1) else frame.pc - 1;
+            const unit = unitOf(run, frame);
+            const body = unit.bodies[frame.body];
+            for (unit.unwind, 0..) |e, ei| {
+                if (e.kind != .offer or !covers(e, place)) continue;
+                if (e.first < body.first or e.last > body.last) continue;
+                if (d.search.limit) |l| if (level == l.frame and ei >= l.entry) continue;
+                for (unit.offers[e.target].offers, 0..) |o, j| if (std.mem.eql(u8, o.name, name)) return .{ .frame = level, .entry = ei, .record = e.target, .offer = @intCast(j) };
+            }
+        }
+        return null;
+    }
+
+    /// Looks `name` up in the Run's frames, innermost first, each at the
+    /// instruction it is running or waiting on.
+    fn lookupFrames(run: *Run, limit: ?Limit, name: []const u8, examined: *u64) ?Found {
+        const lowest = if (limit) |l| l.frame else 0;
+        var level = run.frames.items.len;
+        while (level > lowest) {
+            level -= 1;
+            examined.* += 1;
+            const frame = &run.frames.items[level];
+            const place = frame.pc - 1;
+            const unit = unitOf(run, frame);
+            for (unit.unwind, 0..) |e, ei| {
+                if (e.kind != .offer or !covers(e, place)) continue;
+                if (!usable(run, level, e, ei, limit, null)) continue;
+                for (unit.offers[e.target].offers, 0..) |o, j| if (std.mem.eql(u8, o.name, name)) return .{ .frame = level, .entry = ei, .record = e.target, .offer = @intCast(j) };
+            }
+        }
+        return null;
+    }
+
+    /// `choose-offer`: the nearest offer named `name` in the failure chain,
+    /// with exactly `args.len` parameters. Its policy's own `finally`
+    /// blocks run, then the failure's down to the offering `try`, then the
+    /// action is entered. Takes `args`.
+    fn chooseOffer(g: *Group, run: *Run, name: []const u8, args: []*Value, pc: u32, ins: lower.Instruction, m: *costs.Measures) !Step {
+        m.count = args.len;
+        const d = recovery(run) orelse {
+            releaseAll(args, g.gpa);
+            return g.raiseUnavailable(name);
+        };
+        var examined: u64 = 0;
+        const found = lookupOffer(run, .{ .dispatch = d }, name, &examined);
+        m.fuel_extra = 4 * examined;
+        const f = found orelse {
+            releaseAll(args, g.gpa);
+            return g.raiseUnavailable(name);
+        };
+        const frame: *const Frame = if (f.frame > d.owner) &d.held[f.frame - d.owner - 1] else &run.frames.items[f.frame];
+        const offer = unitOf(run, frame).offers[f.record].offers[f.offer];
+        if (offer.binds.len != args.len) {
+            releaseAll(args, g.gpa);
+            return g.raise("wrong arity", &.{});
+        }
+        run.attempts += 1;
+        if (g.trace) |w| {
+            w.print("offer-chosen {s} attempt={d} name=", .{ run.id, run.attempts }) catch {};
+            const shown_name = try model.text(g.gpa, name);
+            defer shown_name.release();
+            display.writeTrace(w, shown_name) catch {};
+            w.print(" at={s}:{d} target={s}:{d}", .{ topName(run), pc, unitName(run, frame), offer.entry }) catch {};
+            if (args.len > 0) {
+                w.writeAll(" args=") catch {};
+                const shown = try model.list(g.gpa, args);
+                defer shown.release();
+                display.writeTrace(w, shown) catch {};
+            }
+            w.writeAll("\n") catch {};
+        }
+        _ = ins;
+        return .{ .transfer = .{ .frame = f.frame, .offer_entry = f.entry, .record = f.record, .offer = f.offer, .args = args, .attempt = run.attempts, .limit = d.search.limit } };
+    }
+
+    fn raiseUnavailable(g: *Group, name: []const u8) error{ Raised, OutOfMemory } {
+        const n = model.text(g.gpa, name) catch return error.OutOfMemory;
+        defer n.release();
+        return g.raise("offer unavailable", &.{.{ .key = "name", .value = n }});
+    }
+
+    /// Starts a chosen transfer: the policy's own `finally` blocks, then
+    /// the failure's, then the action.
+    fn startTransfer(g: *Group, run: *Run, t: Transfer, pc: u32, charged: bool) !?Outcome {
+        errdefer releaseAll(t.args, g.gpa);
+        const d = recovery(run).?;
+        var cleanups: std.ArrayList(Cleanup) = .empty;
+        errdefer cleanups.deinit(g.gpa);
+        try g.collect(run, &cleanups, d.owner, d.search.entry - 1, null, pc);
+        try cleanups.append(g.gpa, .{ .leave = true });
+        const err = d.err.retain();
+        try g.startCleanup(run, err, cleanups, .{ .transfer = t });
+        return g.nextCleanup(run, charged);
+    }
+
+    /// Enters a chosen action: the frames above its `try` are gone, its
+    /// parameters bind at once, and it starts at its entry.
+    fn enterOffer(g: *Group, run: *Run, t: Transfer) !void {
+        while (run.frames.items.len > t.frame + 1) g.popFrame(run);
+        const f = &run.frames.items[t.frame];
+        const unit = unitOf(run, f);
+        const record = unit.offers[t.record];
+        const offer = record.offers[t.offer];
+        try g.cutStack(run, t.frame, record.depth);
+        for (offer.binds, t.args) |slot, v| {
+            f.locals[slot].release();
+            f.locals[slot] = v.retain();
+        }
+        f.pc = offer.entry;
+        g.write("offer-entered {s} attempt={d} target={s}:{d}\n", .{ run.id, t.attempt, unitName(run, f), offer.entry });
+    }
+
+    /// `offerAvailable`: whether the current recovery's failure chain
+    /// offers a valid Name, with the frames it scanned.
+    fn offerAvailable(g: *Group, run: *Run, args: []const *Value, m: *costs.Measures) !*Value {
+        m.builtin = "offerAvailable";
+        m.args = args;
+        if (args[0].data != .text) return g.wrongKind("text", args[0]);
+        const name = args[0].data.text;
+        const chain = chainOf(run) orelse return boolean(g.gpa, false);
+        if (!validName(name)) return boolean(g.gpa, false);
+        var examined: u64 = 0;
+        const found = lookupOffer(run, chain, name, &examined);
+        m.fuel_extra = 4 * examined;
+        return boolean(g.gpa, found != null);
     }
 
     const Step = union(enum) {
@@ -3674,6 +3991,8 @@ pub const Group = struct {
         catch_accept,
         catch_next,
         end_cleanup,
+        /// A valid Recovery Offer choice, to transfer to.
+        transfer: Transfer,
         /// A Guard gave something other than a boolean.
         guard_value: *Value,
         /// It suspended at a Suspension Point.
@@ -4640,6 +4959,12 @@ pub const Group = struct {
                     try g.push(frame, r);
                     return .next;
                 }
+                if (std.mem.eql(u8, ops[0].text, "offerAvailable")) {
+                    const r = try g.offerAvailable(run, args, m);
+                    m.result = r.retain();
+                    try g.push(frame, r);
+                    return .next;
+                }
                 var raised: builtins.Raised = .{};
                 // A Built-in that raises still pays its rate.
                 m.builtin = ops[0].text;
@@ -4755,6 +5080,12 @@ pub const Group = struct {
             .catch_accept => return .catch_accept,
             .catch_next => return .catch_next,
             .end_cleanup => return .end_cleanup,
+            .choose_offer => {
+                const n: usize = @intCast(ops[1].int);
+                const args = try g.gpa.alloc(*Value, n);
+                for (0..n) |i| args[n - 1 - i] = pop(frame);
+                return g.chooseOffer(run, ops[0].text, args, frame.pc - 1, ins, m);
+            },
             .clause_fail => return .clause_failed,
             .raise => return g.raise(ops[0].text, &.{}),
             .throw => {
@@ -4771,7 +5102,6 @@ pub const Group = struct {
                 };
                 return error.Raised;
             },
-            else => return g.raise("not implemented", &.{}),
         }
         return .next;
     }
@@ -5657,6 +5987,22 @@ fn retainSlot(slot: Slot) Slot {
 }
 
 /// A map with `key` added at its end.
+/// `err` with `during` added, unless it has one.
+fn withDuring(gpa: Allocator, err: *Value, during: *Value) Allocator.Error!*Value {
+    if (err.get("during") != null) return err.retain();
+    // Adding a key to a map can only run out of memory.
+    return withKey(gpa, err, "during", during) catch return error.OutOfMemory;
+}
+
+/// An ordinary Name: an identifier word that isn't a Reserved Word or `_`.
+fn validName(w: []const u8) bool {
+    if (w.len == 0 or std.mem.eql(u8, w, "_")) return false;
+    if (!(std.ascii.isAlphabetic(w[0]) or w[0] == '_' or w[0] >= 0x80)) return false;
+    for (w) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c >= 0x80)) return false;
+    for (grammar.reserved) |x| if (std.mem.eql(u8, x, w)) return false;
+    return true;
+}
+
 fn withKey(gpa: Allocator, map: *Value, key: []const u8, value: *Value) !*Value {
     var pairs: std.ArrayList(model.Pair) = .empty;
     defer pairs.deinit(gpa);
