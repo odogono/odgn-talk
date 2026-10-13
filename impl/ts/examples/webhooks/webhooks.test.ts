@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { hostManifest } from './host';
 import { startServer } from './main';
 import { caseFiles, runScenario } from './scenario';
+
+test('the committed Host Manifest matches the Host', () => {
+  // Regenerate with `bun impl/ts/examples/webhooks/main.ts manifest` after
+  // changing a Capability declaration in host.ts.
+  const committed = readFileSync(
+    new URL('webhooks.talk-manifest.json', import.meta.url),
+    'utf8',
+  );
+  expect(committed).toBe(hostManifest());
+});
 
 describe('the recorded scenario', () => {
   // Rerecord with `bun impl/ts/examples/webhooks/main.ts record` after

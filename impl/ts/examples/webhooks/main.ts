@@ -4,9 +4,11 @@
 //
 //   bun impl/ts/examples/webhooks/main.ts serve [--port 8787] [--database rules.sqlite]
 //   bun impl/ts/examples/webhooks/main.ts record [dir]
+//   bun impl/ts/examples/webhooks/main.ts manifest
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { decodeJson, encodeJson, ScriptError } from '../../src/index';
-import { createWebhookHost, type WebhookHost } from './host';
+import { createWebhookHost, hostManifest, type WebhookHost } from './host';
 import { demoRules, record } from './scenario';
 
 /** The webhook endpoint: `POST /hooks` with an `{type, data}` JSON body. */
@@ -112,9 +114,14 @@ if (import.meta.main) {
         new URL('../../../../corpus/examples/webhooks', import.meta.url),
       );
     await record(dir);
+  } else if (command === 'manifest') {
+    writeFileSync(
+      fileURLToPath(new URL('webhooks.talk-manifest.json', import.meta.url)),
+      hostManifest(),
+    );
   } else {
     console.error(
-      'usage: main.ts serve [--port N] [--database PATH] | main.ts record [dir]',
+      'usage: main.ts serve [--port N] [--database PATH] | main.ts record [dir] | main.ts manifest',
     );
     process.exit(2);
   }
