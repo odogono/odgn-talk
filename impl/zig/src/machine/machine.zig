@@ -5923,6 +5923,11 @@ pub const Group = struct {
                 defer v.release();
                 if (v.data.bool == (ins.op == .branch_true)) frame.pc = @intCast(ops[0].int);
             },
+            // Leaves its operand on both edges, unconverted.
+            .branch_not_nothing => {
+                const v = frame.stack.items[frame.stack.items.len - 1].value;
+                if (v.data != .nothing) frame.pc = @intCast(ops[0].int);
+            },
             .check_boolean => {
                 const v = frame.stack.items[frame.stack.items.len - 1].value;
                 if (v.data != .bool) return g.wrongKind("boolean", v);
@@ -6384,6 +6389,25 @@ pub const Group = struct {
                 if (base.data != .map) return g.wrongKind("map", base);
                 const v = base.get(key) orelse try nothing(gpa);
                 try g.push(frame, if (base.get(key)) |found| found.retain() else v);
+            },
+            // A map-only read: Nothing reads as Nothing, and every Host
+            // Object, even for `id`, is a wrong kind with no Host call.
+            .get_optional_key, .get_optional_key_computed => {
+                const base = pop(frame);
+                defer base.release();
+                var key: []const u8 = undefined;
+                var key_value: ?*Value = null;
+                defer if (key_value) |k| k.release();
+                if (ins.op == .get_optional_key) key = try keyOperand(a, ops[0].text) else {
+                    key_value = pop(frame);
+                    if (key_value.?.data != .text) return g.wrongKind("text", key_value.?);
+                    key = key_value.?.data.text;
+                }
+                switch (base.data) {
+                    .nothing => try g.push(frame, base.retain()),
+                    .map => try g.push(frame, if (base.get(key)) |found| found.retain() else try nothing(gpa)),
+                    else => return g.wrongKind("map", base),
+                }
             },
             .property, .property_delimited => {
                 var delimiter: []const u8 = ",";

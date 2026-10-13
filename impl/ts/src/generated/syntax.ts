@@ -60,6 +60,7 @@ export const grammar = {
     ],
     "excluded": [
       "from",
+      "otherwise",
       "with"
     ]
   },
@@ -130,6 +131,7 @@ export const grammar = {
     "ignoring",
     "matches",
     "mod",
+    "otherwise",
     "times",
     "whose",
     "with"
@@ -156,6 +158,7 @@ export const grammar = {
     "kind",
     "map-key",
     "next-repeat",
+    "optional-key",
     "ordinal",
     "ordering-words",
     "pattern-anchor",

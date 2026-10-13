@@ -11,6 +11,7 @@ const wrappers = new Set([
   'Statement',
   'SimpleStatement',
   'Expression',
+  'Default',
   'Primary',
   'Or',
   'And',

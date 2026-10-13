@@ -18,6 +18,7 @@ const (
 	OpMe
 	OpTarget
 	OpJump
+	OpBranchNotNothing
 	OpBranchFalse
 	OpBranchTrue
 	OpCheckBoolean
@@ -49,6 +50,8 @@ const (
 	OpMatches
 	OpGetKey
 	OpGetKeyComputed
+	OpGetOptionalKey
+	OpGetOptionalKeyComputed
 	OpProperty
 	OpPropertyDelimited
 	OpChunkGet

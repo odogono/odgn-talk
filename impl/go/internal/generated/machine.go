@@ -42,8 +42,8 @@ type MachineTableInstructionEntry struct {
 	Suspends bool
 	Cost     string
 	Does     string
-	Errors   []string
 	Jumps    int64
+	Errors   []string
 }
 
 var Machine = MachineTable{
@@ -224,6 +224,19 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "jump",
 			Does:     "Continues at the label",
+		},
+		MachineTableInstructionEntry{
+			Name:  "branch-not-nothing",
+			Group: "control",
+			Operands: []string{
+				"label",
+			},
+			Pops:     1,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "branch",
+			Does:     "Preserves the top value and continues at the label if it is not Nothing",
+			Jumps:    1,
 		},
 		MachineTableInstructionEntry{
 			Name:  "branch-false",
@@ -665,6 +678,34 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"object gone",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:  "get-optional-key",
+			Group: "access",
+			Operands: []string{
+				"key",
+			},
+			Pops:     1,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "get-key",
+			Does:     "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+			Errors: []string{
+				"wrong kind",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:     "get-optional-key-computed",
+			Group:    "access",
+			Operands: []string{},
+			Pops:     2,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "get-key",
+			Does:     "Reads a map key or returns Nothing for a Nothing receiver; computed keys below the receiver must be text",
+			Errors: []string{
+				"wrong kind",
 			},
 		},
 		MachineTableInstructionEntry{

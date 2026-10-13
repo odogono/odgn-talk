@@ -149,6 +149,7 @@ pub const grammar: GrammarTable = .{
         "ignoring",
         "matches",
         "mod",
+        "otherwise",
         "times",
         "whose",
         "with",
@@ -183,6 +184,7 @@ pub const grammar: GrammarTable = .{
         },
         .excluded = &.{
             "from",
+            "otherwise",
             "with",
         },
     },
@@ -459,6 +461,18 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
+            .word = "optional",
+            .positions = &.{
+                "after `the`, unless followed by `of`",
+            },
+        },
+        .{
+            .word = "otherwise",
+            .positions = &.{
+                "between default expression operands",
+            },
+        },
+        .{
             .word = "private",
             .positions = &.{
                 "at the start of a top-level declaration, before `on`, `function` or `constant`",
@@ -624,25 +638,32 @@ pub const grammar: GrammarTable = .{
             .level = 1,
             .assoc = "left",
             .ops = &.{
-                "or",
+                "otherwise",
             },
         },
         .{
             .level = 2,
             .assoc = "left",
             .ops = &.{
-                "and",
+                "or",
             },
         },
         .{
             .level = 3,
+            .assoc = "left",
+            .ops = &.{
+                "and",
+            },
+        },
+        .{
+            .level = 4,
             .assoc = "prefix",
             .ops = &.{
                 "not",
             },
         },
         .{
-            .level = 4,
+            .level = 5,
             .assoc = "none",
             .ops = &.{
                 "=",
@@ -681,21 +702,21 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
-            .level = 5,
+            .level = 6,
             .assoc = "left",
             .ops = &.{
                 "&",
             },
         },
         .{
-            .level = 6,
+            .level = 7,
             .assoc = "none",
             .ops = &.{
                 "..",
             },
         },
         .{
-            .level = 7,
+            .level = 8,
             .assoc = "left",
             .ops = &.{
                 "+",
@@ -703,7 +724,7 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
-            .level = 8,
+            .level = 9,
             .assoc = "left",
             .ops = &.{
                 "*",
@@ -713,28 +734,28 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
-            .level = 9,
+            .level = 10,
             .assoc = "right",
             .ops = &.{
                 "^",
             },
         },
         .{
-            .level = 10,
+            .level = 11,
             .assoc = "prefix",
             .ops = &.{
                 "-",
             },
         },
         .{
-            .level = 11,
+            .level = 12,
             .assoc = "postfix",
             .ops = &.{
                 "as",
             },
         },
         .{
-            .level = 12,
+            .level = 13,
             .assoc = "postfix",
             .ops = &.{
                 "of",
@@ -857,6 +878,10 @@ pub const grammar: GrammarTable = .{
         .{
             .name = "next-repeat",
             .rule = "at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call",
+        },
+        .{
+            .name = "optional-key",
+            .rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise it introduces an optional map-key read",
         },
         .{
             .name = "ordinal",

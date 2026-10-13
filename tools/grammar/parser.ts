@@ -97,6 +97,7 @@ const OPERAND_WORDS = new Set([
 ]);
 // Words that end a line in operator position and so continue it.
 const CONTINUING_WORDS = new Set([
+  'otherwise',
   'and',
   'or',
   'is',
@@ -1403,7 +1404,7 @@ export class Parser {
         return this.everyHead();
       }
     }
-    const e = this.or();
+    const e = this.defaultExpression();
     if (e.k === 'OrdinalChunk' && this.atOperatorWord('whose')) {
       const op = this.next('operator');
       return this.at(op, { k: 'Whose', of: e, cond: this.whoseCondition() });
@@ -1461,6 +1462,15 @@ export class Parser {
       body,
       end: { line: end.line, col: end.col },
     };
+  }
+
+  defaultExpression(): Node {
+    let l = this.or();
+    while (this.atOperatorWord('otherwise')) {
+      const op = this.next('operator');
+      l = this.at(op, { k: 'otherwise', l, r: this.or() });
+    }
+    return l;
   }
 
   or(): Node {
@@ -1983,25 +1993,28 @@ export class Parser {
 
   the(): Node {
     this.next();
-    const t = this.peek(0);
+    let t = this.peek(0);
+    const optional =
+      this.isWord(t, 'optional') &&
+      !this.isWord(this.la2('optional-key', 'operator'), 'of');
+    if (optional) {
+      this.next();
+      t = this.peek(0);
+    }
+    const k = optional ? 'OptionalKey' : 'Key';
     if (this.isOp(t, '(')) {
       this.next();
       const key = this.nested(() => this.expr());
       this.expectOp(')');
       this.expectWord('of', 'operator');
-      return {
-        k: 'Key',
-        key,
-        computed: true,
-        base: this.postfix(this.primary()),
-      };
+      return { k, key, computed: true, base: this.postfix(this.primary()) };
     }
     if (t.t === 'str') {
       this.next();
       this.expectWord('of', 'operator');
-      return { k: 'Key', key: t.v, base: this.postfix(this.primary()) };
+      return { k, key: t.v, base: this.postfix(this.primary()) };
     }
-    if (this.isWord(t, 'target') || ORDINALS.has(t.v)) {
+    if (!optional && (this.isWord(t, 'target') || ORDINALS.has(t.v))) {
       const n = this.la2(t.v === 'target' ? 'target' : 'ordinal', 'operator');
       if (t.v === 'target' && !this.isWord(n, 'of')) {
         this.next();
@@ -2027,10 +2040,12 @@ export class Parser {
         };
       }
     }
-    const key = this.propertyOrKey('a key or property name');
+    const key = this.propertyOrKey(
+      optional ? 'an optional map key' : 'a key or property name',
+    );
     this.expectWord('of', 'operator');
     return {
-      k: PROPERTIES.has(key) ? 'Property' : 'Key',
+      k: optional ? k : PROPERTIES.has(key) ? 'Property' : 'Key',
       key,
       base: this.postfix(this.primary()),
     };

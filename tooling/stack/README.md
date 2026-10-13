@@ -1,5 +1,7 @@
 # NorthTalk tooling
 
+The formatter, LSP and debugger accept Nothing defaults and optional map-key reads through the TS Core. See the [migration guide](../../docs/migrations/nothing-defaults.md).
+
 **Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter preserves `--|` Declaration Documentation and hover uses the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 

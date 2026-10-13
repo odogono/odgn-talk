@@ -61,6 +61,7 @@ export type SyntaxRule =
   | 'Whose'
   | 'EveryHead'
   | 'WhoseKey'
+  | 'Default'
   | 'Or'
   | 'And'
   | 'Not'

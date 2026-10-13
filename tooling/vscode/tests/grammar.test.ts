@@ -165,3 +165,13 @@ describe('the TextMate grammar', () => {
     ]);
   });
 });
+
+test('highlights Nothing defaults and optional map-key reads', () => {
+  const tokens = tokenize('return the optional x of m otherwise 4');
+  expect(tokens.find(([word]) => word === 'otherwise')?.[1]).toBe(
+    'keyword.operator.word.northtalk',
+  );
+  expect(tokens.find(([word]) => word === 'optional')?.[1]).toBe(
+    'keyword.other.northtalk',
+  );
+});

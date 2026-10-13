@@ -235,6 +235,9 @@ const objectKey = (
 /** A Host Object key read calls the Host, unless it is `id` or a Built-in property. */
 const hostKey = (key: string) => key !== 'id' && !properties.has(key);
 
+const isOptionalRead = (node: SemanticNode): boolean =>
+  node.rule === 'The' && word(node.children[1], 'optional');
+
 /** A Guard may call only Built-ins, holds no Lambda and reads no Host property but `id`. */
 const checkGuard = (guard: SemanticNode, report: Report) => {
   const work = [guard];
@@ -252,7 +255,11 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
     ) {
       report('not in a guard', head);
     }
-    if (node.rule === 'The' && isHostObject(node.children.at(-1))) {
+    if (
+      node.rule === 'The' &&
+      !isOptionalRead(node) &&
+      isHostObject(node.children.at(-1))
+    ) {
       const key = node.children.find(
         (child): child is SemanticNode =>
           child.kind === 'node' && child.rule === 'Key',

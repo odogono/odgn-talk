@@ -246,7 +246,7 @@ var Costs = CostsTable{
 		CostsTableRateEntry{
 			Key:   "get-key",
 			Fuel:  "3",
-			Input: "the map or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
+			Input: "the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
 		},
 		CostsTableRateEntry{
 			Key:   "property",
@@ -655,6 +655,10 @@ var Costs = CostsTable{
 		CostsTableChangeEntry{
 			Issue:  "#388",
 			Change: "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#719",
+			Change: "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
 		},
 	},
 }

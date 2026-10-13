@@ -151,7 +151,9 @@ fn step(a: Allocator, unit: *const lower.Unit, out: *Shapes, work: *std.ArrayLis
             try next.append(a, .deadline);
         },
         else => {
-            if (label) |l| if (l < unit.code.len) try reach(a, out, work, l, popped);
+            // A jump leaves `jumps` of the popped slots pushed, as they were.
+            const kept = popped.len + @as(usize, @intCast(entry.jumps orelse 0));
+            if (label) |l| if (l < unit.code.len and kept <= shape.len) try reach(a, out, work, l, shape[0..kept]);
             try next.appendSlice(a, popped);
             for (0..pushes) |_| try next.append(a, .value);
         },

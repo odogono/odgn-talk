@@ -238,3 +238,28 @@ describe('compiling and adding Libraries', () => {
     expect(r.vars).toBe('vars s n="hi!!!"');
   });
 });
+
+test('optional-read and operand errors in stdlib-attributed code point at its entering call', () => {
+  for (const expression of [
+    'the optional x of 1',
+    'the optional (1) of (1 / 0)',
+  ]) {
+    const library = compileLibrary(
+      {
+        name: 'optionalErrors',
+        version: '1',
+        source: `function read\nreturn ${expression}\nend read`,
+      },
+      [],
+      {},
+      { atCaller: true },
+    );
+    const result = run(
+      'use read from optionalErrors\nscript variable e\non go\ntry\nread()\ncatch err\nput err into e\nend try\nend go',
+      [library],
+    );
+    expect(result.vars).toContain(
+      'at: {unit: "s", handler: "go", line: 5, column: 1}',
+    );
+  }
+});

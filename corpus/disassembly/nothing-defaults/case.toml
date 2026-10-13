@@ -1,0 +1,14 @@
+# Unblessed: Nothing defaults and optional map-key reads, with `otherwise` in a Guard, chained defaults, a Constant fallback and literal and computed optional keys (#719); first blessing awaits human review.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+
+[[scripts]]
+name = "defaults"
+source = "defaults.talk"
+
+[[disassembly]]
+unit = "defaults"
+expected = "defaults.dis"

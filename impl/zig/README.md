@@ -28,6 +28,8 @@ Container mutations. `set` does not modify chunks inside a property's value.
 Direct known-owner read-only properties are checked at load; `it` and Target
 properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
 
+`a otherwise b` and `the optional k of x` follow [the Nothing-defaults design](../../docs/design/nothing-defaults.md). `otherwise` parses as the lowest binary operator and lowers to `branch-not-nothing` and `pop` at its own token, so the left side runs once and the fallback only on Nothing. Optional reads parse into their own `optional_key` node, so they are never Containers; `the optional of m` stays the ordinary key read by the `optional-key` decision. They lower to `get-optional-key` instructions at their `the`, which read maps and Nothing only and reject every Host Object, even for `id`, with no Host crossing. The checker checks both forms in every operand in Guards, Constants and other restricted expressions, and an optional read of a known Host Object is no Host property access in a Guard. The Zig Core passes the shared `nothing-defaults` Disassembly Case; cross-Core Trace cases land with the coordinated integration ([#722](https://github.com/odogono/odgn-talk/issues/722)).
+
 ## Layout
 
 - `build.zig`, `build.zig.zon`: one Zig package, `northtalk`, pinned to Zig
