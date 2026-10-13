@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 2;
+pub const format_version: u32 = 3;
 
 pub const Error = error{
     InvalidSave,
@@ -665,6 +665,7 @@ const Saving = struct {
 
     fn delivery(s: *Saving, d: machine.Delivery) !void {
         try s.o.int(d.id);
+        try s.o.int(d.root);
         try s.o.str(d.message);
         try s.values(d.args);
         try s.o.flag(d.request);
@@ -688,6 +689,9 @@ const Saving = struct {
 
     fn oneRun(s: *Saving, r: *const Run) !void {
         try s.o.str(r.id);
+        try s.o.int(r.order);
+        try s.o.flag(r.reported_fuel != null);
+        if (r.reported_fuel) |f| try s.o.int(f);
         try s.o.int(r.fuel);
         try s.o.int(r.alloc);
         try s.delivery(r.delivery);
@@ -832,6 +836,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
     try o.int(g.timers);
+    try o.int(g.run_order);
     // Libraries, by identity.
     try o.int(g.libraries.items.len);
     for (g.libraries.items) |l| {
@@ -987,6 +992,16 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.flag(x.mark != null);
         if (x.mark) |m| try s.mark(m);
     }
+    // Run accounting: each root's discarded messages, and the roots whose
+    // work changed since the last report (chapter 9, Run accounting).
+    try o.int(g.root_discards.count());
+    var discards = g.root_discards.iterator();
+    while (discards.next()) |e| {
+        try o.int(e.key_ptr.*);
+        try o.int(e.value_ptr.*);
+    }
+    try o.int(g.changed_roots.count());
+    for (g.changed_roots.keys()) |root| try o.int(root);
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(o.bytes.items, &digest, .{});
     try o.bytes.appendSlice(gpa, &digest);
@@ -1182,7 +1197,9 @@ const Restoring = struct {
     /// A Delivery the caller owns.
     fn delivery(r: *Restoring) Error!machine.Delivery {
         const a = r.gpa();
-        var d: machine.Delivery = .{ .id = try r.i.int(), .message = try r.owned(), .args = &.{}, .request = false };
+        const id = try r.i.int();
+        const root = try r.i.int();
+        var d: machine.Delivery = .{ .id = id, .root = root, .message = try r.owned(), .args = &.{}, .request = false };
         errdefer r.g.releaseDelivery(d);
         d.args = try r.values();
         d.request = try r.i.flag();
@@ -1513,6 +1530,8 @@ const Restoring = struct {
             return e;
         };
         try r.runs.append(a, x);
+        x.order = try r.i.int();
+        if (try r.i.flag()) x.reported_fuel = try r.i.int();
         x.fuel = try r.i.int();
         x.alloc = try r.i.int();
         const d = try r.delivery();
@@ -2025,6 +2044,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
     g.timers = try i.int();
+    g.run_order = try i.int();
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
     // Libraries, matched by identity to those the Host passes.
     r.libraries = try a.alloc(?*Library, try i.count());
@@ -2287,6 +2307,13 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         const mark = if (try i.flag()) try r.mark() else null;
         g.deferred.appendAssumeCapacity(.{ .id = id, .broadcast = broadcast, .mark = mark });
     }
+    const discards = try i.count();
+    for (0..discards) |_| {
+        const root = try i.int();
+        try g.root_discards.put(a, root, try i.int());
+    }
+    const changed = try i.count();
+    for (0..changed) |_| try g.changed_roots.put(a, try i.int(), {});
     if (i.pos != i.bytes.len) return error.InvalidSave;
     // Each call's Grant binding.
     for (calls) |c| {
@@ -2295,7 +2322,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }
     var discarded: Discarded = .{};
     defer discarded.deinit(a);
-    if (variables_only) try discard(&r, saved, &discarded);
+    if (variables_only) try discard(&r, saved, &discarded) else baseline(g);
     // The calls that still pend.
     var pending_ids: std.ArrayList([]const u8) = .empty;
     errdefer pending_ids.deinit(a);
@@ -2346,6 +2373,26 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         w.writeAll("\n") catch {};
     }
     return if (variables_only) .variables_only else .full;
+}
+
+/// A full restore's accounting baseline (chapter 9, Run accounting): every
+/// saved live Run's accounting and every active root's work, reported by
+/// the restore without its Runs' `run started`.
+fn baseline(g: *Group) void {
+    for (g.scripts.items) |s| {
+        for (s.live.items) |run| {
+            run.reported_fuel = null;
+            g.markRoot(machine.rootOf(run.delivery));
+        }
+        for (s.work.items) |w| switch (w) {
+            .message => |d| g.markRoot(machine.rootOf(d)),
+            .run => {},
+        };
+    }
+    for (g.inputs.items) |x| switch (x) {
+        .deliver => |d| g.markRoot(machine.rootOf(d.delivery)),
+        else => {},
+    };
 }
 
 /// What a variables-only restore discarded, by id, in order; the ids are
@@ -2401,6 +2448,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
         for (s.variables) |v| state += machine.costs.size(v);
         if (state > s.limits.persistent_state) return error.StateTooLarge;
         for (runs.items) |run| {
+            g.discardRun(run, "variables-only restore");
             try out.runs.append(a, try k.dupe(u8, run.id));
             s.fuel_total += run.fuel;
             s.alloc_total += run.alloc;
@@ -2412,6 +2460,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
             .message => |d| {
                 if (d.from == null and d.id > 0) try dropped.append(a, d.id);
                 if (d.decision) try defer_(g, d, s.name, "");
+                g.discardMessage(d);
                 g.releaseDelivery(d);
             },
             .run => {},
@@ -2428,6 +2477,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
             .deliver => |d| {
                 if (d.delivery.id > 0) try dropped.append(a, d.delivery.id);
                 if (d.delivery.decision) try defer_(g, d.delivery, d.script, "");
+                g.discardMessage(d.delivery);
             },
             .broadcast => |b| if (b.decision) try g.deferred.append(a, .{ .id = b.id }),
             else => {},
