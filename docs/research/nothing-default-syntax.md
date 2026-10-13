@@ -219,12 +219,12 @@ that no external source can break.
 
 ## Parser experiment: 2026-10-13
 
-The throwaway prototype is captured in local branch
+The throwaway prototype is captured in branch
 `prototype/issue-687-default`, commit `c98d2a1a`, based on `0ea3a15c`.
 Its entry point is `tools/grammar/prototype-default.ts`, beside the reference
 parser it varies. That branch also contains `prototype-default-README.md`
 and the full AST/error observations in `prototype-default-results.txt`.
-It is local evidence, not a published remote branch. Reproduce it in that
+The [prototype branch](https://github.com/odogono/odgn-talk/tree/prototype/issue-687-default/tools/grammar) retains its runnable source and captured output. Reproduce it in that
 branch's checkout with `bun tools/grammar/prototype-default.ts`.
 
 The runner generates isolated parser variants and removes them after the
@@ -267,7 +267,7 @@ lowering, Fuel, lazy execution and optional reads were not implemented.
 
 ## Optional-key follow-up and selected specification
 
-The follow-up is captured on the same local branch at `ce05553e`.
+The follow-up is captured on the same prototype branch at `ce05553e`.
 It adds 16 optional-key cases, for **57 focused cases** in total. Literal,
 quoted, computed, reserved, property-looking and ordinal-looking keys,
 multiword keys, nesting and Guard syntax parse as proposed. Optional reads
@@ -287,6 +287,6 @@ that the shorter form helps, especially whether the word `optional` teaches
 map-only semantics clearly enough. The default-operator parser questions now have the bounded evidence above;
 the optional-key follow-up supplies the same bounded grammar evidence. Pin evaluation
 order, single evaluation, lazy fallbacks, explicit Nothing, malformed
-computed keys, Host rejection and Guard behavior in corpus cases. Specify
-lowering, Fuel and error fields before splitting implementation across TS,
-Go and Zig; no zero-cost or existing-opcode claim is made here.
+computed keys, Host rejection and Guard behavior in corpus cases. Adopt and verify the draft's lowering, Fuel and error-field definitions when
+splitting implementation across TS, Go and Zig. No runtime parity or
+expectation approval has yet been established.

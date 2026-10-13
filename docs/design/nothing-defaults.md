@@ -154,11 +154,12 @@ Add three instructions to `machine.toml` at integration. All are synchronous,
 allocate no result storage of their own, and obey existing instruction Fuel
 charging and Limit Fault behavior.
 
-`branch-not-nothing label`: control group, pops 0, pushes 0, cost `branch`.
-Inspect the existing top stack value without removing or replacing it.
-If it is not Nothing, jump to `label`; otherwise continue to the next
-instruction. It requires one value to be present despite its zero net stack
-effect. It performs no boolean conversion and raises no Script error.
+`branch-not-nothing label`: control group, pops 1, pushes 1, jumps 1, cost
+`branch`. Pop the top value and push that same value back, without copying
+or converting it. If it is not Nothing, jump to `label`; otherwise continue
+to the next instruction. This stack signature lets the existing verifier
+reject an empty incoming stack while preserving the value on both edges.
+It performs no boolean conversion and raises no Script error.
 
 `get-optional-key key`: access group, pops 1, pushes 1, cost `get-key`.
 Pop the receiver and apply the literal optional-read rules above.
@@ -274,7 +275,9 @@ These are required observations, not blessed expectation files yet.
 9. Compatibility: old label declarations/events reject; old command/send
    witnesses show the documented Selector change; grouped indexes survive.
    Migrated labels and Host message names work together.
-10. Disassembly emits all three instructions, source maps point correctly,
+10. Machine verification rejects `branch-not-nothing` with an empty stack
+    and accepts equal stack depth on its branch and fallthrough edges.
+    Disassembly emits all three instructions, source maps point correctly,
     budget exhaustion immediately before branch/pop/read faults consistently,
     and TS/Go/Zig agree on values, errors, Fuel and Trace observations.
 
