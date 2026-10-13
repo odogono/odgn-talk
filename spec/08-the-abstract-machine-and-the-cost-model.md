@@ -649,7 +649,7 @@ Each code unit has one Unwind Table, whose entries are part of its disassembly (
 - **Transfer:** lowering evaluates arguments left to right, then emits `choose-offer name count`. The instruction performs complete nearest-name lookup and checks exact arity, paying lookup charges even for a missing name or wrong arity. A valid choice runs exited dispatch-local finally scopes, then exited original scopes. The offering finally remains to protect the action. After cleanup, bind all parameter slots atomically, preserve owner locals and outer iterator prefix, and enter the action. No failed instruction resumes. An escaping cleanup Error cancels acceptance/transfer and attaches the original as `during` if absent; a rejecting cleanup-local catch does not prevent this replacement.
 - **Nested policy failures:** a nested context searches only local selection control and its helpers, excluding the original failure's offer chain and inherited scopes. Local acceptance restores its policy continuation. Escape adds `during` if absent, aborts the outer context and skips the catching try's siblings. Policy-local cleanup precedes exited original cleanup; consecutive selection boundaries use the same rule.
 - **Pending cleanup:** `end-cleanup` continues an acceptance or offer transfer at its existing 2 Fuel, without raising the original Error. Error-mode cleanup retains its ordinary raise record.
-- **Control accounting:** a context retains its original Error, continuation references, search cursor, activation and pending arguments/cleanup. Real frames and owner locals count once; helpers are real call-depth frames, dispatch activations are not. Unwind charges real frames left by search; offer lookup counts each real owner examined once, even when its control has multiple continuations. Completed, faulted and stopped contexts are discarded.
+- **Control accounting:** a context retains its original Error, continuation references, search cursor, activation and pending arguments/cleanup. Real frames and owner locals count once; helpers are real call-depth frames, dispatch activations are not. Unwind charges real frames left by search; offer lookup counts each real owner examined once, even when its control has multiple continuations. Completed, faulted and stopped contexts are discarded. Cancellation also discards the interrupted dispatch contexts, including their original Errors and pending transfer arguments, even while cancellation cleanup remains pending; it retains only the frames and activations needed by that cleanup. [Pending cleanup state](#pending-cleanup-state) fixes their Persistent State accounting.
 - **Cancellation** enumerates dispatch-local and retained `finally` scopes innermost first, using control activation plus cleanup entry as identity. Activations inherit the owners' already active scopes rather than duplicating them. An entered cleanup copy is not restarted; remaining scopes keep their shared owner locals ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)). It isn't unwinding: it charges no `unwind`, and a frame with no `finally` entry left to run is dropped, not popped by an error.
 - **Preemption:** catch search and offer lookup are indivisible. Their complete charge may create Fuel Slice debt; preemption happens only at the following instruction boundary, with no mid-scan saved cursor.
 - **Entering a `try`** costs nothing, since it has no instruction; offer metadata adds no normal-path Fuel.
@@ -915,9 +915,51 @@ The Allocation Budget and Persistent State count values by their logical size, a
 <!-- end -->
 
 - **Persistent State** is measured at each Segment's end, over everything the Script keeps ([chapter 6](06-errors-and-limits.md#limits)): each Script Variable's value, each message in its mailbox, and each suspended, ready, parked or preempted Run, which counts its frames, its pending calls and its Join's early answers. A ready Run retains the answer or event it will resume with in place of the call it no longer waits on. A cancelled Run awaiting cleanup retains the frames its remaining cleanup needs.
-- **A frame's** `items` is its number of locals, and its `contents` the values in its locals and on its operand stack. A Run's `contents` is its real frames, dispatch contexts and activations, pending calls and retained answers; a message's is its arguments. A dispatch context's `items` is its pending argument count, and its `contents` is its original Error and pending argument Values. An activation's `contents` is its operand stack; its shared owner locals are counted only in the real owner frame.
+- **A frame's** `items` is its number of locals, and its `contents` the values in its locals and on its operand stack. A Run's `contents` is its real frames, dispatch contexts and activations, pending cleanup state as defined below, pending calls and retained answers; a message's is its arguments. A dispatch context's `items` is its pending argument count, and its `contents` is its original Error and pending argument Values. An activation's `contents` is its operand stack; its shared owner locals are counted only in the real owner frame.
 - **An internal value** counts the value it holds as well: an iterator its list or range, a reader its Bytes, and a replacement its text and Matches.
 - **The Allocation Budget** counts what each instruction's allocation formula says. An instruction that builds a value counts its size, and a write counts only the new part it puts in, not the whole it rebuilds ([ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md)).
+
+### Pending cleanup state
+
+A cleanup-stack entry has no separate fixed logical size. Its control references,
+Unwind Table entry, mode, search cursor and progress add no bytes beyond the
+retained state below. This applies to both the running cleanup and queued
+cleanup scopes; a reference to a frame, activation or context does not count
+that control a second time.
+
+- **Error mode:** retain the Error's dispatch context until propagation or
+  replacement completes, even when no catch is being tested. Count its original
+  Error by the dispatch-context formula. Count retained real frames and dispatch
+  activations, including their operand stacks, even while a cleanup copy runs.
+- **Acceptance:** retain the accepting dispatch context and its activation until
+  exited cleanup finishes and the real owner resumes. The context still counts
+  its original Error; acceptance has no pending argument Values.
+- **Offer transfer:** retain the context, its original Error and the pending
+  argument Values, including the `8 * items(v)` argument slots. Retain dispatch
+  control while dispatch-local cleanup runs; when cleanup proceeds into the
+  original scopes, discard the selection activation. The offering real owner
+  and its locals remain until the action is entered.
+- **Cancellation:** discard the interrupted dispatch contexts and their pending
+  acceptance or offer transfer. Count each real owner and each dispatch
+  activation needed by the remaining cleanup once. Truncate interrupted operand
+  stacks to the iterator prefixes required by those cleanup entries; if a real
+  owner is retained only for an activation's shared locals, retain no operand
+  stack for that owner. Drop each owner or activation when no remaining cleanup
+  needs it. An Error still held in an owner local counts as that local's value,
+  even though its dispatch context has gone.
+
+An Error-mode, acceptance or offer cleanup of a real frame shares its owner
+locals, so the frame header, local slots and local Values count once. Its active
+operand stack and the retained failed continuation's operand stack both count:
+entering cleanup does not replace the retained operands. A cleanup running in
+an activation uses the activation formula rather than adding a real frame;
+distinct retained activations still count separately. Cancellation instead
+keeps only the cleanup's required prefixes, as above. Values on distinct
+retained stacks count at each occurrence under the usual logical-size rule.
+
+These are Persistent State rules, not extra Allocation Budget or Fuel charges.
+Save and restore preserve the same retained control and therefore its size
+([chapter 10](10-save-and-restore.md#what-a-save-holds)).
 
 ### Rates
 
