@@ -124,7 +124,7 @@ fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c
             const label = if (case_setup.field(t, "version")) |v| v.string else "";
             const src: c.talk_library_source = .{ .name = name.ptr, .name_len = name.len, .version = label.ptr, .version_len = label.len, .source = source.ptr, .source_len = source.len };
             var l: ?*c.talk_library = null;
-            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l));
+            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l, null));
             try out.put(a, name, l.?);
             _ = left.orderedRemove(i);
             progressed = true;
@@ -1364,7 +1364,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             c.talk_library_version(replaced, &label, &label_len);
             const src: c.talk_library_source = .{ .name = library.ptr, .name_len = library.len, .version = label, .version_len = label_len, .source = source.ptr, .source_len = source.len };
             var l: ?*c.talk_library = null;
-            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l));
+            try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l, null));
             const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
             const code = c.talk_replace_library(group, l, carry, null);
             if (code == c.TALK_OK) {

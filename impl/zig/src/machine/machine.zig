@@ -157,6 +157,17 @@ pub const Delivery = struct {
     passed_by: ?*objects.Object = null,
 };
 
+/// A Handler's Selector: its name, then `:` and each Argument Label
+/// followed by `:`.
+fn handlerSelector(a: Allocator, t: *const ast.Tree, h: ast.Handler) ![]const u8 {
+    if (h.labels.len == 0) return t.text(h.name);
+    var out: std.ArrayList(u8) = .empty;
+    try out.appendSlice(a, t.text(h.name));
+    try out.append(a, ':');
+    for (h.labels) |l| try out.print(a, "{s}:", .{t.text(l)});
+    return out.items;
+}
+
 /// The Host Delivery at a message's root.
 pub fn rootOf(d: Delivery) u64 {
     return if (d.root != 0) d.root else d.id;
@@ -1730,7 +1741,9 @@ pub const Group = struct {
                     .script_variable => |v| s.hasName(t.text(v.name)),
                     .constant => |k| s.hasName(t.text(k.name)),
                     .function => |f| s.hasName(t.text(f.name)),
-                    .handler => |h| if (h.fallback) s.handlerUnit("any message", .fallback) != null else s.hasName(t.text(h.name)),
+                    // A Handler is reused only by its Selector: `on move x`
+                    // and `on move x to y` are two names.
+                    .handler => |h| if (h.fallback) s.handlerUnit("any message", .fallback) != null else s.handlerUnit(try handlerSelector(a, t, h), .handler) != null,
                     .use => |u| for (u.names) |n| {
                         if (s.hasName(t.text(u.rename orelse n))) break true;
                     } else false,

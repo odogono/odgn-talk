@@ -931,14 +931,14 @@ static int reload_test(void) {
     bad |= talk_script_reload(script, "on", 2, TALK_RESET_VARIABLES, NULL, NULL) != TALK_LOAD_REFUSED;
     talk_library_source lib_src = {"lib", 3, "1", 1, "constant k = 1\n", 15};
     talk_library *lib = NULL, *replaced = NULL;
-    bad |= talk_compile_library(core, &lib_src, NULL, 0, NULL, 0, &lib) != TALK_OK;
+    bad |= talk_compile_library(core, &lib_src, NULL, 0, NULL, 0, &lib, NULL) != TALK_OK;
     bad |= talk_add_library(group, lib) != TALK_OK;
     const char *user = "use k from lib\nscript variable v = k\n";
     talk_load_options user_load = {"t", 1, user, strlen(user), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *t = NULL;
     bad |= talk_load(group, &user_load, &t) != TALK_OK;
     talk_library_source next_src = {"lib", 3, "2", 1, "constant k = 2\n", 15};
-    bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced) != TALK_OK;
+    bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced, NULL) != TALK_OK;
     bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES, NULL) != TALK_OK;
     talk_inspect(group, NULL);
     bad |= strstr(trace, "refused code=\"name reused\"\n") == NULL;
@@ -1288,18 +1288,26 @@ static int library_test(void) {
     const char *base_source = "constant step = 10\nfunction bump n, by = step\n  return n + by\nend bump\n";
     talk_library_source base_src = {"base", 4, "1", 1, base_source, strlen(base_source)};
     talk_library *base = NULL, *top = NULL, *clash = NULL, *broken = NULL;
-    int bad = talk_compile_library(core, &base_src, NULL, 0, NULL, 0, &base) != TALK_OK;
+    int bad = talk_compile_library(core, &base_src, NULL, 0, NULL, 0, &base, NULL) != TALK_OK;
     /* A Library may import the stdlib's, which every Group holds. */
     const char *top_source = "use bump from base\nuse padLeft from text\nfunction label n\n  return padLeft(bump(n) & \"\", 4, \"0\")\nend label\n";
     talk_library_source top_src = {"top", 3, "1", 1, top_source, strlen(top_source)};
-    bad |= talk_compile_library(core, &top_src, &base, 1, NULL, 0, &top) != TALK_OK;
+    bad |= talk_compile_library(core, &top_src, &base, 1, NULL, 0, &top, NULL) != TALK_OK;
     talk_library_source clash_src = {"text", 4, "1", 1, base_source, strlen(base_source)};
-    bad |= talk_compile_library(core, &clash_src, NULL, 0, NULL, 0, &clash) != TALK_OK;
+    bad |= talk_compile_library(core, &clash_src, NULL, 0, NULL, 0, &clash, NULL) != TALK_OK;
     talk_library_source broken_src = {"broken", 6, "1", 1, "function f\n  put 1 into 3\nend f\n", 30};
-    bad |= talk_compile_library(core, &broken_src, NULL, 0, NULL, 0, &broken) != TALK_LOAD_REFUSED;
+    /* Its diagnostics come back as a talk_load_error, in its own lines. */
+    talk_load_error *refused = NULL;
+    bad |= talk_compile_library(core, &broken_src, NULL, 0, NULL, 0, &broken, &refused) != TALK_LOAD_REFUSED;
+    bad |= refused == NULL || refused->diagnostics_len != 1;
+    if (!bad) {
+        const talk_diagnostic *d = &refused->diagnostics[0];
+        bad |= d->unit_len != 6 || memcmp(d->unit, "broken", 6) != 0 || d->line != 2 || d->code_len == 0;
+    }
+    talk_load_error_release(refused);
     /* A Constant whose initialiser raises refuses the Library too. */
     talk_library_source failing_src = {"failing", 7, "1", 1, "constant x = 1 / 0\n", 19};
-    bad |= talk_compile_library(core, &failing_src, NULL, 0, NULL, 0, &broken) != TALK_LOAD_REFUSED;
+    bad |= talk_compile_library(core, &failing_src, NULL, 0, NULL, 0, &broken, NULL) != TALK_LOAD_REFUSED;
     /* Imports first, one per name, and never a stdlib name. */
     bad |= talk_add_library(group, top) != TALK_LIBRARY_MISMATCH;
     bad |= talk_add_library(group, base) != TALK_OK;

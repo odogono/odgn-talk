@@ -113,6 +113,9 @@ pub const Context = struct {
     /// resolve as its own Script Variables or as imports (chapter 8, Code
     /// units).
     inherited: []const Inherited = &.{},
+    /// Whether to give each body's `roots`, which only a Session Host
+    /// needs.
+    collect_roots: bool = false,
 };
 
 /// A name an extension inherits: a Script Variable, or a Constant, function
@@ -260,6 +263,10 @@ pub const Result = struct {
     bodies: []const Body,
     /// Whether each Handler selector may suspend.
     suspends: std.StringHashMapUnmanaged(bool),
+    /// With `collect_roots`: by body, the locals it binds as a Container's
+    /// root or by a `replace` Capture, not by a pattern, in the order first
+    /// bound, which a Session Entry makes Script Variables (chapter 12).
+    roots: std.AutoHashMapUnmanaged(u32, std.ArrayList([]const u8)) = .empty,
 };
 
 /// Checks a parsed unit. Everything is allocated in `arena`.
@@ -278,7 +285,7 @@ pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocato
         if (out.items.len > 0 and out.items[out.items.len - 1].code == d.code and out.items[out.items.len - 1].offset == d.offset) continue;
         try out.append(arena, d);
     }
-    return .{ .diagnostics = out.items, .needs = c.needs.items, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends };
+    return .{ .diagnostics = out.items, .needs = c.needs.items, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
 }
 
 /// What a checked Library exports: every top-level definition that isn't
@@ -449,6 +456,9 @@ const Where = struct {
 const In = enum { normal, guard, whose, initialiser };
 
 const Checker = struct {
+    /// Collecting a `replace`'s Captures, which bind as roots do.
+    in_replace: bool = false,
+    roots: std.AutoHashMapUnmanaged(u32, std.ArrayList([]const u8)) = .empty,
     a: Allocator,
     tree: *const ast.Tree,
     context: Context,
@@ -615,7 +625,11 @@ const Checker = struct {
         var it = c.imports.iterator();
         while (it.next()) |e| {
             const name = e.key_ptr.*;
-            if (c.functions.contains(name) or c.constants.contains(name) or c.variables.contains(name) or c.handler_names.contains(name) or c.objectIndex(name) != null) {
+            // An extension's Handler and one its Script's other units hold
+            // share the Script's Handlers, told apart by Selector.
+            const inherited_handler = e.value_ptr.decl == std.math.maxInt(u32) and if (e.value_ptr.export_) |x| x.kind == .handler else false;
+            const handler_clash = c.handler_names.contains(name) and !inherited_handler;
+            if (c.functions.contains(name) or c.constants.contains(name) or c.variables.contains(name) or handler_clash or c.objectIndex(name) != null) {
                 try c.report(.name_clash, e.value_ptr.name);
             }
         }
@@ -744,6 +758,11 @@ const Checker = struct {
         if (!entry.found_existing) {
             try s.order.append(c.a, name);
             try s.order_tokens.append(c.a, t);
+            if (c.context.collect_roots and (!pattern_name or c.in_replace)) {
+                const e = try c.roots.getOrPut(c.a, s.body);
+                if (!e.found_existing) e.value_ptr.* = .empty;
+                try e.value_ptr.append(c.a, name);
+            }
         }
     }
 
@@ -933,6 +952,8 @@ const Checker = struct {
     /// The Captures a `replace` writes, when its pattern is a literal.
     fn collectCaptures(c: *Checker, s: *Scope, e: *const Expr) Allocator.Error!void {
         if (e.data != .text_pattern) return;
+        c.in_replace = true;
+        defer c.in_replace = false;
         for (e.data.text_pattern.elements) |el| try c.collectElement(s, el);
     }
 
