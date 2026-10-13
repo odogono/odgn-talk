@@ -1,4 +1,5 @@
 // Browser driving and reader input stay outside the testable Play Session.
+import { scriptNameProblems } from './script-names';
 import { text } from '@odgn/northtalk';
 import { byId, h } from './dom';
 import { replacePlainText, textOf } from './model';
@@ -217,6 +218,12 @@ export const mountPlay = (shell: StackShell): void => {
   toggle.addEventListener('click', () => {
     if (session) {
       leave();
+      return;
+    }
+    const names = scriptNameProblems(shell.editor.project);
+    if (names.length) {
+      problems.hidden = false;
+      problems.replaceChildren(...names.map(p => h('p', {}, p.message)));
       return;
     }
     shell.setPlaying(true);

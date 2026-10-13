@@ -8,6 +8,7 @@ import {
 } from '@odgn/northtalk-editor/editor';
 import { LspClient } from '@odgn/northtalk-editor/lsp-client';
 import { h } from './dom';
+import { openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
 import {
   scriptManifest,
@@ -22,11 +23,14 @@ export const bringWindowForward = (window: HTMLElement): void => {
 };
 
 type OpenScript = {
+  addAction: HTMLButtonElement;
   configure: string;
   editing: Compartment;
   lsp: LspClient;
   node: HTMLElement;
+  owner: ScriptOwner;
   path: HTMLElement;
+  recipes: HTMLElement;
   title: HTMLElement;
   uri: string;
   view: EditorView;
@@ -113,6 +117,18 @@ export class ScriptWindows {
       'aria-label': 'Message Path',
     });
     const parent = h('div', { class: 'script-editor' });
+    const recipes = h('div');
+    const addAction = h(
+      'button',
+      { type: 'button', class: 'add-action' },
+      'Add action…',
+    );
+    addAction.addEventListener('click', () => {
+      const current = this.#owners().get(id);
+      if (current) {
+        this.addAction(current);
+      }
+    });
     const problems = h(
       'div',
       { class: 'script-problems', role: 'status' },
@@ -129,6 +145,8 @@ export class ScriptWindows {
       },
       h('div', { class: 'bar' }, close, title),
       path,
+      addAction,
+      recipes,
       parent,
       problems,
     );
@@ -190,6 +208,9 @@ export class ScriptWindows {
     };
     this.#windows.set(id, {
       configure: '',
+      owner,
+      recipes,
+      addAction,
       editing,
       lsp,
       node,
@@ -204,6 +225,21 @@ export class ScriptWindows {
     lsp.open(uri, owner.script ?? '');
     node.dispatchEvent(new Event('script-window-opened', { bubbles: true }));
     this.#goTo(view, line ?? 1);
+  }
+
+  addAction(owner: ScriptOwner): void {
+    if (this.editor.readOnly) {
+      return;
+    }
+    this.open(owner);
+    const win = this.#windows.get(this.editor.identity(owner))!;
+    openRecipePicker(
+      win.recipes,
+      win.view,
+      this.editor.project,
+      owner,
+      () => this.editor.readOnly,
+    );
   }
 
   #goTo(view: EditorView, line: number): void {
@@ -228,6 +264,14 @@ export class ScriptWindows {
         if (!owner) {
           this.close(id);
           continue;
+        }
+        if (owner !== win.owner) {
+          win.recipes.replaceChildren();
+          win.owner = owner;
+        }
+        win.addAction.disabled = this.editor.readOnly;
+        if (this.editor.readOnly) {
+          win.recipes.replaceChildren();
         }
         const project = this.editor.project;
         const page = scriptPage(project, owner);
@@ -260,6 +304,7 @@ export class ScriptWindows {
         const manifest = scriptManifest(project, owner);
         const configure = JSON.stringify(manifest);
         if (configure !== win.configure) {
+          win.recipes.replaceChildren();
           win.configure = configure;
           win.lsp.configure({ manifest });
         }
