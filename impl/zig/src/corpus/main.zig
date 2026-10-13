@@ -192,14 +192,25 @@ fn encodingCase(init: std.process.Init, detail: *std.Io.Writer, name: []const u8
     return count;
 }
 /// Replays a Trace case through `replay` and compares record by record.
+/// Every Trace Case also replays with a save and restore between each pair
+/// of Pumps, which must give the same Trace.
 fn traceCase(init: std.process.Init, detail: *std.Io.Writer, name: []const u8, path: []const u8, setup: []const u8, replay: trace.Replay) !usize {
+    const n = try traceCaseOnce(init, detail, name, path, setup, replay, false);
+    _ = traceCaseOnce(init, detail, name, path, setup, replay, true) catch |err| {
+        if (err == error.CaseFailed) try detail.writeAll("\n  (in the save and restore replay)");
+        return err;
+    };
+    return n;
+}
+
+fn traceCaseOnce(init: std.process.Init, detail: *std.Io.Writer, name: []const u8, path: []const u8, setup: []const u8, replay: trace.Replay, round_trip: bool) !usize {
     const expected = try read(init, path);
     defer init.gpa.free(expected);
     const case_dir = try std.fmt.allocPrint(init.gpa, "../../corpus/{s}", .{name});
     defer init.gpa.free(case_dir);
     var dir = try std.Io.Dir.cwd().openDir(init.io, case_dir, .{});
     defer dir.close(init.io);
-    const actual = try replay.run(init.gpa, init.io, dir, setup, expected);
+    const actual = try replay.run(init.gpa, init.io, dir, setup, expected, round_trip);
     defer init.gpa.free(actual);
     var want = std.mem.splitScalar(u8, expected, '\n');
     var got = std.mem.splitScalar(u8, actual, '\n');
