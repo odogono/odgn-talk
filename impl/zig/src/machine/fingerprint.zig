@@ -104,10 +104,14 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation) !voi
     try w.print(",\"cost\":{{\"fuel\":{d},\"alloc\":{d}}}", .{ op.cost.fuel, op.cost.alloc });
     if (op.mode == .suspending and op.max_pending_ms > 0) try w.print(",\"maxPending\":{d}", .{op.max_pending_ms});
     if (op.errors.len > 0 or op.closed_errors) {
-        // Ordered by code.
+        // Ordered by code. The codes the Core raises itself, such as
+        // `invalid key`, aren't the Host's to declare.
         var order: [64]usize = undefined;
-        const n = @min(op.errors.len, order.len);
-        for (order[0..n], 0..) |*o, i| o.* = i;
+        var n: usize = 0;
+        for (op.errors, 0..) |e, i| if (!e.core and n < order.len) {
+            order[n] = i;
+            n += 1;
+        };
         std.mem.sort(usize, order[0..n], op.errors, struct {
             fn less(errs: []const capabilities.ErrorDecl, x: usize, y: usize) bool {
                 return std.mem.order(u8, errs[x].code, errs[y].code) == .lt;
