@@ -208,6 +208,9 @@ pub const Run = struct {
     limits: Limits = .{},
     /// The `clause` rate dispatch charges with the next instruction.
     clause_fuel: u64 = 0,
+    /// The `clause` rate of a clause a Command Call just tried, which its
+    /// body's first instruction pays.
+    called_clause: u64 = 0,
     /// Preempted in a clause's patterns or Guard: the clause, and whether it
     /// is a Fallback's, from which dispatch goes on.
     preempted_in: ?struct { library: ?*Library, body: u32, fallback: bool } = null,
@@ -5444,7 +5447,10 @@ pub const Group = struct {
             if (b.kind != .handler or !std.mem.eql(u8, b.name, name) or b.params.len != args.len) continue;
             try g.pushFrameIn(run, library, @intCast(i), args);
             run.frames.items[run.frames.items.len - 1].called = true;
-            run.fuel += 4;
+            // The clause rate, charged with the clause body's first
+            // instruction: never, if that instruction faults on its own
+            // limit (chapter 8, Charging).
+            run.called_clause += 4;
             return true;
         }
         return false;
@@ -5518,6 +5524,10 @@ pub const Group = struct {
     fn execute(g: *Group, run: *Run, charged: bool) !Outcome {
         while (true) {
             _ = g.scratch.reset(.retain_capacity);
+            // A clause a Command Call tried pays its rate with the clause
+            // body's first instruction, this one.
+            run.clause_fuel += run.called_clause;
+            run.called_clause = 0;
             const frame = &run.frames.items[run.frames.items.len - 1];
             const pc = frame.pc;
             if (run.select_at) |at| if (run.frames.items.len == 1 and pc == at) {

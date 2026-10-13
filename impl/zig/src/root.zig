@@ -66,6 +66,7 @@ test {
     _ = @import("machine/nothing_defaults_test.zig");
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
+    _ = @import("machine/clause_charge_test.zig");
     _ = notify;
     _ = @import("decimal/transcendental.zig");
     _ = @import("pattern.zig");
