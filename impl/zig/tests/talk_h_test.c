@@ -95,7 +95,7 @@ static int group_test(void) {
     bad |= talk_pending_result(pending, &result) != TALK_OK;
     bad |= !talk_value_as_text(result, &text, &len) || len != 3 || memcmp(text, "41!", 3) != 0;
     talk_value_release(result);
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "vars adder total=41\n") == NULL;
     talk_load_options broken = {"broken", 6, "on t\n  put 1 into 3\nend t\n", 26, NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *refused = NULL;
@@ -155,7 +155,7 @@ static int capability_test(void) {
         bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
         talk_value_release(text);
         bad |= talk_pump(group, 1790000000 + i, 0, NULL, NULL) != TALK_OK;
-        talk_inspect(group);
+        talk_inspect(group, NULL);
     }
     bad |= strstr(trace, "call caller/r1.c1 op=echo.twice args=[\"ab\"] result=\"abab\" charged=3\n") == NULL;
     bad |= strstr(trace, "vars caller said=\"abab\"\n") == NULL;
@@ -214,7 +214,7 @@ static int revoke_test(void) {
     talk_message go = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= released != 1 || released_reason != TALK_RELEASE_REVOKE || strcmp(released_grant, "echo") != 0;
     bad |= strstr(trace, "> revoke s grant=echo\n> revoke s grant=echo\n> revoke s grant=other\n") == NULL;
     bad |= strstr(trace, "call s/r1.c1") != NULL;
@@ -381,7 +381,7 @@ static int segment_test(void) {
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
     commit_status = TALK_EFFECT_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "run s/r2 outcome=effect-failed delivery=d2 handler=go effect={grant: \"a\", segment: \"s/r2.s1\", phase: \"commit\", status: \"failed\"}") == NULL;
     bad |= strstr(effects_seen, "commit a s/r2.s1 2\nrollback a s/r2.s1 2\n") == NULL;
     /* The second Run's add was rolled back. */
@@ -639,7 +639,7 @@ static int limits_test(void) {
     bad |= talk_script_deliver(script, &spin, NULL) != TALK_OK;
     bad |= talk_script_deliver(script, &spin, NULL) != TALK_ERR_MAILBOX_FULL;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "refused code=\"invalid value\"\n") == NULL || strstr(trace, "refused code=\"mailbox full\"\n") == NULL;
     bad |= strstr(trace, "fault s/r1 limit=fuel ") == NULL || strstr(trace, " rollback=[n]\n") == NULL;
     bad |= strstr(trace, "run s/r1 outcome=limit-fault delivery=d1 handler=spin limit=fuel fuel=") == NULL;
@@ -679,7 +679,7 @@ static int slice_test(void) {
     bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
     bad |= result.state != TALK_IDLE;
     talk_reports_release(result.reports);
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "seg s/r1 continue fuel=") == NULL || strstr(trace, "vars s n=5\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
@@ -710,7 +710,7 @@ static int cancel_test(void) {
     bad |= talk_script_request(script, &hold, NULL, &pending) != TALK_OK;
     bad |= talk_cancel_delivery(group, "d2", 2) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "> cancel-run s/r1\n") == NULL || strstr(trace, "> cancel-delivery d2\n") == NULL;
     bad |= strstr(trace, "run s/r1 outcome=cancelled delivery=d1 handler=hold") == NULL;
     bad |= strstr(trace, "vars s n=9\n") == NULL;
@@ -737,6 +737,20 @@ static int stop_test(void) {
     talk_message hold = {"hold", 4, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    /* Inspect shows the Run waiting until its deadline, and n. */
+    talk_inspection *inspection = NULL;
+    bad |= talk_inspect(group, &inspection) != TALK_OK || inspection == NULL || inspection->scripts_len != 1;
+    if (!bad) {
+        const talk_script_view *view = &inspection->scripts[0];
+        bad |= view->vars_len != 1 || view->vars[0].key_len != 1 || view->vars[0].key[0] != 'n' || view->runs_len != 1 || view->mailbox_len != 0;
+        if (!bad) {
+            const talk_run_view *run = &view->runs[0];
+            bad |= run->status != TALK_SUSPENDED || run->wait_len != 4 || memcmp(run->wait, "wait", 4) != 0;
+            bad |= !run->has_until || run->until_seconds != 1790000001 || run->calls_len != 0;
+            bad |= run->handler_len != 4 || memcmp(run->handler, "hold", 4) != 0;
+        }
+    }
+    talk_inspection_release(inspection);
     bad |= talk_script_stop(script, "done", 4) != TALK_OK;
     talk_pump_result result = {0};
     bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
@@ -758,7 +772,7 @@ static int stop_test(void) {
     talk_reports_release(result.reports);
     bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "> stop s reason=\"done\"\n") == NULL;
     bad |= strstr(trace, "stopped s reason=\"done\" discarded=[s/r1]\n") == NULL;
     bad |= strstr(trace, "stopped s reason=\"done\" dropped=[d2]\n") == NULL;
@@ -806,7 +820,7 @@ static int reload_test(void) {
     talk_library_source next_src = {"lib", 3, "2", 1, "constant k = 2\n", 15};
     bad |= talk_compile_library(core, &next_src, NULL, 0, NULL, 0, &replaced) != TALK_OK;
     bad |= talk_replace_library(group, replaced, TALK_RESET_VARIABLES, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "refused code=\"name reused\"\n") == NULL;
     bad |= strstr(trace, "stopped s reason=\"reload\"\n") == NULL;
     bad |= strstr(trace, "diag s code=\"unexpected token\"") == NULL;
@@ -852,7 +866,7 @@ static int save_test(void) {
     bad |= talk_settle(restored, "s/r1.c1", 7, &adopt, NULL) != TALK_UNKNOWN_CALL;
     bad |= talk_pump(restored, 1789999999, 0, NULL, NULL) != TALK_CLOCK_BACKWARDS;
     bad |= talk_pump(restored, 1790000006, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(restored);
+    talk_inspect(restored, NULL);
     saved.data[saved.len / 2] ^= 1;
     talk_group *corrupt = NULL;
     bad |= talk_restore(core, saved.data, saved.len, &ro, &corrupt, &result) != TALK_INVALID_SAVE || corrupt != NULL;
@@ -935,7 +949,7 @@ static int runaway_test(void) {
     bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
     talk_value_release(few);
     bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     talk_memory memory;
     talk_group_memory(group, &memory);
     bad |= memory.refused || memory.peak > memory.cap;
@@ -1021,7 +1035,7 @@ static int user_test(void) {
     bad |= started == NULL || talk_call_answer(started, answer) != TALK_OK;
     talk_value_release(answer);
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "call-failed s/r1.c2 op=user.choose\n") == NULL;
     bad |= strstr(trace, "vars s got=\"host error\"\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
@@ -1067,7 +1081,7 @@ static int suspension_test(void) {
     bad |= started == NULL || talk_call_answer_with_cost(started, answer, 3) != TALK_OK;
     talk_value_release(answer);
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "> answer waiter/r1.c1 value=42 fuel=3\n") == NULL;
     bad |= strstr(trace, "vars waiter got=42\n") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
@@ -1185,7 +1199,7 @@ static int library_test(void) {
     talk_message message = {"go", 2, NULL, 0, NULL};
     bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
-    talk_inspect(group);
+    talk_inspect(group, NULL);
     bad |= strstr(trace, "refused code=\"library mismatch\"\n") == NULL;
     bad |= strstr(trace, "refused code=\"reserved name\"\n") == NULL;
     bad |= strstr(trace, "vars user got=\"0015\"\n") == NULL;

@@ -1490,9 +1490,161 @@ export fn talk_fingerprint(g: *Group, out: *[32]u8) HostErrorCode {
     return .ok;
 }
 
-export fn talk_inspect(g: *Group) void {
+pub const RunStatus = enum(c_int) { ready, suspended, parked, preempted };
+pub const RunView = extern struct {
+    id: [*]const u8,
+    id_len: usize,
+    status: RunStatus,
+    handler: [*]const u8,
+    handler_len: usize,
+    wait: [*]const u8 = "",
+    wait_len: usize = 0,
+    has_until: bool = false,
+    until_seconds: i64 = 0,
+    until_nanos: i32 = 0,
+    calls: [*]const Id = &.{},
+    calls_len: usize = 0,
+};
+pub const MessageView = extern struct { delivery: [*]const u8, delivery_len: usize, from: [*]const u8, from_len: usize, message: Message };
+pub const ScriptView = extern struct {
+    disabled_grants: [*]const Id,
+    disabled_grants_len: usize,
+    name: [*]const u8,
+    name_len: usize,
+    vars: [*]const Pair,
+    vars_len: usize,
+    runs: [*]const RunView,
+    runs_len: usize,
+    mailbox: [*]const MessageView,
+    mailbox_len: usize,
+};
+pub const Inspection = extern struct { scripts: [*]const ScriptView, scripts_len: usize };
+
+/// An Inspection and the arena its views live in. The values it shows are
+/// retained until it is released.
+const Inspecting = struct {
+    view: Inspection,
+    arena: std.heap.ArenaAllocator,
+    values: std.ArrayList(*Value) = .empty,
+
+    fn value(x: *Inspecting, v: *Value) !*Value {
+        try x.values.append(x.arena.allocator(), v);
+        return v.retain();
+    }
+};
+
+export fn talk_inspect(g: *Group, out: ?*?*Inspection) HostErrorCode {
+    if (out) |o| o.* = null;
     g.group.vars();
     g.flush();
+    const o = out orelse return .ok;
+    const x = g.group.gpa.create(Inspecting) catch return .out_of_memory;
+    x.* = .{ .view = .{ .scripts = &.{}, .scripts_len = 0 }, .arena = .init(g.group.gpa) };
+    inspect(&g.group, x) catch {
+        talk_inspection_release(&x.view);
+        return .out_of_memory;
+    };
+    o.* = &x.view;
+    return .ok;
+}
+
+fn inspect(g: *machine.Group, x: *Inspecting) !void {
+    const a = x.arena.allocator();
+    const scripts = try a.alloc(ScriptView, g.scripts.items.len);
+    for (g.scripts.items, scripts) |s, *view| {
+        var disabled: std.ArrayList(Id) = .empty;
+        for (s.grants) |sg| if (sg.disabled) try disabled.append(a, .{ .data = sg.name.ptr, .len = sg.name.len });
+        std.mem.sort(Id, disabled.items, {}, struct {
+            fn less(_: void, p: Id, q: Id) bool {
+                return std.mem.order(u8, p.data[0..p.len], q.data[0..q.len]) == .lt;
+            }
+        }.less);
+        const vars = try a.alloc(Pair, s.variables.len);
+        for (s.variableNames(), s.variables, vars) |name, v, *pair| pair.* = .{ .key = name.ptr, .key_len = name.len, .value = try x.value(v) };
+        // Runs in the order they started.
+        const live = try a.dupe(*machine.Run, s.live.items);
+        std.mem.sort(*machine.Run, live, {}, struct {
+            fn less(_: void, p: *machine.Run, q: *machine.Run) bool {
+                return runNumber(p.id) < runNumber(q.id);
+            }
+        }.less);
+        const runs = try a.alloc(RunView, live.len);
+        for (live, runs) |r, *rv| rv.* = try runView(a, r);
+        var mailbox: std.ArrayList(MessageView) = .empty;
+        for (s.work.items) |w| switch (w) {
+            .message => |d| {
+                const delivery: []const u8 = if (d.from == null and d.id > 0) try std.fmt.allocPrint(a, "d{d}", .{d.id}) else "";
+                const from: []const u8 = d.from orelse "";
+                const args = try a.alloc(*Value, d.args.len);
+                for (d.args, args) |v, *arg| arg.* = try x.value(v);
+                try mailbox.append(a, .{ .delivery = delivery.ptr, .delivery_len = delivery.len, .from = from.ptr, .from_len = from.len, .message = .{ .name = d.message.ptr, .name_len = d.message.len, .args = args.ptr, .args_len = args.len } });
+            },
+            .run => {},
+        };
+        view.* = .{
+            .disabled_grants = disabled.items.ptr,
+            .disabled_grants_len = disabled.items.len,
+            .name = s.name.ptr,
+            .name_len = s.name.len,
+            .vars = vars.ptr,
+            .vars_len = vars.len,
+            .runs = runs.ptr,
+            .runs_len = runs.len,
+            .mailbox = mailbox.items.ptr,
+            .mailbox_len = mailbox.items.len,
+        };
+    }
+    x.view = .{ .scripts = scripts.ptr, .scripts_len = scripts.len };
+}
+
+fn runNumber(id: []const u8) u64 {
+    const at = std.mem.lastIndexOfScalar(u8, id, 'r') orelse return 0;
+    return std.fmt.parseInt(u64, id[at + 1 ..], 10) catch 0;
+}
+
+/// A live Run as Inspect shows it: preempted mid-Segment, parked by its
+/// clause's Queueing Policy, suspended at a wait, or ready to go on.
+fn runView(a: std.mem.Allocator, r: *const machine.Run) !RunView {
+    const handler: []const u8 = if (r.delivery.function) |f| try display.string(a, f) else r.handler;
+    var out: RunView = .{ .id = r.id.ptr, .id_len = r.id.len, .status = .ready, .handler = handler.ptr, .handler_len = handler.len };
+    if (r.continuing) {
+        out.status = .preempted;
+        return out;
+    }
+    if (r.resume_with != null) return out;
+    if (r.parked) {
+        out.status = .parked;
+        return out;
+    }
+    out.status = .suspended;
+    out.wait = r.suspended_at.ptr;
+    out.wait_len = r.suspended_at.len;
+    var calls: std.ArrayList(Id) = .empty;
+    if (r.waiting) |p| {
+        // As the `seg` record shows it: a deadline of its own, never a
+        // call's MaxWait.
+        if (p.deadline != std.math.maxInt(i128) and ((p.call == null and p.id.len == 0) or p.block)) {
+            out.has_until = true;
+            out.until_seconds = @intCast(@divFloor(p.deadline, std.time.ns_per_s));
+            out.until_nanos = @intCast(@mod(p.deadline, std.time.ns_per_s));
+        }
+        if (p.call) |c| try calls.append(a, .{ .data = c.id.ptr, .len = c.id.len }) else if (p.id.len > 0) try calls.append(a, .{ .data = p.id.ptr, .len = p.id.len });
+    }
+    if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| {
+        if (p.call) |c| try calls.append(a, .{ .data = c.id.ptr, .len = c.id.len }) else if (p.id.len > 0) try calls.append(a, .{ .data = p.id.ptr, .len = p.id.len });
+    };
+    out.calls = calls.items.ptr;
+    out.calls_len = calls.items.len;
+    return out;
+}
+
+export fn talk_inspection_release(i: ?*Inspection) void {
+    const view = i orelse return;
+    const x: *Inspecting = @fieldParentPtr("view", view);
+    for (x.values.items) |v| v.release();
+    const gpa = x.arena.child_allocator;
+    x.arena.deinit();
+    gpa.destroy(x);
 }
 
 /// Whether `E`'s tags, spelled `prefix` ++ TAG, are the enumerators of
@@ -1544,6 +1696,7 @@ test "the enums match talk.h's" {
     try expectHeaderEnum(EffectStatus, "talk_effect_status", "TALK_EFFECT_");
     try expectHeaderEnum(ReleaseReason, "talk_release_reason", "TALK_RELEASE_");
     try expectHeaderEnum(ReportKind, "talk_report_kind", "TALK_REPORT_");
+    try expectHeaderEnum(RunStatus, "talk_run_status", "TALK_");
 }
 
 test "a Group loads, pumps and inspects through the exports" {
@@ -2999,4 +3152,34 @@ test "a restore reports its accounting baseline, and a Reload its discards" {
     try std.testing.expectEqual(HostErrorCode.ok, talk_script_reload(script.?, source.ptr, source.len, .carry_variables, null, &reports));
     defer talk_reports_release(reports);
     try std.testing.expectEqualStrings("run_discarded(reload) stop run_accounting(discarded 15) causal_work(0 0 0) causal_work(0 1 0) ", try reportKinds(a, reports));
+}
+
+test "Inspect shows a preempted Run and the message it sent" {
+    const core = talk_new().?;
+    defer talk_core_release(core);
+    var group: ?*Group = null;
+    const options: GroupOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &options, &group));
+    defer talk_group_release(group);
+    const source = "on go\n send note with 1 to me\n repeat 100 times\n end repeat\nend go\non note x\nend note\n";
+    const load: LoadOptions = .{ .name = "s", .name_len = 1, .source = source.ptr, .source_len = source.len };
+    var script: ?*Script = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_load(group.?, &load, &script));
+    const go: Message = .{ .name = "go", .name_len = 2, .args = null, .args_len = 0 };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_script_deliver(script.?, &go, null));
+    const capped: PumpOptions = .{ .fuel_slice = 0, .fuel_cap = 30 };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, 0, 0, &capped, null));
+    var inspection: ?*Inspection = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_inspect(group.?, &inspection));
+    defer talk_inspection_release(inspection);
+    const view = inspection.?.scripts[0];
+    try std.testing.expectEqual(@as(usize, 1), view.runs_len);
+    try std.testing.expectEqual(RunStatus.preempted, view.runs[0].status);
+    try std.testing.expectEqualStrings("s/r1", view.runs[0].id[0..view.runs[0].id_len]);
+    try std.testing.expectEqual(@as(usize, 1), view.mailbox_len);
+    const m = view.mailbox[0];
+    try std.testing.expectEqualStrings("", m.delivery[0..m.delivery_len]);
+    try std.testing.expectEqualStrings("s/r1", m.from[0..m.from_len]);
+    try std.testing.expectEqualStrings("note", m.message.name.?[0..m.message.name_len]);
+    try std.testing.expectEqual(@as(usize, 1), m.message.args_len);
 }
