@@ -115,6 +115,9 @@ pub const Frame = struct {
 
 pub const Delivery = struct {
     id: u64,
+    /// The Host Delivery whose work this message is (chapter 9, Run
+    /// accounting): 0 for a Host Delivery, which is its own root.
+    root: u64 = 0,
     message: []const u8,
     args: []*Value,
     request: bool,
@@ -154,6 +157,11 @@ pub const Delivery = struct {
     passed_by: ?*objects.Object = null,
 };
 
+/// The Host Delivery at a message's root.
+pub fn rootOf(d: Delivery) u64 {
+    return if (d.root != 0) d.root else d.id;
+}
+
 /// A Decision's Verdict (chapter 5, Decisions).
 pub const Verdict = enum { allowed, vetoed, undecided };
 
@@ -186,6 +194,10 @@ pub const OpenBroadcast = struct { deliveries: []u64, parts: []?Part };
 pub const Run = struct {
     id: []const u8,
     script: *Script,
+    /// When it was made among the Group's Runs, which orders its accounting.
+    order: u64 = 0,
+    /// The Fuel its last `run accounting` report gave, or null before one.
+    reported_fuel: ?u64 = null,
     frames: std.ArrayList(Frame) = .empty,
     fuel: u64 = 0,
     alloc: u64 = 0,
@@ -1149,6 +1161,15 @@ pub const Group = struct {
     keep: std.heap.ArenaAllocator,
     /// The reports not yet returned to the Host.
     reports: report.Reports,
+    /// The Runs made, which order them for accounting.
+    run_order: u64 = 0,
+    /// The Runs ended or discarded since the last accounting tail, as their
+    /// last report rows.
+    ended: std.ArrayList(Ended) = .empty,
+    /// The roots whose work changed since the last accounting tail.
+    changed_roots: std.AutoArrayHashMapUnmanaged(u64, void) = .empty,
+    /// Each root's queued messages a lifecycle discarded, cumulatively.
+    root_discards: std.AutoHashMapUnmanaged(u64, u64) = .empty,
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa), .reports = .init(gpa) };
@@ -1201,12 +1222,143 @@ pub const Group = struct {
         g.scratch.deinit();
         g.keep.deinit();
         g.reports.deinit();
+        g.ended.deinit(g.gpa);
+        g.changed_roots.deinit(g.gpa);
+        g.root_discards.deinit(g.gpa);
     }
 
     /// Adds a report. Reports are observations: one the Group can't keep is
     /// left out, and execution goes on.
     pub fn addReport(g: *Group, r: report.Report) void {
         g.reports.add(r) catch {};
+    }
+
+    // ------------------------------------------------------------ Run accounting
+
+    /// A Run ended or discarded since the last accounting tail, as its row.
+    pub const Ended = struct { order: u64, script: []const u8, run: []const u8, ancestry: report.Ancestry, fuel: u64, state: report.RunAccounting.State };
+
+    /// A root whose work changed, for the next accounting tail.
+    pub fn markRoot(g: *Group, root: u64) void {
+        if (root == 0) return;
+        g.changed_roots.put(g.gpa, root, {}) catch {};
+    }
+
+    /// A message's ancestry, as the reports hold it: its root, and the Run,
+    /// or the call of a Run, that sent it.
+    fn ancestry(g: *Group, d: Delivery) !report.Ancestry {
+        const r = &g.reports;
+        var out: report.Ancestry = .{ .root = try r.print("d{d}", .{rootOf(d)}) };
+        const from = d.from orelse return out;
+        // A call id is its Run's id, `.c` and a number.
+        if (std.mem.lastIndexOf(u8, from, ".c")) |dot| if (dot + 2 < from.len and std.ascii.isDigit(from[dot + 2])) {
+            out.parent_run = try r.text(from[0..dot]);
+            out.parent_call = try r.text(from);
+            return out;
+        };
+        out.parent_run = try r.text(from);
+        return out;
+    }
+
+    /// `run started`, as a new Run dispatches, which also places it in the
+    /// order of the Group's Runs.
+    fn reportRunStarted(g: *Group, s: *const Script, run: *Run) void {
+        g.run_order += 1;
+        run.order = g.run_order;
+        const d = run.delivery;
+        g.markRoot(rootOf(d));
+        const r = &g.reports;
+        const started: report.RunStarted = .{
+            .ancestry = g.ancestry(d) catch return,
+            .script = r.text(s.name) catch return,
+            .run = r.text(run.id) catch return,
+            .delivery = if (d.from == null and d.id > 0) r.print("d{d}", .{d.id}) catch return else "",
+            .selector = if (d.function == null) r.text(d.message) catch return else "",
+            .function = if (d.function) |f| r.value(f) catch return else null,
+            .args = r.valueList(d.args) catch return,
+        };
+        g.addReport(.{ .run_started = started });
+    }
+
+    /// A Run's last accounting row, as it ends or is discarded.
+    fn endRow(g: *Group, run: *const Run, state: report.RunAccounting.State) void {
+        const d = run.delivery;
+        g.markRoot(rootOf(d));
+        const r = &g.reports;
+        g.ended.append(g.gpa, .{
+            .order = run.order,
+            .script = r.text(run.script.name) catch return,
+            .run = r.text(run.id) catch return,
+            .ancestry = g.ancestry(d) catch return,
+            .fuel = run.fuel,
+            .state = state,
+        }) catch {};
+    }
+
+    /// `run discarded`, for a live Run discarded without a `run end`.
+    pub fn discardRun(g: *Group, run: *const Run, reason: []const u8) void {
+        const r = &g.reports;
+        if (g.ancestry(run.delivery)) |a| {
+            g.addReport(.{ .run_discarded = .{ .ancestry = a, .script = r.text(run.script.name) catch "", .run = r.text(run.id) catch "", .reason = reason } });
+        } else |_| {}
+        g.endRow(run, .discarded);
+    }
+
+    /// Counts a queued message a lifecycle discarded against its root.
+    pub fn discardMessage(g: *Group, d: Delivery) void {
+        const root = rootOf(d);
+        if (root == 0) return;
+        g.markRoot(root);
+        const e = g.root_discards.getOrPut(g.gpa, root) catch return;
+        if (!e.found_existing) e.value_ptr.* = 0;
+        e.value_ptr.* += 1;
+    }
+
+    /// The accounting tail of a Host call (chapter 9, Run accounting): a
+    /// `run accounting` row for every Run started, charged, ended or
+    /// discarded since the last, in the order the Runs were made, then
+    /// `causal work` for every root that changed, in admission order.
+    pub fn accountingTail(g: *Group) void {
+        g.writeTail() catch {};
+        g.ended.clearRetainingCapacity();
+        g.changed_roots.clearRetainingCapacity();
+    }
+
+    fn writeTail(g: *Group) !void {
+        var rows: std.ArrayList(Ended) = .empty;
+        defer rows.deinit(g.gpa);
+        try rows.appendSlice(g.gpa, g.ended.items);
+        const r = &g.reports;
+        for (g.scripts.items) |s| for (s.live.items) |run| {
+            if (run.reported_fuel) |f| if (f == run.fuel) continue;
+            try rows.append(g.gpa, .{ .order = run.order, .script = try r.text(s.name), .run = try r.text(run.id), .ancestry = try g.ancestry(run.delivery), .fuel = run.fuel, .state = .live });
+            run.reported_fuel = run.fuel;
+            g.markRoot(rootOf(run.delivery));
+        };
+        std.mem.sort(Ended, rows.items, {}, struct {
+            fn less(_: void, x: Ended, y: Ended) bool {
+                return x.order < y.order;
+            }
+        }.less);
+        for (rows.items) |x| try r.add(.{ .run_accounting = .{ .ancestry = x.ancestry, .script = x.script, .run = x.run, .fuel = x.fuel, .state = x.state } });
+        const roots = g.changed_roots.keys();
+        std.mem.sort(u64, roots, {}, std.sort.asc(u64));
+        for (roots) |root| {
+            var live: u64 = 0;
+            var queued: u64 = 0;
+            for (g.scripts.items) |s| {
+                for (s.live.items) |run| live += @intFromBool(rootOf(run.delivery) == root);
+                for (s.work.items) |w| switch (w) {
+                    .message => |d| queued += @intFromBool(rootOf(d) == root),
+                    .run => {},
+                };
+            }
+            for (g.inputs.items) |input| switch (input) {
+                .deliver => |x| queued += @intFromBool(rootOf(x.delivery) == root),
+                else => {},
+            };
+            try r.add(.{ .causal_work = .{ .root = try r.print("d{d}", .{root}), .live_runs = live, .queued_messages = queued, .discarded_messages = g.root_discards.get(root) orelse 0 } });
+        }
     }
 
     /// Releases queued Host Inputs never drained.
@@ -1639,7 +1791,7 @@ pub const Group = struct {
             g.write("refused code=\"state too large\"\n", .{});
             return .state_too_large;
         }
-        if (!try g.replaceCode(s, fresh, keep_mailbox)) return .stopped;
+        if (!try g.replaceCode(s, fresh, keep_mailbox, "reload")) return .stopped;
         return .reloaded;
     }
 
@@ -1750,10 +1902,10 @@ pub const Group = struct {
     /// Stops the Script with reason `reload` and puts the new code and
     /// Script Variables in place of the old, all at once: false if the stop
     /// stopped the Group, which prevents replacing it.
-    fn replaceCode(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) !bool {
+    fn replaceCode(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool, discard: []const u8) !bool {
         // A stopped Script has nothing left to stop; Reload isn't sticky, so
         // it takes new messages after.
-        if (s.stopped == null) try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload });
+        if (s.stopped == null) try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload, .discard = discard });
         // A stop that left an effect's state unknown stopped the Group, and
         // prevents replacing it.
         if (g.fatal) return false;
@@ -1891,7 +2043,7 @@ pub const Group = struct {
         }
         @memcpy(g.libraries.items, given);
         // A stop that stops the Group leaves the rest stopped with it.
-        for (rebuilt.items) |x| if (!try g.replaceCode(x.script, x.fresh, false)) break;
+        for (rebuilt.items) |x| if (!try g.replaceCode(x.script, x.fresh, false, "library replacement")) break;
         return .{ .replaced = try made.toOwnedSlice(g.gpa) };
     }
 
@@ -2144,6 +2296,7 @@ pub const Group = struct {
 
     /// Ends a rewound Run, whose message is back in its mailbox.
     fn dropRewound(g: *Group, r: *Run) void {
+        g.discardRun(r, "rewind");
         r.delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false };
         g.destroyRun(r);
     }
@@ -2313,6 +2466,7 @@ pub const Group = struct {
     /// Queues a Delivery Input with its own copies of the names and the
     /// argument list; a refusal leaves none of them behind.
     fn queueDelivery(g: *Group, to: []const u8, d: Delivery) !void {
+        g.markRoot(rootOf(d));
         const script_name = try g.gpa.dupe(u8, to);
         errdefer g.gpa.free(script_name);
         var copy = d;
@@ -2486,6 +2640,7 @@ pub const Group = struct {
     }
 
     pub fn releaseDelivery(g: *Group, d: Delivery) void {
+        g.markRoot(rootOf(d));
         if (d.function) |f| f.release();
         releaseAll(d.args, g.gpa);
         g.gpa.free(d.message);
@@ -3163,6 +3318,7 @@ pub const Group = struct {
             return e;
         };
         run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message, .limits = Override.apply(d.limits, s.limits) };
+        g.reportRunStarted(s, run);
         g.takeBase(run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -3752,7 +3908,7 @@ pub const Group = struct {
         }
         const owned = try gpa.dupe(*Value, args.items);
         args.clearRetainingCapacity();
-        var d = try g.newDelivery(name, owned, from);
+        var d = try g.newDelivery(name, owned, from, rootOf(run.delivery));
         d.waits = waits;
         d.target = target;
         d.at = at;
@@ -4615,6 +4771,7 @@ pub const Group = struct {
             out.print(" fuel={d} alloc={d}\n", .{ run.fuel, run.alloc }) catch {};
         }
         g.reportRunEnd(s, run, outcome, segment) catch {};
+        g.endRow(run, .terminal);
         // A Run that ends before sealing its Verdict, or a dropped
         // Decision, leaves it undecided.
         if (run.verdict or (d.decision and (outcome == .dropped or outcome == .faulted))) {
@@ -4667,7 +4824,7 @@ pub const Group = struct {
                         return err;
                     };
                     args[0] = e;
-                    var message = try g.newDelivery("error", args, run.id);
+                    var message = try g.newDelivery("error", args, run.id, rootOf(run.delivery));
                     message.during = g.messageMap(d) catch |err| {
                         g.releaseDelivery(message);
                         return err;
@@ -4690,11 +4847,11 @@ pub const Group = struct {
     }
 
     /// A message from a Run, which takes `args`: all or nothing.
-    fn newDelivery(g: *Group, name: []const u8, args: []*Value, from: []const u8) !Delivery {
+    fn newDelivery(g: *Group, name: []const u8, args: []*Value, from: []const u8, root: u64) !Delivery {
         errdefer releaseAll(args, g.gpa);
         const message = try g.gpa.dupe(u8, name);
         errdefer g.gpa.free(message);
-        return .{ .id = 0, .message = message, .args = args, .request = false, .from = try g.gpa.dupe(u8, from) };
+        return .{ .id = 0, .root = root, .message = message, .args = args, .request = false, .from = try g.gpa.dupe(u8, from) };
     }
 
     /// Stops a Script (chapter 6, Cancellation and Stop): each of its Runs,
@@ -4707,7 +4864,7 @@ pub const Group = struct {
     /// went. A stopped Script stays stopped.
     /// How a Stop goes: a Reload's keeps the mailbox if asked, and releases
     /// the Script's Grants with reason `reload`.
-    const StopHow = struct { keep_mailbox: bool = false, release: capabilities.ReleaseReason = .stop };
+    const StopHow = struct { keep_mailbox: bool = false, release: capabilities.ReleaseReason = .stop, discard: []const u8 = "stop" };
 
     fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run, how: StopHow) !void {
         if (s.stopped != null) return;
@@ -4746,6 +4903,7 @@ pub const Group = struct {
             if (discarded.items.len > 0) try discarded.appendSlice(g.gpa, ", ");
             try discarded.appendSlice(g.gpa, r.id);
             try discarded_ids.append(g.gpa, r.id);
+            g.discardRun(r, how.discard);
             const d = r.delivery;
             if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
             s.fuel_total += r.fuel;
@@ -4754,7 +4912,10 @@ pub const Group = struct {
         var dropped: std.ArrayList(u8) = .empty;
         defer dropped.deinit(g.gpa);
         if (!how.keep_mailbox) for (s.work.items) |w| switch (w) {
-            .message => |d| if (d.from == null and d.id > 0) {
+            .message => |d| if (blk: {
+                g.discardMessage(d);
+                break :blk d.from == null and d.id > 0;
+            }) {
                 if (dropped.items.len > 0) try dropped.appendSlice(g.gpa, ", ");
                 try dropped.print(g.gpa, "d{d}", .{d.id});
                 try dropped_ids.append(g.gpa, d.id);
@@ -4846,6 +5007,7 @@ pub const Group = struct {
             out.print(" dropped=[d{d}]\n", .{d.id}) catch {};
         };
         if (d.from == null and d.id > 0) g.reportStop(s.name, reason, &.{}, &.{d.id}, &.{}) catch {};
+        g.discardMessage(d);
         try g.settleDropped(s, d);
     }
 
@@ -4876,6 +5038,7 @@ pub const Group = struct {
     /// Puts a message at the back of a Script's mailbox; refused, the
     /// message is released.
     fn post(g: *Group, s: *Script, d: Delivery) !void {
+        g.markRoot(rootOf(d));
         if (s.stopped) |reason| return g.dropStopped(s, reason, d);
         s.work.append(g.gpa, .{ .message = d }) catch |e| {
             g.releaseDelivery(d);
@@ -5152,7 +5315,7 @@ pub const Group = struct {
             }
             const owned = try g.gpa.alloc(*Value, n);
             for (owned, args) |*x, v| x.* = v.retain();
-            var d = try g.newDelivery("", owned, id);
+            var d = try g.newDelivery("", owned, id, rootOf(run.delivery));
             d.waits = true;
             d.function = fv.retain();
             try g.post(home, d);

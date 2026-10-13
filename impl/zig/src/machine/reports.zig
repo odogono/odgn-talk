@@ -91,6 +91,54 @@ pub const Decided = struct {
     undecided: []const UndecidedBy = &.{},
 };
 
+/// Where a Run's work came from (chapter 9, Run accounting): the Host
+/// Delivery at its root, and the Run, and call, that spawned it.
+pub const Ancestry = struct {
+    root: []const u8,
+    parent_run: []const u8 = "",
+    parent_call: []const u8 = "",
+};
+
+pub const RunStarted = struct {
+    ancestry: Ancestry,
+    script: []const u8,
+    run: []const u8,
+    /// Empty unless a Host Delivery started it.
+    delivery: []const u8 = "",
+    /// Empty for a Function Value invocation, which has `function`.
+    selector: []const u8 = "",
+    function: ?*Value = null,
+    args: []const *Value = &.{},
+};
+
+pub const RunDiscarded = struct {
+    ancestry: Ancestry,
+    script: []const u8,
+    run: []const u8,
+    /// `stop`, `reload`, `library replacement`, `variables-only restore` or
+    /// `rewind`.
+    reason: []const u8,
+};
+
+pub const RunAccounting = struct {
+    ancestry: Ancestry,
+    script: []const u8,
+    run: []const u8,
+    /// Lifetime cumulative.
+    fuel: u64,
+    state: State,
+
+    pub const State = enum { live, terminal, discarded };
+};
+
+pub const CausalWork = struct {
+    root: []const u8,
+    live_runs: u64,
+    queued_messages: u64,
+    /// Cumulative lifecycle discards.
+    discarded_messages: u64,
+};
+
 /// A queued Host Input the Pump refused as it drained it.
 pub const HostError = struct { code: []const u8, detail: []const u8 = "" };
 
@@ -102,6 +150,10 @@ pub const Report = union(enum) {
     effect_failure: EffectFailure,
     decided: Decided,
     host_error: HostError,
+    run_started: RunStarted,
+    run_discarded: RunDiscarded,
+    run_accounting: RunAccounting,
+    causal_work: CausalWork,
 };
 
 /// The reports not yet returned, in the order they happened. Their text

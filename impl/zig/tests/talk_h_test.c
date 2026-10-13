@@ -75,14 +75,16 @@ static int group_test(void) {
     talk_pump_result pumped = {0};
     bad |= talk_pump(group, 1790000000, 0, NULL, &pumped) != TALK_OK;
     bad |= pumped.state != TALK_IDLE || pumped.fuel_used <= 0 || pumped.has_next_deadline;
-    /* The Run's end is reported with its result. */
+    /* The Run starts, ends with its result, then the accounting tail: its
+     * Fuel and its root's work. */
     const talk_report *reports = NULL;
-    bad |= talk_reports_items(pumped.reports, &reports) != 1;
+    bad |= talk_reports_items(pumped.reports, &reports) != 4;
     if (!bad) {
-        const talk_run_end *end = &reports[0].as.run_end;
+        bad |= reports[0].kind != TALK_REPORT_RUN_STARTED || reports[2].kind != TALK_REPORT_RUN_ACCOUNTING || reports[3].kind != TALK_REPORT_CAUSAL_WORK;
+        const talk_run_end *end = &reports[1].as.run_end;
         const char *shown = NULL;
         size_t shown_len = 0;
-        bad |= reports[0].kind != TALK_REPORT_RUN_END || end->outcome != TALK_COMPLETED;
+        bad |= reports[1].kind != TALK_REPORT_RUN_END || end->outcome != TALK_COMPLETED;
         bad |= end->run_len != 8 || memcmp(end->run, "adder/r1", 8) != 0 || end->delivery_len != 2 || memcmp(end->delivery, "d1", 2) != 0;
         bad |= !talk_value_as_text(end->result, &shown, &shown_len) || shown_len != 3 || memcmp(shown, "41!", 3) != 0;
     }
@@ -739,13 +741,19 @@ static int stop_test(void) {
     talk_pump_result result = {0};
     bad |= talk_pump(group, 1790000000, 0, NULL, &result) != TALK_OK;
     bad |= result.state != TALK_STOPPED;
-    /* The Stop is reported, with the Run it discarded. */
+    /* The Run's discard, the Stop, then the accounting tail. */
     const talk_report *reports = NULL;
-    bad |= talk_reports_items(result.reports, &reports) != 1;
+    bad |= talk_reports_items(result.reports, &reports) != 4;
     if (!bad) {
-        const talk_stop *stop = &reports[0].as.stop;
-        bad |= reports[0].kind != TALK_REPORT_STOP || stop->reason_len != 4 || memcmp(stop->reason, "done", 4) != 0;
+        const talk_run_discarded *discarded = &reports[0].as.run_discarded;
+        bad |= reports[0].kind != TALK_REPORT_RUN_DISCARDED || discarded->reason_len != 4 || memcmp(discarded->reason, "stop", 4) != 0;
+        const talk_stop *stop = &reports[1].as.stop;
+        bad |= reports[1].kind != TALK_REPORT_STOP || stop->reason_len != 4 || memcmp(stop->reason, "done", 4) != 0;
         bad |= stop->discarded_runs_len != 1 || stop->discarded_runs[0].len != 4 || memcmp(stop->discarded_runs[0].data, "s/r1", 4) != 0;
+        const talk_run_accounting *accounting = &reports[2].as.run_accounting;
+        bad |= reports[2].kind != TALK_REPORT_RUN_ACCOUNTING || accounting->state_len != 9 || memcmp(accounting->state, "discarded", 9) != 0 || accounting->fuel != 15;
+        const talk_causal_work *work = &reports[3].as.causal_work;
+        bad |= reports[3].kind != TALK_REPORT_CAUSAL_WORK || work->live_runs != 0 || work->queued_messages != 0;
     }
     talk_reports_release(result.reports);
     bad |= talk_script_deliver(script, &hold, NULL) != TALK_OK;

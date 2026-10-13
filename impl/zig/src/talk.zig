@@ -588,7 +588,25 @@ pub const Unhandled = extern struct {
 pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
 pub const CallFailed = extern struct { script: [*]const u8, script_len: usize, call: [*]const u8, call_len: usize, operation: OperationRef, detail: [*]const u8, detail_len: usize };
 pub const HostError = extern struct { code: HostErrorCode, detail: [*]const u8, detail_len: usize };
-pub const ReportKind = enum(c_int) { run_end, stop, unhandled, call_failed, effect_failure, decided, host_error };
+pub const RunAncestry = extern struct { root_delivery: [*]const u8, root_delivery_len: usize, parent_run: [*]const u8, parent_run_len: usize, parent_call: [*]const u8, parent_call_len: usize };
+pub const RunStarted = extern struct {
+    ancestry: RunAncestry,
+    script: [*]const u8,
+    script_len: usize,
+    run: [*]const u8,
+    run_len: usize,
+    delivery: [*]const u8,
+    delivery_len: usize,
+    selector: [*]const u8,
+    selector_len: usize,
+    function: ?*Value,
+    args: [*]const *Value,
+    args_len: usize,
+};
+pub const RunDiscarded = extern struct { ancestry: RunAncestry, script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, reason: [*]const u8, reason_len: usize };
+pub const RunAccounting = extern struct { ancestry: RunAncestry, script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, fuel: i64, state: [*]const u8, state_len: usize };
+pub const CausalWork = extern struct { root_delivery: [*]const u8, root_delivery_len: usize, live_runs: i64, queued_messages: i64, discarded_messages: i64 };
+pub const ReportKind = enum(c_int) { run_end, stop, unhandled, call_failed, effect_failure, decided, host_error, run_started, run_discarded, run_accounting, causal_work };
 pub const Report = extern struct {
     kind: ReportKind,
     as: extern union {
@@ -599,6 +617,10 @@ pub const Report = extern struct {
         effect_failure: EffectFailure,
         decided: Decided,
         host_error: HostError,
+        run_started: RunStarted,
+        run_discarded: RunDiscarded,
+        run_accounting: RunAccounting,
+        causal_work: CausalWork,
     },
 };
 
@@ -612,6 +634,7 @@ pub const Reports = struct {
 /// Takes the reports the Group has collected, as talk.h's view; null when
 /// there are none, or the view can't be built.
 fn takeReports(g: *Group) ?*Reports {
+    g.group.accountingTail();
     if (g.group.reports.list.items.len == 0) return null;
     var held = g.group.reports.take();
     const out = held.arena.allocator().create(Reports) catch {
@@ -715,8 +738,32 @@ fn viewReports(held: *machine.report.Reports) ![]Report {
             } } };
         },
         .host_error => |x| .{ .kind = .host_error, .as = .{ .host_error = .{ .code = hostErrorCode(x.code), .detail = x.detail.ptr, .detail_len = x.detail.len } } },
+        .run_started => |x| .{ .kind = .run_started, .as = .{ .run_started = .{
+            .ancestry = ancestryView(x.ancestry),
+            .script = x.script.ptr,
+            .script_len = x.script.len,
+            .run = x.run.ptr,
+            .run_len = x.run.len,
+            .delivery = x.delivery.ptr,
+            .delivery_len = x.delivery.len,
+            .selector = x.selector.ptr,
+            .selector_len = x.selector.len,
+            .function = x.function,
+            .args = x.args.ptr,
+            .args_len = x.args.len,
+        } } },
+        .run_discarded => |x| .{ .kind = .run_discarded, .as = .{ .run_discarded = .{ .ancestry = ancestryView(x.ancestry), .script = x.script.ptr, .script_len = x.script.len, .run = x.run.ptr, .run_len = x.run.len, .reason = x.reason.ptr, .reason_len = x.reason.len } } },
+        .run_accounting => |x| .{ .kind = .run_accounting, .as = .{ .run_accounting = blk: {
+            const state = @tagName(x.state);
+            break :blk .{ .ancestry = ancestryView(x.ancestry), .script = x.script.ptr, .script_len = x.script.len, .run = x.run.ptr, .run_len = x.run.len, .fuel = @intCast(x.fuel), .state = state.ptr, .state_len = state.len };
+        } } },
+        .causal_work => |x| .{ .kind = .causal_work, .as = .{ .causal_work = .{ .root_delivery = x.root.ptr, .root_delivery_len = x.root.len, .live_runs = @intCast(x.live_runs), .queued_messages = @intCast(x.queued_messages), .discarded_messages = @intCast(x.discarded_messages) } } },
     };
     return out;
+}
+
+fn ancestryView(x: machine.report.Ancestry) RunAncestry {
+    return .{ .root_delivery = x.root.ptr, .root_delivery_len = x.root.len, .parent_run = x.parent_run.ptr, .parent_run_len = x.parent_run.len, .parent_call = x.parent_call.ptr, .parent_call_len = x.parent_call.len };
 }
 
 fn one(a: std.mem.Allocator, x: anytype) !*const @TypeOf(x) {
@@ -1215,6 +1262,8 @@ pub const RestoreResult = struct {
     discarded: []Id,
     dropped: []Id,
     abandoned: []Id,
+    /// The accounting baseline the restore reports.
+    reports: ?*Reports = null,
 };
 
 /// An id the Group holds, such as a Run's or a call's.
@@ -1323,6 +1372,7 @@ export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const Resto
         talk_group_release(g);
         return .out_of_memory;
     }
+    r.reports = takeReports(g);
     g.flush();
     out.* = g;
     restored.* = r;
@@ -1365,7 +1415,13 @@ export fn talk_restore_result_release(r: ?*RestoreResult) void {
     x.gpa.free(x.discarded);
     x.gpa.free(x.dropped);
     x.gpa.free(x.abandoned);
+    talk_reports_release(x.reports);
     x.gpa.destroy(x);
+}
+
+/// C only: the restore's accounting baseline, borrowed from r.
+export fn talk_restore_result_reports(r: *const RestoreResult) ?*const Reports {
+    return r.reports;
 }
 
 pub const Settlement = extern struct {
@@ -2746,4 +2802,201 @@ export fn talk_add_library(g: *Group, l: *machine.Library) HostErrorCode {
     defer g.flush();
     g.group.addLibrary(l) catch |err| return status(err);
     return .ok;
+}
+
+// ---------------------------------------------------------------- Run accounting fixtures
+
+// The shared Run accounting fixtures (impl/testdata/run-accounting.json),
+// which the Go and TS Cores also replay: each delivers `go` to the Script
+// `s`, pumps at the listed Clock readings, and compares every Pump's
+// reports as rows, apart from the canonical Trace.
+
+/// A report as the fixture's row: each key's value, shown as JSON.
+const Row = std.StringArrayHashMapUnmanaged([]const u8);
+
+fn put(a: std.mem.Allocator, row: *Row, key: []const u8, value: []const u8) !void {
+    try row.put(a, key, try std.json.Stringify.valueAlloc(a, value, .{}));
+}
+
+fn putAncestry(a: std.mem.Allocator, row: *Row, x: RunAncestry) !void {
+    try put(a, row, "rootDelivery", x.root_delivery[0..x.root_delivery_len]);
+    if (x.parent_run_len > 0) try put(a, row, "parentRun", x.parent_run[0..x.parent_run_len]);
+    if (x.parent_call_len > 0) try put(a, row, "parentCall", x.parent_call[0..x.parent_call_len]);
+}
+
+fn actualRow(a: std.mem.Allocator, r: Report) !?Row {
+    var row: Row = .empty;
+    switch (r.kind) {
+        .run_started => {
+            const x = r.as.run_started;
+            try put(a, &row, "kind", "run started");
+            try putAncestry(a, &row, x.ancestry);
+            try put(a, &row, "script", x.script[0..x.script_len]);
+            try put(a, &row, "run", x.run[0..x.run_len]);
+            try put(a, &row, "selector", x.selector[0..x.selector_len]);
+            if (x.delivery_len > 0) try put(a, &row, "delivery", x.delivery[0..x.delivery_len]);
+            var args: std.ArrayList([]const u8) = .empty;
+            for (x.args[0..x.args_len]) |v| {
+                var shown: Buffer = .{};
+                try std.testing.expectEqual(HostErrorCode.ok, talk_value_string(v, &shown));
+                defer talk_owned_bytes_release(&shown);
+                try args.append(a, try a.dupe(u8, shown.data.?[0..shown.len]));
+            }
+            try row.put(a, "args", try std.json.Stringify.valueAlloc(a, args.items, .{}));
+        },
+        .run_end => {
+            const x = r.as.run_end;
+            try put(a, &row, "kind", "run end");
+            try put(a, &row, "run", x.run[0..x.run_len]);
+        },
+        .run_accounting => {
+            const x = r.as.run_accounting;
+            try put(a, &row, "kind", "run accounting");
+            try putAncestry(a, &row, x.ancestry);
+            try put(a, &row, "script", x.script[0..x.script_len]);
+            try put(a, &row, "run", x.run[0..x.run_len]);
+            try row.put(a, "fuel", try std.fmt.allocPrint(a, "{d}", .{x.fuel}));
+            try put(a, &row, "state", x.state[0..x.state_len]);
+        },
+        .causal_work => {
+            const x = r.as.causal_work;
+            try put(a, &row, "kind", "causal work");
+            try put(a, &row, "rootDelivery", x.root_delivery[0..x.root_delivery_len]);
+            try row.put(a, "liveRuns", try std.fmt.allocPrint(a, "{d}", .{x.live_runs}));
+            try row.put(a, "queuedMessages", try std.fmt.allocPrint(a, "{d}", .{x.queued_messages}));
+            try row.put(a, "discardedMessages", try std.fmt.allocPrint(a, "{d}", .{x.discarded_messages}));
+        },
+        else => return null,
+    }
+    return row;
+}
+
+fn expectedRow(a: std.mem.Allocator, v: std.json.Value) !Row {
+    var row: Row = .empty;
+    var it = v.object.iterator();
+    while (it.next()) |e| try row.put(a, e.key_ptr.*, try std.json.Stringify.valueAlloc(a, e.value_ptr.*, .{}));
+    return row;
+}
+
+fn sameRow(want: Row, got: Row) bool {
+    if (want.count() != got.count()) return false;
+    var it = want.iterator();
+    while (it.next()) |e| {
+        const other = got.get(e.key_ptr.*) orelse return false;
+        if (!std.mem.eql(u8, e.value_ptr.*, other)) return false;
+    }
+    return true;
+}
+
+fn showRows(rows: []const Row) void {
+    for (rows) |row| {
+        var it = row.iterator();
+        while (it.next()) |e| std.debug.print("{s}={s} ", .{ e.key_ptr.*, e.value_ptr.* });
+        std.debug.print("\n", .{});
+    }
+}
+
+test "the shared Run accounting fixtures" {
+    const gpa = std.testing.allocator;
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const data = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "../testdata/run-accounting.json", a, .unlimited);
+    const cases = try std.json.parseFromSliceLeaky(std.json.Value, a, data, .{});
+    for (cases.array.items) |case| {
+        const name = case.object.get("name").?.string;
+        const source = case.object.get("source").?.string;
+        const core = talk_new().?;
+        defer talk_core_release(core);
+        var group: ?*Group = null;
+        const options: GroupOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null };
+        try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &options, &group));
+        defer talk_group_release(group);
+        const load: LoadOptions = .{ .name = "s", .name_len = 1, .source = source.ptr, .source_len = source.len };
+        var script: ?*Script = null;
+        try std.testing.expectEqual(HostErrorCode.ok, talk_load(group.?, &load, &script));
+        const message: Message = .{ .name = "go", .name_len = 2, .args = null, .args_len = 0 };
+        try std.testing.expectEqual(HostErrorCode.ok, talk_script_deliver(script.?, &message, null));
+        const pumps = case.object.get("pumps").?.array.items;
+        const expected = case.object.get("expected").?.array.items;
+        for (pumps, expected, 0..) |clock, want, i| {
+            const ns = clock.integer;
+            var pumped: PumpResult = .{ .state = .idle, .fuel_used = 0 };
+            try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, @divFloor(ns, std.time.ns_per_s), @intCast(@mod(ns, std.time.ns_per_s)), null, &pumped));
+            defer talk_reports_release(pumped.reports);
+            var items: [*]const Report = undefined;
+            const n = talk_reports_items(pumped.reports, &items);
+            var got: std.ArrayList(Row) = .empty;
+            for (items[0..n]) |r| if (try actualRow(a, r)) |row| try got.append(a, row);
+            var wanted: std.ArrayList(Row) = .empty;
+            for (want.array.items) |x| try wanted.append(a, try expectedRow(a, x));
+            const same = got.items.len == wanted.items.len and for (wanted.items, got.items) |w, g| {
+                if (!sameRow(w, g)) break false;
+            } else true;
+            if (!same) {
+                std.debug.print("{s}, pump {d}\nexpected:\n", .{ name, i });
+                showRows(wanted.items);
+                std.debug.print("actual:\n", .{});
+                showRows(got.items);
+                return error.TestUnexpectedResult;
+            }
+        }
+    }
+}
+
+/// Each report's kind, and for a discard its reason, for the tests below.
+fn reportKinds(a: std.mem.Allocator, reports: ?*const Reports) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var items: [*]const Report = undefined;
+    const n = talk_reports_items(reports, &items);
+    for (items[0..n]) |r| {
+        try out.appendSlice(a, @tagName(r.kind));
+        switch (r.kind) {
+            .run_discarded => try out.print(a, "({s})", .{r.as.run_discarded.reason[0..r.as.run_discarded.reason_len]}),
+            .run_accounting => try out.print(a, "({s} {d})", .{ r.as.run_accounting.state[0..r.as.run_accounting.state_len], r.as.run_accounting.fuel }),
+            .causal_work => try out.print(a, "({d} {d} {d})", .{ r.as.causal_work.live_runs, r.as.causal_work.queued_messages, r.as.causal_work.discarded_messages }),
+            else => {},
+        }
+        try out.append(a, ' ');
+    }
+    return out.items;
+}
+
+test "a restore reports its accounting baseline, and a Reload its discards" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const core = talk_new().?;
+    defer talk_core_release(core);
+    var group: ?*Group = null;
+    const options: GroupOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &options, &group));
+    defer talk_group_release(group);
+    const source = "on go\n wait 1 s\nend go\n";
+    const load: LoadOptions = .{ .name = "s", .name_len = 1, .source = source.ptr, .source_len = source.len };
+    var script: ?*Script = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_load(group.?, &load, &script));
+    const go: Message = .{ .name = "go", .name_len = 2, .args = null, .args_len = 0 };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_script_deliver(script.?, &go, null));
+    var pumped: PumpResult = .{ .state = .idle, .fuel_used = 0 };
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, 0, 0, null, &pumped));
+    talk_reports_release(pumped.reports);
+    // A second Delivery waits in the input queue across the save.
+    try std.testing.expectEqual(HostErrorCode.ok, talk_script_deliver(script.?, &go, null));
+    var saved: Buffer = .{};
+    try std.testing.expectEqual(HostErrorCode.ok, talk_save(group.?, &saved));
+    defer talk_owned_bytes_release(&saved);
+    const restore_options: RestoreOptions = .{ .name = "g", .name_len = 1, .trace = null, .trace_context = null, .libraries = null, .libraries_len = 0, .grants = null, .grants_context = null, .resolve = null, .resolve_context = null, .mismatch = .reject_mismatch, .allocator = null, .memory_cap = 0 };
+    var restored: ?*Group = null;
+    var outcome: ?*RestoreResult = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_restore(core, saved.data, saved.len, &restore_options, &restored, &outcome));
+    defer talk_group_release(restored);
+    try std.testing.expectEqualStrings("run_accounting(live 15) causal_work(1 0 0) causal_work(0 1 0) ", try reportKinds(a, talk_restore_result_reports(outcome.?)));
+    talk_restore_result_release(outcome);
+    // Reload discards the live Run. The second Delivery, still in the input
+    // queue, is first reported here, the next call that returns reports.
+    var reports: ?*Reports = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_script_reload(script.?, source.ptr, source.len, .carry_variables, null, &reports));
+    defer talk_reports_release(reports);
+    try std.testing.expectEqualStrings("run_discarded(reload) stop run_accounting(discarded 15) causal_work(0 0 0) causal_work(0 1 0) ", try reportKinds(a, reports));
 }

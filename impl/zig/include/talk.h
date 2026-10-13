@@ -945,6 +945,65 @@ typedef struct talk_host_error {
     size_t detail_len;
 } talk_host_error;
 
+/* Where a Run's work came from (chapter 9, Run accounting): ordinary Host
+ * Delivery ancestry, kept across saves. */
+typedef struct talk_run_ancestry {
+    const char *root_delivery;
+    size_t root_delivery_len;
+    const char *parent_run; /* empty for a root Run */
+    size_t parent_run_len;
+    const char *parent_call; /* empty unless spawned through a call */
+    size_t parent_call_len;
+} talk_run_ancestry;
+
+/* A new Run, as it dispatches, before it runs. */
+typedef struct talk_run_started {
+    talk_run_ancestry ancestry;
+    const char *script;
+    size_t script_len;
+    const char *run;
+    size_t run_len;
+    const char *delivery; /* empty unless a Host Delivery started it */
+    size_t delivery_len;
+    const char *selector; /* empty for a Function Value invocation */
+    size_t selector_len;
+    talk_value *function; /* borrowed; NULL unless a Function Value invocation */
+    talk_value *const *args; /* borrowed */
+    size_t args_len;
+} talk_run_started;
+
+/* A live Run discarded without an ordinary run end. */
+typedef struct talk_run_discarded {
+    talk_run_ancestry ancestry;
+    const char *script;
+    size_t script_len;
+    const char *run;
+    size_t run_len;
+    const char *reason; /* "stop", "reload", "library replacement", "variables-only restore" or "rewind" */
+    size_t reason_len;
+} talk_run_discarded;
+
+/* A Run's cumulative Fuel, once per affected Run at the end of the Host call. */
+typedef struct talk_run_accounting {
+    talk_run_ancestry ancestry;
+    const char *script;
+    size_t script_len;
+    const char *run;
+    size_t run_len;
+    int64_t fuel; /* lifetime cumulative, including observation and cleanup charges */
+    const char *state; /* "live", "terminal" or "discarded" */
+    size_t state_len;
+} talk_run_accounting;
+
+/* A root's work, once per affected root at the end of the Host call. */
+typedef struct talk_causal_work {
+    const char *root_delivery;
+    size_t root_delivery_len;
+    int64_t live_runs;
+    int64_t queued_messages;
+    int64_t discarded_messages; /* cumulative lifecycle discards */
+} talk_causal_work;
+
 /* C only: which of talk.go's Report types a talk_report holds. */
 typedef enum talk_report_kind {
     /* C only */
@@ -960,7 +1019,15 @@ typedef enum talk_report_kind {
     /* C only */
     TALK_REPORT_DECIDED,
     /* C only */
-    TALK_REPORT_HOST_ERROR
+    TALK_REPORT_HOST_ERROR,
+    /* C only */
+    TALK_REPORT_RUN_STARTED,
+    /* C only */
+    TALK_REPORT_RUN_DISCARDED,
+    /* C only */
+    TALK_REPORT_RUN_ACCOUNTING,
+    /* C only */
+    TALK_REPORT_CAUSAL_WORK
 } talk_report_kind;
 
 /* One report, in the order they happened (ADR 0015). Every pointer in it
@@ -975,6 +1042,10 @@ typedef struct talk_report {
         talk_effect_failure effect_failure;
         talk_decided decided;
         talk_host_error host_error;
+        talk_run_started run_started;
+        talk_run_discarded run_discarded;
+        talk_run_accounting run_accounting;
+        talk_causal_work causal_work;
     } as;
 } talk_report;
 
@@ -1248,6 +1319,10 @@ bool talk_restore_result_variables_only(const talk_restore_result *r);
 size_t talk_restore_result_pending(const talk_restore_result *r, const talk_pending_call **out);
 /* C only: the Host Objects that didn't resolve; *out borrows from r. */
 size_t talk_restore_result_disposed(const talk_restore_result *r, const talk_object_ref **out);
+/* C only: talk.go's RestoreResult.Reports, the restore's accounting
+ * baseline: a full restore's saved live Runs and active roots, or a
+ * variables-only restore's discards; borrowed from r, and NULL for none. */
+const talk_reports *talk_restore_result_reports(const talk_restore_result *r);
 /* C only: what a variables-only restore discarded: which 0 the Runs, 1 the
  * dropped Deliveries, 2 the abandoned calls; *out borrows from the Group. */
 size_t talk_restore_result_ids(const talk_restore_result *r, int which, const talk_id **out);

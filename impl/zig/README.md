@@ -202,7 +202,15 @@ its Group: each `run end` with its result, error or limit, `stop`,
 `unhandled`, `call failed`, `effect failure`, `decided`, and a queued input
 the Pump refused. A Pump's result also gives its next deadline. The Group
 collects reports whether or not it writes a Trace, and charges nothing for
-them. Run accounting's reports are not implemented yet. Loading a Script parses, checks and lowers it, runs its initialiser
+them. Each Host call that returns reports ends with Run accounting's tail:
+`run started` and `run discarded` join the other reports as they happen, then
+come a `run accounting` row for each Run started, charged, ended or discarded,
+in the order the Runs were made, and `causal work` for each root whose work
+changed, in admission order. Every message carries its root Delivery, and the
+Run and call that sent it, so a save keeps ancestry, the roots' discard counts
+and the roots not yet reported. `talk_restore_result_reports` gives a
+restore's baseline. The [shared fixtures](../testdata/run-accounting.json)
+run against the exports. Loading a Script parses, checks and lowers it, runs its initialiser
 uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
