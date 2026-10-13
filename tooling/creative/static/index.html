@@ -7,17 +7,83 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <header>
+    <header id="menu">
       <h1>NorthTalk <span>creative tool</span></h1>
+      <details id="edit-menu">
+        <summary>Edit</summary>
+        <div class="edit-commands" aria-label="Editing commands">
+          <button type="button" data-command="undo">Undo <kbd>⌘Z</kbd></button>
+          <button type="button" data-command="redo">Redo <kbd>⇧⌘Z</kbd></button>
+          <hr />
+          <button type="button" data-command="duplicate">
+            Duplicate <kbd>⌘D</kbd>
+          </button>
+          <button type="button" data-command="delete">
+            Delete <kbd>⌫</kbd>
+          </button>
+          <hr />
+          <button type="button" data-command="forward">Bring forward</button>
+          <button type="button" data-command="backward">Send backward</button>
+          <button type="button" data-command="front">Bring to front</button>
+          <button type="button" data-command="back">Send to back</button>
+        </div>
+      </details>
+      <span id="project-title"></span>
+      <button id="show-script" type="button">Sample Script</button>
       <span id="core" class="muted"></span>
     </header>
     <main id="desk">
-      <section class="window" aria-labelledby="script-title">
-        <div class="bar"><span id="script-title"></span></div>
-        <div id="editor"></div>
-        <div id="problems" role="status"></div>
-      </section>
+      <div id="caption">
+        <span id="page-name"></span><span id="page-number" class="muted"></span>
+      </div>
+      <div id="stage"><div id="page" class="page edit"></div></div>
     </main>
+    <nav id="strip" aria-label="Pages">
+      <button id="previous-page" type="button" title="Previous Page">‹</button>
+      <ol id="thumbnails"></ol>
+      <button id="add-page" type="button" title="Add a Page">+</button>
+      <button id="next-page" type="button" title="Next Page">›</button>
+    </nav>
+    <section
+      id="tools-window"
+      class="window"
+      aria-labelledby="tools-title"
+      data-left="16"
+      data-top="56"
+    >
+      <div class="bar"><span id="tools-title">Tools</span></div>
+      <div id="tools"></div>
+    </section>
+    <section
+      id="info-window"
+      class="window"
+      aria-labelledby="info-title"
+      data-right="16"
+      data-top="56"
+    >
+      <div class="bar"><span id="info-title">Info</span></div>
+      <form id="info" autocomplete="off"></form>
+    </section>
+    <section
+      id="script-window"
+      class="window"
+      aria-labelledby="script-title"
+      data-left="140"
+      data-top="420"
+      hidden
+    >
+      <div class="bar">
+        <button
+          id="close-script"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
+        <span id="script-title"></span>
+      </div>
+      <div id="editor"></div>
+      <div id="problems" role="status"></div>
+    </section>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

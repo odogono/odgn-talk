@@ -20,6 +20,7 @@ const binary = @import("binary.zig");
 const capabilities = @import("capabilities.zig");
 const objects = @import("objects.zig");
 const fingerprint = @import("fingerprint.zig");
+const verify = @import("verify.zig");
 const version = @import("../generated/version.zig").version;
 const cost_model = @import("../generated/costs.zig").costs;
 const limits_table = @import("../generated/limits.zig").limits;
@@ -107,7 +108,15 @@ const In = struct {
         return i.bytes[i.pos - 1];
     }
 
+    /// An integer no counter, id or charge of a real save comes near, so
+    /// the machine's arithmetic on it never overflows.
     fn int(i: *In) Error!u64 {
+        const v = try i.wide();
+        if (v > 1 << 56) return error.InvalidSave;
+        return v;
+    }
+
+    fn wide(i: *In) Error!u64 {
         var out: u64 = 0;
         var shift: u7 = 0;
         while (true) {
@@ -330,6 +339,16 @@ fn readValue(i: *In, gpa: Allocator, t: Tables, depth: usize) Error!*Value {
             break :blk v;
         },
     };
+}
+
+/// A deadline in nanoseconds: none, or an Instant the Core can show.
+fn deadline(i: *In) Error!i128 {
+    const ns = try i.signed();
+    if (ns == std.math.maxInt(i128)) return ns;
+    const seconds = std.math.cast(i64, @divFloor(ns, std.time.ns_per_s)) orelse return error.InvalidSave;
+    const at: model.dates.Instant = .{ .seconds = seconds, .nanos = @intCast(@mod(ns, std.time.ns_per_s)) };
+    model.dates.validateInstant(at) catch return error.InvalidSave;
+    return ns;
 }
 
 fn valueError(e: anyerror) Error {
@@ -1067,6 +1086,9 @@ const Restoring = struct {
     /// A variables-only restore reads Runs only to discard them, against
     /// code that may no longer match: no code position is trusted or used.
     skim: bool = false,
+    /// Each unit's stack shapes, made once.
+    shapes: std.AutoHashMapUnmanaged(*const lower.Unit, verify.Shapes) = .empty,
+    shape_arena: ?std.heap.ArenaAllocator = null,
 
     fn gpa(r: *Restoring) Allocator {
         return r.g.gpa;
@@ -1084,6 +1106,8 @@ const Restoring = struct {
         r.replacements.deinit(a);
         r.unbound.deinit(a);
         a.free(r.libraries);
+        r.shapes.deinit(a);
+        if (r.shape_arena) |*x| x.deinit();
     }
 
     /// Text a part of the Group borrows.
@@ -1136,9 +1160,13 @@ const Restoring = struct {
         };
     }
 
+    /// A Script's limits, which the Host set, and may set high.
     fn limits(r: *Restoring) Error!machine.Limits {
         var l: machine.Limits = .{};
-        inline for (@typeInfo(machine.Limits).@"struct".field_names) |f| @field(l, f) = try r.i.int();
+        inline for (@typeInfo(machine.Limits).@"struct".field_names) |f| {
+            @field(l, f) = try r.i.wide();
+            if (@field(l, f) > 1 << 62) return error.InvalidSave;
+        }
         return l;
     }
 
@@ -1240,7 +1268,7 @@ const Restoring = struct {
         p.* = .{ .run = run, .deadline = 0, .order = 0 };
         errdefer r.g.destroyPending(p);
         p.id = try r.kept();
-        p.deadline = try r.i.signed();
+        p.deadline = try deadline(&r.i);
         p.order = try r.i.int();
         p.call = try r.call();
         p.grant = try r.kept();
@@ -1272,7 +1300,7 @@ const Restoring = struct {
                         errdefer if (from) |v| v.release();
                         break :blk .{ .when = .{ .from = from, .captures = try r.values() } };
                     },
-                    1 => .{ .after = try r.i.signed() },
+                    1 => .{ .after = try deadline(&r.i) },
                     else => return error.InvalidSave,
                 };
                 made += 1;
@@ -1303,6 +1331,19 @@ const Restoring = struct {
                     errdefer a.destroy(it);
                     it.position = try r.i.small(usize);
                     it.left = try r.i.int();
+                    // What `iterate` makes: a list, or a range of whole
+                    // numbers, and a place within it.
+                    if (subject) |v| switch (v.data) {
+                        .list => |items| if (it.position > items.len) return error.InvalidSave,
+                        .range => |range| {
+                            if (range.from.data != .number or range.to.data != .number) return error.InvalidSave;
+                            const from = range.from.data.number.integer(i64) catch return error.InvalidSave;
+                            const to = range.to.data.number.integer(i64) catch return error.InvalidSave;
+                            const span: u64 = if (to >= from) @intCast(@as(i128, to) - from + 1) else 0;
+                            if (it.position > span) return error.InvalidSave;
+                        },
+                        else => return error.InvalidSave,
+                    };
                     try r.iterators.append(a, it);
                     break :blk .{ .iterator = it };
                 },
@@ -1348,7 +1389,7 @@ const Restoring = struct {
                     try r.replacements.append(a, x);
                     break :blk .{ .replacement = x };
                 },
-                4 => .{ .deadline = .{ .at = try r.i.signed(), .ms = try r.i.int() } },
+                4 => .{ .deadline = .{ .at = try deadline(&r.i), .ms = try r.i.int() } },
                 else => return error.InvalidSave,
             };
             out.appendAssumeCapacity(slot);
@@ -1500,6 +1541,8 @@ const Restoring = struct {
         x.segment_alloc = try r.i.int();
         x.started = try r.i.flag();
         x.waiting = try r.pending(x);
+        // A Run's own wait is no Join Member's.
+        if (x.waiting) |p| if (p.member != null) return error.InvalidSave;
         x.resume_with = try r.resumeWith();
         x.suspended_at = try r.kept();
         x.waited = try r.waited(s);
@@ -1544,8 +1587,147 @@ const Restoring = struct {
             if (!r.skim and base.len > s.variables.len) return error.InvalidSave;
         }
         try r.frames(x, &x.frames);
-        if (x.base > x.frames.items.len) return error.InvalidSave;
+        // A nonzero base is only an event test's, inside a Pump.
+        if (x.base != 0) return error.InvalidSave;
         if (x.waiting != null and x.frames.items.len == 0) return error.InvalidSave;
+        if (!r.skim) try r.checkRun(x);
+    }
+
+    fn shapesOf(r: *Restoring, code: *const lower.Unit) Error!verify.Shapes {
+        if (r.shapes.get(code)) |x| return x;
+        if (r.shape_arena == null) r.shape_arena = .init(r.gpa());
+        const x = try verify.shapes(r.shape_arena.?.allocator(), code);
+        try r.shapes.put(r.gpa(), code, x);
+        return x;
+    }
+
+    /// The shape a frame's stack must have at `pc`, less its last `less`
+    /// slots, which an instruction already made will push.
+    fn expected(r: *Restoring, code: *const lower.Unit, pc: u32, less: usize) Error![]const verify.Kind {
+        const shapes = try r.shapesOf(code);
+        if (shapes.conflicts > 0) return error.InvalidSave;
+        const shape = shapes.at[pc] orelse return error.InvalidSave;
+        return r.cut(shape, less);
+    }
+
+    /// Under error control a frame may stop just after an instruction that
+    /// never goes on, such as a `throw`: its stack is what that instruction
+    /// left once it popped.
+    fn expectedRaised(r: *Restoring, code: *const lower.Unit, pc: u32) Error![]const verify.Kind {
+        const shapes = try r.shapesOf(code);
+        if (shapes.conflicts > 0) return error.InvalidSave;
+        if (shapes.at[pc]) |shape| return shape;
+        if (pc == 0) return error.InvalidSave;
+        const before = shapes.at[pc - 1] orelse return error.InvalidSave;
+        const pops = verify.popCount(code, code.code[pc - 1]) orelse return error.InvalidSave;
+        if (pops > before.len) return error.InvalidSave;
+        return before[0 .. before.len - pops];
+    }
+
+    fn cut(r: *Restoring, shape: []const verify.Kind, less: usize) Error![]const verify.Kind {
+        _ = r;
+        if (less > shape.len) return error.InvalidSave;
+        for (shape[shape.len - less ..]) |k| if (k != .value) return error.InvalidSave;
+        return shape[0 .. shape.len - less];
+    }
+
+    fn kinds(stack: []const Slot, want: []const verify.Kind, prefix: bool) bool {
+        if (stack.len > want.len or (!prefix and stack.len != want.len)) return false;
+        for (stack, want[0..stack.len]) |slot, k| if (@as(verify.Kind, switch (slot) {
+            .value => .value,
+            .iterator => .iterator,
+            .reader => .reader,
+            .replacement => .replacement,
+            .deadline => .deadline,
+        }) != k) return false;
+        return true;
+    }
+
+    /// A search's bounds: frames at or below `top`, and entries within
+    /// their units' Unwind Tables.
+    fn checkSearch(r: *Restoring, run: *const Run, x: machine.Search, top: usize) Error!void {
+        _ = r;
+        const fs = run.frames.items;
+        if (x.frame >= fs.len or x.entry > run.script.unitIn(fs[x.frame].library).unwind.len) return error.InvalidSave;
+        for ([_]?machine.Limit{ x.limit, x.skip }) |l| if (l) |b| {
+            if (b.frame > top or b.frame >= fs.len) return error.InvalidSave;
+            if (b.entry > run.script.unitIn(fs[b.frame].library).unwind.len) return error.InvalidSave;
+        };
+    }
+
+    /// Control validation (chapter 10, Restoring): each frame's stack is
+    /// the one its code expects there. A frame below the top waits for a
+    /// call's result; a suspended Run's top frame for its Suspension
+    /// Point's. In a catch dispatch or cleanup, where frames are held aside
+    /// and stacks cut back, each stack must still be a prefix of its code's,
+    /// and every frame and entry it names in bounds.
+    fn checkRun(r: *Restoring, run: *Run) Error!void {
+        const fs = run.frames.items;
+        const controlled = run.controls.items.len > 0;
+        for (fs, 0..) |*f, n| {
+            const code = run.script.unitIn(f.library);
+            const top = n == fs.len - 1;
+            var less: usize = 0;
+            if (!top) {
+                if (f.pc == 0) return error.InvalidSave;
+                switch (code.code[f.pc - 1].op) {
+                    .call, .call_import, .call_handler, .call_handler_wait, .call_value, .call_value_wait => less = 1,
+                    else => if (!controlled) return error.InvalidSave,
+                }
+            } else if (!run.continuing and f.pc > 0) {
+                // Suspended at the instruction before, which pushes what it
+                // waited for when the Run resumes.
+                const ins = code.code[f.pc - 1];
+                if (@import("../generated/machine.zig").machine.instruction[@backingInt(ins.op)].suspends) less = verify.pushCount(code, ins) orelse return error.InvalidSave;
+            }
+            const want = if (controlled) try r.expectedRaised(code, f.pc) else try r.expected(code, f.pc, less);
+            if (!kinds(f.stack.items, want, controlled)) return error.InvalidSave;
+        }
+        for (run.controls.items) |c| switch (c) {
+            .dispatch => |d| {
+                if (d.owner >= fs.len) return error.InvalidSave;
+                // Its search goes on after the catch that owns it.
+                const owner_code = run.script.unitIn(fs[d.owner].library);
+                if (d.search.frame != d.owner or d.search.entry == 0 or d.search.entry > owner_code.unwind.len) return error.InvalidSave;
+                if (owner_code.unwind[d.search.entry - 1].kind != .@"catch") return error.InvalidSave;
+                if (d.place >= owner_code.code.len or d.search.raised >= owner_code.code.len) return error.InvalidSave;
+                if (d.search.position > d.owner + 1 + d.held.len) return error.InvalidSave;
+                try r.checkSearch(run, d.search, d.owner);
+                for (d.held) |*f| {
+                    const code = run.script.unitIn(f.library);
+                    if (!kinds(f.stack.items, try r.expectedRaised(code, f.pc), true)) return error.InvalidSave;
+                }
+                const owner = fs[d.owner];
+                const code = run.script.unitIn(owner.library);
+                if (d.owner_pc >= code.code.len) return error.InvalidSave;
+                if (!kinds(d.owner_stack.items, try r.expectedRaised(code, d.owner_pc), true)) return error.InvalidSave;
+            },
+            .cleanup => |u| {
+                for (u.cleanups.items) |x| {
+                    if (x.frame >= fs.len) return error.InvalidSave;
+                    const code = run.script.unitIn(fs[x.frame].library);
+                    if (x.target >= code.code.len or x.entry >= code.unwind.len) return error.InvalidSave;
+                }
+                switch (u.then) {
+                    .accept => |acc| {
+                        if (acc.frame >= fs.len) return error.InvalidSave;
+                        const code = run.script.unitIn(fs[acc.frame].library);
+                        if (acc.pc >= code.code.len) return error.InvalidSave;
+                        if (!kinds(acc.stack.items, try r.expectedRaised(code, acc.pc), true)) return error.InvalidSave;
+                    },
+                    .transfer => |t| {
+                        if (t.frame >= fs.len) return error.InvalidSave;
+                        const code = run.script.unitIn(fs[t.frame].library);
+                        if (t.offer_entry >= code.unwind.len or t.record >= code.offers.len or t.offer >= code.offers[t.record].offers.len) return error.InvalidSave;
+                    },
+                    .search => |x| {
+                        if (x.frame >= fs.len) return error.InvalidSave;
+                        try r.checkSearch(run, x, x.frame);
+                    },
+                    .end, .cancel => {},
+                }
+            },
+        };
     }
 
     /// A queued Host Input the caller owns.
@@ -2032,6 +2214,9 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             1 => {
                 const x = r.runs.items[try i.index(r.runs.items.len)];
                 if (x.script != s) return error.InvalidSave;
+                // Ready with what it waited for, or preempted, and once.
+                if (!x.continuing and x.resume_with == null) return error.InvalidSave;
+                for (s.work.items) |w| if (w == .run and w.run == x) return error.InvalidSave;
                 s.work.appendAssumeCapacity(.{ .run = x });
             },
             else => return error.InvalidSave,
@@ -2445,5 +2630,110 @@ test "a save or restore refused at any allocation leaves nothing behind" {
             try testing.expectEqualSlices(u8, good, again);
             break :blk true;
         };
+    }
+}
+
+/// A Group with more state in its Runs: an iterator and a Timeout Block's
+/// deadline held across a `wait`, a parked Run, a Join of two sends, a
+/// `wait` inside a `catch`, and a Run preempted in the middle of a loop.
+fn richGroup(gpa: Allocator) !Group {
+    var g: Group = .init(gpa, null);
+    errdefer g.deinit();
+    const a =
+        \\script variable log = []
+        \\on loop
+        \\  repeat for each i in [1, 2, 3]
+        \\    with timeout of 9 s
+        \\      wait 1 s
+        \\    end timeout
+        \\    put i after log
+        \\  end repeat
+        \\end loop
+        \\on busy n, queued
+        \\  wait 2 s
+        \\  put n after log
+        \\end busy
+        \\on fan
+        \\  wait for all
+        \\    send note with 1 to b and wait
+        \\    send note with 2 to b and wait
+        \\  end wait
+        \\  put it after log
+        \\end fan
+        \\on fix
+        \\  try
+        \\    throw {code: "x"}
+        \\  catch e
+        \\    wait 1 s
+        \\    put e after log
+        \\  end try
+        \\end fix
+        \\on spin
+        \\  repeat for each i in [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        \\    put i after log
+        \\  end repeat
+        \\end spin
+        \\
+    ;
+    const b =
+        \\on note n
+        \\  wait 1 s
+        \\  return n * 2
+        \\end note
+        \\
+    ;
+    try testing.expect(try g.load("a", a, .{}) == .loaded);
+    try testing.expect(try g.load("b", b, .{}) == .loaded);
+    for ([_][]const u8{ "loop", "fan", "fix" }) |m| _ = try g.deliver("a", m, &.{}, false);
+    for (0..2) |k| {
+        const n = try model.scalar(gpa, .{ .number = model.Decimal.fromInt(@as(i64, @intCast(k))) });
+        var args = [_]*Value{n};
+        _ = try g.deliver("a", "busy", &args, false);
+    }
+    _ = try g.deliver("a", "spin", &.{}, false);
+    // A Fuel cap that stops `spin` in the middle of its loop.
+    try g.pumpWith(.{ .seconds = 1790000000, .nanos = 0 }, 0, 140);
+    return g;
+}
+
+/// Restores a mutated save and, if it restores, runs it: it must refuse or
+/// run, never crash.
+fn hostile(gpa: Allocator, bad: []u8) !void {
+    std.crypto.hash.sha2.Sha256.hash(bad[0 .. bad.len - 32], bad[bad.len - 32 ..][0..32], .{});
+    for ([_]bool{ false, true }) |variables_only| {
+        var restored: Group = .init(gpa, null);
+        defer restored.deinit();
+        var result: Result = .{};
+        const outcome = restore(&restored, bad, .{ .variables_only = variables_only }, &result) catch continue;
+        result.deinit(gpa);
+        if (outcome == .mismatch) continue;
+        _ = restored.deliver("a", "spin", &.{}, false) catch {};
+        restored.pump(.{ .seconds = 1790000001, .nanos = 0 }) catch {};
+        restored.pump(.{ .seconds = 1790000020, .nanos = 0 }) catch {};
+    }
+}
+
+test "a hostile save that restores runs without a crash" {
+    const gpa = testing.allocator;
+    var prng: std.Random.DefaultPrng = .init(628);
+    const random = prng.random();
+    for ([_]*const fn (Allocator) anyerror!Group{ busyGroup, richGroup }) |make| {
+        var g = try make(gpa);
+        defer g.deinit();
+        const good = try save(&g, gpa, try g.groupFingerprint());
+        defer gpa.free(good);
+        const bad = try gpa.dupe(u8, good);
+        defer gpa.free(bad);
+        // Every byte changed, and then random changes of a few bytes.
+        for (0..good.len - 32) |n| for ([_]u8{ 0x01, 0x02, 0x80, 0xff }) |flip| {
+            @memcpy(bad, good);
+            bad[n] ^= flip;
+            try hostile(gpa, bad);
+        };
+        for (0..3000) |_| {
+            @memcpy(bad, good);
+            for (0..random.intRangeAtMost(usize, 1, 4)) |_| bad[random.uintLessThan(usize, good.len - 32)] = random.int(u8);
+            try hostile(gpa, bad);
+        }
     }
 }

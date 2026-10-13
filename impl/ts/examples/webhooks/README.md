@@ -33,6 +33,22 @@ curl localhost:8787/events
 | `POST /hooks` | Sends the `{type, data}` body as a Request, and replies with the Run's result as JSON: `{"status": 202, "attempts": 1}`, `{"status": "ignored"}`, or a failure code such as `"timeout"` or `"rejected"`. A Run that fails is a 422 with its `send failed` reason. |
 | `GET /events` | The outcomes `rules.record` logged. |
 
+## Editing the Script
+
+The language server learns what `rules` and `outbound` offer from a Host Manifest, committed as [`webhooks.talk-manifest.json`](webhooks.talk-manifest.json). Point an editor at it (the path is relative to the workspace root) to get hover, completion and **NorthTalk: Show Dictionary** for their Operations in `rules.talk`:
+
+```json
+{
+  "northtalk.manifest": "impl/ts/examples/webhooks/webhooks.talk-manifest.json"
+}
+```
+
+After changing a Capability declaration in `host.ts`, regenerate it; `webhooks.test.ts` fails while the committed copy is stale:
+
+```sh
+bun impl/ts/examples/webhooks/main.ts manifest
+```
+
 ## Its Trace Case
 
 `record` plays a fixed scenario with a manual Clock and a stand-in `fetch` whose answers the scenario gives, and writes [`corpus/examples/webhooks/`](../../../../corpus/examples/webhooks/):

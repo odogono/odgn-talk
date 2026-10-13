@@ -147,6 +147,25 @@ export const operationText = (
     ? `\`\`\`northtalk\n${op.call}\n\`\`\`\n\n${op.facts.map(f => `- ${f}`).join('\n')}`
     : [op.call, ...op.facts.map(f => `  ${f}`)].join('\n');
 
+/** One Grant's section of the dictionary, as LSP hover on its name shows it. */
+export const grantText = (
+  grant: DictionaryGrant,
+  format: DictionaryFormat,
+): string => {
+  const title =
+    grant.capability === grant.name
+      ? grant.name
+      : `${grant.name} (${grant.capability})`;
+  const ops = grant.operations.map(op =>
+    format === 'markdown'
+      ? `### ${op.name}\n\n${operationText(op, format)}`
+      : operationText(op, format),
+  );
+  return format === 'markdown'
+    ? [`## ${title}`, ...ops].join('\n\n')
+    : [title, ...ops.map(o => o.replaceAll(/^/gm, '  '))].join('\n');
+};
+
 /** The whole dictionary, for the LSP's `northtalk/dictionary` request. */
 export const dictionaryText = (
   grants: readonly DictionaryGrant[],
@@ -157,20 +176,7 @@ export const dictionaryText = (
       ? '# Dictionary\n\nNo Host Manifest, so no Grants to show.\n'
       : 'No Host Manifest, so no Grants to show.\n';
   }
-  const sections = grants.map(grant => {
-    const title =
-      grant.capability === grant.name
-        ? grant.name
-        : `${grant.name} (${grant.capability})`;
-    const ops = grant.operations.map(op =>
-      format === 'markdown'
-        ? `### ${op.name}\n\n${operationText(op, format)}`
-        : operationText(op, format),
-    );
-    return format === 'markdown'
-      ? [`## ${title}`, ...ops].join('\n\n')
-      : [title, ...ops.map(o => o.replaceAll(/^/gm, '  '))].join('\n');
-  });
+  const sections = grants.map(grant => grantText(grant, format));
   return format === 'markdown'
     ? `# Dictionary\n\n${sections.join('\n\n')}\n`
     : `${sections.join('\n\n')}\n`;

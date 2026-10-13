@@ -29,7 +29,12 @@ import {
   type TextEdit,
 } from './protocol';
 import type { HostManifest, ManifestOperation } from './manifest';
-import { dictionaryOperation, operationText } from '../dictionary';
+import {
+  dictionaryOf,
+  dictionaryOperation,
+  grantText,
+  operationText,
+} from '../dictionary';
 
 /** What the client said it can show, from its `initialize` capabilities. */
 export type ClientFeatures = { markdown: boolean; snippets: boolean };
@@ -707,50 +712,86 @@ export const hover = (
   }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;
+  type Leaf = Exclude<ReturnType<typeof leaf>, undefined>;
+  const onLeaf = (l: Leaf | undefined): l is Leaf =>
+    l !== undefined && l.span.start <= offset && offset < l.span.end;
+  const receiverOf = (block: SemanticNode | undefined) => {
+    const receiver = block?.children.find(
+      (e): e is SemanticNode => e.kind === 'node' && e.rule === 'Expression',
+    );
+    return receiver && leaf(receiver);
+  };
+  let grant: Leaf | undefined;
+  let op: Leaf | undefined;
   const node = analysis.nodes.find(
     n => (n.rule === 'AskTell' || n.rule === 'OperationLine') && within(n),
   );
-  if (node) {
-    type Leaf = Exclude<ReturnType<typeof leaf>, undefined>;
-    let grant: Leaf | undefined;
-    let op: Leaf | undefined;
-    if (node.rule === 'AskTell') {
-      const leaves = semanticElements(node).filter(e => e.kind !== 'node');
-      const to = leaves.findIndex(e => e.text === 'to');
-      grant = leaves[to - 1];
-      op = leaves[to + 1];
-    } else {
-      // A `tell` block's line calls an Operation of the block's receiver.
-      const block = analysis.nodes.find(
+  if (node?.rule === 'AskTell') {
+    const leaves = semanticElements(node).filter(e => e.kind !== 'node');
+    const to = leaves.findIndex(e => e.text === 'to');
+    grant = leaves[to - 1];
+    op = leaves[to + 1];
+  } else if (node) {
+    // A `tell` block's line calls an Operation of the block's receiver.
+    grant = receiverOf(
+      analysis.nodes.find(
         n => n.rule === 'TellBlock' && n.children.includes(node),
+      ),
+    );
+    const first = node.children[0];
+    op = first?.kind === 'node' ? undefined : first;
+  } else {
+    // The receiver heading a `tell` block stands outside its OperationLines.
+    grant = receiverOf(
+      analysis.nodes.find(n => n.rule === 'TellBlock' && within(n)),
+    );
+  }
+  if (
+    grant?.kind === 'name' &&
+    grant.role === 'grant' &&
+    (onLeaf(grant) || onLeaf(op))
+  ) {
+    const format = client.markdown ? 'markdown' : 'plaintext';
+    const at = (l: Leaf, value: string) => ({
+      contents: { kind: format, value },
+      range: rangeAt(analysis.document.text, l.span.start, l.span.end),
+    });
+    const declared = op && manifest?.grants.get(grant.text)?.get(op.text);
+    if (declared && op && onLeaf(op)) {
+      return at(
+        op,
+        operationText(dictionaryOperation(grant.text, declared), format),
       );
-      const receiver = block?.children.find(
-        (e): e is SemanticNode => e.kind === 'node' && e.rule === 'Expression',
-      );
-      grant = receiver && leaf(receiver);
-      const first = node.children[0];
-      op = first?.kind === 'node' ? undefined : first;
     }
-    const declared =
-      grant && op && manifest?.grants.get(grant.text)?.get(op.text);
-    if (
-      declared &&
-      grant &&
-      op &&
-      op.span.start <= offset &&
-      offset < op.span.end
-    ) {
-      const format = client.markdown ? 'markdown' : 'plaintext';
-      return {
-        contents: {
-          kind: format,
-          value: operationText(
-            dictionaryOperation(grant.text, declared),
-            format,
-          ),
-        },
-        range: rangeAt(analysis.document.text, op.span.start, op.span.end),
-      };
+    const entry = manifest
+      ? dictionaryOf(manifest).find(g => g.name === grant.text)
+      : undefined;
+    if (entry && onLeaf(grant)) {
+      return at(grant, grantText(entry, format));
+    }
+    // A bare receiver name may instead name a well-known Object, whose
+    // Operations are its Kind's, not a Grant's.
+    if (!manifest?.objectsKinds.has(grant.text)) {
+      // Say why the Grant's Operations are unknown rather than show nothing.
+      const hovered = onLeaf(grant) ? grant : op!;
+      if (!manifest) {
+        return at(
+          hovered,
+          `No Host Manifest is loaded, so the Operations ${grant.text} offers are unknown. Export one from the Host (exportManifest) and set northtalk.manifest, or put a single *.talk-manifest.json in a workspace root.`,
+        );
+      }
+      if (!entry) {
+        return at(
+          hovered,
+          `The loaded Host Manifest has no Grant named ${grant.text}, so its Operations are unknown.`,
+        );
+      }
+      if (op) {
+        return at(
+          op,
+          `Grant ${grant.text} in the loaded Host Manifest has no Operation named ${op.text}.`,
+        );
+      }
     }
   }
   const name = nameAt(analysis, offset);
