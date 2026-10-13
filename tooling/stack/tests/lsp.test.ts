@@ -511,6 +511,53 @@ describe('language server', () => {
         'ask ledger to begin\n  Immediate: answers at the call\n  Result: transaction object\n  Cost per call: 2 Fuel\n  Scope: opens transaction, abandoned by rollback',
     });
   });
+  test("hovers a Grant's name with its dictionary section", () => {
+    const source =
+      'on demo\n ask ledger to post [1]\n tell ledger\n  post [1]\n end tell\nend demo\n';
+    const { request } = setup(source, shop, snippets);
+    for (const line of [1, 2]) {
+      const contents = request('textDocument/hover', at(line, 7)).contents;
+      expect(contents.kind).toBe('markdown');
+      expect(contents.value).toContain('## ledger (books)');
+      expect(contents.value).toContain('### post');
+      expect(contents.value).toContain(
+        'ask ledger to charge ‹quantity in GBP›, [‹{note: text}›] and wait',
+      );
+    }
+    const plain = setup(source, shop).request(
+      'textDocument/hover',
+      at(1, 7),
+    ).contents;
+    expect(plain).toMatchObject({ kind: 'plaintext' });
+    expect(plain.value).toContain('ledger (books)');
+  });
+  test('explains a Grant or Operation the loaded Host Manifest cannot describe', () => {
+    const source = 'on demo\n ask ledger to post [1]\nend demo\n';
+    const none = setup(source, false);
+    for (const col of [7, 16]) {
+      expect(
+        none.request('textDocument/hover', at(1, col)).contents.value,
+      ).toContain('No Host Manifest is loaded');
+    }
+    const unknown = setup(
+      'on demo\n ask mystery to post [1]\n ask ledger to vanish\nend demo\n',
+      shop,
+    );
+    expect(
+      unknown.request('textDocument/hover', at(1, 7)).contents.value,
+    ).toContain('has no Grant named mystery');
+    expect(
+      unknown.request('textDocument/hover', at(2, 17)).contents.value,
+    ).toContain('has no Operation named vanish');
+  });
+  test('does not treat a variable receiver as a Grant', () => {
+    // Only a bare name after `ask` is a Grant name; `(box)` reads the variable.
+    const { request } = setup(
+      'on demo box\n ask (box) to post [1]\nend demo\n',
+      shop,
+    );
+    expect(request('textDocument/hover', at(1, 7))).toBeNull();
+  });
   test('answers northtalk/dictionary with every Grant and its Operations', () => {
     const text = setup('', shop).request('northtalk/dictionary');
     expect(text).toStartWith(

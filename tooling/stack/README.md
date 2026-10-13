@@ -170,7 +170,10 @@ is the call its mode allows (`tell g to …`, `ask g to …` or `ask g to … an
 wait`, with argument Shapes as placeholders), then its mode and how long a
 suspending one waits, result Shape, per-call cost, declared errors, Capability
 Scope and whether it is Segment-bound. Hover on an Operation name shows it,
-as Markdown when the client's `hover.contentFormat` includes it. Completion
+as Markdown when the client's `hover.contentFormat` includes it; hover on a
+Grant's name shows its whole section of the dictionary. With no manifest
+loaded, or one that lacks the Grant or Operation, hover on either name says
+so instead of showing nothing. Completion
 after `tell g to` offers only fire-and-forget Operations, after `ask g to` only
 the others, and on a `tell g` block's line every Operation; the entry is each
 item's documentation and its call is the detail. A suspending Operation's item

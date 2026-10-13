@@ -4,6 +4,7 @@ import { autoDrive, type AutoDriveOptions, type Drive } from '../../src/driver';
 import {
   defineCapability,
   encodeJson,
+  exportManifest,
   newGroup,
   nothing,
   num,
@@ -125,6 +126,28 @@ const outbound = defineCapability<Outbound>('outbound', {
     },
   },
 });
+
+/**
+ * This Host's Host Manifest, as committed beside the Script for editor
+ * tooling (`webhooks.talk-manifest.json`). Bindings never appear in it, so
+ * the Grants are made against a throwaway database and no targets.
+ */
+export const hostManifest = (): string => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    return exportManifest({
+      kind: 'webhooks',
+      version: '1',
+      grants: {
+        rules: rules.grant('all', db),
+        outbound: outbound.grant('all', { fetch, targets: {} }),
+      },
+      messages: [{ name: 'event', args: [shape.any] }],
+    });
+  } finally {
+    db.close();
+  }
+};
 
 /** The Trace sinks of recording Hosts, by Group. */
 const recorders = new WeakMap<Group, Recorder>();
