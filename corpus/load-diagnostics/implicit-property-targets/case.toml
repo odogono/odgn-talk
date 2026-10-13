@@ -1,0 +1,98 @@
+# Implicit bindings are not Containers; direct owner properties are checked at load (#744).
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[objectKinds]]
+name = "light"
+props = [{ name = "label", shape = "text", readOnly = true }]
+[[objects]]
+kind = "light"
+id = "owned"
+props = { label = '"on"' }
+
+[[scripts]]
+name = "readonly"
+source = "readonly.talk"
+owner = { kind = "light", id = "owned" }
+
+[[scripts]]
+name = "readonly-computed"
+source = "readonly-computed.talk"
+owner = { kind = "light", id = "owned" }
+
+[[scripts]]
+name = "me-bare-set"
+source = "me-bare-set.talk"
+
+[[scripts]]
+name = "me-bare-put"
+source = "me-bare-put.talk"
+
+[[scripts]]
+name = "me-put-key"
+source = "me-put-key.talk"
+
+[[scripts]]
+name = "me-delete-key"
+source = "me-delete-key.talk"
+
+[[scripts]]
+name = "me-chunk"
+source = "me-chunk.talk"
+
+[[scripts]]
+name = "me-builtin"
+source = "me-builtin.talk"
+
+[[scripts]]
+name = "it-bare-set"
+source = "it-bare-set.talk"
+
+[[scripts]]
+name = "it-bare-put"
+source = "it-bare-put.talk"
+
+[[scripts]]
+name = "it-put-key"
+source = "it-put-key.talk"
+
+[[scripts]]
+name = "it-add-key"
+source = "it-add-key.talk"
+
+[[scripts]]
+name = "it-chunk"
+source = "it-chunk.talk"
+
+[[scripts]]
+name = "it-builtin"
+source = "it-builtin.talk"
+
+[[scripts]]
+name = "target-bare-set"
+source = "target-bare-set.talk"
+
+[[scripts]]
+name = "target-bare-put"
+source = "target-bare-put.talk"
+
+[[scripts]]
+name = "target-put-key"
+source = "target-put-key.talk"
+
+[[scripts]]
+name = "target-multiply-key"
+source = "target-multiply-key.talk"
+
+[[scripts]]
+name = "target-chunk"
+source = "target-chunk.talk"
+
+[[scripts]]
+name = "target-builtin"
+source = "target-builtin.talk"
+
+[[scripts]]
+name = "lambda-target"
+source = "lambda-target.talk"

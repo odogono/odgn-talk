@@ -1,0 +1,3 @@
+on go
+  set item 2 of the tags of it to 1
+end go

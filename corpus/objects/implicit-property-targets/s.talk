@@ -1,0 +1,55 @@
+script variable log = []
+on go
+  set the label of me to "self"
+  set the "label" of me to "quoted"
+  put "label" into k
+  set ((the (k) of (me))) to "computed"
+  set the label of the target to "target"
+  put [the label of me, the label of the target] after log
+  objectResult
+  set the label of it to "result"
+  set (the "label" of (it)) to "quoted result"
+  set the (k) of it to "computed result"
+  put [it is me, the label of me] after log
+  listResult
+  set the label of item 2 of it to "list result"
+  mapResult
+  set the label of the child of it to "map result"
+  set ((the (k) of (the target))) to "computed target"
+  put [the label of me, the label of the target] after log
+  objectResult
+  try
+    set the watts of it to 1
+  catch e
+    put e after log
+  end try
+  try
+    set the watts of the target to 1
+  catch e
+    put e after log
+  end try
+  put "watts" into w
+  try
+    set the (w) of me to 1
+  catch e
+    put e after log
+  end try
+  scalarResult
+  try
+    set the label of it to "bad"
+  catch e
+    put e after log
+  end try
+end go
+on objectResult
+  return me
+end objectResult
+on listResult
+  return [nothing, me]
+end listResult
+on mapResult
+  return {child: me}
+end mapResult
+on scalarResult
+  return 42
+end scalarResult

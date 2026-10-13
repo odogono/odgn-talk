@@ -1,0 +1,3 @@
+on go
+  add 1 to the label of it
+end go

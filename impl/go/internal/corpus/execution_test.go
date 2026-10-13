@@ -25,8 +25,8 @@ func TestExecutionBackends(t *testing.T) {
 			})
 		}
 	}
-	if count != 57 {
-		t.Fatalf("expected 57 Trace cases, got %d", count)
+	if count != 58 {
+		t.Fatalf("expected 58 Trace cases, got %d", count)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestPassingListContainsFullStepOneSet(t *testing.T) {
 			t.Errorf("required step-1 case not listed: %s", c.Name)
 		}
 	}
-	if count != 74 {
-		t.Fatalf("required set: %d cases, want 74", count)
+	if count != 75 {
+		t.Fatalf("required set: %d cases, want 75", count)
 	}
 }
 
@@ -736,7 +736,7 @@ func TestObjectIdentityAcceptance(t *testing.T) {
 
 func TestObjectPropertyAcceptance(t *testing.T) {
 	const root = "../../../../corpus"
-	names := []string{"objects/properties", "objects/guard-keys", "load-diagnostics/object-properties"}
+	names := []string{"objects/properties", "objects/guard-keys", "load-diagnostics/object-properties", "objects/implicit-property-targets", "load-diagnostics/implicit-property-targets"}
 	listed, err := os.ReadFile("../../corpus-passing.txt")
 	if err != nil {
 		t.Fatal(err)

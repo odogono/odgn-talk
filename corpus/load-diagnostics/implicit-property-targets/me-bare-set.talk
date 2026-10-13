@@ -1,0 +1,3 @@
+on go
+  set me to 1
+end go

@@ -752,7 +752,7 @@ export class Parser {
       }
       case 'set': {
         this.next();
-        const target = this.container();
+        const target = this.container(true);
         this.expectWord('to', 'operator');
         return { k: 'Set', target, value: this.expr() };
       }
@@ -883,8 +883,8 @@ export class Parser {
     return out;
   }
 
-  // A Container: a name, or a Chunk Expression or key path rooted in one.
-  container(): Node {
+  // Containers require a Name root; set may also read an implicit Object root.
+  container(propertyTarget = false): Node {
     const t = this.peek(0);
     if (!this.startsExpr(t)) {
       this.fail(t, 'a Container');
@@ -894,7 +894,18 @@ export class Parser {
     while (root && ['Chunk', 'OrdinalChunk', 'Key', 'Group'].includes(root.k)) {
       root = root.k === 'Group' ? root.e : (root.of ?? root.base);
     }
-    if (!root || root.k !== 'Name') {
+    let outer = e;
+    while (outer.k === 'Group') {
+      outer = outer.e as Node;
+    }
+    const implicitRoot =
+      root?.k === 'Target' ||
+      (root?.k === 'Const' && (root.v === 'me' || root.v === 'it'));
+    if (
+      !root ||
+      (root.k !== 'Name' &&
+        !(propertyTarget && outer.k === 'Key' && implicitRoot))
+    ) {
       throw new SyntaxError(
         t,
         'not a container',

@@ -217,6 +217,7 @@ load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/empty-timeout
 load-diagnostics/fallback-handler
+load-diagnostics/implicit-property-targets
 load-diagnostics/initialiser-failed
 load-diagnostics/invalid-raw-text-closing-margin
 load-diagnostics/invalid-text-closing-margin
@@ -255,6 +256,7 @@ math/fractional-power-errors
 math/number-functions
 objects/argument-labels
 objects/guard-keys
+objects/implicit-property-targets
 objects/message-path
 objects/moving-climb
 objects/moving-mailbox

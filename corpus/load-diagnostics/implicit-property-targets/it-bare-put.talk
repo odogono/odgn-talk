@@ -1,0 +1,3 @@
+on go
+  put 1 into it
+end go

@@ -205,6 +205,18 @@ describe('Host Objects', () => {
   });
 });
 
+const loadDiagnostics = (work: () => unknown) => {
+  try {
+    work();
+    return [];
+  } catch (error) {
+    if (!(error instanceof LoadError)) {
+      throw error;
+    }
+    return error.diagnostics;
+  }
+};
+
 describe('Object property Load checks', () => {
   test('read-only literal writes reject Load, Reload and cached source declarations', () => {
     const readonly = defineObjectKind({
@@ -260,14 +272,25 @@ describe('Object property Load checks', () => {
         objects: { bulb },
       }),
     ).toThrow(LoadError);
-    const owned = g.object(readonly, 'owned', null);
-    expect(() =>
-      g.load({
-        name: 'owned',
-        source: 'on go\n set the label of me to "off"\nend go',
-        owner: owned,
-      }),
-    ).toThrow(LoadError);
+    for (const target of [
+      'the label of me',
+      'the "label" of me',
+      '((the ("label") of (me)))',
+    ]) {
+      const load = (kind: typeof readonly) => () => {
+        const group = newGroup({ name: 'owned' });
+        const owner = group.object(kind, 'owned', null);
+        group.load({
+          name: 'owned',
+          source: `on go\n set ${target} to "off"\nend go`,
+          owner,
+        });
+      };
+      expect(loadDiagnostics(load(writable))).toEqual([]);
+      expect(loadDiagnostics(load(readonly))).toMatchObject([
+        { code: "can't write", unit: 'owned', line: 2, col: 2 },
+      ]);
+    }
   });
 });
 

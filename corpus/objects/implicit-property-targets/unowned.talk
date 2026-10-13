@@ -1,0 +1,18 @@
+script variable log = []
+on go
+  try
+    set the label of me to "bad"
+  catch e
+    put e after log
+  end try
+  try
+    set the label of it to "bad"
+  catch e
+    put e after log
+  end try
+  try
+    set the label of the target to "bad"
+  catch e
+    put e after log
+  end try
+end go

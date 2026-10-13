@@ -21,6 +21,13 @@ part of the Abstract Machine, driven through `talk.h`.
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
 
+Whole Host Object properties can be assigned with `set` through `me`, `it`
+or `the target`, including intermediate keys/chunks that locate the Object.
+These implicit bindings cannot be replaced or used as roots for ordinary
+Container mutations. `set` does not modify chunks inside a property's value.
+Direct known-owner read-only properties are checked at load; `it` and Target
+properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
+
 ## Layout
 
 - `build.zig`, `build.zig.zon`: one Zig package, `northtalk`, pinned to Zig

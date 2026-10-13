@@ -1,0 +1,24 @@
+# Whole-property writes through implicit roots (#744).
+kind = "trace"
+[versions]
+language = "1.0-rc.2"
+costModel = "0"
+[[objectKinds]]
+name = "light"
+parentKinds = ["light"]
+props = [{ name = "label", shape = "text" }, { name = "watts", shape = "number", readOnly = true }]
+[[objects]]
+kind = "light"
+id = "parent"
+props = { label = '"parent"', watts = "60" }
+[[objects]]
+kind = "light"
+id = "child"
+props = { label = '"child"', watts = "20" }
+[[scripts]]
+name = "s"
+source = "s.talk"
+owner = { kind = "light", id = "parent" }
+[[scripts]]
+name = "unowned"
+source = "unowned.talk"

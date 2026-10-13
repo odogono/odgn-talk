@@ -1,0 +1,3 @@
+on go
+  put 1 into the label of the target
+end go

@@ -668,7 +668,7 @@ const Parser = struct {
         }
         if (std.mem.eql(u8, w, "set")) {
             const first = try p.next(.operand);
-            const target = try p.container();
+            const target = try p.containerPath(true);
             _ = try p.expectWord("to", .operator);
             return p.stmt(first, .{ .set = .{ .target = target, .value = try p.expr() } });
         }
@@ -783,13 +783,29 @@ const Parser = struct {
     /// Parentheses keep the path; a Built-in property anywhere on it is
     /// `not a container` (ADR 0079).
     fn container(p: *Parser) Error!*Expr {
+        return p.containerPath(false);
+    }
+
+    // set may read implicit Object roots without making them assignable Containers.
+    fn containerPath(p: *Parser, property_target: bool) Error!*Expr {
         const t = try p.peek(.operand);
         if (!p.startsExpr(t)) return p.failAt(t);
         const e = try p.chunkLevel();
+        var outer = e;
+        while (outer.data == .group) outer = outer.data.group;
+        const key_target = property_target and outer.data == .key;
         var root = e;
         while (true) {
             root = switch (root.data) {
                 .name => break,
+                .word => |w| {
+                    if (key_target and (w == .me or w == .it)) break;
+                    return p.failCode(.not_a_container, t.start);
+                },
+                .target => {
+                    if (key_target) break;
+                    return p.failCode(.not_a_container, t.start);
+                },
                 .chunk => |c| c.of,
                 .key => |k| k.base,
                 .group => |g| g,
