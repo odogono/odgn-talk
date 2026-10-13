@@ -314,6 +314,8 @@ pub const Core = struct {
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
     mappings: std.ArrayList(*Mapping) = .empty,
     lifecycles: std.ArrayList(*SegmentLifecycle) = .empty,
+    /// The Host release hooks Capabilities call, with their contexts.
+    releases: std.ArrayList(*Releasing) = .empty,
     sqlite_impls: std.ArrayList(*SqliteImpl) = .empty,
     sql_bridges: std.ArrayList(*SqlBridge) = .empty,
 };
@@ -500,6 +502,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.mappings.deinit(gpa);
     for (core.lifecycles.items) |l| gpa.destroy(l);
     core.lifecycles.deinit(gpa);
+    for (core.releases.items) |x| gpa.destroy(x);
+    core.releases.deinit(gpa);
     for (core.sqlite_impls.items) |x| gpa.destroy(x);
     core.sqlite_impls.deinit(gpa);
     for (core.sql_bridges.items) |x| gpa.destroy(x);
@@ -780,6 +784,7 @@ test "the enums match talk.h's" {
     try expectHeaderEnum(Verdict, "talk_verdict", "TALK_");
     try expectHeaderEnum(Outcome, "talk_outcome", "TALK_");
     try expectHeaderEnum(EffectStatus, "talk_effect_status", "TALK_EFFECT_");
+    try expectHeaderEnum(ReleaseReason, "talk_release_reason", "TALK_RELEASE_");
 }
 
 test "a Group loads, pumps and inspects through the exports" {
@@ -1107,6 +1112,58 @@ export fn talk_define_coordinated_capability(c: *Core, name: ?[*]const u8, len: 
     return defineCapability(c, name, len, ops, ops_len, .{ .call = mappedCoordinator, .context = m }, out);
 }
 
+pub const ReleaseReason = enum(c_int) { stop, reload, revoke, disable };
+pub const GrantContext = extern struct {
+    group: ?*Group,
+    script_name: [*]const u8,
+    script_name_len: usize,
+    grant_name: [*]const u8,
+    grant_name_len: usize,
+    binding: ?*anyopaque,
+    now_seconds: i64,
+    now_nanos: i32,
+    reason: ReleaseReason,
+};
+pub const ReleaseHook = *const fn (context: ?*anyopaque, g: *const GrantContext) callconv(.c) void;
+
+/// A Host release hook and its context, which the Core owns.
+pub const Releasing = struct { hook: ReleaseHook, context: ?*anyopaque };
+
+fn releaseHook(context: ?*anyopaque, g: *const caps.GrantContext) void {
+    const r: *const Releasing = @ptrCast(@alignCast(context.?));
+    const machine_group: ?*machine.Group = @ptrCast(@alignCast(g.group));
+    r.hook(r.context, &.{
+        .group = if (machine_group) |mg| @fieldParentPtr("group", mg) else null,
+        .script_name = g.script.ptr,
+        .script_name_len = g.script.len,
+        .grant_name = g.grant.ptr,
+        .grant_name_len = g.grant.len,
+        .binding = g.binding,
+        .now_seconds = g.now.seconds,
+        .now_nanos = g.now.nanos,
+        .reason = switch (g.reason) {
+            inline else => |x| @field(ReleaseReason, @tagName(x)),
+        },
+    });
+}
+
+/// Gives a Capability its release hook, before any Grant is made from it.
+fn setRelease(c: *Core, def: *caps.Capability, hook: ReleaseHook, context: ?*anyopaque) HostErrorCode {
+    if (def.release != null or def.grants.items.len > 0) return .invalid_value;
+    const r = c.gpa.create(Releasing) catch return .out_of_memory;
+    r.* = .{ .hook = hook, .context = context };
+    c.releases.append(c.gpa, r) catch {
+        c.gpa.destroy(r);
+        return .out_of_memory;
+    };
+    def.release = .{ .call = releaseHook, .context = r };
+    return .ok;
+}
+
+export fn talk_with_release_hook(c: *Core, def: *caps.Capability, hook: ?ReleaseHook, context: ?*anyopaque) HostErrorCode {
+    return setRelease(c, def, hook orelse return .invalid_value, context);
+}
+
 /// Non-exhaustive: a malformed status from the Host is `unknown`.
 pub const EffectStatus = enum(c_int) { ok, failed, unknown, _ };
 pub const EffectResult = extern struct { status: EffectStatus, detail: ?[*]const u8, detail_len: usize };
@@ -1412,6 +1469,8 @@ pub const StoreImpl = extern struct {
     watch: OperationFn,
     unwatch: OperationFn,
     coordinator: SegmentLifecycle,
+    /// Optional.
+    release: ?ReleaseHook,
 };
 
 /// Every `store` binding maps to the implementation's one coordinator.
@@ -1433,7 +1492,12 @@ export fn talk_store_capability(c: *Core, impl: *const StoreImpl, costs: ?*const
         return .out_of_memory;
     };
     // In name order: delete, get, increment, keys, set, swap, unwatch, watch.
-    return defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, &.{}, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
+    const code = defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, &.{}, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
+    if (code != .ok) return code;
+    const hook = impl.release orelse return .ok;
+    const released = setRelease(c, out.*.?, hook, impl.context);
+    if (released != .ok) out.* = null;
+    return released;
 }
 
 pub const SqlFn = *const fn (context: ?*anyopaque, call: *Call, sql: [*]const u8, sql_len: usize, params: *const sqlite.Params, max: i64, rows: *sqlite.Rows, err: *ScriptError) callconv(.c) CallEnd;
@@ -1725,6 +1789,14 @@ export fn talk_set_parent(g: *Group, o: *objects.Object, parent: ?*objects.Objec
     if (parent) |p| if (!g.owns(p)) return .wrong_group;
     defer g.flush();
     g.group.setParent(o, parent) catch |err| return status(err);
+    return .ok;
+}
+
+export fn talk_script_revoke(s: *Script, name: ?[*]const u8, len: usize) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    const n = bytes(name, len) catch return .invalid_value;
+    g.group.revoke(s.name, n) catch |err| return status(err);
     return .ok;
 }
 

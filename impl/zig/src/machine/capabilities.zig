@@ -517,6 +517,27 @@ pub const CoordinatorOf = struct {
 };
 
 /// A Capability's definition: its Operations, ordered by name.
+/// Why a Script's named Grant stops being effective (chapter 9).
+pub const ReleaseReason = enum { stop, reload, revoke, disable };
+
+/// What a release hook is told: whose Grant it was, its binding, the
+/// Group's last Clock reading and why.
+pub const GrantContext = struct {
+    group: ?*anyopaque,
+    script: []const u8,
+    grant: []const u8,
+    binding: ?*anyopaque,
+    now: model.dates.Instant,
+    reason: ReleaseReason,
+};
+
+/// A Capability's Grant release hook: Host work with no result, cost or
+/// Trace record, which can't refuse.
+pub const ReleaseHook = struct {
+    call: *const fn (context: ?*anyopaque, g: *const GrantContext) void,
+    context: ?*anyopaque,
+};
+
 pub const Capability = struct {
     name: []const u8,
     operations: []Operation,
@@ -525,6 +546,7 @@ pub const Capability = struct {
     /// For a Capability with Segment-bound Operations, how each Grant gets
     /// its Segment Coordinator.
     coordinator_of: ?CoordinatorOf = null,
+    release: ?ReleaseHook = null,
 
     /// Whether any of its Operations is Segment-bound.
     pub fn segmentBound(c: *const Capability) bool {

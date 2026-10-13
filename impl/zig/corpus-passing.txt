@@ -28,6 +28,7 @@ capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args
 capabilities/optional-args-join
+capabilities/ordinary-grants
 capabilities/scope-failed-close
 capabilities/scope-malformed-acquisition
 capabilities/scope-ordinary-error
@@ -56,7 +57,9 @@ capabilities/standard-store-errors
 capabilities/standard-store-validation
 capabilities/standard-store-watch
 capabilities/standard-store-watch-counts
+capabilities/standard-store-watch-disabled
 capabilities/standard-store-watch-errors
+capabilities/standard-store-watch-grants
 capabilities/standard-store-watch-validation
 capabilities/standard-timer
 capabilities/standard-user

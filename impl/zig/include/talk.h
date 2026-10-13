@@ -363,6 +363,33 @@ typedef struct talk_segment_lifecycle {
  * the Grant is made. NULL refuses the Grant. */
 typedef const talk_segment_lifecycle *(*talk_coordinator_fn)(void *context, void *binding);
 
+/* Why a Script's named Grant stops being effective (chapter 9). */
+typedef enum talk_release_reason {
+    TALK_RELEASE_STOP,
+    TALK_RELEASE_RELOAD,
+    TALK_RELEASE_REVOKE,
+    TALK_RELEASE_DISABLE
+} talk_release_reason;
+
+/* What a release hook is told; its strings are borrowed for the call. */
+typedef struct talk_grant_context {
+    talk_group *group;
+    const char *script_name;
+    size_t script_name_len;
+    const char *grant_name;
+    size_t grant_name_len;
+    void *binding;
+    int64_t now_seconds;
+    int32_t now_nanos;
+    talk_release_reason reason;
+} talk_grant_context;
+
+/* A Grant release hook: synchronous Host work with no result, cost or Trace
+ * record. It may queue inputs, and can't refuse the release. The Core calls
+ * it on revoke, the first time only, and when failed automatic abandonment
+ * disables a Grant. */
+typedef void (*talk_release_hook)(void *context, const talk_grant_context *g);
+
 /* A Capability's definition, owned by its Core. */
 typedef struct talk_capability_def talk_capability_def;
 /* A reusable Grant, owned by its Core. */
@@ -491,12 +518,14 @@ typedef struct talk_sqlite_impl {
     void (*release_rows)(void *context, talk_sql_rows *rows);
 } talk_sqlite_impl;
 
-/* store's implementation: a function for each Operation, and the Segment
- * Coordinator every Store maps to. */
+/* store's implementation: a function for each Operation, the Segment
+ * Coordinator every Store maps to, and an optional release hook, called
+ * with context. */
 typedef struct talk_store_impl {
     void *context;
     talk_operation_fn get, set, del, keys, increment, swap, watch, unwatch;
     talk_segment_lifecycle coordinator;
+    talk_release_hook release;
 } talk_store_impl;
 
 /* timer: both Operations are fire-and-forget. schedule receives the name,
@@ -778,6 +807,9 @@ talk_host_error_code talk_define_capability(talk_core *c, const char *name, size
  * mapped to the same coordinator share a Segment's participant. */
 talk_host_error_code talk_define_segment_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_segment_lifecycle *lifecycle, talk_capability_def **out);
 talk_host_error_code talk_define_coordinated_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_coordinator_fn coordinator, void *context, talk_capability_def **out);
+/* Gives a definition its release hook, before any Grant is made from it.
+ * A second hook is TALK_INVALID_VALUE. */
+talk_host_error_code talk_with_release_hook(talk_core *c, talk_capability_def *def, talk_release_hook hook, void *context);
 /* C only: ends the Group and every handle it gave out. */
 void talk_group_release(talk_group *g);
 /* Loads a Script. A refusal with diagnostics is TALK_LOAD_REFUSED. The Script
@@ -790,6 +822,10 @@ talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, 
 talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
 /* Queues a Decision to the Script; *out settles when a Pump seals it. */
 talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
+/* Queues revoking the Script's named Grant. Later calls through it raise
+ * capability revoked; calls in flight are left to the Host. A repeat, or a
+ * name the Script doesn't keep, is recorded and does nothing. */
+talk_host_error_code talk_script_revoke(talk_script *s, const char *name, size_t len);
 /* A Script's Counters: its lifetime work since load, live Runs included,
  * and its current Persistent State and mailbox. */
 typedef struct talk_counters {

@@ -631,8 +631,10 @@ pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 /// A Script's Grant: the Operations it keeps, by index into its
 /// Capability's.
 /// A Script's named Grant. `disabled` is set when automatic abandonment
-/// through it fails, and refuses later calls with `capability disabled`.
-pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool, disabled: bool = false };
+/// through it fails, and refuses later calls with `capability disabled`;
+/// `revoked` is set by a `revoke` Host Input, and refuses them with
+/// `capability revoked`.
+pub const ScriptGrant = struct { name: []const u8, grant: *capabilities.Grant, kept: []bool, disabled: bool = false, revoked: bool = false };
 
 /// An occupied Capability Scope slot: its named Grant, its scope and the
 /// index of its abandonment Operation.
@@ -667,6 +669,8 @@ const Input = union(enum) {
     /// A Broadcast, or a Broadcast Decision. Its recipients, each with its
     /// delivery id, are found when the queue is drained.
     broadcast: Broadcast,
+    /// Revokes a Script's named Grant; both names are owned.
+    revoke: struct { script: []const u8, grant: []const u8 },
 };
 
 const Broadcast = struct {
@@ -735,6 +739,10 @@ pub const Group = struct {
                 g.releaseResume(x.with);
             },
             .broadcast => |b| g.releaseBroadcast(b),
+            .revoke => |x| {
+                g.gpa.free(x.script);
+                g.gpa.free(x.grant);
+            },
             .set_parent, .dispose => {},
         };
         g.inputs.deinit(g.gpa);
@@ -1037,6 +1045,22 @@ pub const Group = struct {
         return null;
     }
 
+    /// Queues `Revoke` for a Script's named Grant. A Script or name the
+    /// Group doesn't know is still recorded, and does nothing.
+    pub fn revoke(g: *Group, script_name: []const u8, grant_name: []const u8) !void {
+        const s = try g.gpa.dupe(u8, script_name);
+        errdefer g.gpa.free(s);
+        const n = try g.gpa.dupe(u8, grant_name);
+        errdefer g.gpa.free(n);
+        try g.inputs.append(g.gpa, .{ .revoke = .{ .script = s, .grant = n } });
+    }
+
+    /// Calls a named Grant's release hook, if its Capability has one.
+    fn releaseGrant(g: *Group, s: *const Script, sg: *const ScriptGrant, reason: capabilities.ReleaseReason) void {
+        const release = sg.grant.capability.release orelse return;
+        release.call(release.context, &.{ .group = g, .script = s.name, .grant = sg.name, .binding = sg.grant.binding, .now = g.clock, .reason = reason });
+    }
+
     pub fn dispose(g: *Group, o: *objects.Object) !void {
         try g.inputs.append(g.gpa, .{ .dispose = o });
     }
@@ -1313,6 +1337,7 @@ pub const Group = struct {
                 out.writeAll("> dispose object=") catch {};
                 display.writeTrace(out, o.value) catch {};
             },
+            .revoke => |x| out.print("> revoke {s} grant={s}", .{ x.script, x.grant }) catch {},
             .broadcast => |b| {
                 out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
                 // A refused Broadcast never had an id.
@@ -1372,6 +1397,17 @@ pub const Group = struct {
                 } else x.object.parent = x.parent;
             },
             .dispose => |o| o.disposed = true,
+            .revoke => |x| {
+                defer g.gpa.free(x.script);
+                defer g.gpa.free(x.grant);
+                // The first revocation of a name the Script keeps releases
+                // it; any other does nothing.
+                const s = g.script(x.script) orelse continue;
+                const sg = s.grant(x.grant) orelse continue;
+                if (sg.revoked) continue;
+                sg.revoked = true;
+                g.releaseGrant(s, sg, .revoke);
+            },
             .settle => |x| {
                 defer g.gpa.free(x.id);
                 const index = for (g.pending.items, 0..) |p, i| {
@@ -2557,6 +2593,7 @@ pub const Group = struct {
             }
             if (!ok) {
                 slot.grant.disabled = true;
+                g.releaseGrant(run.script, slot.grant, .disable);
                 const participating = if (run.participant) |pt| std.mem.indexOfScalar(*ScriptGrant, pt.grants.items, slot.grant) != null else false;
                 if (participating and prevented == null) prevented = .{ .grant = slot.grant.name, .phase = "abandon", .status = "unknown", .scope = slot.name };
             }
@@ -5037,6 +5074,10 @@ pub const Group = struct {
         if (granted.disabled) {
             m.uncharged = true;
             return g.raise("capability disabled", &where);
+        }
+        if (granted.revoked) {
+            m.uncharged = true;
+            return g.raise("capability revoked", &where);
         }
 
         // Arguments, depth-first in order.

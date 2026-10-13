@@ -295,6 +295,17 @@ ends, the Core calls each slot's abandonment Operation, newest first, with
 `automatic` set and nothing charged; a failure disables the Grant, so later
 calls raise `capability disabled`.
 
+`talk_script_revoke` queues a `revoke` input. When it is drained, the first
+revocation of a name the Script keeps marks that Grant revoked, and later
+calls through it raise `capability revoked`, uncharged, after the
+`capability disabled` check. A call in flight is left to the Host, and its
+answer still resumes the Run. A repeat, or a name the Script doesn't keep, is
+recorded and does nothing. A Capability's release hook, from
+`talk_with_release_hook` or `store`'s `release`, is called with the reason
+`revoke` then, and with `disable` right after the `effect-failure` record of a
+failed abandonment. The `stop` and `reload` releases come with Stop and
+Reload, in steps 4 and 5.
+
 Segment-bound Operations come from `talk_define_segment_capability`, which
 makes each Grant its own Segment Coordinator, or
 `talk_define_coordinated_capability`, which maps each Grant's binding to one
@@ -440,8 +451,8 @@ frame and no Handler Clause and writes `fn=` in place of a Handler.
 `functionArity` and `functionName` read the code. Stale values wait for
 Reload.
 
-The `store` notification router and the `revoke` and Grant release Host Inputs
-come next. A Run past the default Fuel per Run ends
+The `store` notification router, a Host companion, waits for Save and
+Restore. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 
