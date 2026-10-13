@@ -1560,7 +1560,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                 for (restored.adopted) |x| try calls.put(a, x.id, x.call);
             };
         } else if (std.mem.eql(u8, name, "vars")) {
-            c.talk_inspect(group);
+            _ = c.talk_inspect(group, null);
         } else if (std.mem.eql(u8, name, "stop")) {
             const rest = input[name_end + 1 ..];
             const script = scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase]) orelse return error.UnknownScript;

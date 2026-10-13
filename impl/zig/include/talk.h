@@ -1348,9 +1348,64 @@ talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
 /* The Group Fingerprint, which covers the Group's Libraries and each
  * Script's code identity, Grants and limits, never its state. A worker call. */
 talk_host_error_code talk_fingerprint(talk_group *g, uint8_t out[32]);
-/* Inspects the Group. In step 1 it writes a vars record for each Script to
- * the Trace, as the Host Input vars does. */
-void talk_inspect(talk_group *g);
+typedef enum talk_run_status {
+    TALK_READY,
+    TALK_SUSPENDED,
+    TALK_PARKED,
+    TALK_PREEMPTED
+} talk_run_status;
+
+/* A Run that hasn't ended. */
+typedef struct talk_run_view {
+    const char *id;
+    size_t id_len;
+    talk_run_status status;
+    const char *handler; /* its Handler, or the display form of the Function Value it runs */
+    size_t handler_len;
+    const char *wait; /* TALK_SUSPENDED: the `seg` end reason it suspended at */
+    size_t wait_len;
+    /* C only: TALK_SUSPENDED, whether it has a deadline, talk.go's Until. */
+    bool has_until;
+    int64_t until_seconds;
+    int32_t until_nanos;
+    const talk_id *calls; /* TALK_SUSPENDED: the calls, replies or Join Members it waits for */
+    size_t calls_len;
+} talk_run_view;
+
+/* A message waiting in a mailbox. */
+typedef struct talk_message_view {
+    const char *delivery; /* empty for a message a Script sent */
+    size_t delivery_len;
+    const char *from; /* for a message a Script sent, the call or Run that sent it */
+    size_t from_len;
+    talk_message message; /* its args are borrowed */
+} talk_message_view;
+
+typedef struct talk_script_view {
+    const talk_id *disabled_grants; /* in code-point order */
+    size_t disabled_grants_len;
+    const char *name;
+    size_t name_len;
+    const talk_pair *vars; /* its Script Variables, in declaration order; values borrowed */
+    size_t vars_len;
+    const talk_run_view *runs; /* every Run that hasn't ended, in the order they started */
+    size_t runs_len;
+    const talk_message_view *mailbox; /* in mailbox order */
+    size_t mailbox_len;
+} talk_script_view;
+
+typedef struct talk_inspection {
+    const talk_script_view *scripts; /* in load order */
+    size_t scripts_len;
+} talk_inspection;
+
+/* Inspects the Group between Pumps, as the Host Input vars, which writes a
+ * vars record for each Script to the Trace. It charges nothing. *out, when
+ * out isn't NULL, is the Inspection, which the caller releases with
+ * talk_inspection_release before its Group. */
+talk_host_error_code talk_inspect(talk_group *g, talk_inspection **out);
+/* C only */
+void talk_inspection_release(talk_inspection *i);
 
 #ifdef __cplusplus
 }

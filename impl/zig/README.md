@@ -215,6 +215,15 @@ uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
 
+`talk_inspect` is the Host Input `vars`: it writes each Script's `vars`
+record and, when asked, returns the `talk_inspection` a REPL renders `:vars`,
+`:runs` and `:mailbox` from. That is each Script's disabled Grants, its Script
+Variables, its Runs that haven't ended, in the order they started, and its
+mailbox. A Run is preempted mid-Segment, ready with what it resumes with,
+parked by its clause's Queueing Policy, or suspended. A suspended Run shows
+the end reason and the deadline its `seg` record wrote, and the calls,
+replies or Join Members it waits for.
+
 Each Group allocates everything it holds through its own allocator
 ([Group allocator](src/machine/group_allocator.zig)), which wraps the
 `talk_allocator` the Host gives in `talk_group_options`, or the Core's, and
