@@ -285,7 +285,28 @@ pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocato
 /// `private`, with each function's arity and whether each Handler may
 /// suspend.
 pub fn exports(arena: Allocator, tree: *const ast.Tree, result: *const Result) Allocator.Error![]const Export {
+    return exportsWithScratch(arena, arena, tree, result);
+}
+
+/// Returns exports in `arena`, reclaiming the lookup tables and growing
+/// export buffer through `scratch`.
+pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast.Tree, result: *const Result) Allocator.Error![]const Export {
     var out: std.ArrayList(Export) = .empty;
+    defer out.deinit(scratch);
+    // Selectors can share their first word. Aggregate once, rather than
+    // walking every selector and earlier export for every Handler Clause.
+    var suspends: std.StringHashMapUnmanaged(bool) = .empty;
+    defer suspends.deinit(scratch);
+    var it = result.suspends.iterator();
+    while (it.next()) |e| {
+        const sel = e.key_ptr.*;
+        const word = sel[0 .. std.mem.indexOfScalar(u8, sel, ':') orelse sel.len];
+        const entry = try suspends.getOrPut(scratch, word);
+        if (!entry.found_existing) entry.value_ptr.* = false;
+        entry.value_ptr.* = entry.value_ptr.* or e.value_ptr.*;
+    }
+    var handlers: std.StringHashMapUnmanaged(void) = .empty;
+    defer handlers.deinit(scratch);
     for (tree.declarations) |d| {
         if (d.private != null) continue;
         switch (d.data) {
@@ -294,27 +315,19 @@ pub fn exports(arena: Allocator, tree: *const ast.Tree, result: *const Result) A
                 for (f.params) |p| {
                     if (p.default == null) required += 1;
                 }
-                try out.append(arena, .{ .name = tree.text(f.name), .kind = .function, .required = required, .total = f.params.len });
+                try out.append(scratch, .{ .name = tree.text(f.name), .kind = .function, .required = required, .total = f.params.len });
             },
-            .constant => |k| try out.append(arena, .{ .name = tree.text(k.name), .kind = .constant }),
+            .constant => |k| try out.append(scratch, .{ .name = tree.text(k.name), .kind = .constant }),
             .handler => |h| {
                 if (h.fallback) continue;
                 const name = tree.text(h.name);
-                var may_suspend = false;
-                var it = result.suspends.iterator();
-                while (it.next()) |e| {
-                    const sel = e.key_ptr.*;
-                    const word = sel[0 .. std.mem.indexOfScalar(u8, sel, ':') orelse sel.len];
-                    if (std.mem.eql(u8, word, name) and e.value_ptr.*) may_suspend = true;
-                }
-                for (out.items) |*x| {
-                    if (x.kind == .handler and std.mem.eql(u8, x.name, name)) break;
-                } else try out.append(arena, .{ .name = name, .kind = .handler, .may_suspend = may_suspend });
+                const entry = try handlers.getOrPut(scratch, name);
+                if (!entry.found_existing) try out.append(scratch, .{ .name = name, .kind = .handler, .may_suspend = suspends.get(name) orelse false });
             },
             else => {},
         }
     }
-    return out.items;
+    return arena.dupe(Export, out.items);
 }
 
 // ---------------------------------------------------------------- word lists
@@ -2194,6 +2207,40 @@ const Checker = struct {
 
 const testing = std.testing;
 const parser = @import("../syntax/parser.zig");
+
+test "exports keep declaration order and combine selectors including private clauses" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const source =
+        \\constant first = 1
+        \\private on hidden
+        \\end hidden
+        \\private on action x to y
+        \\  wait 1 s
+        \\end action
+        \\on action x
+        \\end action
+        \\function twice x, factor = 2
+        \\  return x * factor
+        \\end twice
+        \\on action x to y
+        \\end action
+    ;
+    const tree = (try parser.parse(a, source)).tree;
+    const result = try check(a, &tree, .{ .library = true });
+    try testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    const got = try exportsWithScratch(a, testing.allocator, &tree, &result);
+    try testing.expectEqual(@as(usize, 3), got.len);
+    try testing.expectEqualStrings("first", got[0].name);
+    try testing.expectEqualStrings("action", got[1].name);
+    try testing.expectEqual(.handler, got[1].kind);
+    try testing.expect(got[1].may_suspend);
+    try testing.expectEqualStrings("twice", got[2].name);
+    try testing.expectEqual(.function, got[2].kind);
+    try testing.expectEqual(@as(usize, 1), got[2].required);
+    try testing.expectEqual(@as(usize, 2), got[2].total);
+}
 
 /// The diagnostics of `source`, as `code at line:col` lines, or the first
 /// syntax error.

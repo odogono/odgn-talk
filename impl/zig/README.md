@@ -97,6 +97,15 @@ tree at 128 levels, so hostile source ends in `source nesting too deep`, never
 a stack overflow. Like the Go Core's limit, that code is an implementation
 limit outside the Spec's catalogue.
 
+Loading retains the source, executable code and required metadata. The syntax
+tree, checker tables and lowering buffers use temporary storage counted against
+the Group's physical cap, then released. Extensions, Reload and restored code
+use the same policy; compiled Libraries also release their compiler storage.
+The WASI check loads 1 MiB of newlines and 100,000 empty Handlers within a
+256 MiB instance cap, bounds their retained memory and load time, and runs
+Handlers after compilation. [The load measurements](../../docs/research/zig-load-scaling.md)
+record the causes and before/after figures for #790.
+
 ## Checking
 
 `check.check` takes a parsed unit and a `Context`: whether it is a Library,

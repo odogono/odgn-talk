@@ -2007,7 +2007,8 @@ fn rebuildSaved(r: *Restoring, saved: *const Saved) Error!*Script {
     const s = try newScript(r, saved);
     const g = r.g;
     const ca = s.code.allocator();
-    const parsed = try g.parseCode(ca, s.source);
+    var parsed = try g.parseCode(ca, s.source);
+    defer parsed.deinit();
     s.imports = parsed.imports;
     if (!(g.buildCode(s, s, &parsed, saved.extensions, true) catch |e| return valueError(e))) return error.LoadRefused;
     s.identity = machine.codeIdentity(s.name, s.source, .script, s.imports);

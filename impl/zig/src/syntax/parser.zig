@@ -31,9 +31,17 @@ pub const Result = union(enum) {
 /// Parses a Script or Library. Everything is allocated in `arena`, which
 /// owns the tree.
 pub fn parse(arena: Allocator, source: []const u8) Allocator.Error!Result {
+    return parseWithScratch(arena, arena, source);
+}
+
+/// Keeps the tree in `arena`, but grows the token and declaration buffers
+/// in `scratch`, which can reclaim superseded buffers. Only their final
+/// contents are copied into the tree.
+pub fn parseWithScratch(arena: Allocator, scratch: Allocator, source: []const u8) Allocator.Error!Result {
     const shared = try arena.create(lexer.Shared);
     shared.* = .{ .source = source, .arena = arena };
-    var p: Parser = .{ .a = arena, .lex = .init(shared) };
+    var p: Parser = .{ .a = arena, .scratch = scratch, .lex = .init(shared) };
+    defer p.tokens.deinit(scratch);
     try p.brackets.ensureTotalCapacity(arena, 16);
     try p.nl_base.append(arena, 0);
     const declarations = p.sourceUnit() catch |e| switch (e) {
@@ -42,7 +50,7 @@ pub fn parse(arena: Allocator, source: []const u8) Allocator.Error!Result {
     };
     return .{ .tree = .{
         .source = source,
-        .tokens = p.tokens.items,
+        .tokens = try arena.dupe(Token, p.tokens.items),
         .declarations = declarations,
         .shared = shared,
     } };
@@ -136,6 +144,7 @@ const Buffered = struct { tok: Token, mode: Mode, start: usize };
 
 const Parser = struct {
     a: Allocator,
+    scratch: Allocator,
     lex: lexer.Lexer,
     tokens: std.ArrayList(Token) = .empty,
     /// The source offset after the last consumed token.
@@ -260,7 +269,7 @@ const Parser = struct {
     }
 
     fn push(p: *Parser, t: Token) Allocator.Error!Tok {
-        try p.tokens.append(p.a, t);
+        try p.tokens.append(p.scratch, t);
         return @intCast(p.tokens.items.len - 1);
     }
 
@@ -411,13 +420,14 @@ const Parser = struct {
 
     fn sourceUnit(p: *Parser) Error![]const ast.Declaration {
         var out: std.ArrayList(ast.Declaration) = .empty;
+        defer out.deinit(p.scratch);
         try p.skipNewlines();
         while ((try p.peek(.operand)).kind != .eof) {
-            try out.append(p.a, try p.declaration());
+            try out.append(p.scratch, try p.declaration());
             try p.skipNewlines();
         }
         _ = try p.next(.operand);
-        return p.list(ast.Declaration, &out);
+        return p.a.dupe(ast.Declaration, out.items);
     }
 
     fn declaration(p: *Parser) Error!ast.Declaration {

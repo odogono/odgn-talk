@@ -726,16 +726,26 @@ pub const Lines = struct {
     cache: struct { line: usize = 0, offset: usize = 0, column: usize = 1 } = .{},
 
     pub fn init(a: Allocator, source: []const u8) Allocator.Error!Lines {
-        var starts: std.ArrayList(usize) = .empty;
-        try starts.append(a, 0);
+        var count: usize = 1;
         var i: usize = 0;
         while (i < source.len) {
             if (source[i] == '\n' or source[i] == '\r') {
                 i += lineBreakLength(source, i);
-                try starts.append(a, i);
+                count += 1;
             } else i += 1;
         }
-        return .{ .source = source, .starts = try starts.toOwnedSlice(a) };
+        const starts = try a.alloc(usize, count);
+        starts[0] = 0;
+        var next: usize = 1;
+        i = 0;
+        while (i < source.len) {
+            if (source[i] == '\n' or source[i] == '\r') {
+                i += lineBreakLength(source, i);
+                starts[next] = i;
+                next += 1;
+            } else i += 1;
+        }
+        return .{ .source = source, .starts = starts };
     }
 
     pub fn deinit(self: *Lines, a: Allocator) void {
