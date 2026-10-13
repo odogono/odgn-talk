@@ -117,6 +117,7 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 			return domain(v)
 		}
 		out := v.Items()[0]
+		m.Scanned = 1
 		for _, x := range v.Items()[1:] {
 			m.Scanned++
 			c, e := x.Compare(out)

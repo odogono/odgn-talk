@@ -1,0 +1,15 @@
+-- m.talk: the min-max-scanned case's Script.
+
+script variable seen = []
+
+on one
+  put [min([7]), max([7])] into seen
+end one
+
+on many
+  put [min([3, 1, 2, 5]), max([3, 1, 2, 5])] into seen
+end many
+
+on fails
+  put max([1, 2, "t", 4]) into seen
+end fails

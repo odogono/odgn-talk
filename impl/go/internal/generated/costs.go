@@ -389,12 +389,12 @@ var Costs = CostsTable{
 		CostsTableRateEntry{
 			Key:   "builtin.min",
 			Fuel:  "4 + scanned",
-			Input: "`scanned` is the items compared",
+			Input: "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.max",
 			Fuel:  "4 + scanned",
-			Input: "`scanned` is the items compared",
+			Input: "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
 		},
 		CostsTableRateEntry{
 			Key:  "builtin.codePoint",
@@ -663,6 +663,10 @@ var Costs = CostsTable{
 		CostsTableChangeEntry{
 			Issue:  "#722",
 			Change: "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#788",
+			Change: "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
 		},
 	},
 }

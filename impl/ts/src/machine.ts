@@ -4930,7 +4930,7 @@ export class Run {
           frame.pc++;
           return;
         }
-        const out = builtin(a as string, args);
+        const out = builtin(a as string, args, m);
         m.result = out.result;
         m.scanned = out.scanned;
         m.steps = out.steps;

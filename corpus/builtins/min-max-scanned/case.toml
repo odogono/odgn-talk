@@ -1,0 +1,14 @@
+# min-max-scanned: `min` and `max` charge `4 + scanned`, where `scanned` is
+# the items examined: every item of the list, or the items through the one
+# that can't be compared, when a comparison fails (spec chapter 8, Rates;
+# #788).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "m"
+source = "m.talk"

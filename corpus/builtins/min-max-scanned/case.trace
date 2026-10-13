@@ -1,0 +1,24 @@
+# Unblessed: min and max scanned Fuel (#788); first blessing awaits human review.
+# min-max-scanned: a singleton list, a four-item list, and a list whose third
+# item can't be compared, each delivered on its own so its Run's Fuel shows
+# the `scanned` it charged.
+
+> load m identity=a1a8087f47fe38ae4658d49f01785113d139ce55eb1b666b121851075bb405e5
+> deliver d1 to=m message=one
+> pump clock=2026-10-02T09:00:00Z
+seg m/r1 start delivery=d1 handler=one clause=1 fuel=34 alloc=144 state=64 end=return
+run m/r1 outcome=completed delivery=d1 handler=one fuel=34 alloc=144
+pumped state=idle fuel=34
+> deliver d2 to=m message=many
+> pump clock=2026-10-02T09:00:01Z
+seg m/r2 start delivery=d2 handler=many clause=1 fuel=52 alloc=288 state=64 end=return
+run m/r2 outcome=completed delivery=d2 handler=many fuel=52 alloc=288
+pumped state=idle fuel=52
+> deliver d3 to=m message=fails
+> pump clock=2026-10-02T09:00:02Z
+raise m/r3 code="can't compare" at=m:37 pos=14:7
+seg m/r3 start delivery=d3 handler=fails clause=1 fuel=26 alloc=113 state=64 end=error
+run m/r3 outcome=errored delivery=d3 handler=fails error={code: "can't compare", left: "t", right: 2, at: {unit: "m", handler: "fails", line: 14, column: 7}} fuel=26 alloc=113
+pumped state=idle fuel=26
+> vars
+vars m seen=[1, 5]

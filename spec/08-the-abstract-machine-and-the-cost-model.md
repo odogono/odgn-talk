@@ -983,8 +983,8 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 
 | Built-in | Fuel | Allocation | Input |
 | --- | --- | --- | --- |
-| `min` | `4 + scanned` | 0 | `scanned` is the items compared |
-| `max` | `4 + scanned` | 0 | `scanned` is the items compared |
+| `min` | `4 + scanned` | 0 | `scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far |
+| `max` | `4 + scanned` | 0 | `scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far |
 | `codePoint` | `3` | 0 |  |
 | `fromCodePoint` | `4` | `size(result)` |  |
 | `upper` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
@@ -1054,6 +1054,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#388](https://github.com/odogono/odgn-talk/issues/388) | Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes |
 | [#719](https://github.com/odogono/odgn-talk/issues/719) | Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional. |
 | [#722](https://github.com/odogono/odgn-talk/issues/722) | Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration. |
+| [#788](https://github.com/odogono/odgn-talk/issues/788) | The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails |
 
 <!-- end -->
 
