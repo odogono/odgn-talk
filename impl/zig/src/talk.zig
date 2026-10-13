@@ -1323,7 +1323,9 @@ pub const NamedCost = extern struct { name: ?[*]const u8, name_len: usize, cost:
 pub const Costs = extern struct { entries: ?[*]const NamedCost, len: usize };
 pub const CalendarImpl = extern struct { context: ?*anyopaque, today: OperationFn, now: OperationFn, to_civil: OperationFn, to_instant: OperationFn, offset: OperationFn, zone: OperationFn };
 pub const LocaleImpl = extern struct { context: ?*anyopaque, compare: OperationFn, rank: OperationFn, upper: OperationFn, lower: OperationFn, number_symbols: OperationFn, month_names: OperationFn, day_names: OperationFn, tag: OperationFn };
+pub const TimerImpl = extern struct { context: ?*anyopaque, schedule: OperationFn, cancel: OperationFn };
 pub const ConsoleImpl = extern struct { context: ?*anyopaque, write: OperationFn, read: OperationFn };
+pub const UserImpl = extern struct { context: ?*anyopaque, confirm: OperationFn, choose: OperationFn, enter: OperationFn, notify: OperationFn };
 
 /// The largest cost component: 2^53 - 1.
 const max_cost = 9_007_199_254_740_991;
@@ -1384,6 +1386,15 @@ export fn talk_locale_capability(c: *Core, impl: *const LocaleImpl, costs: ?*con
     // In name order: compare, dayNames, lower, monthNames, numberSymbols,
     // rank, tag, upper.
     return defineStandard(c, .locale, &.{ impl.compare, impl.day_names, impl.lower, impl.month_names, impl.number_symbols, impl.rank, impl.tag, impl.upper }, impl.context, costs, out);
+}
+
+export fn talk_timer_capability(c: *Core, impl: *const TimerImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandard(c, .timer, &.{ impl.cancel, impl.schedule }, impl.context, costs, out);
+}
+
+export fn talk_user_capability(c: *Core, impl: *const UserImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    // In name order: choose, confirm, enter, notify.
+    return defineStandard(c, .user, &.{ impl.choose, impl.confirm, impl.enter, impl.notify }, impl.context, costs, out);
 }
 
 export fn talk_console_capability(c: *Core, impl: *const ConsoleImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {

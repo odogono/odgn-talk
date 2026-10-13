@@ -40,7 +40,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
 }
 
 /// The Standard Capabilities talk.h makes so far.
-const standard_made = [_][]const u8{ "clock", "calendar", "locale", "console", "store", "sqlite" };
+const standard_made = [_][]const u8{ "clock", "calendar", "locale", "timer", "console", "store", "sqlite", "user" };
 
 /// Why talk.h can't make the case's Grants yet, or null: only Operations the
 /// case declares itself and the Standard Capabilities made so far are.
@@ -51,7 +51,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
             const which = (case_setup.field(t, "capability") orelse return "a Standard Capability without a name").string;
             for (standard_made) |made| {
                 if (std.mem.eql(u8, made, which)) break;
-            } else return "Standard Capabilities other than clock, calendar, locale, console, store and sqlite are not implemented";
+            } else return "a Standard Capability the Core doesn't define";
         }
         if (!std.mem.eql(u8, t.header, "[[operations]]")) continue;
         const mode = case_setup.field(t, "mode") orelse return "an Operation without a mode";
@@ -412,8 +412,12 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             &.{ .{ "today", c.TALK_IMMEDIATE }, .{ "now", c.TALK_IMMEDIATE }, .{ "toCivil", c.TALK_IMMEDIATE }, .{ "toInstant", c.TALK_IMMEDIATE }, .{ "offset", c.TALK_IMMEDIATE }, .{ "zone", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "locale"))
             &.{ .{ "compare", c.TALK_IMMEDIATE }, .{ "rank", c.TALK_IMMEDIATE }, .{ "upper", c.TALK_IMMEDIATE }, .{ "lower", c.TALK_IMMEDIATE }, .{ "numberSymbols", c.TALK_IMMEDIATE }, .{ "monthNames", c.TALK_IMMEDIATE }, .{ "dayNames", c.TALK_IMMEDIATE }, .{ "tag", c.TALK_IMMEDIATE } }
+        else if (std.mem.eql(u8, which, "timer"))
+            &.{ .{ "schedule", c.TALK_FIRE_AND_FORGET }, .{ "cancel", c.TALK_FIRE_AND_FORGET } }
         else if (std.mem.eql(u8, which, "console"))
             &.{ .{ "write", c.TALK_FIRE_AND_FORGET }, .{ "read", c.TALK_SUSPENDING } }
+        else if (std.mem.eql(u8, which, "user"))
+            &.{ .{ "confirm", c.TALK_SUSPENDING }, .{ "choose", c.TALK_SUSPENDING }, .{ "enter", c.TALK_SUSPENDING }, .{ "notify", c.TALK_FIRE_AND_FORGET } }
         else if (std.mem.eql(u8, which, "sqlite"))
             &.{ .{ "query", c.TALK_IMMEDIATE }, .{ "change", c.TALK_IMMEDIATE }, .{ "begin", c.TALK_IMMEDIATE }, .{ "commit", c.TALK_IMMEDIATE }, .{ "rollback", c.TALK_IMMEDIATE } }
         else if (std.mem.eql(u8, which, "store"))
@@ -433,6 +437,12 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
         } else if (std.mem.eql(u8, which, "locale")) {
             const impl: c.talk_locale_impl = .{ .context = hosts, .compare = standardHost("locale.compare"), .rank = standardHost("locale.rank"), .upper = standardHost("locale.upper"), .lower = standardHost("locale.lower"), .number_symbols = standardHost("locale.numberSymbols"), .month_names = standardHost("locale.monthNames"), .day_names = standardHost("locale.dayNames"), .tag = standardHost("locale.tag") };
             try check(c.talk_locale_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "timer")) {
+            const impl: c.talk_timer_impl = .{ .context = hosts, .schedule = standardHost("timer.schedule"), .cancel = standardHost("timer.cancel") };
+            try check(c.talk_timer_capability(core, &impl, &all_costs, &def));
+        } else if (std.mem.eql(u8, which, "user")) {
+            const impl: c.talk_user_impl = .{ .context = hosts, .confirm = standardHost("user.confirm"), .choose = standardHost("user.choose"), .enter = standardHost("user.enter"), .notify = standardHost("user.notify") };
+            try check(c.talk_user_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "console")) {
             const impl: c.talk_console_impl = .{ .context = hosts, .write = standardHost("console.write"), .read = standardHost("console.read") };
             try check(c.talk_console_capability(core, &impl, &all_costs, &def));

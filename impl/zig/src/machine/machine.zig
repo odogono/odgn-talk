@@ -748,6 +748,7 @@ pub const Group = struct {
         g.functions.deinit(g.gpa);
         for (g.calls.items) |c| {
             g.gpa.free(c.id);
+            releaseAll(c.args, g.gpa);
             g.gpa.destroy(c);
         }
         g.calls.deinit(g.gpa);
@@ -1784,8 +1785,14 @@ pub const Group = struct {
                     const result_shape = decl.result orelse break :blk true;
                     const checked = try capabilities.checkValue(g.scratch.allocator(), gpa, result_shape, x.value);
                     defer checked.release();
-                    break :blk checked.mismatch == null;
+                    if (checked.mismatch != null) break :blk false;
+                    const after = decl.after orelse break :blk true;
+                    break :blk after(decl, waited.call.?.args, x.value);
                 };
+                // The arguments were kept only for that check.
+                const call = waited.call.?;
+                releaseAll(call.args, gpa);
+                call.args = &.{};
                 if (!ok) return try g.resumeRaise(run, pc, ins, g.hostErrorAt(waited));
                 // Only the rate's terms over the result, and the answer's
                 // own cost.
@@ -5120,7 +5127,15 @@ pub const Group = struct {
                 return err;
             };
             c.group = g;
-            try g.calls.append(gpa, c);
+            g.calls.append(gpa, c) catch |err| {
+                gpa.free(c.id);
+                gpa.destroy(c);
+                return err;
+            };
+            if (decl.after != null) {
+                c.args = try gpa.dupe(*Value, args);
+                for (c.args) |v| _ = v.retain();
+            }
             break :blk c;
         } else &local;
         const outcome = decl.host.call(decl.host.context, call, args);

@@ -499,6 +499,26 @@ typedef struct talk_store_impl {
     talk_segment_lifecycle coordinator;
 } talk_store_impl;
 
+/* timer: both Operations are fire-and-forget. schedule receives the name,
+ * the Instant, the message name and the list of arguments; cancel the name.
+ * The Host stores timers durably, by Script and name, and when one is due
+ * delivers it as an ordinary Delivery. */
+typedef struct talk_timer_impl {
+    void *context;
+    talk_operation_fn schedule, cancel;
+} talk_timer_impl;
+
+/* user: confirm receives the message; choose the items, the prompt and
+ * multiple; enter the message and the default; notify the message and the
+ * title. An omitted prompt, default or title is "", and an omitted multiple
+ * false. confirm, choose and enter are suspending, and the Core checks each
+ * answer; notify is fire-and-forget. Fail with user busy while the Script
+ * has another prompt unanswered. */
+typedef struct talk_user_impl {
+    void *context;
+    talk_operation_fn confirm, choose, enter, notify;
+} talk_user_impl;
+
 /* console: write receives the value to show. read is suspending, and
  * suspending calls aren't made yet. */
 typedef struct talk_console_impl {
@@ -511,6 +531,7 @@ typedef struct talk_console_impl {
 talk_host_error_code talk_clock_capability(talk_core *c, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_calendar_capability(talk_core *c, const talk_calendar_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_locale_capability(talk_core *c, const talk_locale_impl *impl, const talk_costs *costs, talk_capability_def **out);
+talk_host_error_code talk_timer_capability(talk_core *c, const talk_timer_impl *impl, const talk_costs *costs, talk_capability_def **out);
 talk_host_error_code talk_console_capability(talk_core *c, const talk_console_impl *impl, const talk_costs *costs, talk_capability_def **out);
 /* store: the Grant's binding is the Store's name, as NUL-terminated text.
  * The Core has checked the Shapes, refused an empty key with invalid key and
@@ -529,6 +550,9 @@ talk_host_error_code talk_store_capability(talk_core *c, const talk_store_impl *
  * values and rows by chapter 7's rules, raising sql for a column named twice
  * and unrepresentable for a value it can't hold. */
 talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, int64_t per_row, talk_capability_def **out);
+/* user is optional (chapter 7), and has no binding. The Core refuses an
+ * empty items with out of domain before calling choose. */
+talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *impl, const talk_costs *costs, talk_capability_def **out);
 
 /* The call's id, such as "pricing/r1.c1", borrowed from the call. */
 void talk_call_id(const talk_call *c, const char **s, size_t *len);
