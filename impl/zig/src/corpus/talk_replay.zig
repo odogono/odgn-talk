@@ -436,7 +436,59 @@ const OperationHost = struct {
     next: usize = 0,
 };
 
+/// The Function Values the runner has received from the Core, in the order
+/// it received them: a Run's result, or a Host function's argument.
+const Received = struct {
+    a: std.mem.Allocator,
+    values: std.ArrayList(*c.talk_value) = .empty,
+
+    fn keep(r: *Received, v: ?*c.talk_value) void {
+        const x = v orelse return;
+        if (c.talk_value_kind(x) != c.TALK_KIND_FUNCTION) return;
+        r.values.append(r.a, x) catch return;
+        c.talk_value_retain(x);
+    }
+
+    /// Keeps the Function Values a worker call's reports carry.
+    fn keepReports(r: *Received, reports: ?*c.talk_reports) void {
+        var items: [*c]const c.talk_report = null;
+        const n = c.talk_reports_items(reports, &items);
+        for (items[0..n]) |x| switch (x.kind) {
+            c.TALK_REPORT_RUN_END => r.keep(x.as.run_end.result),
+            c.TALK_REPORT_UNHANDLED => for (x.as.unhandled.args[0..x.as.unhandled.args_len]) |v| r.keep(v),
+            else => {},
+        };
+    }
+
+    /// The latest one received with this display form, an owned reference.
+    fn named(r: *Received, shown: []const u8) ?*c.talk_value {
+        var i = r.values.items.len;
+        while (i > 0) {
+            i -= 1;
+            const v = r.values.items[i];
+            var text: c.talk_owned_bytes = .{ .data = null, .len = 0 };
+            if (c.talk_value_string(v, &text) != c.TALK_OK) continue;
+            defer c.talk_owned_bytes_release(&text);
+            if (!std.mem.eql(u8, text.data[0..text.len], shown)) continue;
+            c.talk_value_retain(v);
+            return v;
+        }
+        return null;
+    }
+
+    fn deinit(r: *Received) void {
+        for (r.values.items) |v| c.talk_value_release(v);
+        r.values.deinit(r.a);
+    }
+};
+
+var received: ?*Received = null;
+
+/// A value a case line shows. A Host can't build a Function Value, so one
+/// shown is the latest the runner received with that display form
+/// (chapter 11, Reading values).
 fn parsed(shown: []const u8) ?*c.talk_value {
+    if (std.mem.startsWith(u8, shown, "<function ")) return (received orelse return null).named(shown);
     var v: ?*c.talk_value = null;
     if (c.talk_parse_display(shown.ptr, shown.len, &v) != c.TALK_OK) return null;
     return v;
@@ -444,8 +496,7 @@ fn parsed(shown: []const u8) ?*c.talk_value {
 
 fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_value, len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
     cross();
-    _ = args;
-    _ = len;
+    if (received) |r| for (args[0..len]) |v| r.keep(v);
     const h: *OperationHost = @ptrCast(@alignCast(context.?));
     const stub: Stub = if (h.next < h.stubs.items.len) blk: {
         h.next += 1;
@@ -1117,7 +1168,7 @@ fn roundTrip(a: std.mem.Allocator, core: ?*c.talk_core, sink: *Sink, group: ?*c.
         if (std.mem.startsWith(u8, later[0], x)) return null;
     };
     // A Function Value the Host holds belongs to the original Group.
-    for (later) |l| if (std.mem.startsWith(u8, l, "> call-value")) return null;
+    for (later) |l| if (std.mem.startsWith(u8, l, "> call-value") or (std.mem.startsWith(u8, l, "> ") and std.mem.indexOf(u8, l, "<function ") != null)) return null;
     sink.hidden = true;
     defer sink.hidden = false;
     var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };
@@ -1231,6 +1282,13 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     // Each Request's future, whose result the Host may hold.
     var requests: std.ArrayList(*c.talk_pending) = .empty;
     defer for (retired.items) |x| c.talk_group_release(x);
+    // Released before the Groups that made them.
+    var held: Received = .{ .a = gpa };
+    received = &held;
+    defer {
+        received = null;
+        held.deinit();
+    }
     try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries, &declarations);
     const order = (try hostOrder(a, trace)).items;
     // The inputs a Host function makes during a Pump, which the main order
@@ -1291,7 +1349,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             } else {
                 const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
                 const o: c.talk_reload_options = .{ .keep_mailbox = std.mem.eql(u8, field(input, "mailbox") orelse "", "keep") };
-                const code = c.talk_script_reload(script, source.ptr, source.len, carry, &o);
+                const code = c.talk_script_reload(script, source.ptr, source.len, carry, &o, null);
                 if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE and code != c.TALK_EFFECT_STATE_UNKNOWN) try check(code);
             }
         } else if (std.mem.eql(u8, name, "replace-library")) {
@@ -1308,7 +1366,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var l: ?*c.talk_library = null;
             try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l));
             const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
-            const code = c.talk_replace_library(group, l, carry);
+            const code = c.talk_replace_library(group, l, carry, null);
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
             } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
@@ -1485,8 +1543,11 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var made: Crossing = .{ .group = group, .scripts = &scripts, .store = &store, .inputs = try crossings(a, trace, line) };
             for (made.inputs) |x| try crossed.put(a, @intFromPtr(x.line.ptr), {});
             crossing = &made;
-            const code = c.talk_pump(group, seconds, nanos, &pump_options, null);
+            var pumped: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
+            const code = c.talk_pump(group, seconds, nanos, &pump_options, &pumped);
             crossing = null;
+            held.keepReports(pumped.reports);
+            c.talk_reports_release(pumped.reports);
             if (made.failed or made.next != made.inputs.len) {
                 return error.CrossingInput;
             }

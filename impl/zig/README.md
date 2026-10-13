@@ -185,7 +185,14 @@ doesn't declare yet. Those fail only from step 6's conformance gate.
 `talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
 `talk_script_request`, `talk_pending_result`, `talk_pump`, `talk_inspect` and
 `talk_script_counters` drive a Group. A Group's Trace reaches the Host's `talk_trace_sink` one line at
-a time. Loading a Script parses, checks and lowers it, runs its initialiser
+a time. `talk_pump`, `talk_script_reload` and `talk_replace_library`
+also return the Host call's reports ([chapter 9](../../spec/09-embedding.md)),
+in the order they happened, as a `talk_reports` the caller releases before
+its Group: each `run end` with its result, error or limit, `stop`,
+`unhandled`, `call failed`, `effect failure`, `decided`, and a queued input
+the Pump refused. A Pump's result also gives its next deadline. The Group
+collects reports whether or not it writes a Trace, and charges nothing for
+them. Run accounting's reports are not implemented yet. Loading a Script parses, checks and lowers it, runs its initialiser
 uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
