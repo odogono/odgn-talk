@@ -271,8 +271,10 @@ class MessageHost:
     through talk_buffer/talk_send, interim op needs answered under the
     Pump's own ref."""
 
-    def __init__(self, engine, module):
+    def __init__(self, engine, module, *, memory_limit=None):
         self.store = wasmtime.Store(engine)
+        if memory_limit is not None:
+            self.store.set_limits(memory_size=memory_limit)
         wasi = wasmtime.WasiConfig()
         wasi.inherit_stderr()
         self.store.set_wasi(wasi)
@@ -346,6 +348,39 @@ def message_layer(engine, module):
     return {"hello": hello, "linearMemory": size}
 
 
+def text_containment(engine, module):
+    """#804: text doubling must reach the logical Allocation Limit Fault
+    under #532's instance caps, including repeated Runs on one instance."""
+    measurements = []
+    for alloc, persistent, cap in ((16 << 20, 1 << 20, 128 << 20), (256 << 20, 64 << 20, 1 << 30)):
+        h = MessageHost(engine, module, memory_limit=cap)
+        hello = h.ok("hello", protocol=1)
+        h.ok("new-group", group="g", name="g")
+        h.ok(
+            "load",
+            group="g",
+            name="s",
+            limits={"fuelPerRun": 1_000_000_000, "allocPerRun": alloc, "persistentState": persistent},
+            source='on double\n  put "x" into s\n  repeat forever\n    put s & s into s\n  end repeat\nend double\non ping\n  return 42\nend ping\n',
+        )
+        peaks = []
+        for _ in range(3):
+            h.ok("deliver", group="g", to={"script": "s"}, message={"name": "double"})
+            reports = h.ok("pump", group="g", now="2026-10-10T12:00:00Z")["reports"]
+            ends = [r for r in reports if r["kind"] == "run end"]
+            assert len(ends) == 1, reports
+            end = ends[0]
+            assert end["outcome"] == "limit fault" and end["limit"] == "alloc", end
+            peaks.append(h.memory.data_len(h.store))
+            assert h.ok("hello", protocol=1) == hello
+            h.ok("request", group="g", to={"script": "s"}, message={"name": "ping"})
+            reports = h.ok("pump", group="g", now="2026-10-10T12:00:00Z")["reports"]
+            ends = [r for r in reports if r["kind"] == "run end"]
+            assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == 42, reports
+        measurements.append({"allocPerRun": alloc, "cap": cap, "linearMemory": peaks})
+    return measurements
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: uv run tools/wasi/zig.py path/to/talk.wasm")
@@ -363,6 +398,7 @@ def main():
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
     messages = message_layer(engine, module)
+    texts = text_containment(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -384,6 +420,7 @@ def main():
                 "nesting": nesting,
                 "largeLoads": loads,
                 "messageLayer": messages,
+                "textContainment": texts,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),

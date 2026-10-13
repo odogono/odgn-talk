@@ -238,6 +238,41 @@ pub fn text(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
     errdefer gpa.free(normal);
     return scalar(gpa, .{ .text = normal });
 }
+/// Concatenates UTF-8 text and normalises across the join. ASCII is already
+/// NFC, so its joined buffer becomes the Value's storage without a copy.
+pub fn concatText(gpa: std.mem.Allocator, left: []const u8, right: []const u8) Error!*Value {
+    if (!unicode.utf8.validate(left) or !unicode.utf8.validate(right)) return error.InvalidValue;
+    const joined = try std.mem.concat(gpa, u8, &.{ left, right });
+    if (unicode.normalize.isAscii(joined)) {
+        errdefer gpa.free(joined);
+        return scalar(gpa, .{ .text = joined });
+    }
+    defer gpa.free(joined);
+    return text(gpa, joined);
+}
+
+fn concatTextAllocations(gpa: std.mem.Allocator) !void {
+    const cases = [_][3][]const u8{
+        .{ "ab", "cd", "abcd" },
+        .{ "", "", "" },
+        .{ "e", "\u{0301}", "\u{00e9}" },
+        .{ "\u{1100}", "\u{1161}", "\u{ac00}" },
+        .{ "a\u{0302}", "\u{0323}", "\u{1ead}" },
+    };
+    for (cases) |case| {
+        const joined = try concatText(gpa, case[0], case[1]);
+        defer joined.release();
+        try std.testing.expectEqualStrings(case[2], joined.data.text);
+    }
+}
+
+test "Text concatenation normalises across joins and frees every failed allocation" {
+    try concatTextAllocations(std.testing.allocator);
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, concatTextAllocations, .{});
+    try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, "\xff", "x"));
+    try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, "x", "\xff"));
+}
+
 /// Bytes, copied from `s`.
 pub fn bytes(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
     const copy = try gpa.dupe(u8, s);
