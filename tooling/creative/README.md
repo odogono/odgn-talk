@@ -56,7 +56,9 @@ The design is sections 4–6 of
 The stores are [`src/storage.ts`](src/storage.ts), the scheduling
 [`src/autosave.ts`](src/autosave.ts), one-editor-per-Project
 [`src/edit-lock.ts`](src/edit-lock.ts), and the windows and banners
-[`src/projects.ts`](src/projects.ts). All but the windows are tested
+[`src/projects.ts`](src/projects.ts). Beside each stored version, a
+`summaries` record keeps its time, Page count and asset hashes, so listing,
+trimming and freeing unused assets never read whole models. All but the windows are tested
 without a DOM against `tests/fake-indexeddb.ts`, a small in-memory
 IndexedDB whose transactions stage and discard writes like the real ones;
 `tests/storage.browser.ts` checks the same behaviour against the real

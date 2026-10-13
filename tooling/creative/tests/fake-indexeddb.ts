@@ -233,9 +233,15 @@ export const createFakeIdb = (options: FakeIdbOptions = {}): FakeIdb => {
         getAllKeys: (range?: FakeKeyRange) =>
           make(() => tx.readAll(storeName, range).map(entry => entry.key)),
         put: (value: Record<string, unknown>) => make(putRun(value)),
-        delete: (key: Key) =>
+        delete: (key: Key | FakeKeyRange) =>
           make(() => {
-            tx.stage(storeName, { deleted: true, key });
+            const keys =
+              typeof key === 'object' && !Array.isArray(key)
+                ? tx.readAll(storeName, key).map(entry => entry.key)
+                : [key];
+            for (const each of keys) {
+              tx.stage(storeName, { deleted: true, key: each });
+            }
             return undefined;
           }),
       };

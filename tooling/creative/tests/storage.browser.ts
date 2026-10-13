@@ -4,7 +4,7 @@
 import { Autosave, failureMessage } from '../src/autosave';
 import { browserChannel, browserLocks, EditLock } from '../src/edit-lock';
 import { createProject } from '../src/model';
-import { openProjectStorage } from '../src/storage';
+import { DATABASE_NAME, openProjectStorage } from '../src/storage';
 
 const equal = (actual: unknown, expected: unknown) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -46,7 +46,7 @@ export const runBrowserTests = async () => {
     created.push(record.id);
     // A crash mid-save: write a new model and record, then abort.
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const pending = indexedDB.open('northtalk-creative', 1);
+      const pending = indexedDB.open(DATABASE_NAME);
       pending.onsuccess = () => resolve(pending.result);
       pending.onerror = () => reject(pending.error);
     });

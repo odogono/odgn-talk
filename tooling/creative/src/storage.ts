@@ -81,6 +81,12 @@ type StoredVersion = {
   savedAt: number;
   seq: number;
 };
+// A version's summary sits in its own store, under the same key, so the
+// version list, trimming and asset clean-up never read whole models.
+type StoredSummary = VersionInfo & {
+  assetHashes: string[];
+  projectId: string;
+};
 type StoredAsset = { blob: Blob; hash: string; mediaType: string };
 type StoredMeta = { key: string; value: string };
 
@@ -168,15 +174,44 @@ const store = (tx: IDBTransaction, name: string): IDBObjectStore =>
 const versionRange = (projectId: string): IDBKeyRange =>
   IDBKeyRange.bound([projectId, 0], [projectId, Number.MAX_SAFE_INTEGER]);
 
+const summaryOf = (version: StoredVersion): StoredSummary => ({
+  projectId: version.projectId,
+  seq: version.seq,
+  savedAt: version.savedAt,
+  pageCount: Array.isArray(version.model.pages)
+    ? version.model.pages.length
+    : 0,
+  assetHashes: (
+    (version.model.assets as { hash: string }[] | undefined) ?? []
+  ).map(asset => asset.hash),
+});
+
 const openDatabase = (factory: IDBFactory): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
-    const pending = factory.open(DATABASE_NAME, 1);
-    pending.onupgradeneeded = () => {
+    const pending = factory.open(DATABASE_NAME, 2);
+    pending.onupgradeneeded = (event?: IDBVersionChangeEvent) => {
       const db = pending.result;
-      db.createObjectStore('projects', { keyPath: 'id' });
-      db.createObjectStore('versions', { keyPath: ['projectId', 'seq'] });
-      db.createObjectStore('assets', { keyPath: 'hash' });
-      db.createObjectStore('meta', { keyPath: 'key' });
+      const oldVersion = event?.oldVersion ?? 0;
+      if (oldVersion < 1) {
+        db.createObjectStore('projects', { keyPath: 'id' });
+        db.createObjectStore('versions', { keyPath: ['projectId', 'seq'] });
+        db.createObjectStore('assets', { keyPath: 'hash' });
+        db.createObjectStore('meta', { keyPath: 'key' });
+      }
+      if (oldVersion < 2) {
+        const summaries = db.createObjectStore('summaries', {
+          keyPath: ['projectId', 'seq'],
+        });
+        // Summarise versions stored before summaries existed.
+        if (oldVersion === 1) {
+          const all = pending.transaction!.objectStore('versions').getAll();
+          all.onsuccess = () => {
+            for (const version of all.result as StoredVersion[]) {
+              summaries.put(summaryOf(version));
+            }
+          };
+        }
+      }
     };
     pending.onsuccess = () => {
       // A newer app version may raise the database version; step aside.
@@ -225,16 +260,11 @@ const checkedModel = (project: Project): Record<string, unknown> => {
  * Deletes stored assets no kept version of any Project refers to. Runs
  * inside the caller's transaction, after versions have been trimmed.
  */
-const assetHashesOf = (version: StoredVersion): string[] =>
-  ((version.model.assets as { hash: string }[] | undefined) ?? []).map(
-    asset => asset.hash,
-  );
-
 const collectGarbage = async (tx: IDBTransaction): Promise<void> => {
-  const versions = (await request(
-    store(tx, 'versions').getAll(),
-  )) as StoredVersion[];
-  const used = new Set(versions.flatMap(assetHashesOf));
+  const summaries = (await request(
+    store(tx, 'summaries').getAll(),
+  )) as StoredSummary[];
+  const used = new Set(summaries.flatMap(summary => summary.assetHashes));
   const assets = store(tx, 'assets');
   const keys = (await request(assets.getAllKeys())) as string[];
   for (const hash of keys) {
@@ -300,7 +330,7 @@ export class ProjectStorage {
     const projectId = id ?? this.#makeId();
     return transact(
       this.#db,
-      ['projects', 'versions', 'assets'],
+      ['projects', 'versions', 'summaries', 'assets'],
       'readwrite',
       async tx => {
         const projects = store(tx, 'projects');
@@ -333,33 +363,37 @@ export class ProjectStorage {
             ? {}
             : { exportedAt: stored.exportedAt }),
         };
-        const versions = store(tx, 'versions');
-        await request(
-          versions.put({
-            projectId,
-            seq: record.seq,
-            savedAt: now,
-            model,
-          } satisfies StoredVersion),
-        );
+        const version: StoredVersion = {
+          projectId,
+          seq: record.seq,
+          savedAt: now,
+          model,
+        };
+        const summaries = store(tx, 'summaries');
+        await request(store(tx, 'versions').put(version));
+        await request(summaries.put(summaryOf(version)));
         await request(projects.put(record));
-        const kept = (await request(
-          versions.getAll(versionRange(projectId)),
-        )) as StoredVersion[];
-        const keep = versionsToKeep(kept, now);
-        const trimmed = kept.filter(version => !keep.has(version.seq));
-        for (const version of trimmed) {
-          await request(versions.delete([projectId, version.seq]));
+        const all = (await request(
+          summaries.getAll(versionRange(projectId)),
+        )) as StoredSummary[];
+        const keep = versionsToKeep(all, now);
+        const trimmed = all.filter(summary => !keep.has(summary.seq));
+        for (const { seq } of trimmed) {
+          await request(store(tx, 'versions').delete([projectId, seq]));
+          await request(summaries.delete([projectId, seq]));
         }
         // Only assets a trimmed version used, or new ones the model leaves
         // out, can be unused now, so most saves skip scanning every Project.
         const keptHashes = new Set(
-          kept.filter(version => keep.has(version.seq)).flatMap(assetHashesOf),
+          all
+            .filter(summary => keep.has(summary.seq))
+            .flatMap(summary => summary.assetHashes),
         );
         if (
-          [...trimmed.flatMap(assetHashesOf), ...assets.keys()].some(
-            hash => !keptHashes.has(hash),
-          )
+          [
+            ...trimmed.flatMap(summary => summary.assetHashes),
+            ...assets.keys(),
+          ].some(hash => !keptHashes.has(hash))
         ) {
           await collectGarbage(tx);
         }
@@ -417,17 +451,11 @@ export class ProjectStorage {
 
   /** Every kept version of a Project, newest first. */
   async listVersions(id: string): Promise<VersionInfo[]> {
-    const versions = await transact(this.#db, ['versions'], 'readonly', tx =>
-      request(store(tx, 'versions').getAll(versionRange(id))),
+    const summaries = await transact(this.#db, ['summaries'], 'readonly', tx =>
+      request(store(tx, 'summaries').getAll(versionRange(id))),
     );
-    return (versions as StoredVersion[])
-      .map(version => ({
-        seq: version.seq,
-        savedAt: version.savedAt,
-        pageCount: Array.isArray(version.model.pages)
-          ? version.model.pages.length
-          : 0,
-      }))
+    return (summaries as StoredSummary[])
+      .map(({ seq, savedAt, pageCount }) => ({ seq, savedAt, pageCount }))
       .sort((a, b) => b.seq - a.seq);
   }
 
@@ -472,17 +500,12 @@ export class ProjectStorage {
   async deleteProject(id: string): Promise<void> {
     await transact(
       this.#db,
-      ['projects', 'versions', 'assets'],
+      ['projects', 'versions', 'summaries', 'assets'],
       'readwrite',
       async tx => {
         await request(store(tx, 'projects').delete(id));
-        const versions = store(tx, 'versions');
-        const keys = (await request(
-          versions.getAllKeys(versionRange(id)),
-        )) as IDBValidKey[];
-        for (const key of keys) {
-          await request(versions.delete(key));
-        }
+        await request(store(tx, 'versions').delete(versionRange(id)));
+        await request(store(tx, 'summaries').delete(versionRange(id)));
         await collectGarbage(tx);
       },
     );
@@ -507,18 +530,19 @@ export class ProjectStorage {
   async freeSpace(): Promise<void> {
     await transact(
       this.#db,
-      ['projects', 'versions', 'assets'],
+      ['projects', 'versions', 'summaries', 'assets'],
       'readwrite',
       async tx => {
         const records = (await request(
           store(tx, 'projects').getAll(),
         )) as ProjectRecord[];
         const newest = new Map(records.map(r => [r.id, r.seq]));
-        const versions = store(tx, 'versions');
-        const all = (await request(versions.getAll())) as StoredVersion[];
-        for (const version of all) {
-          if (newest.get(version.projectId) !== version.seq) {
-            await request(versions.delete([version.projectId, version.seq]));
+        const summaries = store(tx, 'summaries');
+        const all = (await request(summaries.getAll())) as StoredSummary[];
+        for (const { projectId, seq } of all) {
+          if (newest.get(projectId) !== seq) {
+            await request(store(tx, 'versions').delete([projectId, seq]));
+            await request(summaries.delete([projectId, seq]));
           }
         }
         await collectGarbage(tx);

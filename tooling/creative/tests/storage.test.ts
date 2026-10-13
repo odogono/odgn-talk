@@ -147,6 +147,25 @@ test('saves trim old versions, keeping the newest', async () => {
   expect((await storage.loadProject(record.id)).project.name).toBe('Many 22');
 });
 
+test('an asset only trimmed versions used is dropped with them', async () => {
+  const { storage } = await openStorage();
+  const { project, hash, assets } = await withAsset('Pictured');
+  let record = await storage.saveProject(undefined, project, {
+    assets,
+    now: 1,
+  });
+  project.assets = [];
+  for (let n = 2; n <= 21; n++) {
+    record = await storage.saveProject(record.id, project, { now: n });
+    // Kept while any kept version still refers to it.
+    expect((await storage.assetBytes([hash])).size).toBe(n <= 20 ? 1 : 0);
+  }
+  expect(await storage.listVersions(record.id)).toHaveLength(20);
+
+  await storage.deleteProject(record.id);
+  expect(await storage.listVersions(record.id)).toEqual([]);
+});
+
 test('restoring an earlier version writes a new newest, so it can be undone', async () => {
   const { storage } = await openStorage();
   const project = createProject('One');
