@@ -643,6 +643,8 @@ pub const Call = struct {
     starting: bool = true,
     /// For a suspending call, the Group its answer goes to.
     group: ?*anyopaque = null,
+    /// The Group that made the call, whatever its mode.
+    owner: ?*anyopaque = null,
     run: []const u8 = "",
     /// The current Segment's id, `<run>.s<N>`.
     segment: []const u8 = "",

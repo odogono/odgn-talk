@@ -570,6 +570,126 @@ static talk_call_end unused(void *context, talk_call *call, talk_value *const *a
 }
 
 /* clock's now from the Pump's Clock, and say through console's write. */
+/* The Notification router, over a store Grant whose watch and unwatch
+ * forward to it. The Store is "scores"; its revision is a counter. */
+static talk_router *router_under_test;
+static int store_revision;
+static char revision_text[16];
+static int64_t watch_cap;
+
+static talk_watch_limits router_limits(void *context, const char *store, size_t len) {
+    (void)context; (void)store; (void)len;
+    talk_watch_limits l = {watch_cap, 65536, 1000, 1048576};
+    return l;
+}
+static void router_revision(void *context, const char *store, size_t len, const char **out, size_t *out_len) {
+    (void)context; (void)store; (void)len;
+    *out_len = (size_t)snprintf(revision_text, sizeof revision_text, "%d", store_revision);
+    *out = revision_text;
+}
+static bool router_store_of(void *context, void *binding, const char **out, size_t *out_len) {
+    (void)context;
+    if (binding == NULL) return false;
+    *out = (const char *)binding;
+    *out_len = strlen((const char *)binding);
+    return true;
+}
+static talk_call_end router_watch(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context;
+    if (len != 3) return TALK_CALL_BROKEN;
+    const char *name, *prefix, *message;
+    size_t name_len, prefix_len, message_len;
+    if (!talk_value_as_text(args[0], &name, &name_len) || !talk_value_as_text(args[1], &prefix, &prefix_len) || !talk_value_as_text(args[2], &message, &message_len)) return TALK_CALL_BROKEN;
+    if (!talk_router_watch(router_under_test, call, name, name_len, prefix, prefix_len, message, message_len, error)) return TALK_CALL_FAILED;
+    talk_nothing(result);
+    return TALK_CALL_ANSWERED;
+}
+static talk_grant *rebound_grant;
+static talk_grant *rebind(void *context, const char *script, size_t script_len, const char *name, size_t name_len) {
+    (void)context; (void)script; (void)script_len; (void)name; (void)name_len;
+    return rebound_grant;
+}
+
+/* A commit is routed to a matching watch; a full mailbox holds the next
+ * Notification until the retry after a Pump; a checkpoint restored after
+ * the Store changed resyncs the watch with a marker. */
+static int router_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_router_options ro = {NULL, NULL, router_limits, router_revision, router_store_of};
+    router_under_test = talk_router_new(&ro);
+    store_revision = 0;
+    watch_cap = 100;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost entries[] = {{"get", 3, {0, 0}}, {"set", 3, {0, 0}}, {"delete", 6, {0, 0}}, {"keys", 4, {0, 0}}, {"increment", 9, {0, 0}}, {"swap", 4, {0, 0}}, {"watch", 5, {0, 0}}, {"unwatch", 7, {0, 0}}};
+    talk_costs costs = {entries, 8};
+    talk_store_impl impl = {NULL, unused, unused, unused, unused, unused, unused, router_watch, unused, {begin_hook, commit_hook, rollback_hook, NULL}, NULL};
+    talk_capability_def *def = NULL;
+    int bad = talk_store_capability(core, &impl, &costs, &def) != TALK_OK;
+    if (bad) return 1;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, "scores", &grant) != TALK_OK;
+    rebound_grant = grant;
+    talk_load_grant grants[] = {{"st", 2, grant}};
+    const char *source = "script variable seen = []\non start\n  ask st to watch \"w\", \"a/\", \"changed\"\nend start\non changed c, queued\n  put [the \"keys\" of c, the \"resync\" of c] after seen\nend changed\non more\n  try\n    ask st to watch \"v\", \"\", \"changed\"\n  catch {code: \"watch limit\", limit: l}\n    put l after seen\n  end try\nend more\n";
+    talk_limits limits = {0};
+    limits.mailbox_depth = 1;
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, &limits};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message start = {"start", 5, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &start, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    /* Two commits before a Pump: the first is admitted, the second finds the
+     * mailbox full and waits. b/2 matches no watch. */
+    talk_id first[] = {{"a/1", 3}, {"b/2", 3}};
+    talk_id second[] = {{"a/2", 3}};
+    bad |= talk_router_commit(router_under_test, "scores", 6, first, 2) != TALK_OK;
+    bad |= talk_router_commit(router_under_test, "scores", 6, second, 1) != TALK_OK;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_router_pumped(router_under_test, group);
+    bad |= talk_pump(group, 1790000002, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_router_pumped(router_under_test, group);
+    /* A second watch passes the Store's watches limit. */
+    watch_cap = 1;
+    talk_message more = {"more", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &more, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000002, 0, NULL, NULL) != TALK_OK;
+    watch_cap = 100;
+    /* A checkpoint, a change to the Store, and the restore's marker. */
+    talk_owned_bytes checkpoint = {0};
+    bad |= talk_router_save(router_under_test, group, &checkpoint) != TALK_OK;
+    store_revision = 1;
+    talk_restore_options restore = {"g", 1, record, NULL, NULL, 0, rebind, NULL, NULL, NULL, TALK_REJECT_MISMATCH, NULL, 0};
+    talk_group *restored = NULL;
+    talk_restore_result *result = NULL;
+    talk_routing_result *routing = NULL;
+    bad |= talk_router_restore(router_under_test, core, checkpoint.data, checkpoint.len, &restore, &restored, &result, &routing) != TALK_OK;
+    bad |= routing == NULL || routing->restored_len != 1 || routing->resynced_len != 1 || routing->dropped_len != 0;
+    if (!bad) bad |= routing->resynced[0].len != 6 || memcmp(routing->resynced[0].data, "s.st.w", 6) != 0;
+    talk_routing_result_release(routing);
+    talk_restore_result_release(result);
+    bad |= talk_pump(restored, 1790000003, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(restored, NULL);
+    bad |= strstr(trace, "vars s seen=[[[\"a/1\"], false], [[\"a/2\"], false], \"watches\", [[], true]]") == NULL;
+    /* A truncated checkpoint is refused. */
+    talk_group *refused = NULL;
+    bad |= talk_router_restore(router_under_test, core, checkpoint.data, checkpoint.len - 1, &restore, &refused, &result, &routing) != TALK_INVALID_CHECKPOINT || refused != NULL;
+    talk_owned_bytes_release(&checkpoint);
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_router_detach(router_under_test, restored);
+    talk_router_detach(router_under_test, group);
+    talk_router_free(router_under_test);
+    talk_group_release(restored);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 static int standard_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
@@ -1419,6 +1539,7 @@ int main(void) {
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");
     expect(sqlite_test() == 0, "sqlite refuses a malformed binding, charges max per row and gives rows as maps");
     expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
+    expect(router_test() == 0, "the router routes commits, retries a full mailbox after a Pump, and resyncs a checkpoint after a change");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");

@@ -15,6 +15,7 @@ pub const corpus_disassembly = @import("corpus/disassembly.zig");
 pub const corpus_replay = @import("corpus/replay.zig");
 pub const talk = @import("talk.zig");
 pub const message = @import("message.zig");
+pub const notify = @import("notify/router.zig");
 
 /// Tables generated from the Spec's Data Files by tools/zig/generate.ts and
 /// tools/unicode/generate.ts. Never edit them by hand.
@@ -39,6 +40,7 @@ comptime {
     _ = talk;
     // And the Message Layer's, in the wasm32-wasi build.
     _ = message;
+    _ = notify;
 }
 
 test {
@@ -64,6 +66,7 @@ test {
     _ = @import("machine/nothing_defaults_test.zig");
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
+    _ = notify;
     _ = @import("decimal/transcendental.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;

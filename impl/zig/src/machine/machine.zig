@@ -4608,7 +4608,7 @@ pub const Group = struct {
             run.calls += 1;
             const id = std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls }) catch "";
             const segment = g.segmentId(run);
-            var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true };
+            var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true };
             const outcome = op.host.call(op.host.context, &call, &.{});
             const result: ?*Value = if (outcome == .value) outcome.value else null;
             defer if (result) |v| v.release();
@@ -8045,7 +8045,7 @@ pub const Group = struct {
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
         const left: ?u64 = fuelLeft(run) -| decl.cost.fuel;
-        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
+        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .owner = g, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
         const suspending = decl.mode == .suspending;

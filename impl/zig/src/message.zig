@@ -302,6 +302,7 @@ fn hostCodeName(code: talk.HostErrorCode) []const u8 {
         .state_too_large => "state too large",
         .effects_pending => "effects pending",
         .effect_state_unknown => "effect state unknown",
+        .invalid_checkpoint => "invalid checkpoint",
         .err_limit => "limit",
         .err_mailbox_full => "mailbox full",
         .load_refused => "load error",

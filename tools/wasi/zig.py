@@ -31,8 +31,8 @@ import wasmtime
 
 # talk_host_error_code's TALK_OK, TALK_LOAD_REFUSED and TALK_OUT_OF_MEMORY.
 OK = 0
-LOAD_REFUSED = 19
-OUT_OF_MEMORY = 20
+LOAD_REFUSED = 20
+OUT_OF_MEMORY = 21
 
 
 class Host:
