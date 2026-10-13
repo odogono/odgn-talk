@@ -461,6 +461,11 @@ pub const Unwinding = struct {
     then: Then,
     /// Whether its `leave` has ended the dispatch under it.
     left: bool = false,
+    /// The logical size of the operand stack its cleanup copy cut from
+    /// the failed continuation of frame `failed_frame`, which stays
+    /// retained while the cleanup runs (chapter 8, Pending cleanup state).
+    failed: u64 = 0,
+    failed_frame: ?usize = null,
 };
 
 pub const Script = struct {
@@ -874,11 +879,72 @@ fn fuelLeft(run: *const Run) u64 {
     return run.limits.fuel_per_run -| run.fuel;
 }
 
+/// The operands an instruction is about to pop, retained until it ends,
+/// so that an Error-mode cleanup can count them on the failed
+/// continuation's stack. Only an instruction in a `finally` block's scope
+/// in its own frame needs them; `throw`'s operand becomes its Error.
+const Operands = struct {
+    buffer: [8]Slot = undefined,
+    more: []Slot = &.{},
+    len: usize = 0,
+
+    fn take(o: *Operands, gpa: Allocator, unit: *const lower.Unit, frame: *const Frame, pc: u32, ins: lower.Instruction) !void {
+        if (ins.op == .throw or frame.stack.items.len == 0) return;
+        const protected = for (unit.unwind) |e| {
+            if (e.kind == .finally and e.first <= pc and pc <= e.last) break true;
+        } else false;
+        if (!protected) return;
+        const n = verify.popCount(unit, ins) orelse return;
+        if (n == 0 or n > frame.stack.items.len) return;
+        const out = if (n <= o.buffer.len) o.buffer[0..n] else blk: {
+            o.more = try gpa.alloc(Slot, n);
+            break :blk o.more;
+        };
+        for (out, frame.stack.items[frame.stack.items.len - n ..]) |*x, slot| x.* = retainSlot(slot);
+        o.len = n;
+    }
+
+    fn slots(o: *const Operands) []const Slot {
+        return if (o.more.len > 0) o.more else o.buffer[0..o.len];
+    }
+
+    fn release(o: *Operands, gpa: Allocator) void {
+        for (o.slots()) |slot| slot.release(gpa);
+        if (o.more.len > 0) gpa.free(o.more);
+        o.* = .{};
+    }
+};
+
 /// A retained frame's size: its slots, their values and its operand stack.
 fn frameSize(f: *const Frame) u64 {
+    return frameHeader(f) + stackSize(f.stack.items);
+}
+
+/// A frame's size without its operand stack: its header and locals.
+fn frameHeader(f: *const Frame) u64 {
     var total: u64 = 64 + 8 * f.locals.len;
     for (f.locals) |v| total += costs.size(v);
-    return total + stackSize(f.stack.items);
+    return total;
+}
+
+/// The size of a stack's first `n` slots.
+fn prefixSize(stack: []const Slot, n: u32) u64 {
+    return stackSize(stack[0..@min(n, stack.len)]);
+}
+
+/// The stack prefix the `finally` entries of frame `f` covering `place`
+/// need, only those before `before` if given, or null when none does.
+fn finallyPrefix(run: *const Run, f: *const Frame, place: u32, before: ?usize) ?u32 {
+    const unit = unitOf(run, f);
+    const body = unit.bodies[f.body];
+    var depth: ?u32 = null;
+    for (unit.unwind, 0..) |e, ei| {
+        if (e.kind != .finally or e.first > place or place > e.last) continue;
+        if (e.first < body.first or e.last > body.last) continue;
+        if (before) |b| if (ei >= b) continue;
+        depth = @max(depth orelse 0, e.depth);
+    }
+    return depth;
 }
 
 fn stackSize(stack: []const Slot) u64 {
@@ -1137,6 +1203,9 @@ pub const Group = struct {
     pending_error: ?*Value = null,
     /// Whether the Core raised it, so it gets a `message`.
     pending_core: bool = false,
+    /// The logical size of the operands of the instruction whose Error is
+    /// being unwound, which its failed continuation keeps.
+    failing_operands: u64 = 0,
     /// The last Pump's Clock reading, which a Capability call reads.
     clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 },
     /// The waits with deadlines, and how many have been set.
@@ -5261,7 +5330,16 @@ pub const Group = struct {
     fn runSize(g: *Group, run: *const Run) u64 {
         _ = g;
         var total: u64 = 96;
-        for (run.frames.items) |*f| total += frameSize(f);
+        // A cancellation's cleanup keeps only the frames and activations
+        // it still needs; the dispatches it interrupted are gone.
+        var cancelling: ?usize = null;
+        for (run.controls.items, 0..) |c, i| if (c == .cleanup and c.cleanup.then == .cancel) {
+            cancelling = i;
+            break;
+        };
+        if (cancelling) |k| total += cancelSize(run, k) else for (run.frames.items) |*f| {
+            total += frameSize(f);
+        }
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
             total += 48;
         };
@@ -5290,15 +5368,91 @@ pub const Group = struct {
         if (run.resume_with) |r| total += retained(r);
         // A preempted Run's catch dispatches: each context with its Error,
         // its activation, the owner's own stack and the failed frames it
-        // holds aside.
-        for (run.controls.items) |c| switch (c) {
+        // holds aside. A pending cleanup has no size of its own; it keeps
+        // its Error's context, an acceptance's activation, a transfer's
+        // arguments and the failed continuation's operands (chapter 8,
+        // Pending cleanup state).
+        for (run.controls.items, 0..) |c, i| switch (c) {
             .dispatch => |d| {
+                if (cancelling) |k| if (i < k) continue;
                 total += 96 + costs.size(d.err) + 48;
                 total += stackSize(d.owner_stack.items);
                 for (d.held) |*f| total += frameSize(f);
             },
-            .cleanup => {},
+            .cleanup => |u| switch (u.then) {
+                .cancel => {},
+                .accept => |acc| total += 96 + costs.size(u.err) + 48 + stackSize(acc.stack.items) + u.failed,
+                .end, .search => total += 96 + costs.size(u.err) + u.failed,
+                .transfer => |t| {
+                    // Until its `leave`, the dispatch under it holds the
+                    // context.
+                    if (u.left) total += 96 + costs.size(u.err);
+                    total += 8 * t.args.len + u.failed;
+                    for (t.args) |v| total += costs.size(v);
+                },
+            },
         };
+        return total;
+    }
+
+    /// The frames and dispatch activations a cancellation's remaining
+    /// cleanup needs, the cleanup being control `k` (chapter 8, Pending
+    /// cleanup state). The running cleanup copy, and what it calls, keep
+    /// their whole stacks; each interrupted stack keeps only the prefix
+    /// its `finally` entries need, and an owner or activation none of them
+    /// needs is gone. The interrupted dispatch contexts count nothing.
+    fn cancelSize(run: *const Run, k: usize) u64 {
+        const u = &run.controls.items[k].cleanup;
+        const running: usize = if (u.next > 0 and !u.cleanups.items[u.next - 1].leave) u.cleanups.items[u.next - 1].frame else run.frames.items.len;
+        const dispatches = run.controls.items[0..k];
+        var total: u64 = 0;
+        for (run.frames.items, 0..) |*f, i| {
+            if (i > running) {
+                total += frameSize(f);
+                continue;
+            }
+            var kept = false;
+            var part: u64 = 0;
+            // The owner's own continuation is under its first dispatch;
+            // each activation's under the next, the last's in the frame.
+            var own_stack: []const Slot = f.stack.items;
+            var own_place: u32 = f.pc -| 1;
+            var previous: ?*const Dispatch = null;
+            for (dispatches) |*c| if (c.* == .dispatch and c.dispatch.owner == i) {
+                const d = &c.dispatch;
+                if (previous) |p| {
+                    if (finallyPrefix(run, f, d.place, p.search.entry - 1)) |n| {
+                        part += 48 + prefixSize(d.owner_stack.items, n);
+                        kept = true;
+                    }
+                } else {
+                    own_stack = d.owner_stack.items;
+                    own_place = d.place;
+                }
+                previous = d;
+                for (d.held, 0..) |*h, hi| {
+                    const place = if (hi == d.held.len - 1) d.search.raised else h.pc -| 1;
+                    if (finallyPrefix(run, h, place, null)) |n| total += frameHeader(h) + prefixSize(h.stack.items, n);
+                }
+            };
+            if (previous) |p| {
+                if (i == running) {
+                    part += 48 + stackSize(f.stack.items);
+                    kept = true;
+                } else if (finallyPrefix(run, f, f.pc -| 1, p.search.entry - 1)) |n| {
+                    part += 48 + prefixSize(f.stack.items, n);
+                    kept = true;
+                }
+            }
+            if (i == running and previous == null) {
+                part += stackSize(f.stack.items);
+                kept = true;
+            } else if (finallyPrefix(run, f, own_place, null)) |n| {
+                part += prefixSize(own_stack, n);
+                kept = true;
+            }
+            if (kept) total += frameHeader(f) + part;
+        }
         return total;
     }
 
@@ -5544,6 +5698,12 @@ pub const Group = struct {
             // taken first.
             const at_unit = unitName(run, frame);
             g.driving = .{ .unit = at_unit, .pc = pc, .ins = ins };
+            // Its operands, which stay on its failed continuation's stack
+            // if it fails in a `finally` block's scope (chapter 8, Pending
+            // cleanup state).
+            var held: Operands = .{};
+            try held.take(g.gpa, unitOf(run, frame), frame, pc, ins);
+            defer held.release(g.gpa);
             frame.pc += 1;
             var charge: costs.Measures = .{};
             const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
@@ -5697,6 +5857,8 @@ pub const Group = struct {
                     if (try g.unwind(run, err, call_pc, call_ins, charged)) |end| return end;
                 },
                 .raised => |err| {
+                    g.failing_operands = stackSize(held.slots());
+                    defer g.failing_operands = 0;
                     if (try g.unwind(run, err, pc, ins, charged)) |end| return end;
                 },
                 .end_cleanup => {
@@ -5970,6 +6132,15 @@ pub const Group = struct {
             errdefer cleanups.deinit(g.gpa);
             try g.collect(run, &cleanups, 0, null, s.skip, s.raised);
             try g.startCleanup(run, err, cleanups, .end);
+            // The failing frame's continuation keeps the failed
+            // instruction's operands.
+            if (g.failing_operands > 0) {
+                const u = &run.controls.items[run.controls.items.len - 1].cleanup;
+                const top = run.frames.items.len - 1;
+                u.failed = stackSize(run.frames.items[top].stack.items) + g.failing_operands;
+                u.failed_frame = top;
+                g.failing_operands = 0;
+            }
             return g.nextCleanup(run, charged);
         }
         // It escapes the control that bounds it.
@@ -6135,6 +6306,12 @@ pub const Group = struct {
                     continue;
                 }
                 while (run.frames.items.len > c.frame + 1) g.popFrame(run);
+                // Entering cleanup doesn't replace the failed continuation's
+                // operands; a cancellation keeps only the prefix.
+                if (u.then != .cancel and u.failed_frame != c.frame) {
+                    u.failed = stackSize(run.frames.items[c.frame].stack.items);
+                    u.failed_frame = c.frame;
+                }
                 try g.cutStack(run, c.frame, c.depth);
                 run.frames.items[c.frame].pc = c.target;
                 return null;
