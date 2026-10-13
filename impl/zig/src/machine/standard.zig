@@ -238,8 +238,12 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
     }
     const decls = try gpa.alloc(caps.ErrorDecl, errors.len);
     for (errors, decls) |code, *d| {
-        // The catalogue's fields, with the kinds the chapter gives them.
-        const fields: []const struct { []const u8, caps.Kind } = if (std.mem.eql(u8, code, "unknown zone"))
+        // The catalogue's fields, with the kinds the chapter gives them. The
+        // `store` codes declare none, as the other Cores' declarations do; a
+        // Fail's fields are still held to the catalogue.
+        const fields: []const struct { []const u8, caps.Kind } = if (which == .store)
+            &.{}
+        else if (std.mem.eql(u8, code, "unknown zone"))
             &.{.{ "zone", .text }}
         else if (std.mem.eql(u8, code, "ambiguous time"))
             &.{ .{ "civil", .civil_date }, .{ "zone", .text } }
@@ -746,4 +750,27 @@ fn privateUse(ps: []const []const u8) bool {
 test "BCP 47 well-formedness" {
     for ([_][]const u8{ "en", "en-GB", "de-CH-1996", "zh-Hant-TW", "qzz-QZ", "und", "x-private", "en-US-u-co-phonebk", "i-klingon", "sr-Latn-RS", "es-419" }) |t| try std.testing.expect(wellFormed(t));
     for ([_][]const u8{ "en_US", "", "e", "en-", "toolongtag", "en-u", "x", "en-GB-x" }) |t| try std.testing.expect(!wellFormed(t));
+}
+
+test "store's Operation Declarations, as the Group Fingerprint and the Host Manifest give them" {
+    // The declarations the other Cores' Host Manifest gives for a store
+    // Grant: the codes the Host fails with, with no fields, and none the
+    // Core raises itself.
+    const fingerprint = @import("fingerprint.zig");
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var contexts: std.ArrayList(*Context) = .empty;
+    const ops = operations(.store);
+    const impl = try a.alloc(?caps.HostFn, ops.len);
+    @memset(impl, null);
+    const costs = try a.alloc(caps.Cost, ops.len);
+    for (ops, costs) |name, *x| {
+        const cheap = std.mem.eql(u8, name, "get") or std.mem.eql(u8, name, "keys") or std.mem.eql(u8, name, "unwatch");
+        x.* = .{ .fuel = if (cheap) 2 else 4, .alloc = 0 };
+    }
+    const capability = try define(a, .store, impl, costs, &contexts, null);
+    const kept = try a.alloc(bool, ops.len);
+    @memset(kept, true);
+    try std.testing.expectEqualStrings("{\"capability\":\"store\",\"operations\":[{\"name\":\"delete\",\"mode\":\"immediate\",\"args\":[\"text\"],\"result\":\"nothing\",\"cost\":{\"fuel\":4,\"alloc\":0},\"errors\":[{\"code\":\"store busy\",\"fields\":[]}],\"segmentBound\":true},{\"name\":\"get\",\"mode\":\"immediate\",\"args\":[\"text\",{\"optional\":\"any\"}],\"result\":\"any\",\"cost\":{\"fuel\":2,\"alloc\":0},\"errors\":[]},{\"name\":\"increment\",\"mode\":\"immediate\",\"args\":[\"text\",{\"optional\":{\"oneOf\":[\"number\",\"quantity\"]}}],\"result\":{\"oneOf\":[\"number\",\"quantity\"]},\"cost\":{\"fuel\":4,\"alloc\":0},\"errors\":[{\"code\":\"incompatible units\",\"fields\":[]},{\"code\":\"overflow\",\"fields\":[]},{\"code\":\"store busy\",\"fields\":[]},{\"code\":\"store full\",\"fields\":[]},{\"code\":\"wrong kind\",\"fields\":[]}],\"segmentBound\":true},{\"name\":\"keys\",\"mode\":\"immediate\",\"args\":[{\"optional\":\"text\"}],\"result\":{\"list\":\"text\"},\"cost\":{\"fuel\":2,\"alloc\":0},\"errors\":[]},{\"name\":\"set\",\"mode\":\"immediate\",\"args\":[\"text\",\"any\"],\"result\":\"nothing\",\"cost\":{\"fuel\":4,\"alloc\":0},\"errors\":[{\"code\":\"can't store\",\"fields\":[]},{\"code\":\"store busy\",\"fields\":[]},{\"code\":\"store full\",\"fields\":[]}],\"segmentBound\":true},{\"name\":\"swap\",\"mode\":\"immediate\",\"args\":[\"text\",\"any\",\"any\"],\"result\":\"boolean\",\"cost\":{\"fuel\":4,\"alloc\":0},\"errors\":[{\"code\":\"can't store\",\"fields\":[]},{\"code\":\"store busy\",\"fields\":[]},{\"code\":\"store full\",\"fields\":[]}],\"segmentBound\":true},{\"name\":\"unwatch\",\"mode\":\"immediate\",\"args\":[\"text\"],\"result\":\"nothing\",\"cost\":{\"fuel\":2,\"alloc\":0},\"errors\":[]},{\"name\":\"watch\",\"mode\":\"immediate\",\"args\":[\"text\",\"text\",{\"optional\":\"text\"}],\"result\":\"nothing\",\"cost\":{\"fuel\":4,\"alloc\":0},\"errors\":[{\"code\":\"watch limit\",\"fields\":[]}]}]}", try fingerprint.grantJson(a, capability, kept));
 }
