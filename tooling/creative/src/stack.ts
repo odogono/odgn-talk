@@ -6,6 +6,7 @@ import {
   HANDLES,
   labelSuggestion,
   StackEditor,
+  type Edit,
   type Gesture,
   type Handle,
   type NameCheck,
@@ -19,6 +20,7 @@ import {
   type Page,
   type Project,
 } from './model';
+import { commandForKey, type EditingCommand } from './shortcuts';
 
 type Attributes = Record<string, string | number | boolean | undefined>;
 
@@ -284,6 +286,11 @@ export const mountStack = (project: Project): StackEditor => {
   const thumbnails = byId('thumbnails');
   let scale = 1;
   let refusal: Refusal | undefined;
+  let fieldEdit: Edit | undefined;
+  const finishFieldEdit = () => {
+    fieldEdit?.finish();
+    fieldEdit = undefined;
+  };
 
   const fit = () => {
     const style = getComputedStyle(desk);
@@ -581,6 +588,7 @@ export const mountStack = (project: Project): StackEditor => {
     drawPage();
     drawStrip();
     drawInfo();
+    drawCommands();
   };
 
   /** Applies an edit, forgetting any refused name, then redraws. */
@@ -617,27 +625,34 @@ export const mountStack = (project: Project): StackEditor => {
         : isNumber
           ? Math.round(number)
           : target.value;
-    const [element] = editor.selected;
-    if (element && editor.selection.length === 1) {
-      if (key === 'text' && element.kind === 'text') {
-        if (plainTextOf(element.richText) !== value) {
-          element.richText = richTextFromPlainText(String(value));
+    fieldEdit ??= editor.startEdit();
+    fieldEdit.change(() => {
+      const [element] = editor.selected;
+      if (element && editor.selection.length === 1) {
+        if (key === 'text' && element.kind === 'text') {
+          if (plainTextOf(element.richText) !== value) {
+            element.richText = richTextFromPlainText(String(value));
+          }
+        } else {
+          const sizes = key === 'width' || key === 'height';
+          const minimum = sizes ? (element.kind === 'line' ? 0 : 1) : undefined;
+          (element as Record<string, unknown>)[key] =
+            minimum === undefined ? value : Math.max(minimum, value as number);
         }
-      } else {
-        const sizes = key === 'width' || key === 'height';
-        const minimum = sizes ? (element.kind === 'line' ? 0 : 1) : undefined;
-        (element as Record<string, unknown>)[key] =
-          minimum === undefined ? value : Math.max(minimum, value as number);
+      } else if (key === 'pageHeight') {
+        editor.page.height = Math.max(1, value as number);
+      } else if (key === 'background') {
+        editor.page.background = String(value);
+      } else if (key === 'projectName') {
+        project.name = String(value);
+      } else if (key === 'designWidth') {
+        project.designWidth = Math.max(1, value as number);
       }
-    } else if (key === 'pageHeight') {
-      editor.page.height = Math.max(1, value as number);
-    } else if (key === 'background') {
-      editor.page.background = String(value);
-    } else if (key === 'projectName') {
-      project.name = String(value);
-    } else if (key === 'designWidth') {
-      project.designWidth = Math.max(1, value as number);
+    });
+    if (!live) {
+      finishFieldEdit();
     }
+    drawCommands();
     if (live) {
       byId('project-title').textContent = project.name;
       drawPage();
@@ -647,6 +662,10 @@ export const mountStack = (project: Project): StackEditor => {
     }
   };
 
+  info.addEventListener('focusout', () => {
+    finishFieldEdit();
+    drawCommands();
+  });
   info.addEventListener('submit', event => event.preventDefault());
   info.addEventListener('input', event => {
     const target = event.target as HTMLInputElement;
@@ -712,6 +731,9 @@ export const mountStack = (project: Project): StackEditor => {
     };
     const up = () => {
       pageNode.removeEventListener('pointermove', move);
+      pageNode.removeEventListener('pointerup', up);
+      pageNode.removeEventListener('pointercancel', up);
+      gesture.finish();
       if (moved) {
         draw();
       }
@@ -786,13 +808,62 @@ export const mountStack = (project: Project): StackEditor => {
     }
   });
 
-  // Keys: Escape selects the Page; arrows nudge the selection, by 10 with Shift.
+  const commands: Record<EditingCommand, () => void> = {
+    undo: () => editor.undo(),
+    redo: () => editor.redo(),
+    duplicate: () => editor.duplicate(),
+    delete: () => editor.delete(),
+    forward: () => editor.orderLayers('forward'),
+    backward: () => editor.orderLayers('backward'),
+    front: () => editor.orderLayers('front'),
+    back: () => editor.orderLayers('back'),
+  };
+  const commandButtons = [
+    ...document.querySelectorAll<HTMLButtonElement>('[data-command]'),
+  ];
+  const drawCommands = () => {
+    for (const button of commandButtons) {
+      const command = button.dataset.command as EditingCommand;
+      const enabled: Partial<Record<EditingCommand, boolean>> = {
+        undo: editor.canUndo,
+        redo: editor.canRedo,
+        delete: editor.canDelete,
+        duplicate: true,
+      };
+      button.disabled = !(enabled[command] ?? editor.selection.length > 0);
+    }
+  };
+  const runCommand = (command: EditingCommand) => {
+    finishFieldEdit();
+    edit(commands[command]);
+    byId('edit-menu').removeAttribute('open');
+  };
+  byId('edit-menu').addEventListener('click', event => {
+    const command = (event.target as HTMLElement).closest<HTMLButtonElement>(
+      '[data-command]',
+    )?.dataset.command as EditingCommand | undefined;
+    if (command) {
+      runCommand(command);
+    }
+  });
+
+  // Ignore all editor shortcuts while typing, including the Script editor.
   document.addEventListener('keydown', event => {
     const target = event.target as HTMLElement;
-    if (target.closest('input, textarea, select, [contenteditable]')) {
+    const typing = !!target.closest(
+      'input, textarea, select, [contenteditable], [role="textbox"]',
+    );
+    const command = commandForKey(event, typing);
+    if (command) {
+      event.preventDefault();
+      runCommand(command);
+      return;
+    }
+    if (typing || event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
     if (event.key === 'Escape') {
+      byId('edit-menu').removeAttribute('open');
       edit(() => editor.selectPage());
       return;
     }
@@ -805,7 +876,11 @@ export const mountStack = (project: Project): StackEditor => {
     }[event.key];
     if (nudge && editor.selection.length) {
       event.preventDefault();
-      edit(() => editor.startMove().to(nudge[0]!, nudge[1]!));
+      edit(() => {
+        const gesture = editor.startMove();
+        gesture.to(nudge[0]!, nudge[1]!);
+        gesture.finish();
+      });
     }
   });
 
