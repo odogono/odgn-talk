@@ -3,6 +3,7 @@
 pub const unicode = @import("unicode/unicode.zig");
 pub const decimal = @import("decimal/decimal.zig");
 pub const value = @import("value.zig");
+pub const units = @import("units.zig");
 pub const display = @import("display.zig");
 pub const encoding = @import("encoding.zig");
 pub const syntax = @import("syntax/syntax.zig");

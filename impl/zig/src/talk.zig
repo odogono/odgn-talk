@@ -3013,8 +3013,9 @@ pub const LibrarySource = extern struct {
 /// Compiles a Library once per process. imports must hold every Library
 /// its `use` lines name, besides the stdlib's; anything that fails to parse
 /// or check is TALK_LOAD_REFUSED. The Library lives as long as the Core.
-export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*]const *machine.Library, imports_len: usize, declarations: ?[*]const LoadGrant, declarations_len: usize, out: *?*machine.Library) HostErrorCode {
+export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*]const *machine.Library, imports_len: usize, declarations: ?[*]const LoadGrant, declarations_len: usize, out: *?*machine.Library, load_error: ?*?*LoadError) HostErrorCode {
     out.* = null;
+    if (load_error) |e| e.* = null;
     const name = bytes(src.name, src.name_len) catch return .invalid_value;
     const label = bytes(src.version, src.version_len) catch return .invalid_value;
     const source = bytes(src.source, src.source_len) catch return .invalid_value;
@@ -3027,7 +3028,8 @@ export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*
     const compiled = machine.compileLibrary(c.gpa, name, label, source, given, if (declarations == null) null else named) catch |err| return status(err);
     switch (compiled) {
         .refused => |diags| {
-            c.gpa.free(diags);
+            defer c.gpa.free(diags);
+            if (load_error) |e| e.* = loadError(name, diags);
             return .load_refused;
         },
         .library => |l| {
@@ -3039,6 +3041,33 @@ export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*
             return .ok;
         },
     }
+}
+
+pub const Diagnostic = extern struct { code: [*]const u8, code_len: usize, message: [*]const u8 = "", message_len: usize = 0, unit: [*]const u8, unit_len: usize, line: i64, col: i64 };
+pub const LoadError = extern struct { diagnostics: [*]const Diagnostic, diagnostics_len: usize };
+
+/// A refusal's diagnostics, in an arena the LoadError heads.
+const LoadErrorHeld = struct { view: LoadError, arena: std.heap.ArenaAllocator };
+
+fn loadError(unit: []const u8, diags: []const machine.Diagnostic) ?*LoadError {
+    const held = allocator.create(LoadErrorHeld) catch return null;
+    held.arena = .init(allocator);
+    const a = held.arena.allocator();
+    const name = a.dupe(u8, unit) catch return null;
+    const out = a.alloc(Diagnostic, diags.len) catch return null;
+    for (diags, out) |d, *o| {
+        const code = a.dupe(u8, d.code) catch return null;
+        o.* = .{ .code = code.ptr, .code_len = code.len, .unit = name.ptr, .unit_len = name.len, .line = d.line, .col = d.column };
+    }
+    held.view = .{ .diagnostics = out.ptr, .diagnostics_len = out.len };
+    return &held.view;
+}
+
+export fn talk_load_error_release(e: ?*LoadError) void {
+    const view = e orelse return;
+    const held: *LoadErrorHeld = @fieldParentPtr("view", view);
+    held.arena.deinit();
+    allocator.destroy(held);
 }
 
 export fn talk_library_name(l: *const machine.Library, s: *[*]const u8, len: *usize) void {

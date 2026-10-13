@@ -126,7 +126,8 @@ pub fn nfc(gpa: Allocator, text: []const u8) Allocator.Error![]u8 {
     return result;
 }
 
-fn isAscii(text: []const u8) bool {
+/// Whether every byte is an ASCII scalar, which is already in NFC.
+pub fn isAscii(text: []const u8) bool {
     for (text) |byte| {
         if (byte >= 0x80) return false;
     }

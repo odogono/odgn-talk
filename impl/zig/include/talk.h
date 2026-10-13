@@ -835,6 +835,28 @@ typedef struct talk_pump_options {
 /* C only: an id the Group holds. */
 typedef struct talk_id { const char *data; size_t len; } talk_id;
 
+/* A load-time diagnostic: its catalogue code, the unit it is in, and its
+ * position. */
+typedef struct talk_diagnostic {
+    const char *code;
+    size_t code_len;
+    const char *message; /* wording: not covered by parity */
+    size_t message_len;
+    const char *unit; /* the Script or Library the diagnostic is in */
+    size_t unit_len;
+    int64_t line;
+    int64_t col;
+} talk_diagnostic;
+
+/* A Load or a Library's compile refused with diagnostics. */
+typedef struct talk_load_error {
+    const talk_diagnostic *diagnostics;
+    size_t diagnostics_len;
+} talk_load_error;
+
+/* C only */
+void talk_load_error_release(talk_load_error *e);
+
 /* Where a Run raised its error or faulted. */
 typedef struct talk_location {
     const char *unit; /* Script or Library */
@@ -1234,8 +1256,9 @@ typedef struct talk_library_source {
  * names the source uses, whose Operations' modes and Shapes its Capability
  * calls are checked and lowered against; NULL gives none, enough only for a
  * Library that makes no direct Capability call. A source that fails to
- * parse or check is TALK_LOAD_REFUSED. */
-talk_host_error_code talk_compile_library(talk_core *c, const talk_library_source *src, talk_library *const *imports, size_t imports_len, const talk_load_grant *declarations, size_t declarations_len, talk_library **out);
+ * parse or check is TALK_LOAD_REFUSED, with its diagnostics in *error when
+ * error isn't NULL, which the caller releases. */
+talk_host_error_code talk_compile_library(talk_core *c, const talk_library_source *src, talk_library *const *imports, size_t imports_len, const talk_load_grant *declarations, size_t declarations_len, talk_library **out, talk_load_error **error);
 void talk_library_name(const talk_library *l, const char **s, size_t *len);
 void talk_library_version(const talk_library *l, const char **s, size_t *len);
 void talk_library_identity(const talk_library *l, uint8_t out[32]);

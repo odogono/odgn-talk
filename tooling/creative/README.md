@@ -31,12 +31,12 @@ also have read-only Script editors.
 Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; the Project Script
-binds every Page name. All receive the `pages`, `elements` and `sound` Grants
-from ADR 0084. Renames refresh open windows' Manifests and diagnostics. Problems
+binds every Page name. The Manifests describe the planned `pages`, `elements` and `sound` Grants
+from ADR 0084; these Grants are not yet available during Play. Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
-properties. Scripts do not execute in Edit; Play remains separate work.
+properties. Scripts execute only in Play.
 
 Unit tests cover each owner's Manifest and language-server diagnostics and
 completion. Browser regression checks exercise real editor windows, workers,
@@ -171,7 +171,7 @@ removes it; **Clear** removes
 all selection marks so the Element's colour applies again. **Paragraph** inserts
 a paragraph break at the selection, as Enter does. Formatting requires a text
 selection. Font, size, whole-Element colour and **Reader can edit** remain in Info;
-the reader flag is stored for future Play Sessions.
+the reader flag allows plain-text input during Play Sessions.
 
 **Done**, Escape, selecting another Element or changing Page finishes editing.
 The toolbar's Undo and Redo, or ⌘/Ctrl-Z and ⌘/Ctrl-Shift-Z (also Ctrl-Y), are
@@ -188,7 +188,7 @@ file round-trip preserves them; the editor never stores raw HTML.
 The model's `textOf(element)` reads paragraphs joined by newlines;
 `replacePlainText(element, text)` replaces them and clears mixed formatting,
 even when the plain text is unchanged. These are the plain-text operations the
-Play Host can use for `the text of` in stage 2. Info's plain text field also
+Play Host uses for `the text of`. Info's plain text field also
 clears mixed formatting when its text is changed.
 
 Browser regression checks use the real DOM, including clipboard HTML, selections,
@@ -212,3 +212,37 @@ bun run creative                       # serves at http://127.0.0.1:3928/ and re
 bun run --cwd tooling/creative build   # a static dist/ any web server can host
 bun test tooling/creative/tests
 ```
+
+## Play
+
+Choose **Play** to start on the selected Page. Each session uses a fresh Core
+Group and a disposable copy of the Project. The Project receives `startPlay`,
+and the Page receives `openPage`. Click and pointer messages follow the Core's
+Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
+then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
+or to the Page, without preventing normal typing. Finishing reader text editing
+sends `textChanged`. Script property writes update the reader view; setting
+`text` clears mixed formatting.
+
+**Stop** or Escape stops every Script and stays in Play. Execution uses the
+Core's default limits with small Pump slices between browser turns. Errors
+appear as non-blocking links to the authored Script and line; other handlers
+continue. Script-sent unhandled messages warn, while unhandled Host messages
+are ignored. **Back to Edit** discards Play State and restores the authored
+Project, selection and history. Autosave and export use authored content only.
+Script windows are read-only during Play.
+
+Navigation and the `pages` Grant are the next stage; `elements` and `sound`
+Grants are not implemented yet. Only the selected Page's and its Elements'
+Scripts load alongside the Project Script.
+
+Browser regression checks run on a dedicated page without `main.js`:
+
+```sh
+bun build tooling/creative/tests/play.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/play-test.html
+```
+
+Open `/play-test.html` and run
+`await import('/play.browser.js').then(m => m.runBrowserTests())`.
+Reload before repeating; the result must have `passed: true`.

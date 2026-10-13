@@ -10,6 +10,7 @@ const schema = northtalk.generated.corpus.corpus;
 const trace = northtalk.corpus_trace;
 const model = northtalk.value;
 const talk_replay = @import("talk_replay.zig");
+const session_case = @import("session_case.zig");
 const Kind = enum { trace, disassembly, transcript, encoding };
 const Metadata = struct { kind: Kind, objects: bool };
 /// What a malformed case.toml names, for its message.
@@ -117,8 +118,7 @@ fn unsupported(case: Case, replay: ?trace.Replay) ?[]const u8 {
             defer arena.deinit();
             break :blk r.supports(arena.allocator(), case.setup, case.trace);
         },
-        .disassembly => null,
-        inline else => |kind| @tagName(kind) ++ " execution is not implemented",
+        .disassembly, .transcript => null,
     };
 }
 fn read(init: std.process.Init, path: []const u8) ![]u8 {
@@ -242,6 +242,7 @@ const Runner = struct {
     fn execute(self: Runner, case: Case) !?usize {
         const gpa = self.init.gpa;
         if (case.meta.kind == .disassembly) return disassemblyCase(self, case);
+        if (case.meta.kind == .transcript) return transcriptCase(self, case);
         var detail: std.Io.Writer.Allocating = .init(gpa);
         defer detail.deinit();
         const file = try std.fmt.allocPrint(gpa, "../../corpus/{s}/case.{s}", .{ case.name, if (case.meta.kind == .trace) "trace" else "encoding" });
@@ -257,6 +258,21 @@ const Runner = struct {
         }
     }
 };
+/// A Session Transcript replays through the Session Host.
+fn transcriptCase(self: Runner, case: Case) !?usize {
+    const gpa = self.init.gpa;
+    var detail: std.Io.Writer.Allocating = .init(gpa);
+    defer detail.deinit();
+    const case_dir = try std.fmt.allocPrint(gpa, "../../corpus/{s}", .{case.name});
+    defer gpa.free(case_dir);
+    var dir = try std.Io.Dir.cwd().openDir(self.init.io, case_dir, .{});
+    defer dir.close(self.init.io);
+    if (session_case.run(gpa, self.init.io, dir, case.name, &detail.writer)) |n| return n else |err| {
+        if (err != error.CaseFailed) try detail.writer.print("{s}: {t}", .{ case.name, err });
+        try self.out.print("FAIL {s}\n  reproduce: cd impl/zig && zig build corpus -- {s}\n", .{ detail.written(), case.name });
+        return null;
+    }
+}
 /// A Disassembly Case runs through the front end directly: the canonical
 /// disassembly is a compiled unit's, which talk.h doesn't expose.
 fn disassemblyCase(self: Runner, case: Case) !?usize {

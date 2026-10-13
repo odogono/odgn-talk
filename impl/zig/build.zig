@@ -51,8 +51,18 @@ pub fn build(b: *std.Build) void {
     });
     corpus_module.addImport("northtalk", core);
     const c_api = b.addTranslateC(.{ .root_source_file = b.path("include/talk.h"), .target = target, .optimize = optimize, .link_libc = false });
-    corpus_module.addImport("talk-c", c_api.createModule());
+    const c_module = c_api.createModule();
+    corpus_module.addImport("talk-c", c_module);
     corpus_module.addIncludePath(b.path("include"));
+    // The Session Host, an ordinary Host over talk.h (chapter 12).
+    const session_module = b.createModule(.{
+        .root_source_file = b.path("src/session/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    session_module.addImport("northtalk", core);
+    session_module.addImport("talk-c", c_module);
+    corpus_module.addImport("session", session_module);
     const corpus = b.addExecutable(.{ .name = "talk-corpus", .root_module = corpus_module });
     const run_corpus = b.addRunArtifact(corpus);
     run_corpus.setCwd(b.path("."));
@@ -69,6 +79,8 @@ pub fn build(b: *std.Build) void {
     const run_corpus_tests = b.addRunArtifact(corpus_tests);
     run_corpus_tests.setCwd(b.path("."));
     test_step.dependOn(&run_corpus_tests.step);
+    const session_tests = b.addTest(.{ .root_module = session_module });
+    test_step.dependOn(&b.addRunArtifact(session_tests).step);
 
     // The C API's own tests, compiled as a Host would compile them against
     // talk.h. libc serves only the test program; the Core links none.

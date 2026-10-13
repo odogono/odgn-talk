@@ -86,13 +86,17 @@ export class ScriptWindows {
     return true;
   }
 
-  open(owner: ScriptOwner): void {
+  open(owner: ScriptOwner, line?: number): void {
     this.#dropStale();
     const id = this.editor.identity(owner);
     const existing = this.#windows.get(id);
     if (existing) {
       bringWindowForward(existing.node);
-      existing.view.focus();
+      if (line === undefined) {
+        existing.view.focus();
+      } else {
+        this.#goTo(existing.view, line);
+      }
       return;
     }
     const uri = `creative:///script-${id}.talk`;
@@ -199,6 +203,17 @@ export class ScriptWindows {
     this.sync();
     lsp.open(uri, owner.script ?? '');
     node.dispatchEvent(new Event('script-window-opened', { bubbles: true }));
+    this.#goTo(view, line ?? 1);
+  }
+
+  #goTo(view: EditorView, line: number): void {
+    const pos = view.state.doc.line(
+      Math.max(1, Math.min(line, view.state.doc.lines)),
+    ).from;
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos),
+    });
     view.focus();
   }
 
