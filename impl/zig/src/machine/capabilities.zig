@@ -620,6 +620,9 @@ pub const Call = struct {
     automatic: bool = false,
     /// Whether an automatic call tried to charge.
     charge_refused: bool = false,
+    /// A suspending call's arguments, kept when its Operation checks the
+    /// answer against them; the Group releases them.
+    args: []*Value = &.{},
     /// The Group's allocator, which owns a failure's code and message.
     gpa: std.mem.Allocator,
 

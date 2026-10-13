@@ -347,6 +347,19 @@ values, and convert the rows back, raising `sql` for a column named twice and
 malformed result is `host error`. `talk_store_coordinator`, for a Store kept
 in a database, comes later.
 
+`timer` (`talk_timer_capability`) forwards `schedule`'s name, Instant, message
+and arguments and `cancel`'s name to the Host, both fire-and-forget. The Host
+stores timers and delivers a due one as an ordinary Delivery; the Core keeps
+no timer of its own. `user` (`talk_user_capability`) is optional and has no
+binding. The Core refuses an empty `choose` with `out of domain` before the
+call, and the implementation hears each omitted option resolved: an empty
+`prompt`, `default` or `title`, and `multiple` false. `confirm`, `choose` and
+`enter` suspend for up to 2,147,483,647 ms, and the Core checks the answer:
+a boolean, text or Nothing, and for `choose` Nothing, one of the items, or
+with `multiple: true` a subsequence of them. Any other answer ends the call as
+`host error`. A suspending call whose Operation checks its answer keeps its
+arguments until it is answered or the Group is released.
+
 Runs suspend at `ask … and wait` and `wait d`. A suspended Run lives on the
 heap, its Script goes on to its next work, and each Script's work is one
 queue of messages and ready Runs, in the order each became ready. A
@@ -427,8 +440,8 @@ frame and no Handler Clause and writes `fn=` in place of a Handler.
 `functionArity` and `functionName` read the code. Stale values wait for
 Reload.
 
-`timer`, `store`, `sqlite` and `user`, Capability Scopes and Segment-bound
-effects and Broadcasts come next. A Run past the default Fuel per Run ends
+The `store` notification router and the `revoke` and Grant release Host Inputs
+come next. A Run past the default Fuel per Run ends
 in a minimal `fault` until step 4 brings limits, including the Text Pattern
 size limit.
 

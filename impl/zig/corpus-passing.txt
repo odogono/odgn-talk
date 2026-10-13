@@ -58,6 +58,11 @@ capabilities/standard-store-watch
 capabilities/standard-store-watch-counts
 capabilities/standard-store-watch-errors
 capabilities/standard-store-watch-validation
+capabilities/standard-timer
+capabilities/standard-user
+capabilities/standard-user-answers
+capabilities/standard-user-busy
+capabilities/standard-user-cancel
 collecting/condition-target
 collecting/exit
 collecting/next-filter

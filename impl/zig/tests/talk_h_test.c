@@ -547,6 +547,74 @@ static talk_call_end start(void *context, talk_call *call, talk_value *const *ar
     return TALK_CALL_STARTED;
 }
 
+/* timer's schedule: counts the arguments it receives. */
+static size_t scheduled = 0;
+static talk_call_end schedule(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)call; (void)args; (void)error;
+    scheduled = len;
+    return talk_nothing(result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+
+/* user's choose: starts the call when it hears the items, the given prompt
+ * and multiple's default, false. */
+static talk_call_end choose(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)result; (void)error;
+    const char *prompt = NULL;
+    size_t prompt_len = 0;
+    bool multiple = true;
+    if (len != 3 || !talk_value_as_text(args[1], &prompt, &prompt_len) || !talk_value_as_bool(args[2], &multiple)) return TALK_CALL_BROKEN;
+    if (prompt_len != 4 || memcmp(prompt, "Pick", 4) != 0 || multiple) return TALK_CALL_BROKEN;
+    started = call;
+    return TALK_CALL_STARTED;
+}
+
+/* timer forwards schedule's four arguments, and user's choose hears its
+ * options resolved and fails an answer that isn't one of the items. */
+static int user_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_named_cost timer_costs[] = {{"schedule", 8, {1, 0}}, {"cancel", 6, {1, 0}}};
+    talk_costs timer_all = {timer_costs, 2};
+    talk_timer_impl timer_impl = {NULL, schedule, unused};
+    talk_named_cost user_costs[] = {{"confirm", 7, {1, 0}}, {"choose", 6, {1, 0}}, {"enter", 5, {1, 0}}, {"notify", 6, {1, 0}}};
+    talk_costs user_all = {user_costs, 4};
+    talk_user_impl user_impl = {NULL, unused, choose, unused, unused};
+    talk_capability_def *timer = NULL, *user = NULL;
+    int bad = talk_timer_capability(core, &timer_impl, &timer_all, &timer) != TALK_OK;
+    bad |= talk_user_capability(core, &user_impl, &user_all, &user) != TALK_OK;
+    talk_grant *timer_grant = NULL, *user_grant = NULL;
+    bad |= talk_capability_def_grant_all(timer, NULL, &timer_grant) != TALK_OK;
+    bad |= talk_capability_def_grant_all(user, NULL, &user_grant) != TALK_OK;
+    talk_load_grant grants[] = {{"timer", 5, timer_grant}, {"user", 4, user_grant}};
+    const char *source = "script variable got\non go\n  tell timer to schedule \"t\", \"2026-10-02T10:00:00Z\" as instant, \"tick\", [1]\n"
+                         "  try\n    ask user to choose [\"S\", \"M\"], {prompt: \"Pick\"} and wait\n  catch {code: code}\n    put code into got\n  end try\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0};
+    started = NULL;
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= scheduled != 4 || started == NULL;
+    talk_value *answer = NULL;
+    talk_text("X", 1, &answer);
+    bad |= started == NULL || talk_call_answer(started, answer) != TALK_OK;
+    talk_value_release(answer);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group);
+    bad |= strstr(trace, "call-failed s/r1.c2 op=user.choose\n") == NULL;
+    bad |= strstr(trace, "vars s got=\"host error\"\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A Run suspends at ask … and wait, and resumes with the Host's answer. */
 static int suspension_test(void) {
     talk_core *core = talk_new();
@@ -843,6 +911,7 @@ int main(void) {
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");
     expect(standard_test() == 0, "clock answers from the Pump's Clock, and say reaches console's write");
     expect(suspension_test() == 0, "a Run suspends at a suspending call and resumes with the Host's answer");
+    expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");

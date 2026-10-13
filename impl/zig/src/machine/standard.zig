@@ -1,9 +1,10 @@
 //! The Standard Capabilities (chapter 7): `clock`, `calendar`, `locale`,
-//! `console`, `store` and `sqlite`, with the declarations the chapter fixes. Each factory takes the
+//! `timer`, `console`, `store`, `sqlite` and `user`, with the declarations the chapter fixes. Each factory takes the
 //! Host's implementation, one Host function per Operation, and a cost per
 //! Operation. The Core makes the chapter's own checks: option words and
 //! Locale tags before a call, which are charged nothing, and the result rules
-//! after it, whose failure is `host error`. The Host function receives the
+//! after it, or after the answer to a suspending call, whose failure is
+//! `host error`. The Host function receives the
 //! resolved arguments: defaults filled and the optional positions told apart.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -15,7 +16,7 @@ const Value = model.Value;
 const Shape = caps.Shape;
 
 /// The Standard Capabilities this Core defines so far.
-pub const Which = enum { clock, calendar, locale, console, store, sqlite };
+pub const Which = enum { clock, calendar, locale, timer, console, store, sqlite, user };
 
 /// Each one's Operations, in name order, as its declarations list them.
 pub fn operations(which: Which) []const []const u8 {
@@ -23,9 +24,11 @@ pub fn operations(which: Which) []const []const u8 {
         .clock => &.{"now"},
         .calendar => &.{ "now", "offset", "toCivil", "toInstant", "today", "zone" },
         .locale => &.{ "compare", "dayNames", "lower", "monthNames", "numberSymbols", "rank", "tag", "upper" },
+        .timer => &.{ "cancel", "schedule" },
         .console => &.{ "read", "write" },
         .store => &.{ "delete", "get", "increment", "keys", "set", "swap", "unwatch", "watch" },
         .sqlite => &.{ "begin", "change", "commit", "query", "rollback" },
+        .user => &.{ "choose", "confirm", "enter", "notify" },
     };
 }
 
@@ -189,6 +192,41 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             result = try Kinds.kind(gpa, .nothing);
             errors = if (eq(name, "begin")) &.{ "sqlite busy", "scope already open", "scope in join" } else &.{"scope not open"};
         },
+        .timer => {
+            try args.append(gpa, try Kinds.kind(gpa, .text));
+            if (eq(name, "schedule")) {
+                try args.append(gpa, try Kinds.kind(gpa, .instant));
+                try args.append(gpa, try Kinds.kind(gpa, .text));
+                try args.append(gpa, try Shape.listOf(gpa, try Kinds.kind(gpa, .any)));
+            }
+            mode = .fire_and_forget;
+        },
+        .user => {
+            if (eq(name, "choose")) {
+                try args.append(gpa, try Shape.listOf(gpa, try Kinds.kind(gpa, .text)));
+                try args.append(gpa, try Shape.optional(gpa, try Kinds.options(gpa, &.{ .{ "prompt", .text }, .{ "multiple", .boolean } })));
+                result = try Kinds.kind(gpa, .any);
+                errors = &.{ "user busy", "out of domain" };
+            } else {
+                try args.append(gpa, try Kinds.kind(gpa, .text));
+                if (eq(name, "enter")) {
+                    try args.append(gpa, try Shape.optional(gpa, try Kinds.options(gpa, &.{.{ "default", .text }})));
+                    result = try Kinds.optionalText(gpa);
+                } else if (eq(name, "notify")) {
+                    try args.append(gpa, try Shape.optional(gpa, try Kinds.options(gpa, &.{.{ "title", .text }})));
+                } else {
+                    result = try Kinds.kind(gpa, .boolean);
+                }
+                if (!eq(name, "notify")) errors = &.{"user busy"};
+            }
+            if (eq(name, "notify")) {
+                mode = .fire_and_forget;
+            } else {
+                // As long as console's read: a person can take their time.
+                mode = .suspending;
+                max_pending = 2_147_483_647;
+            }
+        },
         .console => if (eq(name, "write")) {
             try args.append(gpa, try Kinds.kind(gpa, .value));
             mode = .fire_and_forget;
@@ -227,6 +265,8 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             &.{.{ "max", .number }}
         else if (std.mem.eql(u8, code, "unrepresentable"))
             &.{.{ "column", .text }}
+        else if (std.mem.eql(u8, code, "out of domain"))
+            &.{ .{ "function", .text }, .{ "value", .value } }
         else
             &.{};
         const out = try gpa.alloc(caps.Field, fields.len);
@@ -240,7 +280,7 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .{ .field = "kind", .words = &.{ "unique", "primary key", "not null", "check", "foreign key", "datatype", "trigger", "other" } }
         else
             null;
-        const core = for ([_][]const u8{ "invalid key", "invalid watch", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
+        const core = for ([_][]const u8{ "invalid key", "invalid watch", "out of domain", "out of range", "scope already open", "scope in join", "scope not open" }) |x| {
             if (std.mem.eql(u8, x, code)) break true;
         } else false;
         d.* = .{ .code = try gpa.dupe(u8, code), .fields = out, .choice = choice, .core = core };
@@ -267,11 +307,13 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
             .locale => beforeLocale,
             .store => if (eq(name, "keys")) null else beforeStore,
             .sqlite => if (eq(name, "query") or eq(name, "change")) beforeSqlite else null,
+            .user => if (eq(name, "choose")) beforeChoose else null,
             else => null,
         },
         .after = switch (which) {
             .calendar => afterCalendar,
             .locale => afterLocale,
+            .user => if (eq(name, "choose")) afterChoose else null,
             else => null,
         },
     };
@@ -336,6 +378,42 @@ fn beforeToInstant(a: Allocator, op: *const caps.Operation, args: []const *Value
     if (!civil.data.civil_date.has_time) return .{ .out_of_domain = civil };
     if (args.len == 3 and args[1].data == .text and !isText(args[1], &disambiguations)) return .{ .out_of_domain = args[1] };
     return null;
+}
+
+/// `choose`'s own check: at least one item to choose from.
+fn beforeChoose(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    _ = a;
+    _ = op;
+    _ = binding;
+    return if (args[0].data.list.len == 0) .{ .out_of_domain = args[0] } else null;
+}
+
+/// A `choose` answer: Nothing, one of the items, or with `multiple: true` a
+/// list that is a subsequence of them, no position taken twice.
+fn afterChoose(op: *const caps.Operation, args: []const *Value, result: *const Value) bool {
+    _ = op;
+    if (result.data == .nothing) return true;
+    const items = args[0].data.list;
+    const multiple = blk: {
+        if (args.len < 2 or args[1].data != .map) break :blk false;
+        const m = args[1].get("multiple") orelse break :blk false;
+        break :blk m.data == .bool and m.data.bool;
+    };
+    if (!multiple) {
+        if (result.data != .text) return false;
+        for (items) |x| if (std.mem.eql(u8, x.data.text, result.data.text)) return true;
+        return false;
+    }
+    if (result.data != .list) return false;
+    // Each chosen item matches a later position than the one before.
+    var at: usize = 0;
+    for (result.data.list) |chosen| {
+        if (chosen.data != .text) return false;
+        while (at < items.len and !std.mem.eql(u8, items[at].data.text, chosen.data.text)) at += 1;
+        if (at == items.len) return false;
+        at += 1;
+    }
+    return true;
 }
 
 fn beforeSqlite(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
@@ -495,7 +573,29 @@ fn resolve(ctx: *Context, args: []const *Value, out: *std.ArrayList(*Value), mad
     const nothing = try fresh(gpa, made, try model.scalar(gpa, .nothing));
     switch (ctx.which) {
         .clock => {},
-        .console, .sqlite => try out.appendSlice(gpa, args),
+        .timer, .console, .sqlite => try out.appendSlice(gpa, args),
+        .user => {
+            // The message or items, then each option, in the order the
+            // Host function takes them: an omitted text is empty, and an
+            // omitted `multiple` false.
+            try out.append(gpa, args[0]);
+            const options: ?*Value = if (args.len > 1 and args[1].data == .map) args[1] else null;
+            const fields: []const []const u8 = if (std.mem.eql(u8, ctx.name, "choose"))
+                &.{ "prompt", "multiple" }
+            else if (std.mem.eql(u8, ctx.name, "enter"))
+                &.{"default"}
+            else if (std.mem.eql(u8, ctx.name, "notify"))
+                &.{"title"}
+            else
+                &.{};
+            for (fields) |f| {
+                const given = if (options) |o| o.get(f) else null;
+                try out.append(gpa, given orelse if (std.mem.eql(u8, f, "multiple"))
+                    try fresh(gpa, made, try model.scalar(gpa, .{ .bool = false }))
+                else
+                    try fresh(gpa, made, try model.text(gpa, "")));
+            }
+        },
         .store => {
             // Each omitted default: get's and increment's Nothing, keys'
             // empty prefix, and watch's effective message.
