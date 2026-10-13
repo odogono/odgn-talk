@@ -863,6 +863,11 @@ talk_host_error_code talk_load(talk_group *g, const talk_load_options *o, talk_s
 talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, talk_owned_bytes *id);
 /* Queues a Request; *out settles when a Pump ends its Run. */
 talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* Calls a Function Value from the Host: a Request to its Home Script, the
+ * Host Input call-value. *out settles when a Pump ends its Run. A value this
+ * Group didn't make is TALK_INVALID_VALUE; a stale one runs nothing. id, if
+ * not NULL, receives the delivery id. limits may be NULL. */
+talk_host_error_code talk_group_call(talk_group *g, talk_value *fn, talk_value *const *args, size_t len, const talk_limit_override *limits, talk_owned_bytes *id, talk_pending **out);
 /* Queues a Decision to the Script; *out settles when a Pump seals it. */
 talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
 /* Queues revoking the Script's named Grant. Later calls through it raise
@@ -871,7 +876,8 @@ talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, t
 talk_host_error_code talk_script_revoke(talk_script *s, const char *name, size_t len);
 /* Queues cancelling one of the Script's Runs, by its id, such as "s/r1": its
  * finally blocks run on its Cleanup Budget in its Script's turn, and it ends
- * cancelled. One that has ended does nothing. */
+ * cancelled. One that has ended does nothing. Like Stop and RewindRun, made
+ * during a Pump from a Host function, it lands at that Host crossing. */
 talk_host_error_code talk_script_cancel_run(talk_script *s, const char *id, size_t len);
 /* Queues Stop Script, which is sticky: its Runs are discarded with no
  * finally, after their scopes are abandoned and participants rolled back,
@@ -901,6 +907,14 @@ talk_host_error_code talk_script_reload(talk_script *s, const char *source, size
  * TALK_NAME_REUSED, a LoadError TALK_LOAD_REFUSED, and Script Variables over
  * the Persistent State cap TALK_STATE_TOO_LARGE, each leaving it unchanged. */
 talk_host_error_code talk_script_extend(talk_script *s, const char *source, size_t len);
+/* Queues rewinding one of the Script's Runs, by its id, such as "s/r1"
+ * (ADR 0068). A Run still in its first Segment ends as if it had never
+ * started: its Segment rolls back, and its message goes back to the head of
+ * the mailbox, its ids and an open Decision kept. Made during a Pump, from a
+ * Host function, it lands at that Host crossing, and the Pump returns
+ * TALK_REWOUND at once. A Run past its first Segment, or ended, is noted
+ * not-rewindable and does nothing. */
+talk_host_error_code talk_script_rewind_run(talk_script *s, const char *id, size_t len);
 /* C only: queues cancelling a Request or Decision, by its delivery id, such
  * as "d1", which talk.go does through its context: its Run is cancelled, or,
  * still in a mailbox, it is removed and reported cancelled with no Run. */

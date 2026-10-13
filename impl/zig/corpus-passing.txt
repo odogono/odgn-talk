@@ -8,10 +8,13 @@ bytes/value-encoding
 cancellation/broadcast-recipients
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/failed-operation-crossings
+cancellation/host-crossings
 cancellation/owner-disposal-and-stop
 cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
+cancellation/refused-host-crossings
 capabilities/argument-shapes
 capabilities/calls
 capabilities/charge-faults
@@ -168,6 +171,9 @@ fallback/message-path
 fallback/no-match
 fallback/policies
 functions/foreign-calls
+functions/host-calls
+functions/host-cancellation
+functions/queued-host-cancellation
 libraries/caller-capabilities
 libraries/calls
 libraries/errors
@@ -278,6 +284,13 @@ reload/extension-state-cap
 reload/function-staleness
 reload/reload-carry-and-discard
 reload/replacement-transitive
+rewind/at-crossing
+rewind/decision-at-crossing
+rewind/effects
+rewind/message-kinds
+rewind/not-rewindable
+rewind/parked-queued
+rewind/preempted-request
 save-restore/overdue-waits-fire-in-deadline-order
 save-restore/preempted-join-keeps-pending-members
 save-restore/preempted-run-keeps-segment-base

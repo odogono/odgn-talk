@@ -716,6 +716,33 @@ export fn talk_script_request(s: *Script, m: *const Message, id: ?*Buffer, out: 
     return .ok;
 }
 
+/// Calls a Function Value from the Host, as a Request to its Home Script
+/// (talk.go's Group.Call): `*out` settles when a Pump ends its Run. A value
+/// this Group didn't make is TALK_INVALID_VALUE; a stale one runs nothing.
+export fn talk_group_call(g: *Group, f: *Value, args: ?[*]const *Value, len: usize, limits: ?*const LimitOverride, id: ?*Buffer, out: *?*Pending) HostErrorCode {
+    out.* = null;
+    if (g.memory.refused) return .out_of_memory;
+    if (f.data != .function or g.group.codeOfValue(f) == null) return .invalid_value;
+    const given: []const *Value = if (len == 0) &.{} else (args orelse return .invalid_value)[0..len];
+    g.group.override = overrideOf(limits) catch return .invalid_value;
+    const owned = g.core.gpa.alloc(*Value, given.len) catch return .out_of_memory;
+    defer g.core.gpa.free(owned);
+    for (owned, given) |*x, v| x.* = v.retain();
+    const n = g.group.callFunctionValue(f, owned) catch {
+        for (owned) |v| v.release();
+        return .out_of_memory;
+    };
+    if (id) |b| {
+        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        b.* = .{ .data = text.ptr, .len = text.len };
+    }
+    const p = g.core.gpa.create(Pending) catch return .out_of_memory;
+    p.* = .{ .group = g, .id = n };
+    g.pending.append(g.core.gpa, p) catch return .out_of_memory;
+    out.* = p;
+    return .ok;
+}
+
 export fn talk_pending_result(p: *const Pending, out: *?*Value) HostErrorCode {
     if (p.group.group.results.get(p.id)) |v| {
         out.* = v.retain();
@@ -809,7 +836,7 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
         return .clock_backwards;
     };
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
-    if (out) |r| r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
+    if (out) |r| r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel) };
     return .ok;
 }
 
@@ -2233,6 +2260,17 @@ export fn talk_script_extend(s: *Script, source: ?[*]const u8, len: usize) HostE
         .name_reused => .name_reused,
         .state_too_large => .state_too_large,
     };
+}
+
+/// RewindRun (ADR 0068): a Run still in its first Segment goes back to its
+/// message, at the head of its Script's mailbox. Made in a Pump, it lands at
+/// its next Host crossing, and that Pump returns `rewound` at once.
+export fn talk_script_rewind_run(s: *Script, id: ?[*]const u8, len: usize) HostErrorCode {
+    const g = s.group;
+    if (g.memory.refused) return .out_of_memory;
+    const run = bytes(id, len) catch return .invalid_value;
+    g.group.rewindRunInput(run) catch |err| return status(err);
+    return .ok;
 }
 
 export fn talk_script_cancel_run(s: *Script, id: ?[*]const u8, len: usize) HostErrorCode {

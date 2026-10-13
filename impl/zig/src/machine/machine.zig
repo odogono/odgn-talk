@@ -261,6 +261,9 @@ pub const Run = struct {
     /// Its Script's Variables when its Segment began, which a failed commit
     /// restores; only for a Script with Segment-bound Operations.
     segment_base: ?[]*Value = null,
+    /// A Stop, cancellation or Rewind that landed while it ran, which ends
+    /// its Stretch before its next instruction; a Stop's reason is owned.
+    landed: ?union(enum) { stop: []const u8, cancel, rewind } = null,
 };
 
 /// A Segment's participant: its Segment Coordinator and the Grants enrolled
@@ -1015,6 +1018,10 @@ pub const Restored = struct {
     }
 };
 
+/// A Host Input made during a Pump that lands at a Host crossing, and
+/// whether its line is already written.
+pub const Landing = struct { input: Input, written: bool };
+
 /// How the Host settles a restored pending call.
 pub const How = enum { answer, fail, reissue, adopt };
 
@@ -1035,6 +1042,8 @@ pub const Input = union(enum) {
     revoke: struct { script: []const u8, grant: []const u8 },
     /// Cancels a Run, by its owned id.
     cancel_run: []const u8,
+    /// Rewinds a Run in its first Segment to its message, by its owned id.
+    rewind_run: []const u8,
     /// Stops a Script, with an owned name and reason.
     stop: struct { script: []const u8, reason: []const u8 },
     /// Cancels a Delivery's Run, or the Delivery itself if it is still in
@@ -1110,6 +1119,17 @@ pub const Group = struct {
     generations: u64 = 0,
     /// The save attempts made, which number them `s1`, `s2`, …
     saves: u64 = 0,
+    /// Whether a Pump is running: a Stop, CancelRun or RewindRun made then
+    /// lands at its next Host crossing, or at its end, rather than waiting
+    /// for the next Pump (chapter 9, Threads and the input queue).
+    pumping: bool = false,
+    landing: std.ArrayList(Landing) = .empty,
+    /// What a Host function wrote to the Trace while it ran, inside a Pump:
+    /// it follows the crossing's own records.
+    held: ?std.Io.Writer.Allocating = null,
+    held_trace: ?*std.Io.Writer = null,
+    /// Whether a Rewind landed in this Pump, which returns at once.
+    rewound: bool = false,
     /// For a restored Group until its first Pump: its pending calls, and the
     /// Clock reading that Pump must not go back before.
     restored: ?Restored = null,
@@ -1126,6 +1146,9 @@ pub const Group = struct {
 
     pub fn deinit(g: *Group) void {
         g.releaseInputs(g.inputs.items);
+        for (g.landing.items) |x| g.releaseInputs(&.{x.input});
+        g.landing.deinit(g.gpa);
+        if (g.held) |*h| h.deinit();
         g.inputs.deinit(g.gpa);
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
@@ -1185,7 +1208,7 @@ pub const Group = struct {
                 g.gpa.free(x.script);
                 g.gpa.free(x.grant);
             },
-            .cancel_run => |id| g.gpa.free(id),
+            .cancel_run, .rewind_run => |id| g.gpa.free(id),
             .settlement => |x| {
                 g.gpa.free(x.id);
                 if (x.with) |w| g.releaseResume(w);
@@ -1984,7 +2007,159 @@ pub const Group = struct {
     pub fn cancelRunInput(g: *Group, id: []const u8) !void {
         const owned = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(owned);
-        try g.inputs.append(g.gpa, .{ .cancel_run = owned });
+        try g.queueLanding(.{ .cancel_run = owned });
+    }
+
+    /// Queues RewindRun (ADR 0068).
+    pub fn rewindRunInput(g: *Group, id: []const u8) !void {
+        const owned = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(owned);
+        try g.queueLanding(.{ .rewind_run = owned });
+    }
+
+    /// Lands what the Host made during a Pump, each with its input line, at
+    /// a Host crossing of `running` or between turns. One for the running
+    /// Run ends its Stretch before its next instruction.
+    fn land(g: *Group, running: ?*Run) !void {
+        g.flushHeld();
+        while (g.landing.items.len > 0) {
+            const landed = g.landing.orderedRemove(0);
+            const input = landed.input;
+            if (!landed.written) g.writeInput(input);
+            switch (input) {
+                .stop => |x| {
+                    defer g.gpa.free(x.script);
+                    defer g.gpa.free(x.reason);
+                    const target = g.script(x.script) orelse continue;
+                    if (running) |r| if (r.script == target) {
+                        if (target.stopped == null and r.landed == null) r.landed = .{ .stop = try g.gpa.dupe(u8, x.reason) };
+                        continue;
+                    };
+                    try g.stopScript(target, x.reason, null, .{});
+                },
+                .cancel_run => |id| {
+                    defer g.gpa.free(id);
+                    if (running) |r| if (std.mem.eql(u8, r.id, id)) {
+                        if (r.landed == null) r.landed = .cancel;
+                        continue;
+                    };
+                    for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
+                        try g.cancel(x, r);
+                        break;
+                    };
+                },
+                .rewind_run => |id| {
+                    defer g.gpa.free(id);
+                    try g.rewind(id, running);
+                },
+                else => g.releaseInputs(&.{input}),
+            }
+        }
+    }
+
+    /// Lands what the Host made at a crossing of the running Run: true if
+    /// it ends the Run's Stretch.
+    fn landedAt(g: *Group, run: *Run) !bool {
+        g.flushHeld();
+        if (g.landing.items.len == 0) return false;
+        try g.land(run);
+        return run.landed != null;
+    }
+
+    /// RewindRun (ADR 0068): a Run still in its first Segment goes back to
+    /// its message; any other, or one that has ended, is noted.
+    fn rewind(g: *Group, id: []const u8, running: ?*Run) !void {
+        if (running) |r| if (std.mem.eql(u8, r.id, id)) {
+            if (r.segments == 0 and r.landed == null and r.cleanup_from == null) {
+                r.landed = .rewind;
+            } else g.write("note {s} kind=not-rewindable\n", .{id});
+            return;
+        };
+        for (g.scripts.items) |s| for (s.live.items, 0..) |r, i| if (std.mem.eql(u8, r.id, id)) {
+            // A Run parked at dispatch hasn't begun its clause.
+            const first = r.segments == 0 or r.parked or (r.resume_with != null and r.resume_with.? == .unparked);
+            if (!first or r.cleanup_from != null or (r.resume_with != null and r.resume_with.? != .unparked)) {
+                g.write("note {s} kind=not-rewindable\n", .{id});
+                return;
+            }
+            // Preempted or parked: it has no Stretch to end.
+            _ = s.live.orderedRemove(i);
+            var k: usize = 0;
+            while (k < s.work.items.len) {
+                if (s.work.items[k] == .run and s.work.items[k].run == r) {
+                    _ = s.work.orderedRemove(k);
+                } else k += 1;
+            }
+            _ = g.abandonScopes(r);
+            _ = g.finalize(r, false);
+            if (!r.parked) g.restoreBase(r);
+            try g.putBack(s, r);
+            g.dropRewound(r);
+            return;
+        };
+        g.write("note {s} kind=not-rewindable\n", .{id});
+    }
+
+    /// A rewound Run's message goes back to the head of its Script's
+    /// mailbox as it left it: its ids, its place on its path, and an open
+    /// Decision still open. Its Fuel isn't refunded, and the Pump returns.
+    fn putBack(g: *Group, s: *Script, r: *Run) !void {
+        var d = r.delivery;
+        if (r.verdict) {
+            r.verdict = false;
+            d.decision = true;
+        }
+        try s.work.insert(g.gpa, 0, .{ .message = d });
+        r.delivery.decision = d.decision;
+        s.fuel_total += r.fuel;
+        s.alloc_total += r.alloc;
+        g.rewound = true;
+    }
+
+    /// A cancellation that landed while the Run ran: its Segment rolls back,
+    /// then its `finally` blocks run on its Cleanup Budget.
+    fn landedCancel(g: *Group, run: *Run) !Outcome {
+        _ = g.abandonScopes(run);
+        _ = g.finalize(run, false);
+        g.restoreBase(run);
+        return g.startCancel(run);
+    }
+
+    /// Ends a rewound Run, whose message is back in its mailbox.
+    fn dropRewound(g: *Group, r: *Run) void {
+        r.delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false };
+        g.destroyRun(r);
+    }
+
+    /// A Stop, CancelRun or RewindRun: made during a Pump, it lands at the
+    /// next Host crossing; otherwise the next Pump drains it.
+    fn queueLanding(g: *Group, input: Input) !void {
+        if (!g.pumping) return g.inputs.append(g.gpa, input);
+        try g.landing.append(g.gpa, .{ .input = input, .written = g.held_trace != null });
+        // Made in a Host function, it is written where it was made, after
+        // the crossing's records.
+        if (g.held_trace != null) g.writeInput(input);
+    }
+
+    /// While a Host function runs inside a Pump, what is written to the
+    /// Trace is held, to follow the crossing's own records. Returns the
+    /// Trace to put back.
+    fn holdTrace(g: *Group) ?*std.Io.Writer {
+        const trace = g.trace;
+        if (!g.pumping or trace == null or g.held_trace != null) return trace;
+        if (g.held == null) g.held = .init(g.gpa);
+        g.held_trace = trace;
+        g.trace = &g.held.?.writer;
+        return trace;
+    }
+
+    /// Writes what a Host function wrote, after its crossing's records.
+    fn flushHeld(g: *Group) void {
+        g.held_trace = null;
+        const h = if (g.held) |*x| x else return;
+        const out = g.trace orelse return;
+        out.writeAll(h.written()) catch {};
+        h.clearRetainingCapacity();
     }
 
     /// Queues cancelling a Delivery, by its delivery number.
@@ -2001,7 +2176,14 @@ pub const Group = struct {
         for (g.scripts.items) |x| for (x.work.items, 0..) |w, i| switch (w) {
             .message => |d| if (d.id == id and d.from == null) {
                 _ = x.work.orderedRemove(i);
-                g.write("run outcome=cancelled delivery=d{d} fuel=0 alloc=0\n", .{id});
+                if (g.trace) |out| {
+                    out.print("run outcome=cancelled delivery=d{d}", .{id}) catch {};
+                    if (d.function) |f| {
+                        out.writeAll(" fn=") catch {};
+                        display.writeTrace(out, f) catch {};
+                    }
+                    out.writeAll(" fuel=0 alloc=0\n") catch {};
+                }
                 if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
                 g.releaseDelivery(d);
                 return;
@@ -2144,6 +2326,17 @@ pub const Group = struct {
     }
 
     /// Queues a Delivery to the Script `to`. Takes the arguments.
+    /// Queues a Host call of a Function Value (chapter 9, Function Values):
+    /// a Request to its Home Script. Takes the arguments.
+    pub fn callFunctionValue(g: *Group, fv: *Value, args: []*Value) !u64 {
+        g.deliveries += 1;
+        const id = g.deliveries;
+        const f = fv.retain();
+        errdefer f.release();
+        try g.queueDelivery(fv.data.function.home, .{ .id = id, .message = "", .args = args, .request = true, .function = f });
+        return id;
+    }
+
     pub fn deliver(g: *Group, to: []const u8, message: []const u8, args: []*Value, request: bool) !u64 {
         g.deliveries += 1;
         const id = g.deliveries;
@@ -2352,7 +2545,13 @@ pub const Group = struct {
     pub fn writeInput(g: *Group, input: Input) void {
         const out = g.trace orelse return;
         switch (input) {
-            .deliver => |d| {
+            .deliver => |d| if (d.delivery.function) |f| {
+                // A Host call of a Function Value.
+                out.print("> call-value d{d} fn=", .{d.delivery.id}) catch {};
+                display.writeTrace(out, f) catch {};
+                writeArgs(out, d.delivery.args);
+                if (d.delivery.limits) |o| o.write(out);
+            } else {
                 out.print("> {s}", .{if (d.delivery.decision) "decide" else if (d.delivery.request) "request" else "deliver"}) catch {};
                 // A refused Delivery never had an id.
                 if (d.delivery.id > 0) out.print(" d{d}", .{d.delivery.id}) catch {};
@@ -2411,6 +2610,7 @@ pub const Group = struct {
             },
             .revoke => |x| out.print("> revoke {s} grant={s}", .{ x.script, x.grant }) catch {},
             .cancel_run => |id| out.print("> cancel-run {s}", .{id}) catch {},
+            .rewind_run => |id| out.print("> rewind-run {s}", .{id}) catch {},
             .stop => |x| {
                 out.print("> stop {s} reason=", .{x.script}) catch {};
                 writeText(out, x.reason);
@@ -2443,6 +2643,9 @@ pub const Group = struct {
     /// A Pump with a Fuel Slice per Script and a Fuel cap for the Group, 0
     /// for none (chapter 5, Fuel Slices).
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
+        g.pumping = true;
+        defer g.pumping = false;
+        g.rewound = false;
         g.clock = clock;
         g.slice = slice;
         g.cap = cap;
@@ -2496,6 +2699,13 @@ pub const Group = struct {
                     g.releaseDelivery(d.delivery);
                     continue;
                 };
+                // A Host call of a Function Value that's gone, or whose Home
+                // Script is stopped, runs nothing.
+                if (d.delivery.function) |f| if (s.stopped != null or g.codeOf(f) == null or g.functionBody(g.codeOf(f).?) == null) {
+                    g.write("note d{d} kind=function-gone\n", .{d.delivery.id});
+                    g.releaseDelivery(d.delivery);
+                    continue;
+                };
                 try g.post(s, d.delivery);
             },
             .set_parent => |x| {
@@ -2517,6 +2727,10 @@ pub const Group = struct {
                 };
             },
             .cancel_delivery => |id| try g.cancelDelivery(id),
+            .rewind_run => |id| {
+                defer g.gpa.free(id);
+                try g.rewind(id, null);
+            },
             .stop => |x| {
                 defer g.gpa.free(x.script);
                 defer g.gpa.free(x.reason);
@@ -2607,9 +2821,10 @@ pub const Group = struct {
                 try g.takePart(.{ .id = x.id, .message = "", .args = &.{}, .request = false, .decision = true, .broadcast = x.broadcast }, .{ .undecided = m });
             }
         }
-        // Due timers, in deadline order, then the order they were set.
+        // Due timers, in deadline order, then the order they were set; a
+        // Rewind drained returns at once.
         const now = nanos(clock);
-        while (true) {
+        while (!g.rewound) {
             var first: ?usize = null;
             for (g.pending.items, 0..) |p, i| {
                 if (p.deadline > now) continue;
@@ -2627,6 +2842,10 @@ pub const Group = struct {
         turns: while (busy) {
             busy = false;
             for (g.scripts.items) |s| {
+                // What landed during the last turn, and a Rewind, which
+                // ends the Pump.
+                if (g.landing.items.len > 0) try g.land(null);
+                if (g.rewound) break :turns;
                 if (s.work.items.len == 0) continue;
                 if (g.fatal) break :turns;
                 if (g.cap > 0 and g.pump_fuel >= g.cap) {
@@ -2679,11 +2898,12 @@ pub const Group = struct {
                 }
             }
         }
+        try g.land(null);
         // A slice overrun is carried to the Script's next Pump as debt.
         if (slice > 0) for (g.scripts.items) |x| {
             if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
         };
-        g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
+        g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.rewound) "rewound" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
         if (g.next()) |deadline| {
             const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
             const text = try model.dates.string(g.scratch.allocator(), model.dates.fields(at), true);
@@ -2943,6 +3163,20 @@ pub const Group = struct {
         if (d.function) |fv| {
             // A foreign call: one frame, no Handler Clause, so no `clause`.
             const code = g.codeOf(fv).?;
+            // A Host call with the wrong number of arguments raises at the
+            // function's first instruction, before anything runs.
+            if (d.args.len < code.required or d.args.len > code.total) {
+                try g.pushFrameIn(run, code.library, code.body, &.{});
+                const first = run.frames.items[0].pc;
+                const ins = s.unitIn(code.library).code[first];
+                switch (g.raise("wrong arity", &.{})) {
+                    error.Raised => {},
+                    error.OutOfMemory => return error.OutOfMemory,
+                }
+                const err = try g.completeError(run, first, ins);
+                if (try g.unwind(run, err, first, ins, false)) |end| return end;
+                return g.execute(run, true);
+            }
             try g.callFunction(run, code.library, code.body, d.args);
             const callee = &run.frames.items[run.frames.items.len - 1];
             const body = g.functionBody(code).?;
@@ -4123,10 +4357,10 @@ pub const Group = struct {
         // permit it, or roll it back.
         var failure: ?EffectFailure = if (outcome != .suspended) g.abandonScopes(run) else null;
         // A cancelled Run's cleanup Segment commits, unless a limit ended it.
-        const commits = failure == null and outcome != .faulted and outcome != .stopped and !(outcome == .cancelled and run.cleanup_limited);
+        const commits = failure == null and outcome != .faulted and outcome != .stopped and outcome != .rewound and !(outcome == .cancelled and run.cleanup_limited);
         if (g.finalize(run, commits)) |f| failure = f;
         // An effect whose state is unknown stops the Group with this Run.
-        if (g.fatal and outcome != .stopped) {
+        if (g.fatal and outcome != .stopped and outcome != .rewound) {
             failure = null;
             switch (outcome) {
                 .returned, .errored, .vetoed => |v| v.release(),
@@ -4152,6 +4386,15 @@ pub const Group = struct {
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
         s.spent += fuel;
+        // A Rewind rolls its Segment back as a Limit Fault would, and puts
+        // its message back.
+        if (outcome == .rewound) {
+            g.restoreBase(run);
+            g.putBack(s, run) catch |e| {
+                g.destroyRun(run);
+                return e;
+            };
+        }
         if (outcome == .suspended) s.live.append(g.gpa, run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -4173,6 +4416,7 @@ pub const Group = struct {
                 .effect_failed => "effect-failed",
                 .vetoed => "veto",
                 .stopped => "stop",
+                .rewound => "rewind",
                 .selected, .preempted => unreachable,
             };
             out.print(" fuel={d} alloc={d} state={d} end={s}", .{ fuel, alloc, state, end }) catch {};
@@ -4188,10 +4432,25 @@ pub const Group = struct {
             out.writeAll("\n") catch {};
             if (outcome == .cancelled) g.writeAbandoned(run);
         }
-        // Stopping the Group discards this Run with every other.
+        // A Stop that landed stops its Script, this Run with it; otherwise
+        // stopping the Group discards this Run with every other.
         if (outcome == .stopped) {
+            if (run.landed) |l| if (l == .stop) {
+                defer g.gpa.free(l.stop);
+                run.landed = null;
+                g.stopScript(s, l.stop, run, .{}) catch |e| {
+                    g.destroyRun(run);
+                    return e;
+                };
+                g.destroyRun(run);
+                return;
+            };
             try g.stopGroup(run);
             g.destroyRun(run);
+            return;
+        }
+        if (outcome == .rewound) {
+            g.dropRewound(run);
             return;
         }
         // The end of the first Segment seals a held Verdict: `veto` vetoes
@@ -4224,7 +4483,7 @@ pub const Group = struct {
                 .dropped => "dropped",
                 .cancelled => "cancelled",
                 .effect_failed => "effect-failed",
-                .suspended, .selected, .preempted, .stopped => unreachable,
+                .suspended, .selected, .preempted, .stopped, .rewound => unreachable,
             };
             out.print("run {s} outcome={s}", .{ run.id, word }) catch {};
             // A `run` record names a Host Delivery, never a sender.
@@ -4490,7 +4749,7 @@ pub const Group = struct {
         errdefer g.gpa.free(n);
         const why = try g.gpa.dupe(u8, reason);
         errdefer g.gpa.free(why);
-        try g.inputs.append(g.gpa, .{ .stop = .{ .script = n, .reason = why } });
+        try g.queueLanding(.{ .stop = .{ .script = n, .reason = why } });
     }
 
     /// Puts a message at the back of a Script's mailbox; refused, the
@@ -4676,6 +4935,10 @@ pub const Group = struct {
     }
 
     /// The code of a Function Value this Group made.
+    pub fn codeOfValue(g: *Group, v: *const Value) ?*FunctionCode {
+        return g.codeOf(v);
+    }
+
     fn codeOf(g: *Group, v: *const Value) ?*FunctionCode {
         if (v.data != .function) return null;
         for (g.functions.items) |f| if (@intFromPtr(f) == v.data.function.identity) return f;
@@ -4857,8 +5120,11 @@ pub const Group = struct {
         /// Its Script's Fuel Slice or the Group's Fuel cap is spent, so it
         /// stops before its next instruction, in the middle of its Segment.
         preempted: Preemption,
-        /// The Group stopped while it ran, discarding it.
+        /// The Group stopped while it ran, or a Stop of its Script landed,
+        /// discarding it.
         stopped,
+        /// A Rewind landed while it ran in its first Segment.
+        rewound,
     };
 
     /// Runs until the bottom frame returns. `charged` is false for the
@@ -4872,6 +5138,19 @@ pub const Group = struct {
                 run.select_at = null;
                 return .selected;
             };
+            // What landed at the last Host crossing, between instructions.
+            g.flushHeld();
+            if (g.landing.items.len > 0 and run.base == 0 and run.id.len > 0) {
+                try g.land(run);
+                if (run.landed) |l| switch (l) {
+                    .stop => return .stopped,
+                    .rewind => return .rewound,
+                    .cancel => {
+                        run.landed = null;
+                        return g.landedCancel(run);
+                    },
+                };
+            }
             // Preemption, only between instructions.
             if (run.base == 0) if (g.preemption(run)) |by| return .{ .preempted = by };
             const ins = unitOf(run, frame).code[pc];
@@ -4888,6 +5167,25 @@ pub const Group = struct {
                         return other;
                     };
                     break :blk Step{ .raised = err };
+                },
+                error.Landed => {
+                    // A Stop, cancellation or Rewind that landed at this
+                    // crossing: the call keeps its charge.
+                    if (charged) {
+                        const spent = costs.charge(costKey(ins, &charge), &charge);
+                        run.fuel += spent.fuel + run.clause_fuel;
+                        run.alloc += spent.alloc;
+                        run.clause_fuel = 0;
+                    }
+                    charge.release();
+                    return switch (run.landed.?) {
+                        .stop => .stopped,
+                        .rewind => .rewound,
+                        .cancel => blk: {
+                            run.landed = null;
+                            break :blk g.landedCancel(run);
+                        },
+                    };
                 },
                 error.GroupStop => {
                     // The call that stopped the Group keeps its charge.
@@ -7336,7 +7634,9 @@ pub const Group = struct {
             for (c.args) |v| _ = v.retain();
             break :blk c;
         } else &local;
+        const held = g.holdTrace();
         const outcome = decl.host.call(decl.host.context, call, args);
+        g.trace = held;
         call.starting = false;
         m.reached_host = true;
         m.declared = decl.cost.fuel;
@@ -7386,6 +7686,7 @@ pub const Group = struct {
                 if (decl.mode == .fire_and_forget) {
                     v.release();
                     record(g, id, grant_name, op_name, args, "", null, call.charged);
+                    if (try g.landedAt(run)) return error.Landed;
                     return .next;
                 }
                 const ok = blk: {
@@ -7404,6 +7705,12 @@ pub const Group = struct {
                 }
                 record(g, id, grant_name, op_name, args, "result", v, call.charged);
                 try g.acknowledge(run, granted, decl.scope, id);
+                // What the Host made at this crossing lands before the
+                // result is converted.
+                if (try g.landedAt(run)) {
+                    v.release();
+                    return error.Landed;
+                }
                 m.result = v.retain();
                 try g.push(frame, v);
             },
@@ -7426,6 +7733,7 @@ pub const Group = struct {
                 };
                 defer shown.release();
                 record(g, id, grant_name, op_name, args, "error", shown, call.charged);
+                if (try g.landedAt(run)) return error.Landed;
                 if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
                 // Its Data is converted as a result is, an empty map when
                 // it has none.
@@ -7437,6 +7745,7 @@ pub const Group = struct {
             },
             .broken => {
                 record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                if (try g.landedAt(run)) return error.Landed;
                 return g.hostError(id, grant_name, op_name, &where);
             },
             .limited => {
@@ -7488,7 +7797,9 @@ pub const Group = struct {
             try g.push(frame, try nothing(gpa));
             return .next;
         };
+        const held = g.holdTrace();
         const outcome = prop.get.call(prop.get.context, gpa, o);
+        g.trace = held;
         m.fuel_extra = prop.get_cost.fuel;
         m.alloc_extra = prop.get_cost.alloc;
         switch (outcome) {
@@ -7501,6 +7812,10 @@ pub const Group = struct {
                     return g.propError(o, key);
                 }
                 g.propRecord(run, o, key, "get", "value", v);
+                if (try g.landedAt(run)) {
+                    v.release();
+                    return error.Landed;
+                }
                 // The value's conversion, as a Capability result's.
                 const size = costs.size(v);
                 m.fuel_extra += (size + 31) / 32;
@@ -7545,13 +7860,16 @@ pub const Group = struct {
             return g.raiseMismatchAt(bad);
         }
         m.input = value.retain();
+        const held = g.holdTrace();
         const outcome = set.call(set.context, gpa, o, value);
+        g.trace = held;
         m.fuel_extra = prop.set_cost.fuel;
         m.alloc_extra = prop.set_cost.alloc;
         switch (outcome) {
             .done, .value => {
                 g.releasePropResult(outcome);
                 g.propRecord(run, o, key, "set", "value", value);
+                if (try g.landedAt(run)) return error.Landed;
                 return .next;
             },
             else => {

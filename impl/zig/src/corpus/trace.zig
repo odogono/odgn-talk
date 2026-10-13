@@ -209,11 +209,20 @@ fn anyObject(context: ?*anyopaque, kind: []const u8, object_id: []const u8) mode
     return model.object(a.*, kind, object_id, 0);
 }
 
+/// A Function Value, as a Trace shows it: compared by its display form.
+fn anyFunction(context: ?*anyopaque, shown: []const u8) model.Error!*model.Value {
+    const a: *const std.mem.Allocator = @ptrCast(@alignCast(context.?));
+    const captures = try model.map(a.*, &.{});
+    defer captures.release();
+    return model.function(a.*, "", shown, 0, captures);
+}
+
 pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !bool {
     if (std.mem.eql(u8, expected, actual) and !std.mem.startsWith(u8, actual, "> ")) return true;
-    // Host Objects are compared by their display form, kind and id.
+    // Host Objects are compared by their display form, kind and id, and
+    // Function Values by their display form.
     var gpa = a;
-    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject };
+    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject, .function = anyFunction };
     const x = (try parse(a, expected, objects)) orelse return false;
     defer x.deinit(a);
     const y = (try parseMode(a, actual, objects, false)) orelse return false;
