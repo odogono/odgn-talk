@@ -39,7 +39,7 @@ When work on one Core finds that the other Core diverges from the Spec, open an 
 - Blocking: use GitHub issue dependencies. If unavailable, add `Blocked by: #<n>, #<n>` to the child body.
 - Frontier: take the first open, unassigned child in map order with no open blocker.
 - Claim: `gh issue edit <n> --add-assignee @me` before work.
-- Resolve: comment with the answer, close the child, then add a context pointer and link to the map's Decisions-so-far.
+- Resolve: record the answer in the child, reconcile its [implementation handoff](#specification-handoffs) and parent map, then close the child when its acceptance is complete.
 
 ## Specification handoffs
 
@@ -60,3 +60,10 @@ At intake, reconcile that block with the checkout before planning implementation
 An open issue may have only approval or verification work left. For grammar,
 opcodes or Advanced tags, use the [Spec change-impact guide](spec-changes.md)
 before deciding how to split specification and implementation PRs.
+
+When work lands, update this block and its parent map's child checkbox,
+Decisions-so-far and affected blockers together. Check the linked
+PR state and accepted criteria before marking a child complete; an open child
+may contain merged implementation, and a closed child may leave a later stage
+unimplemented. Keep progress in these issues; implementation guides describe
+capabilities and limitations rather than copying the checklist.

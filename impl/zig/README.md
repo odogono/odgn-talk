@@ -168,6 +168,9 @@ zig build corpus -- bytes/value-encoding
 zig fmt --check .
 ```
 
+The build has no `-Dtest-filter` option: run `zig build test` for unit and C
+tests, or select a Corpus case with `zig build corpus -- <case>`.
+
 Every build is `-Doptimize=safe` (ReleaseSafe) unless told otherwise, so bounds
 and integer overflow stay checked while the Core reads hostile input.
 `-Doptimize=fast` is refused.
@@ -201,6 +204,18 @@ stack sits in linear memory and nothing recurses past the depth guards.
 memory per instance and payload to #532's thresholds, in CI; the [first
 figures](../../docs/research/zig-wasi-figures.md) are 2 MiB per instance and
 0.40 MiB of Brotli payload, against the Go reactor's 15.5 and 2.04.
+
+After building the WASI target, run its pinned Python dependencies through `uv`
+from the repository root:
+
+```sh
+uv run tools/wasi/zig.py impl/zig/zig-out/bin/talk.wasm
+```
+
+The script declares its Python version and dependencies inline; `uv run` creates
+the environment. This checks the C API reactor; Message Layer verification uses
+the shared [reactor harness](../../tools/wasi/check.py):
+`uv run tools/wasi/check.py impl/zig/zig-out/bin/talk.wasm`.
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless
