@@ -35,16 +35,7 @@ const max_depth: usize = 64;
 
 const protocol_version: i64 = 1;
 
-fn quoted(w: *std.Io.Writer, s: []const u8) !void {
-    try w.writeByte('"');
-    for (s) |c| switch (c) {
-        '"' => try w.writeAll("\\\""),
-        '\\' => try w.writeAll("\\\\"),
-        0...31 => try w.print("\\u00{x:0>2}", .{c}),
-        else => try w.writeByte(c),
-    };
-    try w.writeByte('"');
-}
+const quoted = encoding.quoted;
 
 fn field(obj: Json, name: []const u8) ?Json {
     if (obj != .object) return null;
@@ -82,7 +73,7 @@ fn asU64(j: ?Json) ?u64 {
 /// Writes an integer as chapter 9 encodes it: a JSON integer below 2^53,
 /// else its decimal text in a string.
 fn writeInt(w: *std.Io.Writer, n: i128) !void {
-    if (n > -9007199254740992 and n < 9007199254740992) {
+    if (@abs(n) < encoding.plain_integer_limit) {
         try w.print("{d}", .{@as(i64, @intCast(n))});
     } else {
         try w.print("\"{d}\"", .{n});
@@ -583,6 +574,20 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
     if (s.answer) |*a| {
         const answer = a.*;
         s.answer = null;
+        // A result answers only an immediate Operation, started only a
+        // suspending one, done only a fire-and-forget one.
+        const fits = switch (answer.kind) {
+            .result => oc.mode == .immediate,
+            .started => oc.mode == .suspending,
+            .done => oc.mode == .fire_and_forget,
+            .fail, .limit, .host_error => true,
+        };
+        if (!fits) {
+            _ = call.charge(answer.charged);
+            var copy = answer;
+            copy.release(s.gpa);
+            return .broken;
+        }
         switch (answer.kind) {
             .result => {
                 if (!call.charge(answer.charged)) {

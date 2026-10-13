@@ -191,8 +191,12 @@ the exports directly, passing structs and text through `talk_alloc` and
 [#635](https://github.com/odogono/odgn-talk/issues/635)): one Core per
 instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `deliver`/`request`, `pump` with interim `op` and `prop` needs, `answer`/`fail`,
-`save` and `fingerprint`, and Object Kinds with `object`; messages for later
-work are protocol errors. It is stripped of debug sections and has a 1 MiB stack, since the
+`save` and `fingerprint`, and Object Kinds with `object`. It does not yet
+conform: `restore`, `resolve`, `settle`, `standard-capability`, `inspect`,
+`counters`, `effect`/`release` needs, load `owner`/`objects` and `$function`
+values are protocol errors; Reports are `run end` only, without `at` or
+`effect`; and a Pump's `nextDeadline` is null and `abandoned` empty (all tracked
+on #635). It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory and nothing recurses past the depth guards.
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
 memory per instance and payload to #532's thresholds, in CI; the [first

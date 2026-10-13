@@ -9,8 +9,8 @@ const Json = std.json.Value;
 pub const Error = model.Error || error{WriteFailed};
 /// 2^53: integers below it in magnitude are plain JSON numbers, which every
 /// JSON reader holds exactly; larger ones and fractions are `$dec`.
-const plain_integer_limit: u128 = 9007199254740992;
-fn quoted(w: *std.Io.Writer, s: []const u8) !void {
+pub const plain_integer_limit: u128 = 9007199254740992;
+pub fn quoted(w: *std.Io.Writer, s: []const u8) !void {
     try w.writeByte('"');
     for (s) |c| switch (c) {
         '"' => try w.writeAll("\\\""),
