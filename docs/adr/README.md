@@ -85,3 +85,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0081: Mappings compose Shapes with restricted transformations](0081-mappings-compose-shapes-with-restricted-transformations.md)
 - [0082: Metered Operations authorize work through the Pump](0082-metered-operations-authorize-work-through-the-pump.md)
 - [0083: TS Hosts run on Bun and Node](0083-ts-hosts-run-on-bun-and-node.md)
+- [0084: Creative tool Scripts reach Elements through load-time names, properties and three Grants](0084-creative-tool-scripts-reach-elements-through-load-time-names-properties-and-three-grants.md)
