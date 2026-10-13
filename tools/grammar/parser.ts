@@ -900,7 +900,7 @@ export class Parser {
     }
     const implicitRoot =
       root?.k === 'Target' ||
-      (root?.k === 'Const' && ['me', 'it'].includes(root.v as string));
+      (root?.k === 'Const' && (root.v === 'me' || root.v === 'it'));
     if (
       !root ||
       (root.k !== 'Name' &&

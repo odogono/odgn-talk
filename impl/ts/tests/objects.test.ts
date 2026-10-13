@@ -205,6 +205,18 @@ describe('Host Objects', () => {
   });
 });
 
+const loadDiagnostics = (work: () => unknown) => {
+  try {
+    work();
+    return [];
+  } catch (error) {
+    if (!(error instanceof LoadError)) {
+      throw error;
+    }
+    return error.diagnostics;
+  }
+};
+
 describe('Object property Load checks', () => {
   test('read-only literal writes reject Load, Reload and cached source declarations', () => {
     const readonly = defineObjectKind({
@@ -265,31 +277,19 @@ describe('Object property Load checks', () => {
       'the "label" of me',
       '((the ("label") of (me)))',
     ]) {
-      for (const kind of [readonly, writable]) {
+      const load = (kind: typeof readonly) => () => {
         const group = newGroup({ name: 'owned' });
         const owner = group.object(kind, 'owned', null);
-        const options = {
+        group.load({
           name: 'owned',
           source: `on go\n set ${target} to "off"\nend go`,
           owner,
-        };
-        if (kind === writable) {
-          expect(() => group.load(options)).not.toThrow();
-        } else {
-          try {
-            group.load(options);
-            throw new Error('expected a read-only load error');
-          } catch (error) {
-            expect(error).toBeInstanceOf(LoadError);
-            if (!(error instanceof LoadError)) {
-              throw error;
-            }
-            expect(error.diagnostics).toMatchObject([
-              { code: "can't write", unit: 'owned', line: 2, col: 2 },
-            ]);
-          }
-        }
-      }
+        });
+      };
+      expect(loadDiagnostics(load(writable))).toEqual([]);
+      expect(loadDiagnostics(load(readonly))).toMatchObject([
+        { code: "can't write", unit: 'owned', line: 2, col: 2 },
+      ]);
     }
   });
 });

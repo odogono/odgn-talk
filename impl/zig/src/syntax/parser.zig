@@ -793,16 +793,17 @@ const Parser = struct {
         const e = try p.chunkLevel();
         var outer = e;
         while (outer.data == .group) outer = outer.data.group;
+        const key_target = property_target and outer.data == .key;
         var root = e;
         while (true) {
             root = switch (root.data) {
                 .name => break,
                 .word => |w| {
-                    if (property_target and outer.data == .key and (w == .me or w == .it)) break;
+                    if (key_target and (w == .me or w == .it)) break;
                     return p.failCode(.not_a_container, t.start);
                 },
                 .target => {
-                    if (property_target and outer.data == .key) break;
+                    if (key_target) break;
                     return p.failCode(.not_a_container, t.start);
                 },
                 .chunk => |c| c.of,
