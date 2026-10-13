@@ -388,12 +388,12 @@ pub const costs: CostsTable = .{
         .{
             .key = "builtin.min",
             .fuel = "4 + scanned",
-            .input = "`scanned` is the items compared",
+            .input = "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
         },
         .{
             .key = "builtin.max",
             .fuel = "4 + scanned",
-            .input = "`scanned` is the items compared",
+            .input = "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
         },
         .{
             .key = "builtin.codePoint",
@@ -662,6 +662,10 @@ pub const costs: CostsTable = .{
         .{
             .issue = "#722",
             .change = "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
+        },
+        .{
+            .issue = "#788",
+            .change = "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
         },
     },
 };

@@ -1871,10 +1871,12 @@ const toFloat = (name: string, n: Value, order: Value): Value => {
 };
 
 export type BuiltinResult = { result: Value; scanned?: number; steps?: number };
-/** A Built-in call, with its defaults filled in. */
+/** A Built-in call, with its defaults filled in. `measure` holds what it has
+ * scanned so far, so a call that raises is still charged for it. */
 export const builtin = (
   name: string,
   args: readonly Value[],
+  measure: { scanned?: number } = {},
 ): BuiltinResult => {
   const [x, y, z] = args;
   switch (name) {
@@ -1888,6 +1890,7 @@ export const builtin = (
       }
       let best = x!.index(1);
       for (let i = 2; i <= x!.length; i++) {
+        measure.scanned = i;
         const o = order(x!.index(i), best);
         if (name === 'min' ? o < 0 : o > 0) {
           best = x!.index(i);

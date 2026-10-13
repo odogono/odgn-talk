@@ -6,6 +6,7 @@
 
 builtins/function-values
 builtins/kind-of
+builtins/min-max-scanned
 builtins/object-kind
 bytes/build-and-match
 bytes/build-errors
