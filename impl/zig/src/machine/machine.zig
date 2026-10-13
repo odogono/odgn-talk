@@ -6689,8 +6689,7 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                const joined = try std.mem.concat(a, u8, &.{ try chunks.textForm(a, x), try chunks.textForm(a, y) });
-                const r = model.text(gpa, joined) catch return error.OutOfMemory;
+                const r = model.concatText(gpa, try chunks.textForm(a, x), try chunks.textForm(a, y)) catch return error.OutOfMemory;
                 m.result = r.retain();
                 try g.push(frame, r);
             },

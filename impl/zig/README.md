@@ -106,6 +106,13 @@ The WASI check loads 1 MiB of newlines and 100,000 empty Handlers within a
 Handlers after compilation. [The load measurements](../../docs/research/zig-load-scaling.md)
 record the causes and before/after figures for #790.
 
+ASCII concatenation writes directly into the result's owned storage; other
+text joins are normalised across the boundary. The WASI check doubles text
+under the default Allocation Budget with a 128 MiB instance cap, and the
+conformance minimum with a 1 GiB cap. Three successive Runs must end in the
+Allocation Limit Fault, with the instance still answering and running a
+fresh Handler after each fault.
+
 ## Checking
 
 `check.check` takes a parsed unit and a `Context`: whether it is a Library,
