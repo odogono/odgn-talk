@@ -494,6 +494,48 @@ describe('language server', () => {
     expect(block.charge!.insertText).toBe('charge ${1} and wait');
     expect(block.note!.insertText).toBe('note');
   });
+  test('Operation documentation reaches hover, completion and dictionary', () => {
+    const documented = {
+      ...shop,
+      grants: shop.grants.map(grant => ({
+        ...grant,
+        operations: grant.operations.map(op => ({
+          ...op,
+          description: 'Plain *text* <tag>',
+          examples: [
+            'ask ledger to post [1]',
+            '-- ```\nask ledger to post [2]',
+          ],
+        })),
+      })),
+    };
+    const source = 'on demo\n ask ledger to post [1]\nend demo\n';
+    for (const caps of [{}, snippets]) {
+      const { request } = setup(source, documented, caps);
+      const hover = request('textDocument/hover', at(1, 16)).contents;
+      expect(hover.value).toContain('ask ledger to post [1]');
+      expect(hover.value).toContain('Examples:');
+      expect(hover.value).toContain(
+        hover.kind === 'markdown'
+          ? String.raw`Plain \*text\* \<tag\>`
+          : 'Plain *text* <tag>',
+      );
+      if (hover.kind === 'markdown') {
+        expect(hover.value).toContain('````northtalk\n-- ```');
+      }
+      const completion = setup(
+        'on demo\n ask ledger to \nend demo',
+        documented,
+        caps,
+      )
+        .request('textDocument/completion', at(1, 16))
+        .find(item => item.label === 'post')!;
+      expect(JSON.stringify(completion.documentation)).toContain('Examples:');
+      expect(request('northtalk/dictionary')).toContain(
+        'ask ledger to post [2]',
+      );
+    }
+  });
   test('hovers an Operation with its dictionary entry, in markdown when the client shows it', () => {
     const source =
       'on demo\n ask ledger to post [1]\n ask ledger to begin\nend demo\n';

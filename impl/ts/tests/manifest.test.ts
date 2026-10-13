@@ -6,6 +6,8 @@ import {
   defineObjectKind,
   exportManifest,
   num,
+  newGroup,
+  restore,
   shape,
   type ManifestSpec,
 } from '../src/index';
@@ -224,4 +226,97 @@ test('Host Manifests sort declarations, preserve Shape order and omit executable
   ).toBe(bytes);
   expect(manifest.messages![0]!.name).toBe('z');
   expect(actor.parentKinds).toEqual(['zone', 'scene']);
+});
+
+const documentedGrant = (description?: string, examples?: string[]) =>
+  defineCapability('documented', {
+    read: {
+      mode: 'immediate',
+      cost: { fuel: 0 },
+      do: fail,
+      description,
+      examples,
+    },
+  }).grant('all', undefined);
+
+test('Operation documentation is manifest-only and rewording restores without a mismatch', () => {
+  const original = documentedGrant('Original documentation', [
+    'ask api to read',
+  ]);
+  const revised = documentedGrant('Revised documentation', [
+    'ask api to read -- revised',
+  ]);
+  const makeGroup = (api: typeof original) => {
+    const group = newGroup({ name: 'g' });
+    group.load({
+      name: 's',
+      source: 'on go\n ask api to read\nend go',
+      grants: { api },
+    });
+    return group;
+  };
+  const group = makeGroup(original);
+  expect(group.fingerprint()).toEqual(makeGroup(revised).fingerprint());
+  const saved = group.save();
+  expect(new TextDecoder().decode(saved)).not.toContain(
+    'Original documentation',
+  );
+  const restored = restore(saved, {
+    name: 'g',
+    libraries: [],
+    grants: () => revised,
+    resolve: () => undefined,
+    onMismatch: 'reject',
+  });
+  expect(restored.result.variablesOnly).toBe(false);
+  expect(restored.group.fingerprint()).toEqual(group.fingerprint());
+  const manifest = (api: typeof original) =>
+    exportManifest({ kind: 'test', version: '1', grants: { api } });
+  expect(manifest(original)).not.toBe(manifest(revised));
+  const op = JSON.parse(manifest(original)).grants[0].operations[0];
+  expect(Object.keys(op)).toEqual([
+    'name',
+    'mode',
+    'args',
+    'cost',
+    'description',
+    'examples',
+  ]);
+  expect(op.description).toBe('Original documentation');
+  expect(op.examples).toEqual(['ask api to read']);
+  expect(manifest(documentedGrant('', []))).toBe(manifest(documentedGrant()));
+});
+
+test('DefineCapability refuses malformed documentation without parsing source examples', () => {
+  for (const documentation of [
+    { description: null },
+    { description: 1 },
+    { examples: null },
+    { examples: 'ask api to read' },
+    { examples: [1] },
+    { examples: [null] },
+    { examples: Array(1) },
+  ]) {
+    expect(() =>
+      defineCapability('invalid-docs', {
+        // @ts-expect-error Deliberately malformed Host input.
+        read: {
+          mode: 'immediate',
+          cost: { fuel: 0 },
+          do: fail,
+          ...documentation,
+        },
+      }),
+    ).toThrow();
+  }
+  expect(() =>
+    defineCapability('unparsed-docs', {
+      read: {
+        mode: 'immediate',
+        cost: { fuel: 0 },
+        do: fail,
+        examples: ['not valid NorthTalk'],
+      },
+    }),
+  ).not.toThrow();
 });

@@ -297,7 +297,10 @@ export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
 type OpBase = {
   args?: Shape[];
   cost: Cost;
+  /** Plain-text documentation, carried only by the Host Manifest. */
+  description?: string;
   errors?: ErrorDecl[];
+  examples?: string[];
   result?: Shape;
 };
 /** What the Core gives a Host function at each call (chapter 9, The call). */
@@ -417,6 +420,16 @@ export const defineCapability = <B = void>(
   const scopes = new Map<string, string>();
   const scopeEffects = new Map<string, boolean>();
   for (const [opName, op] of Object.entries(ops)) {
+    if (op.description !== undefined && typeof op.description !== 'string') {
+      invalidValue('description must be text');
+    }
+    if (
+      op.examples !== undefined &&
+      (!Array.isArray(op.examples) ||
+        [...op.examples].some(example => typeof example !== 'string'))
+    ) {
+      invalidValue('examples must be a list of text');
+    }
     const metadata = op as Operation<B> & {
       scope?: ScopeDecl;
       segmentBound?: boolean;

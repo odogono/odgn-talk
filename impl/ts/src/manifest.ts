@@ -87,11 +87,20 @@ export const operationData = (name: string, op: Operation<unknown>) => ({
     : {}),
   ...(op.mode === 'immediate' && op.segmentBound ? { segmentBound: true } : {}),
 });
-export const grantData = (grant: Grant<unknown>) => ({
+export const grantData = (
+  grant: Grant<unknown>,
+  operation: (name: string, op: Operation<unknown>) => object = operationData,
+) => ({
   capability: grant.capability.name,
   operations: [...grant.ops]
     .sort(compareText)
-    .map(name => operationData(name, grant.capability.operations.get(name)!)),
+    .map(name => operation(name, grant.capability.operations.get(name)!)),
+});
+/** Operation Data plus the manifest-only documentation fields. */
+const documentedOperation = (name: string, op: Operation<unknown>) => ({
+  ...operationData(name, op),
+  ...(op.description ? { description: op.description } : {}),
+  ...(op.examples?.length ? { examples: op.examples } : {}),
 });
 export const canonicalJSON = (value: unknown): string => {
   if (typeof value === 'string') {
@@ -131,7 +140,10 @@ export const exportManifest = (m: ManifestSpec): string =>
     language: languageVersion,
     grants: Object.entries(m.grants)
       .sort(([a], [b]) => compareText(a, b))
-      .map(([name, grant]) => ({ name, ...grantData(grant) })),
+      .map(([name, grant]) => ({
+        name,
+        ...grantData(grant, documentedOperation),
+      })),
     libraries: byName(m.libraries ?? []).map(l => ({
       name: l.name,
       version: l.version,
