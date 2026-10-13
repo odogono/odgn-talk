@@ -1,0 +1,32 @@
+-- h.talk: the handler-name-locals case's Script.
+
+script variable log = []
+
+on foo n
+  put ["foo", n] after log
+end foo
+
+on otherwise n
+  put ["otherwise", n] after log
+  return n * 10
+end otherwise
+
+on local
+  put 2 into foo
+  foo 3
+  put ["local", item (foo) of [8, 9]] after log
+end local
+
+on otherwiseLocal xs
+  put 1 into otherwise
+  otherwise 4
+  put ["command", it] after log
+  put ["index", item (otherwise) of xs] after log
+  put ["default", nothing otherwise otherwise] after log
+end otherwiseLocal
+
+on bindings otherwise, [foo]
+  let [y] be [otherwise + foo]
+  put given otherwise: otherwise * y into f
+  put ["bindings", f(foo)] after log
+end bindings

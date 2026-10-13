@@ -1,5 +1,3 @@
-# Unblessed: Nothing-default and optional map-key values, precedence and load-time evaluation (#722); first blessing awaits human review.
-
 > load values identity=2f6f2d161d4251fa8085f8115bbad83d4b9eaa63e13456cada6dd5bbdcd327be
 > deliver d1 to=values message=onlyNothing
 > deliver d2 to=values message=optionalReads

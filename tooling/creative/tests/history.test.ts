@@ -279,3 +279,77 @@ test('long mixed history repeats every Project exactly without drift', () => {
     expect(editor.canRedo).toBe(false);
   }
 });
+
+test('onChange is told of edits, live drags, undo and redo (#752)', () => {
+  const editor = makeEditor();
+  const notices: string[] = [];
+  editor.onChange = () => notices.push(editor.project.pages.length.toString());
+  editor.addPage();
+  expect(notices.length).toBeGreaterThan(0);
+
+  editor.goToPage(0);
+  const beforeDrag = notices.length;
+  select(editor, 'a');
+  const gesture = editor.startMove();
+  gesture.to(5, 5);
+  expect(notices.length).toBeGreaterThan(beforeDrag); // A live notice.
+  gesture.finish();
+
+  const beforeUndo = notices.length;
+  editor.undo();
+  expect(notices.length).toBeGreaterThan(beforeUndo);
+  const beforeRedo = notices.length;
+  editor.redo();
+  expect(notices.length).toBeGreaterThan(beforeRedo);
+
+  // Selection and navigation alone are not authored changes.
+  const settled = notices.length;
+  editor.click('b');
+  editor.goToPage(0);
+  expect(notices).toHaveLength(settled);
+});
+
+test('replaceProject loads another Project without history or a change notice', () => {
+  const editor = makeEditor();
+  const reference = editor.project;
+  editor.addPage();
+  let notices = 0;
+  editor.onChange = () => notices++;
+  const other = createProject('Other');
+  editor.replaceProject(other);
+  expect(editor.project).toBe(reference);
+  expect(editor.project).toEqual(other);
+  expect(editor.project).not.toBe(other);
+  expect(editor.canUndo).toBe(false);
+  expect(editor.canRedo).toBe(false);
+  expect(editor.pageIndex).toBe(0);
+  expect(editor.selection).toEqual([]);
+  expect(notices).toBe(0);
+});
+
+test('a read-only editor rolls back every change but still navigates', () => {
+  const editor = makeEditor();
+  editor.addPage();
+  const before = structuredClone(editor.project);
+  let notices = 0;
+  editor.onChange = () => notices++;
+  editor.readOnly = true;
+
+  select(editor, 'a');
+  editor.addElement('button');
+  editor.duplicate();
+  editor.delete();
+  const gesture = editor.startMove();
+  gesture.to(10, 10);
+  gesture.finish();
+  editor.undo();
+  expect(editor.project).toEqual(before);
+  expect(editor.canUndo).toBe(false);
+  expect(notices).toBe(0);
+
+  editor.goToPage(1);
+  expect(editor.pageIndex).toBe(1);
+
+  editor.readOnly = false;
+  expect(editor.canUndo).toBe(true);
+});

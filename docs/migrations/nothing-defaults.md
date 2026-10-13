@@ -15,9 +15,7 @@ recompile Libraries and regenerate pinned identities and corpus expectations.
 - Group an index variable named `otherwise`: change `item otherwise of xs`
   to `item (otherwise) of xs`.
 - Variables, functions, Handlers and map keys named `otherwise` remain legal.
-  `the optional of m` still reads the ordinary key `optional`. The Go Core
-  doesn't yet load a Script with both a Handler and a local of one name
-  ([#764](https://github.com/odogono/odgn-talk/issues/764)).
+  `the optional of m` still reads the ordinary key `optional`.
 
 `a otherwise b` defaults only Nothing and evaluates `b` lazily. For every
 nullable map step, write `the optional k of x`; no optional form reads Host

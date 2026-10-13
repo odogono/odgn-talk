@@ -89,6 +89,19 @@ func (u *Unit) Resolve(body *Body, name string) (Symbol, bool) {
 	}
 	return Symbol{}, false
 }
+
+// Callee resolves a call's or Command Call's name. A Command Call names a
+// message, so a local never shadows the Handler it reaches (chapter 4).
+func (u *Unit) Callee(body *Body, n *syntax.Node) (Symbol, bool) {
+	if n.Kind == "command" {
+		s, ok := u.Symbols[n.Text]
+		return s, ok
+	}
+	return u.Resolve(body, n.Text)
+}
+
+// A variable may share a local Handler's name; only an imported one clashes.
+func localHandler(s Symbol) bool                     { return s.Kind == "handler" && s.Import == "" }
 func (u *Unit) add(code string, pos syntax.Position) { u.addMessage(code, pos, "") }
 func (u *Unit) addMessage(code string, pos syntax.Position, message string) {
 	for _, d := range u.Diagnostics {
@@ -279,7 +292,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 					return false
 				}
 				if x.Kind == "command" {
-					if s, ok := u.Resolve(b, x.Text); ok && s.Kind == "handler" {
+					if s, ok := u.Callee(b, x); ok && s.Kind == "handler" {
 						if s.MaySuspend {
 							b.MaySuspend = true
 						}
@@ -329,7 +342,7 @@ func (u *Unit) checkHandlerWaits() {
 			if n.Kind != "command" && n.Kind != "call" || n.Kind == "command" && syntax.HasFlag(n, "and") {
 				return true
 			}
-			symbol, ok := u.Resolve(body, n.Text)
+			symbol, ok := u.Callee(body, n)
 			if !ok || symbol.Kind != "handler" {
 				return true
 			}
@@ -493,8 +506,9 @@ func (u *Unit) prepareBody(n *syntax.Node, parent *Body, kind, name string) *Bod
 		if x.Text == "it" {
 			return
 		}
-		// A collecting target is an explicit local, even when it shadows a Handler.
-		if symbol, ok := u.Symbols[x.Text]; ok && x.Kind != "collecting-target" && !(x.Kind == "offer-parameter" && symbol.Kind == "handler" && symbol.Import == "") {
+		// A local may share a local Handler's name, and a collecting target is
+		// an explicit local even when it clashes (chapter 4).
+		if symbol, ok := u.Symbols[x.Text]; ok && x.Kind != "collecting-target" && !localHandler(symbol) {
 			return
 		}
 		if parent != nil && x.Kind == "name" && parent.Slot(x.Text) >= 0 {
@@ -649,7 +663,7 @@ func (u *Unit) validateBody(b *Body, ctx context) {
 			names = []*syntax.Node{p}
 		}
 		for _, name := range names {
-			if symbol, ok := u.Symbols[name.Text]; ok && symbol.Kind != "builtin" {
+			if symbol, ok := u.Symbols[name.Text]; ok && symbol.Kind != "builtin" && !localHandler(symbol) {
 				u.clash(name)
 			}
 		}
@@ -691,7 +705,7 @@ func (u *Unit) handlerSuffixes(n *syntax.Node) {
 		j++
 		binding := n.Flags[j]
 		name := &syntax.Node{Kind: "binding", Text: binding.Raw, Token: binding}
-		if _, ok := u.Symbols[binding.Raw]; ok {
+		if symbol, ok := u.Symbols[binding.Raw]; ok && !localHandler(symbol) {
 			u.clash(name)
 		}
 		for _, param := range n.Params {
@@ -841,7 +855,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 				u.add("duplicate name", param.Pos())
 			}
 			seen[param.Text] = true
-			if symbol, ok := u.Symbols[param.Text]; ok && symbol.Kind != "builtin" && !(symbol.Kind == "handler" && symbol.Import == "") {
+			if symbol, ok := u.Symbols[param.Text]; ok && symbol.Kind != "builtin" && !localHandler(symbol) {
 				u.clash(param)
 			}
 		}
@@ -950,7 +964,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	case "repeat":
 		if n.Collect != nil {
 			target := n.Collect.Params[0]
-			if symbol, ok := u.Symbols[target.Text]; ok && (symbol.Kind != "handler" || symbol.Import != "") {
+			if symbol, ok := u.Symbols[target.Text]; ok && !localHandler(symbol) {
 				u.clash(target)
 			}
 			for _, param := range n.Params {
@@ -1043,7 +1057,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 		u.bits(n)
 	case "command":
 		if u.Options.Library && n.Text != "say" {
-			if symbol, ok := u.Resolve(b, n.Text); !ok || symbol.Kind != "handler" {
+			if symbol, ok := u.Callee(b, n); !ok || symbol.Kind != "handler" {
 				u.add("not in a library", n.Pos())
 			}
 		}
@@ -1154,7 +1168,7 @@ func (u *Unit) constant(n *syntax.Node, available map[string]bool) {
 func (u *Unit) pattern(n *syntax.Node, b *Body, ctx context) {
 	seen := map[string]bool{}
 	for _, name := range Bindings(n) {
-		if _, ok := u.Symbols[name.Text]; ok {
+		if symbol, ok := u.Symbols[name.Text]; ok && !localHandler(symbol) {
 			u.clash(name)
 		}
 		if seen[name.Text] {

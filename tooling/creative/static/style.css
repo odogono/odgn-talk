@@ -447,11 +447,100 @@ button:disabled {
   border-bottom: 1px solid var(--line);
   font-size: 0.8rem;
 }
-#text-toolbar[data-scope='element'] :is([data-text-command='paragraph'], [data-text-command='done']) {
+#text-toolbar[data-scope='element']
+  :is([data-text-command='paragraph'], [data-text-command='done']) {
   display: none;
 }
-#text-toolbar label { display: flex; align-items: center; gap: 0.3rem; }
-#text-toolbar input { width: 2rem; height: 1.7rem; }
-#text-toolbar [aria-pressed='true'] { background: var(--accent); color: white; }
-.page.edit .el.text-editing { cursor: text; user-select: text; overflow: auto; }
-.el.text p { min-height: 1.35em; }
+#text-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+#text-toolbar input {
+  width: 2rem;
+  height: 1.7rem;
+}
+#text-toolbar [aria-pressed='true'] {
+  background: var(--accent);
+  color: white;
+}
+.page.edit .el.text-editing {
+  cursor: text;
+  user-select: text;
+  overflow: auto;
+}
+.el.text p {
+  min-height: 1.35em;
+}
+
+/* Lasting banners: save failures, read-only viewing and other notices. */
+.banner:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border-bottom: 1.5px solid var(--line);
+  background: #fff3cd;
+  font-size: 0.9rem;
+}
+.banner details {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* The Project list and the earlier-versions panel. */
+#projects-window {
+  width: 22rem;
+}
+#versions-window {
+  width: 20rem;
+}
+#projects-panel,
+#versions-panel {
+  padding: 0.6rem;
+  font-size: 0.85rem;
+  max-height: calc(100vh - 12rem);
+  overflow-y: auto;
+}
+#project-list,
+#version-list {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+#project-list li,
+#version-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #ddd;
+}
+#project-list .title,
+#version-list .when {
+  flex: 1;
+  min-width: 8rem;
+}
+#project-list .current {
+  font-weight: 700;
+}
+#project-list input {
+  font: inherit;
+  flex: 1;
+  min-width: 8rem;
+}
+#storage-status {
+  border-top: 1px solid #ddd;
+  margin-top: 0.6rem;
+}
+#preview-note:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  background: #fff3cd;
+  padding: 0.4rem;
+  margin: 0 0 0.6rem;
+}

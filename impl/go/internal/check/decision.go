@@ -15,7 +15,7 @@ func (u *Unit) checkDecisions() {
 				return false
 			}
 			if x.Kind == "call" || x.Kind == "command" {
-				if s, ok := u.Resolve(b, x.Text); ok && s.Kind == "handler" {
+				if s, ok := u.Callee(b, x); ok && s.Kind == "handler" {
 					called[s.Name] = true
 				}
 			}
@@ -84,7 +84,7 @@ func (f *decisionFlow) suspends(n *syntax.Node) bool {
 		if syntax.HasFlag(n, "and") {
 			return true
 		}
-		s, ok := f.unit.Resolve(f.body, n.Text)
+		s, ok := f.unit.Callee(f.body, n)
 		if ok && s.Kind == "handler" {
 			for _, b := range f.unit.Bodies {
 				if b.Kind == "handler" && b.Name == s.Name && b.MaySuspend {

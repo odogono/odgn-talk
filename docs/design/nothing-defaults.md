@@ -250,8 +250,8 @@ receiver. `lookup` also handles list positions and reports cumulative paths.
 ## Acceptance cases
 
 The ten groups below are required observations. The corpus covers them on
-TS, Go and Zig, in ordinary and Save/Restore replay; first blessing is a
-separate human review ([corpus guide](../../corpus/README.md#seed-blessing)).
+TS, Go and Zig, in ordinary and Save/Restore replay, and the maintainer approved their first
+blessings ([record](../reviews/nothing-defaults-blessings/README.md)).
 
 | Group | Corpus cases |
 | --- | --- |
@@ -266,12 +266,15 @@ separate human review ([corpus guide](../../corpus/README.md#seed-blessing)).
 | 9 | [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
 | 10 | [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/); the empty-stack verifier check is a TS unit test ([lowering tests](../../impl/ts/tests/lowering.test.ts)) |
 
-Go refuses a local named like a Handler
-([#764](https://github.com/odogono/odgn-talk/issues/764)), so `compatibility`
-doesn't pair a Handler and a local named `otherwise`. An unresolved fallback in
-a Constant is `unknown name` and `not constant` at the same token;
-`load-diagnostics/constant-unknown-name` checks it
-([#765](https://github.com/odogono/odgn-talk/issues/765)).
+Go refused a local named like a Handler until
+[#764](https://github.com/odogono/odgn-talk/issues/764), so `compatibility`
+doesn't pair them; [`nothing-defaults/handler-name-locals`](../../corpus/nothing-defaults/handler-name-locals/)
+covers a local `otherwise` beside `on otherwise`, and its first blessing awaits
+review. An unresolved fallback in a Constant is `unknown name` and
+`not constant` at the same token;
+[`load-diagnostics/constant-unknown-name`](../../corpus/load-diagnostics/constant-unknown-name/)
+checks it ([#765](https://github.com/odogono/odgn-talk/issues/765)), and its
+first blessing awaits review.
 
 1. Default only Nothing: explicit Nothing and absent map keys use the
    fallback; false, zero, empty text, list and map do not. A fallback may
@@ -328,6 +331,5 @@ checks reads compiled as stdlib-attributed code.
   Zig [#760](https://github.com/odogono/odgn-talk/pull/760); language
   1.0-rc.3 activation and cross-Core Trace cases for
   [#722](https://github.com/odogono/odgn-talk/issues/722).
-- **Approval still needed:** first blessing of every expectation the
-  acceptance table names. Each carries an `Unblessed` header, which the
-  reviewer removes on approval.
+- **Approved:** first blessing of every expectation the acceptance table
+  names, on 2026-10-13 ([record](../reviews/nothing-defaults-blessings/README.md)).
