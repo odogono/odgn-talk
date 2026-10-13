@@ -34,7 +34,7 @@ Capability diagnostics deferred to step 3 are listed beside the checker in
 | [empty-join](empty-join/bad.talk) | `empty join` at `2:1` | [Trace](empty-join/case.trace) |
 | [empty-timeout](empty-timeout/bad.talk) | `empty timeout` at `2:3`, for a block whose only wait is in a Lambda, and `8:5`, for a block in a Join's body (first blessing pending, #542) | [Trace](empty-timeout/case.trace) |
 | [initialiser-failed](initialiser-failed/bad.talk) | `initialiser failed` at `1:16` | [Trace](initialiser-failed/case.trace) |
-| [it-outside-body](it-outside-body/constant.talk) | `unknown name` for every `it` in Constant and Script Variable initialisers and parameter defaults, alongside only the first `not constant`; [body locals](it-outside-body/body-locals.talk) retain their own results (first blessing pending, #774, #779, #781) | [Trace](it-outside-body/case.trace) |
+| [it-outside-body](it-outside-body/constant.talk) | `unknown name` for every `it` in Constant and Script Variable initialisers and parameter defaults, alongside only the first `not constant`; [body locals](it-outside-body/body-locals.talk) retain their own results (first blessing approved for #774, #779, #781; [approval record](../../docs/reviews/it-outside-body/README.md)) | [Trace](it-outside-body/case.trace) |
 | [leaves-finally](leaves-finally/bad.talk) | `leaves finally` at `4:1` | [Trace](leaves-finally/case.trace) |
 | [name-clash](name-clash/bad.talk) | `name clash` at `2:6` | [Trace](name-clash/case.trace) |
 | [needless-and-wait](needless-and-wait/bad.talk) | `needless and wait` at `2:1` | [Trace](needless-and-wait/case.trace) |
