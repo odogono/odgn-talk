@@ -1,4 +1,3 @@
-# Unblessed: unknown name for it outside a body and preserved body locals (#774); first blessing awaits human review.
 > load constant identity=2a7b61a8dff98c55c72ecae5f2e491b909cbaa8ecdb340c24087d3752a082df7
 diag constant code="unknown name" pos=1:14
 diag constant code="not constant" pos=1:14
