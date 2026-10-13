@@ -15,7 +15,11 @@ import {
   type Value,
 } from '@odgn/northtalk';
 import { replacePlainText, textOf, type Project } from './model';
-import { scriptManifest, type ScriptOwner } from './script-manifest';
+import {
+  scriptManifest,
+  scriptPage,
+  type ScriptOwner,
+} from './script-manifest';
 
 export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
 export type PlayMessage =
@@ -172,6 +176,17 @@ export class PlaySession {
   }
 
   #load(owners: ScriptOwner[]): void {
+    const pages = Object.fromEntries(
+      this.project.pages.map(p => [p.name, this.objects.get(p)!]),
+    );
+    const pageObjects = {
+      ...pages,
+      ...Object.fromEntries(
+        this.page.elements.map(e => [e.name, this.objects.get(e)!]),
+      ),
+      thisPage: this.objects.get(this.page)!,
+      project: this.objects.get(this.project)!,
+    };
     for (const owner of owners) {
       if (!owner.script?.trim()) {
         continue;
@@ -183,20 +198,7 @@ export class PlaySession {
             ? `page:${this.page.name}`
             : `element:${this.page.name}/${owner.name}`;
       this.owners.set(name, owner);
-      const objects = {
-        ...Object.fromEntries(
-          this.project.pages.map(p => [p.name, this.objects.get(p)!]),
-        ),
-        ...(owner === this.project
-          ? {}
-          : {
-              ...Object.fromEntries(
-                this.page.elements.map(e => [e.name, this.objects.get(e)!]),
-              ),
-              thisPage: this.objects.get(this.page)!,
-              project: this.objects.get(this.project)!,
-            }),
-      };
+      const objects = owner === this.project ? pages : pageObjects;
       try {
         const existing = this.group.script(name);
         if (existing) {
@@ -233,10 +235,7 @@ export class PlaySession {
     const closing = this.#closing!;
     closing.cancel.abort();
     for (const [name, owner] of this.owners) {
-      if (
-        owner === this.page ||
-        ('kind' in owner && this.page.elements.includes(owner))
-      ) {
+      if (scriptPage(this.project, owner) === this.page) {
         this.group.script(name)?.stop('Left Page');
       }
     }
@@ -347,14 +346,14 @@ export class PlaySession {
         { name: 'closePage' },
         { signal: cancel.signal },
       );
-      this.#closing = {
+      const closing = {
         target,
         deadline: now + 1_000_000_000n,
         id: request.id,
         cancel,
         done: false,
       };
-      const closing = this.#closing;
+      this.#closing = closing;
       const complete = () => {
         closing.done = true;
       };
@@ -375,10 +374,10 @@ export class PlaySession {
       return {
         ...result,
         nextDeadline:
-          result.nextDeadline === undefined ||
-          result.nextDeadline > this.#closing.deadline
-            ? this.#closing.deadline
-            : result.nextDeadline,
+          result.nextDeadline !== undefined &&
+          result.nextDeadline < this.#closing.deadline
+            ? result.nextDeadline
+            : this.#closing.deadline,
       };
     }
     return result;
