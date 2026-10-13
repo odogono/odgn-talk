@@ -20,7 +20,7 @@ pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]c
         for (step1_inputs) |known| {
             if (std.mem.eql(u8, known, name)) break;
         } else return "a Host Input talk.h doesn't make yet";
-        if (std.mem.indexOf(u8, input, " limits=") != null or std.mem.indexOf(u8, input, " fuel-slice=") != null or std.mem.indexOf(u8, input, " fuel-cap=") != null) return "limits are not implemented";
+        if (std.mem.indexOf(u8, input, " fuel-slice=") != null or std.mem.indexOf(u8, input, " fuel-cap=") != null) return "Fuel Slices are not implemented";
         // An uncertain effect outcome stops the Group, which comes with
         // Stop in step 4.
         if (std.mem.eql(u8, name, "stub-effect")) {
@@ -61,9 +61,7 @@ fn grantsUnsupported(a: std.mem.Allocator, setup: []const u8) ?[]const u8 {
     for (all) |t| {
         if (!std.mem.eql(u8, t.header, "[[scripts]]")) continue;
         if (case_setup.field(t, "limits")) |limits| for (limits.table) |l| {
-            // Limits the machine already meets with its defaults don't
-            // change these cases; the others wait for step 4.
-            for ([_][]const u8{ "maxWaitMs", "fuelPerRun", "mailboxDepth" }) |k| if (std.mem.eql(u8, l.key, k)) return "limits are not implemented";
+            if (std.mem.eql(u8, l.key, "cleanupBudget")) return "limits are not implemented";
         };
     }
     return null;
@@ -509,6 +507,79 @@ fn shapeOf(v: case_setup.Value) !?*c.talk_shape {
     }
 }
 
+/// The Trace's Host Inputs in the order the Host made them. A refusal is
+/// written at the call, but accepted inputs only when a Pump drains them, so
+/// an input refused with `mailbox full` was made after the accepted inputs
+/// that follow it, up to the next Pump (chapter 11).
+fn hostOrder(a: std.mem.Allocator, trace: []const u8) !std.ArrayList([]const u8) {
+    var out: std.ArrayList([]const u8) = .empty;
+    var held: std.ArrayList([]const u8) = .empty;
+    var lines = std.mem.splitScalar(u8, trace, '\n');
+    while (lines.next()) |line| {
+        if (!std.mem.startsWith(u8, line, "> ")) continue;
+        if (std.mem.startsWith(u8, line, "> pump")) {
+            try out.appendSlice(a, held.items);
+            held.clearRetainingCapacity();
+        }
+        const next = lines.peek() orelse "";
+        if (std.mem.eql(u8, next, "refused code=\"mailbox full\"")) {
+            try held.append(a, line);
+            continue;
+        }
+        try out.append(a, line);
+    }
+    try out.appendSlice(a, held.items);
+    return out;
+}
+
+/// A Script's limits: its inline `limits` table, or a `[scripts.limits]`
+/// table right after its own.
+fn scriptLimits(all: []const case_setup.Table, table: case_setup.Table) []const case_setup.Value.Entry {
+    if (case_setup.field(table, "limits")) |given| return given.table;
+    for (all, 0..) |t, i| if (t.entries.ptr == table.entries.ptr and i + 1 < all.len and std.mem.eql(u8, all[i + 1].header, "[scripts.limits]")) {
+        return all[i + 1].entries;
+    };
+    return &.{};
+}
+
+/// A limit's talk_limits field, by its `ts` name.
+fn limitField(ts: []const u8) ?[]const u8 {
+    const names = .{
+        .{ "fuelPerRun", "fuel_per_run" }, .{ "allocPerRun", "alloc_per_run" }, .{ "persistentState", "persistent_state" },
+        .{ "callDepth", "call_depth" },    .{ "patternSize", "pattern_size" },  .{ "mailboxDepth", "mailbox_depth" },
+        .{ "maxWaitMs", "max_wait_ms" },   .{ "maxJoin", "max_join" },          .{ "cleanupBudget", "cleanup_budget" },
+    };
+    inline for (names) |n| if (std.mem.eql(u8, ts, n[0])) return n[1];
+    return null;
+}
+
+/// An input's `limits={…}` override, each field marked as supplied.
+fn overrideOf(input: []const u8, out: *c.talk_limit_override) !bool {
+    const at = std.mem.indexOf(u8, input, " limits={") orelse return false;
+    const start = at + " limits={".len;
+    const end = std.mem.indexOfScalarPos(u8, input, start, '}') orelse return error.MalformedCase;
+    var pairs = std.mem.splitSequence(u8, input[start..end], ", ");
+    while (pairs.next()) |pair| {
+        const colon = std.mem.indexOf(u8, pair, ": ") orelse return error.MalformedCase;
+        const v = std.fmt.parseInt(i64, pair[colon + 2 ..], 10) catch return error.MalformedCase;
+        const key = pair[0..colon];
+        if (std.mem.eql(u8, key, "fuelPerRun")) {
+            out.fuel_per_run = v;
+            out.set |= c.TALK_OVERRIDE_FUEL_PER_RUN;
+        } else if (std.mem.eql(u8, key, "allocPerRun")) {
+            out.alloc_per_run = v;
+            out.set |= c.TALK_OVERRIDE_ALLOC_PER_RUN;
+        } else if (std.mem.eql(u8, key, "maxWaitMs")) {
+            out.max_wait_ms = v;
+            out.set |= c.TALK_OVERRIDE_MAX_WAIT;
+        } else if (std.mem.eql(u8, key, "maxJoin")) {
+            out.max_join = v;
+            out.set |= c.TALK_OVERRIDE_MAX_JOIN;
+        } else return error.MalformedCase;
+    }
+    return true;
+}
+
 fn number(v: ?case_setup.Value) i64 {
     const x = v orelse return 0;
     return if (x == .raw) std.fmt.parseInt(i64, x.raw, 10) catch 0 else 0;
@@ -865,7 +936,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     var sink: Sink = .{ .gpa = gpa };
     errdefer sink.out.deinit(gpa);
     var group: ?*c.talk_group = null;
-    const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &sink };
+    // Cases at the conformance minimums hold more than the default physical
+    // cap allows while they build their values.
+    const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &sink, .memory_cap = 1 << 30 };
     try check(c.talk_new_group(core, &options, &group));
     defer c.talk_group_release(group);
     var scripts: std.StringHashMapUnmanaged(*c.talk_script) = .empty;
@@ -881,9 +954,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     try defineObjects(a, core, group, all, &store);
     var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
     try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries);
-    var lines = std.mem.splitScalar(u8, trace, '\n');
-    while (lines.next()) |line| {
-        if (!std.mem.startsWith(u8, line, "> ")) continue;
+    for ((try hostOrder(a, trace)).items) |line| {
         const input = line[2..];
         const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse input.len;
         const name = input[0..name_end];
@@ -904,7 +975,15 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (case_setup.field(table, "objects")) |given| for (given.table) |e| {
                 try bound.append(a, .{ .name = e.key.ptr, .name_len = e.key.len, .object = try objectNamed(&store, a, e.value) });
             };
-            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len };
+            var limits: c.talk_limits = std.mem.zeroes(c.talk_limits);
+            for (scriptLimits(all, table)) |e| {
+                const field_of = limitField(e.key) orelse return error.MalformedCase;
+                const v = number(e.value);
+                inline for (@typeInfo(c.talk_limits).@"struct".field_names) |f| if (std.mem.eql(u8, f, field_of)) {
+                    @field(limits, f) = v;
+                };
+            }
+            const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = &limits };
             var loaded: ?*c.talk_script = null;
             const code = c.talk_load(group, &load, &loaded);
             if (code == c.TALK_LOAD_REFUSED) continue;
@@ -942,7 +1021,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                     try args.append(a, item);
                 }
             }
-            const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len };
+            var override: c.talk_limit_override = std.mem.zeroes(c.talk_limit_override);
+            const has_override = try overrideOf(input, &override);
+            const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len, .limits = if (has_override) &override else null };
             var pending: ?*c.talk_pending = null;
             var deciding: ?*c.talk_deciding = null;
             const code = if (std.mem.eql(u8, name, "decide"))
@@ -954,7 +1035,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             else
                 c.talk_script_request(to, &m, null, &pending);
             // A refusal at the call is in the Trace, as a `refused` record.
-            if (code != c.TALK_INVALID_VALUE) try check(code);
+            if (code != c.TALK_INVALID_VALUE and code != c.TALK_ERR_MAILBOX_FULL) try check(code);
         } else if (std.mem.eql(u8, name, "broadcast") or std.mem.eql(u8, name, "decide-broadcast")) {
             // The Core writes the recipients, when the queue is drained.
             const message = field(input, "message").?;
@@ -970,7 +1051,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                     try args.append(a, item);
                 }
             }
-            const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len };
+            var override: c.talk_limit_override = std.mem.zeroes(c.talk_limit_override);
+            const has_override = try overrideOf(input, &override);
+            const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len, .limits = if (has_override) &override else null };
             var deciding: ?*c.talk_deciding = null;
             const code = if (std.mem.eql(u8, name, "broadcast")) c.talk_broadcast(group, &m, null) else c.talk_decide_broadcast(group, &m, null, &deciding);
             if (code != c.TALK_INVALID_VALUE) try check(code);

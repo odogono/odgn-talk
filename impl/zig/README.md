@@ -220,7 +220,7 @@ allows it. A Run that errors, faults or ends `effect failed` first, or a
 record. A Delivery, Request or Decision whose name has a `:` but isn't a
 Selector with one argument per part is refused at the call, with its `>`
 line, no id, and `refused code="invalid value"`. `cancel-delivery` comes
-with step 4.
+with cancellation.
 
 A Broadcast (`talk_broadcast`) or Broadcast Decision (`talk_decide_broadcast`)
 finds its recipients when the queue is drained: the Scripts with a Handler
@@ -466,9 +466,34 @@ frame and no Handler Clause and writes `fn=` in place of a Handler.
 Reload.
 
 The `store` notification router, a Host companion, waits for Save and
-Restore. A Run past the default Fuel per Run ends
-in a minimal `fault` until step 4 brings limits, including the Text Pattern
-size limit.
+Restore.
+
+A Script's limits come from `talk_load_options`' `talk_limits`, a zero field
+taking its default from `limits.toml`, and a Delivery's `talk_limit_override`
+tightens its Run's Fuel, allocation, MaxWait and MaxJoin; one that loosens is
+refused `invalid value`, with the override on its `>` line. A Limit Fault
+comes before the faulting instruction's charge, so none of it is made:
+- **Its own limit first:** a call past the call depth, a `make-pattern` past
+  the Text Pattern size and a Join Member past MaxJoin fault before anything
+  else, through `error.LimitFault`.
+- **Fuel and allocation:** every other instruction faults when its whole
+  charge, dispatch's `clause` rate included, won't fit. A search's `unwind`
+  is part of the charge of the instruction driving it, and an error is
+  raised, with its record and its Join abandoned, before that charge. A
+  Capability call checks its declared cost before the Host is called; one
+  whose `Charge` is refused spends its own charge, and one whose result's
+  conversion faults on allocation keeps its Fuel before the conversion.
+  `store-var` checks its charge before it writes.
+- **Persistent State:** a Run-ending `return`, `pass` or `veto` measures the
+  Script without the Run before its charge, and a suspension measures it with
+  the Run after its charge, abandoning the call it waits on.
+
+The fault's record names the Script Variables its rollback changes back, and
+every Script's Segment keeps a base for it. MaxWait bounds a Run's waiting
+calls, and a Script's `send` to a mailbox at its depth raises `mailbox full`.
+A Host Delivery to a Script whose mailbox and queued Deliveries reach its
+depth is refused `TALK_ERR_MAILBOX_FULL`. Fuel Slices and caps, cancellation
+and its Cleanup Budget, and Stop come next.
 
 ## Values and ownership
 

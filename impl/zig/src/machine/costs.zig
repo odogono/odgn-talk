@@ -29,6 +29,9 @@ pub const Measures = struct {
     /// Set when nothing is charged, as for a Capability argument that
     /// breaks its Shape.
     uncharged: bool = false,
+    /// Set once a Capability call has reached its Host function, whose
+    /// Fuel stays spent if converting its result faults on allocation.
+    reached_host: bool = false,
 
     pub fn release(self: *Measures) void {
         if (self.input) |v| v.release();

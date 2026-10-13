@@ -298,6 +298,7 @@ pub const HostErrorCode = enum(c_int) {
     effects_pending,
     effect_state_unknown,
     err_limit,
+    err_mailbox_full,
     load_refused,
     out_of_memory,
 };
@@ -375,7 +376,70 @@ pub const LoadOptions = extern struct {
     owner: ?*objects.Object = null,
     objects: ?[*]const LoadObject = null,
     objects_len: usize = 0,
+    /// Null for the default limit profile.
+    limits: ?*const Limits = null,
 };
+
+/// A Script's limits, MaxWait in whole milliseconds. A zero field takes its
+/// default, and a negative one is `invalid value`.
+pub const Limits = extern struct {
+    fuel_per_run: i64 = 0,
+    alloc_per_run: i64 = 0,
+    persistent_state: i64 = 0,
+    call_depth: i64 = 0,
+    pattern_size: i64 = 0,
+    mailbox_depth: i64 = 0,
+    max_wait_ms: i64 = 0,
+    max_join: i64 = 0,
+    cleanup_budget: i64 = 0,
+};
+
+/// Which of a LimitOverride's fields are supplied, zero ones included.
+pub const LimitOverrideFields = enum(u8) { fuel_per_run = 1, alloc_per_run = 2, max_wait = 4, max_join = 8 };
+
+/// Tightens a Script's per-Run limits for one Delivery. A nonzero field is
+/// always supplied, and a zero one only when `set` marks it.
+pub const LimitOverride = extern struct {
+    set: u8 = 0,
+    fuel_per_run: i64 = 0,
+    alloc_per_run: i64 = 0,
+    max_wait_ms: i64 = 0,
+    max_join: i64 = 0,
+};
+
+export fn talk_default_limits(out: *Limits) void {
+    const d: machine.Limits = .{};
+    out.* = .{ .fuel_per_run = @intCast(d.fuel_per_run), .alloc_per_run = @intCast(d.alloc_per_run), .persistent_state = @intCast(d.persistent_state), .call_depth = @intCast(d.call_depth), .pattern_size = @intCast(d.pattern_size), .mailbox_depth = @intCast(d.mailbox_depth), .max_wait_ms = @intCast(d.max_wait_ms), .max_join = @intCast(d.max_join), .cleanup_budget = @intCast(d.cleanup_budget) };
+}
+
+/// A Script's limits from the Host's: zero fields take the defaults.
+fn limitsOf(given: ?*const Limits) error{InvalidValue}!machine.Limits {
+    var out: machine.Limits = .{};
+    const l = given orelse return out;
+    inline for (@typeInfo(Limits).@"struct".field_names) |name| {
+        const v = @field(l, name);
+        if (v < 0) return error.InvalidValue;
+        if (v > 0) @field(out, name) = @intCast(v);
+    }
+    return out;
+}
+
+/// A Delivery's override from the Host's, or null for none.
+fn overrideOf(given: ?*const LimitOverride) error{InvalidValue}!?machine.Override {
+    const o = given orelse return null;
+    if (o.set & ~@as(u8, 15) != 0) return error.InvalidValue;
+    var out: machine.Override = .{};
+    var any = false;
+    inline for (.{ .{ "fuel_per_run", 1 }, .{ "alloc_per_run", 2 }, .{ "max_wait_ms", 4 }, .{ "max_join", 8 } }) |f| {
+        const v = @field(o, f[0]);
+        if (v < 0) return error.InvalidValue;
+        if (v != 0 or o.set & f[1] != 0) {
+            @field(out, f[0]) = @intCast(v);
+            any = true;
+        }
+    }
+    return if (any) out else null;
+}
 
 pub const LoadObject = extern struct { name: ?[*]const u8, name_len: usize, object: *objects.Object };
 
@@ -384,6 +448,8 @@ pub const Message = extern struct {
     name_len: usize,
     args: ?[*]const *Value,
     args_len: usize,
+    /// Null for no override.
+    limits: ?*const LimitOverride = null,
 };
 
 pub const GroupState = enum(c_int) { idle, sliced, stopped, rewound };
@@ -573,7 +639,8 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
         b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
     }
     if (o.owner) |owner| if (!g.owns(owner)) return .wrong_group;
-    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound }) catch |err| return status(err);
+    const limits = limitsOf(o.limits) catch return .invalid_value;
+    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
         .loaded => {},
@@ -594,13 +661,20 @@ fn queue(s: *Script, m: *const Message, how: Asking, id: ?*Buffer, n_out: *u64) 
     if (g.memory.refused) return .out_of_memory;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
-    if (!machine.hostMessageName(name, args.len)) {
-        g.group.refuseDelivery(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide }, "invalid value");
+    const override = overrideOf(m.limits) catch return .invalid_value;
+    const loosens = if (override) |o| (if (g.group.script(s.name)) |target| o.loosens(target.limits) else false) else false;
+    if (!machine.hostMessageName(name, args.len) or loosens) {
+        g.group.refuseDelivery(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .limits = override }, "invalid value");
         return .invalid_value;
     }
+    if (g.group.script(s.name)) |target| if (g.group.mailboxFull(target)) {
+        g.group.refuseDelivery(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .limits = override }, "mailbox full");
+        return .err_mailbox_full;
+    };
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
     for (owned, args) |*x, v| x.* = v.retain();
     defer g.core.gpa.free(owned);
+    g.group.override = override;
     const n = (if (how == .decide) g.group.decide(s.name, name, owned) else g.group.deliver(s.name, name, owned, how == .request)) catch {
         for (owned) |v| v.release();
         return .out_of_memory;
@@ -1812,13 +1886,15 @@ fn queueTo(g: *Group, to: *objects.Object, m: *const Message, how: Asking, id: ?
     if (!g.owns(to)) return .wrong_group;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    const override = overrideOf(m.limits) catch return .invalid_value;
     if (!machine.hostMessageName(name, args.len)) {
-        g.group.refuseDelivery("", .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .target = to }, "invalid value");
+        g.group.refuseDelivery("", .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .target = to, .limits = override }, "invalid value");
         return .invalid_value;
     }
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
     for (owned, args) |*x, v| x.* = v.retain();
     defer g.core.gpa.free(owned);
+    g.group.override = override;
     const n = (if (how == .decide) g.group.decideTo(to, name, owned) else g.group.deliverTo(to, name, owned, how == .request)) catch {
         for (owned) |v| v.release();
         return .out_of_memory;
@@ -1848,6 +1924,7 @@ export fn talk_decide(g: *Group, to: *objects.Object, m: *const Message, id: ?*B
 
 fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
+    const override = overrideOf(m.limits) catch return .invalid_value;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
     if (!machine.hostMessageName(name, args.len)) {
@@ -1857,6 +1934,7 @@ fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
     for (owned, args) |*x, v| x.* = v.retain();
     defer g.core.gpa.free(owned);
+    g.group.override = override;
     const n = g.group.broadcast(name, owned, decision) catch {
         for (owned) |v| v.release();
         return .out_of_memory;
