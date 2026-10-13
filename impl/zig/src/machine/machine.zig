@@ -5540,25 +5540,12 @@ pub const Group = struct {
                 defer whole.release();
                 const after = ins.op == .append or ins.op == .append_all;
                 const r: *Value = switch (whole.data) {
-                    .list => |items| blk: {
-                        var out: std.ArrayList(*Value) = .empty;
+                    .list => blk: {
                         if (ins.op == .append_all or ins.op == .prepend_all) {
                             if (v.data != .list) return g.wrongKind("list", v);
-                            if (after) {
-                                try out.appendSlice(a, items);
-                                try out.appendSlice(a, v.data.list);
-                            } else {
-                                try out.appendSlice(a, v.data.list);
-                                try out.appendSlice(a, items);
-                            }
-                        } else if (after) {
-                            try out.appendSlice(a, items);
-                            try out.append(a, v);
-                        } else {
-                            try out.append(a, v);
-                            try out.appendSlice(a, items);
+                            break :blk model.listGrow(whole, v.data.list, after) catch return error.OutOfMemory;
                         }
-                        break :blk model.list(gpa, out.items) catch return error.OutOfMemory;
+                        break :blk model.listGrow(whole, &.{v}, after) catch return error.OutOfMemory;
                     },
                     .text => |t| blk: {
                         if (ins.op == .append_all or ins.op == .prepend_all) return g.wrongKind("list", whole);

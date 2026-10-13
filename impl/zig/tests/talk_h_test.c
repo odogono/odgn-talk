@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "talk.h"
 
@@ -742,9 +743,8 @@ static int stop_test(void) {
  * their Allocation Limit Fault, and a growing Script Variable in its
  * Persistent State Limit Fault, in a Group capped at 128 MiB. The Group
  * never refuses, and a Script beside them keeps its state and goes on
- * working. They run under the default limits, but the growing List's
- * Allocation Budget is 1 MiB: appending to a List costs time in proportion
- * to its length, so reaching the default 16 MiB takes about a minute. */
+ * working. They run under the default Allocation and Persistent State
+ * limits; growing the List must reach its fault in under a second. */
 static int load_limited(talk_group *group, const char *name, const char *source, const talk_limits *limits, talk_script **out) {
     talk_load_options load = {name, strlen(name), source, strlen(source), NULL, 0, false, NULL, NULL, 0, limits};
     return talk_load(group, &load, out) != TALK_OK;
@@ -762,10 +762,8 @@ static int runaway_test(void) {
      * Allocation Budget is what ends them. */
     talk_limits fuel = {0};
     fuel.fuel_per_run = 1000000000;
-    talk_limits list = fuel;
-    list.alloc_per_run = 1 << 20;
     talk_script *hog = NULL, *dbl = NULL, *hoard = NULL, *calm = NULL;
-    int bad = load_limited(group, "hog", "on hog\n  put [] into xs\n  repeat forever\n    put \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" after xs\n  end repeat\nend hog\n", &list, &hog);
+    int bad = load_limited(group, "hog", "on hog\n  put [] into xs\n  repeat forever\n    put \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" after xs\n  end repeat\nend hog\n", &fuel, &hog);
     bad |= load_limited(group, "double", "on double\n  put \"x\" into s\n  repeat forever\n    put s & s into s\n  end repeat\nend double\n", &fuel, &dbl);
     bad |= load_limited(group, "hoard", "script variable hoard = []\non stash n\n  repeat for each i in 1..n\n    put \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" after hoard\n  end repeat\nend stash\n", NULL, &hoard);
     bad |= load_limited(group, "calm", "script variable n = 0\non bump\n  add 1 to n\nend bump\n", NULL, &calm);
@@ -783,7 +781,15 @@ static int runaway_test(void) {
     bad |= talk_script_deliver(hoard, &stash, NULL) != TALK_OK;
     bad |= talk_script_deliver(calm, &bump, NULL) != TALK_OK;
     talk_value_release(many);
+    struct timespec before = {0}, after = {0};
+    bad |= timespec_get(&before, TIME_UTC) != TIME_UTC;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= timespec_get(&after, TIME_UTC) != TIME_UTC;
+    double elapsed = (double)(after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec) / 1e9;
+    if (elapsed >= 1.0) {
+        fprintf(stderr, "talk.h: runaway Scripts took %.3f s (expected under 1 s)\n", elapsed);
+        bad = 1;
+    }
     /* Each runaway is healthy afterwards: it takes its next Delivery. */
     talk_value *few = NULL;
     talk_int(3, &few);
@@ -797,7 +803,8 @@ static int runaway_test(void) {
     talk_memory memory;
     talk_group_memory(group, &memory);
     bad |= memory.refused || memory.peak > memory.cap;
-    bad |= strstr(trace, "run hog/r1 outcome=limit-fault delivery=d2 handler=hog limit=alloc ") == NULL;
+    bad |= strstr(trace, "fault hog/r1 limit=alloc at=hog:8 pos=4:5\n") == NULL;
+    bad |= strstr(trace, "run hog/r1 outcome=limit-fault delivery=d2 handler=hog limit=alloc fuel=1715861 alloc=16777216\n") == NULL;
     bad |= strstr(trace, "run double/r1 outcome=limit-fault delivery=d3 handler=double limit=alloc ") == NULL;
     bad |= strstr(trace, "run hoard/r1 outcome=limit-fault delivery=d4 handler=stash limit=persistent ") == NULL;
     bad |= strstr(trace, "run hoard/r2 outcome=completed delivery=d6 handler=stash ") == NULL;
