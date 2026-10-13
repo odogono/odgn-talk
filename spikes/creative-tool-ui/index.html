@@ -252,75 +252,81 @@ const FONTS = { serif: "'Iowan Old Style', 'Palatino', Georgia, serif", sans: "-
 
 const PROJECT_SCRIPT = `-- Project Script: keeps shared story state
 -- for the whole Play Session.
-on startPlay
-  set the clues of me to []
-end startPlay
+script variable clues = []
 
 on foundClue clue
-  append clue to the clues of me
-end foundClue`;
+  put clue after clues
+end foundClue
 
+on clueCount
+  return size(clues)
+end clueCount`;
+
+// Names are identifiers bound when Play loads each Script (#735); button labels are separate.
 const AUTHORED = {
-  name: 'The Lighthouse Mystery',
+  name: 'lighthouseMystery',
   script: PROJECT_SCRIPT,
   pages: [
-    { id: 'p1', name: 'The Shore', height: 860, bg: '#efe8da', script: '', elements: [
-      { id: 'e1', kind: 'text', name: 'Title', x: 60, y: 40, w: 600, h: 70, font: 'serif', size: 44, color: '#2d2a26', html: '<p>The Lighthouse Mystery</p>' },
-      { id: 'e2', kind: 'image', name: 'Shore illustration', x: 60, y: 125, w: 600, h: 380, asset: 'shore' },
-      { id: 'e3', kind: 'text', name: 'Story', x: 60, y: 530, w: 600, h: 130, font: 'serif', size: 21, color: '#3b362f', html: '<p>The lamp went dark at midnight. By morning the keeper was gone — and the lighthouse door stood <i>wide open</i>.</p><p>You have until the <b>tide</b> comes in.</p>' },
-      { id: 'e4', kind: 'line', name: 'Divider', x: 60, y: 690, w: 600, h: 2, fill: '#c9bfae' },
-      { id: 'e5', kind: 'button', name: 'Listen to the sea', label: '♪ Listen to the sea', x: 60, y: 730, w: 260, h: 56, fill: '#3d6f86', color: '#fff', radius: 28, action: { type: 'sound', file: 'waves.mp3' },
-        script: `-- Recipe: Play a sound\non click\n  play sound "waves.mp3"\nend click` },
-      { id: 'e6', kind: 'button', name: 'Climb the stairs', label: 'Climb the stairs →', x: 400, y: 730, w: 260, h: 56, fill: '#c8483b', color: '#fff', radius: 28, action: { type: 'go', page: 'p2' },
-        script: `-- Recipe: Go to a Page\non click\n  go to page "The Lamp Room"\nend click` },
+    { id: 'p1', name: 'shore', height: 860, bg: '#efe8da', script: '', elements: [
+      { id: 'e1', kind: 'text', name: 'title', x: 60, y: 40, w: 600, h: 70, font: 'serif', size: 44, color: '#2d2a26', html: '<p>The Lighthouse Mystery</p>' },
+      { id: 'e2', kind: 'image', name: 'shoreArt', x: 60, y: 125, w: 600, h: 380, asset: 'shore' },
+      { id: 'e3', kind: 'text', name: 'story', x: 60, y: 530, w: 600, h: 130, font: 'serif', size: 21, color: '#3b362f', html: '<p>The lamp went dark at midnight. By morning the keeper was gone — and the lighthouse door stood <i>wide open</i>.</p><p>You have until the <b>tide</b> comes in.</p>' },
+      { id: 'e4', kind: 'line', name: 'divider', x: 60, y: 690, w: 600, h: 2, fill: '#c9bfae' },
+      { id: 'e5', kind: 'button', name: 'listenButton', label: '♪ Listen to the sea', x: 60, y: 730, w: 260, h: 56, fill: '#3d6f86', color: '#fff', radius: 28, action: { type: 'sound', file: 'waves.mp3' },
+        script: `-- Recipe: Play a sound\non click\n  tell sound to play "waves"\nend click` },
+      { id: 'e6', kind: 'button', name: 'climbButton', label: 'Climb the stairs →', x: 400, y: 730, w: 260, h: 56, fill: '#c8483b', color: '#fff', radius: 28, action: { type: 'go', page: 'p2' },
+        script: `-- Recipe: Go to a Page\non click\n  tell pages to show lampRoom\nend click` },
     ]},
-    { id: 'p2', name: 'The Lamp Room', height: 1000, bg: '#1f2a3a', elements: [
-      { id: 'e7', kind: 'text', name: 'Title', x: 60, y: 40, w: 600, h: 60, font: 'serif', size: 38, color: '#f5d98b', html: '<p>The Lamp Room</p>' },
-      { id: 'e8', kind: 'image', name: 'Broken lamp', x: 60, y: 120, w: 360, h: 360, asset: 'lamp' },
-      { id: 'e9', kind: 'text', name: 'Description', x: 450, y: 120, w: 210, h: 280, font: 'serif', size: 19, color: '#dfe6ef', html: '<p>Shattered glass everywhere.</p><p>A logbook lies open on the desk, its last page <b>torn out</b>.</p>' },
-      { id: 'e10', kind: 'button', name: 'Examine the logbook', label: 'Examine the logbook', x: 450, y: 424, w: 210, h: 56, fill: '#f5d98b', color: '#1f2a3a', radius: 10, action: { type: 'clue', clue: 'torn logbook page' },
+    { id: 'p2', name: 'lampRoom', height: 1000, bg: '#1f2a3a', elements: [
+      { id: 'e7', kind: 'text', name: 'title', x: 60, y: 40, w: 600, h: 60, font: 'serif', size: 38, color: '#f5d98b', html: '<p>The Lamp Room</p>' },
+      { id: 'e8', kind: 'image', name: 'lampArt', x: 60, y: 120, w: 360, h: 360, asset: 'lamp' },
+      { id: 'e9', kind: 'text', name: 'description', x: 450, y: 120, w: 210, h: 280, font: 'serif', size: 19, color: '#dfe6ef', html: '<p>Shattered glass everywhere.</p><p>A logbook lies open on the desk, its last page <b>torn out</b>.</p>' },
+      { id: 'e10', kind: 'button', name: 'logbookButton', label: 'Examine the logbook', x: 450, y: 424, w: 210, h: 56, fill: '#f5d98b', color: '#1f2a3a', radius: 10, action: { type: 'clue', clue: 'torn logbook page' },
         script: `on click\n  send foundClue with "torn logbook page" to me\n  set the label of me to "Logbook examined ✓"\n  set the fill of me to "#5b6472"\nend click` },
-      { id: 'e11', kind: 'rect', name: 'Journal paper', x: 60, y: 520, w: 600, h: 300, fill: '#fbf6e9', radius: 6 },
-      { id: 'e12', kind: 'text', name: 'Journal', editable: true, x: 84, y: 540, w: 552, h: 260, font: 'hand', size: 20, color: '#2d3b55', html: '<p><b>My journal</b></p><p>Write down what you notice…</p>' },
-      { id: 'e13', kind: 'button', name: 'Back down', label: '← Back down', x: 60, y: 860, w: 200, h: 52, fill: '#3a4659', color: '#fff', radius: 10, action: { type: 'go', page: 'p1' },
-        script: `-- Recipe: Go to a Page\non click\n  go to page "The Shore"\nend click` },
-    ], script: `-- Page Script: The Lamp Room
+      { id: 'e11', kind: 'rect', name: 'journalPaper', x: 60, y: 520, w: 600, h: 300, fill: '#fbf6e9', radius: 6 },
+      { id: 'e12', kind: 'text', name: 'journal', editable: true, x: 84, y: 540, w: 552, h: 260, font: 'hand', size: 20, color: '#2d3b55', html: '<p><b>My journal</b></p><p>Write down what you notice…</p>' },
+      { id: 'e13', kind: 'button', name: 'backButton', label: '← Back down', x: 60, y: 860, w: 200, h: 52, fill: '#3a4659', color: '#fff', radius: 10, action: { type: 'go', page: 'p1' },
+        script: `-- Recipe: Go to a Page\non click\n  tell pages to show shore\nend click` },
+    ], script: `-- Page Script: lampRoom
 on foundClue clue
   -- Recipe: Create a button
-  create button "Open the trapdoor" at 420, 860
+  ask elements to create "button", thisPage, "trapdoor"
+  set the label of it to "Open the trapdoor ↓"
+  set the left of it to 420
+  set the top of it to 860
   pass foundClue
 end foundClue
 
 on click
-  -- clicks on created buttons reach this Page
-  if the name of the target is "Open the trapdoor" then
-    go to page "The Cellar"
+  -- a created button has no Script, so its click reaches this Page
+  if the name of the target is "trapdoor" then
+    tell pages to show cellar
   end if
 end click` },
-    { id: 'p3', name: 'The Cellar', height: 820, bg: '#2b2320', elements: [
-      { id: 'e14', kind: 'text', name: 'Title', x: 60, y: 40, w: 600, h: 60, font: 'serif', size: 38, color: '#f5c26b', html: '<p>The Cellar</p>' },
-      { id: 'e15', kind: 'image', name: 'Cellar', x: 60, y: 120, w: 600, h: 340, asset: 'cellar' },
-      { id: 'e16', kind: 'ellipse', name: 'Lantern glow', x: 520, y: 470, w: 120, h: 120, fill: 'rgba(245,194,107,.18)' },
-      { id: 'e17', kind: 'text', name: 'Verdict', x: 60, y: 490, w: 460, h: 160, font: 'serif', size: 21, color: '#efe3cf', html: '<p>At the bottom of the stairs: the keeper, asleep beside the torn page.</p>' },
-      { id: 'e18', kind: 'button', name: 'Start again', label: 'Start again', x: 60, y: 690, w: 200, h: 52, fill: '#f5c26b', color: '#2b2320', radius: 10, action: { type: 'go', page: 'p1' },
-        script: `-- Recipe: Go to a Page\non click\n  go to page "The Shore"\nend click` },
-    ], script: `-- Page Script: The Cellar
+    { id: 'p3', name: 'cellar', height: 820, bg: '#2b2320', elements: [
+      { id: 'e14', kind: 'text', name: 'title', x: 60, y: 40, w: 600, h: 60, font: 'serif', size: 38, color: '#f5c26b', html: '<p>The Cellar</p>' },
+      { id: 'e15', kind: 'image', name: 'cellarArt', x: 60, y: 120, w: 600, h: 340, asset: 'cellar' },
+      { id: 'e16', kind: 'ellipse', name: 'glow', x: 520, y: 470, w: 120, h: 120, fill: 'rgba(245,194,107,.18)' },
+      { id: 'e17', kind: 'text', name: 'verdict', x: 60, y: 490, w: 460, h: 160, font: 'serif', size: 21, color: '#efe3cf', html: '<p>At the bottom of the stairs: the keeper, asleep beside the torn page.</p>' },
+      { id: 'e18', kind: 'button', name: 'restartButton', label: 'Start again', x: 60, y: 690, w: 200, h: 52, fill: '#f5c26b', color: '#2b2320', radius: 10, action: { type: 'go', page: 'p1' },
+        script: `-- Recipe: Go to a Page\non click\n  tell pages to show shore\nend click` },
+    ], script: `-- Page Script: cellar
 on openPage
-  put the count of the clues of project into n
-  set the text of element "Verdict" to ¬
-    "You found " & n & " clue(s). The keeper wakes."
+  send clueCount to project and wait
+  set the text of verdict to "You found " & it & " clue(s). The keeper wakes."
 end openPage` },
   ],
 };
 
+// Recipes insert ordinary NorthTalk using the agreed Host interface (#735).
 const RECIPES = [
-  { name: 'Go to a Page', hint: 'When clicked, show another Page', src: p => `on click\n  go to page "${p}"\nend click` },
-  { name: 'Play a sound', hint: 'Play an imported audio file', src: () => `on click\n  play sound "waves.mp3"\nend click` },
-  { name: 'Show / hide', hint: 'Toggle another Element', src: () => `on click\n  set the visible of element "Journal" to not the visible of element "Journal"\nend click` },
+  { name: 'Go to a Page', hint: 'When clicked, show another Page', src: p => `on click\n  tell pages to show ${p}\nend click` },
+  { name: 'Play a sound', hint: 'Play an imported audio file', src: () => `on click\n  tell sound to play "waves"\nend click` },
+  { name: 'Show / hide', hint: 'Toggle another Element', src: () => `on click\n  set the visible of journal to not the visible of journal\nend click` },
   { name: 'Remember a clue', hint: 'Store shared story state', src: () => `on click\n  send foundClue with "a clue" to project\nend click` },
-  { name: 'Change text', hint: 'Replace an Element’s text', src: () => `on click\n  set the text of element "Story" to "Something changed."\nend click` },
-  { name: 'After a delay', hint: 'Run something later', src: () => `on openPage\n  wait 3 seconds\n  set the visible of element "Title" to true\nend openPage` },
-  { name: 'Create a button', hint: 'Add an Element during Play', src: () => `on openPage\n  create button "Surprise!" at 300, 400\nend openPage` },
+  { name: 'Change text', hint: 'Replace an Element’s text', src: () => `on click\n  set the text of story to "Something changed."\nend click` },
+  { name: 'After a delay', hint: 'Run something later', src: () => `on openPage\n  wait 3 s\n  set the visible of title to true\nend openPage` },
+  { name: 'Create a button', hint: 'Add an Element during Play', src: () => `on openPage\n  ask elements to create "button", thisPage, "surprise"\n  set the label of it to "Surprise!"\nend openPage` },
 ];
 
 // ===================================================================
@@ -389,7 +395,7 @@ function checkScript(src) {
     let m;
     if ((m = l.match(/^on (\w+)/))) stack.push({ w: m[1], line: i + 1 });
     else if (/^if .* then$/.test(l)) stack.push({ w: 'if', line: i + 1 });
-    else if (/^(repeat|tell)\b/.test(l)) stack.push({ w: l.split(' ')[0], line: i + 1 });
+    else if (/^repeat\b/.test(l) || /^tell \w+$/.test(l)) stack.push({ w: l.split(' ')[0], line: i + 1 }); // one-line `tell g to op` isn't a block
     else if ((m = l.match(/^end (\w+)/))) {
       const top = stack.pop();
       if (!top) return { line: i + 1, msg: `\`end ${m[1]}\` has no matching \`on ${m[1]}\`` };
@@ -738,7 +744,7 @@ function goPage(id) {
 }
 function onOpenPage() {
   const P = S.play; const pg = page();
-  if (pg.id === 'p3') { const v = pg.elements.find(e => e.name === 'Verdict'); if (v) { v.html = `<p>At the bottom of the stairs: the keeper, asleep beside the torn page.</p><p>You found <b>${P.clues.length}</b> clue${P.clues.length === 1 ? '' : 's'}. The keeper wakes.</p>`; } }
+  if (pg.id === 'p3') { const v = pg.elements.find(e => e.name === 'verdict'); if (v) { v.html = `<p>At the bottom of the stairs: the keeper, asleep beside the torn page.</p><p>You found <b>${P.clues.length}</b> clue${P.clues.length === 1 ? '' : 's'}. The keeper wakes.</p>`; } }
 }
 function runButton(el) {
   const P = S.play; const a = el.action || {};
@@ -748,7 +754,7 @@ function runButton(el) {
     if (P.clues.includes(a.clue)) return;
     P.clues.push(a.clue);
     el.label = 'Logbook examined ✓'; el.fill = '#5b6472'; el.color = '#fff'; P.changes += 2;
-    page().elements.push({ id: 'e' + (++uid), kind: 'button', name: 'Open the trapdoor', label: 'Open the trapdoor ↓', x: 420, y: 860, w: 240, h: 52, fill: '#c8483b', color: '#fff', radius: 10, action: { type: 'go', page: 'p3' }, created: true });
+    page().elements.push({ id: 'e' + (++uid), kind: 'button', name: 'trapdoor', label: 'Open the trapdoor ↓', x: 420, y: 860, w: 240, h: 52, fill: '#c8483b', color: '#fff', radius: 10, action: { type: 'go', page: 'p3' }, created: true });
     P.created++;
     toast('Clue remembered by the Project Script. The Page Script created a button.');
     return;
