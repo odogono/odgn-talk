@@ -1,7 +1,7 @@
 // Runs the sqlite test kit on node:sqlite in whichever runtime runs this
-// file, bundled, so the implementation is held to the kit under Node and
-// Deno as well as Bun. Reads the sequences as JSON from the path given, and
-// prints each failure as a JSON line.
+// file, bundled, so the implementation is held to the kit under Node as well
+// as Bun. Reads the sequences as JSON from the path given, and prints each
+// failure as a JSON line.
 //   node sqlite-kit-runtime.js sequences.json
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

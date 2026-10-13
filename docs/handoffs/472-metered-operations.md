@@ -14,7 +14,7 @@ Required sections: declaration/effect safety and synchronous authorization; asyn
 1. Add declaration metadata, validation, manifests/fingerprints and native APIs. Add pending-call source positions, request identity/counter, retained issued-call eligibility, one-outstanding enforcement, FIFO admission, report/future settlement and terminal cleanup. Preserve queued requests across lifecycle teardown until a Pump resolves them inactive. Activate and match the staged Go/TS declarations and expose the same behavior through the Message Layer and Zig's embedding surface.
 2. Implement accounting, saved counter/version changes and Save refusals. Preserve existing early-interruption and timer order. Paid requests remain paid if cancellation lands later in the same Pump. No asynchronous write transaction or synthetic Segment is introduced.
 3. Activate the executable Trace and setup catalogues together with parsers, writers, replay backends, case loaders and Session recording/replay. Add cases only once consumers understand them; do not weaken coverage or bless changed expectations merely to make checks pass.
-4. Change SQLite factories and every supplied driver to `perStep` and the `beforeStep` callback. Update Go/Bun/Node/Deno adapters, test kits, examples and current-support guides together. No standard SQLite Message Layer factory is added by this design; generic metered Operations must work over that layer.
+4. Change SQLite factories and every supplied driver to `perStep` and the `beforeStep` callback. Update Go/Bun/Node adapters, test kits, examples and current-support guides together. No standard SQLite Message Layer factory is added by this design; generic metered Operations must work over that layer.
 
 ### Deferred Data Files and consumers
 

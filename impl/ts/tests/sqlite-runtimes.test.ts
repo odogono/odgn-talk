@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sqliteKitSequences } from '../tools/sqlite-kit';
 
-// The implementation is node:sqlite, so it runs unchanged under Node and
-// Deno. A runtime that isn't on PATH, or whose node:sqlite has no
-// setAuthorizer, is skipped, unless NORTHTALK_SQLITE_RUNTIMES, a comma
-// list, requires it.
+// The implementation is node:sqlite, so it runs unchanged under Node. Node is
+// skipped when it isn't on PATH, or its node:sqlite has no setAuthorizer,
+// unless NORTHTALK_SQLITE_RUNTIMES, a comma list, requires it.
 const required = new Set(
   (process.env.NORTHTALK_SQLITE_RUNTIMES ?? '').split(',').filter(Boolean),
 );
@@ -32,24 +31,12 @@ const bundled = async () => {
 
 const runtimes = {
   node: (script: string, ...args: string[]) => ['node', script, ...args],
-  deno: (script: string, ...args: string[]) => [
-    'deno',
-    'run',
-    '--allow-read',
-    '--allow-write',
-    '--allow-env',
-    script,
-    ...args,
-  ],
 };
 const supported = (name: string) => {
   if (!Bun.which(name)) {
     return false;
   }
-  const command =
-    name === 'node'
-      ? ['node', '--input-type=module', '-e', AUTHORIZER]
-      : ['deno', 'eval', AUTHORIZER];
+  const command = ['node', '--input-type=module', '-e', AUTHORIZER];
   return Bun.spawnSync(command).stdout.toString().trim() === 'function';
 };
 
