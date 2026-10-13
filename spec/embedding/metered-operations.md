@@ -1,6 +1,6 @@
 # Metered Operations
 
-This is the normative incremental charging contract of [chapter 9](../09-embedding.md#metered-operations), decided in [ADR 0082](../../docs/adr/0082-metered-operations-authorize-work-through-the-pump.md). The [implementation handoff](../../docs/handoffs/472-metered-operations.md) identifies deferred executable catalogues and acceptance work. The record and setup extensions below take precedence over the older generated tables until those catalogues are activated.
+This is the normative incremental charging contract of [chapter 9](../09-embedding.md#metered-operations), decided in [ADR 0082](../../docs/adr/0082-metered-operations-authorize-work-through-the-pump.md). The [implementation handoff](../../docs/handoffs/472-metered-operations.md) identifies deferred executable catalogues and acceptance work. The record/setup extensions and target embedding declarations below take precedence over the older generated tables and checked interface files for this feature until implementation activates them together.
 
 ## Declarations and effect safety
 
@@ -71,6 +71,79 @@ For synchronous callbacks, `call.charged` remains the sum of accepted increments
 A Stub without `charge-refused` retains its existing single-charge behavior, including a possible refusal. With `charge-refused=yes`, its `charge` is the accepted prefix total (zero when absent), which must fit; then simulate a refused increment without doing work. `value` and `error` must be absent. Live-Trace replay uses the same accepted-prefix-plus-refusal behavior; it must not mistake a successfully paid prefix for a successful whole call. No simulated increment may overflow the Fuel amount representation. Replay may inject the refusal directly through its Host adapter. Ordinary automatic-abandonment Stubs cannot charge or refuse a charge.
 
 The Message Layer adds `request-charge` with `call` and `fuel`; its immediate `ok` reply contains `request`, acknowledging enqueue only. A later `pump` report has `kind: "charge result"`, `request`, `call`, `fuel`, `status`. Host glue settles its local future from that report. During a synchronous `op`, keep subtracting local `fuelLeft` before each chunk; latch refusal and send `{limit: true, charged: <accepted total>}` even if the callback suppressed refusal. The Core records `charge-refused=yes`. Successful replies cannot override a latched refusal. Never reuse `fuelLeft` after replying `started`: subsequent work requires `request-charge` and a later Pump outcome. The existing transport `ref` is distinct from the Core-assigned request id.
+
+## Target embedding declarations
+
+These declarations are the normative implementation target. The checked `talk.go` and `talk.ts` files retain their pre-metering declarations until the runtime implementation lands, so the existing API comparison continues to verify the implemented contract without exemptions. Move these additions and replacements into those files with implementation; all unrelated members stay unchanged.
+
+In Go, add `Metering string` to `Operation` immediately after `SegmentBound`. Its values are empty, `"read-only"` and `"segment-bound"`, validated as above. Add the following request and report types; `ChargeResult` implements `Report`:
+
+```go
+func (c *Call) RequestCharge(fuel int64) (*ChargeRequest, error)
+
+type ChargeRequestID string
+
+type ChargeRequest struct { /* opaque */ }
+
+func (r *ChargeRequest) ID() ChargeRequestID
+func (r *ChargeRequest) Done() <-chan struct{}
+func (r *ChargeRequest) Result() *ChargeResult // read after Done closes at Pump end
+
+type ChargeResult struct {
+    Request ChargeRequestID
+    Call    CallID
+    Fuel    int64 // requested amount; only accepted contributes Fuel
+    Status  string // "accepted", "limit" or "inactive"
+}
+
+func (*ChargeResult) isReport()
+```
+
+Replace the Go SQLite implementation interface and factory signature with:
+
+```go
+type SqliteImpl interface {
+    Coordinator(database string) *SegmentLifecycle
+    Query(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
+    Change(c *Call, sql string, params SqlParams, max int64, beforeStep func() error) (SqlRows, error)
+    Begin(c *Call) error
+    Commit(c *Call) error
+    Rollback(c *Call) error
+}
+
+func (c *Core) SqliteCapability(impl SqliteImpl, costs Costs, perStep int64) (*CapabilityDef, error)
+```
+
+In TS, add `metering?: "read-only" | "segment-bound"` to `ImmediateOp` and `metering?: "read-only"` to `SuspendingOp`; `FireOp` has no metering member. Add `requestCharge(fuel: number): ChargeRequest` to `Call<B>`, and include `ChargeResult` in the `Report` union:
+
+```ts
+export interface ChargeRequest {
+  readonly id: string;
+  readonly result: Promise<ChargeResult>; // settles at the processing Pump's end
+}
+export interface ChargeResult {
+  readonly kind: "charge result";
+  readonly request: string;
+  readonly call: string;
+  readonly fuel: number; // requested amount; only accepted contributes Fuel
+  readonly status: "accepted" | "limit" | "inactive";
+}
+```
+
+Replace the TS SQLite implementation interface with:
+
+```ts
+export interface SqliteImpl {
+  coordinator(database: string): SegmentCoordinator;
+  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows;
+  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows & { readonly changes: number };
+  begin(call: Call<SqliteBinding>): void;
+  commit(call: Call<SqliteBinding>): void;
+  rollback(call: Call<SqliteBinding>): void;
+}
+```
+
+The TS Core factory becomes `sqliteCapability(impl: SqliteImpl, costs: Costs, perStep: number): CapabilityDef<SqliteBinding>`. Both factories supply the `beforeStep` callback as specified below. The existing `Charge`, `AnswerWithCost`/`answer`, and Save signatures stay unchanged; their metering behavior follows this contract rather than the legacy comments in the staged interface files.
 
 ## SQLite step authorization
 

@@ -1,4 +1,6 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
+// Metering extensions and SQLite perStep signatures are staged in
+// metered-operations.md#target-embedding-declarations until runtime implementation.
 // The package is @odgn/northtalk.
 //
 // This file mirrors talk.go call for call. The differences are idiom only
@@ -243,7 +245,6 @@ export interface ImmediateOp<B> extends OpBase {
   mode: "immediate";
   scope?: ScopeDecl;
   segmentBound?: boolean; // absent/false: ordinary immediate effects
-  metering?: "read-only" | "segment-bound"; // latter requires segmentBound: true
   /** Return a Value, or throw ScriptError, LimitReached, or anything else as `host error`. */
   do(call: Call<B>, ...args: Value[]): Value;
 }
@@ -254,7 +255,6 @@ export interface ImmediateOp<B> extends OpBase {
  */
 export interface SuspendingOp<B> extends OpBase {
   mode: "suspending";
-  metering?: "read-only";
   maxPendingMs?: number; // whole milliseconds; otherwise the Script's maxWaitMs
   start?(call: Call<B>, ...args: Value[]): void;
   run?(call: Call<B>, ...args: Value[]): Promise<Value>;
@@ -285,29 +285,14 @@ export interface Call<B> {
   readonly binding: B;
   readonly now: bigint;        // the last observed Clock reading
   readonly signal: AbortSignal; // aborted when the call is abandoned, including by a timeout
-  /** Synchronous during the callback; metered calls may authorize successive chunks. Refusal latches LimitReached. */
+  /** Legal only while starting a Script call; forbidden for automatic abandonment. Throws LimitReached. */
   charge(fuel: number): void;
-  /** Queued; read-only suspending metering only. One unresolved request per Call. See metered-operations.md. */
-  requestCharge(fuel: number): ChargeRequest;
   /**
    * Queued, into the Group that made this Call, never one restored from it.
    * Ignored once the call isn't pending: abandoned, its Run ended, or discarded by a restore.
-   * lateCost covers additional unpaid work; metering increments are never charged again.
    */
   answer(v: Value, lateCost?: { fuel: number }): void;
   fail(e: ScriptError): void;
-}
-
-export interface ChargeResult {
-  readonly kind: "charge result";
-  readonly request: string;
-  readonly call: string;
-  readonly fuel: number; // requested amount; only accepted contributes Fuel
-  readonly status: "accepted" | "limit" | "inactive";
-}
-export interface ChargeRequest {
-  readonly id: string; // Group-wide q1, q2, ...
-  readonly result: Promise<ChargeResult>; // settles when the processing Pump finishes
 }
 
 // ---------------------------------------------------------------------------
@@ -398,9 +383,7 @@ export interface SqlRows {
 }
 /**
  * The Core has checked the Shapes and max, converted params by the chapter 7
- * rules and charged the declared cost. Call beforeStep immediately before each
- * statement step, including completion/overflow probes; propagate refusal.
- * The factory callback charges perStep. It converts the result, raising `sql` for a
+ * rules and charged max × perRow. It converts the result, raising `sql` for a
  * column named twice and `unrepresentable` for a double it can't hold.
  * change, begin, commit and rollback are Segment-bound: they act inside the
  * calling Segment's transaction, which the coordinator publishes or discards.
@@ -412,8 +395,8 @@ export interface SqlRows {
 export interface SqliteImpl {
   /** Called once per Grant. The same database gives the same coordinator. */
   coordinator(database: string): SegmentCoordinator;
-  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows;
-  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number, beforeStep: () => void): SqlRows & { readonly changes: number };
+  query(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows;
+  change(call: Call<SqliteBinding>, sql: string, params: SqlParams, max: number): SqlRows & { readonly changes: number };
   begin(call: Call<SqliteBinding>): void;
   commit(call: Call<SqliteBinding>): void;
   rollback(call: Call<SqliteBinding>): void;
@@ -537,8 +520,8 @@ export interface Core {
   timerCapability(impl: TimerImpl, costs: Costs): CapabilityDef<unknown>;
   consoleCapability(impl: ConsoleImpl, costs: Costs): CapabilityDef<unknown>;
   storeCapability(impl: StoreImpl, costs: Costs): CapabilityDef<string>;      // binding: the Store's name; impl coordinates every binding
-  /** Optional for Hosts. perStep is whole Fuel charged before each statement step; a bad one throws "invalid value". */
-  sqliteCapability(impl: SqliteImpl, costs: Costs, perStep: number): CapabilityDef<SqliteBinding>;
+  /** Optional for Hosts. perRow is whole Fuel charged per row of max; a bad one throws "invalid value". */
+  sqliteCapability(impl: SqliteImpl, costs: Costs, perRow: number): CapabilityDef<SqliteBinding>;
   /** Optional for Hosts. */
   userCapability(impl: UserImpl, costs: Costs): CapabilityDef<unknown>;
   /** Throws LoadError. `imports` holds every Library its `use` lines name. */
@@ -635,7 +618,7 @@ export interface Group {
   call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
   /** Worker. Synchronous. now is epoch nanoseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
-  /** Throws effects pending for live scopes/participants, pending asynchronous metered calls, unresolved charge requests or fatal effect uncertainty. */
+  /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
   save(): Uint8Array;
   fingerprint(): Uint8Array; // the Group Fingerprint, 32 bytes
   /** Worker, and the Host Input `vars`. Reads the Group without changing it. */
@@ -761,7 +744,7 @@ export interface CausalWork {
 
 export type Report =
   | { kind: "host error"; code: HostErrorCode; detail?: string } // drain-time Host refusal; detail is outside parity
-  | RunStarted | RunDiscarded | RunAccounting | CausalWork | ChargeResult
+  | RunStarted | RunDiscarded | RunAccounting | CausalWork
   | {
       kind: "run end";
       script: string;

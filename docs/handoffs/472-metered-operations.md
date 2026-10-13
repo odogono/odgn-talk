@@ -2,8 +2,8 @@
 
 ## Required base and delivery boundary
 
-- **Specification revision / required base:** [baac99a8c30ab2bf1e4322784dde0e5243649d7c](https://github.com/odogono/odgn-talk/commit/baac99a8c30ab2bf1e4322784dde0e5243649d7c) on `docs/grill-issue-472`, based on `18877eaafa58df7990e4f13e6c2cd0cac80adec1`. This is committed specification work awaiting merge. Start implementation from this revision or its merged successor; the file set below identifies the complete specification delivery.
-- **Implemented in:** no runtime changes in this handoff. The normative contract is [Metered Operations](../../spec/embedding/metered-operations.md), with [ADR 0082](../adr/0082-metered-operations-authorize-work-through-the-pump.md) and updated Go/TS interface declarations.
+- **Specification revision / required base:** [PR #723](https://github.com/odogono/odgn-talk/pull/723), branch `docs/grill-issue-472`, based on `18877eaafa58df7990e4f13e6c2cd0cac80adec1`. Use the latest PR head or its merged successor. The initial specification commit `baac99a8c30ab2bf1e4322784dde0e5243649d7c` alone is insufficient: subsequent changes stage the target API declarations so checked interfaces continue to match runtime support.
+- **Implemented in:** no runtime changes in this handoff. The normative contract is [Metered Operations](../../spec/embedding/metered-operations.md), with [ADR 0082](../adr/0082-metered-operations-authorize-work-through-the-pump.md) and [staged Go/TS target declarations](../../spec/embedding/metered-operations.md#target-embedding-declarations).
 - **Remaining work:** all Core, Host, replay, tool and executable-catalogue acceptance below. Current support is documented beside the [Go](../../impl/go/README.md#ordinary-capability-operations), [TS](../../impl/ts/README.md#process-wide-core-and-host-manifests) and [Zig](../../impl/zig/README.md#the-machine) APIs.
 - **Approval still needed:** no new expectation files have been created or blessed. Future Trace and Session expectations require their first blessing under the [corpus workflow](../../corpus/README.md#checking); execution agreement is not approval.
 
@@ -11,17 +11,19 @@ Required sections: declaration/effect safety and synchronous authorization; asyn
 
 ## Implementation sequence
 
-1. Add declaration metadata, validation, manifests/fingerprints and native APIs. Add pending-call source positions, request identity/counter, retained issued-call eligibility, one-outstanding enforcement, FIFO admission, report/future settlement and terminal cleanup. Preserve queued requests across lifecycle teardown until a Pump resolves them inactive. Match the Go/TS declarations and expose the same behavior through the Message Layer and Zig's embedding surface.
+1. Add declaration metadata, validation, manifests/fingerprints and native APIs. Add pending-call source positions, request identity/counter, retained issued-call eligibility, one-outstanding enforcement, FIFO admission, report/future settlement and terminal cleanup. Preserve queued requests across lifecycle teardown until a Pump resolves them inactive. Activate and match the staged Go/TS declarations and expose the same behavior through the Message Layer and Zig's embedding surface.
 2. Implement accounting, saved counter/version changes and Save refusals. Preserve existing early-interruption and timer order. Paid requests remain paid if cancellation lands later in the same Pump. No asynchronous write transaction or synthetic Segment is introduced.
 3. Activate the executable Trace and setup catalogues together with parsers, writers, replay backends, case loaders and Session recording/replay. Add cases only once consumers understand them; do not weaken coverage or bless changed expectations merely to make checks pass.
 4. Change SQLite factories and every supplied driver to `perStep` and the `beforeStep` callback. Update Go/Bun/Node/Deno adapters, test kits, examples and current-support guides together. No standard SQLite Message Layer factory is added by this design; generic metered Operations must work over that layer.
 
 ### Deferred Data Files and consumers
 
+- `spec/embedding/talk.go` and `spec/embedding/talk.ts`: apply the [target declarations](../../spec/embedding/metered-operations.md#target-embedding-declarations) with runtime implementation. Their current declarations deliberately retain the existing checked API. This stages the metering field, request/result API and SQLite callback signatures without weakening the API comparison.
+
 - `spec/data/corpus.toml`: add `charge-request` and `charge-result` with the ordered fields in the contract, optional `call.charge-refused`, optional `stub.charge-refused`, optional Operation setup `metering`, and SQLite standard setup `perStep` replacing `perRow` (default 0, old key rejected). Existing generated tables intentionally lack these extensions until implementation. Remove the staging notices in chapters 11 and the metering contract when activated.
 - `spec/data/stdlib.toml`: add SQLite query/change metering metadata together with its schema and factory/catalogue consumers. Preserve the other SQLite declarations. This delivery does not change active Standard Capability tables.
 - Regenerate Spec output and Go/Zig tables when those catalogues change; update TS consumers and tooling manifest readers. `trace.ebnf` needs no syntax extension: its record grammar already permits the new names and fields. Existing `invalid value`, `unknown call` and `effects pending` codes suffice.
-- The Go API comparison will need runtime parity for the new request/result types, Operation field and SQLite callback signatures. Do not add exemptions to hide that intentional spec/implementation gap. Review snapshot format versions and manifest compatibility when implementing persisted counters and metadata.
+- Keep the Go API comparison passing when activating the new request/result types, Operation field and SQLite callback signatures. Do not add exemptions for staging. Review snapshot format versions and manifest compatibility when implementing persisted counters and metadata.
 
 ## Acceptance matrix
 
@@ -43,10 +45,9 @@ The planning inspection identified a **possible, unverified Zig discrepancy**: o
 
 ## Specification validation
 
-Checked on 2026-10-13 against specification commit `baac99a8c30ab2bf1e4322784dde0e5243649d7c`:
+The original API comparison failure was reproduced both in PR #723 CI and with `go -C impl/go test ./internal/apicheck`: `Operation.Metering` and the Query/Change callback signatures had been activated before implementation. The target declarations now live in the metering contract until implementation; the API comparison and runtime code are unchanged.
 
-- `bun run spec:gen`, `bun run check` (153 tooling tests plus Spec, grammar, machine, corpus, generation and documentation checks), `bun run go:check`, and `git diff --check` pass.
-- `go -C impl/go test ./internal/apicheck` fails on the intentionally unimplemented `Operation.Metering` field and Query/Change callback signatures. It also reports the new charging API names as unimplemented alongside pre-existing missing API names. Runtime API conformance is not claimed; no exemptions or expectations were changed.
+- Verified on 2026-10-13: `go -C impl/go test ./internal/apicheck`, the full `go -C impl/go test ./...` suite, `bun run check`, `bun run go:check`, and `git diff --check` pass.
 - No runtime, SQLite driver, new Trace Case or Session expectation has been implemented or blessed by this specification delivery.
 
 ## Specification file set
