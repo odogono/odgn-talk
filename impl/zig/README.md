@@ -563,10 +563,29 @@ the Host's would, Reissue runs the Operation's Start again, charging only
 its `Charge`, which a Run that can't cover it faults on at the call, and
 Adopt hands back the call. The first Pump must read a Clock at or after the
 saved one, or it is `clock backwards`, and after draining the settlements
-it fails every call still pending with `call lost`, in call id order. A
-restore checks every index, length and code position a save gives, so a
-corrupt or hostile save is refused, never read past; the operand stack
-shapes a Run's code expects aren't checked against its frames yet.
+it fails every call still pending with `call lost`, in call id order.
+
+A restore checks every index, length, count and code position a save
+gives, so a corrupt or hostile save is refused, never read past or run into
+a crash. Integers above 2⁵⁶, and limits above 2⁶², are refused, so the
+machine's arithmetic on them can't overflow, and every deadline must be an
+Instant the Core can show. [The stack verifier](src/machine/verify.zig)
+works out, from each unit's code and `machine.toml`'s stack effects, the
+operand stack every instruction expects: its depth, and which slots hold an
+iterator, a reader, a replacement or a Timeout Block's deadline, through
+jumps, Unwind Table targets and offer action entries. Each saved frame's
+stack must be that one: a calling frame's less its call's result, a
+suspended Run's top frame's less what its Suspension Point pushes on
+resuming. Inside a catch dispatch or cleanup, where frames are held aside
+and stacks cut back, each stack must be a prefix of its code's, and its
+search, cleanups and transfer must point at frames and Unwind Table entries
+that exist. A Run's own wait is no Join Member's, a Run queued in its
+Script's work is ready or preempted, and a saved iterator stays within what
+it iterates. A test holds every corpus unit to one stack shape at each
+instruction, and the decoder is fuzzed: every byte of two busy Groups'
+saves changed, and thousands of random changes, each with its digest made
+good again, must be refused or restore and run without a crash or leak,
+under both mismatch policies.
 
 The `store` notification router, a Host companion, waits for checkpoints.
 

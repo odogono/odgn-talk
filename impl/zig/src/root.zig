@@ -58,6 +58,7 @@ test {
     _ = @import("machine/objects.zig");
     _ = @import("machine/builtins.zig");
     _ = @import("machine/group_allocator.zig");
+    _ = @import("machine/verify.zig");
     _ = @import("decimal/transcendental.zig");
     _ = @import("pattern.zig");
     _ = corpus_trace;
