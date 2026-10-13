@@ -487,7 +487,7 @@ pub const Group = struct {
     }
 
     /// Sends each complete Trace line to the sink.
-    fn flush(g: *Group) void {
+    pub fn flush(g: *Group) void {
         const written = g.out.written();
         var start: usize = 0;
         while (std.mem.indexOfScalarPos(u8, written, start, '\n')) |end| {
@@ -1645,6 +1645,61 @@ export fn talk_inspection_release(i: ?*Inspection) void {
     const gpa = x.arena.child_allocator;
     x.arena.deinit();
     gpa.destroy(x);
+}
+
+/// The Message Layer (src/message.zig) is a Zig Host of this same API: it
+/// calls these exports as Zig functions, through these names.
+pub const direct = struct {
+    pub const new = talk_new;
+    pub const coreRelease = talk_core_release;
+    pub const newGroup = talk_new_group;
+    pub const groupRelease = talk_group_release;
+    pub const load = talk_load;
+    pub const groupScript = talk_group_script;
+    pub const scriptDeliver = talk_script_deliver;
+    pub const scriptRequest = talk_script_request;
+    pub const save = talk_save;
+    pub const fingerprint = talk_fingerprint;
+    pub const callAnswer = talk_call_answer;
+    pub const callFail = talk_call_fail;
+    pub const grant = talk_capability_def_grant;
+    pub const grantAll = talk_capability_def_grant_all;
+    pub const defineObjectKind = talk_define_object_kind;
+    pub const groupObject = talk_group_object;
+    pub const setParent = talk_set_parent;
+    pub const dispose = talk_dispose;
+    pub const ownedBytesRelease = talk_owned_bytes_release;
+    pub const valueRelease = talk_value_release;
+};
+
+/// Defines a Capability from Core Operations whose Host functions are the
+/// Core's own Zig functions, for the Message Layer. Takes `operations`
+/// (allocated with the Core's allocator) on success only.
+pub fn defineCapabilityZig(c: *Core, name: []const u8, operations: []caps.Operation, out: *?*caps.Capability) HostErrorCode {
+    out.* = null;
+    const gpa = c.gpa;
+    if (name.len == 0) return .invalid_value;
+    for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, name)) return .name_reused;
+    std.mem.sort(caps.Operation, operations, {}, struct {
+        fn less(_: void, x: caps.Operation, y: caps.Operation) bool {
+            return std.mem.order(u8, x.name, y.name) == .lt;
+        }
+    }.less);
+    for (operations[1..@max(operations.len, 1)], 0..) |op, i| if (std.mem.eql(u8, op.name, operations[i].name)) return .invalid_value;
+    const shape: caps.Capability = .{ .name = name, .operations = operations };
+    if (!shape.validScopes() or shape.segmentBound()) return .invalid_value;
+    const d = gpa.create(caps.Capability) catch return .out_of_memory;
+    d.* = .{ .name = gpa.dupe(u8, name) catch {
+        gpa.destroy(d);
+        return .out_of_memory;
+    }, .operations = operations };
+    c.definitions.append(gpa, d) catch {
+        gpa.free(d.name);
+        gpa.destroy(d);
+        return .out_of_memory;
+    };
+    out.* = d;
+    return .ok;
 }
 
 /// Whether `E`'s tags, spelled `prefix` ++ TAG, are the enumerators of

@@ -185,7 +185,17 @@ still use. Check names against the installed source, under `lib_dir` from
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
 the exports directly, passing structs and text through `talk_alloc` and
-`talk_free`. It is stripped of debug sections and has a 1 MiB stack, since the
+`talk_free`. It also speaks the
+[Message Layer](../../spec/09-embedding.md#the-message-layer) through
+`talk_buffer`/`talk_send` ([`src/message.zig`](src/message.zig),
+[#635](https://github.com/odogono/odgn-talk/issues/635)): one Core per
+instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
+`deliver`/`request`, `pump` with interim `op` and `prop` needs, `answer`/`fail`,
+`save` and `fingerprint`, and Object Kinds with `object`. It does not yet
+conform: `restore`, `resolve`, `settle`, `standard-capability`, `inspect`,
+`counters`, `effect`/`release` needs, load `owner`/`objects` and `$function`
+values are protocol errors, and a Pump's `nextDeadline` is null and
+`abandoned` empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory and nothing recurses past the depth guards.
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
 memory per instance and payload to #532's thresholds, in CI; the [first

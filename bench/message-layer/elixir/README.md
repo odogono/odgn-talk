@@ -20,6 +20,12 @@ mix talk.measure --render <file>.json   # rewrites a saved run's Markdown
 mix test                                # one Operation round trip on each transport
 ```
 
+Set `TALK_WASM` to measure another reactor module by path on the `wasmex`
+and `c` transports — the Zig Core's `wasm32-wasi` build
+([#635](https://github.com/odogono/odgn-talk/issues/635)) — instead of the
+Go build in `.cache/`; the sidecar stays the Go binary, and `--build`
+always rebuilds the Go artifacts.
+
 It needs Elixir 1.18 or later and Go 1.27. The sidecar's memory containment runs the Linux build in a container, so it needs Docker. Without Docker, that row is reported as skipped. A full run takes about half an hour on an Apple M5. Latency figures are sensitive to other load, so the report records the load average at the start; run it on a quiet machine.
 
 ## What it measures

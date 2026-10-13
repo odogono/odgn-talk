@@ -4,9 +4,12 @@
 # ///
 """Run the Zig Core's wasm32-wasi build in wasmtime and measure it.
 
-It drives talk.h's exports directly, with no Message Layer: a Core, a Group,
-a small Script and one Pump, as tools/wasi/check.py measures the Go reactor
-(ADR 0078). Build with `zig build -Dtarget=wasm32-wasi` in impl/zig, then run:
+It drives talk.h's exports directly: a Core, a Group, a small Script and
+one Pump, as tools/wasi/check.py measures the Go reactor (ADR 0078), and
+then the Message Layer's talk_buffer/talk_send through one Operation
+round trip and a fault (issue #635); check.py runs the same module
+unchanged for the full protocol check. Build with
+`zig build -Dtarget=wasm32-wasi` in impl/zig, then run:
     uv run tools/wasi/zig.py impl/zig/zig-out/bin/talk.wasm
 
 The Python bindings use the wasmtime C API:
@@ -263,6 +266,86 @@ def deep(engine, module):
     return depths
 
 
+class MessageHost:
+    """One instance spoken to through the Message Layer (#635): frames in
+    through talk_buffer/talk_send, interim op needs answered under the
+    Pump's own ref."""
+
+    def __init__(self, engine, module):
+        self.store = wasmtime.Store(engine)
+        wasi = wasmtime.WasiConfig()
+        wasi.inherit_stderr()
+        self.store.set_wasi(wasi)
+        linker = wasmtime.Linker(engine)
+        linker.define_wasi()
+        instance = linker.instantiate(self.store, module)
+        self.exports = instance.exports(self.store)
+        self.exports["_initialize"](self.store)
+        self.memory = self.exports["memory"]
+        self.ref = 0
+
+    def frame(self, data):
+        pointer = self.exports["talk_buffer"](self.store, len(data)) & 0xFFFFFFFF
+        assert pointer > 0
+        self.memory.write(self.store, data, pointer)
+        packed = self.exports["talk_send"](self.store, len(data)) & (1 << 64) - 1
+        out, size = packed >> 32, packed & 0xFFFFFFFF
+        assert out > 0 and size > 0
+        return json.loads(self.memory.read(self.store, out, out + size))
+
+    def send(self, message, /, *, is_result=False, **fields):
+        if not is_result:
+            self.ref += 1
+        reply = self.frame(json.dumps({"m": message, "ref": self.ref, **fields}).encode())
+        assert reply["ref"] == self.ref, reply
+        return reply
+
+    def ok(self, message, /, **fields):
+        reply = self.send(message, **fields)
+        assert "ok" in reply, reply
+        return reply["ok"]
+
+
+def message_layer(engine, module):
+    """Hello byte-identical, an immediate op answered through a need, a
+    Fuel fault, malformed frames, and a healthy instance after each."""
+    h = MessageHost(engine, module)
+    hello = h.ok("hello", protocol=1)
+    assert hello["core"].startswith("zig/"), hello
+    assert h.send("hello", protocol=2)["err"]["kind"] == "protocol error"
+    assert h.frame(b"{")["err"]["kind"] == "protocol error"
+    for length in (0, (64 << 20) + 1, 0xFFFFFFFF):
+        assert h.exports["talk_buffer"](h.store, length) == 0
+    h.ok(
+        "define-capability",
+        name="api",
+        ops=[{"name": "double", "mode": "immediate", "args": ["number"], "result": "number", "cost": {"fuel": 7}}],
+    )
+    grant = h.ok("grant", capability="api", ops="all")["grant"]
+    h.ok("new-group", group="g", name="g")
+    h.ok(
+        "load",
+        group="g",
+        name="s",
+        grants={"api": grant},
+        source="on double n\n  ask api to double n\n  return it + 1\nend double\non spin\n  repeat forever\n  end repeat\nend spin\n",
+    )
+    now = "2026-10-10T12:00:00Z"
+    h.ok("request", group="g", to={"script": "s"}, message={"name": "double", "args": [20]})
+    need = h.send("pump", group="g", now=now)["need"]
+    assert need["m"] == "op" and need["operation"] == "double" and need["args"] == [20], need
+    done = h.send("op-result", is_result=True, result=40, charged=3)["ok"]
+    ends = [r for r in done["reports"] if r["kind"] == "run end"]
+    assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == 41, done
+    h.ok("deliver", group="g", to={"script": "s"}, message={"name": "spin"})
+    spun = h.ok("pump", group="g", now=now)["reports"][-1]
+    assert spun["outcome"] == "limit fault" and spun["limit"] == "fuel", spun
+    assert h.ok("hello", protocol=1) == hello
+    size = h.memory.data_len(h.store)
+    assert size <= MEMORY_LIMIT, f"an instance holds {size} bytes (> 16 MiB)"
+    return {"hello": hello, "linearMemory": size}
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: uv run tools/wasi/zig.py path/to/talk.wasm")
@@ -279,6 +362,7 @@ def main():
     refused = containment(engine, module)
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
+    messages = message_layer(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -299,6 +383,7 @@ def main():
                 "containment": refused,
                 "nesting": nesting,
                 "largeLoads": loads,
+                "messageLayer": messages,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),

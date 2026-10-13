@@ -105,7 +105,7 @@ def check(engine, module):
     assert all(i.module == "wasi_snapshot_preview1" for i in module.imports)
     h = Host(engine, module)
     hello = h.ok("hello", protocol=1)
-    assert hello["core"].startswith("go/"), hello
+    assert hello["core"].startswith(("go/", "zig/")), hello
     assert all(hello[k] for k in ("language", "costModel", "unicode", "saveFormat"))
     assert h.send("hello", protocol=2)["err"]["kind"] == "protocol error"
 

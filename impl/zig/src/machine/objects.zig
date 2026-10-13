@@ -18,6 +18,9 @@ pub const Result = union(enum) {
     failed: @FieldType(capabilities.Outcome, "failed"),
     /// Any other failure, which the Script sees as `host error`.
     broken,
+    /// The Host cannot answer inside this call (the Message Layer): the
+    /// Pump pauses at the crossing.
+    deferred,
 };
 
 pub const Get = struct {

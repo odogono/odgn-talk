@@ -14,6 +14,7 @@ pub const corpus_case = @import("corpus/case.zig");
 pub const corpus_disassembly = @import("corpus/disassembly.zig");
 pub const corpus_replay = @import("corpus/replay.zig");
 pub const talk = @import("talk.zig");
+pub const message = @import("message.zig");
 
 /// Tables generated from the Spec's Data Files by tools/zig/generate.ts and
 /// tools/unicode/generate.ts. Never edit them by hand.
@@ -36,6 +37,8 @@ pub const generated = struct {
 comptime {
     // Keeps talk.h's exports in every build.
     _ = talk;
+    // And the Message Layer's, in the wasm32-wasi build.
+    _ = message;
 }
 
 test {
@@ -69,4 +72,5 @@ test {
     _ = corpus_replay;
     _ = @import("dates.zig");
     _ = talk;
+    _ = message;
 }
