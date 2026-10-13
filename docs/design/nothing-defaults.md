@@ -250,8 +250,8 @@ receiver. `lookup` also handles list positions and reports cumulative paths.
 ## Acceptance cases
 
 The ten groups below are required observations. The corpus covers them on
-TS, Go and Zig, in ordinary and Save/Restore replay; first blessing is a
-separate human review ([corpus guide](../../corpus/README.md#seed-blessing)).
+TS, Go and Zig, in ordinary and Save/Restore replay, and the maintainer approved their first
+blessings ([record](../reviews/nothing-defaults-blessings/README.md)).
 
 | Group | Corpus cases |
 | --- | --- |
@@ -328,6 +328,5 @@ checks reads compiled as stdlib-attributed code.
   Zig [#760](https://github.com/odogono/odgn-talk/pull/760); language
   1.0-rc.3 activation and cross-Core Trace cases for
   [#722](https://github.com/odogono/odgn-talk/issues/722).
-- **Approval still needed:** first blessing of every expectation the
-  acceptance table names. Each carries an `Unblessed` header, which the
-  reviewer removes on approval.
+- **Approved:** first blessing of every expectation the acceptance table
+  names, on 2026-10-13 ([record](../reviews/nothing-defaults-blessings/README.md)).

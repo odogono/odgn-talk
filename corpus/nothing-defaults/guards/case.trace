@@ -1,5 +1,3 @@
-# Unblessed: Guards with Nothing defaults and optional reads, including Host Objects (#722); first blessing awaits human review.
-
 > load g identity=055e8802823ff9b989d5c49cfadc6c3b35677076b41b95ed8198f12b07eeab66
 > deliver d1 to=g message=check args=[{active: true}]
 > deliver d2 to=g message=check args=[{}]

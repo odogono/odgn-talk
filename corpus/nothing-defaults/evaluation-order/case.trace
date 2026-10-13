@@ -1,5 +1,3 @@
-# Unblessed: Nothing-default laziness and computed optional-key evaluation order and errors (#722); first blessing awaits human review.
-
 > load order identity=6543dac6941f2f223e675823a472919988010a059e62afe8f88bf7e5684b55bc
 > deliver d1 to=order message=presentLeft
 > deliver d2 to=order message=nothingLeft

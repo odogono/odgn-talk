@@ -1,5 +1,3 @@
-# Unblessed: Nothing-default and optional-read Fuel totals and budget boundaries (#722); first blessing awaits human review.
-#
 # totals: `one` is dispatch 4, `const` 1 and `return` 2, so 7. Each other
 # handler's Fuel less 6 is its expression's Fuel, as the design lists them:
 # `1 otherwise 2` 2, `nothing otherwise 2` 4, `1 otherwise 2 otherwise 3` 3,

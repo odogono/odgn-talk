@@ -1,5 +1,3 @@
-# Unblessed: language 1.0-rc.3 source compatibility for `otherwise` (#722); first blessing awaits human review.
-
 > load c identity=1c065377652ad6f7041958de75a0abb9c80dca60b1275f4ab0198a5b270c1e5e
 > deliver d1 to=c message=move:instead: args=[nothing, 5]
 > deliver d2 to=c message=move:instead: args=[1, 5]
