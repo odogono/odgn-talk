@@ -86,7 +86,7 @@ fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
 }
 
 /// Compiles the case's Libraries, each once those it imports are compiled.
-fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_grant_decls)) !void {
+fn compileLibraries(a: std.mem.Allocator, sources: Sources, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_grant_decls)) !void {
     // The Grant declarations: each Capability the case defines, by its name.
     var it = defs.iterator();
     while (it.next()) |e| {
@@ -101,7 +101,7 @@ fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c
         var i: usize = 0;
         while (i < left.items.len) {
             const t = left.items[i];
-            const source = try dir.readFileAlloc(io, case_setup.field(t, "source").?.string, a, .unlimited);
+            const source = try sources.read(a, case_setup.field(t, "source").?.string);
             var imports: std.ArrayList(?*c.talk_library) = .empty;
             const ready = for (try usedLibraries(a, source)) |name| {
                 const named = for (left.items) |x| {
@@ -1232,81 +1232,141 @@ fn objectList(a: std.mem.Allocator, shown: []const u8) ![]const [2][]const u8 {
     return out.items;
 }
 
-/// Replays the case in `dir` and returns the Trace the Core wrote.
-pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8, round_trip: bool) ![]u8 {
-    var arena: std.heap.ArenaAllocator = .init(gpa);
-    defer arena.deinit();
-    const a = arena.allocator();
-    const s = try case_setup.read(a, setup);
-    const core = c.talk_new() orelse return error.OutOfMemory;
-    defer c.talk_core_release(core);
-    var sink: Sink = .{ .gpa = gpa };
-    errdefer sink.out.deinit(gpa);
-    defer sink.renamed.deinit(gpa);
-    defer sink.adopted.deinit(gpa);
-    var group: ?*c.talk_group = null;
-    // Cases at the conformance minimums hold more than the default physical
-    // cap allows while they build their values.
-    const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &sink, .memory_cap = 1 << 30 };
-    try check(c.talk_new_group(core, &options, &group));
-    defer c.talk_group_release(group);
-    var scripts: std.StringHashMapUnmanaged(*c.talk_script) = .empty;
-    const all = try case_setup.tables(a, setup);
-    var hosts: std.StringHashMapUnmanaged(*OperationHost) = .empty;
-    var calls: std.StringHashMapUnmanaged(?*c.talk_call) = .empty;
-    var defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty;
-    var effects: Effects = .{ .a = a };
-    try defineCapabilities(a, core, all, &hosts, &defs, &calls, &effects);
-    try defineStandard(a, core, all, &hosts, &defs, &calls, &effects);
-    var store: ObjectStore = .{ .a = a };
-    defer store.deinit();
-    try defineObjects(a, core, group, all, &store);
-    // The version of each Library the runner compiled last, by name.
-    var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
-    var declarations: std.ArrayList(c.talk_grant_decls) = .empty;
-    // Saves by id, each Script's Grants as loaded, which a restore re-binds,
-    // and the Groups a restore replaced.
-    var saves: std.StringHashMapUnmanaged([]const u8) = .empty;
-    var latest: ?[]const u8 = null;
-    var script_grants: std.StringHashMapUnmanaged([]c.talk_load_grant) = .empty;
-    var retired: std.ArrayList(?*c.talk_group) = .empty;
-    // Each Request's future, whose result the Host may hold.
-    var requests: std.ArrayList(*c.talk_pending) = .empty;
-    defer for (retired.items) |x| c.talk_group_release(x);
-    // Released before the Groups that made them.
-    var held: Received = .{ .a = gpa };
-    received = &held;
-    defer {
-        received = null;
-        held.deinit();
+/// Where a replay reads the sources its setup names.
+pub const Sources = union(enum) {
+    /// Files in the case's directory.
+    dir: struct { io: std.Io, dir: std.Io.Dir },
+    /// Texts by name.
+    texts: *const std.StringHashMapUnmanaged([]const u8),
+
+    fn read(s: Sources, a: std.mem.Allocator, name: []const u8) ![]const u8 {
+        return switch (s) {
+            .dir => |d| d.dir.readFileAlloc(d.io, name, a, .unlimited),
+            .texts => |t| t.get(name) orelse error.MissingSource,
+        };
     }
-    try compileLibraries(a, io, dir, core, all, &defs, &libraries, &declarations);
-    const order = (try hostOrder(a, trace)).items;
-    // The inputs a Host function makes during a Pump, which the main order
-    // skips.
-    var crossed: std.AutoHashMapUnmanaged(usize, void) = .empty;
-    for (order, 0..) |line, at| {
-        if (crossed.contains(@intFromPtr(line.ptr))) continue;
+};
+
+/// The inputs a Host function makes during a Pump.
+pub const Inside = []const @typeInfo(@FieldType(Crossing, "inputs")).pointer.child;
+
+/// A replay Host: a Core and its Group, with the Capabilities, Host Objects
+/// and Libraries a case sets up, which takes the case's inputs one line at a
+/// time and keeps the Trace the Core writes.
+pub const Host = struct {
+    gpa: std.mem.Allocator,
+    arena: std.heap.ArenaAllocator,
+    sources: Sources,
+    all: []const case_setup.Table = &.{},
+    units: []const case_setup.Unit = &.{},
+    core: ?*c.talk_core = null,
+    sink: Sink,
+    group: ?*c.talk_group = null,
+    scripts: std.StringHashMapUnmanaged(*c.talk_script) = .empty,
+    hosts: std.StringHashMapUnmanaged(*OperationHost) = .empty,
+    calls: std.StringHashMapUnmanaged(?*c.talk_call) = .empty,
+    defs: std.StringHashMapUnmanaged(?*c.talk_capability_def) = .empty,
+    effects: Effects,
+    store: ObjectStore,
+    /// The version of each Library the runner compiled last, by name.
+    libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty,
+    declarations: std.ArrayList(c.talk_grant_decls) = .empty,
+    /// Saves by id, each Script's Grants as loaded, which a restore
+    /// re-binds, and the Groups a restore replaced.
+    saves: std.StringHashMapUnmanaged([]const u8) = .empty,
+    latest: ?[]const u8 = null,
+    script_grants: std.StringHashMapUnmanaged([]c.talk_load_grant) = .empty,
+    retired: std.ArrayList(?*c.talk_group) = .empty,
+    /// Each Request's future, whose result the Host may hold.
+    requests: std.ArrayList(*c.talk_pending) = .empty,
+    held: Received,
+
+    /// A Host for the setup's tables. Only one lives at a time, since the
+    /// Host functions find it through globals.
+    pub fn create(gpa: std.mem.Allocator, sources: Sources, all: []const case_setup.Table) !*Host {
+        const h = try gpa.create(Host);
+        h.* = .{ .gpa = gpa, .arena = .init(gpa), .sources = sources, .sink = .{ .gpa = gpa }, .effects = undefined, .store = undefined, .held = .{ .a = gpa } };
+        const a = h.arena.allocator();
+        h.effects = .{ .a = a };
+        h.store = .{ .a = a };
+        received = &h.held;
+        errdefer h.destroy();
+        h.all = all;
+        h.units = (try case_setup.fromTables(a, all)).units;
+        h.core = c.talk_new() orelse return error.OutOfMemory;
+        // Cases at the conformance minimums hold more than the default
+        // physical cap allows while they build their values.
+        const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &h.sink, .memory_cap = 1 << 30 };
+        try check(c.talk_new_group(h.core, &options, &h.group));
+        try defineCapabilities(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
+        try defineStandard(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
+        try defineObjects(a, h.core, h.group, all, &h.store);
+        try compileLibraries(a, sources, h.core, all, &h.defs, &h.libraries, &h.declarations);
+        return h;
+    }
+
+    pub fn destroy(h: *Host) void {
+        // Function Values are released before the Groups that made them.
+        received = null;
+        h.held.deinit();
+        for (h.retired.items) |x| c.talk_group_release(x);
+        h.store.deinit();
+        if (h.group) |g| c.talk_group_release(g);
+        h.sink.out.deinit(h.gpa);
+        h.sink.renamed.deinit(h.gpa);
+        h.sink.adopted.deinit(h.gpa);
+        if (h.core) |core| c.talk_core_release(core);
+        h.arena.deinit();
+        h.gpa.destroy(h);
+    }
+
+    /// The Trace so far.
+    pub fn trace(h: *Host) ![]const u8 {
+        if (h.sink.failed) return error.OutOfMemory;
+        return h.sink.out.items;
+    }
+
+    /// Takes one input line. inside are the inputs a Host function makes
+    /// during it, for a Pump; later, when not null, are the inputs after it,
+    /// and a Pump saves and restores before them.
+    pub fn apply(h: *Host, line: []const u8, inside: Inside, later: ?[]const []const u8) !void {
+        const gpa = h.gpa;
+        const a = h.arena.allocator();
+        const core = h.core;
+        const all = h.all;
+        const sink = &h.sink;
+        const scripts = &h.scripts;
+        const hosts = &h.hosts;
+        const calls = &h.calls;
+        const defs = &h.defs;
+        const effects = &h.effects;
+        const store = &h.store;
+        const libraries = &h.libraries;
+        const declarations = &h.declarations;
+        const saves = &h.saves;
+        const script_grants = &h.script_grants;
+        const retired = &h.retired;
+        const requests = &h.requests;
         const input = line[2..];
         const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse input.len;
         const name = input[0..name_end];
         if (std.mem.eql(u8, name, "load")) {
             const rest = input[name_end + 1 ..];
             const script = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
-            const unit = for (s.units) |u| {
+            const unit = for (h.units) |u| {
                 if (std.mem.eql(u8, u.name, script)) break u;
             } else return error.UnknownScript;
-            const source = try dir.readFileAlloc(io, unit.source, a, .unlimited);
+            const source = try h.sources.read(a, unit.source);
             const table = for (all) |t| {
                 if (std.mem.eql(u8, t.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(t, "name").?.string, script)) break t;
             } else return error.UnknownScript;
-            const grants = try grantsOf(a, table, &defs, &effects);
+            const grants = try grantsOf(a, table, defs, effects);
             try script_grants.put(a, script, grants);
             const as_used = if (case_setup.field(table, "grantsAsUsed")) |x| x == .raw and std.mem.eql(u8, x.raw, "true") else false;
-            const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(&store, a, x) else null;
+            const owner: ?*c.talk_object = if (case_setup.field(table, "owner")) |x| try objectNamed(store, a, x) else null;
             var bound: std.ArrayList(c.talk_load_object) = .empty;
             if (case_setup.field(table, "objects")) |given| for (given.table) |e| {
-                try bound.append(a, .{ .name = e.key.ptr, .name_len = e.key.len, .object = try objectNamed(&store, a, e.value) });
+                try bound.append(a, .{ .name = e.key.ptr, .name_len = e.key.len, .object = try objectNamed(store, a, e.value) });
             };
             var limits: c.talk_limits = std.mem.zeroes(c.talk_limits);
             for (scriptLimits(all, table)) |e| {
@@ -1318,15 +1378,15 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             }
             const load: c.talk_load_options = .{ .name = script.ptr, .name_len = script.len, .source = source.ptr, .source_len = source.len, .grants = grants.ptr, .grants_len = grants.len, .grants_as_used = as_used, .owner = owner, .objects = bound.items.ptr, .objects_len = bound.items.len, .limits = &limits };
             var loaded: ?*c.talk_script = null;
-            const code = c.talk_load(group, &load, &loaded);
-            if (code == c.TALK_LOAD_REFUSED) continue;
+            const code = c.talk_load(h.group, &load, &loaded);
+            if (code == c.TALK_LOAD_REFUSED) return;
             try check(code);
             try scripts.put(a, script, loaded.?);
         } else if (std.mem.eql(u8, name, "add-library")) {
             const rest = input[name_end + 1 ..];
             const library = libraries.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len]) orelse return error.MalformedCase;
             // A refusal is in the Trace as a `refused` record.
-            const code = c.talk_add_library(group, library);
+            const code = c.talk_add_library(h.group, library);
             if (code != c.TALK_RESERVED_NAME and code != c.TALK_NAME_REUSED and code != c.TALK_LIBRARY_MISMATCH) try check(code);
         } else if (std.mem.eql(u8, name, "reload") or std.mem.eql(u8, name, "extend")) {
             // The source travels in the Trace, its scalars as written.
@@ -1357,22 +1417,22 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var l: ?*c.talk_library = null;
             try check(c.talk_compile_library(core, &src, imports.items.ptr, imports.items.len, declarations.items.ptr, declarations.items.len, &l, null));
             const carry: c.talk_carry_over = if (std.mem.eql(u8, field(input, "carry") orelse "", "yes")) c.TALK_CARRY_VARIABLES else c.TALK_RESET_VARIABLES;
-            const code = c.talk_replace_library(group, l, carry, null);
+            const code = c.talk_replace_library(h.group, l, carry, null);
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
             } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
         } else if (std.mem.eql(u8, name, "save")) {
             // The save is kept under the id the Core gives it.
             var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };
-            const code = c.talk_save(group, &saved);
-            if (code == c.TALK_EFFECTS_PENDING) continue;
+            const code = c.talk_save(h.group, &saved);
+            if (code == c.TALK_EFFECTS_PENDING) return;
             try check(code);
             defer c.talk_owned_bytes_release(&saved);
             const id = try a.dupe(u8, input[name_end + 1 ..]);
             try saves.put(a, id, try a.dupe(u8, saved.data[0..saved.len]));
-            latest = id;
+            h.latest = id;
         } else if (std.mem.eql(u8, name, "restore")) {
-            const bytes_saved = saves.get(field(input, "from") orelse latest orelse return error.MalformedCase) orelse return error.MalformedCase;
+            const bytes_saved = saves.get(field(input, "from") orelse h.latest orelse return error.MalformedCase) orelse return error.MalformedCase;
             var withheld: []const []const u8 = &.{};
             if (field(input, "withheld")) |x| withheld = try idList(a, x);
             var given: std.ArrayList(?*c.talk_library) = .empty;
@@ -1382,13 +1442,13 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
                     if (std.mem.eql(u8, w, e.key_ptr.*)) break;
                 } else try given.append(a, e.value_ptr.*);
             }
-            var rebinding: Rebinding = .{ .grants = &script_grants, .unbound = if (field(input, "unbound")) |x| try idList(a, x) else &.{} };
+            var rebinding: Rebinding = .{ .grants = script_grants, .unbound = if (field(input, "unbound")) |x| try idList(a, x) else &.{} };
             var resolving: Resolving = .{ .refused = if (field(input, "disposed")) |x| try objectList(a, x) else &.{} };
             const restore_options: c.talk_restore_options = .{
                 .name = "corpus",
                 .name_len = 6,
                 .trace = record,
-                .trace_context = &sink,
+                .trace_context = sink,
                 .libraries = @ptrCast(given.items.ptr),
                 .libraries_len = given.items.len,
                 .grants = Rebinding.call,
@@ -1402,15 +1462,15 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var restored: ?*c.talk_group = null;
             var result: ?*c.talk_restore_result = null;
             const code = c.talk_restore(core, bytes_saved.ptr, bytes_saved.len, &restore_options, &restored, &result);
-            if (code == c.TALK_SAVE_MISMATCH or code == c.TALK_LOAD_REFUSED or code == c.TALK_STATE_TOO_LARGE) continue;
+            if (code == c.TALK_SAVE_MISMATCH or code == c.TALK_LOAD_REFUSED or code == c.TALK_STATE_TOO_LARGE) return;
             try check(code);
             c.talk_restore_result_release(result);
             // The runner goes on with the restored Group; the old one lives
             // until the end, since its handles may still be read.
-            try retired.append(a, group);
-            group = restored;
-            try rehandle(&scripts, group);
-            try store.moveTo(group);
+            try retired.append(a, h.group);
+            h.group = restored;
+            try rehandle(scripts, h.group);
+            try store.moveTo(h.group);
         } else if (std.mem.eql(u8, name, "settle")) {
             const rest = input[name_end + 1 ..];
             const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase];
@@ -1432,7 +1492,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             } else return error.MalformedCase;
             defer if (st.fail != null) if (e.data) |d| c.talk_value_release(d);
             var adopted: ?*c.talk_call = null;
-            const code = c.talk_settle(group, id.ptr, id.len, &st, &adopted);
+            const code = c.talk_settle(h.group, id.ptr, id.len, &st, &adopted);
             // A refusal is in the Trace as a `refused` record.
             if (code != c.TALK_UNKNOWN_CALL) try check(code);
             if (adopted) |x| try calls.put(a, try a.dupe(u8, id), x);
@@ -1441,10 +1501,10 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             const shown = field(input, "parent").?;
             const parent: ?*c.talk_object = if (std.mem.eql(u8, shown, "nothing")) null else store.named(shown) orelse return error.MalformedCase;
             // A refusal at the call is in the Trace as a `refused` record.
-            const code = c.talk_set_parent(group, o, parent);
+            const code = c.talk_set_parent(h.group, o, parent);
             if (code != c.TALK_PARENT_CYCLE and code != c.TALK_INVALID_VALUE) try check(code);
         } else if (std.mem.eql(u8, name, "dispose")) {
-            try check(c.talk_dispose(group, store.named(field(input, "object").?) orelse return error.MalformedCase));
+            try check(c.talk_dispose(h.group, store.named(field(input, "object").?) orelse return error.MalformedCase));
         } else if (std.mem.eql(u8, name, "deliver") or std.mem.eql(u8, name, "request") or std.mem.eql(u8, name, "decide")) {
             const to_shown = field(input, "to").?;
             const to_object: ?*c.talk_object = if (std.mem.startsWith(u8, to_shown, "<object ")) store.named(to_shown) orelse return error.MalformedCase else null;
@@ -1468,9 +1528,9 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var pending: ?*c.talk_pending = null;
             var deciding: ?*c.talk_deciding = null;
             const code = if (std.mem.eql(u8, name, "decide"))
-                (if (to_object) |o| c.talk_decide(group, o, &m, null, &deciding) else c.talk_script_decide(to, &m, null, &deciding))
+                (if (to_object) |o| c.talk_decide(h.group, o, &m, null, &deciding) else c.talk_script_decide(to, &m, null, &deciding))
             else if (to_object) |o|
-                (if (std.mem.eql(u8, name, "deliver")) c.talk_deliver(group, o, &m, null) else c.talk_request(group, o, &m, null, &pending))
+                (if (std.mem.eql(u8, name, "deliver")) c.talk_deliver(h.group, o, &m, null) else c.talk_request(h.group, o, &m, null, &pending))
             else if (std.mem.eql(u8, name, "deliver"))
                 c.talk_script_deliver(to, &m, null)
             else
@@ -1498,7 +1558,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             var override: c.talk_limit_override = std.mem.zeroes(c.talk_limit_override);
             const has_override = try overrideOf(input, &override);
             var pending: ?*c.talk_pending = null;
-            try check(c.talk_group_call(group, f, @ptrCast(args.items.ptr), args.items.len, if (has_override) &override else null, null, &pending));
+            try check(c.talk_group_call(h.group, f, @ptrCast(args.items.ptr), args.items.len, if (has_override) &override else null, null, &pending));
             try requests.append(a, pending.?);
         } else if (std.mem.eql(u8, name, "broadcast") or std.mem.eql(u8, name, "decide-broadcast")) {
             // The Core writes the recipients, when the queue is drained.
@@ -1519,7 +1579,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             const has_override = try overrideOf(input, &override);
             const m: c.talk_message = .{ .name = message.ptr, .name_len = message.len, .args = @ptrCast(args.items.ptr), .args_len = args.items.len, .limits = if (has_override) &override else null };
             var deciding: ?*c.talk_deciding = null;
-            const code = if (std.mem.eql(u8, name, "broadcast")) c.talk_broadcast(group, &m, null) else c.talk_decide_broadcast(group, &m, null, &deciding);
+            const code = if (std.mem.eql(u8, name, "broadcast")) c.talk_broadcast(h.group, &m, null) else c.talk_decide_broadcast(h.group, &m, null, &deciding);
             if (code != c.TALK_INVALID_VALUE) try check(code);
         } else if (std.mem.eql(u8, name, "pump")) {
             const clock = field(input, "clock").?;
@@ -1531,27 +1591,26 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             if (!c.talk_value_as_instant(instant, &seconds, &nanos)) return error.BadClock;
             const pump_options: c.talk_pump_options = .{ .fuel_slice = if (field(input, "fuel-slice")) |x| try std.fmt.parseInt(i64, x, 10) else 0, .fuel_cap = if (field(input, "fuel-cap")) |x| try std.fmt.parseInt(i64, x, 10) else 0 };
             // A refusal is in the Trace as a `refused` record.
-            var made: Crossing = .{ .group = group, .scripts = &scripts, .store = &store, .inputs = try crossings(a, trace, line) };
-            for (made.inputs) |x| try crossed.put(a, @intFromPtr(x.line.ptr), {});
+            var made: Crossing = .{ .group = h.group, .scripts = scripts, .store = store, .inputs = inside };
             crossing = &made;
             var pumped: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
-            const code = c.talk_pump(group, seconds, nanos, &pump_options, &pumped);
+            const code = c.talk_pump(h.group, seconds, nanos, &pump_options, &pumped);
             crossing = null;
-            held.keepReports(pumped.reports);
+            h.held.keepReports(pumped.reports);
             c.talk_reports_release(pumped.reports);
             if (made.failed or made.next != made.inputs.len) {
                 return error.CrossingInput;
             }
             if (code != c.TALK_CLOCK_BACKWARDS) try check(code);
-            if (round_trip) if (try roundTrip(a, core, &sink, group, order[at + 1 ..], &libraries, &script_grants)) |restored| {
-                try retired.append(a, group);
-                group = restored.group;
-                try rehandle(&scripts, group);
-                try store.moveTo(group);
+            if (later) |rest| if (try roundTrip(a, core, sink, h.group, rest, libraries, script_grants)) |restored| {
+                try retired.append(a, h.group);
+                h.group = restored.group;
+                try rehandle(scripts, h.group);
+                try store.moveTo(h.group);
                 for (restored.adopted) |x| try calls.put(a, x.id, x.call);
             };
         } else if (std.mem.eql(u8, name, "vars")) {
-            _ = c.talk_inspect(group, null);
+            _ = c.talk_inspect(h.group, null);
         } else if (std.mem.eql(u8, name, "stop")) {
             const rest = input[name_end + 1 ..];
             const script = scripts.get(rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase]) orelse return error.UnknownScript;
@@ -1573,7 +1632,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try check(c.talk_script_cancel_run(script, id.ptr, id.len));
         } else if (std.mem.eql(u8, name, "cancel-delivery")) {
             const id = input[name_end + 1 ..];
-            try check(c.talk_cancel_delivery(group, id.ptr, id.len));
+            try check(c.talk_cancel_delivery(h.group, id.ptr, id.len));
         } else if (std.mem.eql(u8, name, "revoke")) {
             const rest = input[name_end + 1 ..];
             const script_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase;
@@ -1607,8 +1666,8 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             // to the Trace where the case has it.
             const rest = input[name_end + 1 ..];
             const op = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
-            const h = hosts.get(op) orelse return error.UnknownOperation;
-            try h.stubs.append(a, .{ .value = field(input, "value"), .err = field(input, "error"), .charge = if (field(input, "charge")) |n| try std.fmt.parseInt(i64, n, 10) else null });
+            const op_host = hosts.get(op) orelse return error.UnknownOperation;
+            try op_host.stubs.append(a, .{ .value = field(input, "value"), .err = field(input, "error"), .charge = if (field(input, "charge")) |n| try std.fmt.parseInt(i64, n, 10) else null });
             try sink.out.appendSlice(gpa, line);
             try sink.out.append(gpa, '\n');
         } else if (std.mem.eql(u8, name, "stub-effect")) {
@@ -1627,6 +1686,27 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
             try sink.out.append(gpa, '\n');
         } else return error.Unsupported;
     }
-    if (sink.failed) return error.OutOfMemory;
-    return sink.out.toOwnedSlice(gpa);
+};
+
+/// Replays the case in `dir` and returns the Trace the Core wrote.
+pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8, round_trip: bool) ![]u8 {
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const h = try Host.create(gpa, .{ .dir = .{ .io = io, .dir = dir } }, try case_setup.tables(a, setup));
+    defer h.destroy();
+    const order = (try hostOrder(a, trace)).items;
+    // The inputs a Host function makes during a Pump, which the main order
+    // skips.
+    var crossed: std.AutoHashMapUnmanaged(usize, void) = .empty;
+    for (order, 0..) |line, at| {
+        if (crossed.contains(@intFromPtr(line.ptr))) continue;
+        var inside: Inside = &.{};
+        if (std.mem.startsWith(u8, line, "> pump")) {
+            inside = try crossings(a, trace, line);
+            for (inside) |x| try crossed.put(a, @intFromPtr(x.line.ptr), {});
+        }
+        try h.apply(line, inside, if (round_trip) order[at + 1 ..] else null);
+    }
+    return gpa.dupe(u8, try h.trace());
 }

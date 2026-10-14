@@ -176,7 +176,11 @@ fn standardArity(call: []const u8) struct { required: usize, total: usize } {
 
 /// Reads a case's setup.
 pub fn read(a: Allocator, toml: []const u8) Error!Setup {
-    const all = try tables(a, toml);
+    return fromTables(a, try tables(a, toml));
+}
+
+/// A case's setup, from its tables.
+pub fn fromTables(a: Allocator, all: []const Table) Error!Setup {
     var declared: std.ArrayList(Declared) = .empty;
     for (all) |t| {
         if (std.mem.eql(u8, t.header, "[[operations]]")) {
