@@ -86,6 +86,7 @@ trace limits/rollback-after-suspension
 trace limits/script-join-width
 trace limits/self-send-persistent
 trace limits/send-wait-retention
+trace limits/shared-values
 trace limits/wait-deadline
 trace limits/wait-zero-next-pump
 trace load-diagnostics/argument-labels

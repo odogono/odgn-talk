@@ -28,24 +28,24 @@
 
 > decide d1 to=board message=beforeMove args=[{from: "a1", to: "e5", path: ["b2", "c3", "d4", "e5"]}]
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 start delivery=d1 handler=beforeMove clause=1 by=slice fuel=20 alloc=24
-pumped state=sliced fuel=20
+preempt board/r1 start delivery=d1 handler=beforeMove clause=1 by=slice fuel=21 alloc=24
+pumped state=sliced fuel=21
 
 # Still open: the Host pumps again at the same Clock reading.
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 continue by=slice fuel=21 alloc=0
-pumped state=sliced fuel=21
+preempt board/r1 continue by=slice fuel=19 alloc=0
+pumped state=sliced fuel=19
 
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-preempt board/r1 continue by=slice fuel=19 alloc=41
-pumped state=sliced fuel=19
+preempt board/r1 continue by=slice fuel=20 alloc=0
+pumped state=sliced fuel=20
 
 # The Segment ends at the veto, which seals the Verdict in this fourth Pump.
 > pump clock=2026-09-30T10:00:00Z fuel-slice=20
-seg board/r1 continue fuel=7 alloc=42 state=84 end=veto value="The path is blocked at e5."
+seg board/r1 continue fuel=15 alloc=83 state=84 end=veto value="The path is blocked at e5."
 decided d1 verdict=vetoed vetoes=[{script: "board", run: "board/r1", reason: "The path is blocked at e5."}]
-run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=67 alloc=107
-pumped state=idle fuel=7
+run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=75 alloc=107
+pumped state=idle fuel=15
 
 > vars
 vars board occupied=["e5", "h8"] moves=0

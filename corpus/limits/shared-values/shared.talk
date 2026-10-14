@@ -1,0 +1,25 @@
+-- shared.talk: the shared-values case's Script.
+
+script variable checks
+
+on build n
+  put 1 into a
+  put 1 into b
+  put 2 into c
+  repeat for each i in 1..n
+    put [a, a] into a
+    put [b, b] into b
+    put [c, c] into c
+  end repeat
+  put [a = b, a = a, a < c, c > a, a is in [0, b], min([c, a]) = a, max([a, c]) = c] into checks
+end build
+
+on compareCheap n
+  put 1 into a
+  put 1 into b
+  repeat for each i in 1..n
+    put [a, a] into a
+    put [b, b] into b
+  end repeat
+  put [a = b] into checks
+end compareCheap

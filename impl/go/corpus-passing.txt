@@ -212,6 +212,7 @@ limits/rollback-after-suspension
 limits/script-join-width
 limits/self-send-persistent
 limits/send-wait-retention
+limits/shared-values
 limits/wait-deadline
 limits/wait-zero-next-pump
 load-diagnostics/argument-labels

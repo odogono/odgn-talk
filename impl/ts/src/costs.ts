@@ -262,17 +262,21 @@ export const sizeOf = (v: Value): number => {
   if (cached !== undefined) {
     return cached;
   }
-  // Deep values are sized leaves first, so no size recurses far.
+  // Deep values are sized leaves first, so no size recurses far. A
+  // shared part is visited once, not once per path to it (#890); its
+  // logical size still counts at each occurrence, through its parents.
   const pending: Value[] = [v];
   const order: Value[] = [];
+  const seen = new Set<Value>();
   while (pending.length) {
     const next = pending.pop()!;
-    if (known.has(next)) {
+    if (known.has(next) || seen.has(next)) {
       continue;
     }
+    seen.add(next);
     order.push(next);
     for (const child of childrenOf(next)) {
-      if (!known.has(child)) {
+      if (!known.has(child) && !seen.has(child)) {
         pending.push(child);
       }
     }

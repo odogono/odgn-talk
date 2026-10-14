@@ -204,117 +204,284 @@ export const textForm = (v: Value): string =>
 // Equality and ordering
 // ---------------------------------------------------------------------------
 
+const SCAN_CAP = Number.MAX_SAFE_INTEGER;
+const scanAdd = (a: number, b: number): number =>
+  a >= SCAN_CAP - b ? SCAN_CAP : a + b;
+
+/**
+ * One comparison's shared work (#890). Equality walks each distinct pair
+ * of nodes once, however many paths reach it, while `scanned` still
+ * counts every logical pair examined, shared parts at each occurrence:
+ * the Fuel charge is logical, the native work is not. A Comparer is
+ * created per top-level comparison and shared by its parts, so ordering,
+ * membership and min/max reuse what their equality tests prove.
+ */
+class Comparer {
+  #proven = new Map<Value, Set<Value>>();
+  #selfScans = new Map<Value, number>();
+
+  constructor(readonly fold: boolean) {}
+
+  /** Deep equality, comparing texts by simple case folding when folding. */
+  equal(a: Value, b: Value): boolean {
+    const pending: [Value, Value, boolean][] = [[a, b, false]];
+    while (pending.length) {
+      const [x, y, finish] = pending.pop()!;
+      if (finish) {
+        let set = this.#proven.get(x);
+        if (!set) {
+          set = new Set();
+          this.#proven.set(x, set);
+        }
+        set.add(y);
+        continue;
+      }
+      if (x === y || this.#proven.get(x)?.has(y)) {
+        continue;
+      }
+      if (x.kind !== y.kind) {
+        return false;
+      }
+      if (x.kind === 'text' && this.fold) {
+        if (simpleFold(textOf(x)) !== simpleFold(textOf(y))) {
+          return false;
+        }
+      } else if (x.kind === 'list') {
+        if (x.length !== y.length) {
+          return false;
+        }
+        pending.push([x, y, true]);
+        for (let i = 1; i <= x.length; i++) {
+          pending.push([x.index(i), y.index(i), false]);
+        }
+      } else if (x.kind === 'map') {
+        const rhs = new Map(y.entries());
+        if (x.mapSize !== rhs.size) {
+          return false;
+        }
+        pending.push([x, y, true]);
+        for (const [k, v] of x.entries()) {
+          const other = rhs.get(k);
+          if (!other) {
+            return false;
+          }
+          pending.push([v, other, false]);
+        }
+      } else if (x.kind === 'range') {
+        const p = x.asRange()!;
+        const q = y.asRange()!;
+        pending.push(
+          [x, y, true],
+          [p.from, q.from, false],
+          [p.to, q.to, false],
+        );
+      } else if (x.kind === 'function') {
+        const p = x.asFunction()!;
+        const q = y.asFunction()!;
+        if (
+          p.home !== q.home ||
+          p.identity !== q.identity ||
+          p.captures.length !== q.captures.length
+        ) {
+          return false;
+        }
+        pending.push([x, y, true]);
+        p.captures.forEach(([, v], i) =>
+          pending.push([v, q.captures[i]![1], false]),
+        );
+      } else if (!x.equals(y)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * What comparing one value with itself scans: every logical pair in
+   * it. An equal pair scans this much, from either side.
+   */
+  selfScan(v: Value): number {
+    const cached = this.#selfScans.get(v);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const pending: Value[] = [v];
+    const order: Value[] = [];
+    const seen = new Set<Value>();
+    while (pending.length) {
+      const next = pending.pop()!;
+      if (this.#selfScans.has(next) || seen.has(next)) {
+        continue;
+      }
+      seen.add(next);
+      order.push(next);
+      for (const child of scanChildren(next)) {
+        if (!this.#selfScans.has(child) && !seen.has(child)) {
+          pending.push(child);
+        }
+      }
+    }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const value = order[i]!;
+      let total = 0;
+      if (value.kind === 'text') {
+        total = characters(foldText(textOf(value), this.fold)).length;
+      } else if (value.kind === 'bytes') {
+        total = value.bytesView()!.length;
+      } else if (
+        value.kind === 'list' ||
+        value.kind === 'map' ||
+        value.kind === 'function'
+      ) {
+        for (const child of scanChildren(value)) {
+          total = scanAdd(total, scanAdd(1, this.#selfScans.get(child)!));
+        }
+      } else if (value.kind === 'range') {
+        for (const child of scanChildren(value)) {
+          total = scanAdd(total, this.#selfScans.get(child)!);
+        }
+      }
+      this.#selfScans.set(value, total);
+    }
+    return this.#selfScans.get(v)!;
+  }
+
+  /**
+   * The logical pairs a comparison of `a` with `b` examines, through the
+   * first that differs, at every depth (chapter 8, the `compare` rate).
+   * Only the first differing path is descended; equal parts contribute
+   * their self-scan, so shared parts count without being rewalked.
+   */
+  scanned(a: Value, b: Value): number {
+    if (a.kind !== b.kind) {
+      return 0;
+    }
+    if (a.kind === 'text') {
+      const x = characters(foldText(textOf(a), this.fold));
+      const y = characters(foldText(textOf(b), this.fold));
+      let i = 0;
+      while (i < x.length && i < y.length) {
+        i++;
+        if (x[i - 1] !== y[i - 1]) {
+          break;
+        }
+      }
+      return i;
+    }
+    if (a.kind === 'bytes') {
+      const x = a.bytesView()!;
+      const y = b.bytesView()!;
+      let i = 0;
+      while (i < x.length && i < y.length) {
+        i++;
+        if (x[i - 1] !== y[i - 1]) {
+          break;
+        }
+      }
+      return i;
+    }
+    if (a.kind === 'list') {
+      let total = 0;
+      for (let i = 1; i <= a.length && i <= b.length; i++) {
+        const x = a.index(i);
+        const y = b.index(i);
+        total = scanAdd(total, 1);
+        if (this.equal(x, y)) {
+          total = scanAdd(total, this.selfScan(x));
+        } else {
+          return scanAdd(total, this.scanned(x, y));
+        }
+      }
+      return total;
+    }
+    if (a.kind === 'map') {
+      let total = 0;
+      let examined = 0;
+      for (const [k, v] of a.entries()) {
+        if (examined >= b.mapSize) {
+          break;
+        }
+        examined++;
+        total = scanAdd(total, 1);
+        if (!b.hasKey(k)) {
+          break;
+        }
+        const other = b.get(k);
+        if (this.equal(v, other)) {
+          total = scanAdd(total, this.selfScan(v));
+        } else {
+          return scanAdd(total, this.scanned(v, other));
+        }
+      }
+      return total;
+    }
+    if (a.kind === 'range') {
+      const x = a.asRange()!;
+      const y = b.asRange()!;
+      if (!this.equal(x.from, y.from)) {
+        return this.scanned(x.from, y.from);
+      }
+      const first = this.selfScan(x.from);
+      return this.equal(x.to, y.to)
+        ? scanAdd(first, this.selfScan(x.to))
+        : scanAdd(first, this.scanned(x.to, y.to));
+    }
+    if (a.kind === 'function') {
+      const x = a.asFunction()!;
+      const y = b.asFunction()!;
+      if (
+        x.home !== y.home ||
+        x.identity !== y.identity ||
+        x.captures.length !== y.captures.length
+      ) {
+        return 0;
+      }
+      let total = 0;
+      for (let i = 0; i < x.captures.length; i++) {
+        const p = x.captures[i]![1];
+        const q = y.captures[i]![1];
+        total = scanAdd(total, 1);
+        if (this.equal(p, q)) {
+          total = scanAdd(total, this.selfScan(p));
+        } else {
+          return scanAdd(total, this.scanned(p, q));
+        }
+      }
+      return total;
+    }
+    return 0;
+  }
+}
+
+/** The values whose pairs a comparison of `v` with itself examines. */
+const scanChildren = (v: Value): Value[] => {
+  switch (v.kind) {
+    case 'list':
+      return Array.from({ length: v.length }, (_, i) => v.index(i + 1));
+    case 'map':
+      return v.entries().map(([, value]) => value);
+    case 'range': {
+      const { from, to } = v.asRange()!;
+      return [from, to];
+    }
+    case 'function':
+      return v.asFunction()!.captures.map(([, value]) => value);
+  }
+  return [];
+};
+
 /** Equality, with what the compare rate's `scanned` counts. */
 export const equals = (
   a: Value,
   b: Value,
   fold: boolean,
 ): { equal: boolean; scanned: number } => {
-  const scanned = scannedPairs(a, b, fold);
-  if (!fold) {
-    return { equal: a.equals(b), scanned };
-  }
-  return { equal: foldedEquals(a, b), scanned };
-};
-
-// Deep equality comparing texts by their simple case foldings.
-const foldedEquals = (a: Value, b: Value): boolean => {
-  const pending: [Value, Value][] = [[a, b]];
-  while (pending.length) {
-    const [x, y] = pending.pop()!;
-    if (x.kind !== y.kind) {
-      return false;
-    }
-    if (x.kind === 'text') {
-      if (simpleFold(textOf(x)) !== simpleFold(textOf(y))) {
-        return false;
-      }
-    } else if (x.kind === 'list') {
-      if (x.length !== y.length) {
-        return false;
-      }
-      for (let i = 1; i <= x.length; i++) {
-        pending.push([x.index(i), y.index(i)]);
-      }
-    } else if (x.kind === 'map') {
-      const rhs = new Map(y.entries());
-      if (x.mapSize !== rhs.size) {
-        return false;
-      }
-      for (const [k, v] of x.entries()) {
-        const other = rhs.get(k);
-        if (!other) {
-          return false;
-        }
-        pending.push([v, other]);
-      }
-    } else if (!x.equals(y)) {
-      return false;
-    }
-  }
-  return true;
+  const comparer = new Comparer(fold);
+  const equal = comparer.equal(a, b);
+  return { equal, scanned: comparer.scanned(a, b) };
 };
 
 const foldText = (s: string, fold: boolean) => (fold ? simpleFold(s) : s);
-
-/**
- * The Characters, items or entries a comparison examines before its answer
- * is known: pairs in order, through the first that differs, or to the end of
- * the shorter (chapter 8, the `compare` rate).
- */
-const scannedPairs = (a: Value, b: Value, fold: boolean): number => {
-  if (a.kind !== b.kind) {
-    return 0;
-  }
-  if (a.kind === 'text') {
-    const x = characters(foldText(textOf(a), fold));
-    const y = characters(foldText(textOf(b), fold));
-    let i = 0;
-    while (i < x.length && i < y.length) {
-      i++;
-      if (x[i - 1] !== y[i - 1]) {
-        break;
-      }
-    }
-    return i;
-  }
-  if (a.kind === 'bytes') {
-    const x = a.bytesView()!;
-    const y = b.bytesView()!;
-    let i = 0;
-    while (i < x.length && i < y.length) {
-      i++;
-      if (x[i - 1] !== y[i - 1]) {
-        break;
-      }
-    }
-    return i;
-  }
-  if (a.kind === 'list') {
-    let i = 0;
-    while (i < a.length && i < b.length) {
-      i++;
-      if (!equals(a.index(i), b.index(i), fold).equal) {
-        break;
-      }
-    }
-    return i;
-  }
-  if (a.kind === 'map') {
-    let i = 0;
-    for (const [k, v] of a.entries()) {
-      if (i >= b.mapSize) {
-        break;
-      }
-      i++;
-      if (!b.hasKey(k) || !equals(v, b.get(k), fold).equal) {
-        break;
-      }
-    }
-    return i;
-  }
-  return 0;
-};
 
 const cantCompare = (a: Value, b: Value) =>
   new ScriptError("can't compare", [
@@ -325,7 +492,11 @@ const cantCompare = (a: Value, b: Value) =>
 const codePoints = (s: string) => Array.from(s, ch => ch.codePointAt(0)!);
 
 /** Chapter 3's ordering: -1, 0 or 1, or `can't compare`. */
-export const order = (a: Value, b: Value, fold = false): -1 | 0 | 1 => {
+export const order = (a: Value, b: Value, fold = false): -1 | 0 | 1 =>
+  orderBy(new Comparer(fold), a, b);
+
+const orderBy = (comparer: Comparer, a: Value, b: Value): -1 | 0 | 1 => {
+  const fold = comparer.fold;
   if (a.kind !== b.kind) {
     throw cantCompare(a, b);
   }
@@ -370,8 +541,8 @@ export const order = (a: Value, b: Value, fold = false): -1 | 0 | 1 => {
     }
     case 'list': {
       for (let i = 1; i <= Math.min(a.length, b.length); i++) {
-        if (!equals(a.index(i), b.index(i), fold).equal) {
-          return order(a.index(i), b.index(i), fold);
+        if (!comparer.equal(a.index(i), b.index(i))) {
+          return orderBy(comparer, a.index(i), b.index(i));
         }
       }
       return a.length === b.length ? 0 : a.length < b.length ? -1 : 1;
@@ -390,8 +561,9 @@ export const comparison = (
     const { equal, scanned } = equals(a, b, fold);
     return { result: bool(op === 'equal' ? equal : !equal), scanned };
   }
-  const o = order(a, b, fold);
-  const scanned = scannedPairs(a, b, fold);
+  const comparer = new Comparer(fold);
+  const scanned = comparer.scanned(a, b);
+  const o = orderBy(comparer, a, b);
   const result =
     op === 'less'
       ? o < 0
@@ -410,17 +582,28 @@ export const member = (
   fold: boolean,
 ): { result: Value; scanned: number } => {
   if (xs.kind === 'list') {
+    const comparer = new Comparer(fold);
+    let scanned = 0;
     for (let i = 1; i <= xs.length; i++) {
-      if (equals(x, xs.index(i), fold).equal) {
-        return { result: bool(true), scanned: i };
+      const item = xs.index(i);
+      scanned = scanAdd(scanned, 1);
+      if (comparer.equal(x, item)) {
+        return {
+          result: bool(true),
+          scanned: scanAdd(scanned, comparer.selfScan(x)),
+        };
       }
+      scanned = scanAdd(scanned, comparer.scanned(x, item));
     }
-    return { result: bool(false), scanned: xs.length };
+    return { result: bool(false), scanned };
   }
   if (xs.kind === 'range') {
     const { from, to } = xs.asRange()!;
+    const comparer = new Comparer(fold);
     return {
-      result: bool(order(from, x, fold) <= 0 && order(x, to, fold) <= 0),
+      result: bool(
+        orderBy(comparer, from, x) <= 0 && orderBy(comparer, x, to) <= 0,
+      ),
       scanned: 2,
     };
   }
@@ -1897,14 +2080,19 @@ export const builtin = (
         throw outOfDomain(name, x!);
       }
       let best = x!.index(1);
+      const comparer = new Comparer(false);
+      let scanned = 1;
+      measure.scanned = scanned;
       for (let i = 2; i <= x!.length; i++) {
-        measure.scanned = i;
-        const o = order(x!.index(i), best);
+        const item = x!.index(i);
+        scanned = scanAdd(scanned, scanAdd(1, comparer.scanned(item, best)));
+        measure.scanned = scanned;
+        const o = orderBy(comparer, item, best);
         if (name === 'min' ? o < 0 : o > 0) {
-          best = x!.index(i);
+          best = item;
         }
       }
-      return { result: best, scanned: x!.length };
+      return { result: best, scanned };
     }
     case 'codePoint': {
       if (x!.kind !== 'text') {
