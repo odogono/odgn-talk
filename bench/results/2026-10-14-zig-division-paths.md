@@ -88,7 +88,7 @@ these rather than selecting faster samples. These workloads do not use the
 new division/Unit paths, so their movement is a limitation of the machine-level
 comparison, not evidence for a causal improvement or regression.
 
-A [targeted three-pair recheck](2026-10-14-zig-division-regression-check.json)
+A targeted three-pair recheck
 repeats Fibonacci and suspension after all peer measurements and CPU profiling,
 using the same binary hashes and settings. The smallest Fuel Slice medians
 are 5.034 versus 5.039 ms (0.1%), and suspension is 3.149 versus 3.168 ms
@@ -127,8 +127,8 @@ numeric factors, so its remaining gap includes this extra language behavior.
 
 ## Separate CPU samples
 
-[Four Pump profiles](2026-10-14-zig-division-profiles.json) retain hashed,
-compressed call trees and binary hashes. Each uses macOS `sample` for two
+Four Pump profiles were taken; the raw call trees are not retained in the
+repository. Each uses macOS `sample` for two
 seconds at 1 ms intervals, separate from all timing/probe runs. Launch the
 same Host with count 2,000, sample after 0.1 seconds, then terminate it after
 sampling; that keeps the sampling window within repeated validated Runs
@@ -219,3 +219,26 @@ bun run bench --only zig,ts,applescript,gopher-lua --filter numbers --count 3 --
 For wasm32 numeric tests, a temporary root in `impl/zig/src` imports
 `decimal/decimal.zig` and `units.zig`. Wasmtime's WASI configuration supplies a
 nonempty argv and inherited stdout/stderr; an exit status of zero is success.
+
+## Follow-up: repeating-division rejection and factor-one steps
+
+A follow-up rejects non-terminating quotients before the digit loop (the
+divisor in lowest terms must have only 2 and 5 as prime factors, checked
+only when the integer division leaves a remainder) and skips Unit steps
+whose factor is exactly 1 on nonzero values. Three focused pairs against the
+original optimized binary, same machine and settings:
+
+| Workload | Before ms | After ms | Speedup |
+| --- | ---: | ---: | ---: |
+| `numbers/divide` | 0.457 | 0.462 | 0.99× |
+| `numbers/quantity` | 0.474 | 0.472 | 1.00× |
+| `probe/div` | 0.428 | 0.430 | 1.00× |
+| `probe/mod` | 0.431 | 0.433 | 1.00× |
+| `probe/divide-repeating` | 1.433 | 1.272 | 1.13× |
+| `probe/quantity-factors` | 0.315 | 0.315 | 1.00× |
+
+Repeating division, previously unchanged from baseline (1.44 ms), improves
+1.13×; the other rows are within noise. An ungated check (run on every
+division) cost about 3% on terminating division, so the check runs only
+after a nonzero remainder.
+

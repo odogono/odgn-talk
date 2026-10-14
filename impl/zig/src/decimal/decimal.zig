@@ -286,6 +286,16 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
             exponent = ideal;
             coefficient = x.coefficient / y.coefficient;
             var remainder = x.coefficient % y.coefficient;
+            if (remainder != 0) {
+                // The quotient terminates only when the divisor in lowest
+                // terms has no prime factors but 2 and 5. Reject the rest
+                // before the digit loop, so repeating fractions reach the
+                // general path at once.
+                var d = y.coefficient / std.math.gcd(remainder, y.coefficient);
+                while (d % 2 == 0) d /= 2;
+                while (d % 5 == 0) d /= 5;
+                if (d != 1) return null;
+            }
             // At most 34 leading fractional zeros and 34 significant digits.
             // Each remainder is below a catalogue/Decimal coefficient (10^34),
             // so multiplying it by ten fits u128. Nonterminating or over-wide
@@ -990,19 +1000,33 @@ test "noninteger powers are correctly rounded, with trailing zeros dropped" {
 }
 
 test "division exact paths retain quantum and fallbacks free every refused allocation" {
-    const examples = .{
-        .{ Operator.divide, "7.50", "3" },
-        .{ Operator.divide, "1", "8" },
-        .{ Operator.divide, "1", "0.01" },
-        .{ Operator.divide, "0.00", "0.1" },
-        .{ Operator.div, "-7.50", "2.0" },
-        .{ Operator.mod, "-7.50", "2.0" },
+    // Terminating division and integer div/mod take the exact path, at the
+    // quantum the general path selects. Zero results are unsigned.
+    const exact = .{
+        .{ Operator.divide, "7.50", "3", "2.50" },
+        .{ Operator.divide, "1", "8", "0.125" },
+        .{ Operator.divide, "10", "4", "2.5" },
+        .{ Operator.divide, "1", "0.01", "100" },
+        .{ Operator.divide, "1", "-40", "-0.025" },
+        .{ Operator.divide, "0.00", "0.1", "0.0" },
+        .{ Operator.divide, "-0.00", "8", "0.00" },
+        .{ Operator.div, "-7.50", "2.0", "-3" },
+        .{ Operator.div, "7.5", "-2", "-3" },
+        .{ Operator.div, "-1", "2", "0" },
+        .{ Operator.mod, "-7.50", "2.0", "-1.50" },
+        .{ Operator.mod, "29", "16", "13" },
+        .{ Operator.mod, "-4", "2", "0" },
     };
-    inline for (examples) |example| {
+    inline for (exact) |example| {
         const x = try Decimal.parse(example[1]);
         const y = try Decimal.parse(example[2]);
-        try std.testing.expect(calculateExact(example[0], x, y, true) != null);
-        try expectGeneralAgreement(example[0], x, y, true);
+        const result = calculateExact(example[0], x, y, true) orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqualStrings(example[3], tryString(result));
+        for ([_]bool{ false, true }) |bounded| try expectGeneralAgreement(example[0], x, y, bounded);
+    }
+    // Repeating fractions are rejected before any digit expansion.
+    inline for (.{ .{ "1", "3" }, .{ "2", "7" }, .{ "1", "0.06" } }) |example| {
+        try std.testing.expect(calculateExact(.divide, try Decimal.parse(example[0]), try Decimal.parse(example[1]), true) == null);
     }
     const pairs = [_][2]Decimal{
         .{ .{ .coefficient = 1 }, .{ .coefficient = 3 } },

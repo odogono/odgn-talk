@@ -168,10 +168,10 @@ pub const Unit = struct {
                     if (u.ratio != null) {
                         value = try dec.calculate(a, op, value, if (applies) ratio_numerator else ratio_denominator);
                     } else if (applies) {
-                        value = try dec.calculate(a, op, value, unit_factors[slot.unit]);
+                        value = try applyFactor(dec.calculate, a, op, value, unit_factors[slot.unit]);
                     }
                     if (kind_factors[kind]) |extra| if (applies) {
-                        value = try dec.calculate(a, op, value, extra);
+                        value = try applyFactor(dec.calculate, a, op, value, extra);
                     };
                 }
             };
@@ -260,10 +260,10 @@ pub const Unit = struct {
                     if (u.ratio != null) {
                         value = try calculate(a, op, value, if (applies) ratio_numerator else ratio_denominator);
                     } else if (applies) {
-                        value = try calculate(a, op, value, unit_factors[s.unit]);
+                        value = try applyFactor(calculate, a, op, value, unit_factors[s.unit]);
                     }
                     if (kind_factors[k]) |extra| if (applies) {
-                        value = try calculate(a, op, value, extra);
+                        value = try applyFactor(calculate, a, op, value, extra);
                     };
                 }
             }
@@ -271,6 +271,13 @@ pub const Unit = struct {
         return value;
     }
 };
+/// One conversion step. A factor of exactly 1 leaves a nonzero value with a
+/// representable exponent unchanged, so it is skipped; zeros and positive
+/// exponents still go through `calculate` for exponent clamping.
+fn applyFactor(calculate: anytype, a: std.mem.Allocator, op: dec.Operator, value: Decimal, f: Decimal) Error!Decimal {
+    if (f.coefficient == 1 and f.exponent == 0 and !f.negative and value.coefficient != 0 and value.exponent <= 0) return value;
+    return calculate(a, op, value, f);
+}
 fn kindIndex(i: usize) usize {
     for (table.kind, 0..) |k, n| if (std.mem.eql(u8, k.name, table.unit[i].kind)) return n;
     unreachable;
