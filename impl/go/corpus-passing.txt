@@ -266,6 +266,7 @@ math/floats
 math/fractional-power
 math/fractional-power-errors
 math/number-functions
+names/handler-shared-names
 nothing-defaults/compatibility
 nothing-defaults/evaluation-order
 nothing-defaults/fuel-boundaries

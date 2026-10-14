@@ -772,6 +772,8 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 
 Source that parses is then checked, and each rule it breaks is a load error: the Script, Library or Entry doesn't load. The chapters state the rules, and [`diagnostics.toml`](data/diagnostics.toml) gives each one its code. A code covers a family of rules, and no code is shared with a syntax error, an Error Code or a Host error.
 
+A local Handler may share a Script Variable's or Constant's name without a `name clash`, regardless of declaration order. Value references and Command Calls resolve separately ([chapter 4](04-expressions-and-statements.md#resolving-a-name)).
+
 <!-- generated: diagnostics -->
 
 | Code | Raised when | Reported at | Sources |

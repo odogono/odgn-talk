@@ -58,6 +58,7 @@ type Unit struct {
 	Tree                   *syntax.Tree
 	Options                Options
 	Symbols                map[string]Symbol
+	Handlers               map[string]Symbol
 	Definitions, Variables []string
 	Bodies                 map[*syntax.Node]*Body
 	Diagnostics            []Diagnostic
@@ -94,7 +95,7 @@ func (u *Unit) Resolve(body *Body, name string) (Symbol, bool) {
 // message, so a local never shadows the Handler it reaches (chapter 4).
 func (u *Unit) Callee(body *Body, n *syntax.Node) (Symbol, bool) {
 	if n.Kind == "command" {
-		s, ok := u.Symbols[n.Text]
+		s, ok := u.Handlers[n.Text]
 		return s, ok
 	}
 	return u.Resolve(body, n.Text)
@@ -124,7 +125,14 @@ func (u *Unit) clash(n *syntax.Node) {
 	u.add("name clash", pos)
 }
 func (u *Unit) declaration(n *syntax.Node, s Symbol) {
-	if previous, ok := u.Symbols[s.Name]; ok && !(s.Kind == "handler" && previous.Kind == "handler" && previous.Import == "" && s.Import == "") {
+	canShare := func(previous Symbol) bool {
+		return previous.Import == "" && s.Import == "" &&
+			(localHandler(s) && slices.Contains([]string{"handler", "variable", "definition"}, previous.Kind) ||
+				localHandler(previous) && slices.Contains([]string{"variable", "definition"}, s.Kind))
+	}
+	previous, exists := u.Symbols[s.Name]
+	handler, hasHandler := u.Handlers[s.Name]
+	if exists && !canShare(previous) || hasHandler && !canShare(handler) {
 		pos := n.Pos()
 		if n.NameToken != nil && n.NameToken.Kind == syntax.Word {
 			pos = n.NameToken.Pos
@@ -133,16 +141,24 @@ func (u *Unit) declaration(n *syntax.Node, s Symbol) {
 		return
 	}
 	s.Node = n
-	u.Symbols[s.Name] = s
+	if s.Kind == "handler" {
+		u.Handlers[s.Name] = s
+	}
+	if s.Kind != "handler" || !exists || previous.Kind == "handler" {
+		u.Symbols[s.Name] = s
+	}
 }
 func Check(tree *syntax.Tree, options Options) *Unit {
-	u := &Unit{Tree: tree, Options: options, Symbols: make(map[string]Symbol, len(tree.Declarations)), Bodies: make(map[*syntax.Node]*Body, len(tree.Declarations)+1)}
+	u := &Unit{Tree: tree, Options: options, Symbols: make(map[string]Symbol, len(tree.Declarations)), Handlers: make(map[string]Symbol), Bodies: make(map[*syntax.Node]*Body, len(tree.Declarations)+1)}
 	if previous := options.Existing; previous != nil {
 		for node, body := range previous.Bodies {
 			u.Bodies[node] = body
 		}
 		u.Definitions = slices.Clone(previous.Definitions)
 		u.Variables = slices.Clone(previous.Variables)
+		for name, handler := range previous.Handlers {
+			u.Handlers[name] = handler
+		}
 		for name, symbol := range previous.Symbols {
 			for _, body := range previous.Bodies {
 				if body.Name == symbol.Name && body.MaySuspend {
@@ -210,6 +226,9 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 					u.add("name clash", param.Pos())
 				} else {
 					u.Symbols[name] = s
+					if s.Kind == "handler" {
+						u.Handlers[name] = s
+					}
 					if s.Kind == "definition" {
 						u.Definitions = append(u.Definitions, s.Import)
 					}

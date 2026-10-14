@@ -33,7 +33,7 @@ export type Diagnostic = {
 export type ExistingName = Pick<
   Binding,
   'kind' | 'contract' | 'importedFrom'
-> & { maySuspend?: boolean };
+> & { handler?: ExistingName; maySuspend?: boolean };
 export type CheckOptions = {
   /** Names in older code units when checking a Script extension. */
   existing?: Readonly<Record<string, ExistingName>>;
@@ -372,12 +372,27 @@ export const checkSyntax = (
     }
     native.set(builtin.name, binding);
   }
+  // Message names and value names have separate lookup paths (chapter 4).
+  const handlers = new Map<string, Binding>();
   for (const [name, previous] of Object.entries(options.existing ?? {})) {
     unit.bindings.set(name, {
       ...makeBinding(name, previous.kind, unit, null),
       contract: previous.contract,
       importedFrom: previous.importedFrom,
     });
+    const handler = previous.kind === 'handler' ? previous : previous.handler;
+    if (handler) {
+      handlers.set(
+        name,
+        previous.kind === 'handler'
+          ? unit.bindings.get(name)!
+          : {
+              ...makeBinding(name, 'handler', unit, null),
+              contract: handler.contract,
+              importedFrom: handler.importedFrom,
+            },
+      );
+    }
   }
   for (const name of options.objects ?? []) {
     unit.bindings.set(name, makeBinding(name, 'object', unit, null));
@@ -747,25 +762,36 @@ export const checkSyntax = (
   );
   for (const { site, kind, importedFrom, contract } of declarationSites) {
     const old = unit.bindings.get(site.name.text);
-    if (
-      old &&
-      !(
-        old.kind === 'handler' &&
-        kind === 'handler' &&
-        !old.importedFrom &&
-        !importedFrom
-      )
-    ) {
-      clash(site, old);
+    const handler = handlers.get(site.name.text);
+    const canShare = (previous: Binding) =>
+      !previous.importedFrom &&
+      !importedFrom &&
+      ((kind === 'handler' &&
+        ['handler', 'script variable', 'constant'].includes(previous.kind)) ||
+        (previous.kind === 'handler' &&
+          ['script variable', 'constant'].includes(kind)));
+    const conflict = [old, handler].find(
+      previous => previous && !canShare(previous),
+    );
+    if (conflict) {
+      clash(site, conflict);
     }
-    const binding = old ?? makeBinding(site.name.text, kind, unit, site.token);
-    if (importedFrom && !old) {
+    const previous = kind === 'handler' ? handler : old;
+    const binding =
+      (previous?.kind === kind ? previous : undefined) ??
+      makeBinding(site.name.text, kind, unit, site.token);
+    if (importedFrom && !previous) {
       binding.importedFrom = importedFrom;
     }
-    if (contract && !old) {
+    if (contract && !previous) {
       binding.contract = contract;
     }
-    unit.bindings.set(site.name.text, binding);
+    if (kind === 'handler') {
+      handlers.set(site.name.text, binding);
+    }
+    if (kind !== 'handler' || !old || old.kind === 'handler') {
+      unit.bindings.set(site.name.text, binding);
+    }
     site.name.binding = binding;
   }
   const duplicates = new Map<SyntaxNode, Set<string>>();
@@ -968,7 +994,7 @@ export const checkSyntax = (
       continue;
     }
     if (site.name.role === 'command') {
-      const binding = unit.bindings.get(site.name.text);
+      const binding = handlers.get(site.name.text);
       if (binding?.kind === 'handler') {
         site.name.binding = binding;
       }
@@ -1207,8 +1233,12 @@ export const checkSyntax = (
   const importedSuspension = (binding: Binding) => {
     const from = binding.importedFrom!;
     const exp = options.libraries?.[from.library]?.[from.name];
+    const existing = options.existing?.[binding.name];
     return (
-      options.existing?.[binding.name]?.maySuspend === true ||
+      (binding.kind === 'handler' && existing?.handler
+        ? existing.handler
+        : existing
+      )?.maySuspend === true ||
       (typeof exp === 'object' && exp.maySuspend === true)
     );
   };
@@ -1237,9 +1267,12 @@ export const checkSyntax = (
         id: scope.id,
         kind: scope.kind,
         parent: scope.parent?.id ?? null,
-        bindings: [...scope.bindings.values()].sort(
-          (a, b) => (a.span?.start ?? -1) - (b.span?.start ?? -1),
-        ),
+        bindings: [
+          ...new Set([
+            ...scope.bindings.values(),
+            ...(scope === unit ? handlers.values() : []),
+          ]),
+        ].sort((a, b) => (a.span?.start ?? -1) - (b.span?.start ?? -1)),
         captures: [...scope.captures],
       })),
     },

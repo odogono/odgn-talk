@@ -2484,7 +2484,8 @@ export class Group {
         if (binding.span === null) {
           continue;
         }
-        existing[binding.name] = {
+        const previous = existing[binding.name];
+        const current: ExistingName = {
           kind: binding.kind,
           contract: binding.contract,
           importedFrom:
@@ -2502,6 +2503,18 @@ export class Group {
                   ?.some(b => b.maySuspend)
               : code.clauses.get(binding.name)?.some(b => b.maySuspend)),
         };
+        if (
+          binding.kind === 'handler' &&
+          previous &&
+          previous.kind !== 'handler'
+        ) {
+          previous.handler = current;
+        } else {
+          if (previous?.kind === 'handler' && binding.kind !== 'handler') {
+            current.handler = previous;
+          }
+          existing[binding.name] = current;
+        }
       }
     }
     const p = prepare(

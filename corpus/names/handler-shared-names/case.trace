@@ -1,0 +1,15 @@
+# Unblessed: Handler names shared with Script Variables and Constants (#769); first blessing awaits human review.
+
+> load s identity=82b102a33b4ac6b633fcc73b2bfa88ca8cb0a7b1a81cad675995da19220dd1a9
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T09:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=203 alloc=416 state=288 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=203 alloc=416
+pumped state=idle fuel=203
+> deliver d2 to=s message=foo args=[1]
+> pump clock=2026-10-14T09:00:01Z
+seg s/r2 start delivery=d2 handler=foo clause=1 fuel=20 alloc=16 state=288 end=return
+run s/r2 outcome=completed delivery=d2 handler=foo value=5 fuel=20 alloc=16
+pumped state=idle fuel=20
+> vars
+vars s foo=5 log=[2, 4, 6, 4, 4, [4, 2, 4, 4]] baz=4

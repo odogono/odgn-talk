@@ -114,7 +114,7 @@ func (u *Unit) statement(n *syntax.Node) {
 			u.emit(pos, "tell", text("console"), text("write"), number(len(n.Children)))
 			return
 		}
-		s, known := u.checked.Symbols[n.Text]
+		s, known := u.checked.Callee(nil, n)
 		op := "send-up"
 		if known && s.Kind == "handler" {
 			op = "call-handler"

@@ -31,6 +31,31 @@ const withoutIdentity = (lines: string[]) =>
   lines.map(line => line.replace(/ identity=[\da-f]{64}$/, ''));
 
 describe('loading', () => {
+  test('extensions retain shared Handler and value names in either order', () => {
+    for (const declaration of ['script variable h = 1', 'constant h = 1']) {
+      const handler = 'on h\n return h + 1\nend h';
+      for (const source of [
+        `${declaration}\n${handler}`,
+        `${handler}\n${declaration}`,
+      ]) {
+        const { g, lines } = group();
+        const s = g.load({ name: 's', source });
+        s.extend('on later\n h\n return it + h\nend later');
+        s.deliver({ name: 'later' });
+        g.pump(clock);
+        expect(lines.find(line => line.startsWith('run '))).toContain(
+          'outcome=completed delivery=d1 handler=later value=3',
+        );
+      }
+      const { g } = group();
+      const s = g.load({
+        name: 's',
+        source: `${declaration}\non h\n wait 1 s\nend h`,
+      });
+      expect(() => s.extend('on bad\n h\nend bad')).toThrow(LoadError);
+    }
+  });
+
   test('a Script loads with its code identity in the Trace', () => {
     const { g, lines } = group();
     const source = 'on go\nend go';
