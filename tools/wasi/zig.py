@@ -402,6 +402,46 @@ def message_layer(engine, module):
     return {"hello": hello, "linearMemory": size}
 
 
+def metered_operations(engine, module):
+    """Zig-only metering transport acceptance while shared catalogues are staged."""
+    h = MessageHost(engine, module)
+    h.ok("define-capability", name="metered", ops=[{
+        "name": "fetch", "mode": "suspending", "metering": "read-only",
+        "result": "number",
+    }])
+    grant = h.ok("grant", capability="metered", ops="all")["grant"]
+    h.ok("new-group", group="g", name="g", trace=True)
+    h.ok("load", group="g", name="s", grants={"api": grant},
+         limits={"fuelPerRun": 1000},
+         source="on go\n ask api to fetch and wait\n return it\nend go\n")
+    now = "2026-10-10T12:00:00Z"
+    h.ok("request", group="g", to={"script": "s"}, message={"name": "go"})
+    need = h.send("pump", group="g", now=now)["need"]
+    call = need["call"]
+    assert h.send("op-result", is_result=True, started=True).get("ok") is not None
+    assert h.send("save", group="g")["err"]["code"] == "effects pending"
+    for fuel in (-1, 1.5, 9007199254740992):
+        assert h.send("request-charge", group="g", call=call, fuel=fuel)["err"]["code"] == "invalid value"
+    assert h.ok("request-charge", group="g", call=call, fuel=17)["request"] == "q1"
+    assert h.send("request-charge", group="g", call=call, fuel=0)["err"]["code"] == "invalid value"
+    paid = h.ok("pump", group="g", now=now)
+    charges = [r for r in paid["reports"] if r["kind"] == "charge result"]
+    assert charges == [{"kind": "charge result", "request": "q1", "call": call, "fuel": 17, "status": "accepted"}], paid
+    assert paid["fuelUsed"] == 17, paid
+    assert h.ok("request-charge", group="g", call=call, fuel=1000)["request"] == "q2"
+    limited = h.ok("pump", group="g", now=now)
+    assert limited["reports"][0]["kind"] == "charge result" and limited["reports"][0]["status"] == "limit", limited
+    ends = [r for r in limited["reports"] if r["kind"] == "run end"]
+    assert len(ends) == 1 and ends[0]["limit"] == "fuel" and ends[0]["at"]["line"] == 2, limited
+    assert limited["abandoned"] == [call] and limited["fuelUsed"] == 0, limited
+    assert not any(line.startswith("seg ") for line in limited["trace"]), limited
+    assert h.ok("request-charge", group="g", call=call, fuel=0)["request"] == "q3"
+    inactive = h.ok("pump", group="g", now=now)
+    assert inactive["reports"][0]["status"] == "inactive" and inactive["fuelUsed"] == 0, inactive
+    h.ok("save", group="g")
+    return {"acceptedFuel": 17, "outcomes": ["accepted", "limit", "inactive"]}
+
+
 def supported_limits(engine, module):
     """Reject unsupported profiles before they can exhaust the reactor,
     then load and run on the same Group after repeated refusals (#807)."""
@@ -486,6 +526,7 @@ def main():
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
     messages = message_layer(engine, module)
+    metering = metered_operations(engine, module)
     profiles = supported_limits(engine, module)
     texts = text_containment(engine, module)
     compressed = brotli.compress(payload, quality=11)
@@ -510,6 +551,7 @@ def main():
                 "nesting": nesting,
                 "largeLoads": loads,
                 "messageLayer": messages,
+                "metering": metering,
                 "supportedLimits": profiles,
                 "textContainment": texts,
                 "bytes": {

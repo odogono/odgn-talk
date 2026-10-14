@@ -20,6 +20,7 @@ const MetadataError = error{ MalformedCase, InvalidCaseKind, UnsupportedVersions
 /// Whether corpus.toml's setup catalogue allows `table` (and `key`, unless
 /// null) in a case of `kind`.
 fn allowed(table: []const u8, key: ?[]const u8, kind: Kind) bool {
+    if (key) |k| if (kind == .trace and ((std.mem.eql(u8, table, "operations") and std.mem.eql(u8, k, "metering")) or (std.mem.eql(u8, table, "standard") and std.mem.eql(u8, k, "perStep")))) return true;
     for (schema.setup) |entry| {
         if (!std.mem.eql(u8, entry.table, table)) continue;
         if (key) |k| if (!std.mem.eql(u8, entry.key, k)) continue;

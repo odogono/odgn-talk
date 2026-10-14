@@ -1054,8 +1054,8 @@ fn releaseOp(a: Allocator, op: caps.Operation) void {
 }
 
 /// One Operation from its declaration JSON, its Host function the
-/// layer's. Scope and Segment-bound declarations are refused: their
-/// lifecycle needs are later work.
+/// layer's. The Core validates mode, metering, scope and Segment-bound
+/// combinations when the Capability is defined.
 fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error || Invalid)!caps.Operation {
     const a = s.core.gpa;
     if (j != .object) return error.InvalidValue;
@@ -1064,6 +1064,12 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
     for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
     const segment_bound = if (j.object.get("segmentBound")) |b| asBool(b) orelse return error.InvalidValue else false;
     const mode = try modeOf(j.object.get("mode"));
+    const metering: ?caps.Metering = if (j.object.get("metering")) |v| blk: {
+        const m = asText(v) orelse return error.InvalidValue;
+        if (std.mem.eql(u8, m, "read-only")) break :blk .read_only;
+        if (std.mem.eql(u8, m, "segment-bound")) break :blk .segment_bound;
+        return error.InvalidValue;
+    } else null;
     var scope: caps.Scope = .none;
     errdefer switch (scope) {
         .none => {},
@@ -1199,6 +1205,7 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
         .examples = examples,
         .scope = scope,
         .segment_bound = segment_bound,
+        .metering = metering,
         .host = .{ .call = opCall, .context = oc },
     };
 }
@@ -1424,6 +1431,17 @@ fn ancestryFields(o: *Out, a: machine.report.Ancestry) Allocator.Error!void {
 
 fn writeReport(o: *Out, report: machine.report.Report) Allocator.Error!void {
     switch (report) {
+        .charge_result => |r| {
+            try o.raw("{\"kind\":\"charge result\",\"request\":");
+            try o.text(r.request);
+            try o.raw(",\"call\":");
+            try o.text(r.call);
+            try o.raw(",\"fuel\":");
+            try o.int(r.fuel);
+            try o.raw(",\"status\":");
+            try o.text(@tagName(r.status));
+            try o.raw("}");
+        },
         .run_end => |r| {
             try o.raw("{\"kind\":\"run end\",\"script\":");
             try o.text(r.script);
@@ -1731,7 +1749,10 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
     const need = s.need.?;
     const entry = need.entry;
     var answer: Answer = .{ .kind = .host_error };
-    answer.charged = asU64(field(msg, "charged")) orelse 0;
+    if (field(msg, "charged")) |v| {
+        answer.charged = asU64(v) orelse return hostError(s.gpa, ref, .invalid_value);
+        if (answer.charged > 9_007_199_254_740_991) return hostError(s.gpa, ref, .invalid_value);
+    }
     if (is_prop) {
         if (field(msg, "value")) |v| {
             answer.kind = .result;
@@ -1745,7 +1766,10 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
             answer.kind = .host_error;
         } else return protocolError(s.gpa, ref, "a prop-result with no outcome");
     } else {
-        if (field(msg, "result")) |v| {
+        if (field(msg, "limit")) |v| {
+            if (!(asBool(v) orelse false)) return hostError(s.gpa, ref, .invalid_value);
+            answer.kind = .limit;
+        } else if (field(msg, "result")) |v| {
             answer.kind = .result;
             answer.value = decodeValue(s.gpa, v, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         } else if (field(msg, "started") != null) {
@@ -2106,6 +2130,26 @@ fn pumpReply(s: *Session, msg: Json, ref: i64) []u8 {
 }
 
 /// Settles a suspending call the Host started (`answer` / `fail`).
+fn requestChargeReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const call = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
+    // A non-whole amount uses an invalid sentinel, preserving enqueue validation/Trace.
+    const fuel = asInt(field(msg, "fuel")) orelse -1;
+    var request: ?*caps.ChargeRequest = null;
+    const code = Direct.requestCharge(entry.group, call.ptr, call.len, fuel, &request);
+    if (code != .ok) {
+        entry.group.flush();
+        return hostError(s.gpa, ref, code);
+    }
+    const q = request.?;
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"request\":") catch return oomReply();
+    o.text(q.id) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
 fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const call_id = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -3315,6 +3359,8 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return queuedReply(s, msg, ref, .broadcast);
     } else if (std.mem.eql(u8, m, "pump")) {
         return pumpReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "request-charge")) {
+        return requestChargeReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "answer")) {
         return settleReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "fail")) {
@@ -4344,4 +4390,76 @@ test "a started call the Core abandons is listed once in abandoned; an answered 
     // Listed once.
     const after = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:03Z\"}}", .{10}));
     try std.testing.expectEqual(@as(usize, 0), after.object.get("abandoned").?.array.items.len);
+}
+
+fn startMetered(c: *Client, immediate: bool) ![]const u8 {
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"{s}\",\"metering\":\"read-only\",\"result\":\"number\",\"maxPending\":5000}}]}}", .{ 1, if (immediate) "immediate" else "suspending" }));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"limits\":{{\"fuelPerRun\":1000}},\"source\":\"on fetch\\n  ask api to fetch{s}\\n  return it\\nend fetch\\n\"}}", .{ 4, grant.object.get("grant").?.integer, if (immediate) "" else " and wait" }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{5}));
+    const reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
+    const call = reply.object.get("need").?.object.get("call").?.string;
+    if (!immediate) _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{6}));
+    return call;
+}
+fn chargeReport(reply: Json) !Json {
+    const ok = try okOf(reply);
+    for (ok.object.get("reports").?.array.items) |r| if (std.mem.eql(u8, "charge result", r.object.get("kind").?.string)) return r;
+    return unexpected(reply);
+}
+
+test "request-charge enqueues only; validates amounts and overlap; reports accepted, limit, inactive" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const call = try startMetered(&c, false);
+    const saved = try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{7});
+    try std.testing.expectEqualStrings("effects pending", saved.object.get("err").?.object.get("code").?.string);
+    for ([_][]const u8{ "-1", "1.5", "9007199254740992", "null", "\"invalid\"" }) |fuel| {
+        const invalid = try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":{s}}}", .{ 8, call, fuel });
+        try std.testing.expectEqualStrings("invalid value", invalid.object.get("err").?.object.get("code").?.string);
+    }
+    const enqueue = try okOf(try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":19}}", .{ 9, call }));
+    try std.testing.expectEqualStrings("q1", enqueue.object.get("request").?.string);
+    const overlap = try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":0}}", .{ 10, call });
+    try std.testing.expectEqualStrings("invalid value", overlap.object.get("err").?.object.get("code").?.string);
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{11});
+    const accepted = try chargeReport(pumped);
+    try std.testing.expectEqualStrings("accepted", accepted.object.get("status").?.string);
+    try std.testing.expectEqual(@as(i64, 19), accepted.object.get("fuel").?.integer);
+    try std.testing.expectEqual(@as(i64, 19), (try okOf(pumped)).object.get("fuelUsed").?.integer);
+    _ = try okOf(try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":1000}}", .{ 12, call }));
+    const refused = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{13});
+    try std.testing.expectEqualStrings("limit", (try chargeReport(refused)).object.get("status").?.string);
+    try std.testing.expectEqualStrings("limit fault", (try runEnd(refused)).object.get("outcome").?.string);
+    try std.testing.expectEqual(@as(usize, 1), (try okOf(refused)).object.get("abandoned").?.array.items.len);
+    for ((try okOf(refused)).object.get("trace").?.array.items) |line| try std.testing.expect(!std.mem.startsWith(u8, line.string, "seg "));
+    _ = try okOf(try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":3}}", .{ 14, call }));
+    const inactive = try chargeReport(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{15}));
+    try std.testing.expectEqualStrings("inactive", inactive.object.get("status").?.string);
+    const unknown = try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"never.c1\",\"fuel\":3}}", .{16});
+    try std.testing.expectEqualStrings("unknown call", unknown.object.get("err").?.object.get("code").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{17}));
+}
+
+test "op-result limit overrides a supplied result and retains its charged prefix" {
+    for ([_]i64{ 0, 23 }) |prefix| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        _ = try startMetered(&c, true);
+        const reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"limit\":true,\"charged\":{d},\"result\":42}}", .{ 6, prefix });
+        const end = try runEnd(reply);
+        try std.testing.expectEqualStrings("limit fault", end.object.get("outcome").?.string);
+        var refused_seen = false;
+        for ((try okOf(reply)).object.get("trace").?.array.items) |line| if (std.mem.startsWith(u8, line.string, "call ")) {
+            try std.testing.expect(std.mem.indexOf(u8, line.string, "charge-refused=yes") != null);
+            try std.testing.expect(std.mem.indexOf(u8, line.string, "result=") == null);
+            refused_seen = true;
+        };
+        try std.testing.expect(refused_seen);
+    }
 }

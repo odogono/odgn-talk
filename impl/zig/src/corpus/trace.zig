@@ -78,6 +78,12 @@ fn typed(r: *display.Reader, k: schema.CorpusTableRecordEntryKeyEntry) !void {
 }
 /// The catalogue's description of the Host Input or output record `name`.
 fn descriptor(input: bool, name: []const u8) ?schema.CorpusTableRecordEntry {
+    // #472 stages the shared catalogue; Zig can read its implementation target.
+    if (input and std.mem.eql(u8, name, "charge-request")) return .{ .name = name, .input = true, .ids = &.{ "call", "request?" }, .is = "Metered Operation admission", .key = &.{.{ .key = "fuel", .type = "value", .is = "whole Fuel or invalid" }} };
+    if (!input and std.mem.eql(u8, name, "charge-result")) return .{ .name = name, .input = false, .ids = &.{ "call", "request" }, .is = "Metered Operation outcome", .key = &.{
+        .{ .key = "fuel", .type = "count", .is = "requested Fuel" },
+        .{ .key = "status", .type = "word", .words = &.{ "accepted", "limit", "inactive" }, .is = "admission outcome" },
+    } };
     for (schema.corpus.record) |record| if (record.input == input and std.mem.eql(u8, record.name, name)) return record;
     return null;
 }
@@ -128,7 +134,14 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
     }
     // Refused inputs legitimately omit ids; an output omits only optional ones.
     if (!input and ids.items.len < requiredIds(spec.ids)) return error.InvalidValue;
-    const keys = spec.key orelse &.{};
+    var metering_keys: std.ArrayList(schema.CorpusTableRecordEntryKeyEntry) = .empty;
+    defer metering_keys.deinit(a);
+    const refusal_key = if (std.mem.eql(u8, name, "call")) "charged" else if (std.mem.eql(u8, name, "stub")) "charge" else "";
+    if (refusal_key.len > 0) for (spec.key orelse &.{}) |k| {
+        try metering_keys.append(a, k);
+        if (std.mem.eql(u8, k.key, refusal_key)) try metering_keys.append(a, .{ .key = "charge-refused", .type = "word", .words = &.{"yes"}, .optional = true, .is = "latched refusal" });
+    };
+    const keys = if (refusal_key.len > 0) metering_keys.items else spec.key orelse &.{};
     var next: usize = 0;
     while (r.pos < line.len) {
         if (!r.take(" ")) return error.InvalidValue;
@@ -156,6 +169,24 @@ fn parseMode(a: std.mem.Allocator, line: []const u8, resolver: display.Resolver,
         try fields.append(a, .{ .key = key, .value = line[value_start..r.pos] });
     }
     for (keys[next..]) |k| if (!omittable(k, input, authored)) return error.InvalidValue;
+    if (std.mem.eql(u8, name, "charge-request")) {
+        const amount = try display.parse(a, fields.items[0].value, resolver);
+        defer amount.release();
+        switch (amount.data) {
+            .text => |v| if (!std.mem.eql(u8, v, "invalid")) return error.InvalidValue,
+            .number => |n| if ((n.integer(u64) catch return error.InvalidValue) > 9_007_199_254_740_991) return error.InvalidValue,
+            else => return error.InvalidValue,
+        }
+    }
+    var refusal = false;
+    var returned = false;
+    var automatic = false;
+    for (fields.items) |f| {
+        refusal = refusal or std.mem.eql(u8, f.key, "charge-refused");
+        returned = returned or std.mem.eql(u8, f.key, "result") or std.mem.eql(u8, f.key, "value") or std.mem.eql(u8, f.key, "error");
+        automatic = automatic or std.mem.eql(u8, f.key, "automatic");
+    }
+    if (refusal and (returned or automatic)) return error.InvalidValue;
     const owned_ids = try ids.toOwnedSlice(a);
     errdefer a.free(owned_ids);
     return .{ .input = input, .name = name, .ids = owned_ids, .fields = try fields.toOwnedSlice(a) };
@@ -258,4 +289,30 @@ test "filled keys compare against actual output but never hide divergences" {
     try std.testing.expect(try matches(a, "> load orders", "> load orders identity=abc012"));
     try std.testing.expect(!try matches(a, "> load orders identity=abc012", "> load orders identity=abc013"));
     try std.testing.expect(!try matches(a, "> pump clock=2026-09-27T00:00:00Z", "> pump clock=2026-09-28T00:00:00Z"));
+}
+
+test "staged metering records validate ordered fields, normalized invalid amounts and latched refusal" {
+    const a = std.testing.allocator;
+    for ([_][]const u8{
+        "> charge-request s/r1.c1 q1 fuel=0",
+        "> charge-request s/r1.c1 fuel=\"invalid\"",
+        "charge-result s/r1.c1 q1 fuel=19 status=accepted",
+        "call s/r1.c1 op=api.fetch args=[] charged=19 charge-refused=yes",
+        "call s/r1.c1 op=api.fetch args=[] charge-refused=yes",
+        "> stub api.fetch charge=19 charge-refused=yes",
+        "> stub api.fetch charge-refused=yes",
+    }) |line| {
+        const r = (try parse(a, line, .{})).?;
+        r.deinit(a);
+    }
+    for ([_][]const u8{
+        "> charge-request s/r1.c1 q1 fuel=1.5",
+        "> charge-request s/r1.c1 fuel=\"bad\"",
+        "> charge-request s/r1.c1 q1 fuel=9007199254740992",
+        "charge-result s/r1.c1 fuel=19 status=accepted",
+        "charge-result s/r1.c1 q1 fuel=19 status=unknown",
+        "call s/r1.c1 op=api.fetch args=[] result=nothing charge-refused=yes",
+        "> stub api.fetch value=nothing charge-refused=yes",
+        "> stub api.fetch charge-refused=no",
+    }) |line| try std.testing.expectError(error.InvalidValue, parse(a, line, .{}));
 }

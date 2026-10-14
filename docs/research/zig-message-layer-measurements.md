@@ -10,7 +10,7 @@ The message gap the previous run left is closed. The Zig build now dispatches ev
 
 Two differences remain, neither a reason to keep the Go build:
 
-- **`request-charge`:** neither build carries it, because no Core implements Metered Operations yet. The Zig work is [#911](https://github.com/odogono/odgn-talk/issues/911).
+- **`request-charge` at the measured commit:** neither build carried it. [#911](https://github.com/odogono/odgn-talk/issues/911) adds it to the Zig Core; its [current support](../../impl/zig/README.md#the-machine) is separate from these measurements.
 - **A Pump's `abandoned`:** the Go reactor fills it; the Zig build returns it empty. Chapter 9 names the field in the `pump` reply but doesn't define its contents, so it needs a Spec decision before either build can be held to it.
 
 **Recommendation:** replace the Go `wasip1` reactor with the Zig build behind the Message Layer. ADR 0078's conditions are met: every threshold row passes, the Zig Core is recorded as conforming ([#636](https://github.com/odogono/odgn-talk/issues/636)), and a Host now loses no message by switching. Settle `abandoned`'s definition first, or switch and define it afterwards, since no Host can rely on undefined contents; that and the switch-over itself are the maintainer's call.

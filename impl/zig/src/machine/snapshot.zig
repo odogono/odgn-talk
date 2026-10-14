@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 6;
+pub const format_version: u32 = 7;
 
 pub const Error = error{
     InvalidSave,
@@ -851,6 +851,7 @@ const Saving = struct {
     fn input(s: *Saving, x: machine.Input) !void {
         try s.o.byte(@backingInt(std.meta.activeTag(x)));
         switch (x) {
+            .charge_request => return error.EffectsPending,
             .deliver => |d| {
                 try s.o.str(d.script);
                 try s.delivery(d.delivery);
@@ -898,6 +899,10 @@ const Saving = struct {
 /// Group (ADR 0049).
 pub fn effectsPending(g: *const Group) bool {
     if (g.fatal) return true;
+    @constCast(g).input_lock.lock();
+    defer @constCast(g).input_lock.unlock();
+    for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return true;
+    for (g.pending.items) |p| if (p.decl) |op| if (op.metering != null) return true;
     for (g.scripts.items) |s| for (s.live.items) |r| {
         if (r.scopes.items.len > 0 or r.participant != null) return true;
     };
@@ -907,6 +912,10 @@ pub fn effectsPending(g: *const Group) bool {
 /// The save's bytes, which `gpa` owns. Saving changes nothing in the Group
 /// but its save id counter, which the caller has already advanced.
 pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
+    if (effectsPending(g)) return error.EffectsPending;
+    g.input_lock.lock();
+    defer g.input_lock.unlock();
+    for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return error.EffectsPending;
     var s: Saving = .{ .o = .{ .gpa = gpa }, .g = g, .tables = .{ .objects = g.objects.items, .functions = g.functions.items } };
     defer s.deinit();
     errdefer s.o.bytes.deinit(gpa);
@@ -923,6 +932,21 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.broadcasts);
     try o.int(g.timers);
     try o.int(g.run_order);
+    try o.int(g.charge_counter);
+    try o.int(g.issued_calls.count());
+    var issued: std.ArrayList([]const u8) = .empty;
+    defer issued.deinit(gpa);
+    var ids = g.issued_calls.keyIterator();
+    while (ids.next()) |id| try issued.append(gpa, id.*);
+    std.mem.sort([]const u8, issued.items, {}, struct {
+        fn less(_: void, x: []const u8, y: []const u8) bool {
+            return std.mem.lessThan(u8, x, y);
+        }
+    }.less);
+    for (issued.items) |id| {
+        try o.str(id);
+        try o.flag(g.issued_calls.get(id).?);
+    }
     // Libraries, by identity.
     try o.int(g.libraries.items.len);
     for (g.libraries.items) |l| {
@@ -1874,6 +1898,7 @@ const Restoring = struct {
         const Tag3 = std.meta.Tag(machine.Input);
         const t = std.enums.fromInt(Tag3, try r.i.byte()) orelse return error.InvalidSave;
         return switch (t) {
+            .charge_request => error.InvalidSave,
             .deliver => blk: {
                 const script = try r.owned();
                 errdefer a.free(script);
@@ -2165,6 +2190,15 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.broadcasts = try i.int();
     g.timers = try i.int();
     g.run_order = try i.int();
+    g.charge_counter = try i.int();
+    const issued_count = try i.count();
+    for (0..issued_count) |_| {
+        const id = try a.dupe(u8, try i.str());
+        errdefer a.free(id);
+        const eligible = try i.flag();
+        if (g.issued_calls.contains(id)) return error.InvalidSave;
+        try g.issued_calls.put(a, id, eligible);
+    }
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
     // Libraries, matched by identity to those the Host passes.
     r.libraries = try a.alloc(?*Library, try i.count());

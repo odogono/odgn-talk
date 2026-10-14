@@ -520,6 +520,7 @@ pub const Group = struct {
 
     /// Sends each complete Trace line to the sink.
     pub fn flush(g: *Group) void {
+        g.group.flushChargeRefusals();
         const written = g.out.written();
         var start: usize = 0;
         while (std.mem.indexOfScalarPos(u8, written, start, '\n')) |end| {
@@ -677,7 +678,8 @@ pub const RunStarted = extern struct {
 pub const RunDiscarded = extern struct { ancestry: RunAncestry, script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, reason: [*]const u8, reason_len: usize };
 pub const RunAccounting = extern struct { ancestry: RunAncestry, script: [*]const u8, script_len: usize, run: [*]const u8, run_len: usize, fuel: i64, state: [*]const u8, state_len: usize };
 pub const CausalWork = extern struct { root_delivery: [*]const u8, root_delivery_len: usize, live_runs: i64, queued_messages: i64, discarded_messages: i64 };
-pub const ReportKind = enum(c_int) { run_end, stop, unhandled, call_failed, effect_failure, decided, host_error, run_started, run_discarded, run_accounting, causal_work };
+pub const ChargeResult = extern struct { request: [*]const u8, request_len: usize, call: [*]const u8, call_len: usize, fuel: i64, status: [*]const u8, status_len: usize };
+pub const ReportKind = enum(c_int) { run_end, stop, unhandled, call_failed, effect_failure, decided, host_error, run_started, run_discarded, run_accounting, causal_work, charge_result };
 pub const Report = extern struct {
     kind: ReportKind,
     as: extern union {
@@ -692,6 +694,7 @@ pub const Report = extern struct {
         run_discarded: RunDiscarded,
         run_accounting: RunAccounting,
         causal_work: CausalWork,
+        charge_result: ChargeResult,
     },
 };
 
@@ -725,6 +728,7 @@ fn viewReports(held: *machine.report.Reports) ![]Report {
     const a = held.arena.allocator();
     const out = try a.alloc(Report, held.list.items.len);
     for (held.list.items, out) |r, *o| o.* = switch (r) {
+        .charge_result => |x| .{ .kind = .charge_result, .as = .{ .charge_result = chargeView(x.request, x.call, x.fuel, x.status) } },
         .run_end => |x| .{ .kind = .run_end, .as = .{ .run_end = .{
             .script = x.script.ptr,
             .script_len = x.script.len,
@@ -831,6 +835,51 @@ fn viewReports(held: *machine.report.Reports) ![]Report {
         .causal_work => |x| .{ .kind = .causal_work, .as = .{ .causal_work = .{ .root_delivery = x.root.ptr, .root_delivery_len = x.root.len, .live_runs = @intCast(x.live_runs), .queued_messages = @intCast(x.queued_messages), .discarded_messages = @intCast(x.discarded_messages) } } },
     };
     return out;
+}
+
+fn chargeView(request: []const u8, call: []const u8, fuel: u64, status_: caps.ChargeStatus) ChargeResult {
+    const word = @tagName(status_);
+    return .{ .request = request.ptr, .request_len = request.len, .call = call.ptr, .call_len = call.len, .fuel = @intCast(fuel), .status = word.ptr, .status_len = word.len };
+}
+
+pub export fn talk_call_request_charge(c: *Call, fuel: i64, out: *?*caps.ChargeRequest) HostErrorCode {
+    out.* = null;
+    const g: *machine.Group = @ptrCast(@alignCast(c.owner orelse c.group orelse return .invalid_value));
+    if (!c.request_eligible or c.automatic) {
+        g.refuseCharge(c.id, fuel, fuel >= 0 and fuel <= 9_007_199_254_740_991, "invalid value");
+        return .invalid_value;
+    }
+    out.* = g.requestCharge(c.id, fuel) catch |err| return status(err);
+    if (g.on_ready) |ready| ready(g.ready_context);
+    return .ok;
+}
+
+pub export fn talk_group_on_ready(g: *Group, hook: ?*const fn (?*anyopaque) callconv(.c) void, context: ?*anyopaque) void {
+    g.group.on_ready = hook;
+    g.group.ready_context = context;
+}
+
+pub export fn talk_request_charge(g: *Group, call: ?[*]const u8, len: usize, fuel: i64, out: *?*caps.ChargeRequest) HostErrorCode {
+    out.* = null;
+    const id = bytes(call, len) catch return .invalid_value;
+    out.* = g.group.requestCharge(id, fuel) catch |err| return if (err == error.UnknownCall) .unknown_call else status(err);
+    if (g.group.on_ready) |ready| ready(g.group.ready_context);
+    return .ok;
+}
+
+pub export fn talk_charge_request_id(q: *const caps.ChargeRequest, id: *[*]const u8, len: *usize) void {
+    id.* = q.id.ptr;
+    len.* = q.id.len;
+}
+
+pub export fn talk_charge_request_done(q: *const caps.ChargeRequest) bool {
+    return q.done.load(.acquire);
+}
+
+pub export fn talk_charge_request_result(q: *const caps.ChargeRequest, out: *ChargeResult) bool {
+    if (!q.done.load(.acquire)) return false;
+    out.* = chargeView(q.id, q.call, q.fuel, q.status);
+    return true;
 }
 
 fn ancestryView(x: machine.report.Ancestry) RunAncestry {
@@ -1328,6 +1377,7 @@ pub export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
     g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
+    g.group.flushChargeRefusals();
     g.group.saves += 1;
     g.group.write("> save s{d}\n", .{g.group.saves});
     if (snapshot.effectsPending(&g.group)) {
@@ -1335,7 +1385,13 @@ pub export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
         return .effects_pending;
     }
     const print = g.group.groupFingerprint() catch return .out_of_memory;
-    const saved = snapshot.save(&g.group, allocator, print) catch return .out_of_memory;
+    const saved = snapshot.save(&g.group, allocator, print) catch |err| {
+        if (err == error.EffectsPending) {
+            g.group.write("refused code=\"effects pending\"\n", .{});
+            return .effects_pending;
+        }
+        return .out_of_memory;
+    };
     out.* = .{ .data = saved.ptr, .len = saved.len };
     return .ok;
 }
@@ -1915,6 +1971,7 @@ pub const direct = struct {
     pub const fingerprint = talk_fingerprint;
     pub const callAnswer = talk_call_answer;
     pub const callFail = talk_call_fail;
+    pub const requestCharge = talk_request_charge;
     pub const grant = talk_capability_def_grant;
     pub const grantAll = talk_capability_def_grant_all;
     pub const defineObjectKind = talk_define_object_kind;
@@ -2295,6 +2352,8 @@ pub const Operation = extern struct {
     context: ?*anyopaque,
     scope: ?*const ScopeDecl,
     segment_bound: bool,
+    metering: ?[*]const u8 = null,
+    metering_len: usize = 0,
     description: ?[*]const u8 = null,
     description_len: usize = 0,
     examples: ?[*]const ?[*]const u8 = null,
@@ -2371,6 +2430,12 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     } else .none;
     const args_in: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
     const errors_in: []const ErrorDecl = if (o.errors_len == 0) &.{} else (o.errors orelse return error.InvalidValue)[0..o.errors_len];
+    const metering: ?caps.Metering = if (o.metering == null and o.metering_len == 0) null else blk: {
+        const m = try bytes(o.metering, o.metering_len);
+        if (std.mem.eql(u8, m, "read-only")) break :blk .read_only;
+        if (std.mem.eql(u8, m, "segment-bound")) break :blk .segment_bound;
+        return error.InvalidValue;
+    };
     const bridge = try gpa.create(Bridge);
     bridge.* = .{ .call = call, .context = o.context };
     c.bridges.append(gpa, bridge) catch |err| {
@@ -2409,6 +2474,7 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
             .closes => |n| .{ .closes = try gpa.dupe(u8, n) },
         },
         .segment_bound = o.segment_bound,
+        .metering = metering,
         .description = description,
         .examples = try examples.toOwnedSlice(gpa),
         .host = .{ .call = bridged, .context = bridge },
@@ -2729,7 +2795,7 @@ export fn talk_call_context(c: *const Call) bool {
     return c.abandoned.load(.acquire);
 }
 export fn talk_call_charge(c: *Call, fuel: i64) HostErrorCode {
-    if (fuel < 0) return .invalid_value;
+    if (fuel < 0 or fuel > 9_007_199_254_740_991) return .invalid_value;
     return if (c.charge(@intCast(fuel))) .ok else .err_limit;
 }
 
@@ -2888,7 +2954,9 @@ export fn talk_store_capability(c: *Core, impl: *const StoreImpl, costs: ?*const
     return released;
 }
 
-pub const SqlFn = *const fn (context: ?*anyopaque, call: *Call, sql: [*]const u8, sql_len: usize, params: *const sqlite.Params, max: i64, rows: *sqlite.Rows, err: *ScriptError) callconv(.c) CallEnd;
+pub const BeforeStep = *const fn (context: ?*anyopaque) callconv(.c) HostErrorCode;
+
+pub const SqlFn = *const fn (context: ?*anyopaque, call: *Call, sql: [*]const u8, sql_len: usize, params: *const sqlite.Params, max: i64, before_step: BeforeStep, step_context: ?*anyopaque, rows: *sqlite.Rows, err: *ScriptError) callconv(.c) CallEnd;
 pub const SqliteImpl = extern struct {
     context: ?*anyopaque,
     coordinator: ?*const fn (context: ?*anyopaque, database: [*]const u8, len: usize) callconv(.c) ?*const SegmentLifecycle,
@@ -2900,18 +2968,22 @@ pub const SqliteImpl = extern struct {
     release_rows: ?*const fn (context: ?*anyopaque, rows: *sqlite.Rows) callconv(.c) void,
 };
 
-/// A `query` or `change` Host function: the implementation, the per-row
+/// A `query` or `change` Host function: the implementation, the per-step
 /// cost, and which it is.
-const SqlBridge = struct { impl: SqliteImpl, per_row: u64, change: bool };
+const SqlBridge = struct { impl: SqliteImpl, per_step: u64, change: bool };
 
-/// The Core's `query` and `change`: `max` times the per-row cost charged
-/// before the work, `params` converted, and the rows converted back.
+const StepCharge = struct { call: *Call, fuel: u64 };
+fn beforeStep(context: ?*anyopaque) callconv(.c) HostErrorCode {
+    const step: *StepCharge = @ptrCast(@alignCast(context.?));
+    return if (step.call.charge(step.fuel)) .ok else .err_limit;
+}
+
+/// The factory supplies authorization before each driver-owned step.
 fn sqlCall(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome {
     const b: *const SqlBridge = @ptrCast(@alignCast(context.?));
     const binding = sqlite.bindingOf(call.binding) orelse return .broken;
     const max = sqlite.effectiveMax(args, binding);
-    const cost = std.math.mul(u64, max, b.per_row) catch std.math.maxInt(u64);
-    if (cost > 0 and !call.charge(cost)) return .limited;
+    var step: StepCharge = .{ .call = call, .fuel = b.per_step };
     var arena: std.heap.ArenaAllocator = .init(call.gpa);
     defer arena.deinit();
     const a = arena.allocator();
@@ -2920,7 +2992,7 @@ fn sqlCall(context: ?*anyopaque, call: *Call, args: []const *Value) caps.Outcome
     var failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
     const f = (if (b.change) b.impl.change else b.impl.query).?;
     const sql = args[0].data.text;
-    switch (f(b.impl.context, call, sql.ptr, sql.len, &params, @intCast(max), &rows, &failure)) {
+    switch (f(b.impl.context, call, sql.ptr, sql.len, &params, @intCast(max), beforeStep, &step, &rows, &failure)) {
         .answered => {
             defer if (b.impl.release_rows) |release| release(b.impl.context, &rows);
             return switch (sqlite.convert(call.gpa, a, rows, max, b.change) catch return .broken) {
@@ -2969,9 +3041,19 @@ fn sqliteCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinat
     return .{ .identity = @intFromPtr(l), .hook = segmentHook, .context = @constCast(l) };
 }
 
-export fn talk_sqlite_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_row: i64, out: *?*caps.Capability) HostErrorCode {
+export fn talk_sqlite_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_step: i64, out: *?*caps.Capability) HostErrorCode {
+    return sqliteCapability(c, impl, costs, per_step, true, out);
+}
+
+/// The executable corpus still specifies perRow until every Core migrates.
+/// Its C replay uses this compatibility factory, never Core internals.
+export fn talk_sqlite_legacy_capability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return sqliteCapability(c, impl, costs, 0, false, out);
+}
+
+fn sqliteCapability(c: *Core, impl: *const SqliteImpl, costs: ?*const Costs, per_step: i64, metered: bool, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
-    if (per_row < 0 or per_row > sqlite.max_whole) return .invalid_value;
+    if (per_step < 0 or per_step > sqlite.max_whole) return .invalid_value;
     if (impl.coordinator == null or impl.query == null or impl.change == null) return .invalid_value;
     const gpa = c.gpa;
     const kept = gpa.create(SqliteImpl) catch return .out_of_memory;
@@ -2984,14 +3066,19 @@ export fn talk_sqlite_capability(c: *Core, impl: *const SqliteImpl, costs: ?*con
     // In name order: begin, change, commit, query, rollback.
     for ([_]usize{ 1, 3 }) |i| {
         const bridge = gpa.create(SqlBridge) catch return .out_of_memory;
-        bridge.* = .{ .impl = impl.*, .per_row = @intCast(per_row), .change = i == 1 };
+        bridge.* = .{ .impl = impl.*, .per_step = @intCast(per_step), .change = i == 1 };
         c.sql_bridges.append(gpa, bridge) catch {
             gpa.destroy(bridge);
             return .out_of_memory;
         };
         own[i] = .{ .call = sqlCall, .context = bridge };
     }
-    return defineStandardWith(c, .sqlite, &.{ impl.begin, null, impl.commit, null, impl.rollback }, &own, impl.context, costs, .{ .call = sqliteCoordinator, .context = kept }, out);
+    const defined = defineStandardWith(c, .sqlite, &.{ impl.begin, null, impl.commit, null, impl.rollback }, &own, impl.context, costs, .{ .call = sqliteCoordinator, .context = kept }, out);
+    if (defined == .ok and metered) {
+        out.*.?.operations[1].metering = .segment_bound;
+        out.*.?.operations[3].metering = .read_only;
+    }
+    return defined;
 }
 
 // ---------------------------------------------------------------- answers

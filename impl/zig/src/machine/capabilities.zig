@@ -452,6 +452,8 @@ pub const Scope = union(enum) {
     }
 };
 
+pub const Metering = enum { read_only, segment_bound };
+
 pub const Operation = struct {
     name: []const u8,
     args: []*Shape,
@@ -469,6 +471,7 @@ pub const Operation = struct {
     /// Whether its effects join the Segment's participant, deferred to the
     /// Segment's outcome.
     segment_bound: bool = false,
+    metering: ?Metering = null,
     /// For the Host Manifest only: plain text, and source texts that each
     /// call the Operation. Empty is none.
     description: []const u8 = "",
@@ -599,6 +602,10 @@ pub const Capability = struct {
     pub fn validScopes(c: *const Capability) bool {
         for (c.operations) |op| {
             if (op.segment_bound and op.mode != .immediate) return false;
+            if (op.metering) |metering| switch (metering) {
+                .read_only => if (op.mode == .fire_and_forget or op.segment_bound or op.scope != .none) return false,
+                .segment_bound => if (op.mode != .immediate or !op.segment_bound) return false,
+            };
             // Every lifecycle Operation of a scope agrees on being
             // Segment-bound.
             const name = op.scope.name() orelse continue;
@@ -647,6 +654,17 @@ pub const Grant = struct {
 };
 
 /// What an Operation's Host function receives.
+pub const ChargeStatus = enum { accepted, limit, inactive };
+pub const ChargeRequest = struct {
+    id: []const u8,
+    call: []const u8,
+    fuel: u64,
+    status: ChargeStatus = .inactive,
+    done: std.atomic.Value(bool) = .init(false),
+    processed: bool = false,
+    fault_run: ?*anyopaque = null,
+};
+
 pub const Call = struct {
     id: []const u8,
     script: []const u8,
@@ -656,6 +674,12 @@ pub const Call = struct {
     now: model.dates.Instant,
     /// What `Charge` drew.
     charged: u64 = 0,
+    request_eligible: bool = false,
+    /// Saved call site, including the particular Join Member.
+    at_unit: []const u8 = "",
+    at_pc: u32 = 0,
+    at_line: u32 = 0,
+    at_column: u32 = 0,
     /// The Fuel the Run has left after the declared cost; null when there
     /// is no limit.
     left: ?u64,
@@ -674,7 +698,7 @@ pub const Call = struct {
     /// Whether the Core is abandoning a scope, when `Charge` is a Host
     /// contract failure.
     automatic: bool = false,
-    /// Whether an automatic call tried to charge.
+    /// A refused charge is latched for the entire callback.
     charge_refused: bool = false,
     /// Whether an automatic call may answer `deferred`; an Operation's own
     /// call always may.
@@ -695,8 +719,11 @@ pub const Call = struct {
             c.charge_refused = true;
             return false;
         }
-        if (!c.starting) return false;
-        if (c.left) |left| if (c.charged + fuel > left) return false;
+        if (!c.starting or c.charge_refused) return false;
+        if (c.left) |left| if (fuel > left -| c.charged) {
+            c.charge_refused = true;
+            return false;
+        };
         c.charged += fuel;
         return true;
     }

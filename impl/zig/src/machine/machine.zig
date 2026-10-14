@@ -1231,6 +1231,7 @@ pub const Landing = struct { input: Input, written: bool };
 pub const How = enum { answer, fail, reissue, adopt };
 
 pub const Input = union(enum) {
+    charge_request: *capabilities.ChargeRequest,
     /// A restored pending call's settlement, by its owned id; an answer's or
     /// failure's Resume.
     settlement: struct { id: []const u8, how: How, with: ?Resume },
@@ -1286,6 +1287,11 @@ pub const Group = struct {
     driving: struct { unit: []const u8 = "", pc: u32 = 0, ins: lower.Instruction = undefined } = .{},
     scripts: std.ArrayList(*Script) = .empty,
     inputs: std.ArrayList(Input) = .empty,
+    input_lock: @import("queue_lock.zig").Lock = .{},
+    batch: std.ArrayList(Input) = .empty,
+    on_ready: ?*const fn (?*anyopaque) callconv(.c) void = null,
+    ready_context: ?*anyopaque = null,
+    refused_charges: std.ArrayList(struct { call: []const u8, fuel: i64, valid: bool, code: []const u8 }) = .empty,
     deliveries: u64 = 0,
     trace: ?*std.Io.Writer,
     /// Reusable scratch memory for a single instruction.
@@ -1314,6 +1320,10 @@ pub const Group = struct {
     timers: u64 = 0,
     /// Suspending calls, which the Host may answer until the Group ends.
     calls: std.ArrayList(*capabilities.Call) = .empty,
+    charge_counter: u64 = 0,
+    charge_requests: std.ArrayList(*capabilities.ChargeRequest) = .empty,
+    /// Every issued id, including immediate/ineligible calls, for transport validation.
+    issued_calls: std.StringHashMapUnmanaged(bool) = .empty,
     /// The call ids of `send … and wait`, which waits and records name.
     ids: std.ArrayList([]u8) = .empty,
     /// The Host Objects the Group has handles for, in the order made.
@@ -1408,6 +1418,10 @@ pub const Group = struct {
         g.landing.deinit(g.gpa);
         if (g.held) |*h| h.deinit();
         g.inputs.deinit(g.gpa);
+        g.releaseInputs(g.batch.items);
+        g.batch.deinit(g.gpa);
+        for (g.refused_charges.items) |x| g.gpa.free(x.call);
+        g.refused_charges.deinit(g.gpa);
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
         g.libraries.deinit(g.gpa);
@@ -1417,12 +1431,15 @@ pub const Group = struct {
             g.gpa.destroy(f);
         }
         g.functions.deinit(g.gpa);
-        for (g.calls.items) |c| {
-            g.gpa.free(c.id);
-            releaseAll(c.args, g.gpa);
-            g.gpa.destroy(c);
+        for (g.charge_requests.items) |q| {
+            g.gpa.free(q.id);
+            g.gpa.free(q.call);
+            g.gpa.destroy(q);
         }
-        g.calls.deinit(g.gpa);
+        g.charge_requests.deinit(g.gpa);
+        var issued = g.issued_calls.keyIterator();
+        while (issued.next()) |id| g.gpa.free(id.*);
+        g.issued_calls.deinit(g.gpa);
         for (g.ids.items) |id| g.gpa.free(id);
         g.ids.deinit(g.gpa);
         for (g.scripts.items) |s| g.destroyScript(s);
@@ -1430,6 +1447,12 @@ pub const Group = struct {
         // A live Run removed its own wait; any left belongs to none.
         for (g.pending.items) |p| g.destroyPending(p);
         g.pending.deinit(g.gpa);
+        for (g.calls.items) |c| {
+            g.gpa.free(c.id);
+            releaseAll(c.args, g.gpa);
+            g.gpa.destroy(c);
+        }
+        g.calls.deinit(g.gpa);
         // An error raised as an allocation was refused, never taken.
         if (g.pending_error) |e| e.release();
         var it = g.results.valueIterator();
@@ -1552,6 +1575,8 @@ pub const Group = struct {
     }
 
     fn writeTail(g: *Group) !void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
         var rows: std.ArrayList(Ended) = .empty;
         defer rows.deinit(g.gpa);
         try rows.appendSlice(g.gpa, g.ended.items);
@@ -1613,7 +1638,7 @@ pub const Group = struct {
                 g.gpa.free(x.script);
                 g.gpa.free(x.reason);
             },
-            .set_parent, .dispose, .cancel_delivery => {},
+            .set_parent, .dispose, .cancel_delivery, .charge_request => {},
         };
     }
 
@@ -2553,7 +2578,7 @@ pub const Group = struct {
             g.write("refused code=\"{s}\"\n", .{code});
             return if (std.mem.eql(u8, code, "parent cycle")) error.ParentCycle else error.InvalidValue;
         }
-        try g.inputs.append(g.gpa, input);
+        try g.enqueue(input);
     }
 
     fn parentRefusal(o: *const objects.Object, parent: ?*const objects.Object) ?[]const u8 {
@@ -2695,7 +2720,7 @@ pub const Group = struct {
     /// A Stop, CancelRun or RewindRun: made during a Pump, it lands at the
     /// next Host crossing; otherwise the next Pump drains it.
     fn queueLanding(g: *Group, input: Input) !void {
-        if (!g.pumping) return g.inputs.append(g.gpa, input);
+        if (!g.pumping) return g.enqueue(input);
         try g.landing.append(g.gpa, .{ .input = input, .written = g.held_trace != null });
         // Made in a Host function, it is written where it was made, after
         // the crossing's records.
@@ -2725,7 +2750,7 @@ pub const Group = struct {
 
     /// Queues cancelling a Delivery, by its delivery number.
     pub fn cancelDeliveryInput(g: *Group, id: u64) !void {
-        try g.inputs.append(g.gpa, .{ .cancel_delivery = id });
+        try g.enqueue(.{ .cancel_delivery = id });
     }
 
     /// Cancels a Delivery: the Run it started, or, still in a mailbox, the
@@ -2833,7 +2858,7 @@ pub const Group = struct {
         errdefer g.gpa.free(s);
         const n = try g.gpa.dupe(u8, grant_name);
         errdefer g.gpa.free(n);
-        try g.inputs.append(g.gpa, .{ .revoke = .{ .script = s, .grant = n } });
+        try g.enqueue(.{ .revoke = .{ .script = s, .grant = n } });
     }
 
     /// Calls a named Grant's release hook, if its Capability has one.
@@ -2843,7 +2868,7 @@ pub const Group = struct {
     }
 
     pub fn dispose(g: *Group, o: *objects.Object) !void {
-        try g.inputs.append(g.gpa, .{ .dispose = o });
+        try g.enqueue(.{ .dispose = o });
     }
 
     /// Queues a Delivery to a Host Object, routed when it is drained.
@@ -2867,14 +2892,16 @@ pub const Group = struct {
         errdefer g.gpa.free(copy.message);
         copy.args = try g.gpa.dupe(*Value, d.args);
         errdefer g.gpa.free(copy.args);
-        try g.inputs.append(g.gpa, .{ .deliver = .{ .script = script_name, .delivery = copy } });
+        try g.enqueue(.{ .deliver = .{ .script = script_name, .delivery = copy } });
     }
 
     /// Whether a Host Delivery to `s` would overfill its mailbox, counting
     /// the Deliveries already queued to it.
     pub fn mailboxFull(g: *Group, s: *const Script) bool {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
         var n = mailboxLen(s);
-        for (g.inputs.items) |input| switch (input) {
+        for ([_][]const Input{ g.inputs.items, g.batch.items }) |queue| for (queue) |input| switch (input) {
             .deliver => |d| if (d.delivery.target == null and std.mem.eql(u8, d.script, s.name)) {
                 n += 1;
             },
@@ -2915,7 +2942,7 @@ pub const Group = struct {
         const copy = try g.gpa.dupe(*Value, args);
         errdefer g.gpa.free(copy);
         g.broadcasts += 1;
-        try g.inputs.append(g.gpa, .{ .broadcast = .{ .id = g.broadcasts, .message = name, .args = copy, .decision = decision, .limits = g.override } });
+        try g.enqueue(.{ .broadcast = .{ .id = g.broadcasts, .message = name, .args = copy, .decision = decision, .limits = g.override } });
         g.override = null;
         return g.broadcasts;
     }
@@ -3012,7 +3039,7 @@ pub const Group = struct {
     pub fn settle(g: *Group, id: []const u8, with: Resume) !void {
         const copy = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(copy);
-        try g.inputs.append(g.gpa, .{ .settle = .{ .id = copy, .with = with } });
+        try g.enqueue(.{ .settle = .{ .id = copy, .with = with } });
     }
 
     pub fn releaseResume(g: *Group, with: Resume) void {
@@ -3179,6 +3206,7 @@ pub const Group = struct {
                 out.writeAll("> dispose object=") catch {};
                 display.writeTrace(out, o.value) catch {};
             },
+            .charge_request => |q| out.print("> charge-request {s} {s} fuel={d}", .{ q.call, q.id, q.fuel }) catch {},
             .revoke => |x| out.print("> revoke {s} grant={s}", .{ x.script, x.grant }) catch {},
             .cancel_run => |id| out.print("> cancel-run {s}", .{id}) catch {},
             .rewind_run => |id| out.print("> rewind-run {s}", .{id}) catch {},
@@ -3218,23 +3246,27 @@ pub const Group = struct {
         g.pumping = true;
         defer g.pumping = false;
         g.rewound = false;
+        g.flushChargeRefusals();
         g.clock = clock;
         g.slice = slice;
         g.cap = cap;
         g.sliced = false;
+        g.input_lock.lock();
+        std.mem.swap(std.ArrayList(Input), &g.inputs, &g.batch);
+        g.input_lock.unlock();
         // A Broadcast's recipients are those that want it now, as the queue
         // is drained.
         // A Stop, or a disposal that stops a Script, queued before a
         // Broadcast leaves that Script out of its recipients.
         var stopping: std.ArrayList(*const Script) = .empty;
         defer stopping.deinit(g.gpa);
-        for (g.inputs.items) |*input| switch (input.*) {
+        for (g.batch.items) |*input| switch (input.*) {
             .broadcast => |*b| try g.resolveBroadcast(b, stopping.items),
             .stop => |x| if (g.script(x.script)) |target| try stopping.append(g.gpa, target),
             .dispose => |o| for (g.scripts.items) |x| if (x.owner == o) try stopping.append(g.gpa, x),
             else => {},
         };
-        for (g.inputs.items) |input| g.writeInput(input);
+        for (g.batch.items) |input| g.writeInput(input);
         const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
         g.write("> pump clock={s}", .{shown});
         if (slice > 0) g.write(" fuel-slice={d}", .{slice});
@@ -3252,13 +3284,148 @@ pub const Group = struct {
         try g.drain();
     }
 
+    fn enqueue(g: *Group, input: Input) !void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        try g.inputs.append(g.gpa, input);
+    }
+
+    fn registerCall(g: *Group, id: []const u8, eligible: bool) !void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        const own = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(own);
+        try g.issued_calls.put(g.gpa, own, eligible);
+    }
+
+    fn unissueCall(g: *Group, id: []const u8) void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        if (g.issued_calls.fetchRemove(id)) |entry| g.gpa.free(entry.key);
+    }
+
+    pub fn requestCharge(g: *Group, id: []const u8, fuel: i64) !*capabilities.ChargeRequest {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        const valid_amount = fuel >= 0 and fuel <= 9_007_199_254_740_991;
+        const eligible = g.issued_calls.get(id) orelse {
+            g.refuseChargeLocked(id, fuel, valid_amount, "unknown call");
+            return error.UnknownCall;
+        };
+        if (!valid_amount or !eligible) {
+            g.refuseChargeLocked(id, fuel, valid_amount, "invalid value");
+            return error.InvalidValue;
+        }
+        for (g.charge_requests.items) |q| if (std.mem.eql(u8, q.call, id) and !q.done.load(.acquire)) {
+            g.refuseChargeLocked(id, fuel, true, "invalid value");
+            return error.InvalidValue;
+        };
+        const q = try g.gpa.create(capabilities.ChargeRequest);
+        errdefer g.gpa.destroy(q);
+        const request = try std.fmt.allocPrint(g.gpa, "q{d}", .{g.charge_counter + 1});
+        errdefer g.gpa.free(request);
+        const call = try g.gpa.dupe(u8, id);
+        errdefer g.gpa.free(call);
+        q.* = .{ .id = request, .call = call, .fuel = @intCast(fuel) };
+        try g.charge_requests.append(g.gpa, q);
+        errdefer _ = g.charge_requests.pop();
+        try g.inputs.append(g.gpa, .{ .charge_request = q });
+        g.charge_counter += 1;
+        return q;
+    }
+
+    pub fn refuseCharge(g: *Group, id: []const u8, fuel: i64, valid: bool, code: []const u8) void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        g.refuseChargeLocked(id, fuel, valid, code);
+    }
+
+    fn refuseChargeLocked(g: *Group, id: []const u8, fuel: i64, valid: bool, code: []const u8) void {
+        // A foreign thread must not write the worker's Trace writer/arena.
+        const call = g.gpa.dupe(u8, id) catch return;
+        g.refused_charges.append(g.gpa, .{ .call = call, .fuel = fuel, .valid = valid, .code = code }) catch g.gpa.free(call);
+    }
+
+    pub fn flushChargeRefusals(g: *Group) void {
+        g.input_lock.lock();
+        const rows = g.refused_charges;
+        g.refused_charges = .empty;
+        g.input_lock.unlock();
+        var owned = rows;
+        defer owned.deinit(g.gpa);
+        for (rows.items) |x| {
+            defer g.gpa.free(x.call);
+            g.write("> charge-request {s} fuel=", .{x.call});
+            if (x.valid) g.write("{d}", .{x.fuel}) else g.write("\"invalid\"", .{});
+            g.write("\nrefused code=\"{s}\"\n", .{x.code});
+        }
+    }
+
+    fn drainCharge(g: *Group, q: *capabilities.ChargeRequest) !void {
+        if (!q.processed) {
+            const pending = for (g.pending.items) |p| {
+                if (p.call) |c| if (std.mem.eql(u8, c.id, q.call)) break p;
+            } else null;
+            q.status = if (pending) |p| (if (q.fuel <= fuelLeft(p.run)) .accepted else .limit) else .inactive;
+            q.processed = true;
+            g.write("charge-result {s} {s} fuel={d} status={s}\n", .{ q.call, q.id, q.fuel, @tagName(q.status) });
+            try g.reports.add(.{ .charge_result = .{ .request = try g.reports.text(q.id), .call = try g.reports.text(q.call), .fuel = q.fuel, .status = q.status } });
+            if (pending) |p| {
+                const run = p.run;
+                if (q.status == .accepted) {
+                    run.fuel += q.fuel;
+                    // Keep queued charges out of the next Stretch's total.
+                    run.segment_fuel += q.fuel;
+                    run.script.spent += q.fuel;
+                    g.pump_fuel += q.fuel;
+                    g.markRoot(rootOf(run.delivery));
+                } else {
+                    const c = p.call.?;
+                    var ins: lower.Instruction = undefined;
+                    ins.position = .{ .line = c.at_line, .column = c.at_column };
+                    if (!run.continuing) g.dropBase(run);
+                    _ = g.limitFault(run, .fuel, c.at_unit, c.at_pc, ins);
+                    q.fault_run = run;
+                }
+            }
+        }
+        if (q.fault_run) |ptr| {
+            const run: *Run = @ptrCast(@alignCast(ptr));
+            try g.cleanupLifecycle(run);
+            const s = run.script;
+            for (s.live.items, 0..) |r, i| if (r == run) {
+                _ = s.live.orderedRemove(i);
+                break;
+            };
+            var i: usize = 0;
+            while (i < s.work.items.len) {
+                if (s.work.items[i] == .run and s.work.items[i].run == run) {
+                    _ = s.work.orderedRemove(i);
+                } else i += 1;
+            }
+            q.fault_run = null;
+            if (g.fatal) {
+                try g.stopGroup(run);
+                g.destroyRun(run);
+                return;
+            }
+            try g.finishRun(s, run, .{ .faulted = .fuel }, g.segmentId(run));
+        }
+    }
+
+    fn settleChargeRequests(g: *Group) void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
+        for (g.charge_requests.items) |q| if (q.processed and q.fault_run == null) q.done.store(true, .release);
+    }
+
     /// Drains the input queue from its head, each input taken once it has
     /// run. One deferred at a lifecycle crossing stays at the head, and the
     /// Pump pauses; `resumePump` drains on from it.
     fn drain(g: *Group) !void {
         g.draining = true;
-        while (g.inputs.items.len > 0) {
-            const input = g.inputs.items[0];
+        while (g.batch.items.len > 0) {
+            const input = g.batch.items[0];
             // These may defer, so the drain keeps their text until they've
             // run; the others' arms take what they own.
             const kept = switch (input) {
@@ -3272,12 +3439,12 @@ pub const Group = struct {
                 }
                 // Refused partway, the input taken is gone from the queue,
                 // and the rest stay for `deinit`.
-                _ = g.inputs.orderedRemove(0);
+                _ = g.batch.orderedRemove(0);
                 if (kept) g.releaseInputs(&.{input});
                 g.draining = false;
                 return e;
             };
-            _ = g.inputs.orderedRemove(0);
+            _ = g.batch.orderedRemove(0);
             if (kept) g.releaseInputs(&.{input});
         }
         g.draining = false;
@@ -3286,6 +3453,7 @@ pub const Group = struct {
 
     fn drainOne(g: *Group, input: Input) !void {
         switch (input) {
+            .charge_request => |q| try g.drainCharge(q),
             .deliver => |d| {
                 defer g.gpa.free(d.script);
                 if (d.delivery.target != null) {
@@ -3536,6 +3704,7 @@ pub const Group = struct {
             g.write(" next={s}", .{text});
         }
         g.write("\n", .{});
+        g.settleChargeRequests();
     }
 
     /// The earliest deadline still pending.
@@ -3658,7 +3827,7 @@ pub const Group = struct {
         const own = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(own);
         try r.settled.ensureUnusedCapacity(g.gpa, 1);
-        try g.inputs.append(g.gpa, .{ .settlement = .{ .id = own, .how = how, .with = with } });
+        try g.enqueue(.{ .settlement = .{ .id = own, .how = how, .with = with } });
         // The settled list borrows the pending list's id.
         for (r.pending.items) |p| if (std.mem.eql(u8, p, id)) r.settled.appendAssumeCapacity(p);
     }
@@ -5036,8 +5205,12 @@ pub const Group = struct {
             const id = std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls }) catch "";
             const segment = g.segmentId(run);
             var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true, .deferrable = deferrable };
+            // An allocation refusal already makes the C worker refuse;
+            // otherwise keep automatic ids as issued/ineligible too.
+            g.registerCall(id, false) catch {};
             const outcome: capabilities.Outcome = if (deferrable and g.deferOnce()) .deferred else op.host.call(op.host.context, &call, &.{});
             if (outcome == .deferred and deferrable) {
+                g.unissueCall(id);
                 run.calls -= 1;
                 return error.Deferred;
             }
@@ -5315,6 +5488,11 @@ pub const Group = struct {
             run.segment_alloc = run.alloc;
             return;
         }
+        try g.finishRun(s, run, outcome, segment);
+    }
+
+    fn finishRun(g: *Group, s: *Script, run: *Run, outcome: Outcome, segment: []const u8) !void {
+        const d = run.delivery;
         if (g.trace) |out| {
             const word: []const u8 = switch (outcome) {
                 .returned, .passed, .vetoed => "completed",
@@ -6245,7 +6423,7 @@ pub const Group = struct {
                 if (over) |limit| {
                     // A Capability call that reached the Host keeps its
                     // charge before its result's conversion.
-                    if (limit == .alloc and charge.reached_host) {
+                    if ((limit == .alloc or limit == .fuel) and charge.reached_host) {
                         var before = charge;
                         before.result = null;
                         run.fuel += costs.chargeInstruction(ins.op, &before).fuel + clause_fuel;
@@ -8732,8 +8910,8 @@ pub const Group = struct {
         if (run.base == 0 and (run.alloc + before.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
-        const left: ?u64 = fuelLeft(run) -| decl.cost.fuel;
-        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .owner = g, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "" };
+        const left: ?u64 = fuelLeft(run) -| (if (decl.metering != null) before.fuel + run.clause_fuel else decl.cost.fuel);
+        var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .owner = g, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "", .request_eligible = decl.mode == .suspending and decl.metering == .read_only, .at_unit = unitName(run, frame), .at_pc = frame.pc - 1, .at_line = ins.position.line, .at_column = ins.position.column };
         // A suspending call outlives the instruction: the Host answers it
         // later, through the Group.
         const suspending = decl.mode == .suspending;
@@ -8745,6 +8923,7 @@ pub const Group = struct {
                 return err;
             };
             c.group = g;
+            c.at_unit = try g.keep.allocator().dupe(u8, local.at_unit);
             g.calls.append(gpa, c) catch |err| {
                 gpa.free(c.id);
                 gpa.destroy(c);
@@ -8756,10 +8935,13 @@ pub const Group = struct {
             for (c.args) |v| _ = v.retain();
             break :blk c;
         } else &local;
+        try g.registerCall(id, suspending and decl.metering == .read_only);
         const held = g.holdTrace();
         const outcome = decl.host.call(decl.host.context, call, args);
+        g.flushChargeRefusals();
         g.trace = held;
         if (outcome == .deferred) {
+            g.unissueCall(id);
             // No call was made: unmake its id and its suspending Call,
             // put the arguments back, and pause at the crossing. The
             // re-made call takes the same id.
@@ -8785,7 +8967,7 @@ pub const Group = struct {
         // The record: `call <id> op=<grant>.<op> args=[…]`, then the result
         // or error, and `charged`.
         const record = struct {
-            fn write(gr: *Group, call_id: []const u8, grant: []const u8, operation_name: []const u8, values: []const *Value, key: []const u8, shown: ?*const Value, charged: u64) void {
+            fn write(gr: *Group, call_id: []const u8, grant: []const u8, operation_name: []const u8, values: []const *Value, key: []const u8, shown: ?*const Value, charged: u64, refused: bool) void {
                 const w = gr.trace orelse return;
                 w.print("call {s} op={s}.{s} args=[", .{ call_id, grant, operation_name }) catch {};
                 for (values, 0..) |v, k| {
@@ -8798,15 +8980,33 @@ pub const Group = struct {
                     display.writeTrace(w, v) catch {};
                 }
                 if (charged > 0) w.print(" charged={d}", .{charged}) catch {};
+                if (refused) w.writeAll(" charge-refused=yes") catch {};
                 w.writeAll("\n") catch {};
             }
         }.write;
         const empty = try model.map(gpa, &.{});
         defer empty.release();
+        if (call.charge_refused or outcome == .limited) {
+            switch (outcome) {
+                .value => |v| v.release(),
+                .failed => |f| {
+                    gpa.free(f.code);
+                    if (f.message) |t| gpa.free(t);
+                    if (f.data) |d| d.release();
+                },
+                else => {},
+            }
+            record(g, id, grant_name, op_name, args, "", null, call.charged, decl.metering != null);
+            const spent = costs.chargeInstruction(ins.op, m);
+            run.fuel += spent.fuel + run.clause_fuel;
+            run.clause_fuel = 0;
+            run.alloc += spent.alloc;
+            return g.faultOn(.fuel);
+        }
         if (suspending) switch (outcome) {
             .value, .started => {
                 if (outcome == .value) outcome.value.release();
-                record(g, id, grant_name, op_name, args, "", null, call.charged);
+                record(g, id, grant_name, op_name, args, "", null, call.charged, false);
                 const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
                 if (ins.op == .join_ask) {
                     try g.startMember(run, .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms });
@@ -8820,13 +9020,13 @@ pub const Group = struct {
         switch (outcome) {
             .deferred => unreachable,
             .started => {
-                record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
                 return g.hostError(id, grant_name, op_name, &where);
             },
             .value => |v| {
                 if (decl.mode == .fire_and_forget) {
                     v.release();
-                    record(g, id, grant_name, op_name, args, "", null, call.charged);
+                    record(g, id, grant_name, op_name, args, "", null, call.charged, false);
                     if (try g.landedAt(run)) return error.Landed;
                     return .next;
                 }
@@ -8840,11 +9040,11 @@ pub const Group = struct {
                 };
                 if (!ok) {
                     v.release();
-                    record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                    record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
                     try g.acknowledge(run, granted, decl.scope, id);
                     return g.hostError(id, grant_name, op_name, &where);
                 }
-                record(g, id, grant_name, op_name, args, "result", v, call.charged);
+                record(g, id, grant_name, op_name, args, "result", v, call.charged, false);
                 try g.acknowledge(run, granted, decl.scope, id);
                 // What the Host made at this crossing lands before the
                 // result is converted.
@@ -8869,11 +9069,11 @@ pub const Group = struct {
                 if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
                 if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
                 const shown = model.map(gpa, pairs.items) catch {
-                    record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                    record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
                     return g.hostError(id, grant_name, op_name, &where);
                 };
                 defer shown.release();
-                record(g, id, grant_name, op_name, args, "error", shown, call.charged);
+                record(g, id, grant_name, op_name, args, "error", shown, call.charged, false);
                 if (try g.landedAt(run)) return error.Landed;
                 if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
                 // Its Data is converted as a result is, an empty map when
@@ -8885,19 +9085,11 @@ pub const Group = struct {
                 return error.Raised;
             },
             .broken => {
-                record(g, id, grant_name, op_name, args, "error", empty, call.charged);
+                record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
                 if (try g.landedAt(run)) return error.Landed;
                 return g.hostError(id, grant_name, op_name, &where);
             },
-            .limited => {
-                // The call's own charge, with its declared cost, is spent;
-                // the `Charge` past the limit faults it.
-                record(g, id, grant_name, op_name, args, "", null, 0);
-                const spent = costs.chargeInstruction(ins.op, m);
-                run.fuel += spent.fuel;
-                run.alloc += spent.alloc;
-                return g.faultOn(.fuel);
-            },
+            .limited => unreachable,
         }
         return .next;
     }
@@ -8940,6 +9132,7 @@ pub const Group = struct {
         };
         const held = g.holdTrace();
         const outcome = prop.get.call(prop.get.context, gpa, o);
+        g.flushChargeRefusals();
         g.trace = held;
         if (outcome == .deferred) return .crossing;
         m.fuel_extra = prop.get_cost.fuel;
@@ -9039,6 +9232,7 @@ pub const Group = struct {
         m.input = value.retain();
         const held = g.holdTrace();
         const outcome = set.call(set.context, gpa, o, value);
+        g.flushChargeRefusals();
         g.trace = held;
         if (outcome == .deferred) {
             // Put the operands back, in their order, and pause.

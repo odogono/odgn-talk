@@ -142,7 +142,10 @@ pub const CausalWork = struct {
 /// A queued Host Input the Pump refused as it drained it.
 pub const HostError = struct { code: []const u8, detail: []const u8 = "" };
 
+pub const ChargeResult = struct { request: []const u8, call: []const u8, fuel: u64, status: @import("capabilities.zig").ChargeStatus };
+
 pub const Report = union(enum) {
+    charge_result: ChargeResult,
     run_end: RunEnd,
     stop: Stop,
     unhandled: Unhandled,

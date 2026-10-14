@@ -143,7 +143,7 @@ static int capability_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -234,7 +234,7 @@ static int revoke_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
     /* One release hook, given with the definition. */
     talk_capability_option none[] = {talk_with_release_hook(NULL, NULL)};
@@ -310,33 +310,33 @@ static int scope_test(void) {
     int bad = 0;
     /* An opener whose abandonment Operation is missing, takes arguments,
      * closes another scope or disagrees with another opener's. */
-    talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0}};
+    talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
     bad |= talk_define_capability(core, "a", 1, missing, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation with_args[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
-        {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
     };
     bad |= talk_define_capability(core, "b", 1, with_args, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation disagreeing[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
-        {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
-        {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
     };
     bad |= talk_define_capability(core, "c", 1, disagreeing, 4, NULL, 0, &def) != TALK_INVALID_VALUE;
     /* A suspending lifecycle Operation, and a Segment-bound one with no
      * Segment Coordinator. */
     talk_operation suspending[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
     };
     bad |= talk_define_capability(core, "d", 1, suspending, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
-    talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, NULL, 0}};
+    talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
     bad |= talk_define_capability(core, "e", 1, bound, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
 
     talk_operation ops[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
     };
     bad |= talk_define_capability(core, "files", 5, ops, 2, NULL, 0, &def) != TALK_OK;
     /* A Grant keeps an opener's abandonment Operation. */
@@ -405,14 +405,14 @@ static int segment_test(void) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
-    talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
     int bad = 0;
     /* A coordinator without all three hooks, and a suspending Segment-bound
      * Operation. */
     talk_segment_lifecycle partial = {begin_hook, commit_hook, NULL, NULL};
     bad |= talk_define_segment_capability(core, "a", 1, ops, 1, &partial, NULL, 0, &def) != TALK_INVALID_VALUE;
-    talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, NULL, 0}};
+    talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
     bad |= talk_define_segment_capability(core, "b", 1, suspending, 1, &shared_lifecycle, NULL, 0, &def) != TALK_INVALID_VALUE;
     bad |= talk_define_coordinated_capability(core, "db", 2, ops, 1, coordinator_of, NULL, NULL, 0, &def) != TALK_OK;
     talk_grant *refused = NULL, *one = NULL, *two = NULL;
@@ -570,12 +570,45 @@ static int store_test(void) {
 /* sqlite's query: one row, {n: <the number of parameters>}, and the max it
  * was given. */
 static int64_t sql_max = -1;
+static int sql_scenario;
+static int sql_steps;
 static const char *n_column[] = {"n"};
 static const size_t n_len[] = {1};
 static talk_sql_value one_row[1];
-static talk_call_end sql_query(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_sql_rows *rows, talk_script_error *error) {
-    (void)context; (void)call; (void)sql; (void)sql_len; (void)error;
+static talk_call_end sql_query(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_before_step_fn before_step, void *step_context, talk_sql_rows *rows, talk_script_error *error) {
+    (void)context; (void)call; (void)sql; (void)sql_len;
     sql_max = max;
+    if (before_step(step_context) != TALK_OK) return TALK_CALL_LIMITED;
+    sql_steps++;
+    if (sql_scenario == 1 || sql_scenario == 4) {
+        *rows = (talk_sql_rows){n_column, n_len, 1, NULL, 0, sql_scenario == 4 ? 1 : 0};
+        return TALK_CALL_ANSWERED;
+    }
+    if (sql_scenario == 2) {
+        talk_value *reason = NULL, *data = NULL;
+        if (talk_text("SQL step failed", 15, &reason) != TALK_OK) return TALK_CALL_BROKEN;
+        talk_pair pair = {"reason", 6, reason};
+        int bad = talk_map(&pair, 1, &data) != TALK_OK;
+        talk_value_release(reason);
+        if (bad) return TALK_CALL_BROKEN;
+        *error = (talk_script_error){"sql", 3, NULL, 0, data};
+        return TALK_CALL_FAILED;
+    }
+    if (max > 0) {
+        /* A normal completion, or the overflow probe, is also a step. */
+        if (before_step(step_context) != TALK_OK) return TALK_CALL_LIMITED;
+        sql_steps++;
+    }
+    if (max == 0 || sql_scenario == 3) {
+        talk_value *maximum = NULL, *data = NULL;
+        if (talk_int(max, &maximum) != TALK_OK) return TALK_CALL_BROKEN;
+        talk_pair pair = {"max", 3, maximum};
+        int bad = talk_map(&pair, 1, &data) != TALK_OK;
+        talk_value_release(maximum);
+        if (bad) return TALK_CALL_BROKEN;
+        *error = (talk_script_error){"too many rows", 13, NULL, 0, data};
+        return TALK_CALL_FAILED;
+    }
     one_row[0] = (talk_sql_value){TALK_SQL_INTEGER, (int64_t)params->len, 0, NULL, 0};
     *rows = (talk_sql_rows){n_column, n_len, 1, one_row, 1, 0};
     return TALK_CALL_ANSWERED;
@@ -587,7 +620,7 @@ static const talk_segment_lifecycle *database_coordinator(void *context, const c
 }
 
 /* sqlite: a malformed binding refuses the Grant, max defaults to the row
- * cap and is charged per row, and rows come back as maps. */
+ * cap and is charged per step, and rows come back as maps. */
 static int sqlite_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
@@ -616,7 +649,58 @@ static int sqlite_test(void) {
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     bad |= sql_max != 4;
-    bad |= strstr(trace, "result=[{n: 2}] charged=8\n") == NULL;
+    bad |= strstr(trace, "result=[{n: 2}] charged=4\n") == NULL;
+    bad |= sql_steps != 2;
+    for (int scenario = 1; scenario <= 4; scenario++) {
+        sql_scenario = scenario;
+        sql_steps = 0;
+        const char *names[] = {"unused", "empty", "sqlerr", "overflow", "write"};
+        const char *name = names[scenario];
+        const char *next_source = scenario == 4 ? "on go\n ask db to change \"UPDATE\", []\nend go\n" : "on go\n ask db to query \"SELECT\", [], 0\nend go\n";
+        load.name = name; load.name_len = strlen(name); load.source = next_source; load.source_len = strlen(next_source);
+        bad |= talk_load(group, &load, &script) != TALK_OK;
+        trace_len = 0; memset(trace, 0, sizeof trace);
+        bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+        bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+        bad |= sql_steps != 1;
+        bad |= strstr(trace, "charged=2") == NULL;
+        if (scenario == 1) bad |= strstr(trace, "result=[] charged=2") == NULL;
+        if (scenario == 2) bad |= strstr(trace, "code: \"sql\"") == NULL;
+        if (scenario == 3) bad |= strstr(trace, "code: \"too many rows\"") == NULL;
+        if (scenario < 4) bad |= strstr(trace, "phase=begin") != NULL;
+        bad |= talk_script_stop(script, "done", 4) != TALK_OK;
+    }
+    /* A refused completion/probe never steps and retains the paid prefix;
+     * a write-side refusal rolls back the Segment participant. */
+    talk_group_release(group);
+    talk_core_release(core);
+    core = talk_new(); group = NULL;
+    if (core == NULL || talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    bad |= talk_sqlite_capability(core, &impl, &costs, 600, &def) != TALK_OK;
+    bad |= talk_capability_def_grant_all(def, &app, &grant) != TALK_OK;
+    grants[0].grant = grant;
+    talk_limits limits = {0}; limits.fuel_per_run = 1000;
+    load.limits = &limits;
+    const char *writing = "on go\n ask db to change \"UPDATE\", []\nend go\n";
+    load.name = "limited"; load.name_len = 7; load.source = writing; load.source_len = strlen(writing);
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    sql_scenario = 3; sql_steps = 0;
+    trace_len = 0; memset(trace, 0, sizeof trace);
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= sql_steps != 1;
+    bad |= strstr(trace, "charged=600 charge-refused=yes") == NULL;
+    bad |= strstr(trace, "phase=rollback status=ok") == NULL;
+    bad |= strstr(trace, "too many rows") != NULL;
+    talk_limit_override small = {TALK_OVERRIDE_FUEL_PER_RUN, 200, 0, 0, 0};
+    go.limits = &small;
+    trace_len = 0; memset(trace, 0, sizeof trace); sql_steps = 0;
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= sql_steps != 0;
+    bad |= strstr(trace, "charge-refused=yes") == NULL;
+    bad |= strstr(trace, "charged=") != NULL;
+    sql_scenario = 0;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -1240,7 +1324,7 @@ static int suspension_test(void) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
-    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "feed", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -1320,7 +1404,7 @@ static int object_test(void) {
     talk_shape *lamp_shape = NULL;
     bad |= talk_object_shape(lamp, &lamp_shape) != TALK_OK;
     const talk_shape *see_args[] = {lamp_shape};
-    talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
+    talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *probe = NULL;
     bad |= talk_define_capability(core, "probe", 5, see_ops, 1, NULL, 0, &probe) != TALK_OK;
     talk_shape_release(lamp_shape);
@@ -1377,7 +1461,7 @@ static int manifest_test(void) {
     const talk_shape *args[] = {talk_text_shape()};
     const char *examples[] = {"ask echo to twice \"ab\""};
     const size_t examples_lens[] = {22};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, "Doubles a text.", 15, examples, examples_lens, 1}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, "Doubles a text.", 15, examples, examples_lens, 1}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -1653,6 +1737,86 @@ static int memory_test(void) {
     return bad;
 }
 
+/* Metered suspension through the public C surface, including future lifetime. */
+static talk_call *metered_call;
+static int ready_count;
+static void metered_ready(void *context) { (void)context; ready_count++; }
+static talk_call_end metered_start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)args; (void)len; (void)result; (void)error;
+    metered_call = call;
+    return TALK_CALL_STARTED;
+}
+static int metering_test(void) {
+    talk_core *core = talk_new();
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (core == NULL || talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group_on_ready(group, metered_ready, NULL);
+    ready_count = 0;
+    talk_operation op = { .name = "fetch", .name_len = 5, .result = talk_number_shape(), .mode = TALK_SUSPENDING, .fn = metered_start, .metering = "read-only", .metering_len = 9 };
+    talk_capability_def *def = NULL;
+    talk_grant *grant = NULL;
+    int bad = talk_define_capability(core, "metered", 7, &op, 1, NULL, 0, &def) != TALK_OK;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"api", 3, grant}};
+    const char *source = "on go\n ask api to fetch and wait\n return it\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    talk_pending *pending = NULL;
+    bad |= talk_script_request(script, &go, NULL, &pending) != TALK_OK;
+    bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
+    talk_owned_bytes saved = {0};
+    bad |= talk_save(group, &saved) != TALK_EFFECTS_PENDING || saved.data != NULL;
+    talk_charge_request *q = NULL, *invalid = NULL;
+    bad |= talk_call_request_charge(metered_call, -1, &invalid) != TALK_INVALID_VALUE || invalid != NULL;
+    bad |= talk_call_request_charge(metered_call, 9007199254740992LL, &invalid) != TALK_INVALID_VALUE || invalid != NULL;
+    bad |= talk_call_request_charge(metered_call, 17, &q) != TALK_OK;
+    bad |= ready_count != 1 || talk_charge_request_done(q);
+    const char *id = NULL; size_t len = 0;
+    talk_charge_request_id(q, &id, &len);
+    bad |= len != 2 || memcmp(id, "q1", 2) != 0;
+    talk_charge_result result;
+    bad |= talk_charge_request_result(q, &result);
+    bad |= talk_call_request_charge(metered_call, 0, &invalid) != TALK_INVALID_VALUE;
+    talk_pump_result pumped = {0};
+    bad |= talk_pump(group, 0, 0, NULL, &pumped) != TALK_OK;
+    talk_reports *reports = pumped.reports;
+    bad |= !talk_charge_request_done(q) || !talk_charge_request_result(q, &result);
+    bad |= result.fuel != 17 || result.status_len != 8 || memcmp(result.status, "accepted", 8) != 0;
+    const talk_report *items = NULL;
+    size_t count = talk_reports_items(reports, &items);
+    bad |= count == 0 || items[0].kind != TALK_REPORT_CHARGE_RESULT || items[0].as.charge_result.fuel != 17;
+    talk_reports_release(reports);
+    talk_value *answer = NULL;
+    bad |= talk_int(42, &answer) != TALK_OK;
+    bad |= talk_call_answer(metered_call, answer) != TALK_OK;
+    talk_value_release(answer);
+    bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_call_request_charge(metered_call, 19, &q) != TALK_OK;
+    bad |= talk_save(group, &saved) != TALK_EFFECTS_PENDING;
+    bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
+    bad |= !talk_charge_request_result(q, &result) || result.status_len != 8 || memcmp(result.status, "inactive", 8) != 0;
+    bad |= talk_save(group, &saved) != TALK_OK;
+    talk_owned_bytes_release(&saved);
+    op.mode = TALK_FIRE_AND_FORGET;
+    bad |= talk_define_capability(core, "bad", 3, &op, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    op.mode = TALK_IMMEDIATE;
+    op.metering = "segment-bound"; op.metering_len = 13;
+    bad |= talk_define_capability(core, "bad", 3, &op, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    op.segment_bound = true;
+    bad |= talk_define_capability(core, "bad", 3, &op, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    op.metering = "unknown"; op.metering_len = 7;
+    bad |= talk_define_capability(core, "bad", 3, &op, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 int main(void) {
     expect_text("", 0, "");
     expect_text("cat", 3, "cat");
@@ -1777,7 +1941,8 @@ int main(void) {
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");
-    expect(sqlite_test() == 0, "sqlite refuses a malformed binding, charges max per row and gives rows as maps");
+    expect(sqlite_test() == 0, "sqlite refuses a malformed binding, authorizes each step and gives rows as maps");
+    expect(metering_test() == 0, "metered C calls request Fuel through a Pump and retain their future and issued eligibility");
     expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
     expect(router_test() == 0, "the router routes commits, retries a full mailbox after a Pump, and resyncs a checkpoint after a change");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
