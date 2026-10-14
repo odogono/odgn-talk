@@ -8,8 +8,21 @@ import {
 } from '@odgn/northtalk';
 import type { Element, Project } from './model';
 import { scriptPage, type ScriptOwner } from './script-manifest';
+import { isSoundAsset } from './sounds';
 
-export type RecipeKind = 'navigate' | 'show' | 'hide' | 'text';
+export type RecipeKind =
+  | 'navigate'
+  | 'show'
+  | 'hide'
+  | 'text'
+  | 'playSound'
+  | 'loopSound'
+  | 'stopSound';
+export const SOUND_RECIPE_KINDS: readonly RecipeKind[] = [
+  'playSound',
+  'loopSound',
+  'stopSound',
+];
 export type RecipeTarget = {
   name: string;
   property?: 'label' | 'text';
@@ -25,6 +38,15 @@ export const recipeTargets = (
       name: page.name,
       reference: page.name,
     }));
+  }
+  if (SOUND_RECIPE_KINDS.includes(kind)) {
+    const sounds = project.assets
+      .filter(isSoundAsset)
+      .map(asset => ({ name: asset.name, reference: asset.name }));
+    // The empty reference is `tell sound to stop`: all the owner's sounds.
+    return kind === 'stopSound'
+      ? [{ name: 'All sounds this Script started', reference: '' }, ...sounds]
+      : sounds;
   }
   return (scriptPage(project, owner)?.elements ?? [])
     .filter(
@@ -71,6 +93,14 @@ export const recipeSource = (
 ): string => {
   if (kind === 'navigate') {
     return `tell pages to show ${target.reference}`;
+  }
+  if (kind === 'playSound' || kind === 'loopSound') {
+    return `tell sound to ${kind === 'playSound' ? 'play' : 'loop'} ${recipeText(target.reference)}`;
+  }
+  if (kind === 'stopSound') {
+    return target.reference
+      ? `tell sound to stop ${recipeText(target.reference)}`
+      : 'tell sound to stop';
   }
   if (kind === 'text') {
     if (!target.property) {

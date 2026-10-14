@@ -1792,6 +1792,79 @@ fn objectReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// The Script a message names, in its Group.
+fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
+    const name = asText(field(msg, "script")) orelse return null;
+    return Direct.groupScript(entry.group, name.ptr, name.len);
+}
+
+fn countersReply(s: *Session, msg: Json, ref: i64) []u8 {
+    // The shared reactor harness (tools/wasi/check.py) holds both
+    // reactors to a protocol error for counters naming a Group or
+    // Script the instance doesn't hold.
+    const entry = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "unknown group");
+    const script = scriptOf(entry, msg) orelse return protocolError(s.gpa, ref, "unknown script");
+    var read: talk.Counters = undefined;
+    Direct.scriptCounters(script, &read);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"fuelTotal\":") catch {};
+    o.int(read.fuel_total) catch {};
+    o.raw(",\"allocTotal\":") catch {};
+    o.int(read.alloc_total) catch {};
+    o.raw(",\"runs\":") catch {};
+    o.int(read.runs) catch {};
+    o.raw(",\"faults\":") catch {};
+    o.int(read.faults) catch {};
+    o.raw(",\"persistentState\":") catch {};
+    o.int(read.persistent_state) catch {};
+    o.raw(",\"mailboxLen\":") catch {};
+    o.int(read.mailbox_len) catch {};
+    return finishOk(s, &o, entry);
+}
+
+/// `stop`, `cancel-run`, `rewind-run` and `revoke`: Host Inputs that land
+/// at the next Pump (or its next crossing), queued by the Core call.
+fn scriptControlReply(s: *Session, msg: Json, ref: i64, kind: enum { stop, cancel_run, rewind_run, revoke }) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const script = scriptOf(entry, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const code = switch (kind) {
+        .stop => blk: {
+            const reason = asText(field(msg, "reason")) orelse break :blk talk.HostErrorCode.invalid_value;
+            break :blk Direct.scriptStop(script, reason.ptr, reason.len);
+        },
+        .cancel_run => blk: {
+            const run = asText(field(msg, "run")) orelse break :blk talk.HostErrorCode.invalid_value;
+            break :blk Direct.scriptCancelRun(script, run.ptr, run.len);
+        },
+        .rewind_run => blk: {
+            const run = asText(field(msg, "run")) orelse break :blk talk.HostErrorCode.invalid_value;
+            break :blk Direct.scriptRewindRun(script, run.ptr, run.len);
+        },
+        .revoke => blk: {
+            const grant = asText(field(msg, "grant")) orelse break :blk talk.HostErrorCode.invalid_value;
+            break :blk Direct.scriptRevoke(script, grant.ptr, grant.len);
+        },
+    };
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
+fn cancelDeliveryReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const delivery = asText(field(msg, "delivery")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const code = Direct.cancelDelivery(entry.group, delivery.ptr, delivery.len);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
 /// A frame's JSON nesting, brackets outside strings.
 fn frameDepth(frame: []const u8) usize {
     var depth: usize = 0;
@@ -1859,6 +1932,18 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return defineObjectKindReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "object")) {
         return objectReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "counters")) {
+        return countersReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "stop")) {
+        return scriptControlReply(s, msg, ref, .stop);
+    } else if (std.mem.eql(u8, m, "cancel-run")) {
+        return scriptControlReply(s, msg, ref, .cancel_run);
+    } else if (std.mem.eql(u8, m, "rewind-run")) {
+        return scriptControlReply(s, msg, ref, .rewind_run);
+    } else if (std.mem.eql(u8, m, "revoke")) {
+        return scriptControlReply(s, msg, ref, .revoke);
+    } else if (std.mem.eql(u8, m, "cancel-delivery")) {
+        return cancelDeliveryReply(s, msg, ref);
     }
     return protocolError(s.gpa, ref, "unknown or unsupported message");
 }
@@ -2095,4 +2180,88 @@ test "define-capability carries Operation documentation and refuses other kinds"
     const undocumented = s.capabilityNamed("empty").?.operations[0];
     try std.testing.expectEqualStrings("", undocumented.description);
     try std.testing.expectEqual(@as(usize, 0), undocumented.examples.len);
+}
+
+test "counters, cancel-delivery, revoke and stop" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"double\",\"mode\":\"immediate\",\"args\":[\"number\"],\"result\":\"number\"}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on ping\\nreturn 42\\nend ping\\non double n\\n  ask api to double n\\n  return it\\nend double\\n\"}}", .{ 4, grant.object.get("grant").?.integer }));
+    // Counters naming no Group this instance holds is a protocol error,
+    // as the shared reactor harness (tools/wasi/check.py) holds both
+    // reactors to.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"counters\",\"ref\":{d},\"group\":\"nope\",\"script\":\"s\"}}", .{5})));
+    // A Delivery cancelled in the mailbox never runs: it is reported
+    // cancelled, with no Run.
+    const queued = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"ping\"}}}}", .{6}));
+    _ = try okOf(try c.send("{{\"m\":\"cancel-delivery\",\"ref\":{d},\"group\":\"g\",\"delivery\":\"{s}\"}}", .{ 7, queued.object.get("delivery").?.string }));
+    const cancelled = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8}));
+    try std.testing.expectEqualStrings("cancelled", cancelled.object.get("outcome").?.string);
+    // A completed Run is counted.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"ping\"}}}}", .{9}));
+    _ = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
+    const counters = try okOf(try c.send("{{\"m\":\"counters\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{11}));
+    try std.testing.expectEqual(@as(i64, 1), counters.object.get("runs").?.integer);
+    try std.testing.expect(counters.object.get("fuelTotal").?.integer > 0);
+    try std.testing.expectEqual(@as(i64, 0), counters.object.get("faults").?.integer);
+    try std.testing.expectEqual(@as(i64, 0), counters.object.get("mailboxLen").?.integer);
+    // A revoked Grant's calls fail in the Run, with no need.
+    _ = try okOf(try c.send("{{\"m\":\"revoke\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"grant\":\"api\"}}", .{12}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"double\",\"args\":[1]}}}}", .{13}));
+    const revoked = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{14}));
+    try std.testing.expectEqualStrings("errored", revoked.object.get("outcome").?.string);
+    try std.testing.expectEqualStrings("capability revoked", revoked.object.get("error").?.object.get("code").?.string);
+    // Stop lands at the next Pump, with its report.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{15}));
+    const stopped = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{16}));
+    var saw_stop = false;
+    for (stopped.object.get("reports").?.array.items) |r| {
+        if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) {
+            try std.testing.expectEqualStrings("done", r.object.get("reason").?.string);
+            saw_stop = true;
+        }
+    }
+    try std.testing.expect(saw_stop);
+}
+
+fn startedRun(reply: Json) ![]const u8 {
+    const reports = (try okOf(reply)).object.get("reports").?.array.items;
+    for (reports) |r| if (std.mem.eql(u8, r.object.get("kind").?.string, "run started")) return r.object.get("run").?.string;
+    return error.TestUnexpectedResult;
+}
+
+test "rewind-run restarts a sliced Run and cancel-run ends it" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on spin\\n  repeat forever\\n  end repeat\\nend spin\\n\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"spin\"}}}}", .{3}));
+    // A small Fuel Slice preempts the Run in its first Segment.
+    const sliced = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelSlice\":500}}", .{4});
+    try std.testing.expectEqualStrings("sliced", (try okOf(sliced)).object.get("state").?.string);
+    const run = try startedRun(sliced);
+    // Rewinding it puts its message back: the Pump that lands the
+    // rewind returns rewound at once, and the next starts a new Run
+    // for the message, and slices again.
+    _ = try okOf(try c.send("{{\"m\":\"rewind-run\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"{s}\"}}", .{ 5, run }));
+    const rewound = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelSlice\":500}}", .{6});
+    try std.testing.expectEqualStrings("rewound", (try okOf(rewound)).object.get("state").?.string);
+    const resliced = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelSlice\":500}}", .{7});
+    try std.testing.expectEqualStrings("sliced", (try okOf(resliced)).object.get("state").?.string);
+    const rerun = try startedRun(resliced);
+    try std.testing.expect(!std.mem.eql(u8, run, rerun));
+    const counters = try okOf(try c.send("{{\"m\":\"counters\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{8}));
+    try std.testing.expectEqual(@as(i64, 2), counters.object.get("runs").?.integer);
+    // Cancelling the restarted Run ends it cancelled at the next Pump.
+    _ = try okOf(try c.send("{{\"m\":\"cancel-run\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"{s}\"}}", .{ 9, rerun }));
+    const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
+    try std.testing.expectEqualStrings("cancelled", end.object.get("outcome").?.string);
 }

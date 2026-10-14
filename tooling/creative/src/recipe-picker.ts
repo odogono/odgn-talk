@@ -7,6 +7,7 @@ import {
   recipePlacement,
   recipeSource,
   recipeTargets,
+  SOUND_RECIPE_KINDS,
   type RecipeKind,
 } from './recipes';
 import type { ScriptOwner } from './script-manifest';
@@ -30,8 +31,23 @@ export const openRecipePicker = (
   const kind = h(
     'select',
     { 'aria-label': 'Action' },
-    ...(['navigate', 'show', 'hide', 'text'] as const)
-      .filter(value => owner !== project || value === 'navigate')
+    ...(
+      [
+        'navigate',
+        'show',
+        'hide',
+        'text',
+        'playSound',
+        'loopSound',
+        'stopSound',
+      ] as const
+    )
+      .filter(
+        value =>
+          owner !== project ||
+          value === 'navigate' ||
+          SOUND_RECIPE_KINDS.includes(value),
+      )
       .map(value =>
         h(
           'option',
@@ -41,6 +57,9 @@ export const openRecipePicker = (
             show: 'Show an Element',
             hide: 'Hide an Element',
             text: 'Change text',
+            playSound: 'Play a sound',
+            loopSound: 'Loop a sound',
+            stopSound: 'Stop a sound',
           }[value],
         ),
       ),
@@ -118,6 +137,9 @@ export const openRecipePicker = (
       action === 'text'
         ? 'Replacing a text Element’s contents clears mixed formatting.'
         : '',
+      SOUND_RECIPE_KINDS.includes(action)
+        ? 'Sounds a Page or Element Script starts stop when the reader leaves that Page; sounds the Project Script starts keep playing.'
+        : '',
       'Navigation stops the outgoing Page’s Scripts, so action order matters.',
       placement.kind === 'simple'
         ? 'Choose a position, then preview the insertion.'
@@ -134,7 +156,9 @@ export const openRecipePicker = (
     previewButton.disabled = !targets.length || readOnly();
     status.textContent = targets.length
       ? ''
-      : 'There are no matching Elements on this Page.';
+      : SOUND_RECIPE_KINDS.includes(action)
+        ? 'No sounds in this Project yet. Add one with Add sound… in Info when no Element is selected.'
+        : 'There are no matching Elements on this Page.';
   };
   kind.addEventListener('change', configure);
   for (const input of [target, value, position]) {

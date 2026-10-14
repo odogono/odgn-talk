@@ -521,3 +521,109 @@ end startPlay`;
   expect(clone).toHaveProperty('label', '1');
   expect(play.problems).toEqual([]);
 });
+
+const soundAsset = (name: string, mediaType = 'audio/mpeg') => ({
+  name,
+  fileName: `${name}.mp3`,
+  hash: (name === 'waves' ? 'a' : 'b').repeat(64),
+  mediaType,
+  size: 3,
+});
+
+test('the sound Grant plays and loops for the owning Script; stop is owner-scoped', () => {
+  const project = fixture();
+  project.assets.push(soundAsset('waves'), soundAsset('rain'));
+  project.pages[0]!.elements[0]!.script = `on click
+ tell sound to play "waves"
+ tell sound to loop "rain"
+end click
+on pointerLeave
+ tell sound to stop "waves"
+end pointerLeave`;
+  project.pages[0]!.elements[1]!.script = `on click
+ tell sound to stop "rain"
+end click`;
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems).toEqual([]);
+  expect(play.sounds.playing()).toEqual([
+    { owner: 'element:page1/button1', name: 'waves', loop: false },
+    { owner: 'element:page1/button1', name: 'rain', loop: true },
+  ]);
+  // Another Element's Script cannot stop the button's rain.
+  play.send(play.page.elements[1]!, 'click');
+  drain(play);
+  expect(play.sounds.playing().map(s => s.name)).toEqual(['waves', 'rain']);
+  play.send(play.page.elements[0]!, 'pointerLeave');
+  drain(play);
+  expect(play.sounds.playing().map(s => s.name)).toEqual(['rain']);
+  play.stop(0n);
+  expect(play.sounds.playing()).toEqual([]);
+});
+
+for (const bad of ['missing', 'picture']) {
+  test(`playing ${bad === 'missing' ? 'a missing sound' : 'an image as a sound'} reports against the Script`, () => {
+    const project = fixture();
+    project.assets.push(soundAsset('picture', 'image/png'));
+    project.pages[0]!.elements[0]!.script = `on click\n tell sound to play "${bad}"\nend click`;
+    const play = new PlaySession(project);
+    play.send(play.page.elements[0]!, 'click');
+    drain(play);
+    expect(play.sounds.playing()).toEqual([]);
+    expect(play.problems).toHaveLength(1);
+    expect(play.problems[0]?.owner).toBe(project.pages[0]!.elements[0]);
+  });
+}
+
+test('leaving a Page stops its Scripts’ sounds while a Project sound continues', async () => {
+  const project = fixture();
+  project.assets.push(soundAsset('waves'), soundAsset('rain'));
+  project.pages.push(createPage('page2'));
+  project.script = `on startPlay
+ tell sound to loop "rain"
+end startPlay`;
+  project.pages[0]!.script = `on openPage
+ tell sound to loop "waves"
+end openPage`;
+  project.pages[0]!.elements[0]!.script = `on click
+ tell pages to show page2
+end click`;
+  const play = new PlaySession(project);
+  await advance(play);
+  expect(
+    play.sounds
+      .playing()
+      .map(s => s.name)
+      .sort(),
+  ).toEqual(['rain', 'waves']);
+  play.send(play.page.elements[0]!, 'click');
+  await advance(play);
+  expect(play.page.name).toBe('page2');
+  expect(play.sounds.playing()).toEqual([
+    { owner: 'project', name: 'rain', loop: true },
+  ]);
+  expect(play.problems).toEqual([]);
+  // Stop — and with it Back to Edit, which stops first — silences the rest.
+  play.stop(0n);
+  expect(play.sounds.playing()).toEqual([]);
+});
+
+test('deleting an Element stops its sounds; its Script cannot restart them', () => {
+  const project = fixture();
+  project.assets.push(soundAsset('waves'));
+  project.pages[0]!.elements[0]!.script = `on click
+ tell sound to loop "waves"
+end click`;
+  project.pages[0]!.script = `on pointerEnter
+ tell elements to delete button1
+end pointerEnter`;
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.sounds.playing()).toHaveLength(1);
+  play.send(play.page, 'pointerEnter');
+  drain(play);
+  expect(play.sounds.playing()).toEqual([]);
+  expect(play.page.elements.map(e => e.name)).toEqual(['text1']);
+});

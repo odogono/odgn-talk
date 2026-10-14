@@ -31,8 +31,8 @@ also have read-only Script editors.
 Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
-also binds every Page name. The Manifests describe the planned `pages`, `elements` and `sound` Grants
-from ADR 0084; `pages` and `elements` are available during Play; `sound` is not yet implemented. Renames refresh open windows' Manifests and diagnostics. Problems
+also binds every Page name. The Manifests describe the `pages`, `elements` and `sound` Grants
+from ADR 0084; all three are available during Play (see [Sounds](#sounds)). Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -41,11 +41,14 @@ properties. Scripts execute only in Play.
 ### Script Recipes
 
 Choose **Add action…** in a Script window or Info to insert a click action:
-**Go to a Page**, **Show an Element**, **Hide an Element**, or **Change text**.
+**Go to a Page**, **Show an Element**, **Hide an Element**, **Change text**,
+**Play a sound**, **Loop a sound** or **Stop a sound**.
 Navigation offers every Page. Element actions offer only the Script's own
 Page; change-text targets are buttons (`label`) and text Elements (`text`).
-The owning Element is the default target and is written as `me`. Project
-Scripts offer navigation only. Page and Project handlers receive clicks
+The owning Element is the default target and is written as `me`. Sound
+actions offer the Project's sounds by the name Scripts use; **Stop a sound**
+also offers all sounds the Script started. Project Scripts offer navigation
+and sounds. Page and Project handlers receive clicks
 passed up the Message Path. Replacing text clears mixed formatting.
 
 The picker previews ordinary NorthTalk source, highlighting the insertion.
@@ -65,7 +68,8 @@ bindings (`me`, `it`, `thisPage`, `project`, `pages`, `elements`, `sound`).
 Creation and rename enforce this policy. Existing conflicting Projects stay
 editable and retain their names and source; Play and Recipes identify the
 owners to rename in Info before continuing. Renaming does not rewrite Scripts.
-Audio, timers and creating Elements are not yet offered as Recipes.
+Creating Elements is not yet offered as a Recipe; delays use `wait` in
+source (see [Delays with `wait`](#delays-with-wait)).
 
 Recipe unit tests check source, literal values, target filtering, placement,
 names and execution through the Play Host. Browser checks cover Info, previews,
@@ -230,7 +234,7 @@ Choose **Image** in Tools or drop files onto the Page. PNG, JPEG, WebP, GIF
 and SVG are accepted; AVIF carries a warning about older browsers. The app
 identifies the format from bytes and decodes every image before changing the
 Project, regardless of its extension. Files above 10 MB warn, and above
-50 MB are refused. Audio import waits for sound playback.
+50 MB are refused. Sounds have their own intake; see [Sounds](#sounds).
 
 Select an image and choose **Replace image…** in Info to change it without
 changing its position or size. Adding and replacing images are undoable.
@@ -264,8 +268,62 @@ Open `/images-test.html` and run
 `await import('/images.browser.js').then(m => m.runBrowserTests())`.
 Every result must have `passed: true`. Reload before repeating, and rebuild
 both files after an app rebuild. The suite creates and removes only its own
-Projects. iOS's native file picker still needs a device check; the Project
-picker deliberately has no extension filter.
+Projects. The Project picker deliberately has no extension filter, so `.folio` files
+stay pickable on iOS; the device checks behind that are recorded in
+[the storage research](../../docs/research/creative-tool-project-storage.md#device-checks-from-739-recorded-for-822).
+
+## Sounds
+
+With no Element selected, Info lists the Project's sounds and offers
+**Add sound…** and a **Preview** for each. MP3, AAC (`.m4a` or `.aac`) and
+WAV are accepted, identified from their bytes and trial-decoded before the
+Project changes, with the same size limits as images: warn above 10 MB,
+refuse above 50 MB. WAV also warns that it is uncompressed. A sound's
+Script name is its file name without the extension, so `waves.mp3` is played
+as `"waves"`; identical bytes share one asset, and adding a sound is one
+undoable edit. Sounds autosave and export like images: one zip entry per
+SHA-256, kept on export whenever the Project has Scripts, which may choose a
+sound by name dynamically. A missing or undecodable sound stays in the asset
+table as a placeholder; importing reports it, and playing it in Play is a
+Script error naming the sound.
+
+Every Script gets the `sound` Grant during Play:
+
+```talk
+tell sound to play "waves"
+tell sound to loop "rain"
+tell sound to stop "rain"
+tell sound to stop
+```
+
+A sound belongs to the Script that started it (#735), and `stop` reaches
+only that Script's sounds — with no name, all of them. Playing a name the
+Project has no sound for is an error against the Script and line. Leaving a
+Page stops its Page and Element Scripts' sounds; the Project Script's sounds
+carry on across navigation. Stop, Escape and Back to Edit stop all audio at
+once (ADR 0086), as does deleting an Element whose Script started a sound.
+Replaying a name restarts that Script's voice for it. Script Recipes offer
+**Play a sound**, **Loop a sound** and **Stop a sound** for every owner.
+
+[`src/sounds.ts`](src/sounds.ts) owns sound intake, the per-session
+`SoundBoard` of playing voices and the browser `<audio>` backend; Play wires
+the Grant in [`src/play.ts`](src/play.ts), stopping each owner's voices with
+its Scripts. Unit tests cover sniffing, decode refusal, size limits,
+ownership, the Page-leave, Stop and delete lifecycle, Recipes and the
+export/import round trip. Browser checks exercise the real decoder and
+picker with a WAV made in memory:
+
+```sh
+bun build tooling/creative/tests/sounds.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/sounds-test.html
+```
+
+Open `/sounds-test.html` and run
+`await import('/sounds.browser.js').then(m => m.runBrowserTests())`.
+Every result must have `passed: true`. Reload before repeating, and rebuild
+both files after an app rebuild. Which browsers play WAV, and why the
+Project picker has no extension filter, are recorded in
+[the storage research](../../docs/research/creative-tool-project-storage.md#device-checks-from-739-recorded-for-822).
 
 ## Rich text
 
@@ -362,7 +420,8 @@ navigation requests are ignored. Requests in one Pump before closing begins
 use the last destination. The Pages strip stays hidden during Play.
 
 Only the current Page's and its Elements' Scripts run alongside the Project
-Script. The `sound` Grant is not implemented yet.
+Script. Sounds a Page's Scripts started stop when the reader leaves that
+Page; sounds the Project Script started keep playing (see [Sounds](#sounds)).
 
 ### Dynamic Elements
 

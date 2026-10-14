@@ -22,6 +22,7 @@ import {
   type ProjectFileHandle,
 } from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
+import { importSound, isSoundAsset } from './sounds';
 import {
   PROJECT_MIMETYPE,
   readProjectFile,
@@ -49,7 +50,7 @@ const byteSize = (bytes: number): string =>
 
 const missingNote = (missingNames: string[]): string =>
   missingNames.length
-    ? ` Missing images kept as placeholders: ${missingNames.join(', ')}.`
+    ? ` Missing assets kept as placeholders: ${missingNames.join(', ')}.`
     : '';
 
 const fileErrorName = (error: unknown): string =>
@@ -374,7 +375,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
 
   /**
    * Builds the bytes of a portable Project file from the in-memory
-   * Project and its image bytes, for Export's download and for saving
+   * Project and its asset bytes, for Export's download and for saving
    * back to a file on disk.
    */
   const buildProjectFile = async (): Promise<{
@@ -438,7 +439,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
   };
 
-  /** Downloads a stable copy of the in-memory Project and its image bytes. */
+  /** Downloads a stable copy of the in-memory Project and its asset bytes. */
   const exportNow = async (): Promise<void> => {
     try {
       const built = await buildProjectFile();
@@ -524,7 +525,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void drawStorageStatus();
   });
 
-  const loadImages = async (project: Project): Promise<void> => {
+  const loadAssets = async (project: Project): Promise<void> => {
     if (!storage) {
       return;
     }
@@ -539,16 +540,21 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         continue;
       }
       try {
-        const image = await importImage(
-          new File([data as Uint8Array<ArrayBuffer>], asset.fileName),
+        const file = new File(
+          [data as Uint8Array<ArrayBuffer>],
+          asset.fileName,
         );
-        shell.images.add(image);
+        const imported = isSoundAsset(asset)
+          ? await importSound(file)
+          : await importImage(file);
+        shell.images.add(imported);
       } catch {
-        /* Invalid images render as missing, with Replace. */
+        /* Invalid assets stay missing: images render as placeholders, and
+           playing a missing sound is a Script error. */
       }
     }
   };
-  void loadImages(editor.project)
+  void loadAssets(editor.project)
     .then(() => shell.redraw())
     .catch(error => notice(String(error)));
 
@@ -570,8 +576,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (!loaded.project.pages.length) {
         throw new Error('The Project is damaged: it has no Pages.');
       }
-      const messages = loaded.missingAssets.map(
-        a => `Missing image: ${a.name}. Use Replace on the Page or in Info.`,
+      const messages = loaded.missingAssets.map(a =>
+        isSoundAsset(a)
+          ? `Missing sound: ${a.name}. Scripts that play it will report an error; add the file again with Add sound… in Info.`
+          : `Missing image: ${a.name}. Use Replace on the Page or in Info.`,
       );
       const accepted = [];
       for (const asset of loaded.project.assets) {
@@ -580,16 +588,22 @@ export const mountProjects = (deps: ProjectsDeps): void => {
           continue;
         }
         try {
-          const image = await importImage(
-            new File([data as Uint8Array<ArrayBuffer>], asset.fileName),
+          const file = new File(
+            [data as Uint8Array<ArrayBuffer>],
+            asset.fileName,
           );
-          asset.mediaType = image.asset.mediaType;
-          accepted.push(image);
-          messages.push(...image.warnings);
+          const imported = isSoundAsset(asset)
+            ? await importSound(file)
+            : await importImage(file);
+          asset.mediaType = imported.asset.mediaType;
+          accepted.push(imported);
+          messages.push(...imported.warnings);
         } catch (error) {
           loaded.assets.delete(asset.hash);
           messages.push(
-            `${asset.name}: ${String(error)} Use Replace on the Page or in Info.`,
+            isSoundAsset(asset)
+              ? `${asset.name}: ${String(error)} Scripts that play it will report an error.`
+              : `${asset.name}: ${String(error)} Use Replace on the Page or in Info.`,
           );
         }
       }
@@ -602,9 +616,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       // Stage bytes separately until the new Project's transaction succeeds.
       const assets = new Map(
-        accepted.map(image => [
-          image.asset.hash,
-          storageAsset(image.bytes, image.asset.mediaType),
+        accepted.map(imported => [
+          imported.asset.hash,
+          storageAsset(imported.bytes, imported.asset.mediaType),
         ]),
       );
       const previousId = currentId;
@@ -627,8 +641,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         );
         return;
       }
-      for (const image of accepted) {
-        shell.images.add(image);
+      for (const imported of accepted) {
+        shell.images.add(imported);
       }
       await showLoaded(
         { project: loaded.project, migrated: false, record: created },
@@ -749,7 +763,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     switching = true;
     const before = JSON.stringify(editor.project);
     try {
-      await loadImages(loaded.project);
+      await loadAssets(loaded.project);
       if (JSON.stringify(editor.project) !== before) {
         notice(
           'Your current edits stay on the desk. Open the other Project from Projects when ready.',
@@ -1070,7 +1084,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       );
       return;
     }
-    await loadImages(loaded.project);
+    await loadAssets(loaded.project);
     preview = {
       seq,
       savedAt,
@@ -1195,7 +1209,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       await storage
         .loadProject(currentId)
         .then(async loaded => {
-          await loadImages(loaded.project);
+          await loadAssets(loaded.project);
           record = loaded.record;
           editor.replaceProject(loaded.project);
           shell.redraw();

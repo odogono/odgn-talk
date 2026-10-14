@@ -12,6 +12,7 @@ import {
   shape,
   text,
   type HostObject,
+  type ReleaseHook,
   type ObjectKind,
   type PropDef,
   type Value,
@@ -34,6 +35,7 @@ import {
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
+import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
 export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
 export type PlayMessage =
@@ -52,9 +54,15 @@ const PUMP_FUEL = 5000;
 const elementShape = shape.oneOf(
   ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
 );
+// Releasing a Script's sound Grant stops the sounds it started (#735); the
+// board travels as the Grant's binding so this stays a plain function.
+const releaseSounds: ReleaseHook<SoundBoard> = context =>
+  context.binding.stopOwner(context.scriptName);
 
 export class PlaySession {
   readonly project: Project;
+  /** This session's playing sounds, owned by the Scripts that started them. */
+  readonly sounds: SoundBoard;
   readonly group = newGroup({ name: 'play', trace: line => this.#trace(line) });
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
@@ -118,6 +126,7 @@ export class PlaySession {
         page.elements.splice(page.elements.indexOf(element), 1);
         for (const [name, owner] of this.owners) {
           if (owner === element) {
+            this.sounds.stopOwner(name);
             this.group.script(name)?.stop('Element deleted');
           }
         }
@@ -205,13 +214,72 @@ export class PlaySession {
       },
     },
   });
+  // The release hook stops a Script's sounds whenever the Core stops,
+  // reloads or revokes it, so no lifecycle path can leak a voice (#735).
+  #sound = defineCapability<SoundBoard>(
+    'sound',
+    {
+      play: {
+        mode: 'fire-and-forget',
+        args: [shape.text],
+        cost: { fuel: 1 },
+        fire: (call, value) => this.#playSound(call.scriptName, value!, false),
+      },
+      loop: {
+        mode: 'fire-and-forget',
+        args: [shape.text],
+        cost: { fuel: 1 },
+        fire: (call, value) => this.#playSound(call.scriptName, value!, true),
+      },
+      stop: {
+        mode: 'fire-and-forget',
+        args: [shape.optional(shape.text)],
+        cost: { fuel: 1 },
+        fire: (call, value) =>
+          this.sounds.stop(call.scriptName, value?.asText() ?? undefined),
+      },
+    },
+    undefined,
+    releaseSounds,
+  );
+
+  #playSound(owner: string, value: Value, loop: boolean): void {
+    const name = value.asText()!;
+    const asset = this.project.assets.find(a => a.name === name);
+    if (!asset || !isSoundAsset(asset)) {
+      throw new ScriptError('out of domain', `No sound named “${name}”`);
+    }
+    try {
+      this.sounds.play(owner, asset, loop);
+    } catch (error) {
+      if (error instanceof ScriptError) {
+        throw error;
+      }
+      throw new ScriptError(
+        'out of domain',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
   stopped = false;
   changed = false;
 
   constructor(
     project: Project,
     public pageIndex = 0,
+    options: { soundBackend?: SoundBackend } = {},
   ) {
+    this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
+      const owner = this.owners.get(sound.owner);
+      if (owner) {
+        this.problems.push({
+          owner: this.authored.get(owner)!,
+          line: 1,
+          message: `Sound “${sound.name}” could not play: ${message}`,
+        });
+      }
+    });
     const names = scriptNameProblems(project);
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
@@ -354,6 +422,7 @@ export class PlaySession {
           grants: {
             pages: this.#pages.grant(['show'], undefined),
             elements: this.#elements.grant('all', undefined),
+            sound: this.#sound.grant('all', this.sounds),
           },
         });
       } catch (error) {
@@ -380,6 +449,7 @@ export class PlaySession {
     closing.cancel.abort();
     for (const [name, owner] of this.owners) {
       if (scriptPage(this.project, owner) === this.page) {
+        this.sounds.stopOwner(name);
         this.group.script(name)?.stop('Left Page');
       }
     }
@@ -542,6 +612,9 @@ export class PlaySession {
       return;
     }
     this.stopped = true;
+    // Stop silences every sound at once, before Scripts are asked to stop
+    // (ADR 0086); Back to Edit reaches here through the Play view's leave.
+    this.sounds.stopAll();
     this.#closing?.cancel.abort();
     this.#closing = undefined;
     this.#requestedPage = undefined;
