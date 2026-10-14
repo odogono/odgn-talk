@@ -820,6 +820,12 @@ fn namedCoordinator(s: *Session, name: []const u8) Allocator.Error!*EffectContex
     return c;
 }
 
+/// Every `store` Grant's Segment Coordinator: the one implementation's.
+fn storeCoordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    _ = g;
+    return .{ .identity = @intFromPtr(context.?), .hook = effectHook, .context = context };
+}
+
 /// Each Grant's Segment Coordinator: its named one, or its own.
 fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
     if (g.binding) |b| return .{ .identity = @intFromPtr(b), .hook = effectHook, .context = b };
@@ -3069,7 +3075,7 @@ fn newOpContext(s: *Session, capability: []const u8, operation: []const u8) Allo
 fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
     const which = std.meta.stringToEnum(talk.StandardWhich, name) orelse return hostError(s.gpa, ref, .invalid_value);
-    if (which == .store or which == .sqlite) return protocolError(s.gpa, ref, "unknown or unsupported message");
+    if (which == .sqlite) return protocolError(s.gpa, ref, "unknown or unsupported message");
     const names = talk.standardOperations(which);
     const given = field(msg, "costs") orelse return hostError(s.gpa, ref, .invalid_value);
     if (given != .object) return hostError(s.gpa, ref, .invalid_value);
@@ -3089,8 +3095,23 @@ fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
         made[i] = newOpContext(s, name, op) catch return hostError(s.gpa, ref, .out_of_memory);
         own[i] = .{ .call = opCall, .context = made[i] };
     }
+    // `store`'s lifecycle hooks are one Coordinator's, whatever the
+    // binding, and reach the Host as `effect` needs; its release hook as
+    // `release` needs.
+    var coordinator_of: ?caps.CoordinatorOf = null;
+    var release: ?caps.ReleaseHook = null;
+    if (which == .store) {
+        const one = s.gpa.create(EffectContext) catch return hostError(s.gpa, ref, .out_of_memory);
+        one.* = .{ .session = s };
+        s.effect_contexts.append(s.gpa, one) catch {
+            s.gpa.destroy(one);
+            return hostError(s.gpa, ref, .out_of_memory);
+        };
+        coordinator_of = .{ .call = storeCoordinatorOf, .context = one };
+        release = .{ .call = releaseHook, .context = s };
+    }
     var def: ?*caps.Capability = null;
-    const code = talk.defineStandardZig(s.core, which, own[0..hosted], &costs, &def);
+    const code = talk.defineStandardZigWith(s.core, which, own[0..hosted], &costs, coordinator_of, release, &def);
     if (code != .ok) return hostError(s.gpa, ref, code);
     // Each context takes its Operation's declared mode.
     for (made[0..hosted]) |oc| for (def.?.operations) |op| if (std.mem.eql(u8, op.name, oc.operation)) {
@@ -4007,7 +4028,7 @@ test "standard-capability: the Core answers clock, and console reaches the Host 
     try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"console\",\"costs\":{{\"write\":{{\"fuel\":1}}}}}}", .{1})));
     _ = try okOf(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"clock\",\"costs\":{{\"now\":{{\"fuel\":1}}}}}}", .{2}));
     _ = try okOf(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"console\",\"costs\":{{\"write\":{{\"fuel\":2}},\"read\":{{\"fuel\":2}}}}}}", .{3}));
-    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"store\",\"costs\":{{}}}}", .{4})));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"sqlite\",\"costs\":{{}}}}", .{4})));
     const clock = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"clock\",\"ops\":\"all\"}}", .{5}))).object.get("grant").?.integer;
     const console = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"console\",\"ops\":\"all\"}}", .{6}))).object.get("grant").?.integer;
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{7}));
@@ -4140,4 +4161,65 @@ test "a reload's lifecycle crossings reach the Host as needs before its reply" {
     // The new code runs, its Variable carried.
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     try std.testing.expectEqual(@as(i64, 0), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\"}}", .{10}))).object.get("result").?.integer);
+}
+
+test "store reaches the Host as op and effect needs, its Trace the corpus case's" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // `capabilities/standard-store`, answered as its stubs are.
+    const source = try std.Io.Dir.cwd().readFileAlloc(io, "../../corpus/capabilities/standard-store/s.talk", gpa, .unlimited);
+    defer gpa.free(source);
+    var source_json: std.Io.Writer.Allocating = .init(gpa);
+    defer source_json.deinit();
+    try std.json.Stringify.value(source, .{}, &source_json.writer);
+    _ = try okOf(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"store\",\"costs\":{{\"watch\":{{\"fuel\":4}},\"unwatch\":{{\"fuel\":2}},\"get\":{{\"fuel\":2}},\"keys\":{{\"fuel\":2}},\"set\":{{\"fuel\":4}},\"delete\":{{\"fuel\":4}},\"increment\":{{\"fuel\":4}},\"swap\":{{\"fuel\":4,\"alloc\":3}}}}}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"store\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"st\":{d}}},\"source\":{s}}}", .{ 4, grant, source_json.written() }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"save\",\"args\":[\"ann\",9]}}}}", .{5}));
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-07T12:00:00Z\"}}", .{6});
+    const answers = [_]struct { need: []const u8, answer: []const u8 }{
+        .{ .need = "get", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":7}}" },
+        .{ .need = "begin", .answer = "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}" },
+        .{ .need = "set", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}" },
+        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":1}}" },
+        .{ .need = "increment", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":{{\"$quantity\":[\"2.5\",\"km\"]}}}}" },
+        .{ .need = "swap", .answer = "{{\"m\":\"op-result\",\"ref\":{d},\"result\":true}}" },
+        .{ .need = "commit", .answer = "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}" },
+    };
+    inline for (answers) |step| {
+        const need = reply.object.get("need") orelse return unexpected(reply);
+        const named = need.object.get("operation") orelse need.object.get("phase").?;
+        try std.testing.expectEqualStrings(step.need, named.string);
+        reply = try c.sendRef(6, step.answer, .{6});
+    }
+    const done = try okOf(reply);
+    const expected = [_][]const u8{
+        "call s/r1.c1 op=st.get args=[\"best\", 0] result=7",
+        "effect s/r1.s1 grant=st phase=begin status=ok",
+        "call s/r1.c2 op=st.set args=[\"best\", 9] result=nothing",
+        "call s/r1.c3 op=st.increment args=[\"plays\"] result=1",
+        "call s/r1.c4 op=st.increment args=[\"distance\", 2.5 km] result=2.5 km",
+        "call s/r1.c5 op=st.swap args=[\"first\", nothing, \"ann\"] result=true",
+        "effect s/r1.s1 grant=st phase=commit status=ok",
+        "seg s/r1 start delivery=d1 handler=save clause=1 fuel=103 alloc=75 state=8 end=return",
+        "run s/r1 outcome=completed delivery=d1 handler=save fuel=103 alloc=75",
+        "pumped state=idle fuel=103",
+    };
+    var seen: std.ArrayList([]const u8) = .empty;
+    defer seen.deinit(gpa);
+    for (done.object.get("trace").?.array.items) |line| if (!std.mem.startsWith(u8, line.string, ">")) try seen.append(gpa, line.string);
+    try std.testing.expectEqual(expected.len, seen.items.len);
+    for (expected, seen.items) |want, got| try std.testing.expectEqualStrings(want, got);
+    // Its release hook reaches the Host as a stop releases the Grant.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{7}));
+    reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-07T12:00:01Z\"}}", .{8});
+    const release = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("release", release.object.get("m").?.string);
+    try std.testing.expectEqualStrings("st", release.object.get("grant").?.string);
+    _ = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
 }

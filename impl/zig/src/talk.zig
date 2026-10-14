@@ -2782,8 +2782,17 @@ fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn,
 /// Host function a Core Zig function from `own`, in name order; `clock`
 /// takes none.
 pub fn defineStandardZig(c: *Core, which: standard.Which, own: []const ?caps.HostFn, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    return defineStandardZigWith(c, which, own, costs, null, null, out);
+}
+
+/// `defineStandardZig` with `store`'s Segment Coordinator mapping and a
+/// Grant release hook, both the Core's own Zig functions.
+pub fn defineStandardZigWith(c: *Core, which: standard.Which, own: []const ?caps.HostFn, costs: ?*const Costs, coordinator_of: ?caps.CoordinatorOf, release: ?caps.ReleaseHook, out: *?*caps.Capability) HostErrorCode {
     const none: [8]OperationFn = @splat(null);
-    return defineStandardWith(c, which, none[0..own.len], own, null, costs, null, out);
+    const code = defineStandardWith(c, which, none[0..own.len], own, null, costs, coordinator_of, out);
+    if (code != .ok) return code;
+    out.*.?.release = release;
+    return .ok;
 }
 
 pub const StandardWhich = standard.Which;
