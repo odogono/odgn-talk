@@ -1,4 +1,3 @@
-# Unblessed: locals that share a Handler's name (#764); first blessing awaits human review.
 
 > load h identity=0d81d5eda4459d85ddaeb07d1428e09c06b4c9c159ac9cbf42a33c22c869dfc2
 > deliver d1 to=h message=local

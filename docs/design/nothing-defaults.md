@@ -250,8 +250,9 @@ receiver. `lookup` also handles list positions and reports cumulative paths.
 ## Acceptance cases
 
 The ten groups below are required observations. The corpus covers them on
-TS, Go and Zig, in ordinary and Save/Restore replay, and the maintainer approved their first
-blessings ([record](../reviews/nothing-defaults-blessings/README.md)).
+TS, Go and Zig, in ordinary and Save/Restore replay. The maintainer approved
+the original nine first blessings on 2026-10-13 and the two follow-up
+witnesses on 2026-10-14 ([record](../reviews/nothing-defaults-blessings/README.md)).
 
 | Group | Corpus cases |
 | --- | --- |
@@ -263,18 +264,17 @@ blessings ([record](../reviews/nothing-defaults-blessings/README.md)).
 | 6 | [`nothing-defaults/host-objects`](../../corpus/nothing-defaults/host-objects/), [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/) |
 | 7 | [`nothing-defaults/guards`](../../corpus/nothing-defaults/guards/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
 | 8 | [`nothing-defaults/values`](../../corpus/nothing-defaults/values/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/), [`load-diagnostics/constant-unknown-name`](../../corpus/load-diagnostics/constant-unknown-name/) |
-| 9 | [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
+| 9 | [`nothing-defaults/handler-name-locals`](../../corpus/nothing-defaults/handler-name-locals/), [`nothing-defaults/compatibility`](../../corpus/nothing-defaults/compatibility/), [`load-diagnostics/nothing-defaults`](../../corpus/load-diagnostics/nothing-defaults/) |
 | 10 | [`nothing-defaults/fuel-boundaries`](../../corpus/nothing-defaults/fuel-boundaries/), [`disassembly/nothing-defaults`](../../corpus/disassembly/nothing-defaults/); the empty-stack verifier check is a TS unit test ([lowering tests](../../impl/ts/tests/lowering.test.ts)) |
 
 Go refused a local named like a Handler until
 [#764](https://github.com/odogono/odgn-talk/issues/764), so `compatibility`
 doesn't pair them; [`nothing-defaults/handler-name-locals`](../../corpus/nothing-defaults/handler-name-locals/)
-covers a local `otherwise` beside `on otherwise`, and its first blessing awaits
-review. An unresolved fallback in a Constant is `unknown name` and
+covers a local `otherwise` beside `on otherwise`. An unresolved fallback in a Constant is `unknown name` and
 `not constant` at the same token;
 [`load-diagnostics/constant-unknown-name`](../../corpus/load-diagnostics/constant-unknown-name/)
-checks it ([#765](https://github.com/odogono/odgn-talk/issues/765)), and its
-first blessing awaits review.
+checks it ([#765](https://github.com/odogono/odgn-talk/issues/765)). Both
+follow-up witnesses received first-blessing approval on 2026-10-14.
 
 1. Default only Nothing: explicit Nothing and absent map keys use the
    fallback; false, zero, empty text, list and map do not. A fallback may
@@ -329,7 +329,13 @@ checks reads compiled as stdlib-attributed code.
   TS Core and shared tooling [#755](https://github.com/odogono/odgn-talk/pull/755),
   including Go [#757](https://github.com/odogono/odgn-talk/pull/757) and
   Zig [#760](https://github.com/odogono/odgn-talk/pull/760); language
-  1.0-rc.3 activation and cross-Core Trace cases for
-  [#722](https://github.com/odogono/odgn-talk/issues/722).
-- **Approved:** first blessing of every expectation the acceptance table
-  names, on 2026-10-13 ([record](../reviews/nothing-defaults-blessings/README.md)).
+  1.0-rc.3 activation and cross-Core Trace cases in
+  [#766](https://github.com/odogono/odgn-talk/pull/766); Handler-name locals
+  in Go [#771](https://github.com/odogono/odgn-talk/pull/771) and unresolved
+  initializer diagnostics in Zig [#770](https://github.com/odogono/odgn-talk/pull/770).
+- **Approved:** first blessing of the original nine expectations, on
+  2026-10-13 in [#767](https://github.com/odogono/odgn-talk/pull/767)
+  ([record](../reviews/nothing-defaults-blessings/README.md)). The two
+  follow-up witnesses were reviewed and accepted by the maintainer in the
+  #722 implementation conversation on 2026-10-14; the same record documents
+  their approval.
