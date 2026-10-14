@@ -455,3 +455,7 @@ test "every corpus Trace line reads against the record catalogue" {
     try std.testing.expect(files > 0);
     try std.testing.expectEqual(@as(usize, 0), failures);
 }
+
+test {
+    _ = talk_replay;
+}

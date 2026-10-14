@@ -304,6 +304,9 @@ pub const Run = struct {
     /// Its Segment's end, paused at a lifecycle crossing: the outcome it
     /// ended with and how far its cleanup has got.
     ending: ?Ending = null,
+    /// A drained Stop, cancellation or Rewind's rollback of its Segment,
+    /// paused at a lifecycle crossing.
+    cleanup: ?Ending = null,
     /// Its Script's Variables when its Segment began, which a failed commit
     /// restores; only for a Script with Segment-bound Operations.
     segment_base: ?[]*Value = null,
@@ -1337,6 +1340,10 @@ pub const Group = struct {
     /// Hosts do. A Trace must not change with it.
     defer_crossings: bool = false,
     deferred_once: bool = false,
+    /// Whether the Pump is draining its input queue, where a lifecycle
+    /// crossing may defer: the input stays at the queue's head, and
+    /// `resumePump` drains on from it.
+    draining: bool = false,
     /// The next Script to take a turn, kept across a crossing pause.
     turn_at: usize = 0,
     landing: std.ArrayList(Landing) = .empty,
@@ -2486,6 +2493,8 @@ pub const Group = struct {
                 g.write("note {s} kind=not-rewindable\n", .{id});
                 return;
             }
+            // Its rollback first, which may defer while draining.
+            try g.cleanupLifecycle(r);
             // Preempted or parked: it has no Stretch to end.
             _ = s.live.orderedRemove(i);
             var k: usize = 0;
@@ -2494,8 +2503,6 @@ pub const Group = struct {
                     _ = s.work.orderedRemove(k);
                 } else k += 1;
             }
-            _ = g.abandonScopes(r);
-            _ = g.finalize(r, false);
             if (!r.parked) g.restoreBase(r);
             try g.putBack(s, r);
             g.dropRewound(r);
@@ -2604,14 +2611,13 @@ pub const Group = struct {
     /// pending calls are abandoned, and its `finally` blocks run in its
     /// Script's turn, where a Run already in the queue keeps its place.
     fn cancel(g: *Group, s: *Script, r: *Run) !void {
-        if (r.resume_with) |w| switch (w) {
-            .cancelled => return,
-            else => g.releaseResume(w),
-        };
+        if (r.resume_with) |w| if (w == .cancelled) return;
+        // Its rollback first, which may defer while draining: nothing else
+        // changes until it completes.
+        if (r.continuing) try g.cleanupLifecycle(r);
+        if (r.resume_with) |w| g.releaseResume(w);
         const queued = r.resume_with != null or r.continuing;
         if (r.continuing) {
-            _ = g.abandonScopes(r);
-            _ = g.finalize(r, false);
             g.restoreBase(r);
             r.preempted_in = null;
             // Its cleanup is a Segment of its own.
@@ -3093,34 +3099,59 @@ pub const Group = struct {
             x.allowance = slice - paid;
             x.debt -= paid;
         }
-        // Refused partway, the inputs already taken are gone from the queue,
-        // and the rest stay for `deinit`.
-        var consumed: usize = 0;
-        errdefer {
-            const rest = g.inputs.items.len - consumed;
-            std.mem.copyForwards(Input, g.inputs.items[0..rest], g.inputs.items[consumed..]);
-            g.inputs.shrinkRetainingCapacity(rest);
+        try g.drain();
+    }
+
+    /// Drains the input queue from its head, each input taken once it has
+    /// run. One deferred at a lifecycle crossing stays at the head, and the
+    /// Pump pauses; `resumePump` drains on from it.
+    fn drain(g: *Group) !void {
+        g.draining = true;
+        while (g.inputs.items.len > 0) {
+            const input = g.inputs.items[0];
+            // These may defer, so the drain keeps their text until they've
+            // run; the others' arms take what they own.
+            const kept = switch (input) {
+                .stop, .cancel_run, .rewind_run => true,
+                else => false,
+            };
+            g.drainOne(input) catch |e| {
+                if (e == error.Deferred) {
+                    g.crossing_pause = true;
+                    return;
+                }
+                // Refused partway, the input taken is gone from the queue,
+                // and the rest stay for `deinit`.
+                _ = g.inputs.orderedRemove(0);
+                if (kept) g.releaseInputs(&.{input});
+                g.draining = false;
+                return e;
+            };
+            _ = g.inputs.orderedRemove(0);
+            if (kept) g.releaseInputs(&.{input});
         }
-        for (g.inputs.items) |input| switch (blk: {
-            consumed += 1;
-            break :blk input;
-        }) {
+        g.draining = false;
+        try g.afterDrain();
+    }
+
+    fn drainOne(g: *Group, input: Input) !void {
+        switch (input) {
             .deliver => |d| {
                 defer g.gpa.free(d.script);
                 if (d.delivery.target != null) {
                     try g.route(d.delivery);
-                    continue;
+                    return;
                 }
                 const s = g.script(d.script) orelse {
                     g.releaseDelivery(d.delivery);
-                    continue;
+                    return;
                 };
                 // A Host call of a Function Value that's gone, or whose Home
                 // Script is stopped, runs nothing.
                 if (d.delivery.function) |f| if (s.stopped != null or g.codeOf(f) == null or g.functionBody(g.codeOf(f).?) == null) {
                     g.write("note d{d} kind=function-gone\n", .{d.delivery.id});
                     g.releaseDelivery(d.delivery);
-                    continue;
+                    return;
                 };
                 try g.post(s, d.delivery);
             },
@@ -3137,22 +3168,16 @@ pub const Group = struct {
                 for (g.scripts.items) |x| if (x.owner == o) try g.stopScript(x, "owner disposed", null, .{});
             },
             .cancel_run => |id| {
-                defer g.gpa.free(id);
                 for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
                     try g.cancel(x, r);
                     break;
                 };
             },
             .cancel_delivery => |id| try g.cancelDelivery(id),
-            .rewind_run => |id| {
-                defer g.gpa.free(id);
-                try g.rewind(id, null);
-            },
+            .rewind_run => |id| try g.rewind(id, null),
             .stop => |x| {
-                defer g.gpa.free(x.script);
-                defer g.gpa.free(x.reason);
                 // A repeated Stop does nothing, and keeps the first reason.
-                const target = g.script(x.script) orelse continue;
+                const target = g.script(x.script) orelse return;
                 try g.stopScript(target, x.reason, null, .{});
             },
             .revoke => |x| {
@@ -3160,9 +3185,9 @@ pub const Group = struct {
                 defer g.gpa.free(x.grant);
                 // The first revocation of a name the Script keeps releases
                 // it; any other does nothing.
-                const s = g.script(x.script) orelse continue;
-                const sg = s.grant(x.grant) orelse continue;
-                if (sg.revoked) continue;
+                const s = g.script(x.script) orelse return;
+                const sg = s.grant(x.grant) orelse return;
+                if (sg.revoked) return;
                 sg.revoked = true;
                 g.releaseGrant(s, sg, .revoke);
             },
@@ -3175,7 +3200,7 @@ pub const Group = struct {
                     // Its Run no longer waits on it: recorded and ignored.
                     g.write("note {s} kind=late-answer\n", .{x.id});
                     g.releaseResume(x.with);
-                    continue;
+                    return;
                 };
                 const p = g.pending.orderedRemove(i);
                 try g.ready(p, x.with);
@@ -3190,7 +3215,7 @@ pub const Group = struct {
                         } else null;
                         const i = index orelse {
                             g.releaseResume(x.with.?);
-                            continue;
+                            return;
                         };
                         try g.ready(g.pending.orderedRemove(i), x.with.?);
                     },
@@ -3198,9 +3223,12 @@ pub const Group = struct {
                     .adopt => {},
                 }
             },
-        };
-        g.inputs.clearRetainingCapacity();
-        consumed = 0;
+        }
+    }
+
+    /// The Pump after its inputs: a restore's lost calls, discarded
+    /// Decisions, due timers, then the turns.
+    fn afterDrain(g: *Group) !void {
         // After a restore's settlements, every call still unsettled is
         // lost, in call id order, before any timer fires.
         if (g.restored) |*r| {
@@ -3241,7 +3269,7 @@ pub const Group = struct {
         }
         // Due timers, in deadline order, then the order they were set; a
         // Rewind drained returns at once.
-        const now = nanos(clock);
+        const now = nanos(g.clock);
         while (!g.rewound) {
             var first: ?usize = null;
             for (g.pending.items, 0..) |p, i| {
@@ -3264,6 +3292,7 @@ pub const Group = struct {
         g.pumping = true;
         defer g.pumping = false;
         g.crossing_pause = false;
+        if (g.draining) return g.drain();
         try g.turns();
     }
 
@@ -4953,10 +4982,9 @@ pub const Group = struct {
     /// participant if they permit it, or roll it back. Each crossing may
     /// defer; `run.ending` keeps how far it got, so none is made twice.
     /// Returns the failure that ends the Run `effect failed`, if one does.
-    fn lifecycle(g: *Group, run: *Run) error{Deferred}!?EffectFailure {
-        const e = &run.ending.?;
+    fn lifecycle(g: *Group, run: *Run, e: *Ending, deferrable: bool) error{Deferred}!?EffectFailure {
         if (e.stage == .abandon) {
-            if (e.outcome != .suspended) try g.abandonScopesWith(run, true, &e.prevented);
+            if (e.outcome != .suspended) try g.abandonScopesWith(run, deferrable, &e.prevented);
             e.stage = .finalize;
         }
         if (run.participant == null) return e.prevented;
@@ -4967,9 +4995,9 @@ pub const Group = struct {
             const outcome = e.outcome;
             const commits = e.prevented == null and outcome != .faulted and outcome != .stopped and outcome != .rewound and !(outcome == .cancelled and run.cleanup_limited);
             if (commits) {
-                const status = g.hookWith(run, .commit, true);
+                const status = g.hookWith(run, .commit, deferrable);
                 if (status == .deferred) return error.Deferred;
-                if (status == .ok) return g.endParticipant(run, null);
+                if (status == .ok) return g.endParticipant(run, e, null);
                 // An uncertain commit, or a rollback that doesn't succeed,
                 // leaves the effects' state unknown, which stops the Group.
                 if (status == .unknown) e.fatal = true;
@@ -4977,11 +5005,20 @@ pub const Group = struct {
                 e.stage = .commit_rollback;
             } else e.stage = .rollback;
         }
-        const status = g.hookWith(run, .rollback, true);
+        const status = g.hookWith(run, .rollback, deferrable);
         if (status == .deferred) return error.Deferred;
         if (status != .ok) e.fatal = true;
-        if (e.stage == .commit_rollback) return g.endParticipant(run, e.failure);
-        return g.endParticipant(run, e.prevented);
+        if (e.stage == .commit_rollback) return g.endParticipant(run, e, e.failure);
+        return g.endParticipant(run, e, e.prevented);
+    }
+
+    /// A Run's Segment rolled back for a drained Stop, cancellation or
+    /// Rewind: its scopes abandoned and its participant rolled back. While
+    /// draining, each crossing may defer, with progress in `run.cleanup`.
+    fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
+        if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
+        _ = try g.lifecycle(run, &run.cleanup.?, g.draining);
+        run.cleanup = null;
     }
 
     /// Whether `defer_crossings` defers this crossing: every other call.
@@ -4991,10 +5028,10 @@ pub const Group = struct {
         return g.deferred_once;
     }
 
-    fn endParticipant(g: *Group, run: *Run, failure: ?EffectFailure) ?EffectFailure {
+    fn endParticipant(g: *Group, run: *Run, e: *const Ending, failure: ?EffectFailure) ?EffectFailure {
         run.participant.?.grants.deinit(g.gpa);
         run.participant = null;
-        if (run.ending.?.fatal) g.fatal = true;
+        if (e.fatal) g.fatal = true;
         return failure;
     }
 
@@ -5008,7 +5045,7 @@ pub const Group = struct {
 
     fn endSegment(g: *Group, s: *Script, run: *Run, ended: Outcome) !void {
         if (run.ending == null) run.ending = .{ .outcome = ended };
-        const lifecycle_failure = g.lifecycle(run) catch return g.pauseEnding(s, run);
+        const lifecycle_failure = g.lifecycle(run, &run.ending.?, true) catch return g.pauseEnding(s, run);
         var outcome = run.ending.?.outcome;
         run.ending = null;
         const segment = g.segmentId(run);
@@ -5266,7 +5303,6 @@ pub const Group = struct {
 
     fn stopScript(g: *Group, s: *Script, reason: []const u8, running: ?*Run, how: StopHow) !void {
         if (s.stopped != null) return;
-        s.stopped = try g.gpa.dupe(u8, reason);
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(g.gpa);
         try runs.appendSlice(g.gpa, s.live.items);
@@ -5276,6 +5312,10 @@ pub const Group = struct {
                 return runNumber(x.id) < runNumber(y.id);
             }
         }.less);
+        // Every Run's rollback first, which may defer while draining:
+        // nothing else changes until they complete.
+        for (runs.items) |r| try g.cleanupLifecycle(r);
+        s.stopped = try g.gpa.dupe(u8, reason);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);
         var discarded_ids: std.ArrayList([]const u8) = .empty;
@@ -5295,8 +5335,6 @@ pub const Group = struct {
             }
         }.less);
         for (runs.items) |r| {
-            _ = g.abandonScopes(r);
-            if (g.finalize(r, false)) |_| {}
             if (r == running or r.continuing) g.restoreBase(r);
             if (discarded.items.len > 0) try discarded.appendSlice(g.gpa, ", ");
             try discarded.appendSlice(g.gpa, r.id);

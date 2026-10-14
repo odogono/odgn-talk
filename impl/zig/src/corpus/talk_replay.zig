@@ -1734,3 +1734,37 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     }
     return gpa.dupe(u8, try h.trace());
 }
+
+/// Replays `effect-cancellation` with `drained` in place of its
+/// `cancel-run`, with and without `defer_crossings`.
+fn drainedVariant(drained: []const u8) !struct { plain: []u8, deferred: []u8 } {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var dir = try std.Io.Dir.cwd().openDir(io, "../../corpus/capabilities/effect-cancellation", .{});
+    defer dir.close(io);
+    const setup = try dir.readFileAlloc(io, "case.toml", gpa, .unlimited);
+    defer gpa.free(setup);
+    const original = try dir.readFileAlloc(io, "case.trace", gpa, .unlimited);
+    defer gpa.free(original);
+    const trace = try std.mem.replaceOwned(u8, gpa, original, "> cancel-run s/r1", drained);
+    defer gpa.free(trace);
+    defer_crossings = false;
+    const plain = try replay(gpa, io, dir, setup, trace, false);
+    errdefer gpa.free(plain);
+    defer_crossings = true;
+    defer defer_crossings = false;
+    return .{ .plain = plain, .deferred = try replay(gpa, io, dir, setup, trace, false) };
+}
+
+test "a drained Stop or Rewind of a preempted Run defers its rollback and changes no record" {
+    const gpa = std.testing.allocator;
+    for ([_][]const u8{ "> stop s reason=\"off\"", "> rewind-run s/r1" }) |drained| {
+        const out = try drainedVariant(drained);
+        defer gpa.free(out.plain);
+        defer gpa.free(out.deferred);
+        // The open scope is abandoned and the participant rolled back.
+        try std.testing.expect(std.mem.indexOf(u8, out.plain, "phase=rollback status=ok") != null);
+        try std.testing.expect(std.mem.indexOf(u8, out.plain, "action=abandoned") != null);
+        try std.testing.expectEqualStrings(out.plain, out.deferred);
+    }
+}
