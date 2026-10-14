@@ -1,4 +1,3 @@
-# Unblessed: folded comparisons (#903); first blessing awaits human review.
 > load s identity=545d39436ca10c95240c42ad79a4f6214be876f1664896b2d91c71ed4530e437
 > deliver d1 to=s message=go
 > pump clock=2026-10-14T00:00:00Z
