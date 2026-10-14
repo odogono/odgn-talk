@@ -640,6 +640,26 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
     return scalar(gpa, if (u.empty()) .{ .number = n } else .{ .quantity = .{ .number = n, .unit = u } });
 }
 
+test "exact number arithmetic still allocates an immutable result and refuses atomically" {
+    const gpa = std.testing.allocator;
+    const x = try scalar(gpa, .{ .number = try Decimal.parse("2.50") });
+    defer x.release();
+    const y = try scalar(gpa, .{ .number = try Decimal.parse("3") });
+    defer y.release();
+    for ([_]decimal.Operator{ .add, .subtract, .multiply }) |op| {
+        var counting = std.testing.FailingAllocator.init(gpa, .{});
+        const result = try arithmetic(counting.allocator(), op, x, y);
+        try std.testing.expectEqual(@as(usize, 1), counting.allocations);
+        try std.testing.expectEqual(@as(usize, @sizeOf(Value)), counting.allocated_bytes);
+        result.release();
+        try std.testing.expectEqual(counting.allocated_bytes, counting.freed_bytes);
+        var refusing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 0 });
+        try std.testing.expectError(error.OutOfMemory, arithmetic(refusing.allocator(), op, x, y));
+        try std.testing.expectEqual(try Decimal.parse("2.50"), x.data.number);
+        try std.testing.expectEqual(try Decimal.parse("3"), y.data.number);
+    }
+}
+
 test "quantity arithmetic follows kind-order Base Unit factors" {
     const gpa = std.testing.allocator;
     const examples = .{

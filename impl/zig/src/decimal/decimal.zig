@@ -242,6 +242,67 @@ pub fn calculateUnbounded(a: Allocator, op: Operator, x: Decimal, y: Decimal) Er
     return calculateInternal(a, op, x, y, false);
 }
 fn calculateInternal(a: Allocator, op: Operator, x: Decimal, y: Decimal, bounded: bool) Error!Decimal {
+    if (calculateExact(op, x, y, bounded)) |result| return result;
+    return calculateGeneral(a, op, x, y, bounded);
+}
+
+/// Exact results already at the ideal exponent need neither rounding nor
+/// exponent selection. Checked u128 intermediates include aligned operands
+/// larger than 34 digits, so cancellation can still take this path. Anything
+/// needing rounding, exponent adjustment or wider storage uses the general
+/// rational implementation below (also the independent oracle in tests).
+fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal {
+    var coefficient: u128 = undefined;
+    var exponent: i32 = undefined;
+    var negative = x.negative != y.negative;
+    switch (op) {
+        .add, .subtract => {
+            exponent = @min(x.exponent, y.exponent);
+            const n = scaleExact(x.coefficient, x.exponent - exponent) orelse return null;
+            const m = scaleExact(y.coefficient, y.exponent - exponent) orelse return null;
+            const rhs_negative = y.negative != (op == .subtract);
+            if (x.negative == rhs_negative) {
+                const sum = @addWithOverflow(n, m);
+                if (sum[1] != 0) return null;
+                coefficient = sum[0];
+                negative = x.negative;
+            } else if (n >= m) {
+                coefficient = n - m;
+                negative = x.negative;
+            } else {
+                coefficient = m - n;
+                negative = rhs_negative;
+            }
+        },
+        .multiply => {
+            exponent = x.exponent + y.exponent;
+            const product = @mulWithOverflow(x.coefficient, y.coefficient);
+            if (product[1] != 0) return null;
+            coefficient = product[0];
+        },
+        else => return null,
+    }
+    if (coefficient == 0) return zero(exponent);
+    if (coefficient >= coefficient_limit or exponent < -6176 or (bounded and exponent > 0)) return null;
+    return .{ .coefficient = coefficient, .exponent = exponent, .negative = negative };
+}
+
+fn scaleExact(coefficient: u128, places: i32) ?u128 {
+    if (coefficient == 0) return 0;
+    // 10^38 fits u128; even 1 * 10^39 does not. Bound the work before
+    // indexing, including the full exponent gap of a subnormal operand.
+    const powers = comptime blk: {
+        var table: [39]u128 = undefined;
+        table[0] = 1;
+        for (1..table.len) |i| table[i] = table[i - 1] * 10;
+        break :blk table;
+    };
+    if (places > 38) return null;
+    const product = @mulWithOverflow(coefficient, powers[@intCast(places)]);
+    return if (product[1] == 0) product[0] else null;
+}
+
+fn calculateGeneral(a: Allocator, op: Operator, x: Decimal, y: Decimal, bounded: bool) Error!Decimal {
     var n = try Big.initSet(a, x.coefficient);
     defer n.deinit();
     var m = try Big.initSet(a, y.coefficient);
@@ -689,6 +750,107 @@ test "exact operators, trailing zeros and half-even" {
     }
     try std.testing.expectError(error.DivisionByZero, calculate(std.testing.allocator, .divide, .{}, .{}));
     try std.testing.expectError(error.Overflow, calculate(std.testing.allocator, .multiply, try Decimal.parse("9999999999999999999999999999999999"), try Decimal.parse("2")));
+}
+
+fn expectGeneralAgreement(op: Operator, x: Decimal, y: Decimal, bounded: bool) !void {
+    const expected = calculateGeneral(std.testing.allocator, op, x, y, bounded) catch |err| {
+        try std.testing.expectError(err, calculateInternal(std.testing.allocator, op, x, y, bounded));
+        try std.testing.expect(calculateExact(op, x, y, bounded) == null);
+        return;
+    };
+    try std.testing.expectEqual(expected, try calculateInternal(std.testing.allocator, op, x, y, bounded));
+    if (calculateExact(op, x, y, bounded)) |exact| {
+        try std.testing.expectEqual(expected, exact);
+        // A successful fast path must not even attempt an allocation.
+        var refusing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+        try std.testing.expectEqual(expected, try calculateInternal(refusing.allocator(), op, x, y, bounded));
+        try std.testing.expect(!refusing.has_induced_failure);
+    }
+}
+
+test "fixed-width operators agree with general arithmetic at precision and exponent boundaries" {
+    const pairs = [_][2]Decimal{
+        .{ .{}, .{ .exponent = -6176 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = coefficient_limit - 1, .exponent = -34 } },
+        .{ .{ .coefficient = 123, .exponent = -2 }, .{ .coefficient = 1230, .exponent = -3 } },
+        .{ .{ .coefficient = coefficient_limit - 1 }, .{ .coefficient = 5, .exponent = -1 } },
+        .{ .{ .coefficient = coefficient_limit - 2, .exponent = -1 }, .{ .coefficient = 15, .exponent = -2 } },
+        .{ .{ .coefficient = coefficient_limit - 1, .exponent = -34 }, .{ .coefficient = coefficient_limit - 1, .exponent = -34 } },
+        .{ .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 5, .exponent = -1 } },
+        .{ .{ .coefficient = 3, .exponent = -6176 }, .{ .coefficient = 5, .exponent = -1 } },
+        .{ .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 1 } },
+        .{ .{ .coefficient = 1, .exponent = -38 }, .{ .coefficient = 1 } },
+        .{ .{ .coefficient = 1, .exponent = -39 }, .{ .coefficient = 1 } },
+        .{ .{ .coefficient = coefficient_limit - 1, .exponent = -40 }, .{ .coefficient = 1 } },
+        // Positive exponents can arise in unbounded Base Unit comparisons.
+        .{ .{ .coefficient = 1, .exponent = 3 }, .{ .coefficient = 2 } },
+        .{ .{ .coefficient = 3402823669209384634633746074317682, .exponent = 5 }, .{ .coefficient = 11456 } },
+    };
+    for (pairs) |pair| {
+        for ([_]bool{ false, true }) |x_negative| {
+            for ([_]bool{ false, true }) |y_negative| {
+                var x = pair[0];
+                var y = pair[1];
+                x.negative = x_negative and x.coefficient != 0;
+                y.negative = y_negative and y.coefficient != 0;
+                for ([_]bool{ false, true }) |bounded| {
+                    for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+                }
+            }
+        }
+    }
+}
+
+fn randomDecimal(random: std.Random, wide: bool) Decimal {
+    const exponents = [_]i32{ -6176, -6175, -40, -38, -34, -33, -12, -3, -1, 0, 1, 34 };
+    return .{
+        .coefficient = if (wide) random.int(u128) % coefficient_limit else random.int(u32),
+        .exponent = if (wide) exponents[random.uintLessThan(usize, exponents.len)] else -@as(i32, @intCast(random.uintLessThan(u32, 5))),
+        .negative = random.boolean(),
+    };
+}
+
+test "generated fixed-width operators retain signs and ideal exponents" {
+    var generator = std.Random.DefaultPrng.init(877);
+    const random = generator.random();
+    for (0..1024) |i| {
+        const wide = i >= 768;
+        const x = randomDecimal(random, wide);
+        const y = randomDecimal(random, wide);
+        for ([_]bool{ false, true }) |bounded| {
+            for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+        }
+    }
+}
+
+fn fallbackAllocationTest(a: Allocator, op: Operator, x: Decimal, y: Decimal) !void {
+    _ = try calculate(a, op, x, y);
+}
+
+test "exact arithmetic avoids scratch allocations and fallback cleans up on refusal" {
+    const x = try Decimal.parse("2.50");
+    const y = try Decimal.parse("3");
+    for ([_]Operator{ .add, .subtract, .multiply }) |op| {
+        var general = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+        const expected = try calculateGeneral(general.allocator(), op, x, y, true);
+        try std.testing.expect(general.allocations > 0);
+        try std.testing.expectEqual(general.allocated_bytes, general.freed_bytes);
+        var exact = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+        try std.testing.expectEqual(expected, try calculate(exact.allocator(), op, x, y));
+        try std.testing.expectEqual(@as(usize, 0), exact.allocations);
+    }
+    const pairs = [_][2]Decimal{
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 1, .exponent = -40 } },
+        .{ .{ .coefficient = coefficient_limit - 1, .exponent = -34 }, .{ .coefficient = coefficient_limit - 1, .exponent = -34 } },
+        .{ .{ .coefficient = 3, .exponent = -6176 }, .{ .coefficient = 5, .exponent = -1 } },
+    };
+    for (pairs, [_]Operator{ .add, .multiply, .multiply }) |pair, op| {
+        try std.testing.expect(calculateExact(op, pair[0], pair[1], true) == null);
+        var refusing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+        try std.testing.expectError(error.OutOfMemory, calculate(refusing.allocator(), op, pair[0], pair[1]));
+        try std.testing.expect(refusing.has_induced_failure);
+        try std.testing.checkAllAllocationFailures(std.testing.allocator, fallbackAllocationTest, .{ op, pair[0], pair[1] });
+    }
 }
 
 test "half-even at the fraction boundary, size after rounding, conversions" {
