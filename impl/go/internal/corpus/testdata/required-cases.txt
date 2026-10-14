@@ -114,6 +114,7 @@ trace load-diagnostics/it-outside-body
 trace load-diagnostics/leaves-finally
 trace load-diagnostics/missing-handler-wait
 trace load-diagnostics/name-clash
+trace names/handler-shared-names
 trace load-diagnostics/needless-and-wait
 trace load-diagnostics/no-conversion
 trace load-diagnostics/no-item-chunk

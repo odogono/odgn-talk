@@ -102,6 +102,52 @@ describe('Core name resolution', () => {
     ]);
   });
 
+  test('Script Variables and Constants share local Handler names in either order', () => {
+    for (const [declaration, kind] of [
+      ['script variable h = 1', 'script variable'],
+      ['constant h = 1', 'constant'],
+    ] as const) {
+      const handler = 'on h\n return h\nend h';
+      for (const declarations of [
+        `${declaration}\n${handler}`,
+        `${handler}\n${declaration}`,
+      ]) {
+        const result = checkSource(
+          `${declarations}\non go\n h\n return h\nend go`,
+        );
+        expect(result.diagnostics).toEqual([]);
+        expect(
+          names(result.tree!.root)
+            .filter(name => name.text === 'h')
+            .map(name => `${name.role}:${name.binding?.kind}`),
+        ).toEqual([
+          ...(declarations.startsWith('on')
+            ? ['declaration:handler', `value:${kind}`, `declaration:${kind}`]
+            : [`declaration:${kind}`, 'declaration:handler', `value:${kind}`]),
+          'command:handler',
+          `value:${kind}`,
+        ]);
+      }
+    }
+  });
+
+  test('shared Handler names preserve other declaration and binding clashes', () => {
+    expect(
+      diagnostics('script variable h\non h\nend h\nconstant h = 1'),
+    ).toEqual([['name clash', 4, 10]]);
+    expect(diagnostics('constant h = 1\non h\nend h\non go h\nend go')).toEqual(
+      [['name clash', 4, 7]],
+    );
+    expect(
+      diagnostics('on h\nend h\nscript variable h\nfunction h\nend h'),
+    ).toEqual([['name clash', 4, 10]]);
+    expect(
+      diagnostics(
+        'script variable h\non h\n wait 1 s\nend h\non go\n h\nend go',
+      ),
+    ).toEqual([['missing and wait', 6, 2]]);
+  });
+
   test('duplicate bindings cover destructuring, parameter lists and captures', () => {
     expect(
       diagnostics(

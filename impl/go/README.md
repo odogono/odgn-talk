@@ -226,6 +226,10 @@ Help and quit are terminal actions and are not recorded.
 
 ## Front-end and lowering checks
 
+A Script Variable or Constant may share a local Handler's name in either
+declaration order. Value references read the variable or Constant; Command
+Calls resolve the Handler separately, including from a Script extension.
+
 Statically resolved Function and Built-in calls are checked at load against
 their required and total parameter counts. Built-ins accept omitted trailing
 defaults from chapter 7; invalid counts report `wrong argument count` at the

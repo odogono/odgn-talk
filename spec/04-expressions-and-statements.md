@@ -35,6 +35,7 @@ A Name that is none of these is a load error, except as a `send`'s receiver or a
 
 > **Note.** A local's scope is its whole body, so `put day(d) into day` makes `day` a local throughout, and `day(d)` then calls it and raises `wrong kind`. The `shadows-builtin` Lint warns about every shadowed Built-in ([chapter 12](12-sessions-and-tooling.md)).
 - **Other positions:** a message name after `on`, `send` or `pass`, a Grant name after `ask` or `tell`, and an Operation name after `to` aren't resolved this way ([chapter 5](05-handlers-messages-and-scheduling.md)). A `send`'s bracketed message name is an ordinary expression. `me` and `the target` are also chapter 5's.
+- **Shared Handler names:** a Script Variable or Constant may have the same name as a local Handler, in either declaration order. A Name in an expression resolves to the Script Variable or Constant; a Command Call or message of that name selects the Handler. This does not relax the clashes with functions or Imports above ([#769](https://github.com/odogono/odgn-talk/issues/769)).
 
 ### Constants and Script Variables
 

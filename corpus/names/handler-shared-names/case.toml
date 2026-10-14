@@ -1,0 +1,12 @@
+# A local Handler may share a Script Variable or Constant name, in either
+# declaration order. Reads resolve values; Command Calls and Deliveries reach
+# Handlers, including multiple guarded clauses (spec chapters 2 and 4; #769).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

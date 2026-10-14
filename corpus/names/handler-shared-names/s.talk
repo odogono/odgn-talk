@@ -1,0 +1,42 @@
+script variable foo = 1
+constant bar = 2
+script variable log = []
+
+on foo n where n = 1
+  put foo + n into foo
+  return foo
+end foo
+
+on foo n where n = 2
+  put foo + n into foo
+  return foo
+end foo
+
+on bar
+  return bar + foo
+end bar
+
+on baz
+  put baz + 1 into baz
+  return baz
+end baz
+script variable baz = 3
+
+on qux
+  return qux
+end qux
+constant qux = 4
+
+on go
+  foo 1
+  put it after log
+  foo 2
+  put it after log
+  bar
+  put it after log
+  baz
+  put it after log
+  qux
+  put it after log
+  put [foo, bar, baz, qux] after log
+end go

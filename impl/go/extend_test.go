@@ -5,6 +5,38 @@ import (
 	"time"
 )
 
+func TestExtendRetainsSharedHandlerAndValueNames(t *testing.T) {
+	for _, declaration := range []string{"script variable h = 1", "constant h = 1"} {
+		handler := "on h\nreturn h + 1\nend h"
+		for _, source := range []string{declaration + "\n" + handler, handler + "\n" + declaration} {
+			g := New().NewGroup(GroupOptions{})
+			s, err := g.Load(LoadOptions{Name: "s", Source: source})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = s.Extend("script variable result\non later\nh\nput it + h into result\nend later"); err != nil {
+				t.Fatal(err)
+			}
+			s.Deliver(Message{Name: "later"})
+			if _, err = g.Pump(time.Unix(0, 0), PumpOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			vars := g.Inspect().Scripts[0].Vars
+			if got := vars[len(vars)-1].Val.String(); got != "3" {
+				t.Fatalf("%q: result = %s, want 3", source, got)
+			}
+		}
+		g := New().NewGroup(GroupOptions{})
+		s, err := g.Load(LoadOptions{Name: "s", Source: declaration + "\non h\nwait 1 s\nend h"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Extend("on bad\nh\nend bad"); err == nil {
+			t.Fatal("accepted a plain call to inherited suspending Handler")
+		}
+	}
+}
+
 func TestExtendKeepsSuspendedRunAndDefinitions(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable n = 1\nconstant offset = 2\nfunction plus x, y = 3\n return x + y + offset\nend plus\non old\n wait 1 s\n put n + 1 into n\nend old"})

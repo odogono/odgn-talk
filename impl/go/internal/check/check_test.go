@@ -428,6 +428,52 @@ func TestErrorDuringBindingAndSuffixDiagnostics(t *testing.T) {
 
 // A local, parameter or pattern binding may share a local Handler's name, while
 // a Command Call still reaches the Handler (#764).
+func TestScriptBindingsShareHandlerNames(t *testing.T) {
+	for _, declaration := range []string{"script variable h = 1", "constant h = 1"} {
+		for _, source := range []string{
+			declaration + "\non h\nreturn h\nend h\non go\nh\nreturn h\nend go",
+			"on h\nreturn h\nend h\n" + declaration + "\non go\nh\nreturn h\nend go",
+		} {
+			tree, err := syntax.Parse(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			unit := Check(tree, Options{})
+			if len(unit.Diagnostics) > 0 {
+				t.Errorf("%q: %v", source, unit.Diagnostics)
+			}
+			kind := "definition"
+			if strings.HasPrefix(declaration, "script") {
+				kind = "variable"
+			}
+			if symbol, ok := unit.Resolve(nil, "h"); !ok || symbol.Kind != kind {
+				t.Errorf("value h: got %v, want %s", symbol, kind)
+			}
+			if symbol, ok := unit.Callee(nil, &syntax.Node{Kind: "command", Text: "h"}); !ok || symbol.Kind != "handler" {
+				t.Errorf("Command Call h: got %v, want handler", symbol)
+			}
+		}
+	}
+}
+
+func TestSharedHandlerNamesPreserveClashes(t *testing.T) {
+	for _, tc := range []struct{ source, diagnostic string }{
+		{"script variable h\non h\nend h\nconstant h = 1", "name clash at 4:10"},
+		{"constant h = 1\non h\nend h\non go h\nend go", "name clash at 4:7"},
+		{"on h\nend h\nscript variable h\nfunction h\nend h", "name clash at 4:10"},
+		{"script variable h\non h\nwait 1 s\nend h\non go\nh\nend go", "missing and wait at 6:1"},
+	} {
+		tree, err := syntax.Parse(tc.source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := Check(tree, Options{}).Diagnostics
+		if len(got) != 1 || got[0].String() != tc.diagnostic {
+			t.Errorf("%q: got %v, want %s", tc.source, got, tc.diagnostic)
+		}
+	}
+}
+
 func TestLocalsShadowHandlers(t *testing.T) {
 	for _, source := range []string{
 		"on foo n\nput n into x\nend foo\non go\nput 2 into foo\nreturn item (foo) of [8, 9]\nend go",
