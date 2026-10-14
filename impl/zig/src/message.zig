@@ -364,22 +364,39 @@ fn loadError(gpa: Allocator, ref: i64, lines: []const []u8) []u8 {
         const colon = std.mem.indexOfScalar(u8, pos, ':') orelse continue;
         const line_no = std.fmt.parseInt(i64, pos[0..colon], 10) catch continue;
         const col = std.fmt.parseInt(i64, pos[colon + 1 ..], 10) catch continue;
-        if (!first) o.raw(",") catch {};
-        first = false;
-        o.raw("{\"code\":") catch {};
-        o.text(code) catch {};
-        o.raw(",\"message\":") catch {};
-        o.text(diagnosticMessage(code)) catch {};
-        o.raw(",\"unit\":") catch {};
-        o.text(unit) catch {};
-        o.raw(",\"line\":") catch {};
-        o.int(line_no) catch {};
-        o.raw(",\"col\":") catch {};
-        o.int(col) catch {};
-        o.raw("}") catch {};
+        writeDiagnostic(&o, &first, code, unit, line_no, col);
     }
     o.raw("]}}") catch {};
     return o.finish() catch protocolError(gpa, ref, "out of memory");
+}
+
+/// The `load error` reply for a refused Library, from the Core's LoadError.
+fn libraryLoadError(gpa: Allocator, ref: i64, e: *const talk.LoadError) []u8 {
+    var o = Out.init(gpa);
+    defer o.deinit();
+    o.raw("{\"ref\":") catch {};
+    o.int(ref) catch {};
+    o.raw(",\"err\":{\"kind\":\"load error\",\"diagnostics\":[") catch {};
+    var first = true;
+    for (e.diagnostics[0..e.diagnostics_len]) |d| writeDiagnostic(&o, &first, d.code[0..d.code_len], d.unit[0..d.unit_len], d.line, d.col);
+    o.raw("]}}") catch {};
+    return o.finish() catch protocolError(gpa, ref, "out of memory");
+}
+
+fn writeDiagnostic(o: *Out, first: *bool, code: []const u8, unit: []const u8, line: i64, col: i64) void {
+    if (!first.*) o.raw(",") catch {};
+    first.* = false;
+    o.raw("{\"code\":") catch {};
+    o.text(code) catch {};
+    o.raw(",\"message\":") catch {};
+    o.text(diagnosticMessage(code)) catch {};
+    o.raw(",\"unit\":") catch {};
+    o.text(unit) catch {};
+    o.raw(",\"line\":") catch {};
+    o.int(line) catch {};
+    o.raw(",\"col\":") catch {};
+    o.int(col) catch {};
+    o.raw("}") catch {};
 }
 
 /// Resolves `{"$object":[kind,id]}` against a Group's handles.
@@ -1877,8 +1894,7 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     var carry: talk.CarryOver = .reset_variables;
     var options: talk.ReloadOptions = .{ .keep_mailbox = false };
     if (!is_extend) {
-        const given = asText(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
-        carry = if (std.mem.eql(u8, given, "carry variables")) .carry_variables else if (std.mem.eql(u8, given, "reset variables")) .reset_variables else return hostError(s.gpa, ref, .invalid_value);
+        carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
         if (field(msg, "keepMailbox")) |k| options.keep_mailbox = asBool(k) orelse return hostError(s.gpa, ref, .invalid_value);
     }
     // Trace lines from earlier work are not this change's.
@@ -1904,6 +1920,132 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
         if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
     }
     return finishOk(s, &o, entry);
+}
+
+/// The compiled Library a `{"$bytes": …}` identity names, Core-wide.
+fn libraryOf(s: *Session, j: Json) ?*machine.Library {
+    const text = asText(field(j, "$bytes")) orelse return null;
+    const codec = std.base64.standard.Decoder;
+    if ((codec.calcSizeForSlice(text) catch return null) != 32) return null;
+    var identity: [32]u8 = undefined;
+    codec.decode(&identity, text) catch return null;
+    for (s.core.libraries.items) |l| if (std.mem.eql(u8, &l.identity, &identity)) return l;
+    return null;
+}
+
+/// `compile-library`: `name`, `version`, `source`, `imports` (identities)
+/// and `declarations` (`{grant: {operation: {mode, args}}}`), replying the
+/// Library's `identity` and `needs`.
+fn compileLibraryReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const version = asText(field(msg, "version")) orelse "";
+    const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
+    var scratch: std.heap.ArenaAllocator = .init(s.gpa);
+    defer scratch.deinit();
+    const a = scratch.allocator();
+    var imports: []*machine.Library = &.{};
+    if (field(msg, "imports")) |given| {
+        if (given != .array) return hostError(s.gpa, ref, .invalid_value);
+        imports = a.alloc(*machine.Library, given.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
+        for (given.array.items, imports) |item, *slot| slot.* = libraryOf(s, item) orelse return hostError(s.gpa, ref, .invalid_value);
+    }
+    // Shapes are reference counted; the arena holds the list of them.
+    var shapes: std.ArrayList(*caps.Shape) = .empty;
+    defer for (shapes.items) |x| x.release();
+    var declared: ?[]talk.GrantDecls = null;
+    if (field(msg, "declarations")) |given| {
+        if (given != .object) return hostError(s.gpa, ref, .invalid_value);
+        const grants = a.alloc(talk.GrantDecls, given.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
+        for (given.object.keys(), given.object.values(), grants) |grant, ops_json, *g| {
+            if (ops_json != .object) return hostError(s.gpa, ref, .invalid_value);
+            const ops = a.alloc(talk.OperationCheck, ops_json.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
+            for (ops_json.object.keys(), ops_json.object.values(), ops) |op, decl, *slot| {
+                const mode = modeOf(field(decl, "mode")) catch return hostError(s.gpa, ref, .invalid_value);
+                const args_json = field(decl, "args") orelse Json{ .array = .init(a) };
+                if (args_json != .array) return hostError(s.gpa, ref, .invalid_value);
+                const args = a.alloc(*const caps.Shape, args_json.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
+                for (args_json.array.items, args) |item, *arg| {
+                    const shape = shapeOf(s.gpa, item, 0) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+                    shapes.append(a, shape) catch {
+                        shape.release();
+                        return hostError(s.gpa, ref, .out_of_memory);
+                    };
+                    arg.* = shape;
+                }
+                slot.* = .{ .name = op.ptr, .name_len = op.len, .mode = std.meta.stringToEnum(talk.Mode, @tagName(mode)).?, .args = args.ptr, .args_len = args.len };
+            }
+            g.* = .{ .name = grant.ptr, .name_len = grant.len, .operations = ops.ptr, .operations_len = ops.len };
+        }
+        declared = grants;
+    }
+    const src: talk.LibrarySource = .{ .name = name.ptr, .name_len = name.len, .version = version.ptr, .version_len = version.len, .source = source.ptr, .source_len = source.len };
+    var library: ?*machine.Library = null;
+    var load_error: ?*talk.LoadError = null;
+    defer Direct.loadErrorRelease(load_error);
+    const code = Direct.compileLibrary(s.core, &src, imports.ptr, imports.len, if (declared) |d| d.ptr else null, if (declared) |d| d.len else 0, &library, &load_error);
+    if (code == .load_refused) if (load_error) |e| return libraryLoadError(s.gpa, ref, e);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    const l = library.?;
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"identity\":") catch {};
+    o.bytesTag(s.gpa, &l.identity) catch return oomReply();
+    o.raw(",\"needs\":[") catch {};
+    for (l.operations, 0..) |r, i| {
+        if (i > 0) o.raw(",") catch {};
+        o.raw("{\"capability\":") catch {};
+        o.text(r.capability[0..r.capability_len]) catch {};
+        o.raw(",\"operation\":") catch {};
+        o.text(r.operation[0..r.operation_len]) catch {};
+        o.raw("}") catch {};
+    }
+    o.raw("]") catch {};
+    return finishOk(s, &o, null);
+}
+
+/// `add-library` (`identity`) and `replace-library` (`identity`, `carry`),
+/// the latter replying with `reports`.
+fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const library = libraryOf(s, field(msg, "identity") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (!is_replace) {
+        const code = Direct.addLibrary(entry.group, library);
+        if (code != .ok) return hostError(s.gpa, ref, code);
+        var o = Out.init(s.gpa);
+        defer o.deinit();
+        beginOk(&o, ref) catch return oomReply();
+        return finishOk(s, &o, entry);
+    }
+    const carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
+    entry.group.flush();
+    freeTrace(s.gpa, takeTrace(entry));
+    var reports: ?*talk.Reports = null;
+    defer Direct.reportsRelease(reports);
+    const code = Direct.replaceLibrary(entry.group, library, carry, &reports);
+    entry.group.flush();
+    if (code == .load_refused) {
+        const lines = takeTrace(entry);
+        defer freeTrace(s.gpa, lines);
+        return loadError(s.gpa, ref, lines);
+    }
+    if (code != .ok) {
+        freeTrace(s.gpa, takeTrace(entry));
+        return hostError(s.gpa, ref, code);
+    }
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
+/// `talk.ts`'s CarryOver text.
+fn carryOf(j: ?Json) ?talk.CarryOver {
+    const given = asText(j) orelse return null;
+    if (std.mem.eql(u8, given, "carry variables")) return .carry_variables;
+    if (std.mem.eql(u8, given, "reset variables")) return .reset_variables;
+    return null;
 }
 
 /// The Script a message names, in its Group.
@@ -2054,6 +2196,12 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return objectInputReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "dispose")) {
         return objectInputReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "compile-library")) {
+        return compileLibraryReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "add-library")) {
+        return libraryInputReply(s, msg, ref, false);
+    } else if (std.mem.eql(u8, m, "replace-library")) {
+        return libraryInputReply(s, msg, ref, true);
     } else if (std.mem.eql(u8, m, "reload")) {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
@@ -2515,4 +2663,36 @@ test "reload carries or resets variables, extend adds a handler, and a refused s
     if (extended.object.get("reports") != null) return unexpected(extended);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"peek\"}}}}", .{14}));
     try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:03Z\"}}", .{15}))).object.get("result").?.integer);
+}
+
+test "compile-library gives identity and needs, add-library serves a load, and replace-library reloads its users" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const v1 = try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"util\",\"version\":\"1\",\"source\":\"function scale n\\n  return n * 2\\nend scale\\n\"}}", .{1}));
+    try std.testing.expectEqual(@as(usize, 0), v1.object.get("needs").?.array.items.len);
+    const id1 = v1.object.get("identity").?.object.get("$bytes").?.string;
+    const v2 = try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"util\",\"version\":\"2\",\"source\":\"function scale n\\n  return n * 3\\nend scale\\n\"}}", .{2}));
+    const id2 = v2.object.get("identity").?.object.get("$bytes").?.string;
+    try std.testing.expect(!std.mem.eql(u8, id1, id2));
+    // A declared Grant's Operation used by the Library is one of its needs.
+    const asks = try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"asks\",\"version\":\"1\",\"declarations\":{{\"api\":{{\"double\":{{\"mode\":\"immediate\",\"args\":[\"number\"]}}}}}},\"source\":\"function twice n\\n  ask api to double n\\n  return it\\nend twice\\n\"}}", .{3}));
+    const needs = asks.object.get("needs").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), needs.len);
+    try std.testing.expectEqualStrings("double", needs[0].object.get("operation").?.string);
+    const broken = try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"bad\",\"version\":\"1\",\"source\":\"function f\\n\"}}", .{4});
+    try std.testing.expectEqualStrings("load error", try errKind(broken));
+    try std.testing.expect(broken.object.get("err").?.object.get("diagnostics").?.array.items.len > 0);
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"x\",\"version\":\"1\",\"imports\":[{{\"$bytes\":\"AAAA\"}}],\"source\":\"\"}}", .{5})));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{6}));
+    _ = try okOf(try c.send("{{\"m\":\"add-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}}}}", .{ 7, id1 }));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"use scale from util\\non go\\n  return scale(5)\\nend go\\n\"}}", .{8}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
+    try std.testing.expectEqual(@as(i64, 10), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}))).object.get("result").?.integer);
+    const replaced = try okOf(try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\"}}", .{ 11, id2 }));
+    try std.testing.expect(replaced.object.get("reports").? == .array);
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{12}));
+    try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{13}))).object.get("result").?.integer);
 }

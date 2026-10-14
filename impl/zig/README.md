@@ -217,7 +217,8 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `deliver`/`request`, `pump` with interim `op` and `prop` needs, `answer`/`fail`,
 `save` and `fingerprint`, Object Kinds with `object`, `set-parent` and
 `dispose`, `{object}` Delivery targets and load `owner`/`objects`,
-`broadcast` and `decide`, `reload` and `extend`,
+`broadcast` and `decide`, `reload` and `extend`, `compile-library`,
+`add-library` and `replace-library`,
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. It does not yet conform: `restore`, `resolve`,
 `settle`, `standard-capability`, `inspect`, `effect`/`release` needs and
