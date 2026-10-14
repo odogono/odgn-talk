@@ -3702,7 +3702,7 @@ pub const Group = struct {
                 const f = &run.frames.items[run.frames.items.len - 1];
                 const head = unitOf(run, f).code[f.pc];
                 var none: costs.Measures = .{};
-                const need = run.clause_fuel + if (waits) 0 else costs.charge(costKey(head, &none), &none).fuel;
+                const need = run.clause_fuel + if (waits) 0 else costs.chargeInstruction(head.op, &none).fuel;
                 if (need > fuelLeft(run)) return g.limitFault(run, .fuel, unitName(run, f), f.pc, head);
             }
             if (waits) {
@@ -5828,7 +5828,7 @@ pub const Group = struct {
                     // A Stop, cancellation or Rewind that landed at this
                     // crossing: the call keeps its charge.
                     if (charged) {
-                        const spent = costs.charge(costKey(ins, &charge), &charge);
+                        const spent = costs.chargeInstruction(ins.op, &charge);
                         run.fuel += spent.fuel + run.clause_fuel;
                         run.alloc += spent.alloc;
                         run.clause_fuel = 0;
@@ -5846,7 +5846,7 @@ pub const Group = struct {
                 error.GroupStop => {
                     // The call that stopped the Group keeps its charge.
                     if (charged) {
-                        const spent = costs.charge(costKey(ins, &charge), &charge);
+                        const spent = costs.chargeInstruction(ins.op, &charge);
                         run.fuel += spent.fuel + run.clause_fuel;
                         run.alloc += spent.alloc;
                         run.clause_fuel = 0;
@@ -5881,8 +5881,7 @@ pub const Group = struct {
                 run.clause_fuel = 0;
             }
             if (charged and !charge.uncharged) {
-                const key = costKey(ins, &charge);
-                var cost = costs.charge(key, &charge);
+                var cost = costs.chargeInstruction(ins.op, &charge);
                 const clause_fuel = run.clause_fuel;
                 cost.fuel += clause_fuel;
                 run.clause_fuel = 0;
@@ -5910,7 +5909,7 @@ pub const Group = struct {
                     if (limit == .alloc and charge.reached_host) {
                         var before = charge;
                         before.result = null;
-                        run.fuel += costs.charge(key, &before).fuel + clause_fuel;
+                        run.fuel += costs.chargeInstruction(ins.op, &before).fuel + clause_fuel;
                     }
                     charge.release();
                     switch (done) {
@@ -6911,7 +6910,7 @@ pub const Group = struct {
                 // A write it can't pay for faults before it writes, so the
                 // rollback doesn't see it.
                 var none: costs.Measures = .{};
-                if (run.base == 0 and run.clause_fuel + costs.charge("store-var", &none).fuel > fuelLeft(run)) return g.faultOn(.fuel);
+                if (run.base == 0 and run.clause_fuel + costs.chargeInstruction(.store_var, &none).fuel > fuelLeft(run)) return g.faultOn(.fuel);
                 const s: usize = @intCast(ops[0].int);
                 run.script.variables[s].release();
                 run.script.variables[s] = pop(frame);
@@ -8369,7 +8368,7 @@ pub const Group = struct {
         // instruction.
         m.declared = decl.cost.fuel;
         m.alloc_extra = decl.cost.alloc;
-        const before = costs.charge(costKey(ins, m), m);
+        const before = costs.chargeInstruction(ins.op, m);
         if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
         if (run.base == 0 and (run.alloc + before.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
         run.calls += 1;
@@ -8535,7 +8534,7 @@ pub const Group = struct {
                 // The call's own charge, with its declared cost, is spent;
                 // the `Charge` past the limit faults it.
                 record(g, id, grant_name, op_name, args, "", null, 0);
-                const spent = costs.charge(costKey(ins, m), m);
+                const spent = costs.chargeInstruction(ins.op, m);
                 run.fuel += spent.fuel;
                 run.alloc += spent.alloc;
                 return g.faultOn(.fuel);
@@ -8869,12 +8868,6 @@ pub const Group = struct {
         };
     }
 };
-
-fn costKey(ins: lower.Instruction, m: *const costs.Measures) []const u8 {
-    if (m.restricted_refusal) return "restricted-refusal";
-    if (m.builtin.len > 0) return m.builtin;
-    return machine_table.instruction[@backingInt(ins.op)].cost;
-}
 
 fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     return switch (ins.op) {

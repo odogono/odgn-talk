@@ -177,6 +177,25 @@ A Peer Language has no Fuel and no timed Load, so it reports only Run times and 
 
 ## Profiling
 
+For paired native Zig instruction measurements, build the same
+[`talk.h` Host](zig/host.c) against the before and after libraries, then run:
+
+```sh
+python3 bench/zig/instruction-bookkeeping.py /path/to/before /path/to/after \
+  --before-revision <commit> --pairs 3 --count 5 --out /path/to/results.json
+```
+
+This includes every supported manifest workload, the Fibonacci Fuel Slice
+sweep, sliced loops/calls, straight-line moves and a loop protected by
+`finally`. It checks output, Fuel and logical allocation, alternating binary
+order between pairs. Default-allocator timings and counting-allocator probes
+are separate. On macOS, add `--profiles /path/to/reports` for separate
+two-second CPU samples of both binaries after timings finish. The JSON records
+overlapping inclusive sample categories; compressed raw reports retain the
+call trees and offsets for attribution. The
+[instruction bookkeeping report](results/2026-10-14-zig-instruction-bookkeeping.md)
+records the compile-time rate-lookup experiment and its limits.
+
 The Go runner is an ordinary `testing.B` benchmark, so the Go tools work on it directly:
 
 ```sh

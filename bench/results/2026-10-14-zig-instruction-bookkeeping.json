@@ -1,0 +1,7888 @@
+{
+  "recordedAt": "2026-10-14T12:27:18.543152+00:00",
+  "baselineRevision": "bdc8f0e0fd09e2c49ff408f6d3fcdfa93ed2f76a",
+  "checkoutRevision": "bdc8f0e0fd09e2c49ff408f6d3fcdfa93ed2f76a",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0",
+  "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "mode": "safe",
+  "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
+  "samplesPerProcess": 5,
+  "pairs": 3,
+  "binarySha256": {
+    "before": "4b19a7ebb969eb0d6b22cbe14ee463068bb7268d0c1a7a7dd2143e6d764c2cd7",
+    "after": "9151c42a60d854f1a4890b557667c06097a56d2f0c5defcd834a79832a915eab"
+  },
+  "sourceSha256": {
+    "impl/zig/src/machine/machine.zig": "81dca32645d4b5ac1290cb8834c5e78546680d27a451f5f72e679aed86caf2fc",
+    "impl/zig/src/machine/costs.zig": "3f4992c94d0fa486626084689614c9a5e0e5347fbfa5ae332e7efceeb98b6d8b",
+    "bench/zig/host.c": "9769e2fe1179acdfb7b78795b9e6c3f6538739349a163794fc40e654e7fabeb9"
+  },
+  "manifestSha256": "3f27106ec23e3875ce48199359f6f6e42340ac8a66d748e1592a6c91df24ab71",
+  "measurements": [
+    {
+      "pair": 1,
+      "name": "core/loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1579281.25,
+          1888111.111,
+          1686533.333,
+          1745965.517,
+          1770300.0
+        ],
+        "load": [
+          7273.309,
+          8714.012,
+          8013.942,
+          7822.591,
+          7804.589
+        ]
+      },
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1504742.857,
+          1578312.5,
+          1560333.333,
+          1687566.667,
+          1581750.0
+        ],
+        "load": [
+          7972.258,
+          8142.322,
+          7975.279,
+          7778.469,
+          7390.186
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          3399000.0
+        ],
+        "load": [
+          31000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          2986000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          2198000.0,
+          2204347.826,
+          2543600.0,
+          2218086.957,
+          2244541.667
+        ],
+        "load": [
+          8036.805,
+          7137.025,
+          8423.518,
+          7891.572,
+          7263.907
+        ]
+      },
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          2091041.667,
+          2133720.0,
+          2074320.0,
+          2111166.667,
+          2062200.0
+        ],
+        "load": [
+          8045.374,
+          7751.666,
+          8376.948,
+          7875.728,
+          7820.3
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          3877000.0
+        ],
+        "load": [
+          35000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          2080000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/fib",
+      "slice": 0,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1209238.095,
+          1194523.81,
+          1206642.857,
+          1212333.333,
+          1320710.526
+        ],
+        "load": [
+          8825.803,
+          8585.337,
+          8524.207,
+          8113.094,
+          9013.158
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1150400.0,
+          1136954.545,
+          1120200.0,
+          1149511.111,
+          1140590.909
+        ],
+        "load": [
+          8613.609,
+          8779.182,
+          8216.398,
+          8382.9,
+          8392.246
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          2430000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          2273000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/fib",
+      "slice": 10,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          5846500.0,
+          5876111.111,
+          5633888.889,
+          5762777.778,
+          5807333.333
+        ],
+        "load": [
+          8669.209,
+          8484.812,
+          8445.364,
+          8442.85,
+          8612.47
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          5629444.444,
+          5659000.0,
+          5660000.0,
+          5666222.222,
+          5618888.889
+        ],
+        "load": [
+          8431.872,
+          8382.9,
+          7967.177,
+          8759.152,
+          8317.033
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          6219000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          5613000.0
+        ],
+        "load": [
+          36000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/fib",
+      "slice": 100,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1678333.333,
+          1735793.103,
+          1676066.667,
+          1657064.516,
+          1655774.194
+        ],
+        "load": [
+          8211.166,
+          8693.672,
+          8527.115,
+          8975.229,
+          8510.211
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1602843.75,
+          1618468.75,
+          1580937.5,
+          1567781.25,
+          1585375.0
+        ],
+        "load": [
+          8326.007,
+          8466.475,
+          8443.431,
+          8493.8,
+          8571.918
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1714000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1633000.0
+        ],
+        "load": [
+          36000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/fib",
+      "slice": 1000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1229048.78,
+          1227390.244,
+          1240634.146,
+          1251125.0,
+          1242292.683
+        ],
+        "load": [
+          8529.853,
+          8619.376,
+          8697.86,
+          8536.794,
+          8518.228
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1168302.326,
+          1198860.465,
+          1114200.0,
+          1139818.182,
+          1170023.256
+        ],
+        "load": [
+          8682.757,
+          8643.907,
+          8763.407,
+          8707.347,
+          8668.977
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          1286000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          2357000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/fib",
+      "slice": 10000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1235761.905,
+          1224292.683,
+          1206428.571,
+          1209023.81,
+          1219682.927
+        ],
+        "load": [
+          8726.876,
+          8674.879,
+          8510.041,
+          8858.965,
+          8731.448
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1131977.778,
+          1144454.545,
+          1131644.444,
+          1130377.778,
+          1138136.364
+        ],
+        "load": [
+          8620.41,
+          8634.087,
+          8606.54,
+          8501.36,
+          8581.603
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          2488000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          2278000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/calls",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1231268.293,
+          1234097.561,
+          1226000.0,
+          1240595.238,
+          1234195.122
+        ],
+        "load": [
+          9222.243,
+          9384.572,
+          9215.444,
+          9168.867,
+          9264.962
+        ]
+      },
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1127822.222,
+          1135600.0,
+          1171295.455,
+          1154181.818,
+          1286923.077
+        ],
+        "load": [
+          10707.923,
+          8518.739,
+          9727.821,
+          9272.946,
+          10744.791
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1255000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1164000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/calls",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1872666.667,
+          1700200.0,
+          1555909.091,
+          1559424.242,
+          1557181.818
+        ],
+        "load": [
+          9222.612,
+          9291.342,
+          9099.363,
+          10152.893,
+          9122.605
+        ]
+      },
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1705466.667,
+          1620419.355,
+          1598562.5,
+          1585281.25,
+          1600718.75
+        ],
+        "load": [
+          9377.532,
+          9081.896,
+          9117.229,
+          8907.731,
+          8530.194
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1654000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1593000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "core/lambdas",
+      "slice": 0,
+      "n": 2000,
+      "expect": "6003000",
+      "sourceSha256": "9eded74dcd97203faaca9f6614e3bd08cac98ac5058400af18b793cec3a97a7e",
+      "before": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1468142.857,
+          1470794.118,
+          1646612.903,
+          1637096.774,
+          1568375.0
+        ],
+        "load": [
+          9506.844,
+          9580.077,
+          9464.32,
+          9302.512,
+          9284.812
+        ]
+      },
+      "after": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1376675.676,
+          1364216.216,
+          1395722.222,
+          1383432.432,
+          1363675.676
+        ],
+        "load": [
+          9303.628,
+          9197.351,
+          9163.46,
+          8907.892,
+          9096.598
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          1516000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          1430000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "numbers/add",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2000",
+      "sourceSha256": "35221d3c597914b52a8199bcf33299ef2af8687ad0fc1296415e527ec7532eca",
+      "before": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          770661.538,
+          774476.923,
+          765060.606,
+          765227.273,
+          760348.485
+        ],
+        "load": [
+          6731.691,
+          6756.114,
+          7004.622,
+          6799.565,
+          6709.379
+        ]
+      },
+      "after": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          709098.592,
+          710492.958,
+          712943.662,
+          707450.704,
+          698944.444
+        ],
+        "load": [
+          6630.553,
+          6559.229,
+          6525.842,
+          6613.014,
+          6570.565
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          795000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          748000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "numbers/multiply",
+      "slice": 0,
+      "n": 1000,
+      "expect": "5005000",
+      "sourceSha256": "5bbfbb23ac1cc56da54eb513d2f3cb539f30361417942eebaa47fca23bcfd26c",
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          483682.692,
+          490764.706,
+          507909.091,
+          508515.152,
+          512846.939
+        ],
+        "load": [
+          7042.535,
+          7004.062,
+          7000.7,
+          7021.486,
+          6947.069
+        ]
+      },
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          450675.676,
+          450276.786,
+          455872.727,
+          452729.73,
+          449937.5
+        ],
+        "load": [
+          6817.835,
+          6785.724,
+          6964.206,
+          6794.401,
+          6996.642
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          516000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          493000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "numbers/divide",
+      "slice": 0,
+      "n": 1000,
+      "expect": "500500",
+      "sourceSha256": "5d89410203fdf48b4d0823c594b3e30dda4f0157d76c017ffc306a252d419659",
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          994686.275,
+          999607.843,
+          1016380.0,
+          993941.176,
+          1017620.0
+        ],
+        "load": [
+          7095.062,
+          6756.249,
+          6767.628,
+          6818.901,
+          6801.796
+        ]
+      },
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          971942.308,
+          963884.615,
+          966711.538,
+          1037408.163,
+          996196.078
+        ],
+        "load": [
+          6793.886,
+          6724.314,
+          6719.527,
+          6718.124,
+          6729.475
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1312000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1284000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "numbers/quantity",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "12cc9330839bbe79226add1c2cc61e788e31286c97a9a6de50dc6d8cfbd069bd",
+      "before": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1318026.316,
+          1283051.282,
+          1280750.0,
+          1277550.0,
+          1277375.0
+        ],
+        "load": [
+          8388.693,
+          8334.167,
+          8333.833,
+          8345.461,
+          8329.114
+        ]
+      },
+      "after": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1282230.769,
+          1246634.146,
+          1246292.683,
+          1252317.073,
+          1249512.195
+        ],
+        "load": [
+          8342.843,
+          8338.893,
+          8336.779,
+          8315.264,
+          8351.762
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1616000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1578000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "text/build",
+      "slice": 0,
+      "n": 500,
+      "expect": "1500",
+      "sourceSha256": "9432c063f017f90b3aefe801b37746c02a7d5c74a2ae713d61f19519cb82d1f8",
+      "before": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          496643.564,
+          489029.126,
+          497128.713,
+          485326.923,
+          488291.262
+        ],
+        "load": [
+          5833.061,
+          5791.845,
+          5752.531,
+          5800.139,
+          5769.24
+        ]
+      },
+      "after": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          479161.905,
+          478447.619,
+          477771.429,
+          477438.095,
+          480085.714
+        ],
+        "load": [
+          5784.706,
+          5780.925,
+          5834.306,
+          5820.626,
+          5802.483
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          508000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          530000.0
+        ],
+        "load": [
+          13000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "text/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "1600",
+      "sourceSha256": "2d76544215a6b2620d00353f2ccc44c93dc3c2d47f853feb34fc17d5fb726f0d",
+      "before": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          801841.27,
+          801619.048,
+          796904.762,
+          796269.841,
+          810467.742
+        ],
+        "load": [
+          7070.56,
+          7084.585,
+          7064.566,
+          7061.997,
+          7092.624
+        ]
+      },
+      "after": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          751597.015,
+          759833.333,
+          746088.235,
+          756776.119,
+          758242.424
+        ],
+        "load": [
+          7039.983,
+          7075.279,
+          7018.95,
+          7007.708,
+          7022.472
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          912000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          868000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "text/index",
+      "slice": 0,
+      "n": 1000,
+      "expect": "125",
+      "sourceSha256": "ef9ccb5d1fdb4b5a75744884b5f236dabfd7cfdb23f0810428a0e625dabd0f46",
+      "before": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1608000.0,
+          1599750.0,
+          1598593.75,
+          1594406.25,
+          1609250.0
+        ],
+        "load": [
+          7792.271,
+          7913.436,
+          7792.426,
+          7870.455,
+          7817.855
+        ]
+      },
+      "after": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1585093.75,
+          1583406.25,
+          1594656.25,
+          1608218.75,
+          1585531.25
+        ],
+        "load": [
+          7837.931,
+          7809.933,
+          7784.991,
+          7736.5,
+          7636.836
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1902000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1861000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "text/patterns",
+      "slice": 0,
+      "n": 300,
+      "expect": "900",
+      "sourceSha256": "121fde69844c8683c965f348bc1f1d874795baa0461ac93668dd12173c5bc2d9",
+      "before": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          660184.211,
+          658092.105,
+          657337.662,
+          662605.263,
+          662328.947
+        ],
+        "load": [
+          7456.755,
+          7445.057,
+          7438.56,
+          7380.517,
+          7464.398
+        ]
+      },
+      "after": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          653324.675,
+          734550.725,
+          691616.438,
+          693520.548,
+          683121.622
+        ],
+        "load": [
+          7444.097,
+          7400.474,
+          7451.2,
+          7577.36,
+          7438.197
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          877000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          845000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "text/graphemes",
+      "slice": 0,
+      "n": 500,
+      "expect": "2000",
+      "sourceSha256": "6e535a662b977d5ad8d92b52f23834d8b05a013db43800c9125f3c9d2fb3718e",
+      "before": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1476911.765,
+          1473500.0,
+          1476147.059,
+          1464542.857,
+          1467857.143
+        ],
+        "load": [
+          7551.646,
+          7539.123,
+          7566.349,
+          7443.436,
+          7460.46
+        ]
+      },
+      "after": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1387810.811,
+          1383972.973,
+          1391777.778,
+          1467085.714,
+          1396583.333
+        ],
+        "load": [
+          7465.512,
+          7529.288,
+          7447.721,
+          7483.91,
+          7468.708
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1727000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1626000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          825852.459,
+          830590.164,
+          815451.613,
+          817193.548,
+          827655.738
+        ],
+        "load": [
+          7158.769,
+          7137.901,
+          7131.65,
+          7138.473,
+          7165.95
+        ]
+      },
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          784203.125,
+          787718.75,
+          790734.375,
+          778061.538,
+          777123.077
+        ],
+        "load": [
+          7100.824,
+          7104.291,
+          7085.305,
+          7092.624,
+          7087.456
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          737000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          699000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/list-append",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "718f1c9a0bb64511e86319ec9d1fdae36e81a63b794209d9b5c268e5373c17dc",
+      "before": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1517575.758,
+          1510852.941,
+          1519696.97,
+          1511294.118,
+          1519060.606
+        ],
+        "load": [
+          10093.46,
+          10093.258,
+          10092.23,
+          10067.848,
+          10067.244
+        ]
+      },
+      "after": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1394583.333,
+          1397027.778,
+          1403222.222,
+          1377243.243,
+          1377054.054
+        ],
+        "load": [
+          9955.405,
+          9857.875,
+          9901.98,
+          9863.878,
+          9913.957
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1605000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1502000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/map-build",
+      "slice": 0,
+      "n": 300,
+      "expect": "45150",
+      "sourceSha256": "ff167b077d1b5ef7252276352e0b1c23b273d4e7b224c25cff9bd8b95f6cd623",
+      "before": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          919236.364,
+          946037.736,
+          959773.585,
+          955094.34,
+          970923.077
+        ],
+        "load": [
+          8972.367,
+          8974.156,
+          8926.977,
+          9038.322,
+          9082.652
+        ]
+      },
+      "after": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          907589.286,
+          931888.889,
+          948226.415,
+          1008960.0,
+          1030306.122
+        ],
+        "load": [
+          9555.513,
+          9073.671,
+          9135.757,
+          9075.681,
+          9030.522
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1462000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1443000.0
+        ],
+        "load": [
+          31000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/list-update",
+      "slice": 0,
+      "n": 1500,
+      "expect": "1501",
+      "sourceSha256": "4cee8e5c4939f44144294dc732f12bc02e2edf1636542350c05374f9b7c5f2fe",
+      "before": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          877526.316,
+          873534.483,
+          871551.724,
+          865637.931,
+          862137.931
+        ],
+        "load": [
+          10128.216,
+          10053.679,
+          10044.797,
+          10060.362,
+          10086.123
+        ]
+      },
+      "after": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          813661.29,
+          800841.27,
+          805380.952,
+          808806.452,
+          801984.127
+        ],
+        "load": [
+          9992.806,
+          9936.804,
+          9925.764,
+          9920.833,
+          9947.683
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          961000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          898000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/map-update",
+      "slice": 0,
+      "n": 500,
+      "expect": "501",
+      "sourceSha256": "826cbcbfe12dc33a979b0cb24cc18bdf6b58e7948bcbe73b1de6dd438e2c56b8",
+      "before": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          291343.023,
+          288844.828,
+          290953.488,
+          289196.532,
+          291011.628
+        ],
+        "load": [
+          11009.027,
+          10929.617,
+          10991.647,
+          10954.436,
+          10971.698
+        ]
+      },
+      "after": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          272989.13,
+          270086.022,
+          270989.189,
+          272500.0,
+          270378.378
+        ],
+        "load": [
+          10995.602,
+          10930.055,
+          10922.237,
+          11001.98,
+          10927.448
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          381000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          353000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "collections/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "105600",
+      "sourceSha256": "ee5cd36ae0a86d1bbde10f4b2c4d0b6974276bf4cd51083690a8d2bbc175a39f",
+      "before": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2372636.364,
+          2350636.364,
+          2386095.238,
+          2377090.909,
+          2346545.455
+        ],
+        "load": [
+          13386.51,
+          13398.714,
+          14389.64,
+          13152.025,
+          13178.967
+        ]
+      },
+      "after": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2148750.0,
+          2137083.333,
+          2146625.0,
+          2131166.667,
+          2122458.333
+        ],
+        "load": [
+          13288.6,
+          13145.636,
+          13280.212,
+          13127.855,
+          13056.919
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2520000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2259000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "host/pump",
+      "slice": 0,
+      "n": 1,
+      "expect": "nothing",
+      "sourceSha256": "258cc2203fcca4f2e4b01d70ec04baf5ac09bf372e1ffd6105eff7040b9b75df",
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1561.378,
+          1576.392,
+          1594.54,
+          1590.685,
+          1606.716
+        ],
+        "load": [
+          2752.298,
+          2803.532,
+          2916.531,
+          2763.805,
+          2748.365
+        ]
+      },
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1568.56,
+          1573.992,
+          1626.545,
+          1611.24,
+          1641.551
+        ],
+        "load": [
+          2697.599,
+          2791.792,
+          2901.358,
+          2751.389,
+          2762.126
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          3000.0
+        ],
+        "load": [
+          6000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          3000.0
+        ],
+        "load": [
+          6000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "macro/transform",
+      "slice": 0,
+      "n": 300,
+      "expect": "90300",
+      "sourceSha256": "f89be4f81e2ae5759e724cf8142a8d13bfb0203a41366f7f8bf976b801f34ce0",
+      "before": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          721257.143,
+          713661.972,
+          707436.62,
+          705000.0,
+          701472.222
+        ],
+        "load": [
+          10778.616,
+          10828.93,
+          11390.888,
+          12341.066,
+          11355.359
+        ]
+      },
+      "after": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          772584.615,
+          886421.053,
+          711633.803,
+          677581.081,
+          669133.333
+        ],
+        "load": [
+          10733.205,
+          10658.921,
+          11286.166,
+          10702.055,
+          10644.317
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          752000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          724000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1259625.0,
+          1243878.049,
+          1248756.098,
+          1243707.317,
+          1245853.659
+        ],
+        "load": [
+          7653.911,
+          7720.241,
+          7683.159,
+          7551.646,
+          7837.147
+        ]
+      },
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1274575.0,
+          1253050.0,
+          1281000.0,
+          1267600.0,
+          1300820.513
+        ],
+        "load": [
+          7728.903,
+          8085.705,
+          7811.153,
+          7646.582,
+          7672.139
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1306000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1369000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "macro/game-tick",
+      "slice": 0,
+      "n": 1000,
+      "expect": "3000",
+      "sourceSha256": "ea65fdebb9a7f42f54c9e9fd454bde3bcdaa7feb1278b31cdcb82f85c710ead6",
+      "before": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1862777.778,
+          1841178.571,
+          1839750.0,
+          1834821.429,
+          1832107.143
+        ],
+        "load": [
+          12819.021,
+          12794.268,
+          12832.179,
+          12811.683,
+          12765.892
+        ]
+      },
+      "after": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1724827.586,
+          1722133.333,
+          1720266.667,
+          1717966.667,
+          1720666.667
+        ],
+        "load": [
+          12699.086,
+          12684.678,
+          12691.371,
+          12662.193,
+          12585.452
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2124000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2032000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "messaging/suspend",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "2ef584a2b67b286f8f5ccc47fd4745b4d3b4345d14d7fc1f78df81076858af3a",
+      "before": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3232375.0,
+          3187500.0,
+          3792785.714,
+          3923923.077,
+          3675642.857
+        ],
+        "load": [
+          6443.113,
+          6418.303,
+          6426.423,
+          6406.15,
+          6415.833
+        ]
+      },
+      "after": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3154500.0,
+          3120058.824,
+          3122235.294,
+          3163187.5,
+          3175375.0
+        ],
+        "load": [
+          6397.518,
+          6418.303,
+          6449.374,
+          6443.428,
+          6409.254
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3550000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3363000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "lifecycle/load-small",
+      "slice": 0,
+      "n": 1,
+      "expect": "1",
+      "sourceSha256": "1f86be0032d5a94055fed61319e0f6fb9c67337413ae895203dc2b3ef0367dfc",
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1627.392,
+          1673.136,
+          1684.125,
+          1680.706,
+          1643.364
+        ],
+        "load": [
+          3385.376,
+          3360.349,
+          3362.09,
+          3348.199,
+          3352.555
+        ]
+      },
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1630.343,
+          1663.927,
+          1660.832,
+          1675.828,
+          1705.006
+        ],
+        "load": [
+          3345.601,
+          3339.411,
+          3324.91,
+          3338.43,
+          3335.78
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          8000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          3000.0
+        ],
+        "load": [
+          8000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "lifecycle/load-large",
+      "slice": 0,
+      "n": 1,
+      "expect": "1291",
+      "sourceSha256": "3bb065ae11023298d4426bffc83ea86ae04edc0cfa5fa95a36e9a67c1dd7d361",
+      "before": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          190224.335,
+          190071.97,
+          189439.394,
+          188669.173,
+          190406.844
+        ],
+        "load": [
+          774000.0,
+          767287.879,
+          767484.848,
+          759166.667,
+          773107.692
+        ]
+      },
+      "after": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          177670.213,
+          178000.0,
+          178078.292,
+          177563.83,
+          177204.947
+        ],
+        "load": [
+          769969.231,
+          753089.552,
+          753388.06,
+          757597.015,
+          760075.758
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          220000.0
+        ],
+        "load": [
+          729000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          199000.0
+        ],
+        "load": [
+          713000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          19739.148,
+          19970.447,
+          19639.042,
+          19674.666,
+          19675.452
+        ],
+        "load": [
+          179523.297,
+          175104.895,
+          173760.417,
+          173041.522,
+          173819.444
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          18146.226,
+          18170.785,
+          18103.186,
+          18134.155,
+          17963.362
+        ],
+        "load": [
+          175038.462,
+          171273.973,
+          169637.288,
+          169287.162,
+          169901.695
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          22000.0
+        ],
+        "load": [
+          174000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          19000.0
+        ],
+        "load": [
+          173000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "probe/protected-loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          633101.266,
+          629037.5,
+          634025.316,
+          639531.646,
+          661039.474
+        ],
+        "load": [
+          8628.818,
+          6874.742,
+          6858.181,
+          6819.422,
+          6827.939
+        ]
+      },
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          597285.714,
+          597583.333,
+          595642.857,
+          594858.824,
+          593494.118
+        ],
+        "load": [
+          6689.498,
+          6631.83,
+          6731.96,
+          6610.259,
+          6639.225
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          679000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          637000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "probe/protected-loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          840016.667,
+          838966.667,
+          844566.667,
+          848186.441,
+          841016.667
+        ],
+        "load": [
+          6633.855,
+          6612.882,
+          6590.879,
+          6608.776,
+          6595.7
+        ]
+      },
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          807500.0,
+          807403.226,
+          848949.153,
+          903696.429,
+          881561.404
+        ],
+        "load": [
+          7068.278,
+          6760.173,
+          6594.566,
+          6587.011,
+          6714.247
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          935000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          895000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1408138.889,
+          1317315.789,
+          1320842.105,
+          1324763.158,
+          1324605.263
+        ],
+        "load": [
+          6651.723,
+          6769.835,
+          6576.878,
+          6640.106,
+          6611.398
+        ]
+      },
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1429342.857,
+          1434257.143,
+          1422888.889,
+          1440600.0,
+          1505088.235
+        ],
+        "load": [
+          6698.058,
+          7365.94,
+          6872.732,
+          6806.97,
+          7213.966
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          1502000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          1395000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1738068.966,
+          1740517.241,
+          1749655.172,
+          1748413.793,
+          1774655.172
+        ],
+        "load": [
+          6731.287,
+          6610.92,
+          6544.503,
+          6556.313,
+          6517.727
+        ]
+      },
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1848035.714,
+          1846928.571,
+          1971692.308,
+          2024160.0,
+          1984653.846
+        ],
+        "load": [
+          6677.618,
+          6584.672,
+          6563.665,
+          6551.625,
+          6517.008
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          1965000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          1900000.0
+        ],
+        "load": [
+          13000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/fib",
+      "slice": 0,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          935314.815,
+          943962.264,
+          948320.755,
+          939462.963,
+          963000.0
+        ],
+        "load": [
+          7080.855,
+          7566.198,
+          7060.576,
+          7026.981,
+          7067.562
+        ]
+      },
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          988196.078,
+          984235.294,
+          985960.784,
+          988352.941,
+          988490.196
+        ],
+        "load": [
+          7082.436,
+          7347.539,
+          7038.992,
+          7016.276,
+          7022.893
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          1121000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          1048000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/fib",
+      "slice": 10,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          4716090.909,
+          4740000.0,
+          4712090.909,
+          4699363.636,
+          4696909.091
+        ],
+        "load": [
+          7095.502,
+          7039.842,
+          7041.543,
+          7045.653,
+          7032.063
+        ]
+      },
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          4870000.0,
+          4902818.182,
+          5260900.0,
+          6811125.0,
+          6939500.0
+        ],
+        "load": [
+          7187.437,
+          7112.945,
+          7113.229,
+          7101.548,
+          7131.65
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          5440000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          5170000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/fib",
+      "slice": 100,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1328657.895,
+          1321026.316,
+          1311666.667,
+          1311076.923,
+          1321578.947
+        ],
+        "load": [
+          7337.491,
+          7168.459,
+          7177.864,
+          8345.461,
+          7372.899
+        ]
+      },
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1421250.0,
+          1414527.778,
+          1411944.444,
+          1409638.889,
+          1389805.556
+        ],
+        "load": [
+          7213.966,
+          7111.206,
+          7124.537,
+          7083.581,
+          7084.868
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1574000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1527000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/fib",
+      "slice": 1000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          961980.769,
+          978384.615,
+          966076.923,
+          986372.549,
+          960886.792
+        ],
+        "load": [
+          7116.425,
+          7093.63,
+          7103.992,
+          7140.654,
+          7079.853
+        ]
+      },
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1028224.49,
+          1059541.667,
+          1060250.0,
+          1017980.0,
+          1021714.286
+        ],
+        "load": [
+          7153.362,
+          7208.592,
+          7225.578,
+          7289.359,
+          7265.475
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          1190000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          1145000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/fib",
+      "slice": 10000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          948264.151,
+          939759.259,
+          935759.259,
+          939907.407,
+          943528.302
+        ],
+        "load": [
+          7572.078,
+          7276.961,
+          7271.194,
+          7196.143,
+          7228.856
+        ]
+      },
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1044755.102,
+          1062854.167,
+          1032510.204,
+          1004560.0,
+          1021510.204
+        ],
+        "load": [
+          7279.08,
+          7352.595,
+          7384.877,
+          7322.302,
+          7430.461
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          1206000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          1094000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/calls",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          960471.698,
+          973653.846,
+          977326.923,
+          981686.275,
+          962826.923
+        ],
+        "load": [
+          7951.503,
+          7876.969,
+          7861.343,
+          7848.532,
+          7890.8
+        ]
+      },
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1021285.714,
+          1024040.816,
+          1029428.571,
+          1031306.122,
+          1025367.347
+        ],
+        "load": [
+          7935.724,
+          7828.871,
+          7905.771,
+          7961.471,
+          7867.055
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1126000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1073000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/calls",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1389500.0,
+          1360972.973,
+          1361567.568,
+          1369783.784,
+          1383648.649
+        ],
+        "load": [
+          7960.516,
+          7847.301,
+          7770.785,
+          7782.879,
+          7753.915
+        ]
+      },
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1456085.714,
+          1424638.889,
+          1446085.714,
+          1425666.667,
+          1444028.571
+        ],
+        "load": [
+          7867.212,
+          7830.854,
+          7766.542,
+          7762.186,
+          7781.046
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1603000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1524000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "core/lambdas",
+      "slice": 0,
+      "n": 2000,
+      "expect": "6003000",
+      "sourceSha256": "9eded74dcd97203faaca9f6614e3bd08cac98ac5058400af18b793cec3a97a7e",
+      "after": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1308820.513,
+          1281925.0,
+          1296358.974,
+          1300846.154,
+          1306794.872
+        ],
+        "load": [
+          9073.671,
+          9161.964,
+          8922.912,
+          8965.573,
+          8972.546
+        ]
+      },
+      "before": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1407527.778,
+          1415222.222,
+          1408444.444,
+          1433600.0,
+          1408027.778
+        ],
+        "load": [
+          9085.953,
+          9126.483,
+          9167.767,
+          9206.001,
+          9194.741
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          1620000.0
+        ],
+        "load": [
+          31000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          1442000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "numbers/add",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2000",
+      "sourceSha256": "35221d3c597914b52a8199bcf33299ef2af8687ad0fc1296415e527ec7532eca",
+      "after": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          721900.0,
+          707845.07,
+          720571.429,
+          710549.296,
+          732594.203
+        ],
+        "load": [
+          6907.308,
+          6835.27,
+          6835.407,
+          6793.478,
+          6784.261
+        ]
+      },
+      "before": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          782307.692,
+          781750.0,
+          789734.375,
+          781323.077,
+          772707.692
+        ],
+        "load": [
+          6834.085,
+          6878.267,
+          6884.896,
+          6830.601,
+          6813.054
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          797000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          783000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "numbers/multiply",
+      "slice": 0,
+      "n": 1000,
+      "expect": "5005000",
+      "sourceSha256": "5bbfbb23ac1cc56da54eb513d2f3cb539f30361417942eebaa47fca23bcfd26c",
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          458880.734,
+          462394.495,
+          459000.0,
+          461366.972,
+          460880.734
+        ],
+        "load": [
+          6933.722,
+          7027.122,
+          6920.011,
+          7000.0,
+          6983.52
+        ]
+      },
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          492696.078,
+          504200.0,
+          503390.0,
+          504970.0,
+          508363.636
+        ],
+        "load": [
+          7170.515,
+          7049.767,
+          7263.655,
+          8699.2,
+          7716.667
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          539000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          483000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "numbers/divide",
+      "slice": 0,
+      "n": 1000,
+      "expect": "500500",
+      "sourceSha256": "5d89410203fdf48b4d0823c594b3e30dda4f0157d76c017ffc306a252d419659",
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          999450.98,
+          1003260.0,
+          1001480.0,
+          979038.462,
+          963961.538
+        ],
+        "load": [
+          6995.243,
+          6919.33,
+          6956.873,
+          6972.668,
+          7060.859
+        ]
+      },
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          1055750.0,
+          1052458.333,
+          1042708.333,
+          1022469.388,
+          1016340.0
+        ],
+        "load": [
+          6924.526,
+          6918.915,
+          6904.17,
+          6870.294,
+          6861.809
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1392000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1284000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "numbers/quantity",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "12cc9330839bbe79226add1c2cc61e788e31286c97a9a6de50dc6d8cfbd069bd",
+      "after": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1330736.842,
+          1300487.179,
+          1300230.769,
+          1295230.769,
+          1305974.359
+        ],
+        "load": [
+          8640.747,
+          8683.918,
+          8773.333,
+          8719.916,
+          8585.852
+        ]
+      },
+      "before": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1393250.0,
+          1321473.684,
+          1318421.053,
+          1329500.0,
+          1327052.632
+        ],
+        "load": [
+          8829.242,
+          8853.399,
+          8613.953,
+          8942.597,
+          8704.613
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1618000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1673000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "text/build",
+      "slice": 0,
+      "n": 500,
+      "expect": "1500",
+      "sourceSha256": "9432c063f017f90b3aefe801b37746c02a7d5c74a2ae713d61f19519cb82d1f8",
+      "after": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          493039.216,
+          502540.0,
+          484884.615,
+          484740.385,
+          488155.34
+        ],
+        "load": [
+          6073.242,
+          6094.455,
+          5999.04,
+          5936.016,
+          6000.12
+        ]
+      },
+      "before": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          505919.192,
+          511469.388,
+          514132.653,
+          515030.612,
+          512479.592
+        ],
+        "load": [
+          6186.711,
+          6166.996,
+          6200.769,
+          6098.671,
+          6069.426
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          550000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          534000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "text/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "1600",
+      "sourceSha256": "2d76544215a6b2620d00353f2ccc44c93dc3c2d47f853feb34fc17d5fb726f0d",
+      "after": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          820000.0,
+          819983.607,
+          785656.25,
+          797634.921,
+          796936.508
+        ],
+        "load": [
+          7432.075,
+          7395.504,
+          7278.894,
+          7344.448,
+          7380.221
+        ]
+      },
+      "before": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          853288.136,
+          835166.667,
+          853711.864,
+          881421.053,
+          871275.862
+        ],
+        "load": [
+          7421.849,
+          7418.991,
+          7388.15,
+          7454.532,
+          7490.114
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          916000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          868000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "text/index",
+      "slice": 0,
+      "n": 1000,
+      "expect": "125",
+      "sourceSha256": "ef9ccb5d1fdb4b5a75744884b5f236dabfd7cfdb23f0810428a0e625dabd0f46",
+      "after": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1647451.613,
+          1632741.935,
+          1641741.935,
+          1637774.194,
+          1641258.065
+        ],
+        "load": [
+          8168.246,
+          8232.796,
+          8049.903,
+          8098.963,
+          8134.7
+        ]
+      },
+      "before": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1681266.667,
+          1665967.742,
+          1679733.333,
+          1705000.0,
+          1698200.0
+        ],
+        "load": [
+          8213.206,
+          8230.453,
+          8146.79,
+          8065.484,
+          8181.967
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1907000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1897000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "text/patterns",
+      "slice": 0,
+      "n": 300,
+      "expect": "900",
+      "sourceSha256": "121fde69844c8683c965f348bc1f1d874795baa0461ac93668dd12173c5bc2d9",
+      "after": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          679959.459,
+          691356.164,
+          708845.07,
+          696958.333,
+          705126.761
+        ],
+        "load": [
+          7622.866,
+          7771.526,
+          7634.198,
+          7718.74,
+          7692.308
+        ]
+      },
+      "before": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          689013.699,
+          698277.778,
+          703666.667,
+          696111.111,
+          697138.889
+        ],
+        "load": [
+          7868.293,
+          7794.388,
+          7752.093,
+          7873.091,
+          7794.388
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          879000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          891000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "text/graphemes",
+      "slice": 0,
+      "n": 500,
+      "expect": "2000",
+      "sourceSha256": "6e535a662b977d5ad8d92b52f23834d8b05a013db43800c9125f3c9d2fb3718e",
+      "after": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1462085.714,
+          1439457.143,
+          1479323.529,
+          1501235.294,
+          1459514.286
+        ],
+        "load": [
+          7933.841,
+          7867.055,
+          7842.221,
+          7663.142,
+          7693.077
+        ]
+      },
+      "before": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1543484.848,
+          1544000.0,
+          1585468.75,
+          1558545.455,
+          1541151.515
+        ],
+        "load": [
+          7748.063,
+          7775.152,
+          7827.489,
+          7695.445,
+          7786.359
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1740000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1576000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          811322.581,
+          812500.0,
+          821852.459,
+          810225.806,
+          821901.639
+        ],
+        "load": [
+          7314.511,
+          7404.561,
+          7461.573,
+          7438.709,
+          7449.642
+        ]
+      },
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          836833.333,
+          917527.273,
+          856474.576,
+          831721.311,
+          835366.667
+        ],
+        "load": [
+          7424.796,
+          7495.054,
+          7567.343,
+          7456.308,
+          7439.518
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          771000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          734000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/list-append",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "718f1c9a0bb64511e86319ec9d1fdae36e81a63b794209d9b5c268e5373c17dc",
+      "after": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1476441.176,
+          1477382.353,
+          1483235.294,
+          1471823.529,
+          1476823.529
+        ],
+        "load": [
+          10424.64,
+          10317.103,
+          10335.469,
+          10347.889,
+          10319.439
+        ]
+      },
+      "before": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1626677.419,
+          1640419.355,
+          1627193.548,
+          1652935.484,
+          1635645.161
+        ],
+        "load": [
+          10598.983,
+          10439.04,
+          10559.873,
+          10584.674,
+          10413.786
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1692000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1590000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/map-build",
+      "slice": 0,
+      "n": 300,
+      "expect": "45150",
+      "sourceSha256": "ff167b077d1b5ef7252276352e0b1c23b273d4e7b224c25cff9bd8b95f6cd623",
+      "after": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          955245.283,
+          973096.154,
+          995784.314,
+          1002220.0,
+          1034285.714
+        ],
+        "load": [
+          10345.955,
+          9376.336,
+          9405.304,
+          9459.705,
+          9507.891
+        ]
+      },
+      "before": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          995960.784,
+          1015100.0,
+          1018700.0,
+          1008740.0,
+          1032938.776
+        ],
+        "load": [
+          9473.664,
+          9456.884,
+          9462.907,
+          9414.157,
+          9420.874
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1484000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1391000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/list-update",
+      "slice": 0,
+      "n": 1500,
+      "expect": "1501",
+      "sourceSha256": "4cee8e5c4939f44144294dc732f12bc02e2edf1636542350c05374f9b7c5f2fe",
+      "after": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          859830.508,
+          865913.793,
+          863000.0,
+          892929.825,
+          920145.455
+        ],
+        "load": [
+          10856.492,
+          13133.964,
+          17164.379,
+          17097.094,
+          24532.614
+        ]
+      },
+      "before": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          2153166.667,
+          1487882.353,
+          1006240.0,
+          958867.925,
+          960094.34
+        ],
+        "load": [
+          11091.151,
+          10792.575,
+          11007.264,
+          10709.36,
+          10644.53
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          982000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          909000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/map-update",
+      "slice": 0,
+      "n": 500,
+      "expect": "501",
+      "sourceSha256": "826cbcbfe12dc33a979b0cb24cc18bdf6b58e7948bcbe73b1de6dd438e2c56b8",
+      "after": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          296224.852,
+          299285.714,
+          292719.298,
+          292701.754,
+          293953.216
+        ],
+        "load": [
+          11772.834,
+          11885.429,
+          11773.487,
+          12031.28,
+          11930.565
+        ]
+      },
+      "before": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          312743.75,
+          323767.742,
+          317626.582,
+          317708.861,
+          318573.248
+        ],
+        "load": [
+          11842.055,
+          11748.825,
+          11781.338,
+          11944.352,
+          14714.538
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          399000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          376000.0
+        ],
+        "load": [
+          35000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "105600",
+      "sourceSha256": "ee5cd36ae0a86d1bbde10f4b2c4d0b6974276bf4cd51083690a8d2bbc175a39f",
+      "after": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2717473.684,
+          2597450.0,
+          2536428.571,
+          2389761.905,
+          2403952.381
+        ],
+        "load": [
+          14673.709,
+          14282.491,
+          14200.17,
+          14035.925,
+          14069.781
+        ]
+      },
+      "before": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2561600.0,
+          2564650.0,
+          2584750.0,
+          2553250.0,
+          2554200.0
+        ],
+        "load": [
+          14106.629,
+          14083.075,
+          14299.399,
+          13984.62,
+          14049.733
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2692000.0
+        ],
+        "load": [
+          36000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2277000.0
+        ],
+        "load": [
+          30000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "host/pump",
+      "slice": 0,
+      "n": 1,
+      "expect": "nothing",
+      "sourceSha256": "258cc2203fcca4f2e4b01d70ec04baf5ac09bf372e1ffd6105eff7040b9b75df",
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1699.038,
+          1687.593,
+          1684.012,
+          1684.466,
+          1696.444
+        ],
+        "load": [
+          2892.128,
+          2914.942,
+          3219.16,
+          2964.603,
+          2946.841
+        ]
+      },
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1720.874,
+          1688.163,
+          1714.83,
+          1705.82,
+          1694.719
+        ],
+        "load": [
+          2875.216,
+          2901.526,
+          3168.832,
+          2926.26,
+          2938.124
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          7000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          8000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "macro/transform",
+      "slice": 0,
+      "n": 300,
+      "expect": "90300",
+      "sourceSha256": "f89be4f81e2ae5759e724cf8142a8d13bfb0203a41366f7f8bf976b801f34ce0",
+      "after": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          724797.101,
+          721014.286,
+          723385.714,
+          714928.571,
+          716014.286
+        ],
+        "load": [
+          11421.654,
+          11501.61,
+          12140.568,
+          11431.642,
+          11729.064
+        ]
+      },
+      "before": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          772384.615,
+          760757.576,
+          757761.194,
+          759181.818,
+          753985.075
+        ],
+        "load": [
+          11556.043,
+          11520.387,
+          12157.549,
+          11422.567,
+          11716.495
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          809000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          808000.0
+        ],
+        "load": [
+          39000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1308487.179,
+          1287794.872,
+          1282230.769,
+          1284051.282,
+          1289717.949
+        ],
+        "load": [
+          8095.678,
+          8056.066,
+          7989.295,
+          8022.942,
+          7978.459
+        ]
+      },
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1330973.684,
+          1312948.718,
+          1303025.641,
+          1302538.462,
+          1375729.73
+        ],
+        "load": [
+          8033.58,
+          8107.49,
+          8004.802,
+          8178.77,
+          8165.251
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1319000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1510000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "macro/game-tick",
+      "slice": 0,
+      "n": 1000,
+      "expect": "3000",
+      "sourceSha256": "ea65fdebb9a7f42f54c9e9fd454bde3bcdaa7feb1278b31cdcb82f85c710ead6",
+      "after": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1838464.286,
+          1852642.857,
+          1861777.778,
+          1844464.286,
+          1846571.429
+        ],
+        "load": [
+          13641.844,
+          13674.87,
+          13537.358,
+          13634.951,
+          13534.506
+        ]
+      },
+      "before": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1969961.538,
+          2019600.0,
+          2025240.0,
+          2030960.0,
+          2005240.0
+        ],
+        "load": [
+          13749.794,
+          13750.619,
+          13579.147,
+          13861.142,
+          13677.516
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2231000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2156000.0
+        ],
+        "load": [
+          31000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "messaging/suspend",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "2ef584a2b67b286f8f5ccc47fd4745b4d3b4345d14d7fc1f78df81076858af3a",
+      "after": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3362866.667,
+          3374266.667,
+          3275937.5,
+          3306187.5,
+          3298250.0
+        ],
+        "load": [
+          6851.603,
+          6875.43,
+          6889.226,
+          6861.671,
+          6758.075
+        ]
+      },
+      "before": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3335933.333,
+          3344733.333,
+          3334266.667,
+          3362600.0,
+          3377333.333
+        ],
+        "load": [
+          6774.692,
+          6725.989,
+          6756.757,
+          6779.013,
+          6775.203
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3718000.0
+        ],
+        "load": [
+          35000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3592000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "lifecycle/load-small",
+      "slice": 0,
+      "n": 1,
+      "expect": "1",
+      "sourceSha256": "1f86be0032d5a94055fed61319e0f6fb9c67337413ae895203dc2b3ef0367dfc",
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1728.967,
+          1720.519,
+          1728.071,
+          1775.757,
+          1905.924
+        ],
+        "load": [
+          3632.21,
+          3534.28,
+          3543.406,
+          3540.215,
+          3520.594
+        ]
+      },
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1741.77,
+          1760.687,
+          1712.153,
+          1719.868,
+          1745.662
+        ],
+        "load": [
+          3555.176,
+          3501.786,
+          3542.08,
+          3542.653,
+          3529.79
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          8000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          9000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "lifecycle/load-large",
+      "slice": 0,
+      "n": 1,
+      "expect": "1291",
+      "sourceSha256": "3bb065ae11023298d4426bffc83ea86ae04edc0cfa5fa95a36e9a67c1dd7d361",
+      "after": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          188511.278,
+          192476.923,
+          192484.615,
+          191996.169,
+          192145.594
+        ],
+        "load": [
+          828377.049,
+          813951.613,
+          801523.81,
+          818935.484,
+          814500.0
+        ]
+      },
+      "before": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          207144.628,
+          207506.224,
+          206304.527,
+          206185.185,
+          207759.336
+        ],
+        "load": [
+          838750.0,
+          834366.667,
+          863534.483,
+          800523.81,
+          798904.762
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          229000.0
+        ],
+        "load": [
+          764000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          209000.0
+        ],
+        "load": [
+          762000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          19530.262,
+          19688.583,
+          19896.538,
+          19485.97,
+          21017.654
+        ],
+        "load": [
+          208891.667,
+          188022.556,
+          189373.585,
+          196545.098,
+          184106.618
+        ]
+      },
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          21507.527,
+          21811.601,
+          21845.784,
+          22170.213,
+          22283.422
+        ],
+        "load": [
+          199768.924,
+          194898.833,
+          192042.146,
+          189928.03,
+          189064.151
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          23000.0
+        ],
+        "load": [
+          188000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          22000.0
+        ],
+        "load": [
+          190000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "probe/protected-loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          660671.053,
+          666460.526,
+          665776.316,
+          668226.667,
+          672760.0
+        ],
+        "load": [
+          7452.459,
+          7379.87,
+          7260.636,
+          7260.781,
+          7143.286
+        ]
+      },
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          698402.778,
+          716228.571,
+          694611.111,
+          700944.444,
+          715300.0
+        ],
+        "load": [
+          7515.407,
+          7377.397,
+          7390.482,
+          7436.645,
+          7831.637
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          730000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          685000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "probe/protected-loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          886333.333,
+          874396.552,
+          878684.211,
+          885192.982,
+          877210.526
+        ],
+        "load": [
+          7273.309,
+          7233.618,
+          7181.675,
+          7169.917,
+          7250.725
+        ]
+      },
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          927388.889,
+          905392.857,
+          905125.0,
+          917945.455,
+          926259.259
+        ],
+        "load": [
+          7231.848,
+          7254.171,
+          7346.459,
+          7262.6,
+          7164.78
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          989000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          904000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1539666.667,
+          1532727.273,
+          1575937.5,
+          1553696.97,
+          1565500.0
+        ],
+        "load": [
+          7317.723,
+          7495.728,
+          7366.824,
+          7240.371,
+          7251.922
+        ]
+      },
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1436171.429,
+          1423250.0,
+          1397138.889,
+          1444142.857,
+          1425750.0
+        ],
+        "load": [
+          7147.513,
+          7298.015,
+          7062.429,
+          7125.392,
+          7075.845
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          1599000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 2220293,
+        "hostAllocs": 6027,
+        "groupPeak": 26784,
+        "run": [
+          1499000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "0d0208c74d1c6c7304a8ba0297b544cd3e9b4583b6a64ee89b13c946e78e451a",
+      "before": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          2005040.0,
+          2007760.0,
+          1991538.462,
+          1998884.615,
+          2018360.0
+        ],
+        "load": [
+          7259.872,
+          7169.032,
+          7144.163,
+          7153.791,
+          7124.822
+        ]
+      },
+      "after": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "run": [
+          1869740.741,
+          1895814.815,
+          1863814.815,
+          1853740.741,
+          1830678.571
+        ],
+        "load": [
+          7007.147,
+          6866.658,
+          6723.544,
+          6792.555,
+          6981.709
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          2018000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48016,
+        "logicalAlloc": 64000,
+        "hostBytes": 4123641,
+        "hostAllocs": 7949,
+        "groupPeak": 26784,
+        "run": [
+          1918000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/fib",
+      "slice": 0,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1028081.633,
+          1024530.612,
+          1025530.612,
+          1033632.653,
+          1019960.0
+        ],
+        "load": [
+          7319.379,
+          7708.648,
+          7305.961,
+          7358.499,
+          7276.484
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          969096.154,
+          980803.922,
+          981156.863,
+          978288.462,
+          990098.039
+        ],
+        "load": [
+          7414.887,
+          7407.051,
+          7316.945,
+          7261.545,
+          7223.924
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          1136000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2869449,
+        "hostAllocs": 10876,
+        "groupPeak": 31370,
+        "run": [
+          1080000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/fib",
+      "slice": 10,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          5042500.0,
+          5003272.727,
+          4992818.182,
+          5017400.0,
+          5547600.0
+        ],
+        "load": [
+          7320.644,
+          7243.517,
+          7245.291,
+          7312.226,
+          7306.4
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          4841818.182,
+          4855090.909,
+          4778545.455,
+          4820454.545,
+          4788727.273
+        ],
+        "load": [
+          7175.491,
+          7168.459,
+          7195.424,
+          7164.493,
+          7226.012
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          5385000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 21222245,
+        "hostAllocs": 29422,
+        "groupPeak": 31370,
+        "run": [
+          5360000.0
+        ],
+        "load": [
+          25000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/fib",
+      "slice": 100,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1417805.556,
+          1531909.091,
+          1502500.0,
+          1482147.059,
+          1489735.294
+        ],
+        "load": [
+          7560.327,
+          7211.422,
+          7270.137,
+          7900.0,
+          7659.926
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1404888.889,
+          1413416.667,
+          1407694.444,
+          1368054.054,
+          1347210.526
+        ],
+        "load": [
+          7611.661,
+          7667.996,
+          7494.005,
+          7518.569,
+          7488.842
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1647000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 4705511,
+        "hostAllocs": 12730,
+        "groupPeak": 31370,
+        "run": [
+          1569000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/fib",
+      "slice": 1000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1071085.106,
+          1075638.298,
+          1080212.766,
+          1086893.617,
+          1088913.043
+        ],
+        "load": [
+          7295.302,
+          7195.999,
+          7169.773,
+          7195.108,
+          7183.451
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          992176.471,
+          993450.98,
+          1024326.531,
+          1002960.0,
+          1006920.0
+        ],
+        "load": [
+          7261.109,
+          7281.013,
+          7172.716,
+          7304.602,
+          7531.857
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          1169000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 3055025,
+        "hostAllocs": 11062,
+        "groupPeak": 31370,
+        "run": [
+          1152000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/fib",
+      "slice": 10000,
+      "n": 15,
+      "expect": "610",
+      "sourceSha256": "e6118b617581ad05eaaa089fd25b8d73b47fbc8b6eaa1096b11da0d0140aa757",
+      "before": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          1105130.435,
+          1063312.5,
+          1051604.167,
+          1052041.667,
+          1046166.667
+        ],
+        "load": [
+          7593.774,
+          7500.675,
+          7585.71,
+          7642.06,
+          7660.08
+        ]
+      },
+      "after": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "run": [
+          986647.059,
+          993529.412,
+          991823.529,
+          1002320.0,
+          995862.745
+        ],
+        "load": [
+          7509.763,
+          7188.614,
+          7166.834,
+          7188.183,
+          7195.712
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          1141000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46365,
+        "logicalAlloc": 47328,
+        "hostBytes": 2888789,
+        "hostAllocs": 10894,
+        "groupPeak": 31370,
+        "run": [
+          1122000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/calls",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1072595.745,
+          1054187.5,
+          1025673.469,
+          995529.412,
+          995294.118
+        ],
+        "load": [
+          7832.393,
+          7871.851,
+          8239.947,
+          8298.208,
+          8743.312
+        ]
+      },
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          971750.0,
+          986470.588,
+          986176.471,
+          973480.769,
+          985000.0
+        ],
+        "load": [
+          8112.914,
+          8185.464,
+          8263.923,
+          9514.84,
+          8667.187
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1233000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 2555949,
+        "hostAllocs": 10027,
+        "groupPeak": 31676,
+        "run": [
+          1175000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/calls",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "b162cb458c6faa10ed401c0dd595a180b3596122b99f95ee4f4126ee4a9444eb",
+      "before": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1522878.788,
+          1565093.75,
+          1576750.0,
+          1532969.697,
+          1505588.235
+        ],
+        "load": [
+          8067.28,
+          8219.264,
+          8439.156,
+          8020.853,
+          8372.405
+        ]
+      },
+      "after": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "run": [
+          1444457.143,
+          1436028.571,
+          1460828.571,
+          1574968.75,
+          1565781.25
+        ],
+        "load": [
+          8066.624,
+          8243.902,
+          8273.329,
+          7972.577,
+          8088.644
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1590000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 46018,
+        "logicalAlloc": 32072,
+        "hostBytes": 4380137,
+        "hostAllocs": 11869,
+        "groupPeak": 31676,
+        "run": [
+          1594000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "core/lambdas",
+      "slice": 0,
+      "n": 2000,
+      "expect": "6003000",
+      "sourceSha256": "9eded74dcd97203faaca9f6614e3bd08cac98ac5058400af18b793cec3a97a7e",
+      "before": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1447000.0,
+          1470705.882,
+          1491323.529,
+          1478382.353,
+          1448200.0
+        ],
+        "load": [
+          9156.198,
+          9486.625,
+          9344.422,
+          9098.071,
+          10474.864
+        ]
+      },
+      "after": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "run": [
+          1400833.333,
+          1386783.784,
+          1350184.211,
+          1357540.541,
+          1356297.297
+        ],
+        "load": [
+          9632.248,
+          11911.148,
+          12156.577,
+          13589.946,
+          15439.024
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          1864000.0
+        ],
+        "load": [
+          36000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 58027,
+        "logicalAlloc": 64120,
+        "hostBytes": 4046716,
+        "hostAllocs": 14042,
+        "groupPeak": 26592,
+        "run": [
+          2081000.0
+        ],
+        "load": [
+          43000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "numbers/add",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2000",
+      "sourceSha256": "35221d3c597914b52a8199bcf33299ef2af8687ad0fc1296415e527ec7532eca",
+      "before": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          801603.175,
+          787140.625,
+          788109.375,
+          780553.846,
+          768863.636
+        ],
+        "load": [
+          6952.308,
+          6774.692,
+          6986.866,
+          6797.988,
+          6815.592
+        ]
+      },
+      "after": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "run": [
+          734086.957,
+          742735.294,
+          733536.232,
+          724782.609,
+          708521.127
+        ],
+        "load": [
+          6755.201,
+          7095.644,
+          6887.603,
+          6895.339,
+          6836.888
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          811000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26030,
+        "logicalAlloc": 32104,
+        "hostBytes": 1485058,
+        "hostAllocs": 4030,
+        "groupPeak": 25860,
+        "run": [
+          769000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "numbers/multiply",
+      "slice": 0,
+      "n": 1000,
+      "expect": "5005000",
+      "sourceSha256": "5bbfbb23ac1cc56da54eb513d2f3cb539f30361417942eebaa47fca23bcfd26c",
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          495712.871,
+          494921.569,
+          495245.098,
+          501450.0,
+          511214.286
+        ],
+        "load": [
+          7127.281,
+          7009.392,
+          7099.389,
+          7157.458,
+          6951.759
+        ]
+      },
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          475943.396,
+          481605.769,
+          472971.698,
+          469168.224,
+          470579.439
+        ],
+        "load": [
+          6962.819,
+          7002.661,
+          6796.792,
+          7232.716,
+          6813.982
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          519000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1117061,
+        "hostAllocs": 3030,
+        "groupPeak": 30336,
+        "run": [
+          474000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "numbers/divide",
+      "slice": 0,
+      "n": 1000,
+      "expect": "500500",
+      "sourceSha256": "5d89410203fdf48b4d0823c594b3e30dda4f0157d76c017ffc306a252d419659",
+      "before": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          1064276.596,
+          1089478.261,
+          1092130.435,
+          1075297.872,
+          1052520.833
+        ],
+        "load": [
+          7240.371,
+          7222.88,
+          7201.93,
+          6899.007,
+          6740.127
+        ]
+      },
+      "after": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "run": [
+          957811.321,
+          948905.66,
+          954207.547,
+          932259.259,
+          924581.818
+        ],
+        "load": [
+          6905.124,
+          6776.257,
+          6849.726,
+          6691.649,
+          6843.827
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1285000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 18031,
+        "logicalAlloc": 32104,
+        "hostBytes": 1755376,
+        "hostAllocs": 26064,
+        "groupPeak": 29964,
+        "run": [
+          1261000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "numbers/quantity",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "12cc9330839bbe79226add1c2cc61e788e31286c97a9a6de50dc6d8cfbd069bd",
+      "before": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1314076.923,
+          1276450.0,
+          1274750.0,
+          1283076.923,
+          1277750.0
+        ],
+        "load": [
+          8313.051,
+          8257.1,
+          8254.705,
+          8282.756,
+          8284.46
+        ]
+      },
+      "after": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "run": [
+          1276125.0,
+          1245756.098,
+          1241243.902,
+          1242317.073,
+          1246560.976
+        ],
+        "load": [
+          8286.164,
+          8275.194,
+          8272.291,
+          8256.44,
+          8231.111
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1584000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14579,
+        "logicalAlloc": 40088,
+        "hostBytes": 1574498,
+        "hostAllocs": 25532,
+        "groupPeak": 31288,
+        "run": [
+          1564000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "text/build",
+      "slice": 0,
+      "n": 500,
+      "expect": "1500",
+      "sourceSha256": "9432c063f017f90b3aefe801b37746c02a7d5c74a2ae713d61f19519cb82d1f8",
+      "before": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          479304.762,
+          475367.925,
+          473915.094,
+          475566.038,
+          474141.509
+        ],
+        "load": [
+          5761.493,
+          5790.065,
+          5740.758,
+          5685.922,
+          5701.482
+        ]
+      },
+      "after": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "run": [
+          497435.644,
+          494686.275,
+          494274.51,
+          486883.495,
+          483490.385
+        ],
+        "load": [
+          6348.781,
+          5914.597,
+          5911.219,
+          5889.753,
+          5875.911
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          504000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28928,
+        "logicalAlloc": 383838,
+        "hostBytes": 756064,
+        "hostAllocs": 1528,
+        "groupPeak": 24795,
+        "run": [
+          499000.0
+        ],
+        "load": [
+          12000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "text/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "1600",
+      "sourceSha256": "2d76544215a6b2620d00353f2ccc44c93dc3c2d47f853feb34fc17d5fb726f0d",
+      "before": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          799539.683,
+          795777.778,
+          795523.81,
+          799666.667,
+          796349.206
+        ],
+        "load": [
+          7032.063,
+          7014.731,
+          7027.407,
+          7017.684,
+          7002.101
+        ]
+      },
+      "after": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "run": [
+          752164.179,
+          744647.059,
+          751328.358,
+          743632.353,
+          745455.882
+        ],
+        "load": [
+          6993.287,
+          6965.729,
+          6981.709,
+          6958.67,
+          6926.998
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          897000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 30318,
+        "logicalAlloc": 95272,
+        "hostBytes": 1877454,
+        "hostAllocs": 6833,
+        "groupPeak": 31098,
+        "run": [
+          833000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "text/index",
+      "slice": 0,
+      "n": 1000,
+      "expect": "125",
+      "sourceSha256": "ef9ccb5d1fdb4b5a75744884b5f236dabfd7cfdb23f0810428a0e625dabd0f46",
+      "before": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1598156.25,
+          1601093.75,
+          1598843.75,
+          1580218.75,
+          1578968.75
+        ],
+        "load": [
+          7811.904,
+          7783.624,
+          7685.108,
+          7691.432,
+          7674.597
+        ]
+      },
+      "after": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "run": [
+          1560575.758,
+          1559212.121,
+          1561818.182,
+          1561454.545,
+          1564281.25
+        ],
+        "load": [
+          7713.096,
+          7796.227,
+          7683.62,
+          7694.983,
+          7686.703
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1922000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 26640,
+        "logicalAlloc": 51072,
+        "hostBytes": 2571374,
+        "hostAllocs": 28651,
+        "groupPeak": 35449,
+        "run": [
+          1853000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "text/patterns",
+      "slice": 0,
+      "n": 300,
+      "expect": "900",
+      "sourceSha256": "121fde69844c8683c965f348bc1f1d874795baa0461ac93668dd12173c5bc2d9",
+      "before": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          656714.286,
+          656740.26,
+          655753.247,
+          659210.526,
+          656116.883
+        ],
+        "load": [
+          7339.204,
+          7302.132,
+          7271.815,
+          7296.658,
+          7266.202
+        ]
+      },
+      "after": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "run": [
+          640582.278,
+          639189.873,
+          638468.354,
+          641141.026,
+          640810.127
+        ],
+        "load": [
+          7266.967,
+          7267.587,
+          7258.818,
+          7277.398,
+          7265.911
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          845000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 13818,
+        "logicalAlloc": 231372,
+        "hostBytes": 3014525,
+        "hostAllocs": 13833,
+        "groupPeak": 37306,
+        "run": [
+          826000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "text/graphemes",
+      "slice": 0,
+      "n": 500,
+      "expect": "2000",
+      "sourceSha256": "6e535a662b977d5ad8d92b52f23834d8b05a013db43800c9125f3c9d2fb3718e",
+      "before": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1467000.0,
+          1530029.412,
+          1451342.857,
+          1444457.143,
+          1450228.571
+        ],
+        "load": [
+          7417.445,
+          7325.813,
+          7311.741,
+          7375.221,
+          7340.282
+        ]
+      },
+      "after": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "run": [
+          1372621.622,
+          1372594.595,
+          1371513.514,
+          1377729.73,
+          1376486.486
+        ],
+        "load": [
+          7459.794,
+          7326.74,
+          7261.255,
+          7279.039,
+          7310.088
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1621000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 43518,
+        "logicalAlloc": 147572,
+        "hostBytes": 2910678,
+        "hostAllocs": 12032,
+        "groupPeak": 31129,
+        "run": [
+          1587000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          813290.323,
+          807274.194,
+          813322.581,
+          805571.429,
+          802507.937
+        ],
+        "load": [
+          7008.831,
+          7016.136,
+          7032.063,
+          6996.082,
+          7001.4
+        ]
+      },
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          778230.769,
+          779400.0,
+          781328.125,
+          768515.152,
+          782015.625
+        ],
+        "load": [
+          7040.834,
+          7039.42,
+          7056.873,
+          6979.481,
+          6972.807
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          721000.0
+        ],
+        "load": [
+          16000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 1583362,
+        "hostAllocs": 2037,
+        "groupPeak": 213307,
+        "run": [
+          691000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/list-append",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "718f1c9a0bb64511e86319ec9d1fdae36e81a63b794209d9b5c268e5373c17dc",
+      "before": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1528333.333,
+          1511382.353,
+          1516878.788,
+          1522393.939,
+          1528121.212
+        ],
+        "load": [
+          10096.507,
+          10033.106,
+          11314.027,
+          10063.393,
+          9941.153
+        ]
+      },
+      "after": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "run": [
+          1432542.857,
+          1399805.556,
+          1383729.73,
+          1395611.111,
+          1369918.919
+        ],
+        "load": [
+          9956.193,
+          9825.309,
+          9826.292,
+          9814.72,
+          9766.211
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1639000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 52056,
+        "logicalAlloc": 80200,
+        "hostBytes": 2299533,
+        "hostAllocs": 6068,
+        "groupPeak": 780604,
+        "run": [
+          1479000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/map-build",
+      "slice": 0,
+      "n": 300,
+      "expect": "45150",
+      "sourceSha256": "ff167b077d1b5ef7252276352e0b1c23b273d4e7b224c25cff9bd8b95f6cd623",
+      "before": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          906500.0,
+          929870.37,
+          942018.519,
+          938611.111,
+          948169.811
+        ],
+        "load": [
+          8836.897,
+          9006.484,
+          9046.31,
+          8968.969,
+          8877.152
+        ]
+      },
+      "after": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "run": [
+          901375.0,
+          912600.0,
+          928814.815,
+          923709.091,
+          935259.259
+        ],
+        "load": [
+          8752.844,
+          8773.158,
+          8699.374,
+          8755.384,
+          8736.024
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1387000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 14094,
+        "logicalAlloc": 24920,
+        "hostBytes": 1710712,
+        "hostAllocs": 47891,
+        "groupPeak": 151269,
+        "run": [
+          1374000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/list-update",
+      "slice": 0,
+      "n": 1500,
+      "expect": "1501",
+      "sourceSha256": "4cee8e5c4939f44144294dc732f12bc02e2edf1636542350c05374f9b7c5f2fe",
+      "before": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          865896.552,
+          863603.448,
+          868448.276,
+          862220.339,
+          860491.525
+        ],
+        "load": [
+          10071.702,
+          10027.672,
+          10046.414,
+          10015.622,
+          9993.205
+        ]
+      },
+      "after": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "run": [
+          817241.935,
+          807983.871,
+          816774.194,
+          816806.452,
+          815693.548
+        ],
+        "load": [
+          9987.617,
+          9994.603,
+          9920.635,
+          9894.341,
+          9870.707
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          947000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 28553,
+        "logicalAlloc": 24328,
+        "hostBytes": 1215342,
+        "hostAllocs": 4536,
+        "groupPeak": 43290,
+        "run": [
+          889000.0
+        ],
+        "load": [
+          18000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/map-update",
+      "slice": 0,
+      "n": 500,
+      "expect": "501",
+      "sourceSha256": "826cbcbfe12dc33a979b0cb24cc18bdf6b58e7948bcbe73b1de6dd438e2c56b8",
+      "before": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          292403.509,
+          290005.78,
+          289676.301,
+          291430.233,
+          289508.671
+        ],
+        "load": [
+          10954.217,
+          10908.595,
+          10829.76,
+          10871.739,
+          10897.799
+        ]
+      },
+      "after": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "run": [
+          273338.798,
+          272407.609,
+          272005.435,
+          270572.973,
+          271605.405
+        ],
+        "load": [
+          10855.003,
+          10834.236,
+          10832.756,
+          10810.811,
+          10828.93
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          371000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 8056,
+        "logicalAlloc": 12432,
+        "hostBytes": 483505,
+        "hostAllocs": 6043,
+        "groupPeak": 55102,
+        "run": [
+          345000.0
+        ],
+        "load": [
+          21000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/iterate",
+      "slice": 0,
+      "n": 100,
+      "expect": "105600",
+      "sourceSha256": "ee5cd36ae0a86d1bbde10f4b2c4d0b6974276bf4cd51083690a8d2bbc175a39f",
+      "before": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2349500.0,
+          2371863.636,
+          2352727.273,
+          2354136.364,
+          2367181.818
+        ],
+        "load": [
+          13250.397,
+          13215.381,
+          13421.9,
+          13207.343,
+          13167.457
+        ]
+      },
+      "after": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "run": [
+          2138958.333,
+          2136166.667,
+          2131958.333,
+          2124625.0,
+          2144083.333
+        ],
+        "load": [
+          13296.73,
+          13289.131,
+          13244.174,
+          13157.327,
+          13151.236
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2512000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 89459,
+        "logicalAlloc": 200319,
+        "hostBytes": 2561459,
+        "hostAllocs": 7822,
+        "groupPeak": 67210,
+        "run": [
+          2247000.0
+        ],
+        "load": [
+          24000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "host/pump",
+      "slice": 0,
+      "n": 1,
+      "expect": "nothing",
+      "sourceSha256": "258cc2203fcca4f2e4b01d70ec04baf5ac09bf372e1ffd6105eff7040b9b75df",
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1566.644,
+          1574.357,
+          1628.399,
+          1859.427,
+          2076.626
+        ],
+        "load": [
+          2746.306,
+          2764.527,
+          2909.234,
+          2739.03,
+          2745.347
+        ]
+      },
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1539.629,
+          1542.574,
+          1608.939,
+          1587.182,
+          1568.627
+        ],
+        "load": [
+          2715.232,
+          2816.425,
+          2950.029,
+          2803.476,
+          2769.163
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          3000.0
+        ],
+        "load": [
+          6000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10790,
+        "hostAllocs": 22,
+        "groupPeak": 11994,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          7000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "macro/transform",
+      "slice": 0,
+      "n": 300,
+      "expect": "90300",
+      "sourceSha256": "f89be4f81e2ae5759e724cf8142a8d13bfb0203a41366f7f8bf976b801f34ce0",
+      "before": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          722828.571,
+          708239.437,
+          704111.111,
+          698791.667,
+          697222.222
+        ],
+        "load": [
+          10748.495,
+          10747.905,
+          11352.1,
+          10688.542,
+          10702.697
+        ]
+      },
+      "after": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "run": [
+          690068.493,
+          681054.054,
+          675186.667,
+          671973.333,
+          669746.667
+        ],
+        "load": [
+          10709.145,
+          10659.987,
+          11309.658,
+          10644.317,
+          10630.527
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          762000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 20664,
+        "logicalAlloc": 6418202,
+        "hostBytes": 1433997,
+        "hostAllocs": 3342,
+        "groupPeak": 380641,
+        "run": [
+          727000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1251375.0,
+          1258200.0,
+          1249048.78,
+          1250075.0,
+          1250575.0
+        ],
+        "load": [
+          7727.975,
+          7598.389,
+          7665.798,
+          8709.981,
+          10987.475
+        ]
+      },
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1294358.974,
+          1290025.641,
+          1266325.0,
+          1313153.846,
+          1294871.795
+        ],
+        "load": [
+          7696.475,
+          7675.775,
+          7661.814,
+          7567.883,
+          7577.512
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1301000.0
+        ],
+        "load": [
+          17000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1933357,
+        "hostAllocs": 3630,
+        "groupPeak": 32277,
+        "run": [
+          1289000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "macro/game-tick",
+      "slice": 0,
+      "n": 1000,
+      "expect": "3000",
+      "sourceSha256": "ea65fdebb9a7f42f54c9e9fd454bde3bcdaa7feb1278b31cdcb82f85c710ead6",
+      "before": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1833785.714,
+          1846428.571,
+          1837035.714,
+          1833714.286,
+          1838678.571
+        ],
+        "load": [
+          12591.138,
+          12595.466,
+          12597.229,
+          12510.633,
+          12532.331
+        ]
+      },
+      "after": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "run": [
+          1705900.0,
+          1703366.667,
+          1700166.667,
+          1732413.793,
+          1834642.857
+        ],
+        "load": [
+          12588.369,
+          12492.631,
+          12519.029,
+          12504.876,
+          12471.571
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2109000.0
+        ],
+        "load": [
+          23000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 67042,
+        "logicalAlloc": 80270,
+        "hostBytes": 3342214,
+        "hostAllocs": 22038,
+        "groupPeak": 66528,
+        "run": [
+          2012000.0
+        ],
+        "load": [
+          22000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "messaging/suspend",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "2ef584a2b67b286f8f5ccc47fd4745b4d3b4345d14d7fc1f78df81076858af3a",
+      "before": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3163312.5,
+          3133187.5,
+          3181625.0,
+          3335266.667,
+          3332562.5
+        ],
+        "load": [
+          6373.486,
+          6315.105,
+          6341.281,
+          6300.239,
+          6306.596
+        ]
+      },
+      "after": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "run": [
+          3046823.529,
+          3052176.471,
+          3049000.0,
+          3068941.176,
+          3652500.0
+        ],
+        "load": [
+          6275.226,
+          6229.226,
+          6239.985,
+          6238.802,
+          6220.702
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3355000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 48018,
+        "logicalAlloc": 32072,
+        "hostBytes": 9692417,
+        "hostAllocs": 14032,
+        "groupPeak": 26994,
+        "run": [
+          3281000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "lifecycle/load-small",
+      "slice": 0,
+      "n": 1,
+      "expect": "1",
+      "sourceSha256": "1f86be0032d5a94055fed61319e0f6fb9c67337413ae895203dc2b3ef0367dfc",
+      "before": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1610.857,
+          1630.842,
+          1855.531,
+          2135.608,
+          2018.652
+        ],
+        "load": [
+          3358.477,
+          3304.038,
+          3309.484,
+          3296.414,
+          3284.288
+        ]
+      },
+      "after": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "run": [
+          1580.028,
+          1581.678,
+          1619.171,
+          1806.554,
+          2151.599
+        ],
+        "load": [
+          3374.57,
+          3256.693,
+          3326.88,
+          3288.89,
+          3283.772
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          8000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 7,
+        "logicalAlloc": 0,
+        "hostBytes": 10646,
+        "hostAllocs": 21,
+        "groupPeak": 12208,
+        "run": [
+          4000.0
+        ],
+        "load": [
+          7000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "lifecycle/load-large",
+      "slice": 0,
+      "n": 1,
+      "expect": "1291",
+      "sourceSha256": "3bb065ae11023298d4426bffc83ea86ae04edc0cfa5fa95a36e9a67c1dd7d361",
+      "before": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          189393.939,
+          189409.091,
+          189064.151,
+          188784.906,
+          189939.394
+        ],
+        "load": [
+          791921.875,
+          743647.059,
+          737352.941,
+          737573.529,
+          738014.706
+        ]
+      },
+      "after": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "run": [
+          175223.776,
+          174665.505,
+          175332.168,
+          174902.098,
+          174641.115
+        ],
+        "load": [
+          772646.154,
+          745147.059,
+          754134.328,
+          752089.552,
+          735720.588
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          216000.0
+        ],
+        "load": [
+          708000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 4609,
+        "logicalAlloc": 16742,
+        "hostBytes": 338953,
+        "hostAllocs": 1228,
+        "groupPeak": 2081436,
+        "run": [
+          198000.0
+        ],
+        "load": [
+          721000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          19361.982,
+          19246.343,
+          19188.028,
+          19291.281,
+          19431.624
+        ],
+        "load": [
+          177560.284,
+          174268.293,
+          171924.399,
+          172237.113,
+          172431.034
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17901.217,
+          17892.665,
+          17937.59,
+          17919.742,
+          17911.891
+        ],
+        "load": [
+          176133.803,
+          172689.655,
+          173294.118,
+          183021.898,
+          174759.582
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          21000.0
+        ],
+        "load": [
+          175000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 11022,
+        "hostAllocs": 22,
+        "groupPeak": 481156,
+        "run": [
+          19000.0
+        ],
+        "load": [
+          171000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "probe/protected-loop",
+      "slice": 0,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          646615.385,
+          647692.308,
+          645346.154,
+          639000.0,
+          641102.564
+        ],
+        "load": [
+          6746.998,
+          6764.069,
+          6767.492,
+          6722.64,
+          6724.314
+        ]
+      },
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          593058.824,
+          589752.941,
+          589988.235,
+          590305.882,
+          590070.588
+        ],
+        "load": [
+          6688.737,
+          6688.737,
+          6617.176,
+          6632.312,
+          6675.477
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          681000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 1483949,
+        "hostAllocs": 4027,
+        "groupPeak": 27478,
+        "run": [
+          640000.0
+        ],
+        "load": [
+          15000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "probe/protected-loop",
+      "slice": 100,
+      "n": 2000,
+      "expect": "2001000",
+      "sourceSha256": "11ac1e34ab69117a06bd6a97b54fa4a17aa79e3df9826bcbe03fd8019ae9c5dc",
+      "before": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          854305.085,
+          838116.667,
+          852067.797,
+          860610.169,
+          838483.333
+        ],
+        "load": [
+          6673.162,
+          6641.87,
+          6619.886,
+          6633.855,
+          6666.444
+        ]
+      },
+      "after": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "run": [
+          807774.194,
+          817338.71,
+          819935.484,
+          878263.158,
+          881385.965
+        ],
+        "load": [
+          6736.998,
+          6560.352,
+          6562.073,
+          6538.512,
+          6541.934
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          913000.0
+        ],
+        "load": [
+          14000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 22021,
+        "logicalAlloc": 32072,
+        "hostBytes": 2358217,
+        "hostAllocs": 4909,
+        "groupPeak": 27478,
+        "run": [
+          871000.0
+        ],
+        "load": [
+          13000.0
+        ]
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-0.txt.gz",
+      "reportSha256": "b7058466bb52ac7208b96f3a8b11dad9817990d37f88884fa128db6b36e69cfe",
+      "samples": {
+        "pump": 1506,
+        "execute": 1461,
+        "charging": 392,
+        "formulaEvaluation": 166,
+        "instruction": 524,
+        "scratchReset": 66,
+        "operandRetention": 0,
+        "decimal": 67,
+        "valueConstruction": 47,
+        "allocator": 104
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-100.txt.gz",
+      "reportSha256": "1a00bb1d8c25ffcf116c8e8689ca0ce9de7f721399db9d0e466aaee56cc6a2ee",
+      "samples": {
+        "pump": 1480,
+        "execute": 1144,
+        "charging": 323,
+        "formulaEvaluation": 132,
+        "instruction": 385,
+        "scratchReset": 61,
+        "operandRetention": 0,
+        "decimal": 47,
+        "valueConstruction": 37,
+        "allocator": 111
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/fib",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-fib-slice-0.txt.gz",
+      "reportSha256": "cc2f782e158dcfb770d15447aebf2116db4a4af3796d22522e3a930328de7a1d",
+      "samples": {
+        "pump": 1508,
+        "execute": 1471,
+        "charging": 286,
+        "formulaEvaluation": 137,
+        "instruction": 657,
+        "scratchReset": 63,
+        "operandRetention": 0,
+        "decimal": 110,
+        "valueConstruction": 87,
+        "allocator": 169
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/fib",
+      "slice": 10,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-fib-slice-10.txt.gz",
+      "reportSha256": "ad451f43502b684a393242843c22d63d54209138b3ab7ac0127c2844523fd66e",
+      "samples": {
+        "pump": 1419,
+        "execute": 293,
+        "charging": 57,
+        "formulaEvaluation": 26,
+        "instruction": 123,
+        "scratchReset": 9,
+        "operandRetention": 0,
+        "decimal": 19,
+        "valueConstruction": 19,
+        "allocator": 90
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/fib",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-fib-slice-100.txt.gz",
+      "reportSha256": "8b47649c2a2d9c01be8c6a71bd19e99c86c811dd4acb86b7621e9bddcedd8645",
+      "samples": {
+        "pump": 1482,
+        "execute": 1050,
+        "charging": 206,
+        "formulaEvaluation": 85,
+        "instruction": 427,
+        "scratchReset": 54,
+        "operandRetention": 0,
+        "decimal": 65,
+        "valueConstruction": 75,
+        "allocator": 172
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/fib",
+      "slice": 1000,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-fib-slice-1000.txt.gz",
+      "reportSha256": "8407deca332f87061eb24008e3b8ee4e9209aa01b03874b626590d7f28547438",
+      "samples": {
+        "pump": 1510,
+        "execute": 1404,
+        "charging": 302,
+        "formulaEvaluation": 142,
+        "instruction": 588,
+        "scratchReset": 48,
+        "operandRetention": 0,
+        "decimal": 115,
+        "valueConstruction": 76,
+        "allocator": 171
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/fib",
+      "slice": 10000,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-fib-slice-10000.txt.gz",
+      "reportSha256": "c5a7e596c9477af2640a52fdbe35ef44d3ad39aa6d34a61e3625f792ebb67fe5",
+      "samples": {
+        "pump": 1516,
+        "execute": 1457,
+        "charging": 298,
+        "formulaEvaluation": 124,
+        "instruction": 658,
+        "scratchReset": 82,
+        "operandRetention": 0,
+        "decimal": 118,
+        "valueConstruction": 95,
+        "allocator": 205
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/calls",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-calls-slice-0.txt.gz",
+      "reportSha256": "a03a9ab5b8dd2410ae169bf4b75cb355c1f717cf4bed34439b39f65b2181577c",
+      "samples": {
+        "pump": 1506,
+        "execute": 1448,
+        "charging": 365,
+        "formulaEvaluation": 136,
+        "instruction": 499,
+        "scratchReset": 63,
+        "operandRetention": 0,
+        "decimal": 25,
+        "valueConstruction": 82,
+        "allocator": 158
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/calls",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-calls-slice-100.txt.gz",
+      "reportSha256": "95f58eeee832ef967787dee3643fd7d7a338015029932ee558ddee4372bb89a0",
+      "samples": {
+        "pump": 1475,
+        "execute": 1040,
+        "charging": 244,
+        "formulaEvaluation": 94,
+        "instruction": 387,
+        "scratchReset": 56,
+        "operandRetention": 0,
+        "decimal": 33,
+        "valueConstruction": 57,
+        "allocator": 152
+      }
+    },
+    {
+      "binary": "before",
+      "name": "probe/straightline",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-probe-straightline-slice-0.txt.gz",
+      "reportSha256": "cb8a768433276c9c0e782547e6fdea98d7a4dc1a030cf39b5ba485aa5ac2d0d4",
+      "samples": {
+        "pump": 1482,
+        "execute": 1315,
+        "charging": 397,
+        "formulaEvaluation": 120,
+        "instruction": 298,
+        "scratchReset": 92,
+        "operandRetention": 0,
+        "decimal": 0,
+        "valueConstruction": 3,
+        "allocator": 108
+      }
+    },
+    {
+      "binary": "before",
+      "name": "probe/protected-loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-probe-protected-loop-slice-0.txt.gz",
+      "reportSha256": "e561c8e2edb00b4413460e1cdda1b717411c71dc961f10c249a30461a3dcb6ce",
+      "samples": {
+        "pump": 1517,
+        "execute": 1410,
+        "charging": 331,
+        "formulaEvaluation": 149,
+        "instruction": 426,
+        "scratchReset": 78,
+        "operandRetention": 0,
+        "decimal": 52,
+        "valueConstruction": 106,
+        "allocator": 132
+      }
+    },
+    {
+      "binary": "before",
+      "name": "probe/protected-loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-probe-protected-loop-slice-100.txt.gz",
+      "reportSha256": "d6288a2648e825daff38e08ae11b41b37966beb425e4e9515fd15959a52e1084",
+      "samples": {
+        "pump": 1489,
+        "execute": 1149,
+        "charging": 258,
+        "formulaEvaluation": 94,
+        "instruction": 354,
+        "scratchReset": 60,
+        "operandRetention": 0,
+        "decimal": 46,
+        "valueConstruction": 73,
+        "allocator": 110
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-0.txt.gz",
+      "reportSha256": "0cb5692b8e4c65c6fa881ac5f4e2cf509fe8fc4350bb14286dba1df09e077752",
+      "samples": {
+        "pump": 1511,
+        "execute": 1454,
+        "charging": 214,
+        "formulaEvaluation": 175,
+        "instruction": 598,
+        "scratchReset": 78,
+        "operandRetention": 0,
+        "decimal": 71,
+        "valueConstruction": 46,
+        "allocator": 118
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-100.txt.gz",
+      "reportSha256": "c6959224cb9af41a3cf73220b9550f13367543f179cbc522dbdc2c22e0b15f58",
+      "samples": {
+        "pump": 1491,
+        "execute": 1083,
+        "charging": 172,
+        "formulaEvaluation": 146,
+        "instruction": 454,
+        "scratchReset": 63,
+        "operandRetention": 0,
+        "decimal": 50,
+        "valueConstruction": 47,
+        "allocator": 114
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/fib",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-fib-slice-0.txt.gz",
+      "reportSha256": "492b3964f98ab5838b7f1f84977ab2d547183c78fda9a4ee9318960e5e04529c",
+      "samples": {
+        "pump": 1518,
+        "execute": 1467,
+        "charging": 164,
+        "formulaEvaluation": 132,
+        "instruction": 725,
+        "scratchReset": 67,
+        "operandRetention": 0,
+        "decimal": 111,
+        "valueConstruction": 84,
+        "allocator": 199
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/fib",
+      "slice": 10,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-fib-slice-10.txt.gz",
+      "reportSha256": "5b79c97242e41e5ea96ddf93b09446950f6905d0d5fcc9a84f3877a9ed710fcf",
+      "samples": {
+        "pump": 1417,
+        "execute": 303,
+        "charging": 27,
+        "formulaEvaluation": 23,
+        "instruction": 128,
+        "scratchReset": 12,
+        "operandRetention": 0,
+        "decimal": 18,
+        "valueConstruction": 9,
+        "allocator": 105
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/fib",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-fib-slice-100.txt.gz",
+      "reportSha256": "da08dc294cdee837aacccb5134e62ec88596c93e02aad9d5f536aaae0259de88",
+      "samples": {
+        "pump": 1477,
+        "execute": 1032,
+        "charging": 132,
+        "formulaEvaluation": 93,
+        "instruction": 464,
+        "scratchReset": 55,
+        "operandRetention": 0,
+        "decimal": 73,
+        "valueConstruction": 83,
+        "allocator": 179
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/fib",
+      "slice": 1000,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-fib-slice-1000.txt.gz",
+      "reportSha256": "a962bf1891204a92e23afa4a55da2d31f17e0d04c6ed626eb03b3dee90936f0a",
+      "samples": {
+        "pump": 1505,
+        "execute": 1385,
+        "charging": 157,
+        "formulaEvaluation": 128,
+        "instruction": 685,
+        "scratchReset": 67,
+        "operandRetention": 0,
+        "decimal": 110,
+        "valueConstruction": 98,
+        "allocator": 198
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/fib",
+      "slice": 10000,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-fib-slice-10000.txt.gz",
+      "reportSha256": "304ac9616f265f3ade2f6b3a00752876cde37e0a90b5a877fda7649d3ff6a88e",
+      "samples": {
+        "pump": 1516,
+        "execute": 1456,
+        "charging": 171,
+        "formulaEvaluation": 136,
+        "instruction": 714,
+        "scratchReset": 57,
+        "operandRetention": 0,
+        "decimal": 107,
+        "valueConstruction": 105,
+        "allocator": 196
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/calls",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-calls-slice-0.txt.gz",
+      "reportSha256": "28a3f6c65271c83a9d22453f559e0bc68645f28a714a98bef4f5679e1d1397fd",
+      "samples": {
+        "pump": 1510,
+        "execute": 1459,
+        "charging": 201,
+        "formulaEvaluation": 163,
+        "instruction": 618,
+        "scratchReset": 70,
+        "operandRetention": 0,
+        "decimal": 36,
+        "valueConstruction": 101,
+        "allocator": 199
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/calls",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-calls-slice-100.txt.gz",
+      "reportSha256": "b81c891d0f82a73142234f89a1010dae94c799f0d17908d5e105710b6c9e5715",
+      "samples": {
+        "pump": 1471,
+        "execute": 1002,
+        "charging": 112,
+        "formulaEvaluation": 83,
+        "instruction": 431,
+        "scratchReset": 64,
+        "operandRetention": 0,
+        "decimal": 24,
+        "valueConstruction": 63,
+        "allocator": 183
+      }
+    },
+    {
+      "binary": "after",
+      "name": "probe/straightline",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-probe-straightline-slice-0.txt.gz",
+      "reportSha256": "4b4ee8c1fa160866eb88a2405303fcccf24b61334cfba5034e9e157075ae75df",
+      "samples": {
+        "pump": 1469,
+        "execute": 1270,
+        "charging": 204,
+        "formulaEvaluation": 163,
+        "instruction": 328,
+        "scratchReset": 109,
+        "operandRetention": 0,
+        "decimal": 0,
+        "valueConstruction": 0,
+        "allocator": 124
+      }
+    },
+    {
+      "binary": "after",
+      "name": "probe/protected-loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-probe-protected-loop-slice-0.txt.gz",
+      "reportSha256": "803ff0a3163b8907721f1ede750d2f76611b4fd13ca45f51decdee2505259dc4",
+      "samples": {
+        "pump": 1509,
+        "execute": 1385,
+        "charging": 195,
+        "formulaEvaluation": 155,
+        "instruction": 459,
+        "scratchReset": 74,
+        "operandRetention": 0,
+        "decimal": 36,
+        "valueConstruction": 105,
+        "allocator": 127
+      }
+    },
+    {
+      "binary": "after",
+      "name": "probe/protected-loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-probe-protected-loop-slice-100.txt.gz",
+      "reportSha256": "4234a125ea98222926c8a3027f81a8b711b9925b1e4da9de152cffaa11f27acb",
+      "samples": {
+        "pump": 1484,
+        "execute": 1095,
+        "charging": 145,
+        "formulaEvaluation": 125,
+        "instruction": 352,
+        "scratchReset": 59,
+        "operandRetention": 0,
+        "decimal": 42,
+        "valueConstruction": 67,
+        "allocator": 125
+      }
+    }
+  ],
+  "language": "1.0-rc.3",
+  "costModel": 0,
+  "baselineSourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a0a6d70a47de78939c10a00a4fd15d8fdec9079dacd1ed9720ef42fdd3264017",
+    "impl/zig/src/machine/costs.zig": "1bf88a561ed2ee004a66122c9489fb1993c4dc0a4e6e42f14cb0b950d4e91d13",
+    "bench/zig/host.c": "9769e2fe1179acdfb7b78795b9e6c3f6538739349a163794fc40e654e7fabeb9"
+  }
+}
