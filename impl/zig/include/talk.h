@@ -268,6 +268,10 @@ typedef struct talk_script_error {
     talk_value *data;
 } talk_script_error;
 
+/* The error's text, in an owned buffer: its code, then its message if it
+ * has one. The wording is not covered by parity. */
+talk_host_error_code talk_script_error_error(const talk_script_error *e, talk_owned_bytes *out);
+
 /* C only: how a Host function ended, which talk.go gives as its result and
  * error. */
 typedef enum talk_call_end {
@@ -834,6 +838,10 @@ typedef struct talk_pump_options {
 
 /* C only: an id the Group holds. */
 typedef struct talk_id { const char *data; size_t len; } talk_id;
+/* A Delivery's, a Broadcast's and a Run's id, as chapter 11 assigns them. */
+typedef talk_id talk_delivery_id;
+typedef talk_id talk_broadcast_id;
+typedef talk_id talk_run_id;
 
 /* A load-time diagnostic: its catalogue code, the unit it is in, and its
  * position. */
@@ -856,6 +864,9 @@ typedef struct talk_load_error {
 
 /* C only */
 void talk_load_error_release(talk_load_error *e);
+/* The error's text, in an owned buffer: a line for each diagnostic, with its
+ * unit, position, code and message. The wording is not covered by parity. */
+talk_host_error_code talk_load_error_error(const talk_load_error *e, talk_owned_bytes *out);
 
 /* Where a Run raised its error or faulted. */
 typedef struct talk_location {
@@ -969,6 +980,9 @@ typedef struct talk_host_error {
     const char *detail; /* wording: not covered by parity */
     size_t detail_len;
 } talk_host_error;
+/* The error's text, in an owned buffer: its chapter 9 code, then its detail
+ * if it has one. The wording is not covered by parity. */
+talk_host_error_code talk_host_error_error(const talk_host_error *e, talk_owned_bytes *out);
 
 /* Where a Run's work came from (chapter 9, Run accounting): ordinary Host
  * Delivery ancestry, kept across saves. */
@@ -1094,6 +1108,21 @@ typedef struct talk_pump_result {
     talk_reports *reports; /* owned by the caller */
 } talk_pump_result;
 
+/* The versions a Core implements. Its strings live as long as the process. */
+typedef struct talk_versions {
+    const char *language; /* "1.0" */
+    size_t language_len;
+    const char *cost_model; /* versioned with the Abstract Machine */
+    size_t cost_model_len;
+    const char *unicode;
+    size_t unicode_len;
+    const char *core; /* "zig/0.0.0": informational */
+    size_t core_len;
+    const char *save_format; /* same-core only (ADR 0008) */
+    size_t save_format_len;
+} talk_versions;
+void talk_core_versions(talk_versions *out);
+
 /* Makes a Core. NULL when it can't allocate. */
 talk_core *talk_new(void);
 /* C only: ends the Core. Its Groups must be released first. */
@@ -1101,6 +1130,8 @@ void talk_core_release(talk_core *c);
 talk_host_error_code talk_new_group(talk_core *c, const talk_group_options *o, talk_group **out);
 /* C only: the Group's physical memory. */
 void talk_group_memory(const talk_group *g, talk_memory *out);
+/* Group.Name: the name it was made with, borrowed from the Group. */
+void talk_name(const talk_group *g, const char **s, size_t *len);
 /* Defines a Capability, once per process: its Operations, which the Core
  * orders by name. The definition lives as long as the Core. */
 talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_capability_def **out);
@@ -1198,6 +1229,8 @@ void talk_script_counters(talk_script *s, talk_counters *out);
 talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
 /* C only: ends the caller's handle on a Request. */
 void talk_pending_release(talk_pending *p);
+/* Whether a Pump has ended the Run the Request started. */
+bool talk_pending_done(const talk_pending *p);
 bool talk_deciding_done(const talk_deciding *d);
 /* The Verdict, borrowed from the Group, or NULL until a Pump seals it. */
 const talk_decided *talk_deciding_decided(talk_deciding *d);
@@ -1262,6 +1295,14 @@ talk_host_error_code talk_compile_library(talk_core *c, const talk_library_sourc
 void talk_library_name(const talk_library *l, const char **s, size_t *len);
 void talk_library_version(const talk_library *l, const char **s, size_t *len);
 void talk_library_identity(const talk_library *l, uint8_t out[32]);
+/* The Libraries its `use` lines import, in the order first named, in *out,
+ * borrowed from the Library. */
+size_t talk_library_imports(const talk_library *l, talk_library *const **out);
+/* Its `needs` (chapter 7): every Operation it uses, through its imports too,
+ * once each, by the Grant name it uses, sorted by that name and then the
+ * Operation's in Unicode code-point order, in *out, borrowed from the
+ * Library. */
+size_t talk_library_needs(const talk_library *l, const talk_operation_ref **out);
 /* Adds a compiled Library to the Group, writing its add-library record. A
  * stdlib name is TALK_RESERVED_NAME, a name the Group holds
  * TALK_NAME_REUSED, and an import the Group doesn't hold with the same
@@ -1370,6 +1411,21 @@ talk_host_error_code talk_settle(talk_group *g, const char *id, size_t len, cons
 /* The handle of the Group's Script with that name, or NULL; a restored
  * Group's Scripts are reached this way. */
 talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
+/* The Script's name, borrowed from its Group. */
+void talk_script_name(const talk_script *s, const char **name, size_t *len);
+/* C only: one of a Script's kept Grant names, and the names of the
+ * Operations it keeps, sorted in Unicode code-point order. */
+typedef struct talk_script_grant {
+    const char *name;
+    size_t name_len;
+    const talk_id *operations;
+    size_t operations_len;
+} talk_script_grant;
+/* Script.Grants, a worker call: each kept name, in the order the Script was
+ * given them, including disabled Grants and revoked ones a Reload hasn't
+ * removed yet (chapter 9, Grant inspection). They are in *out, borrowed
+ * from the Group until the next call of this function. */
+size_t talk_script_grants(talk_script *s, const talk_script_grant **out);
 /* C only: what tooling reads of a Function Value without running it: its
  * Home Script, name (empty for a Lambda), arity, and the code identity of
  * the unit that defines it, stale or not. Its text is borrowed from the

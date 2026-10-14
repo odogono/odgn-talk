@@ -70,6 +70,13 @@ static int group_test(void) {
     talk_owned_bytes id = {0};
     bad |= talk_script_request(script, &message, &id, &pending) != TALK_OK;
     bad |= id.len != 2 || memcmp(id.data, "d1", 2) != 0;
+    bad |= talk_pending_done(pending);
+    const char *named = NULL;
+    size_t named_len = 0;
+    talk_name(group, &named, &named_len);
+    bad |= named_len != 1 || memcmp(named, "g", 1) != 0;
+    talk_script_name(script, &named, &named_len);
+    bad |= named_len != 5 || memcmp(named, "adder", 5) != 0;
     talk_owned_bytes_release(&id);
     talk_value_release(n);
     talk_pump_result pumped = {0};
@@ -92,6 +99,7 @@ static int group_test(void) {
     talk_value *result = NULL;
     const char *text = NULL;
     size_t len = 0;
+    bad |= !talk_pending_done(pending);
     bad |= talk_pending_result(pending, &result) != TALK_OK;
     bad |= !talk_value_as_text(result, &text, &len) || len != 3 || memcmp(text, "41!", 3) != 0;
     talk_value_release(result);
@@ -207,8 +215,14 @@ static int revoke_test(void) {
     talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
+    /* A revoked Grant is still kept until a Reload removes it. */
+    for (int revoked = 0; revoked < 2; revoked++) {
+        const talk_script_grant *kept = NULL;
+        bad |= talk_script_grants(script, &kept) != 1;
+        if (!bad) bad |= kept[0].name_len != 4 || memcmp(kept[0].name, "echo", 4) != 0 || kept[0].operations_len != 1 || kept[0].operations[0].len != 5 || memcmp(kept[0].operations[0].data, "twice", 5) != 0;
+        if (!revoked) bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
+    }
     released = 0;
-    bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
     bad |= talk_script_revoke(script, "echo", 4) != TALK_OK;
     bad |= talk_script_revoke(script, "other", 5) != TALK_OK;
     talk_message go = {"go", 2, NULL, 0, NULL};
@@ -1303,6 +1317,9 @@ static int library_test(void) {
     if (!bad) {
         const talk_diagnostic *d = &refused->diagnostics[0];
         bad |= d->unit_len != 6 || memcmp(d->unit, "broken", 6) != 0 || d->line != 2 || d->code_len == 0;
+        talk_owned_bytes said = {0};
+        bad |= talk_load_error_error(refused, &said) != TALK_OK || said.len < 9 || memcmp(said.data, "broken:2:", 9) != 0;
+        talk_owned_bytes_release(&said);
     }
     talk_load_error_release(refused);
     /* A Constant whose initialiser raises refuses the Library too. */
@@ -1320,6 +1337,26 @@ static int library_test(void) {
     size_t len = 0;
     talk_library_name(top, &name, &len);
     bad |= len != 3 || memcmp(name, "top", 3) != 0;
+    talk_library *const *imports = NULL;
+    size_t imported = talk_library_imports(top, &imports);
+    bad |= imported != 2 || imports[0] != base;
+    if (!bad) {
+        talk_library_name(imports[1], &name, &len);
+        bad |= len != 4 || memcmp(name, "text", 4) != 0;
+    }
+    /* `needs` is each Operation once, sorted, through imports too, and say
+     * is console's write. */
+    const char *says_source = "function shout\n  say \"a\"\n  say \"b\"\nend shout\n";
+    talk_library_source says_src = {"says", 4, "1", 1, says_source, strlen(says_source)};
+    talk_library *says = NULL, *loud = NULL;
+    bad |= talk_compile_library(core, &says_src, NULL, 0, NULL, 0, &says, NULL) != TALK_OK;
+    const char *loud_source = "use shout from says\nfunction twice\n  shout()\n  shout()\nend twice\n";
+    talk_library_source loud_src = {"loud", 4, "1", 1, loud_source, strlen(loud_source)};
+    bad |= talk_compile_library(core, &loud_src, &says, 1, NULL, 0, &loud, NULL) != TALK_OK;
+    const talk_operation_ref *needs = NULL;
+    bad |= talk_library_needs(base, &needs) != 0;
+    bad |= loud == NULL || talk_library_needs(loud, &needs) != 1;
+    if (!bad) bad |= needs[0].capability_len != 7 || memcmp(needs[0].capability, "console", 7) != 0 || needs[0].operation_len != 5 || memcmp(needs[0].operation, "write", 5) != 0;
     const char *source = "use label from top\nscript variable got\non go\n  put label(5) into got\nend go\n";
     talk_load_options load = {"user", 4, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;
@@ -1542,6 +1579,16 @@ int main(void) {
     expect(talk_value_index(value, 1, &copy) == TALK_OK && talk_value_kind(copy) == TALK_KIND_NOTHING, "missing item is Nothing");
     talk_value_release(copy); talk_value_release(value);
     talk_value_release(NULL);
+    talk_versions versions;
+    talk_core_versions(&versions);
+    expect(versions.language_len > 0 && versions.cost_model_len > 0 && versions.unicode_len > 0, "the versions are named");
+    expect(versions.core_len > 4 && memcmp(versions.core, "zig/", 4) == 0 && versions.save_format_len > 4 && memcmp(versions.save_format, "zig/", 4) == 0, "the Core and save format are the Zig Core's");
+    talk_host_error host_error = {TALK_NAME_REUSED, "pricing", 7};
+    expect(talk_host_error_error(&host_error, &buffer) == TALK_OK && buffer.len == 20 && memcmp(buffer.data, "name reused: pricing", 20) == 0, "a Host error's text");
+    talk_owned_bytes_release(&buffer);
+    talk_script_error script_error = {"empty", 5, "nothing to echo", 15, NULL};
+    expect(talk_script_error_error(&script_error, &buffer) == TALK_OK && buffer.len == 22 && memcmp(buffer.data, "empty: nothing to echo", 22) == 0, "a Script error's text");
+    talk_owned_bytes_release(&buffer);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");

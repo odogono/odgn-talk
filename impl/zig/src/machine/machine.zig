@@ -651,6 +651,9 @@ pub const Library = struct {
     exports: []const check.Export,
     /// Every Capability call it makes, through its imports too.
     needs: []const check.Need,
+    /// Its `needs` as the Host reads them: each Grant name and Operation
+    /// once, sorted by both (chapter 7).
+    operations: []const OperationRef = &.{},
     stdlib: bool = false,
     /// The Grant declarations it was compiled against, which recompiling it
     /// for a replaced import uses again; null for none.
@@ -750,6 +753,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     try needs.appendSlice(a, checked.needs);
     for (imports) |l| try needs.appendSlice(a, l.needs);
     const held_needs = try storage.copy(kept, needs.items);
+    const operations = try operationRefs(kept, held_needs);
     const version_label = try kept.dupe(u8, label);
     const grant_declarations: ?[]const NamedGrant = if (declarations) |named| blk: {
         const declared = try kept.alloc(NamedGrant, named.len);
@@ -769,6 +773,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         .imports = imports,
         .exports = exported,
         .needs = held_needs,
+        .operations = operations,
         .declarations = grant_declarations,
     };
     owns_arena = false;
@@ -1078,6 +1083,32 @@ pub const NamedObject = struct { name: []const u8, object: *objects.Object };
 
 /// A Grant the Host binds at Load, by the name the Script uses.
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
+
+/// An Operation by the Grant name that calls it, laid out as talk.h's
+/// `talk_operation_ref`.
+pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
+
+fn refLess(_: void, x: OperationRef, y: OperationRef) bool {
+    return switch (std.mem.order(u8, x.capability[0..x.capability_len], y.capability[0..y.capability_len])) {
+        .lt => true,
+        .gt => false,
+        .eq => std.mem.lessThan(u8, x.operation[0..x.operation_len], y.operation[0..y.operation_len]),
+    };
+}
+
+/// Each distinct Grant name and Operation of `needs`, sorted in code-point
+/// order, which UTF-8's byte order is.
+fn operationRefs(a: Allocator, needs: []const check.Need) ![]const OperationRef {
+    var refs: std.ArrayList(OperationRef) = .empty;
+    for (needs) |n| {
+        const ref: OperationRef = .{ .capability = n.grant.ptr, .capability_len = n.grant.len, .operation = n.operation.ptr, .operation_len = n.operation.len };
+        for (refs.items) |r| {
+            if (!refLess({}, r, ref) and !refLess({}, ref, r)) break;
+        } else try refs.append(a, ref);
+    }
+    std.mem.sort(OperationRef, refs.items, {}, refLess);
+    return refs.items;
+}
 
 /// A Script's Grant: the Operations it keeps, by index into its
 /// Capability's.
