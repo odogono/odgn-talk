@@ -1,4 +1,5 @@
-# Unblessed: the shape-checks Trace Case (#695); first blessing awaits human review.
+# First blessing approved by the maintainer on 2026-10-14 in the issue-695 conversation.
+# TS, Go and Zig replay passed before approval; expectation records are unchanged.
 
 > load checks identity=f84a36d87789cde4ff692227d101b067a24cd6b1445d4108c4071ea0e7adfb33
 > deliver d1 to=checks message=go
