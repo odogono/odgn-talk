@@ -1,0 +1,555 @@
+{
+  "commit": "661128bb9ab62cd66cc1ab14f71a1e44134ff63c",
+  "coreRevision": "f6477343",
+  "binarySha256": "82637d73ef063fc212cf4d64496efbef1ae56c08adbb9bb6bc10a4e833d019eb",
+  "mode": "native safe; C Host -O2",
+  "method": "Separate CPU sampling, 2 seconds at 1 ms intervals. Host is scheduled for at least 15 seconds of Run repeats (300 samples) and terminated deliberately after sampling, before Load measurements. Host validates every completed Run. Categories only include stacks under talk_pump and overlap; compiler inlining limits named attribution. Timings remain in the focused comparison report.",
+  "profiles": [
+    {
+      "benchmark": "numbers/quantity",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/numbers-quantity.txt.gz",
+      "reportSha256": "06a8ccf1bb1a193db047c73509bbae6565c3568c2f66502ecd28c8efd6a7b7b5",
+      "samples": {
+        "pump": 1493,
+        "execute": 1478,
+        "charging": 42,
+        "formulaEvaluation": 35,
+        "instruction": 1282,
+        "scratchReset": 21,
+        "operandRetention": 0,
+        "decimal": 979,
+        "valueConstruction": 19,
+        "allocator": 286,
+        "listConstruction": 0,
+        "unitConversion": 717,
+        "textSegmentation": 0,
+        "graphemes": 0,
+        "framePush": 0,
+        "framePop": 0,
+        "memmove": 83,
+        "executeMemmove": 51
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "decimal.decimal.finish",
+          "samples": 195
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 109
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 102
+        },
+        {
+          "symbol": "math.big.int.Mutable.pow",
+          "samples": 86
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 83
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 77
+        },
+        {
+          "symbol": "units.Unit.convert__func_911",
+          "samples": 77
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 56
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 53
+        },
+        {
+          "symbol": "heap.SmpAllocator.alloc",
+          "samples": 48
+        },
+        {
+          "symbol": "heap.SmpAllocator.free",
+          "samples": 45
+        },
+        {
+          "symbol": "heap.ArenaAllocator.alloc",
+          "samples": 38
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 37
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 35
+        },
+        {
+          "symbol": "math.big.int.llmulacc__func_959",
+          "samples": 32
+        }
+      ]
+    },
+    {
+      "benchmark": "numbers/divide",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/numbers-divide.txt.gz",
+      "reportSha256": "19f2e1aac6e3b4cec7bc436d909bf792c8a6df23bbe385acca882ddb2ea60e36",
+      "samples": {
+        "pump": 1492,
+        "execute": 1467,
+        "charging": 116,
+        "formulaEvaluation": 97,
+        "instruction": 1083,
+        "scratchReset": 42,
+        "operandRetention": 0,
+        "decimal": 823,
+        "valueConstruction": 25,
+        "allocator": 288,
+        "listConstruction": 0,
+        "unitConversion": 0,
+        "textSegmentation": 0,
+        "graphemes": 0,
+        "framePush": 0,
+        "framePop": 0,
+        "memmove": 116,
+        "executeMemmove": 88
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "decimal.decimal.finish",
+          "samples": 223
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 163
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 145
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 116
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 97
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 79
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 69
+        },
+        {
+          "symbol": "heap.SmpAllocator.free",
+          "samples": 58
+        },
+        {
+          "symbol": "math.big.int.Mutable.pow",
+          "samples": 55
+        },
+        {
+          "symbol": "heap.SmpAllocator.alloc",
+          "samples": 54
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 49
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 42
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 33
+        },
+        {
+          "symbol": "decimal.decimal.digitCount",
+          "samples": 27
+        },
+        {
+          "symbol": "math.big.int.Managed.ensureCapacity",
+          "samples": 23
+        }
+      ]
+    },
+    {
+      "benchmark": "core/loop",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/core-loop.txt.gz",
+      "reportSha256": "419eb00fffbb13d2d3882542682cc3ab4882edd8b26a1459ef481e75e3a04520",
+      "samples": {
+        "pump": 1511,
+        "execute": 1430,
+        "charging": 256,
+        "formulaEvaluation": 200,
+        "instruction": 561,
+        "scratchReset": 111,
+        "operandRetention": 0,
+        "decimal": 87,
+        "valueConstruction": 40,
+        "allocator": 127,
+        "listConstruction": 0,
+        "unitConversion": 0,
+        "textSegmentation": 0,
+        "graphemes": 0,
+        "framePush": 0,
+        "framePop": 0,
+        "memmove": 219,
+        "executeMemmove": 198
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 315
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 298
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 219
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 200
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 111
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 56
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 55
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 52
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 38
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 28
+        },
+        {
+          "symbol": "DYLD-STUB$$memcpy",
+          "samples": 16
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 15
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.order",
+          "samples": 13
+        },
+        {
+          "symbol": "Io.Writer.writeAll",
+          "samples": 13
+        },
+        {
+          "symbol": "Io.Writer.printValue__func_778",
+          "samples": 13
+        }
+      ]
+    },
+    {
+      "benchmark": "collections/list-build",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/collections-list-build.txt.gz",
+      "reportSha256": "4b495ad5eb501c15283d0c9d2df2792a5985a48611def3c398102ef10c8afd72",
+      "samples": {
+        "pump": 1501,
+        "execute": 1464,
+        "charging": 98,
+        "formulaEvaluation": 71,
+        "instruction": 1129,
+        "scratchReset": 43,
+        "operandRetention": 0,
+        "decimal": 6,
+        "valueConstruction": 134,
+        "allocator": 59,
+        "listConstruction": 629,
+        "unitConversion": 0,
+        "textSegmentation": 0,
+        "graphemes": 0,
+        "framePush": 0,
+        "framePop": 4,
+        "memmove": 149,
+        "executeMemmove": 98
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "value.list",
+          "samples": 472
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 217
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 149
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 130
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 126
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 98
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 80
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 71
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 43
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 27
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 18
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 14
+        },
+        {
+          "symbol": "DYLD-STUB$$memcpy",
+          "samples": 13
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 9
+        },
+        {
+          "symbol": "heap.ArenaAllocator.alloc",
+          "samples": 5
+        }
+      ]
+    },
+    {
+      "benchmark": "core/calls",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/core-calls.txt.gz",
+      "reportSha256": "35204427e10cbd732ca3d932c3fb7ce76543fb412af26a5f475b0687d6c8b7cd",
+      "samples": {
+        "pump": 1499,
+        "execute": 1439,
+        "charging": 211,
+        "formulaEvaluation": 163,
+        "instruction": 600,
+        "scratchReset": 84,
+        "operandRetention": 0,
+        "decimal": 41,
+        "valueConstruction": 69,
+        "allocator": 182,
+        "listConstruction": 0,
+        "unitConversion": 0,
+        "textSegmentation": 0,
+        "graphemes": 0,
+        "framePush": 73,
+        "framePop": 30,
+        "memmove": 239,
+        "executeMemmove": 216
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 282
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 276
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 239
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 163
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 84
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 55
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 48
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 45
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 33
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 32
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 30
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 25
+        },
+        {
+          "symbol": "machine.machine.Group.pushFrameIn",
+          "samples": 21
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 20
+        },
+        {
+          "symbol": "DYLD-STUB$$memcpy",
+          "samples": 20
+        }
+      ]
+    },
+    {
+      "benchmark": "text/index",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-applescript-profiles/text-index.txt.gz",
+      "reportSha256": "824b4200df7f6fc118cf1baf9d043573fdc5b6cd6fa6225a079b5ad885f69f9c",
+      "samples": {
+        "pump": 1499,
+        "execute": 1467,
+        "charging": 82,
+        "formulaEvaluation": 65,
+        "instruction": 1167,
+        "scratchReset": 35,
+        "operandRetention": 0,
+        "decimal": 523,
+        "valueConstruction": 31,
+        "allocator": 224,
+        "listConstruction": 0,
+        "unitConversion": 0,
+        "textSegmentation": 322,
+        "graphemes": 276,
+        "framePush": 0,
+        "framePop": 0,
+        "memmove": 114,
+        "executeMemmove": 77
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "unicode.grapheme.end",
+          "samples": 167
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 127
+        },
+        {
+          "symbol": "decimal.decimal.finish",
+          "samples": 126
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 114
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 113
+        },
+        {
+          "symbol": "unicode.grapheme.State.advance",
+          "samples": 97
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 68
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 65
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 50
+        },
+        {
+          "symbol": "heap.SmpAllocator.free",
+          "samples": 47
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 42
+        },
+        {
+          "symbol": "array_list.Aligned(machine.chunks.Span,null).append",
+          "samples": 39
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 35
+        },
+        {
+          "symbol": "heap.SmpAllocator.alloc",
+          "samples": 27
+        },
+        {
+          "symbol": "math.big.int.Mutable.pow",
+          "samples": 25
+        }
+      ]
+    }
+  ],
+  "sourceSha256": {
+    "bench/zig/host.c": "6fefb6b7713d1b2fedcd6c47630fb8c99ba2c210338bf4c772f417735615cbe4",
+    "impl/zig/src/decimal/decimal.zig": "ab03bba121c6e84f9e62daac40f288efd8c43f75edd5f4b8139b183342020136",
+    "impl/zig/src/units.zig": "f3030ea2a5f61fcba25dc0b1b6e9834059b229f6833875c4253f9e909567ce2a",
+    "impl/zig/src/value.zig": "a7a13e515d0b2d0514bc63090fbc3eb2bfea3eafe62ff4df3dfd854469bf4f5a",
+    "impl/zig/src/machine/machine.zig": "0d56fc665a3b76fe977e9b4fb292c0841acb382d90856c273f57816fbf5a01b0",
+    "impl/zig/src/machine/costs.zig": "3f4992c94d0fa486626084689614c9a5e0e5347fbfa5ae332e7efceeb98b6d8b",
+    "impl/zig/src/machine/chunks.zig": "d4149aaab0ef8240afbd0cb1d10d7e1daf57e5c41dead3b99ecdae69cb3467b1"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0"
+}

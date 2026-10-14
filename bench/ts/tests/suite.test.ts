@@ -44,6 +44,14 @@ test('a Benchmark lists the runners that skip it', () => {
   ]);
 });
 
+test('individual Peer Language runners inherit the manifest peer skips', () => {
+  const b = { ...manifest()[0]!, skip: { peers: 'no peer counterpart' } };
+  expect(skipped(b, ['zig', 'ts', 'applescript', 'gopher-lua'])).toEqual([
+    { benchmark: b.name, reason: 'no peer counterpart', runner: 'applescript' },
+    { benchmark: b.name, reason: 'no peer counterpart', runner: 'gopher-lua' },
+  ]);
+});
+
 test('a sweep adds one Benchmark per Fuel Slice, with the same Fuel', () => {
   const all = manifest();
   const swept = all.filter(b => b.slice !== undefined);

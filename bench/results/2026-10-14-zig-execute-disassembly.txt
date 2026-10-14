@@ -1,0 +1,188 @@
+Native safe-mode host used by the focused 2026-10-14 comparison.
+CPU sample Group.execute return offsets +164 and +628 follow calls to the memcpy stub.
+llvm-objdump --macho --indirect-symbols maps 0x1001fd584 to _memcpy.
+Both calls copy 0x1a0 (416) bytes to the same stack buffer.
+Source attribution: Operands initialization and reset in machine.zig (inference from layout and source).
+Command: xcrun llvm-objdump --disassemble-symbols=_machine.machine.Group.execute .cache/bench-zig/host
+Excerpt: function entry through the second copy and operand acquisition.
+
+
+.cache/bench-zig/host:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+00000001000b9350 <_machine.machine.Group.execute>:
+1000b9350: a9ba6ffc    	stp	x28, x27, [sp, #-0x60]!
+1000b9354: a90167fa    	stp	x26, x25, [sp, #0x10]
+1000b9358: a9025ff8    	stp	x24, x23, [sp, #0x20]
+1000b935c: a90357f6    	stp	x22, x21, [sp, #0x30]
+1000b9360: a9044ff4    	stp	x20, x19, [sp, #0x40]
+1000b9364: a9057bfd    	stp	x29, x30, [sp, #0x50]
+1000b9368: 910143fd    	add	x29, sp, #0x50
+1000b936c: d13443ff    	sub	sp, sp, #0xd10
+1000b9370: f90017fe    	str	x30, [sp, #0x28]
+1000b9374: b9005fe3    	str	w3, [sp, #0x5c]
+1000b9378: aa0203f6    	mov	x22, x2
+1000b937c: aa0103f5    	mov	x21, x1
+1000b9380: f9000fe0    	str	x0, [sp, #0x18]
+1000b9384: 90000f68    	adrp	x8, 0x1002a5000 <___anon_136499+0x38>
+1000b9388: f9470908    	ldr	x8, [x8, #0xe10]
+1000b938c: f9400108    	ldr	x8, [x8]
+1000b9390: f81983a8    	stur	x8, [x29, #-0x68]
+1000b9394: 91074020    	add	x0, x1, #0x1d0
+1000b9398: 97fd463f    	bl	0x10000ac94 <_heap.ArenaAllocator.reset>
+1000b939c: a95fa6c8    	ldp	x8, x9, [x22, #0x1f8]
+1000b93a0: ab090108    	adds	x8, x8, x9
+1000b93a4: 54012162    	b.hs	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b93a8: 911a23fc    	add	x28, sp, #0x688
+1000b93ac: 911b83e9    	add	x9, sp, #0x6e0
+1000b93b0: 91008129    	add	x9, x9, #0x20
+1000b93b4: f90023e9    	str	x9, [sp, #0x40]
+1000b93b8: 911d23e9    	add	x9, sp, #0x748
+1000b93bc: 91008129    	add	x9, x9, #0x20
+1000b93c0: f9000be9    	str	x9, [sp, #0x10]
+1000b93c4: b9405fe9    	ldr	w9, [sp, #0x5c]
+1000b93c8: 52000129    	eor	w9, w9, #0x1
+1000b93cc: b90027e9    	str	w9, [sp, #0x24]
+1000b93d0: 90000af3    	adrp	x19, 0x100215000 <___anon_80369+0x8>
+1000b93d4: 91174273    	add	x19, x19, #0x5d0
+1000b93d8: 1400000c    	b	0x1000b9408 <_machine.machine.Group.execute+0xb8>
+1000b93dc: 911203e0    	add	x0, sp, #0x480
+1000b93e0: 90000af3    	adrp	x19, 0x100215000 <___anon_80369+0x8>
+1000b93e4: 91174273    	add	x19, x19, #0x5d0
+1000b93e8: aa1303e1    	mov	x1, x19
+1000b93ec: 52803402    	mov	w2, #0x1a0              ; =416
+1000b93f0: 94051065    	bl	0x1001fd584 <_writev+0x1001fd584>
+1000b93f4: 910742a0    	add	x0, x21, #0x1d0
+1000b93f8: 97fd4627    	bl	0x10000ac94 <_heap.ArenaAllocator.reset>
+1000b93fc: a95fa6c8    	ldp	x8, x9, [x22, #0x1f8]
+1000b9400: ab090108    	adds	x8, x8, x9
+1000b9404: 54011e62    	b.hs	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b9408: a91ffec8    	stp	x8, xzr, [x22, #0x1f8]
+1000b940c: f9404ec1    	ldr	x1, [x22, #0x98]
+1000b9410: f1000420    	subs	x0, x1, #0x1
+1000b9414: 54011de3    	b.lo	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b9418: eb01001f    	cmp	x0, x1
+1000b941c: 54011ec2    	b.hs	0x1000bb7f4 <_machine.machine.Group.execute+0x24a4>
+1000b9420: f9404ac8    	ldr	x8, [x22, #0x90]
+1000b9424: 52800909    	mov	w9, #0x48               ; =72
+1000b9428: 9b092018    	madd	x24, x0, x9, x8
+1000b942c: b9403f1b    	ldr	w27, [x24, #0x3c]
+1000b9430: 3955d2c8    	ldrb	w8, [x22, #0x574]
+1000b9434: 360000c8    	tbz	w8, #0x0, 0x1000b944c <_machine.machine.Group.execute+0xfc>
+1000b9438: f100043f    	cmp	x1, #0x1
+1000b943c: 54000081    	b.ne	0x1000b944c <_machine.machine.Group.execute+0xfc>
+1000b9440: b94572c8    	ldr	w8, [x22, #0x570]
+1000b9444: 6b08037f    	cmp	w27, w8
+1000b9448: 54009980    	b.eq	0x1000ba778 <_machine.machine.Group.execute+0x1428>
+1000b944c: f90262bf    	str	xzr, [x21, #0x4c0]
+1000b9450: 395402a8    	ldrb	w8, [x21, #0x500]
+1000b9454: 36000148    	tbz	w8, #0x0, 0x1000b947c <_machine.machine.Group.execute+0x12c>
+1000b9458: f940e6a0    	ldr	x0, [x21, #0x1c8]
+1000b945c: b4000100    	cbz	x0, 0x1000b947c <_machine.machine.Group.execute+0x12c>
+1000b9460: f9427aa2    	ldr	x2, [x21, #0x4f0]
+1000b9464: f94276a1    	ldr	x1, [x21, #0x4e8]
+1000b9468: eb01005f    	cmp	x2, x1
+1000b946c: 54011d28    	b.hi	0x1000bb810 <_machine.machine.Group.execute+0x24c0>
+1000b9470: f94272a1    	ldr	x1, [x21, #0x4e0]
+1000b9474: 97fd2153    	bl	0x1000019c0 <_Io.Writer.writeAll>
+1000b9478: f9027abf    	str	xzr, [x21, #0x4f0]
+1000b947c: f9428aa9    	ldr	x9, [x21, #0x510]
+1000b9480: f94272c8    	ldr	x8, [x22, #0x4e0]
+1000b9484: b4000189    	cbz	x9, 0x1000b94b4 <_machine.machine.Group.execute+0x164>
+1000b9488: b5000408    	cbnz	x8, 0x1000b9508 <_machine.machine.Group.execute+0x1b8>
+1000b948c: f94242c8    	ldr	x8, [x22, #0x480]
+1000b9490: b4000148    	cbz	x8, 0x1000b94b8 <_machine.machine.Group.execute+0x168>
+1000b9494: aa1503e0    	mov	x0, x21
+1000b9498: aa1603e1    	mov	x1, x22
+1000b949c: 97ff9f02    	bl	0x1000a10a4 <_machine.machine.Group.land>
+1000b94a0: 72003c1f    	tst	w0, #0xffff
+1000b94a4: 54010901    	b.ne	0x1000bb5c4 <_machine.machine.Group.execute+0x2274>
+1000b94a8: 3946a2c8    	ldrb	w8, [x22, #0x1a8]
+1000b94ac: 3700a888    	tbnz	w8, #0x0, 0x1000ba9bc <_machine.machine.Group.execute+0x166c>
+1000b94b0: f94272c8    	ldr	x8, [x22, #0x4e0]
+1000b94b4: b50002a8    	cbnz	x8, 0x1000b9508 <_machine.machine.Group.execute+0x1b8>
+1000b94b8: f9405ac8    	ldr	x8, [x22, #0xb0]
+1000b94bc: f9422ec9    	ldr	x9, [x22, #0x458]
+1000b94c0: eb090108    	subs	x8, x8, x9
+1000b94c4: 54011863    	b.lo	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b94c8: f94146a9    	ldr	x9, [x21, #0x288]
+1000b94cc: b4000109    	cbz	x9, 0x1000b94ec <_machine.machine.Group.execute+0x19c>
+1000b94d0: f9423ac9    	ldr	x9, [x22, #0x470]
+1000b94d4: f940112a    	ldr	x10, [x9, #0x20]
+1000b94d8: ab08014a    	adds	x10, x10, x8
+1000b94dc: 540117a2    	b.hs	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b94e0: f9413d29    	ldr	x9, [x9, #0x278]
+1000b94e4: eb09015f    	cmp	x10, x9
+1000b94e8: 5400a462    	b.hs	0x1000ba974 <_machine.machine.Group.execute+0x1624>
+1000b94ec: f94016a9    	ldr	x9, [x21, #0x28]
+1000b94f0: b40000c9    	cbz	x9, 0x1000b9508 <_machine.machine.Group.execute+0x1b8>
+1000b94f4: f940faaa    	ldr	x10, [x21, #0x1f0]
+1000b94f8: ab080148    	adds	x8, x10, x8
+1000b94fc: 540116a2    	b.hs	0x1000bb7d0 <_machine.machine.Group.execute+0x2480>
+1000b9500: eb09011f    	cmp	x8, x9
+1000b9504: 5400a3c2    	b.hs	0x1000ba97c <_machine.machine.Group.execute+0x162c>
+1000b9508: f9400308    	ldr	x8, [x24]
+1000b950c: b40000c8    	cbz	x8, 0x1000b9524 <_machine.machine.Group.execute+0x1d4>
+1000b9510: 91018109    	add	x9, x8, #0x60
+1000b9514: f9403d21    	ldr	x1, [x9, #0x78]
+1000b9518: eb1b003f    	cmp	x1, x27
+1000b951c: 540000e8    	b.hi	0x1000b9538 <_machine.machine.Group.execute+0x1e8>
+1000b9520: 140008b6    	b	0x1000bb7f8 <_machine.machine.Group.execute+0x24a8>
+1000b9524: f9423ac9    	ldr	x9, [x22, #0x470]
+1000b9528: 9101e129    	add	x9, x9, #0x78
+1000b952c: f9403d21    	ldr	x1, [x9, #0x78]
+1000b9530: eb1b003f    	cmp	x1, x27
+1000b9534: 54011629    	b.ls	0x1000bb7f8 <_machine.machine.Group.execute+0x24a8>
+1000b9538: f9403929    	ldr	x9, [x9, #0x70]
+1000b953c: 5280060a    	mov	w10, #0x30              ; =48
+1000b9540: 9baa2769    	umaddl	x9, w27, w10, x9
+1000b9544: ad408121    	ldp	q1, q0, [x9, #0x10]
+1000b9548: 3d811fe0    	str	q0, [sp, #0x470]
+1000b954c: 3dc00120    	ldr	q0, [x9]
+1000b9550: 3d8117e0    	str	q0, [sp, #0x450]
+1000b9554: 3d811be1    	str	q1, [sp, #0x460]
+1000b9558: b4000088    	cbz	x8, 0x1000b9568 <_machine.machine.Group.execute+0x218>
+1000b955c: 9100c109    	add	x9, x8, #0x30
+1000b9560: 9100e108    	add	x8, x8, #0x38
+1000b9564: 14000004    	b	0x1000b9574 <_machine.machine.Group.execute+0x224>
+1000b9568: f9423ac8    	ldr	x8, [x22, #0x470]
+1000b956c: 9106c109    	add	x9, x8, #0x1b0
+1000b9570: 9106e108    	add	x8, x8, #0x1b8
+1000b9574: b94473ea    	ldr	w10, [sp, #0x470]
+1000b9578: f9002bea    	str	x10, [sp, #0x50]
+1000b957c: b94477ea    	ldr	w10, [sp, #0x474]
+1000b9580: f90027ea    	str	x10, [sp, #0x48]
+1000b9584: 3951e3f4    	ldrb	w20, [sp, #0x478]
+1000b9588: f9400108    	ldr	x8, [x8]
+1000b958c: f9400129    	ldr	x9, [x9]
+1000b9590: a90323e9    	stp	x9, x8, [sp, #0x30]
+1000b9594: a90ca2a9    	stp	x9, x8, [x21, #0xc8]
+1000b9598: b9010abb    	str	w27, [x21, #0x108]
+1000b959c: 3dc117e0    	ldr	q0, [sp, #0x450]
+1000b95a0: 3dc11be1    	ldr	q1, [sp, #0x460]
+1000b95a4: 3c8d82a0    	stur	q0, [x21, #0xd8]
+1000b95a8: 3c8e82a1    	stur	q1, [x21, #0xe8]
+1000b95ac: 3dc11fe0    	ldr	q0, [sp, #0x470]
+1000b95b0: 3c8f82a0    	stur	q0, [x21, #0xf8]
+1000b95b4: 911203e0    	add	x0, sp, #0x480
+1000b95b8: aa1303e1    	mov	x1, x19
+1000b95bc: 52803402    	mov	w2, #0x1a0              ; =416
+1000b95c0: 94050ff1    	bl	0x1001fd584 <_writev+0x1001fd584>
+1000b95c4: f9400308    	ldr	x8, [x24]
+1000b95c8: b40000a8    	cbz	x8, 0x1000b95dc <_machine.machine.Group.execute+0x28c>
+1000b95cc: 91018101    	add	x1, x8, #0x60
+1000b95d0: 7101ce9f    	cmp	w20, #0x73
+1000b95d4: 540000c1    	b.ne	0x1000b95ec <_machine.machine.Group.execute+0x29c>
+1000b95d8: 1400005e    	b	0x1000b9750 <_machine.machine.Group.execute+0x400>
+1000b95dc: f9423ac8    	ldr	x8, [x22, #0x470]
+1000b95e0: 9101e101    	add	x1, x8, #0x78
+1000b95e4: 7101ce9f    	cmp	w20, #0x73
+1000b95e8: 54000b40    	b.eq	0x1000b9750 <_machine.machine.Group.execute+0x400>
+1000b95ec: f9401308    	ldr	x8, [x24, #0x20]
+1000b95f0: b4000b08    	cbz	x8, 0x1000b9750 <_machine.machine.Group.execute+0x400>
+1000b95f4: f9404428    	ldr	x8, [x1, #0x88]
+1000b95f8: b4000ac8    	cbz	x8, 0x1000b9750 <_machine.machine.Group.execute+0x400>
+1000b95fc: a944ceb7    	ldp	x23, x19, [x21, #0x48]
+1000b9600: f9404029    	ldr	x9, [x1, #0x80]
+1000b9604: 29402d2a    	ldp	w10, w11, [x9]

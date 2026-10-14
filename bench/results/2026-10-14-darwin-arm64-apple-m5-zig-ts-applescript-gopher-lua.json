@@ -1,0 +1,1871 @@
+{
+  "commit": "f6477343-dirty",
+  "date": "2026-10-14",
+  "machine": {
+    "arch": "arm64",
+    "cores": 10,
+    "cpu": "Apple M5",
+    "memory": "24 GiB",
+    "os": "darwin"
+  },
+  "measurements": [
+    {
+      "benchmark": "core/loop",
+      "runner": "zig",
+      "fuel": 48016,
+      "logicalAlloc": 64000,
+      "load": {
+        "medianNs": 6656.416,
+        "minNs": 6646.418,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1332763.158,
+        "minNs": 1331894.737,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/fib",
+      "runner": "zig",
+      "fuel": 46365,
+      "logicalAlloc": 47328,
+      "load": {
+        "medianNs": 7178.751,
+        "minNs": 7152.911,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 921690.909,
+        "minNs": 920490.909,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/fib@slice=10",
+      "runner": "zig",
+      "fuel": 46365,
+      "logicalAlloc": 47328,
+      "load": {
+        "medianNs": 7273.931,
+        "minNs": 7261.69,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 4757454.545,
+        "minNs": 4727636.364,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/fib@slice=100",
+      "runner": "zig",
+      "fuel": 46365,
+      "logicalAlloc": 47328,
+      "load": {
+        "medianNs": 7241.564,
+        "minNs": 7203.861,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1340578.947,
+        "minNs": 1328684.211,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/fib@slice=1000",
+      "runner": "zig",
+      "fuel": 46365,
+      "logicalAlloc": 47328,
+      "load": {
+        "medianNs": 7205.793,
+        "minNs": 7163.61,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 982000,
+        "minNs": 972461.538,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/fib@slice=10000",
+      "runner": "zig",
+      "fuel": 46365,
+      "logicalAlloc": 47328,
+      "load": {
+        "medianNs": 7196.603,
+        "minNs": 7182.132,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 937129.63,
+        "minNs": 935370.37,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/calls",
+      "runner": "zig",
+      "fuel": 46018,
+      "logicalAlloc": 32072,
+      "load": {
+        "medianNs": 7739.514,
+        "minNs": 7684.34,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 910909.091,
+        "minNs": 909836.364,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/lambdas",
+      "runner": "zig",
+      "fuel": 58027,
+      "logicalAlloc": 64120,
+      "load": {
+        "medianNs": 8929.821,
+        "minNs": 8897.331,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1233829.268,
+        "minNs": 1229097.561,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/add",
+      "runner": "zig",
+      "fuel": 26030,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6616.911,
+        "minNs": 6590.011,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 679054.054,
+        "minNs": 676324.324,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "runner": "zig",
+      "fuel": 18031,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6902.001,
+        "minNs": 6880.969,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 438938.596,
+        "minNs": 438539.13,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/divide",
+      "runner": "zig",
+      "fuel": 18031,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6821.692,
+        "minNs": 6733.235,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 958377.358,
+        "minNs": 955811.321,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "runner": "zig",
+      "fuel": 14579,
+      "logicalAlloc": 40088,
+      "load": {
+        "medianNs": 8319.967,
+        "minNs": 8296.831,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1263800,
+        "minNs": 1260675,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/build",
+      "runner": "zig",
+      "fuel": 28928,
+      "logicalAlloc": 383838,
+      "load": {
+        "medianNs": 5829.098,
+        "minNs": 5801.485,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 462394.495,
+        "minNs": 460807.339,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/iterate",
+      "runner": "zig",
+      "fuel": 30318,
+      "logicalAlloc": 95272,
+      "load": {
+        "medianNs": 7048.21,
+        "minNs": 7014.871,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 740352.941,
+        "minNs": 740132.353,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/index",
+      "runner": "zig",
+      "fuel": 26640,
+      "logicalAlloc": 51072,
+      "load": {
+        "medianNs": 7796.071,
+        "minNs": 7770.629,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1549606.061,
+        "minNs": 1546575.758,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/patterns",
+      "runner": "zig",
+      "fuel": 13818,
+      "logicalAlloc": 231372,
+      "load": {
+        "medianNs": 7414.887,
+        "minNs": 7408.505,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 632600,
+        "minNs": 631850,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/graphemes",
+      "runner": "zig",
+      "fuel": 43518,
+      "logicalAlloc": 147572,
+      "load": {
+        "medianNs": 7415.542,
+        "minNs": 7394.706,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1364135.135,
+        "minNs": 1361945.946,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/list-build",
+      "runner": "zig",
+      "fuel": 19091,
+      "logicalAlloc": 3022112,
+      "load": {
+        "medianNs": 7040.834,
+        "minNs": 7035.172,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 781515.625,
+        "minNs": 764848.485,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/list-append",
+      "runner": "zig",
+      "fuel": 52056,
+      "logicalAlloc": 80200,
+      "load": {
+        "medianNs": 9857.481,
+        "minNs": 9854.553,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1344000,
+        "minNs": 1340631.579,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/map-build",
+      "runner": "zig",
+      "fuel": 14094,
+      "logicalAlloc": 24920,
+      "load": {
+        "medianNs": 8910.905,
+        "minNs": 8893.118,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 956207.547,
+        "minNs": 950075.472,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/list-update",
+      "runner": "zig",
+      "fuel": 28553,
+      "logicalAlloc": 24328,
+      "load": {
+        "medianNs": 10187.653,
+        "minNs": 10152.05,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 794936.508,
+        "minNs": 789218.75,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/map-update",
+      "runner": "zig",
+      "fuel": 8056,
+      "logicalAlloc": 12432,
+      "load": {
+        "medianNs": 11211.435,
+        "minNs": 11104.819,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 285982.857,
+        "minNs": 285590.909,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/iterate",
+      "runner": "zig",
+      "fuel": 89459,
+      "logicalAlloc": 200319,
+      "load": {
+        "medianNs": 13517.167,
+        "minNs": 13481.801,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 2175826.087,
+        "minNs": 2174695.652,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "host/pump",
+      "runner": "zig",
+      "fuel": 7,
+      "logicalAlloc": 0,
+      "load": {
+        "medianNs": 2403.134,
+        "minNs": 2391.887,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1664.226,
+        "minNs": 1650.002,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "macro/transform",
+      "runner": "zig",
+      "fuel": 20664,
+      "logicalAlloc": 6418202,
+      "load": {
+        "medianNs": 10962.078,
+        "minNs": 10943.97,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 685465.753,
+        "minNs": 685027.397,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "macro/report",
+      "runner": "zig",
+      "fuel": 86555,
+      "logicalAlloc": 1291900,
+      "load": {
+        "medianNs": 7657.58,
+        "minNs": 7651.721,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1221219.512,
+        "minNs": 1219595.238,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "runner": "zig",
+      "fuel": 67042,
+      "logicalAlloc": 80270,
+      "load": {
+        "medianNs": 12757.908,
+        "minNs": 12755.867,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1735586.207,
+        "minNs": 1733896.552,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "runner": "zig",
+      "fuel": 48018,
+      "logicalAlloc": 32072,
+      "load": {
+        "medianNs": 6382.259,
+        "minNs": 6349.841,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 3058705.882,
+        "minNs": 3025823.529,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "runner": "zig",
+      "fuel": 7,
+      "logicalAlloc": 0,
+      "load": {
+        "medianNs": 3154.302,
+        "minNs": 2935.306,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1989.812,
+        "minNs": 1848.429,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "runner": "zig",
+      "fuel": 4609,
+      "logicalAlloc": 16742,
+      "load": {
+        "medianNs": 762606.061,
+        "minNs": 752611.94,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 177822.695,
+        "minNs": 177162.544,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "core/loop",
+      "fuel": 48016,
+      "hostBytes": 315943.73076923075,
+      "load": {
+        "medianNs": 102292,
+        "minNs": 82208,
+        "samples": 5842
+      },
+      "logicalAlloc": 64000,
+      "run": {
+        "medianNs": 2867188,
+        "minNs": 2712042,
+        "samples": 212
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/fib",
+      "fuel": 46365,
+      "hostBytes": 176465.74910394265,
+      "load": {
+        "medianNs": 116750,
+        "minNs": 99041,
+        "samples": 5366
+      },
+      "logicalAlloc": 47328,
+      "run": {
+        "medianNs": 2349916,
+        "minNs": 1934166,
+        "samples": 283
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/fib@slice=10",
+      "fuel": 46365,
+      "hostBytes": 792246.4516129033,
+      "load": {
+        "medianNs": 92083,
+        "minNs": 69042,
+        "samples": 7200
+      },
+      "logicalAlloc": 47328,
+      "run": {
+        "medianNs": 10731271,
+        "minNs": 9351459,
+        "samples": 62
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/fib@slice=100",
+      "fuel": 46365,
+      "hostBytes": 15360,
+      "load": {
+        "medianNs": 79708,
+        "minNs": 68292,
+        "samples": 8149
+      },
+      "logicalAlloc": 47328,
+      "run": {
+        "medianNs": 2966333,
+        "minNs": 2740459,
+        "samples": 221
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/fib@slice=1000",
+      "fuel": 46365,
+      "hostBytes": 1439.1351351351352,
+      "load": {
+        "medianNs": 79833,
+        "minNs": 69042,
+        "samples": 8277
+      },
+      "logicalAlloc": 47328,
+      "run": {
+        "medianNs": 2251979,
+        "minNs": 2081792,
+        "samples": 292
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/fib@slice=10000",
+      "fuel": 46365,
+      "hostBytes": 4055.973941368078,
+      "load": {
+        "medianNs": 77750,
+        "minNs": 63917,
+        "samples": 8444
+      },
+      "logicalAlloc": 47328,
+      "run": {
+        "medianNs": 2153708,
+        "minNs": 2023292,
+        "samples": 305
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/calls",
+      "fuel": 46018,
+      "hostBytes": 145810.84518828453,
+      "load": {
+        "medianNs": 131917,
+        "minNs": 115667,
+        "samples": 5000
+      },
+      "logicalAlloc": 32072,
+      "run": {
+        "medianNs": 2710500,
+        "minNs": 2491625,
+        "samples": 240
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/lambdas",
+      "fuel": 58027,
+      "hostBytes": 442075.85714285716,
+      "load": {
+        "medianNs": 160042,
+        "minNs": 139417,
+        "samples": 4103
+      },
+      "logicalAlloc": 64120,
+      "run": {
+        "medianNs": 3814166,
+        "minNs": 3421292,
+        "samples": 169
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/add",
+      "fuel": 26030,
+      "hostBytes": 245879.76642335765,
+      "load": {
+        "medianNs": 115917,
+        "minNs": 80167,
+        "samples": 5675
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 2408667,
+        "minNs": 2212000,
+        "samples": 275
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "fuel": 18031,
+      "hostBytes": 264479.1828978622,
+      "load": {
+        "medianNs": 91958,
+        "minNs": 77584,
+        "samples": 6964
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 1527791,
+        "minNs": 1404458,
+        "samples": 423
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "fuel": 18031,
+      "hostBytes": 403003.3795379538,
+      "load": {
+        "medianNs": 87125,
+        "minNs": 75417,
+        "samples": 7281
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 2140021,
+        "minNs": 2034958,
+        "samples": 308
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "fuel": 14579,
+      "hostBytes": 490189.4,
+      "load": {
+        "medianNs": 154000,
+        "minNs": 125042,
+        "samples": 4290
+      },
+      "logicalAlloc": 40088,
+      "run": {
+        "medianNs": 4113979,
+        "minNs": 3824250,
+        "samples": 162
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/build",
+      "fuel": 28928,
+      "hostBytes": 202291.2758037225,
+      "load": {
+        "medianNs": 95791,
+        "minNs": 83375,
+        "samples": 6722
+      },
+      "logicalAlloc": 383838,
+      "run": {
+        "medianNs": 1104541.5,
+        "minNs": 1051041,
+        "samples": 600
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/iterate",
+      "fuel": 30318,
+      "hostBytes": 936283.8830409356,
+      "load": {
+        "medianNs": 110834,
+        "minNs": 98000,
+        "samples": 5833
+      },
+      "logicalAlloc": 95272,
+      "run": {
+        "medianNs": 3644667,
+        "minNs": 3464875,
+        "samples": 175
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/index",
+      "fuel": 26640,
+      "hostBytes": 1157803.4666666666,
+      "load": {
+        "medianNs": 129208.5,
+        "minNs": 114167,
+        "samples": 5048
+      },
+      "logicalAlloc": 51072,
+      "run": {
+        "medianNs": 7200333,
+        "minNs": 6350208,
+        "samples": 91
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/patterns",
+      "fuel": 13818,
+      "hostBytes": 1628318.6923076923,
+      "load": {
+        "medianNs": 130042,
+        "minNs": 106084,
+        "samples": 5181
+      },
+      "logicalAlloc": 231372,
+      "run": {
+        "medianNs": 5894250,
+        "minNs": 5532708,
+        "samples": 107
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/graphemes",
+      "fuel": 43518,
+      "hostBytes": 1086484.7843137255,
+      "load": {
+        "medianNs": 107083,
+        "minNs": 89459,
+        "samples": 5753
+      },
+      "logicalAlloc": 147572,
+      "run": {
+        "medianNs": 6021375,
+        "minNs": 5554667,
+        "samples": 106
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/list-build",
+      "fuel": 19091,
+      "hostBytes": 287396.623853211,
+      "load": {
+        "medianNs": 114125,
+        "minNs": 103583,
+        "samples": 5746
+      },
+      "logicalAlloc": 3022112,
+      "run": {
+        "medianNs": 1334917,
+        "minNs": 1238042,
+        "samples": 437
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/list-append",
+      "fuel": 52056,
+      "hostBytes": 984344.0909090909,
+      "load": {
+        "medianNs": 187291,
+        "minNs": 169791,
+        "samples": 3516
+      },
+      "logicalAlloc": 80200,
+      "run": {
+        "medianNs": 7041666.5,
+        "minNs": 5518791,
+        "samples": 88
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/map-build",
+      "fuel": 14094,
+      "hostBytes": 276935.25396825396,
+      "load": {
+        "medianNs": 150458,
+        "minNs": 133625,
+        "samples": 4347
+      },
+      "logicalAlloc": 24920,
+      "run": {
+        "medianNs": 1313042,
+        "minNs": 1149417,
+        "samples": 507
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/list-update",
+      "fuel": 28553,
+      "hostBytes": 504147.46496815287,
+      "load": {
+        "medianNs": 191083,
+        "minNs": 171541,
+        "samples": 3470
+      },
+      "logicalAlloc": 24328,
+      "run": {
+        "medianNs": 4463666,
+        "minNs": 2835500,
+        "samples": 155
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/map-update",
+      "fuel": 8056,
+      "hostBytes": 126559.8703976436,
+      "load": {
+        "medianNs": 177375,
+        "minNs": 153084,
+        "samples": 3750
+      },
+      "logicalAlloc": 12432,
+      "run": {
+        "medianNs": 934229.5,
+        "minNs": 875458,
+        "samples": 678
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/iterate",
+      "fuel": 89459,
+      "hostBytes": 1934017.9784946237,
+      "load": {
+        "medianNs": 241417,
+        "minNs": 217292,
+        "samples": 2713
+      },
+      "logicalAlloc": 200319,
+      "run": {
+        "medianNs": 6765145.5,
+        "minNs": 6477042,
+        "samples": 96
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/immediate",
+      "fuel": 13518,
+      "hostBytes": 93677.36877076412,
+      "load": {
+        "medianNs": 116500,
+        "minNs": 105541,
+        "samples": 5624
+      },
+      "logicalAlloc": 16072,
+      "run": {
+        "medianNs": 2196792,
+        "minNs": 2098792,
+        "samples": 301
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/suspending",
+      "fuel": 13518,
+      "hostBytes": 641609.5714285715,
+      "load": {
+        "medianNs": 121625,
+        "minNs": 104417,
+        "samples": 5470
+      },
+      "logicalAlloc": 16072,
+      "run": {
+        "medianNs": 5108959,
+        "minNs": 4064750,
+        "samples": 109
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/properties",
+      "fuel": 9018,
+      "hostBytes": 318699.6577540107,
+      "load": {
+        "medianNs": 108958,
+        "minNs": 95333,
+        "samples": 6064
+      },
+      "logicalAlloc": 16072,
+      "run": {
+        "medianNs": 1928000,
+        "minNs": 1323875,
+        "samples": 372
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/conversion",
+      "fuel": 25018,
+      "hostBytes": 1121134.4,
+      "load": {
+        "medianNs": 183458,
+        "minNs": 142917,
+        "samples": 3819
+      },
+      "logicalAlloc": 225572,
+      "run": {
+        "medianNs": 9444854.5,
+        "minNs": 9050375,
+        "samples": 70
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/pump",
+      "fuel": 7,
+      "hostBytes": 2965.9069940476193,
+      "load": {
+        "medianNs": 20357.47265625,
+        "minNs": 18656.23974609375,
+        "samples": 12
+      },
+      "logicalAlloc": 0,
+      "run": {
+        "medianNs": 7183.207275390625,
+        "minNs": 6635.040283203125,
+        "samples": 20
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "macro/transform",
+      "fuel": 20664,
+      "hostBytes": 2917.698630136986,
+      "load": {
+        "medianNs": 164084,
+        "minNs": 144750,
+        "samples": 4047
+      },
+      "logicalAlloc": 6418202,
+      "run": {
+        "medianNs": 3104020.5,
+        "minNs": 3017750,
+        "samples": 216
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "macro/report",
+      "fuel": 86555,
+      "hostBytes": 2490055.769968051,
+      "load": {
+        "medianNs": 120125,
+        "minNs": 104292,
+        "samples": 5473
+      },
+      "logicalAlloc": 1291900,
+      "run": {
+        "medianNs": 2203000,
+        "minNs": 2062333,
+        "samples": 311
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "fuel": 67042,
+      "hostBytes": 6123.313131313132,
+      "load": {
+        "medianNs": 207750,
+        "minNs": 185125,
+        "samples": 3098
+      },
+      "logicalAlloc": 80270,
+      "run": {
+        "medianNs": 5751500,
+        "minNs": 5596833,
+        "samples": 97
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "messaging/sends",
+      "fuel": 67518,
+      "hostBytes": 950636.088888889,
+      "load": {
+        "medianNs": 172417,
+        "minNs": 148208,
+        "samples": 3720
+      },
+      "logicalAlloc": 96072,
+      "run": {
+        "medianNs": 16077417,
+        "minNs": 12849375,
+        "samples": 41
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "messaging/parents",
+      "fuel": 67518,
+      "hostBytes": 65093.18918918919,
+      "load": {
+        "medianNs": 147750,
+        "minNs": 129625,
+        "samples": 4464
+      },
+      "logicalAlloc": 96072,
+      "run": {
+        "medianNs": 17582458,
+        "minNs": 17087875,
+        "samples": 35
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "messaging/joins",
+      "fuel": 127218,
+      "hostBytes": 45452.3870967742,
+      "load": {
+        "medianNs": 227687.5,
+        "minNs": 202375,
+        "samples": 2948
+      },
+      "logicalAlloc": 244872,
+      "run": {
+        "medianNs": 20655708,
+        "minNs": 18689750,
+        "samples": 27
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "fuel": 48018,
+      "hostBytes": 1638.4,
+      "load": {
+        "medianNs": 98458,
+        "minNs": 84542,
+        "samples": 6568
+      },
+      "logicalAlloc": 32072,
+      "run": {
+        "medianNs": 17095229,
+        "minNs": 16398500,
+        "samples": 36
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "fuel": 7,
+      "hostBytes": 3301.00244140625,
+      "load": {
+        "medianNs": 30196.919799804688,
+        "minNs": 27805.958984375,
+        "samples": 12
+      },
+      "logicalAlloc": 0,
+      "run": {
+        "medianNs": 7146.3673095703125,
+        "minNs": 6614.766357421875,
+        "samples": 20
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "fuel": 4609,
+      "hostBytes": 276.8667992047714,
+      "load": {
+        "medianNs": 15172541,
+        "minNs": 13648125,
+        "samples": 41
+      },
+      "logicalAlloc": 16742,
+      "run": {
+        "medianNs": 663375.5,
+        "minNs": 632708,
+        "samples": 1004
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "fuel": 8015,
+      "hostBytes": 50876.63157894737,
+      "load": {
+        "medianNs": 234791,
+        "minNs": 203708,
+        "samples": 2747
+      },
+      "logicalAlloc": 8024,
+      "run": {
+        "medianNs": 6990771,
+        "minNs": 6550084,
+        "samples": 92
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "fuel": 102023,
+      "hostBytes": 20480,
+      "load": {
+        "medianNs": 253666,
+        "minNs": 218625,
+        "samples": 2685
+      },
+      "logicalAlloc": 40888,
+      "run": {
+        "medianNs": 63903583,
+        "minNs": 58562375,
+        "samples": 12
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "core/loop",
+      "run": {
+        "minNs": 179396.80992640206,
+        "samples": 3,
+        "medianNs": 179647.29818231717
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/fib",
+      "run": {
+        "minNs": 467765.62521699816,
+        "samples": 3,
+        "medianNs": 468330.72883600835
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/calls",
+      "run": {
+        "minNs": 592432.2922510328,
+        "samples": 3,
+        "medianNs": 594180.3383393562
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/lambdas",
+      "run": {
+        "minNs": 641384.7659132443,
+        "samples": 3,
+        "medianNs": 642496.7441489571
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/add",
+      "run": {
+        "minNs": 225850.9116472851,
+        "samples": 3,
+        "medianNs": 228540.69038658054
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "run": {
+        "minNs": 173321.94011032698,
+        "samples": 3,
+        "medianNs": 173552.8157951194
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "run": {
+        "minNs": 190907.87759523664,
+        "samples": 3,
+        "medianNs": 191411.37681799592
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "run": {
+        "minNs": 118009.19605775562,
+        "samples": 3,
+        "medianNs": 118544.92186103016
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/build",
+      "run": {
+        "minNs": 361324.5444284985,
+        "samples": 3,
+        "medianNs": 370713.86714160326
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/iterate",
+      "run": {
+        "minNs": 3320921.8745469116,
+        "samples": 3,
+        "medianNs": 3396718.7482630834
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/index",
+      "run": {
+        "minNs": 865473.3082948951,
+        "samples": 3,
+        "medianNs": 875157.5514907017
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/patterns",
+      "run": {
+        "minNs": 15323520.841775462,
+        "samples": 3,
+        "medianNs": 15389666.659757495
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/list-build",
+      "run": {
+        "minNs": 226106.28275288036,
+        "samples": 3,
+        "medianNs": 227038.41159454896
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/list-append",
+      "run": {
+        "minNs": 1395843.0990896886,
+        "samples": 3,
+        "medianNs": 1399180.9901199304
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/map-build",
+      "run": {
+        "minNs": 5734304.686484393,
+        "samples": 3,
+        "medianNs": 5745229.165768251
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/list-update",
+      "run": {
+        "minNs": 370714.3555402581,
+        "samples": 3,
+        "medianNs": 370728.19031891413
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/map-update",
+      "run": {
+        "minNs": 3490320.3122667037,
+        "samples": 3,
+        "medianNs": 3496638.0189871415
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/iterate",
+      "run": {
+        "minNs": 5997731.765091885,
+        "samples": 3,
+        "medianNs": 6011450.517689809
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "macro/transform",
+      "run": {
+        "minNs": 333948.8930578227,
+        "samples": 3,
+        "medianNs": 335043.1315993774
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "macro/report",
+      "run": {
+        "minNs": 3096497.3957452457,
+        "samples": 3,
+        "medianNs": 3105070.3109940514
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "run": {
+        "minNs": 1344947.9156406596,
+        "samples": 3,
+        "medianNs": 1353582.681986154
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/loop",
+      "hostAllocs": 180,
+      "hostBytes": 45864,
+      "run": {
+        "medianNs": 25725,
+        "minNs": 25657,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/fib",
+      "hostAllocs": 1,
+      "hostBytes": 63,
+      "run": {
+        "medianNs": 70772,
+        "minNs": 70727,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/calls",
+      "hostAllocs": 180,
+      "hostBytes": 45864,
+      "run": {
+        "medianNs": 70517,
+        "minNs": 70515,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/lambdas",
+      "hostAllocs": 244,
+      "hostBytes": 61704,
+      "run": {
+        "medianNs": 85117,
+        "minNs": 85097,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/add",
+      "hostAllocs": 177,
+      "hostBytes": 44992,
+      "run": {
+        "medianNs": 26471,
+        "minNs": 26443,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "hostAllocs": 118,
+      "hostBytes": 29792,
+      "run": {
+        "medianNs": 18263,
+        "minNs": 18255,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "hostAllocs": 115,
+      "hostBytes": 28976,
+      "run": {
+        "medianNs": 19980,
+        "minNs": 19893,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "hostAllocs": 67,
+      "hostBytes": 16864,
+      "run": {
+        "medianNs": 11467,
+        "minNs": 11426,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/build",
+      "hostAllocs": 1024,
+      "hostBytes": 410419,
+      "run": {
+        "medianNs": 64814,
+        "minNs": 63998,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/iterate",
+      "hostAllocs": 9847,
+      "hostBytes": 191793,
+      "run": {
+        "medianNs": 165479,
+        "minNs": 165265,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/index",
+      "hostAllocs": 1055,
+      "hostBytes": 29984,
+      "run": {
+        "medianNs": 112070,
+        "minNs": 111915,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/patterns",
+      "hostAllocs": 17736,
+      "hostBytes": 400170,
+      "run": {
+        "medianNs": 248382,
+        "minNs": 247958,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/list-build",
+      "hostAllocs": 1045,
+      "hostBytes": 36264,
+      "run": {
+        "medianNs": 37241,
+        "minNs": 37126,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/list-append",
+      "hostAllocs": 4315,
+      "hostBytes": 208801,
+      "run": {
+        "medianNs": 177089,
+        "minNs": 176072,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/map-build",
+      "hostAllocs": 1291,
+      "hostBytes": 92713,
+      "run": {
+        "medianNs": 78740,
+        "minNs": 78717,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/list-update",
+      "hostAllocs": 106,
+      "hostBytes": 22952,
+      "run": {
+        "medianNs": 25570,
+        "minNs": 25551,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/map-update",
+      "hostAllocs": 76,
+      "hostBytes": 10416,
+      "run": {
+        "medianNs": 18719,
+        "minNs": 18511,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "collections/iterate",
+      "hostAllocs": 6741,
+      "hostBytes": 111502,
+      "run": {
+        "medianNs": 390970,
+        "minNs": 390012,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "macro/transform",
+      "hostAllocs": 4538,
+      "hostBytes": 274458,
+      "run": {
+        "medianNs": 123172,
+        "minNs": 122866,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "macro/report",
+      "hostAllocs": 1291,
+      "hostBytes": 33855,
+      "run": {
+        "medianNs": 126431,
+        "minNs": 125361,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "hostAllocs": 128,
+      "hostBytes": 29400,
+      "run": {
+        "medianNs": 127550,
+        "minNs": 126766,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    }
+  ],
+  "outlierFactor": 3,
+  "outliers": [
+    {
+      "benchmark": "core/fib@slice=10",
+      "factor": 3.6158912356634265,
+      "nsPerFuel": 102.60874679176102,
+      "runner": "zig"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "factor": 3.0547916180819374,
+      "nsPerFuel": 86.68632965223952,
+      "runner": "zig"
+    },
+    {
+      "benchmark": "host/pump",
+      "factor": 8.378094176340015,
+      "nsPerFuel": 237.74657142857146,
+      "runner": "zig"
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "factor": 10.017168539135596,
+      "nsPerFuel": 284.25885714285715,
+      "runner": "zig"
+    },
+    {
+      "benchmark": "text/patterns",
+      "factor": 3.1177399937507317,
+      "nsPerFuel": 426.56317846287453,
+      "runner": "ts"
+    },
+    {
+      "benchmark": "host/pump",
+      "factor": 7.500269843325291,
+      "nsPerFuel": 1026.1724679129463,
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "factor": 7.461803782960049,
+      "nsPerFuel": 1020.9096156529018,
+      "runner": "ts"
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "factor": 4.578082868087546,
+      "nsPerFuel": 626.3644766376209,
+      "runner": "ts"
+    }
+  ],
+  "parity": [],
+  "settings": {
+    "count": 3,
+    "filter": "",
+    "runners": "zig,ts,applescript,gopher-lua",
+    "smoke": false
+  },
+  "skipped": [
+    {
+      "benchmark": "core/fib@slice=10",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/fib@slice=10",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/fib@slice=100",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/fib@slice=100",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/fib@slice=1000",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/fib@slice=1000",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "core/fib@slice=10000",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "core/fib@slice=10000",
+      "reason": "A Fuel Slice is a NorthTalk Pump option; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/graphemes",
+      "reason": "Unicode grapheme segmentation has no shared API across the pinned peers; text/iterate and text/index compare ASCII.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/graphemes",
+      "reason": "Unicode grapheme segmentation has no shared API across the pinned peers; text/iterate and text/index compare ASCII.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "host/immediate",
+      "reason": "The native benchmark Host does not yet install immediate bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "host/immediate",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "host/immediate",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "host/suspending",
+      "reason": "The native benchmark Host does not yet install suspending bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "host/suspending",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "host/suspending",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "host/properties",
+      "reason": "The native benchmark Host does not yet install properties bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "host/properties",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "host/properties",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "host/conversion",
+      "reason": "The native benchmark Host does not yet install conversion bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "host/conversion",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "host/conversion",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "host/pump",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "host/pump",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "messaging/sends",
+      "reason": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "messaging/sends",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "messaging/sends",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "messaging/parents",
+      "reason": "The native benchmark Host does not yet install parents bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "messaging/parents",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "messaging/parents",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "messaging/joins",
+      "reason": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "messaging/joins",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "messaging/joins",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "messaging/suspend",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "lifecycle/load-small",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "lifecycle/load-large",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "reason": "The native benchmark Host does not yet install restore bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "lifecycle/restore",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "reason": "The native benchmark Host does not yet install suspending bindings; this is a runner limitation, not a Core limitation.",
+      "runner": "zig"
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "lifecycle/rollback",
+      "reason": "NorthTalk embedding API; no peer counterpart.",
+      "runner": "gopher-lua"
+    }
+  ],
+  "versions": {
+    "bun": "1.4.3",
+    "zig": "0.17.0",
+    "zig build": "native safe; C Host -O2",
+    "cost model": "0",
+    "go": "go1.27.2",
+    "language": "1.0-rc.3",
+    "applescript": "2.8 (macOS 27.0.1)",
+    "gopher-lua": "v1.1.2"
+  }
+}

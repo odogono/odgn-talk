@@ -17,6 +17,7 @@ import {
   type ScriptHandle,
   type LoadOptions,
 } from '@odgn/northtalk';
+import { peerRunners } from './runners';
 
 export const scriptsDir = join(import.meta.dir, '..', '..', 'scripts');
 
@@ -74,7 +75,9 @@ export const selected = (b: Benchmark, filter: string | undefined) =>
 /** The runners among `runners` that skip a Benchmark, with their reasons. */
 export const skipped = (b: Benchmark, runners: readonly string[]) =>
   runners.flatMap(runner => {
-    const reason = b.skip?.[runner];
+    const reason =
+      b.skip?.[runner] ??
+      (peerRunners.includes(runner) ? b.skip?.peers : undefined);
     return reason ? [{ benchmark: b.name, reason, runner }] : [];
   });
 
