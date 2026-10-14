@@ -55,76 +55,92 @@ func Word(s string) bool {
 	return true
 }
 
-// Display walks containers with a heap work stack; a deep transport error
-// must be printable on WASI's bounded native stack too.
+// Display walks containers with a heap stack of open containers and their
+// next child; a deep transport error must be printable on WASI's bounded
+// native stack too, and a long List costs one frame rather than one per item.
 func (v Value) Display() string {
-	type step struct {
+	type frame struct {
 		value Value
-		text  string
+		next  int
 	}
-	stack := []step{{value: v}}
+	var stack []frame
 	var out strings.Builder
-	for len(stack) > 0 {
-		next := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if next.text != "" {
-			out.WriteString(next.text)
-			continue
-		}
-		v := next.value
-		text := func(s string) { stack = append(stack, step{text: s}) }
-		push := func(v Value) { stack = append(stack, step{value: v}) }
+	open := func(v Value) {
 		switch v.Kind {
 		case List:
 			out.WriteByte('[')
-			text("]")
-			items := v.Items()
-			for i := len(items) - 1; i >= 0; i-- {
-				push(items[i])
-				if i > 0 {
-					text(", ")
-				}
-			}
 		case Map:
 			out.WriteByte('{')
-			text("}")
-			pairs := v.Entries()
-			for i := len(pairs) - 1; i >= 0; i-- {
-				p := pairs[i]
-				key := p.Key
-				if !Word(key) || key == "offer" {
-					key = DisplayText(key)
-					if !strings.HasPrefix(key, `"`) {
-						key = `"" & ` + key
-					}
-				}
-				push(p.Val)
-				text(key + ": ")
-				if i > 0 {
-					text(", ")
-				}
-			}
 		case Range:
-			push(v.Items()[1])
-			text("..")
-			push(v.Items()[0])
 		case Function:
 			f := *v.Function()
-			captures := f.Captures
+			if len(f.Captures) == 0 {
+				out.WriteString(v.displayLeaf())
+				return
+			}
 			f.Captures = nil
 			fields := v.Fields()
 			fields.Function = &f
-			prefix := fields.Value().displayLeaf()
-			if len(captures) == 0 {
-				out.WriteString(prefix)
-			} else {
-				out.WriteString(strings.TrimSuffix(prefix, ">") + " ")
-				text(">")
-				push(Fields{Kind: Map, Entries: captures}.Value())
-			}
+			out.WriteString(strings.TrimSuffix(fields.Value().displayLeaf(), ">") + " ")
 		default:
 			out.WriteString(v.displayLeaf())
+			return
 		}
+		stack = append(stack, frame{value: v})
+	}
+	open(v)
+	for len(stack) > 0 {
+		top := &stack[len(stack)-1]
+		v, i := top.value, top.next
+		top.next++
+		switch v.Kind {
+		case List:
+			items := v.Items()
+			if i == len(items) {
+				out.WriteByte(']')
+				break
+			}
+			if i > 0 {
+				out.WriteString(", ")
+			}
+			open(items[i])
+			continue
+		case Map:
+			pairs := v.Entries()
+			if i == len(pairs) {
+				out.WriteByte('}')
+				break
+			}
+			if i > 0 {
+				out.WriteString(", ")
+			}
+			key := pairs[i].Key
+			// A Word key is bare, except offer, which source reserves as a key (chapter 2).
+			if !Word(key) || key == "offer" {
+				key = DisplayText(key)
+				if !strings.HasPrefix(key, `"`) {
+					key = `"" & ` + key
+				}
+			}
+			out.WriteString(key + ": ")
+			open(pairs[i].Val)
+			continue
+		case Range:
+			if i < 2 {
+				if i == 1 {
+					out.WriteString("..")
+				}
+				open(v.Items()[i])
+				continue
+			}
+		case Function:
+			if i == 0 {
+				open(Fields{Kind: Map, Entries: v.Function().Captures}.Value())
+				continue
+			}
+			out.WriteByte('>')
+		}
+		stack = stack[:len(stack)-1]
 	}
 	return out.String()
 }
