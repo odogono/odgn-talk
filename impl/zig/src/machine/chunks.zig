@@ -357,6 +357,16 @@ pub fn set(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value:
             switch (index) {
                 .one => |i| {
                     const p: usize = @intCast(absolute(i, items.len));
+                    if (p <= items.len) {
+                        // `whole` is borrowed: locals, rollback state and Host
+                        // values must retain their old version. Keep the new
+                        // spine on the Group allocator even for Host inputs.
+                        const same_allocator = gpa.ptr == whole.allocator.ptr and gpa.vtable == whole.allocator.vtable;
+                        var result = if (same_allocator) whole.retain() else model.list(gpa, items) catch return error.OutOfMemory;
+                        errdefer result.release();
+                        model.listSet(&result, p - 1, part) catch return error.OutOfMemory;
+                        return result;
+                    }
                     try out.appendSlice(a, items);
                     if (p > items.len) {
                         nothing = try nothingValue(gpa);
@@ -601,4 +611,58 @@ test "reading chunks of text" {
     try expectRead("a,b,c,d,e", .item, .{ .range = .{ .from = 2, .to = 4 } }, ",", "b,c,d");
     try expectRead("x\r\ny\nz\n", .line, .{ .one = -1 }, ",", "z");
     try expectRead("a;;c", .item, .{ .one = 2 }, ";", "");
+}
+
+fn listWriteAllocations(gpa: Allocator) !void {
+    const item = try numberValue(gpa, 1);
+    defer item.release();
+    const empty = try model.list(gpa, &.{});
+    defer empty.release();
+    const first = try model.listGrow(gpa, empty, &.{item}, true);
+    defer first.release();
+    const latest = try model.listGrow(gpa, first, &.{item}, true);
+    defer latest.release();
+    const index = try numberValue(gpa, -1);
+    defer index.release();
+    var effect: Effect = .{};
+    // Inserting the old version, including its shared hidden tail, must not
+    // mutate either visible span or introduce physical ownership cycles.
+    const result = try set(gpa, gpa, first, .item, index, first, ",", &effect);
+    defer result.release();
+    try testing.expectEqual(first, result.data.list[0]);
+    try testing.expectEqual(item, first.data.list[0]);
+    try testing.expectEqualSlices(*Value, &.{ item, item }, latest.data.list);
+    try testing.expect(result.ownership_rank > first.ownership_rank);
+    const nested = try model.list(gpa, &.{result});
+    defer nested.release();
+    const branch = try set(gpa, gpa, latest, .item, index, nested, ",", &effect);
+    defer branch.release();
+    try testing.expectEqualSlices(*Value, &.{ item, nested }, branch.data.list);
+    try testing.expectEqualSlices(*Value, &.{ item, item }, latest.data.list);
+    try testing.expectEqual(model.logicalSize(item) + model.logicalSize(nested), branch.measure);
+}
+
+test "List item writes preserve borrowed versions and clean up every refused allocation" {
+    try listWriteAllocations(testing.allocator);
+    try testing.checkAllAllocationFailures(testing.allocator, listWriteAllocations, .{});
+}
+
+fn hostListWriteAllocations(gpa: Allocator) !void {
+    // Distinct allocators model a Host-owned argument and Group-owned result.
+    const item = try numberValue(testing.allocator, 1);
+    defer item.release();
+    const whole = try model.list(testing.allocator, &.{item});
+    defer whole.release();
+    const index = try numberValue(testing.allocator, 1);
+    defer index.release();
+    var effect: Effect = .{};
+    const result = try set(gpa, gpa, whole, .item, index, whole, ",", &effect);
+    defer result.release();
+    try testing.expectEqual(gpa.ptr, result.allocator.ptr);
+    try testing.expectEqual(whole, result.data.list[0]);
+    try testing.expectEqual(item, whole.data.list[0]);
+}
+
+test "Host List item writes allocate their new spine in the Group" {
+    try testing.checkAllAllocationFailures(testing.allocator, hostListWriteAllocations, .{});
 }

@@ -48,6 +48,10 @@ records 111 measurements on an Apple M5: 30 Zig workloads, 39 TS workloads and
 Cores. Its [JSON](results/2026-10-14-darwin-arm64-apple-m5-zig-ts-applescript-gopher-lua.json)
 records three repeats for Zig and the peers, and mitata's automatic TS samples.
 
+The [Zig List measurements](results/2026-10-14-zig-list-paths.md) record
+paired collecting and item-write timings, size sweeps, allocation probes and
+remaining AppleScript gaps for [#924](https://github.com/odogono/odgn-talk/issues/924).
+
 The [Zig Map write measurements](results/2026-10-14-zig-map-writes.md) record
 three paired before/after runs, construction scaling and Group allocation
 probes for [#876](https://github.com/odogono/odgn-talk/issues/876).

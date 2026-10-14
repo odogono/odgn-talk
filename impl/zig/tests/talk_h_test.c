@@ -1622,7 +1622,7 @@ static void host_free(void *context, void *ptr, size_t size, size_t alignment) {
     free(ptr);
 }
 
-static int host_list_memory_test(void) {
+static int host_list_memory_test(bool collecting) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
     talk_allocator host = {NULL, host_alloc, host_free};
@@ -1631,8 +1631,11 @@ static int host_list_memory_test(void) {
     int bad = talk_new_group(core, &options, &group) != TALK_OK;
     /* Both arguments are Host values. Reusing the same child isolates the
      * growing List's allocations: its backing must come from the Group. */
-    const char *source = "on grow xs, child\n  repeat 10000 times\n    put child after xs\n  end repeat\nend grow\n";
-    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    const char *source = collecting ? "on grow xs, child\n  repeat 10000 times collecting child into xs\n  end repeat\nend grow\n" : "on grow xs, child\n  repeat 10000 times\n    put child after xs\n  end repeat\nend grow\n";
+    talk_limits limits = {0};
+    limits.fuel_per_run = 1000000000;
+    limits.alloc_per_run = 268435456;
+    talk_load_options load = {"hog", 3, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &limits};
     talk_script *script = NULL;
     bad |= talk_load(group, &load, &script) != TALK_OK;
     talk_value *list = NULL, *child = NULL;
@@ -1959,7 +1962,8 @@ int main(void) {
     expect(runaway_test() == 0, "the three runaway Scripts each end in their Limit Fault in a capped Group, and a Script beside them is untouched");
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
-    expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
+    expect(host_list_memory_test(true) == 0, "collecting uses the Group allocator and obeys its physical cap");
+    expect(host_list_memory_test(false) == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
     expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");

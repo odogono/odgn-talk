@@ -877,12 +877,14 @@ pub fn listSet(root: **Value, index: usize, item: *Value) Error!void {
         old.ownership_rank = @max(old.ownership_rank, rank);
         old.measure = itemsSize(old.data.list);
     } else {
-        const v = try list(old.allocator, old.data.list);
-        _ = item.retain();
-        v.data.list[index].release();
-        v.data.list[index] = item;
-        v.ownership_rank = @max(v.ownership_rank, rank);
-        v.measure = itemsSize(v.data.list);
+        // Construct the final spine directly: do not retain the replaced
+        // child or measure the unchanged copy before replacing its slot.
+        const items = try old.allocator.dupe(*Value, old.data.list);
+        errdefer old.allocator.free(items);
+        items[index] = item;
+        const v = try scalar(old.allocator, .{ .list = items });
+        v.measure = itemsSize(items);
+        for (items) |child| _ = child.retain();
         root.* = v;
         old.release();
     }
