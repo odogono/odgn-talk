@@ -592,8 +592,30 @@ fn allocationRoundTrip(a: std.mem.Allocator) !void {
     defer reparsed.release();
     try std.testing.expect(try v.equal(reparsed));
 }
+/// Passes allocations through but never grows or shrinks one in place.
+/// Whether the testing allocator can resize in place depends on where it
+/// placed the block, which varies between runs on some platforms (macOS);
+/// a growth that can't becomes one more allocation, and
+/// `checkAllAllocationFailures` needs the same allocations every run.
+const NoInPlaceResize = struct {
+    child: std.mem.Allocator,
+
+    fn allocator(n: *NoInPlaceResize) std.mem.Allocator {
+        return .{ .ptr = n, .vtable = &.{ .alloc = alloc, .resize = std.mem.Allocator.noResize, .remap = std.mem.Allocator.noRemap, .free = free } };
+    }
+    fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ra: usize) ?[*]u8 {
+        const n: *NoInPlaceResize = @ptrCast(@alignCast(ctx));
+        return n.child.rawAlloc(len, alignment, ra);
+    }
+    fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ra: usize) void {
+        const n: *NoInPlaceResize = @ptrCast(@alignCast(ctx));
+        n.child.rawFree(memory, alignment, ra);
+    }
+};
+
 test "every allocation failure cleans up partially built values" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, allocationRoundTrip, .{});
+    var fixed: NoInPlaceResize = .{ .child = std.testing.allocator };
+    try std.testing.checkAllAllocationFailures(fixed.allocator(), allocationRoundTrip, .{});
     for ([_][]const u8{ "{a: 1,}", "{a: 1 broken}", "[1,]", "{a: [1, 2}" }) |s| try std.testing.expectError(error.InvalidValue, display.parse(std.testing.allocator, s, .{}));
 }
 
