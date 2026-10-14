@@ -1,0 +1,121 @@
+# Native safe-mode operand-holder disassembly (#925)
+
+Baseline: 774923de (includes #924); after: uncommitted machine.zig recorded by the paired measurement JSON.
+Zig 0.17.0 safe; C Host -O2; Apple M5 / macOS 27.0.1.
+llvm-objdump mislabels Mach-O stubs in generic mode; indirect-symbol entries below identify memcpy.
+The 416-byte source constant contains 384 zero buffer bytes, the empty more slice (pointer 0x10, length 0), len 0 and 8 zero padding bytes.
+Undefined inline slots have no live owners; take writes each retained slot before publishing len.
+
+## before
+Host SHA-256: eb47d0e969821086a6d669070e8d2a98a265f261c431990140de2a50f4683ede
+Constant at 0x100216700: verified 384 zero buffer bytes, metadata 16/0/0, 8 zero padding bytes.
+
+0x00000001001fdef8 25224 _memcpy
+0x00000001002a9fd0 25224 _memcpy
+
+<_machine.machine.Group.execute>:
+1000b98c0: 911c0273    	add	x19, x19, #0x700
+1000b98c4: 1400000c    	b	0x1000b98f4 <_machine.machine.Group.execute+0xb8>
+1000b98c8: 911203e0    	add	x0, sp, #0x480
+1000b98cc: b0000af3    	adrp	x19, 0x100216000 <___anon_80651>
+1000b98d0: 911c0273    	add	x19, x19, #0x700
+1000b98d4: aa1303e1    	mov	x1, x19
+1000b98d8: 52803402    	mov	w2, #0x1a0              ; =416
+1000b98dc: 94051187    	bl	0x1001fdef8 <_writev+0x1001fdef8>
+1000b98e0: 910742a0    	add	x0, x21, #0x1d0
+1000b98e4: 97fd44ec    	bl	0x10000ac94 <_heap.ArenaAllocator.reset>
+
+1000b9a90: 3c8d82a0    	stur	q0, [x21, #0xd8]
+1000b9a94: 3c8e82a1    	stur	q1, [x21, #0xe8]
+1000b9a98: 3dc11fe0    	ldr	q0, [sp, #0x470]
+1000b9a9c: 3c8f82a0    	stur	q0, [x21, #0xf8]
+1000b9aa0: 911203e0    	add	x0, sp, #0x480
+1000b9aa4: aa1303e1    	mov	x1, x19
+1000b9aa8: 52803402    	mov	w2, #0x1a0              ; =416
+1000b9aac: 94051113    	bl	0x1001fdef8 <_writev+0x1001fdef8>
+1000b9ab0: f9400308    	ldr	x8, [x24]
+1000b9ab4: b40000a8    	cbz	x8, 0x1000b9ac8 <_machine.machine.Group.execute+0x28c>
+
+
+<_machine.machine.Operands.release>:
+1000c4f3c: f940c668    	ldr	x8, [x19, #0x188]
+1000c4f40: b4000208    	cbz	x8, 0x1000c4f80 <_machine.machine.Operands.release+0xac>
+1000c4f44: f940c276    	ldr	x22, [x19, #0x180]
+1000c4f48: 8b080508    	add	x8, x8, x8, lsl #1
+1000c4f4c: d37ced17    	lsl	x23, x8, #4
+1000c4f50: aa1603e0    	mov	x0, x22
+1000c4f54: 52801541    	mov	w1, #0xaa               ; =170
+1000c4f58: aa1703e2    	mov	x2, x23
+1000c4f5c: 9404e3ed    	bl	0x1001fdf10 <_writev+0x1001fdf10>
+1000c4f60: dac143f4    	xpaci	x20
+1000c4f64: f9400f08    	ldr	x8, [x24, #0x18]
+1000c4f68: aa1503e0    	mov	x0, x21
+1000c4f6c: aa1603e1    	mov	x1, x22
+1000c4f70: aa1703e2    	mov	x2, x23
+1000c4f74: 52800083    	mov	w3, #0x4                ; =4
+1000c4f78: aa1403e4    	mov	x4, x20
+1000c4f7c: d63f0100    	blr	x8
+1000c4f80: d0000a81    	adrp	x1, 0x100216000 <___anon_80651>
+1000c4f84: 911c0021    	add	x1, x1, #0x700
+1000c4f88: aa1303e0    	mov	x0, x19
+1000c4f8c: 52803402    	mov	w2, #0x1a0              ; =416
+1000c4f90: a9447bfd    	ldp	x29, x30, [sp, #0x40]
+1000c4f94: a9434ff4    	ldp	x20, x19, [sp, #0x30]
+1000c4f98: a94257f6    	ldp	x22, x21, [sp, #0x20]
+1000c4f9c: a9415ff8    	ldp	x24, x23, [sp, #0x10]
+1000c4fa0: a8c567fa    	ldp	x26, x25, [sp], #0x50
+1000c4fa4: 1404e3d5    	b	0x1001fdef8 <_writev+0x1001fdef8>
+1000c4fa8: aa1703e0    	mov	x0, x23
+1000c4fac: 52800101    	mov	w1, #0x8                ; =8
+1000c4fb0: 9404bf64    	bl	0x1001f4d40 <_debug.FullPanic((function 'defaultPanic')).outOfBounds>
+## after
+Host SHA-256: 071df4381fae7bd5e23d761aa190c6d62edabf68573034ff5145583403d7709d
+Constant at 0x100216630: verified 384 zero buffer bytes, metadata 16/0/0, 8 zero padding bytes.
+
+0x00000001001fdf0c 25224 _memcpy
+0x00000001002a9fd0 25224 _memcpy
+
+<_machine.machine.Group.execute>:
+1000b9874: f9470908    	ldr	x8, [x8, #0xe10]
+1000b9878: f9400108    	ldr	x8, [x8]
+1000b987c: f81983a8    	stur	x8, [x29, #-0x68]
+1000b9880: b0000ae1    	adrp	x1, 0x100216000 <___anon_80193>
+1000b9884: 9118c021    	add	x1, x1, #0x630
+1000b9888: 911003e0    	add	x0, sp, #0x400
+1000b988c: 52803402    	mov	w2, #0x1a0              ; =416
+1000b9890: 9405119f    	bl	0x1001fdf0c <_writev+0x1001fdf0c>
+1000b9894: 910742a0    	add	x0, x21, #0x1d0
+1000b9898: 97fd44ff    	bl	0x10000ac94 <_heap.ArenaAllocator.reset>
+
+
+<_machine.machine.Operands.release>:
+1000c4f50: b4000248    	cbz	x8, 0x1000c4f98 <_machine.machine.Operands.release+0xb8>
+1000c4f54: f9400336    	ldr	x22, [x25]
+1000c4f58: 8b080508    	add	x8, x8, x8, lsl #1
+1000c4f5c: d37ced17    	lsl	x23, x8, #4
+1000c4f60: aa1603e0    	mov	x0, x22
+1000c4f64: 52801541    	mov	w1, #0xaa               ; =170
+1000c4f68: aa1703e2    	mov	x2, x23
+1000c4f6c: 9404e3ee    	bl	0x1001fdf24 <_writev+0x1001fdf24>
+1000c4f70: dac143f4    	xpaci	x20
+1000c4f74: f9400f08    	ldr	x8, [x24, #0x18]
+1000c4f78: aa1503e0    	mov	x0, x21
+1000c4f7c: aa1603e1    	mov	x1, x22
+1000c4f80: aa1703e2    	mov	x2, x23
+1000c4f84: 52800083    	mov	w3, #0x4                ; =4
+1000c4f88: aa1403e4    	mov	x4, x20
+1000c4f8c: d63f0100    	blr	x8
+1000c4f90: 14000002    	b	0x1000c4f98 <_machine.machine.Operands.release+0xb8>
+1000c4f94: 91060279    	add	x25, x19, #0x180
+1000c4f98: 52800208    	mov	w8, #0x10               ; =16
+1000c4f9c: f9000328    	str	x8, [x25]
+1000c4fa0: a918fe7f    	stp	xzr, xzr, [x19, #0x188]
+1000c4fa4: a9447bfd    	ldp	x29, x30, [sp, #0x40]
+1000c4fa8: a9434ff4    	ldp	x20, x19, [sp, #0x30]
+1000c4fac: a94257f6    	ldp	x22, x21, [sp, #0x20]
+1000c4fb0: a9415ff8    	ldp	x24, x23, [sp, #0x10]
+1000c4fb4: a8c567fa    	ldp	x26, x25, [sp], #0x50
+1000c4fb8: d65f03c0    	ret
+1000c4fbc: aa1703e0    	mov	x0, x23
+1000c4fc0: 52800101    	mov	w1, #0x8                ; =8
+1000c4fc4: 9404bf64    	bl	0x1001f4d54 <_debug.FullPanic((function 'defaultPanic')).outOfBounds>

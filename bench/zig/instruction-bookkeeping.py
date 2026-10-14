@@ -127,6 +127,7 @@ with tempfile.TemporaryDirectory() as temporary:
             workloads.append({**b, "slice": s, "source": root / "bench/scripts" / f"{b.get('script', b['name'])}.talk"})
     workloads.extend([
         {"name": "probe/straightline", "source": straightline, "n": 7, "expect": "7", "slice": 0},
+        {"name": "probe/straightline", "source": straightline, "n": 7, "expect": "7", "slice": 100},
         {"name": "probe/protected-loop", "source": protected, "n": 2000, "expect": "2001000", "slice": 0},
         {"name": "probe/protected-loop", "source": protected, "n": 2000, "expect": "2001000", "slice": 100},
     ])
@@ -154,21 +155,26 @@ with tempfile.TemporaryDirectory() as temporary:
             for b in selected:
                 name = f"{label}-{b['name'].replace('/', '-')}-slice-{b['slice']}"
                 sample_file = temporary / f"{name}.txt"
-                # 60 samples keep the Host in its Run phase for >=3 seconds.
-                process = subprocess.Popen([str(host.resolve()), str(b["source"]), str(b["n"]), b["expect"], str(b["slice"]), "60", "0"], env=env, stdout=subprocess.DEVNULL)
+                # sample's attachment/symbolication can take several seconds.
+                # Keep the Host in its Run phase for >=15 seconds so those
+                # delays do not silently turn this into a Load/startup profile.
+                process = subprocess.Popen([str(host.resolve()), str(b["source"]), str(b["n"]), b["expect"], str(b["slice"]), "300", "0"], env=env, stdout=subprocess.DEVNULL)
                 try:
                     time.sleep(.1)
                     subprocess.run(["sample", str(process.pid), "2", "1", "-file", str(sample_file)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    if process.wait() != 0:
+                    if process.poll() not in (None, 0):
                         raise RuntimeError(f"profile Host failed: {name}")
                 finally:
                     if process.poll() is None:
                         process.terminate()
                         process.wait()
                 report = sample_file.read_text()
+                samples = attribution(report)
+                if samples["pump"] < 500:
+                    raise RuntimeError(f"too few Pump samples for {name}: {samples['pump']}; retry profiling")
                 packed = gzip.compress(report.encode(), mtime=0)
                 artifact = args.profiles / f"{name}.txt.gz"
                 artifact.write_bytes(packed)
-                result["profiles"].append({"binary": label, "name": b["name"], "slice": b["slice"], "durationSeconds": 2, "intervalMs": 1, "report": artifact.name, "reportSha256": sha(artifact), "samples": attribution(report)})
+                result["profiles"].append({"binary": label, "name": b["name"], "slice": b["slice"], "durationSeconds": 2, "intervalMs": 1, "report": artifact.name, "reportSha256": sha(artifact), "samples": samples})
                 args.out.write_text(json.dumps(result, indent=2) + "\n")
                 print(f"profiled {name}", flush=True)

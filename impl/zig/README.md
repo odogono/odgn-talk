@@ -542,6 +542,13 @@ is measured over the Script Variables and the mailbox at a Segment's end.
 Limit Faults, live Runs included, with its current Persistent State and
 mailbox, and writes the `counters` record without draining Host Inputs.
 
+Instructions within a `finally` scope retain their popped operands until the
+instruction ends, so Error-mode cleanup can keep the failed continuation's
+stack. The eight-slot inline buffer is reused within each `execute` call;
+release clears its live-slot metadata after releasing those owners and any
+overflow storage. Each retained slot is written before its length is published.
+This storage remains local to execution; it adds no Run or snapshot state.
+
 Lists keep immutable visible slices over shared backing storage. Appending or
 prepending to the newest slice uses spare capacity, with geometric growth when
 it runs out, so repeated spine growth takes amortised linear time when the
