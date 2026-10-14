@@ -224,8 +224,9 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `broadcast` and `decide`, `reload` and `extend`, `compile-library`,
 `add-library` and `replace-library`, `inspect` and `grants`, `restore`
 with its interim `resolve` need, `settle`, `$function` values and `call`, `export-manifest`,
+`standard-capability` for all but `store` (and `sqlite`, which the layer doesn't offer),
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
-and `cancel-delivery`. It does not yet conform: `standard-capability`, `effect`/`release` needs and
+and `cancel-delivery`. It does not yet conform: `standard-capability` for `store`, `effect`/`release` needs and
 `request-charge` are protocol errors, and a
 Pump's `abandoned` is empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and

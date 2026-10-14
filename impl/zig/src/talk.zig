@@ -2762,6 +2762,17 @@ fn defineStandardWith(c: *Core, which: standard.Which, fns: []const OperationFn,
     return .ok;
 }
 
+/// Defines a Standard Capability for the Message Layer, each Operation's
+/// Host function a Core Zig function from `own`, in name order; `clock`
+/// takes none.
+pub fn defineStandardZig(c: *Core, which: standard.Which, own: []const ?caps.HostFn, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
+    const none: [8]OperationFn = @splat(null);
+    return defineStandardWith(c, which, none[0..own.len], own, null, costs, null, out);
+}
+
+pub const StandardWhich = standard.Which;
+pub const standardOperations = standard.operations;
+
 export fn talk_clock_capability(c: *Core, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     return defineStandard(c, .clock, &.{}, null, costs, out);
 }

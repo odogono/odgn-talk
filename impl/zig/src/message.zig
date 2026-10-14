@@ -2708,6 +2708,60 @@ fn manifestSpecOf(s: *Session, a: Allocator, msg: Json, shapes: *std.ArrayList(*
     return .{ .kind = kind.ptr, .kind_len = kind.len, .version = version.ptr, .version_len = version.len, .grants = grants.ptr, .grants_len = grants.len, .libraries = libraries.ptr, .libraries_len = libraries.len, .messages = messages.ptr, .messages_len = messages.len, .object_kinds = kinds.ptr, .object_kinds_len = kinds.len, .objects = well_known.ptr, .objects_len = well_known.len };
 }
 
+/// An Operation's context, owned by the Session; its mode is set once the
+/// Capability is defined.
+fn newOpContext(s: *Session, capability: []const u8, operation: []const u8) Allocator.Error!*OpContext {
+    const cap = try s.gpa.dupe(u8, capability);
+    errdefer s.gpa.free(cap);
+    const op = try s.gpa.dupe(u8, operation);
+    errdefer s.gpa.free(op);
+    const oc = try s.gpa.create(OpContext);
+    errdefer s.gpa.destroy(oc);
+    oc.* = .{ .session = s, .capability = cap, .operation = op, .mode = .immediate };
+    try s.op_contexts.append(s.gpa, oc);
+    return oc;
+}
+
+/// `standard-capability`: `name` and `costs` (`{operation: {fuel,
+/// alloc}}`). Each Operation the Host implements reaches it as an `op`
+/// need, as a defined Capability's does; `clock` is the Core's own.
+/// `store` waits on its lifecycle needs, and `sqlite` isn't offered.
+fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const which = std.meta.stringToEnum(talk.StandardWhich, name) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (which == .store or which == .sqlite) return protocolError(s.gpa, ref, "unknown or unsupported message");
+    const names = talk.standardOperations(which);
+    const given = field(msg, "costs") orelse return hostError(s.gpa, ref, .invalid_value);
+    if (given != .object) return hostError(s.gpa, ref, .invalid_value);
+    var entries: std.ArrayList(talk.NamedCost) = .empty;
+    defer entries.deinit(s.gpa);
+    for (given.object.keys(), given.object.values()) |k, v| {
+        const fuel = asInt(field(v, "fuel") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+        const alloc = if (field(v, "alloc")) |x| asInt(x) orelse return hostError(s.gpa, ref, .invalid_value) else 0;
+        entries.append(s.gpa, .{ .name = k.ptr, .name_len = k.len, .cost = .{ .fuel = fuel, .alloc = alloc } }) catch return hostError(s.gpa, ref, .out_of_memory);
+    }
+    const costs: talk.Costs = .{ .entries = entries.items.ptr, .len = entries.items.len };
+    // The Core answers `clock.now` itself.
+    const hosted = if (which == .clock) 0 else names.len;
+    var own: [8]?caps.HostFn = @splat(null);
+    var made: [8]*OpContext = undefined;
+    for (names[0..hosted], 0..) |op, i| {
+        made[i] = newOpContext(s, name, op) catch return hostError(s.gpa, ref, .out_of_memory);
+        own[i] = .{ .call = opCall, .context = made[i] };
+    }
+    var def: ?*caps.Capability = null;
+    const code = talk.defineStandardZig(s.core, which, own[0..hosted], &costs, &def);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    // Each context takes its Operation's declared mode.
+    for (made[0..hosted]) |oc| for (def.?.operations) |op| if (std.mem.eql(u8, op.name, oc.operation)) {
+        oc.mode = op.mode;
+    };
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -2872,6 +2926,8 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
         return changeCodeReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "standard-capability")) {
+        return standardCapabilityReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "export-manifest")) {
         return exportManifestReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "call")) {
@@ -3567,4 +3623,33 @@ test "export-manifest writes the Host Manifest's bytes, the same each time" {
     try std.testing.expect(std.mem.indexOf(u8, raw, "Doubles.") != null);
     const unknown = try c.send("{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"objectKinds\":[\"nowhere\"]}}", .{7});
     try std.testing.expectEqualStrings("host error", try errKind(unknown));
+}
+
+test "standard-capability: the Core answers clock, and console reaches the Host as op needs" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // Every Operation needs its cost.
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"console\",\"costs\":{{\"write\":{{\"fuel\":1}}}}}}", .{1})));
+    _ = try okOf(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"clock\",\"costs\":{{\"now\":{{\"fuel\":1}}}}}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"console\",\"costs\":{{\"write\":{{\"fuel\":2}},\"read\":{{\"fuel\":2}}}}}}", .{3}));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"standard-capability\",\"ref\":{d},\"name\":\"store\",\"costs\":{{}}}}", .{4})));
+    const clock = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"clock\",\"ops\":\"all\"}}", .{5}))).object.get("grant").?.integer;
+    const console = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"console\",\"ops\":\"all\"}}", .{6}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"clock\":{d},\"console\":{d}}},\"source\":\"on go\\n  say \\\"hi\\\"\\n  ask clock to now\\n  return it\\nend go\\n\"}}", .{ 8, clock, console }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
+    const need = pumped.object.get("need") orelse return unexpected(pumped);
+    try std.testing.expectEqualStrings("console", need.object.get("capability").?.string);
+    try std.testing.expectEqualStrings("write", need.object.get("operation").?.string);
+    try std.testing.expectEqualStrings("hi", need.object.get("args").?.array.items[0].string);
+    const mode = need.object.get("mode").?.string;
+    const answer = if (std.mem.eql(u8, mode, "fire-and-forget")) "\"done\":true" else "\"result\":null";
+    const done = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":{d},{s}}}", .{ 10, answer });
+    const end = try runEnd(done);
+    try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
+    try std.testing.expectEqualStrings("2026-10-10T12:00:00Z", end.object.get("result").?.object.get("$instant").?.string);
 }
