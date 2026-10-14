@@ -40,6 +40,9 @@ pub const Instant = struct {
 /// display form.
 pub const Answer = struct { shown: []const u8, fail: bool };
 
+/// A `user` prompt's answer while another waits (chapter 12, Prompts).
+pub const user_busy: Answer = .{ .shown = "{code: \"user busy\", message: \"Another prompt is waiting for an answer\"}", .fail = true };
+
 /// Everything from outside the session.
 pub const Driver = struct {
     context: *anyopaque,
@@ -49,7 +52,9 @@ pub const Driver = struct {
     /// The line the user typed for `console`'s `read`, or null.
     line: *const fn (context: *anyopaque) ?[]const u8,
     /// The answer to a built-in Capability's call, if there is one now.
-    answer: *const fn (context: *anyopaque, call: []const u8) ?Answer,
+    /// `busy` when a `user` prompt is already waiting, so the call is
+    /// answered at once, `user_busy` unless the driver has another answer.
+    answer: *const fn (context: *anyopaque, call: []const u8, busy: bool) ?Answer,
     /// An output line, as printed.
     output: *const fn (context: *anyopaque, line: []const u8) void,
     /// A line of the Group's Trace.
@@ -60,6 +65,9 @@ pub const Driver = struct {
     crossing: *const fn (context: *anyopaque) ?[]const u8,
     /// Consumes the crossing `crossing` gave.
     take: *const fn (context: *anyopaque) void,
+    /// Under a real Clock, waits until the foreground's next deadline, before
+    /// the Pump for it; a replay's readings come from the Transcript.
+    sleep: *const fn (context: *anyopaque, until: Instant) void,
 };
 
 const Mode = enum { immediate, suspending, fire_and_forget };
@@ -186,6 +194,8 @@ pub const Session = struct {
     clock: Clock = .real,
     /// The last Pump's Clock reading.
     last: ?Instant = null,
+    /// The last Pump's next deadline, if it left one.
+    next_deadline: ?Instant = null,
     grants: std.ArrayList(GrantSpec) = .empty,
     mocks: std.ArrayList(*Mock) = .empty,
     defs: std.StringHashMapUnmanaged(*c.talk_capability_def) = .empty,
@@ -540,7 +550,7 @@ pub const Session = struct {
             if (p.kind == .prompt) break true;
         } else false;
         if (busy) {
-            const ans = s.driver.answer(s.driver.context, id) orelse Answer{ .shown = "{code: \"user busy\", message: \"Another prompt is waiting for an answer\"}", .fail = true };
+            const ans = s.driver.answer(s.driver.context, id, true) orelse user_busy;
             return s.answerNow(ans, result, err);
         }
         s.pending.append(s.alloc(), .{ .id = s.dupe(id), .run = s.dupe(callRun(call)), .kind = .prompt, .call = call }) catch return c.TALK_CALL_BROKEN;
@@ -745,9 +755,21 @@ pub const Session = struct {
         defer c.talk_reports_release(result.reports);
         s.last = at;
         if (code != c.TALK_OK) return error.HostError;
+        s.deadlineOf(result);
         s.follow(result.reports);
         try s.notifications(at);
         return result.state;
+    }
+
+    fn deadlineOf(s: *Session, result: c.talk_pump_result) void {
+        s.next_deadline = if (result.has_next_deadline) .{ .seconds = result.next_deadline_seconds, .nanos = result.next_deadline_nanos } else null;
+    }
+
+    /// When the session next pumps by itself, under a real Clock: the last
+    /// Pump's next deadline (chapter 12, The foreground).
+    pub fn nextDeadline(s: *const Session) ?Instant {
+        if (s.clock != .real) return null;
+        return s.next_deadline;
     }
 
     /// After each Pump: the router's retry, then, while the router admitted
@@ -764,6 +786,7 @@ pub const Session = struct {
             const code = c.talk_pump(s.group, at.seconds, at.nanos, null, &result);
             defer c.talk_reports_release(result.reports);
             if (code != c.TALK_OK) return error.HostError;
+            s.deadlineOf(result);
             s.follow(result.reports);
         }
     }
@@ -923,7 +946,7 @@ pub const Session = struct {
                         if (!try s.pump()) return;
                         continue;
                     },
-                    .prompt => if (s.driver.answer(s.driver.context, p.id)) |ans| {
+                    .prompt => if (s.driver.answer(s.driver.context, p.id, false)) |ans| {
                         _ = s.pending.orderedRemove(i);
                         try s.settleCall(p.call, ans);
                         if (!try s.pump()) return;
@@ -934,6 +957,7 @@ pub const Session = struct {
             }
             // A deadline under a real Clock: sleep to it, and pump.
             if (s.clock == .real) if (s.waits.get(run)) |w| if (w.until or s.pendingOf(run) != null) {
+                if (s.next_deadline) |until| s.driver.sleep(s.driver.context, until);
                 if (!try s.pump()) return;
                 continue;
             };
@@ -982,6 +1006,57 @@ pub const Session = struct {
     }
 
     // ------------------------------------------------------------ input
+
+    /// Whether a REPL has the whole of an Entry or Session Command in
+    /// `text`, or should wait for more lines (chapter 12, Fenced text in
+    /// sessions and tooling): an Entry waits while its syntax ends early or
+    /// a fenced literal or hole is open, and so does the expression or Entry
+    /// of `:inspect` and `:fuel`. Any other command is one line.
+    pub fn complete(s: *Session, text: []const u8) !bool {
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        const ta = arena.allocator();
+        const trimmed = std.mem.trimStart(u8, text, " \t\n");
+        if (trimmed.len == 0) return true;
+        if (trimmed[0] == ':') {
+            const end = std.mem.indexOfAny(u8, trimmed, " \t\n") orelse return true;
+            const name = trimmed[0..end];
+            const rest = std.mem.trim(u8, trimmed[end..], " \t\n");
+            if (rest.len == 0) return true;
+            if (std.mem.eql(u8, name, ":inspect")) {
+                const r = try parser.parseEntryEnd(ta, rest, true);
+                return ended(rest, r.failure, r.trailing);
+            }
+            if (std.mem.eql(u8, name, ":fuel")) return s.complete(rest);
+            return true;
+        }
+        // A `--|` block waits for the declaration it documents.
+        const lines = try splitLines(ta, trimmed);
+        var i: usize = 0;
+        while (i < lines.len and (std.mem.startsWith(u8, std.mem.trimStart(u8, lines[i], " \t"), "--|") or std.mem.trim(u8, lines[i], " \t").len == 0)) i += 1;
+        if (i == lines.len) return false;
+        const w = firstWords(lines[i]);
+        if (isDeclaration(w)) return switch (try parser.parse(ta, trimmed)) {
+            .tree => true,
+            .failure => |d| ended(trimmed, d, false),
+        };
+        const statement = s.isStatement(w);
+        const r = try parser.parseEntryEnd(ta, trimmed, !statement);
+        return ended(trimmed, r.failure, r.trailing);
+    }
+
+    /// Whether a parse leaves nothing to wait for: it succeeded, or failed
+    /// before the end of the source and not inside a fenced literal or hole.
+    fn ended(text: []const u8, failure: ?parser.Diagnostic, trailing: bool) bool {
+        const d = failure orelse return true;
+        if (trailing) return true;
+        switch (d.code) {
+            .unterminated_interpolation => return false,
+            .unterminated_text => return !(std.mem.startsWith(u8, text[d.offset..], "\"\"\"") or std.mem.startsWith(u8, text[d.offset..], "`")),
+            else => {},
+        }
+        return d.offset < std.mem.trimEnd(u8, text, " \t\n").len;
+    }
 
     /// Gives the session one Entry or Session Command, with the `|` lines a
     /// Transcript records after it.
@@ -1060,11 +1135,7 @@ pub const Session = struct {
         }
         const w = firstWords(deciding);
         if (isDeclaration(w)) return s.declaration(text);
-        const statement = isOneOf(w.first, &statement_words) or
-            (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
-            (std.mem.eql(u8, w.first, "choose") and std.mem.eql(u8, w.second, "offer")) or
-            (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
-            std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
+        const statement = s.isStatement(w);
         _ = try s.runEntry(text, !statement);
     }
 
@@ -1085,6 +1156,16 @@ pub const Session = struct {
         defer arena.deinit();
         if ((try parser.parseEntryEnd(arena.allocator(), text.items, true)).trailing) return s.say("! bad arguments");
         _ = try s.runAs(text.items, true, true);
+    }
+
+    /// Whether an Entry is a statement, by its first words, rather than an
+    /// expression (chapter 2, Entries).
+    fn isStatement(s: *Session, w: anytype) bool {
+        return isOneOf(w.first, &statement_words) or
+            (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
+            (std.mem.eql(u8, w.first, "choose") and std.mem.eql(u8, w.second, "offer")) or
+            (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
+            std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
     }
 
     /// Whether the Session Script has a Handler whose Selector starts with
@@ -2619,10 +2700,7 @@ pub const Session = struct {
         }
         const w = firstWords(text.items);
         if (w.doc or isDeclaration(w) or (w.first.len > 0 and w.first[0] == ':')) return s.say("! bad arguments");
-        const statement = isOneOf(w.first, &statement_words) or
-            (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
-            (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
-            std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
+        const statement = s.isStatement(w);
         s.measuring = true;
         defer s.measuring = false;
         _ = try s.runEntry(text.items, !statement);
@@ -3133,4 +3211,16 @@ fn field(line: []const u8, key: []const u8) ?[]const u8 {
         return line[start..j];
     }
     return null;
+}
+
+test "an Entry is complete when its syntax doesn't end early" {
+    // `complete` reads only the allocator and the session source's
+    // declarations.
+    var s: Session = undefined;
+    s.gpa = std.testing.allocator;
+    s.decls = .empty;
+    const waits = [_][]const u8{ "on greet name", "on greet name\n  say \"hi \" & name", "put [1,", "--| Docs.", "say \"\"\"\n  fenced", "say `a ${1 +", ":inspect {a:", ":fuel put [1," };
+    for (waits) |t| try std.testing.expect(!try s.complete(t));
+    const whole = [_][]const u8{ "on greet name\n  say \"hi \" & name\nend greet", "1 + 2", ":vars", ":library add x lib.talk", "say \"abc", "1 2", ":inspect 1\n2", "put [1, 2] into xs" };
+    for (whole) |t| try std.testing.expect(try s.complete(t));
 }
