@@ -2,7 +2,7 @@
 import { scriptNameProblems } from './script-names';
 import { text } from '@odgn/northtalk';
 import { byId, h } from './dom';
-import { type TextElement } from './model';
+import { type Element, type TextElement } from './model';
 import { PlaySession } from './play';
 import { ReaderTextHistory } from './play-text';
 import { renderElement, type StackShell } from './stack';
@@ -41,6 +41,7 @@ export const mountPlay = (shell: StackShell): void => {
   let problemCount = 0;
   let drawnPage: PlaySession['page'] | undefined;
   let activeText: InPlaceTextEditor | undefined;
+  const renderedElements = new WeakMap<HTMLElement, Element>();
   const histories = new Map<TextElement, ReaderTextHistory>();
   const closeText = () => {
     const editor = activeText;
@@ -115,6 +116,19 @@ export const mountPlay = (shell: StackShell): void => {
       transform: `scale(${scale})`,
       transformOrigin: 'top left',
     });
+    if (
+      activeText &&
+      !play.page.elements.includes(activeText.history.element)
+    ) {
+      closeText();
+    }
+    for (const node of pageNode.querySelectorAll<HTMLElement>(
+      '[data-element]',
+    )) {
+      if (!play.page.elements.includes(renderedElements.get(node)!)) {
+        node.remove();
+      }
+    }
     for (const element of play.page.elements) {
       if (
         activeText?.history.element === element &&
@@ -161,6 +175,7 @@ export const mountPlay = (shell: StackShell): void => {
           }
         }
       } else {
+        renderedElements.set(fresh, element);
         pageNode.append(fresh);
         fresh.addEventListener('pointerenter', event => {
           if (event.pointerType !== 'touch') {

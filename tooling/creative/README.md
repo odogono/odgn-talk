@@ -32,7 +32,7 @@ Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
 also binds every Page name. The Manifests describe the planned `pages`, `elements` and `sound` Grants
-from ADR 0084; `pages` is available during Play; `elements` and `sound` are not yet implemented. Renames refresh open windows' Manifests and diagnostics. Problems
+from ADR 0084; `pages` and `elements` are available during Play; `sound` is not yet implemented. Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -296,7 +296,35 @@ navigation requests are ignored. Requests in one Pump before closing begins
 use the last destination. The Pages strip stays hidden during Play.
 
 Only the current Page's and its Elements' Scripts run alongside the Project
-Script. The `elements` and `sound` Grants are not implemented yet.
+Script. The `sound` Grant is not implemented yet.
+
+### Dynamic Elements
+
+Every Script can use `elements` during Play:
+
+```talk
+ask elements to create "button", thisPage, "trapdoor"
+set the label of it to "Open trapdoor"
+ask elements to clone climbButton
+tell elements to delete climbButton
+ask elements to find "door", cellar
+```
+
+`create` supports all six Element kinds with the editor's default properties.
+Its optional name must be an available Script identifier; omission picks a
+fresh name such as `button1`. Created Elements have no Script, so messages
+follow their Page and Project's Handlers. `clone` copies the current properties
+and Script onto the same Page, with a fresh name and a 20 px position offset.
+Its Script attaches after the creating Pump, or when its Page next opens if
+that Page is not showing. Clone errors link to the authored source Script.
+
+`delete` removes an Element and stops its Script, including a Script deleting
+itself. Old handles become disposed; reusing a deleted name creates a distinct
+Element. `find` requires the Page and reports an error when the name is missing.
+Names are bound when Scripts load; use `find` or the returned handle to reach
+new Elements. Creating, cloning and deleting each consume a Pump's Fuel budget
+so Core parent/disposal changes land before execution continues. All changes
+are temporary Play State: Back to Edit restores the authored Elements exactly.
 
 ### Delays with `wait`
 
@@ -339,7 +367,9 @@ sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/di
 
 Open `/play-test.html` and run
 `await import('/play.browser.js').then(m => m.runBrowserTests())`.
-Reload before repeating; the result must have `passed: true`.
+Reload before repeating; the result must have `passed: true`. After another
+reload, run `await import('/play.browser.js').then(m => m.runElementsBrowserTests())`
+for dynamic creation, cloned Scripts, deletion, name reuse and Edit restoration.
 
 Reader text unit tests cover formatting, `textChanged`, isolation, undo/redo,
 Script replacements and disabled input. The browser suite also checks real
