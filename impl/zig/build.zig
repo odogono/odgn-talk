@@ -89,11 +89,7 @@ pub fn build(b: *std.Build) void {
     const c_library = b.addLibrary(.{
         .name = "talk-test",
         .linkage = .static,
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = core,
     });
     const c_tests = b.addExecutable(.{
         .name = "talk-h-test",

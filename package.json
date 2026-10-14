@@ -17,6 +17,7 @@
     "docs:check": "bun run --cwd tools docs:check",
     "unicode:generate": "bun run --cwd tools unicode:generate",
     "unicode:check": "bun run --cwd tools unicode:check",
+    "unicode:fetch": "bun run --cwd tools unicode:fetch",
     "go:generate": "bun run --cwd tools go:generate",
     "go:check": "bun run --cwd tools go:check",
     "zig:generate": "bun run --cwd tools zig:generate",
