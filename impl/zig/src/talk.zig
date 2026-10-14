@@ -1023,6 +1023,7 @@ export fn talk_group_release(g: ?*Group) void {
     const gpa = group.core.gpa;
     group.group.deinit();
     group.out.deinit();
+    group.memory.deinit(); // Cached Value nodes go back last.
     for (group.scripts.items) |s| {
         gpa.free(s.name);
         gpa.destroy(s);

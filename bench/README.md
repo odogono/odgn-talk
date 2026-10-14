@@ -38,6 +38,11 @@ record three paired runs across all 30 supported workloads, separate allocation
 probes and native/WASI equivalence checks for
 [#877](https://github.com/odogono/odgn-talk/issues/877).
 
+The [Zig Value allocation measurements](results/2026-10-14-zig-value-allocations.md)
+record the size-attributed allocation profile, three paired runs across all 30
+supported workloads and Host-allocator timings for the per-Group Value node
+cache in [#878](https://github.com/odogono/odgn-talk/issues/878).
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
@@ -78,9 +83,20 @@ entries under the Host's existing budgets. Timings use the default allocator;
 separate untimed probes set `NORTHTALK_BENCH_ALLOCATIONS=1` to use a counting
 Host allocator. `hostBytes` and `hostAllocs` count cumulative Group allocation
 requests during one Run, excluding Load and process-owned Host values/returned
-bytes; frees do not subtract. `groupPeak` is the Group's physical high-water
-mark, including Load. These figures describe this allocator's requests, not
-resident memory or allocation by the default Zig allocator.
+bytes; frees do not subtract. `hostFrees` counts free calls in the same span,
+`hostLivePeakDelta` is the largest rise in live requested bytes above the
+level at Run start, and `hostTopSizes` lists the exact request sizes with the
+most requests, so a fixed-size node stands apart from variable-size scratch
+and collection buffers. `groupPeak` is the Group's physical high-water mark,
+including Load. These figures describe this allocator's requests, not resident
+memory or allocation by the default Zig allocator.
+
+For paired before/after timings and probes across every supported workload,
+build two Hosts the same way and run:
+
+```sh
+python3 bench/zig/value-allocations.py <before-host> <after-host> --before-revision <sha> --out <results.json>
+```
 
 ## Workloads
 

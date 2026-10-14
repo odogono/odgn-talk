@@ -2865,6 +2865,7 @@ test "a save or restore refused at any allocation leaves nothing behind" {
     var finished = false;
     while (!finished) : (cap += 64) {
         var memory: GroupAllocator = .init(gpa, cap);
+        defer memory.deinit();
         var restored: Group = .init(memory.allocator(), null);
         defer restored.deinit();
         var result: Result = .{};

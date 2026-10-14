@@ -12,19 +12,51 @@ const model = @import("../value.zig");
 /// Group, so only a defect reaches it.
 pub const default_cap: usize = 256 << 20;
 
+/// The most freed Value nodes a Group keeps for reuse (#878). Temporary
+/// scalars are nearly all of a Run's allocations and few are live at once,
+/// so a small cache absorbs the churn. Retained nodes count in `used`, so
+/// the cap still bounds everything a Group holds.
+const max_cached_values: usize = 128;
+const value_size = @sizeOf(model.Value);
+const value_alignment: Alignment = .fromByteUnits(@alignOf(model.Value));
+
 pub const GroupAllocator = struct {
     parent: Allocator,
     cap: usize,
-    /// Bytes the Group holds now, and the most it has held.
+    /// Bytes the Group holds now, and the most it has held. The Value
+    /// cache below is held memory, so it is included.
     used: usize = 0,
     peak: usize = 0,
     /// Whether an allocation has been refused: past the cap, or by the
     /// parent. The Group's state may then be partial, so it takes no more
     /// work.
     refused: bool = false,
+    /// Freed Value nodes available for reuse, linked through their first
+    /// word, at most `max_cached_values` of them.
+    cached_values: ?[*]u8 = null,
+    cached_value_count: usize = 0,
 
     pub fn init(parent: Allocator, cap: usize) GroupAllocator {
         return .{ .parent = parent, .cap = if (cap == 0) default_cap else cap };
+    }
+
+    /// Returns every cached Value node to the parent. The owner calls this
+    /// once the Group is gone; nothing may allocate through here after.
+    pub fn deinit(self: *GroupAllocator) void {
+        self.flushValues();
+    }
+
+    fn flushValues(self: *GroupAllocator) void {
+        while (self.cached_values) |block| {
+            self.cached_values = @as(*?[*]u8, @ptrCast(@alignCast(block))).*;
+            self.parent.rawFree(block[0..value_size], value_alignment, @returnAddress());
+            self.used -= value_size;
+        }
+        self.cached_value_count = 0;
+    }
+
+    fn isValueNode(len: usize, alignment: Alignment) bool {
+        return len == value_size and alignment == value_alignment;
     }
 
     pub fn allocator(self: *GroupAllocator) Allocator {
@@ -49,6 +81,18 @@ pub const GroupAllocator = struct {
 
     fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        // A cached node is already counted in `used`, so reusing one
+        // neither grows the Group nor reaches the parent.
+        if (isValueNode(len, alignment)) {
+            if (self.cached_values) |block| {
+                self.cached_values = @as(*?[*]u8, @ptrCast(@alignCast(block))).*;
+                self.cached_value_count -= 1;
+                return block;
+            }
+        }
+        // Retained nodes must never cause a refusal other memory could
+        // have avoided: give them back before deciding the cap is hit.
+        if (len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
         if (!self.admit(len)) return null;
         const p = self.parent.rawAlloc(len, alignment, ret_addr) orelse {
             self.refused = true;
@@ -60,6 +104,7 @@ pub const GroupAllocator = struct {
 
     fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return false;
         if (!self.parent.rawResize(memory, alignment, new_len, ret_addr)) return false;
         self.settle(memory.len, new_len);
@@ -68,6 +113,7 @@ pub const GroupAllocator = struct {
 
     fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return null;
         const p = self.parent.rawRemap(memory, alignment, new_len, ret_addr) orelse return null;
         self.settle(memory.len, new_len);
@@ -76,6 +122,12 @@ pub const GroupAllocator = struct {
 
     fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        if (isValueNode(memory.len, alignment) and self.cached_value_count < max_cached_values) {
+            @as(*?[*]u8, @ptrCast(@alignCast(memory.ptr))).* = self.cached_values;
+            self.cached_values = memory.ptr;
+            self.cached_value_count += 1;
+            return;
+        }
         self.parent.rawFree(memory, alignment, ret_addr);
         self.used -= memory.len;
     }
@@ -105,6 +157,43 @@ test "the cap refuses an allocation past it, and frees count back" {
     try std.testing.expect(g.used <= 1024);
 }
 
+test "freed Value nodes are reused from a bounded cache counted in used" {
+    var memory: GroupAllocator = .init(std.testing.allocator, 1 << 20);
+    const a = memory.allocator();
+    const first = try model.scalar(a, .nothing);
+    const address = @intFromPtr(first);
+    first.release();
+    // The retained node still counts against the Group's physical memory.
+    try std.testing.expectEqual(@sizeOf(model.Value), memory.used);
+    const second = try model.scalar(a, .{ .bool = true });
+    try std.testing.expectEqual(address, @intFromPtr(second));
+    try std.testing.expect(second.data.bool);
+    second.release();
+    // Repeated churn retains no more than the cache bound.
+    for (0..1000) |_| {
+        const v = try model.scalar(a, .nothing);
+        v.release();
+    }
+    try std.testing.expect(memory.used <= max_cached_values * @sizeOf(model.Value));
+    // Other sizes are never cached.
+    const scratch = try a.alloc(u8, 100);
+    a.free(scratch);
+    memory.deinit();
+    try std.testing.expectEqual(@as(usize, 0), memory.used);
+}
+
+test "cap pressure flushes the Value cache instead of refusing" {
+    var memory: GroupAllocator = .init(std.testing.allocator, @sizeOf(model.Value) + 512);
+    defer memory.deinit();
+    const a = memory.allocator();
+    const v = try model.scalar(a, .nothing);
+    v.release();
+    try std.testing.expectEqual(@sizeOf(model.Value), memory.used);
+    const big = try a.alloc(u8, 512);
+    defer a.free(big);
+    try std.testing.expect(!memory.refused);
+}
+
 test "Map updates obey the Group physical cap and leave the prior root intact on refusal" {
     var memory: GroupAllocator = .init(std.testing.allocator, 16 << 10);
     {
@@ -130,12 +219,14 @@ test "Map updates obey the Group physical cap and leave the prior root intact on
         try std.testing.expect(refused and memory.refused);
         try std.testing.expect(memory.used <= memory.cap and memory.peak <= memory.cap);
     }
+    memory.deinit(); // Only the bounded Value cache remains to give back.
     try std.testing.expectEqual(@as(usize, 0), memory.used);
 }
 
 test "a Group past its cap refuses mid-Pump and gives back every byte" {
     const machine = @import("machine.zig");
     var memory: GroupAllocator = .init(std.testing.allocator, 256 * 1024);
+    defer memory.deinit();
     var group: machine.Group = .init(memory.allocator(), null);
     defer group.deinit();
     const source = "script variable s\non grow\n  put \"x\" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n";
@@ -149,6 +240,7 @@ test "large loads retain source and code, not compiler working storage" {
     const machine = @import("machine.zig");
     const gpa = std.testing.allocator;
     var memory: GroupAllocator = .init(gpa, 64 << 20);
+    defer memory.deinit();
     var group: machine.Group = .init(memory.allocator(), null);
     defer group.deinit();
     const blank = try gpa.alloc(u8, 100_000);
@@ -185,6 +277,7 @@ test "large loads retain source and code, not compiler working storage" {
     // Libraries use the same compiler storage policy, including a retained
     // source for replacement and save/restore.
     var libraries: GroupAllocator = .init(gpa, 64 << 20);
+    defer libraries.deinit();
     const compiled = try machine.compileLibrary(libraries.allocator(), "lib", "1", blank, &.{}, null);
     const library = compiled.library;
     defer library.destroy();
@@ -248,6 +341,7 @@ test "a refusal at any allocation leaves nothing behind" {
     var finished = false;
     while (!finished) : (cap += 256) {
         var memory: GroupAllocator = .init(std.testing.allocator, cap);
+        defer memory.deinit();
         var group: machine.Group = .init(memory.allocator(), null);
         defer group.deinit();
         finished = blk: {
@@ -299,6 +393,7 @@ test "Extend, Reload and Library replacement refused at any allocation leave not
         const next = (try machine.compileLibrary(gpa, "lib", "2", "constant k = 2\nfunction twice x\n  return x * 3\nend twice\n", &.{}, null)).library;
         defer next.destroy();
         var memory: GroupAllocator = .init(gpa, cap);
+        defer memory.deinit();
         var group: machine.Group = .init(memory.allocator(), null);
         defer group.deinit();
         finished = blk: {
