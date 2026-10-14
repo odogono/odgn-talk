@@ -334,6 +334,7 @@ The message layer is the language-neutral form of this interface, for a Host tha
 - **The Host starts every exchange:** Host code runs through interim replies: Operations, properties and lifecycle hooks reply to `pump`; scope abandonment and rollback may also reply to `reload` or `replace-library`, and the Host answers it before sending anything else to that Group. The Core never calls the Host, so a WASI build needs no reentrant imports.
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox, and it is received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Stops land at a crossing:** `stop`, `cancel-run` and `rewind-run` land at the latest at the running Pump's next `op` or `prop`, or at its end. The Trace records where.
+- **Abandoned calls:** the `abandoned` field of a `pump`, `reload` or `replace-library` reply lists, in call id order, the suspending calls the Host answered `started` that the Core has abandoned since its previous such reply: by a timeout, a cancelled, stopped or rewound Run, a failed Join Member's siblings, or a lost restore. Each is listed once. It stands in for the context or signal an in-process Host's `Call` gives: the Host stops the call's work and drops its queued `answer` or `fail`. One sent anyway is a late answer, recorded and ignored.
 - **Charging:** each `op` carries the Fuel the Run has left after the declared cost. The Host's `Charge` subtracts from it locally and fails exactly when it would go below 0, and its reply carries the total accepted `charged`. Refusal is latched and uses a `limit` reply even after earlier increments succeeded. After `started`, local `fuelLeft` is no longer authorization: [asynchronous metering](embedding/metered-operations.md#trace-and-message-layer) uses `request-charge` and a later Pump outcome.
 - **Ids** are the Core's: delivery ids, run ids and call ids are assigned as [chapter 11](11-the-trace-and-conformance.md#ids) says. Handles for Grants, Libraries (by identity), Groups and Scripts (by name), and Host Objects (`[kind, id]`) are the Host's.
 - **Host Objects** cross as `{"$object": [kind, id]}`, read against the message's Group. The Host's glue code raises `wrong group` before it sends another Group's object.
@@ -355,7 +356,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
-| `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` | `AddLibrary`, `ReplaceLibrary` |
+| `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` and `abandoned` | `AddLibrary`, `ReplaceLibrary` |
 | `object` | `kind`, `id` | – | `Object` |
 | `set-parent`, `dispose` | `object`, and `parent` | – | `SetParent`, `Dispose` |
 | `deliver`, `request` | `to`: `{object}` or `{script}`, `message`: `{name, args (V), limits}` | `delivery` | `Deliver`, `Request` |
@@ -376,7 +377,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls`, `reports` | `Restore` |
 | `resolve` (interim) | `grants`: `[[script, name]]`, `objects`: `[[kind, id]]` | `resolve-result`: `grants`: handles or `null`, `objects`: booleans | `Grants`, `Resolve` |
 | `settle` | `call`, `settlement`: `{answer (V)}`, `{fail}`, `{reissue}` or `{adopt}` | – | `Settle`; an adopted call is answered with `answer` or `fail` |
-| `reload`, `extend` | `source`, and `carry` and optional `keepMailbox` for a reload | `reports`, or – | `Reload`, `Extend` |
+| `reload`, `extend` | `source`, and `carry` and optional `keepMailbox` for a reload | `reports` and `abandoned`, or – | `Reload`, `Extend` |
 | `stop`, `cancel-run`, `rewind-run`, `revoke` | `reason`, `run`, or `grant`: the name | – | `Stop`, `CancelRun`, `RewindRun`, `Revoke` |
 | `counters`, `grants` | – | `Counters`, or `{name: [ops]}` | `Counters`, `Grants` |
 | `export-manifest` | the manifest's definitions, by handle | `manifest`: bytes | `ExportManifest` |
