@@ -11,12 +11,14 @@ translated from the Go or TS Core
 design decisions that bind it are recorded on
 [#625](https://github.com/odogono/odgn-talk/issues/625#issuecomment-6111271797).
 
-It is under construction, step by step through
-[Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
-generated tables, Unicode text primitives, reference-counted values, native
-decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
-the front end's lexer, lossless parser, checker and lowering, and the first
-part of the Abstract Machine, driven through `talk.h`.
+Built step by step through
+[Appendix B](../../spec/appendix-b-implementation-order.md), it conforms to
+language 1.0-rc.3 and Cost Model 0
+([#636](https://github.com/odogono/odgn-talk/issues/636)): it passes every
+Corpus case, every Trace Case in both replays and the pinned Unicode tests, its
+REPL reproduces every Session Transcript, and `talk.h` declares every `talk.go`
+name. Blessing needs it to agree with the Go and TS Cores, and the nightly
+differential fuzzer runs it. Its Message Layer is not yet complete (#635).
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -238,8 +240,8 @@ the shared [reactor harness](../../tools/wasi/check.py):
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless
-the declaration is marked `C only`, and lists the `talk.go` names `talk.h`
-doesn't declare yet. Those fail only from step 6's conformance gate.
+the declaration is marked `C only`, and on a `talk.go` name `talk.h` doesn't
+declare.
 
 ## The Session Host
 
