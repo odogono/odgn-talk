@@ -1247,6 +1247,13 @@ pub const Sources = union(enum) {
     }
 };
 
+/// The id of the last `> save` record in a Trace.
+fn lastSave(written: []const u8) ?[]const u8 {
+    const at = std.mem.lastIndexOf(u8, written, "> save ") orelse return null;
+    const rest = written[at + "> save ".len ..];
+    return rest[0 .. std.mem.indexOfScalar(u8, rest, '\n') orelse rest.len];
+}
+
 /// The inputs a Host function makes during a Pump.
 pub const Inside = []const @typeInfo(@FieldType(Crossing, "inputs")).pointer.child;
 
@@ -1274,6 +1281,8 @@ pub const Host = struct {
     /// Saves by id, each Script's Grants as loaded, which a restore
     /// re-binds, and the Groups a restore replaced.
     saves: std.StringHashMapUnmanaged([]const u8) = .empty,
+    /// The ids of the saves it holds, in the order taken.
+    save_ids: std.ArrayList([]const u8) = .empty,
     latest: ?[]const u8 = null,
     script_grants: std.StringHashMapUnmanaged([]c.talk_load_grant) = .empty,
     retired: std.ArrayList(?*c.talk_group) = .empty,
@@ -1428,8 +1437,10 @@ pub const Host = struct {
             if (code == c.TALK_EFFECTS_PENDING) return;
             try check(code);
             defer c.talk_owned_bytes_release(&saved);
-            const id = try a.dupe(u8, input[name_end + 1 ..]);
+            // A bare `> save` takes the id the Core wrote.
+            const id = try a.dupe(u8, if (name_end < input.len) input[name_end + 1 ..] else lastSave(sink.out.items) orelse return error.MalformedCase);
             try saves.put(a, id, try a.dupe(u8, saved.data[0..saved.len]));
+            try h.save_ids.append(a, id);
             h.latest = id;
         } else if (std.mem.eql(u8, name, "restore")) {
             const bytes_saved = saves.get(field(input, "from") orelse h.latest orelse return error.MalformedCase) orelse return error.MalformedCase;
