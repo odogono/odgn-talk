@@ -42,8 +42,8 @@ type MachineTableInstructionEntry struct {
 	Suspends bool
 	Cost     string
 	Does     string
-	Jumps    int64
 	Errors   []string
+	Jumps    int64
 }
 
 var Machine = MachineTable{
@@ -144,6 +144,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "slot",
 			Does:     "Pushes a Script Variable",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "store-var",
@@ -156,6 +159,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "store-var",
 			Does:     "Pops a value into a Script Variable",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "load-definition",
@@ -180,6 +186,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "slot",
 			Does:     "Pops a Constant's value, in the code unit's initialiser only",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "load-object",
@@ -192,6 +201,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "slot",
 			Does:     "Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:     "me",
@@ -202,6 +214,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "slot",
 			Does:     "Pushes `me`",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:     "target",
@@ -212,6 +227,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "slot",
 			Does:     "Pushes `the target`",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "jump",
@@ -664,6 +682,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"object gone",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -678,6 +697,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"object gone",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1020,6 +1040,7 @@ var Machine = MachineTable{
 				"wrong kind",
 				"read only",
 				"object gone",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1035,6 +1056,7 @@ var Machine = MachineTable{
 				"wrong kind",
 				"read only",
 				"object gone",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1305,6 +1327,7 @@ var Machine = MachineTable{
 			Does:     "`name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does",
 			Errors: []string{
 				"no match",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1319,6 +1342,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "builtin",
 			Does:     "Calls a Built-in function, charged by its own Cost Model key",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "call-value",
@@ -1331,6 +1357,22 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "call",
 			Does:     "Calls the Function Value below the `count` arguments, which must run here without suspending",
+			Errors: []string{
+				"wrong kind",
+				"function gone",
+				"wrong arity",
+				"would suspend",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:     "call-restricted",
+			Group:    "calls",
+			Operands: []string{},
+			Pops:     2,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "call",
+			Does:     "Calls the Function Value below one argument under an inherited restriction on effects and live state observations; emitted only by the trusted stdlib intrinsic",
 			Errors: []string{
 				"wrong kind",
 				"function gone",
@@ -1357,6 +1399,7 @@ var Machine = MachineTable{
 				"send failed",
 				"timeout",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1684,6 +1727,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"offer unavailable",
 				"wrong arity",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1730,6 +1774,7 @@ var Machine = MachineTable{
 				"scope not open",
 				"scope in join",
 				"segment participant conflict",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1752,6 +1797,7 @@ var Machine = MachineTable{
 				"timeout",
 				"capability disabled",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1772,6 +1818,7 @@ var Machine = MachineTable{
 				"capability revoked",
 				"host error",
 				"capability disabled",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1790,6 +1837,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1811,6 +1859,7 @@ var Machine = MachineTable{
 				"send failed",
 				"timeout",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1829,6 +1878,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1850,6 +1900,7 @@ var Machine = MachineTable{
 				"send failed",
 				"timeout",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1866,6 +1917,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1885,6 +1937,7 @@ var Machine = MachineTable{
 				"send failed",
 				"timeout",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1901,6 +1954,7 @@ var Machine = MachineTable{
 			Does:     "A Command Call with no Handler: sends the message up the Message Path",
 			Errors: []string{
 				"mailbox full",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1920,6 +1974,7 @@ var Machine = MachineTable{
 				"send failed",
 				"timeout",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1934,6 +1989,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1950,6 +2006,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1966,6 +2023,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"wrong kind",
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1979,6 +2037,7 @@ var Machine = MachineTable{
 			Does:     "Starts a Join",
 			Errors: []string{
 				"scope open",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -1998,6 +2057,7 @@ var Machine = MachineTable{
 				"wrong kind",
 				"capability revoked",
 				"capability disabled",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2016,6 +2076,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2034,6 +2095,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2050,6 +2112,7 @@ var Machine = MachineTable{
 				"mailbox full",
 				"object gone",
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2064,6 +2127,7 @@ var Machine = MachineTable{
 			Errors: []string{
 				"send failed",
 				"timeout",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2077,6 +2141,7 @@ var Machine = MachineTable{
 			Does:     "`with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later",
 			Errors: []string{
 				"wrong kind",
+				"restricted operation",
 			},
 		},
 		MachineTableInstructionEntry{
@@ -2088,6 +2153,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "stack",
 			Does:     "Pops a Timeout Block's deadline as control leaves the block",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:     "veto",
@@ -2098,6 +2166,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "return",
 			Does:     "Pops the reason, vetoes the Decision and ends the Run",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 		MachineTableInstructionEntry{
 			Name:  "pass",
@@ -2110,6 +2181,9 @@ var Machine = MachineTable{
 			Suspends: false,
 			Cost:     "send",
 			Does:     "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`",
+			Errors: []string{
+				"restricted operation",
+			},
 		},
 	},
 }

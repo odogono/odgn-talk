@@ -1,0 +1,8 @@
+# Unblessed: restricted callback local-mutation (#696); first blessing awaits human review.
+> deliver d1 to=s message=go args=[<function s:map:restrictedCall>]
+> pump clock=1970-01-01T00:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=57 alloc=232 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=[[1, 2], [1]] fuel=57 alloc=232
+pumped state=idle fuel=57
+> vars
+vars s state=7

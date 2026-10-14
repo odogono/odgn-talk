@@ -676,6 +676,15 @@ and the Core adds its `message`. Loading a Script checks the `needs` of every
 Library it imports against its Grants, at the `use` line, and `grantsAsUsed`
 keeps the Operations those `needs` call.
 
+The trusted stdlib loader alone lowers private `map:restrictedCall` to
+`call-restricted`. Its inherited frame restriction rejects live Script state,
+Host effects and recovery-context access before acting, and survives catches,
+cleanup, preemption and restore. Host Library compilation cannot enable it.
+Snapshot format `6` rejects earlier formats. This implements the internal
+callback prerequisite; `map.transform` and a public pure-call API are not
+available. See [the normative contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)
+and [the cross-Core kit](../../corpus/restricted-kit/README.md).
+
 A Lambda makes a Function Value with its captures, by name in slot order, and
 a function's bare name makes one with none. Each Group keeps one record of
 the code a Function Value runs, its Home Script, unit and body, which the

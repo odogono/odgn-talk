@@ -123,13 +123,13 @@ The operand kinds:
 | `load` | `local` | 0 | 1 | Pushes a local |  |
 | `store` | `local` | 1 | 0 | Pops a value into a local |  |
 | `move` | `local`, `local` | 0 | 0 | Copies the first local into the second, which commits a pattern's binding |  |
-| `load-var` | `variable` | 0 | 1 | Pushes a Script Variable |  |
-| `store-var` | `variable` | 1 | 0 | Pops a value into a Script Variable |  |
+| `load-var` | `variable` | 0 | 1 | Pushes a Script Variable | `restricted operation` |
+| `store-var` | `variable` | 1 | 0 | Pops a value into a Script Variable | `restricted operation` |
 | `load-definition` | `definition` | 0 | 1 | Pushes a Constant, the code unit's own or an imported one |  |
-| `store-definition` | `definition` | 1 | 0 | Pops a Constant's value, in the code unit's initialiser only |  |
-| `load-object` | `object` | 0 | 1 | Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds |  |
-| `me` |  | 0 | 1 | Pushes `me` |  |
-| `target` |  | 0 | 1 | Pushes `the target` |  |
+| `store-definition` | `definition` | 1 | 0 | Pops a Constant's value, in the code unit's initialiser only | `restricted operation` |
+| `load-object` | `object` | 0 | 1 | Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds | `restricted operation` |
+| `me` |  | 0 | 1 | Pushes `me` | `restricted operation` |
+| `target` |  | 0 | 1 | Pushes `the target` | `restricted operation` |
 
 <!-- end -->
 
@@ -190,8 +190,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
-| `get-key` | `key` | 1 | 1 | `the k of x`: a map's value, or a Host Object's property | `wrong kind`, `object gone` |
-| `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone` |
+| `get-key` | `key` | 1 | 1 | `the k of x`: a map's value, or a Host Object's property | `wrong kind`, `object gone`, `restricted operation` |
+| `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone`, `restricted operation` |
 | `get-optional-key` | `key` | 1 | 1 | `the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind` | `wrong kind` |
 | `get-optional-key-computed` |  | 2 | 1 | `the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does | `wrong kind` |
 | `property` | `property` | 1 | 1 | `the p of x`, for a Built-in property | `wrong kind` |
@@ -214,8 +214,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `prepend` |  | 2 | 1 | `put e before c` | `wrong kind` |
 | `append-all` |  | 2 | 1 | `put ...e after c` | `wrong kind` |
 | `prepend-all` |  | 2 | 1 | `put ...e before c` | `wrong kind` |
-| `set-property` | `key` | 2 | 0 | `set the p of o to e`: pops the value and the Host Object, and calls the Host's `Set` | `wrong kind`, `read only`, `object gone` |
-| `set-property-computed` |  | 3 | 0 | `set the (k) of o to e`: pops the value, the Host Object and the key | `wrong kind`, `read only`, `object gone` |
+| `set-property` | `key` | 2 | 0 | `set the p of o to e`: pops the value and the Host Object, and calls the Host's `Set` | `wrong kind`, `read only`, `object gone`, `restricted operation` |
+| `set-property-computed` |  | 3 | 0 | `set the (k) of o to e`: pops the value, the Host Object and the key | `wrong kind`, `read only`, `object gone`, `restricted operation` |
 
 <!-- end -->
 
@@ -253,10 +253,11 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `call` | `body`, `count` | count | 1 | Calls a function of the code unit with `count` arguments, and pushes its result |  |
 | `call-import` | `import`, `count` | count | 1 | Calls an imported function with `count` arguments |  |
 | `call-handler` | `handler`, `count` | count | 1 | Calls a Handler of the Script or an imported one, trying its clauses in order | `no match` |
-| `call-handler-wait` (suspends) | `handler`, `count` | count | 1 | `name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does | `no match` |
-| `call-builtin` | `builtin`, `count` | count | 1 | Calls a Built-in function, charged by its own Cost Model key |  |
+| `call-handler-wait` (suspends) | `handler`, `count` | count | 1 | `name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does | `no match`, `restricted operation` |
+| `call-builtin` | `builtin`, `count` | count | 1 | Calls a Built-in function, charged by its own Cost Model key | `restricted operation` |
 | `call-value` | `count` | count + 1 | 1 | Calls the Function Value below the `count` arguments, which must run here without suspending | `wrong kind`, `function gone`, `wrong arity`, `would suspend` |
-| `call-value-wait` (suspends) | `count` | count + 1 | 1 | `f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits | `wrong kind`, `function gone`, `wrong arity`, `mailbox full`, `send failed`, `timeout`, `scope open` |
+| `call-restricted` |  | 2 | 1 | Calls the Function Value below one argument under an inherited restriction on effects and live state observations; emitted only by the trusted stdlib intrinsic | `wrong kind`, `function gone`, `wrong arity`, `would suspend` |
+| `call-value-wait` (suspends) | `count` | count + 1 | 1 | `f(x) and wait`: calls a local Function Value, or sends a foreign one to its Home Script and waits | `wrong kind`, `function gone`, `wrong arity`, `mailbox full`, `send failed`, `timeout`, `scope open`, `restricted operation` |
 | `return` |  | 1 | 0 | Ends the body with the popped value as its result |  |
 | `clause-fail` |  | 0 | 0 | Ends a failed clause, test or branch body, so the Core tries the next |  |
 
@@ -311,7 +312,7 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 | `throw` |  | 1 | 0 | `throw e`: raises the popped map or text | `bad throw` |
 | `catch-accept` |  | 0 | 0 | Accepts an ordinary catch, runs exited cleanup scopes and continues in its real owner frame |  |
 | `catch-next` |  | 0 | 0 | Disposes this catch dispatch activation and continues the search outward |  |
-| `choose-offer` | `name`, `count` | count | 0 | Looks up the nearest eligible offer, validates exact arity and transfers after exited cleanup scopes | `offer unavailable`, `wrong arity` |
+| `choose-offer` | `name`, `count` | count | 0 | Looks up the nearest eligible offer, validates exact arity and transfers after exited cleanup scopes | `offer unavailable`, `wrong arity`, `restricted operation` |
 | `raise` | `code` | 0 | 0 | Raises a catalogue error that has no fields, such as `no match` |  |
 | `end-cleanup` |  | 0 | 0 | Ends a `finally` block reached by an Error, cancellation or pending catch/offer transfer, which then goes on |  |
 
@@ -323,30 +324,30 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 
 | Instruction | Operands | Pops | Pushes | Does | Raises |
 | --- | --- | --- | --- | --- | --- |
-| `ask` | `grant`, `operation`, `count` | count | 1 | Calls an immediate Operation, and pushes its result | `wrong kind`, `capability revoked`, `host error`, `capability disabled`, `scope already open`, `scope not open`, `scope in join`, `segment participant conflict` |
-| `ask-wait` (suspends) | `grant`, `operation`, `count` | count | 1 | Calls a suspending Operation, and suspends until it answers | `wrong kind`, `capability revoked`, `host error`, `timeout`, `capability disabled`, `scope open` |
-| `tell` | `grant`, `operation`, `count` | count | 0 | Calls a fire-and-forget Operation | `wrong kind`, `capability revoked`, `host error`, `capability disabled` |
-| `send` | `message`, `count` | count + 1 | 0 | Pops the receiver and `count` arguments, and puts the message in the receiver's mailbox | `mailbox full`, `object gone`, `wrong kind` |
-| `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
-| `send-named` | `count` | count + 2 | 0 | Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
-| `send-named-wait` (suspends) | `count` | count + 2 | 1 | Sends as `send-named` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
-| `send-spread` |  | 3 | 0 | A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
-| `send-spread-wait` (suspends) |  | 3 | 1 | Sends as `send-spread` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open` |
-| `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full` |
-| `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open` |
-| `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind`, `scope open` |
-| `wait-for` (suspends) | `event` | event | 1 | Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout | `wrong kind`, `scope open` |
-| `wait-for-any` (suspends) | `event` | event | 2 | The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number | `wrong kind`, `scope open` |
-| `join-start` |  | 0 | 0 | Starts a Join | `scope open` |
-| `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled` |
-| `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind` |
-| `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
-| `join-send-spread` |  | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind` |
-| `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout` |
-| `timeout-start` |  | 1 | 1 | `with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later | `wrong kind` |
-| `timeout-end` |  | 1 | 0 | Pops a Timeout Block's deadline as control leaves the block |  |
-| `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run |  |
-| `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message` |  |
+| `ask` | `grant`, `operation`, `count` | count | 1 | Calls an immediate Operation, and pushes its result | `wrong kind`, `capability revoked`, `host error`, `capability disabled`, `scope already open`, `scope not open`, `scope in join`, `segment participant conflict`, `restricted operation` |
+| `ask-wait` (suspends) | `grant`, `operation`, `count` | count | 1 | Calls a suspending Operation, and suspends until it answers | `wrong kind`, `capability revoked`, `host error`, `timeout`, `capability disabled`, `scope open`, `restricted operation` |
+| `tell` | `grant`, `operation`, `count` | count | 0 | Calls a fire-and-forget Operation | `wrong kind`, `capability revoked`, `host error`, `capability disabled`, `restricted operation` |
+| `send` | `message`, `count` | count + 1 | 0 | Pops the receiver and `count` arguments, and puts the message in the receiver's mailbox | `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `send-wait` (suspends) | `message`, `count` | count + 1 | 1 | Sends as `send` does, then suspends until the reply | `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
+| `send-named` | `count` | count + 2 | 0 | Pops the receiver, `count` arguments and the message name below them, checks the name, and sends as `send` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `send-named-wait` (suspends) | `count` | count + 2 | 1 | Sends as `send-named` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
+| `send-spread` |  | 3 | 0 | A `send` with a spread: pops the receiver, the argument list and the message name below it, checks the name against the list's length, and sends as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `send-spread-wait` (suspends) |  | 3 | 1 | Sends as `send-spread` does, then suspends until the reply | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `send failed`, `timeout`, `scope open`, `restricted operation` |
+| `send-up` | `message`, `count` | count | 0 | A Command Call with no Handler: sends the message up the Message Path | `mailbox full`, `restricted operation` |
+| `send-up-wait` (suspends) | `message`, `count` | count | 1 | `name args and wait` with no Handler: sends up the Message Path and waits | `mailbox full`, `send failed`, `timeout`, `scope open`, `restricted operation` |
+| `wait` (suspends) |  | 1 | 0 | `wait d`: pops an exact duration, and suspends until it has passed | `wrong kind`, `scope open`, `restricted operation` |
+| `wait-for` (suspends) | `event` | event | 1 | Suspends until an event of the entry arrives, and pushes the message, or Nothing on a timeout | `wrong kind`, `scope open`, `restricted operation` |
+| `wait-for-any` (suspends) | `event` | event | 2 | The block `wait for`: suspends until a branch fires, and pushes its message or Nothing, then its number | `wrong kind`, `scope open`, `restricted operation` |
+| `join-start` |  | 0 | 0 | Starts a Join | `scope open`, `restricted operation` |
+| `join-ask` | `grant`, `operation`, `count` | count | 0 | Starts a suspending Operation as a Join Member | `wrong kind`, `capability revoked`, `capability disabled`, `restricted operation` |
+| `join-send` | `message`, `count` | count + 1 | 0 | Starts a `send … and wait` as a Join Member | `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-send-named` | `count` | count + 2 | 0 | Starts a `send (e) … and wait` as a Join Member, checking the name as `send-named` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-send-spread` |  | 3 | 0 | Starts a `send … and wait` with a spread as a Join Member, checking the name as `send-spread` does | `bad message name`, `mailbox full`, `object gone`, `wrong kind`, `restricted operation` |
+| `join-end` (suspends) |  | 0 | 1 | a Join's closing `end` (optionally `end wait`): suspends until every member answers, and pushes their answers in start order, or raises the first failure, with `index`; with no members it pushes `[]` and doesn't suspend | `send failed`, `timeout`, `restricted operation` |
+| `timeout-start` |  | 1 | 1 | `with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later | `wrong kind`, `restricted operation` |
+| `timeout-end` |  | 1 | 0 | Pops a Timeout Block's deadline as control leaves the block | `restricted operation` |
+| `veto` |  | 1 | 0 | Pops the reason, vetoes the Decision and ends the Run | `restricted operation` |
+| `pass` | `message` | 0 | 0 | Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message` | `restricted operation` |
 
 <!-- end -->
 
@@ -368,6 +369,78 @@ The test instructions never raise on a value of the wrong kind: they jump. A tes
 - **Function Values:** `call-value` checks, in order, that the value is a Function Value, that it isn't stale, that its Home Script is this Script, that it can't suspend and that it takes that many arguments ([chapter 4](04-expressions-and-statements.md#calls)). `call-value-wait` makes the same local call, suspending if the body does, or sends a foreign call to the Home Script and waits for its reply.
 - **Lambdas:** a Lambda body's frame has its captured values in its capture slots, from the Function Value.
 - **Call depth:** a call that would pass the call depth limit is a Limit Fault at the call ([chapter 6](06-errors-and-limits.md)).
+
+### Restricted stdlib callbacks
+
+The private `restrictedCall(f, value)` entry in normative `map` source is a
+Core intrinsic ([ADR 0081](../docs/adr/0081-mappings-compose-shapes-with-restricted-transformations.md)).
+Its body has the ordinary local loads and return; the unary Function Value
+call lowers to `call-restricted`, with no operands, instead of `call-value 1`.
+Only the Core's loader of the pinned normative Standard Library source enables
+this lowering. Script and Host Library compilation never enables it, including
+identical source, a Library named `map`, a function named `restrictedCall`, or
+caller-attributed error options. Compile caches keep trusted and ordinary
+compilations distinct. The entry is private, cannot be imported or obtained as
+a Function Value by Script code, and adds no public embedding or pure-call API.
+Built-ins still never call Script code.
+
+`call-restricted` reads the Function Value below its single argument. It applies
+the same eligibility checks, in the same order, as `call-value 1`: Function kind,
+live Home Script, same Home Script and non-suspending body, then accepted arity.
+Defaults, captured locals and destructured parameters work as in an ordinary
+call. On success it removes both operands and pushes a callback frame marked
+**restricted**. The callback's return supplies one value to the caller. It pays
+the `call` rate (8 Fuel, no allocation); its body pays ordinary instruction costs.
+Invalid calls retain ordinary call-error charging and call-depth fault rules.
+
+Each frame carries its restriction, inherited by every synchronous callee.
+Nested restricted calls cannot relax an inherited restriction. Catch selection,
+accepted catches, cleanup activations, retained continuations and cancellation
+cleanup keep the restriction of their owning frame, even when that frame is no
+longer on the active stack. Returning or unwinding removes that frame's
+restriction; the caller keeps its own. An uncaught ordinary Error reaches the
+invoking Library unchanged, after ordinary cleanup. Limit Faults remain
+uncatchable. Caller code handling a callback failure is outside the callback;
+retained callback cleanup and any continuation re-entered by caller recovery
+remain restricted.
+
+Before operand validation, resource preflight, Host resolution, observation or
+effects, a restricted frame refuses these operations:
+
+- `load-var`, `store-var`, `store-definition`, `load-object`, `me`, `target`.
+- `set-property`, `set-property-computed`; `get-key` and `get-key-computed` on a
+  Host Object, except a text key exactly `id`.
+- `ask`, `ask-wait`, `tell`; every `send`, `send-wait`, `send-named`,
+  `send-named-wait`, `send-spread`, `send-spread-wait`, `send-up`, `send-up-wait`.
+- `wait`, `wait-for`, `wait-for-any`, `join-start`, `join-ask`, `join-send`,
+  `join-send-named`, `join-send-spread`, `join-end`, `timeout-start`, `timeout-end`,
+  `call-value-wait`, `call-handler-wait`, `veto`, `pass`.
+- `choose-offer`, and `call-builtin` for `offerAvailable` or `isDisposed`.
+  Recovery-offer lookup and transfer are refused even when the name is unknown
+  or names a callback-local offer, so neither can observe or escape through the
+  caller's recovery context.
+
+Refusal pays only `restricted-refusal` (1 Fuel, no allocation), then raises
+`restricted operation` with `instruction` equal to the instruction's canonical
+name, plus the ordinary `code`, `message` and `at` fields. There is no Host
+charge, lookup, call record, state read/write, message or suspension. Failure to
+pay that charge is a Limit Fault. A callback may catch this Error and return a
+fallback; its catch and finally code remain restricted. Argument expressions
+evaluated before the attempted instruction retain their own charges and rules.
+
+All other instructions and Built-ins retain their ordinary behavior. Arguments,
+captured local values, Constants, Value-Semantics local mutation, map/key and
+chunk computation, and Core-held immutable object identity (`id`, `objectKind`,
+equality and kind tests) are allowed. Ordinary Function Value eligibility checks
+remain required, rather than becoming disposal-observation APIs. Optional-key
+reads retain their ordinary rejection of objects without Host access.
+
+The restriction flag occupies the existing logical frame header, introducing
+no new per-call logical allocation. Preemption does not change it. Save/restore
+preserves it on every active, retained and cleanup frame, validates shared-owner
+agreement, and never infers unrestricted state from a missing field. Cores bump
+their private snapshot format and reject the prior format as `invalid save`;
+there is no automatic snapshot migration.
 
 ## The lowering
 
@@ -999,6 +1072,7 @@ Cost Model **0**.
 | `next` | `2` | 0 | the item is part of the snapshot the iterator shares, and a Match is part of the replacement, so nothing is new |
 | `make-closure` | `4 + count` | `size(result)` |  |
 | `call` | `8` | 0 |  |
+| `restricted-refusal` | `1` | 0 |  |
 | `clause` | `4` | 0 | each Handler Clause a dispatch tries, charged at the clause body's first instruction |
 | `return` | `2` | 0 |  |
 | `test` | `1` | 0 |  |
@@ -1089,6 +1163,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 
 | Issue | Change |
 | --- | --- |
+| [#696](https://github.com/odogono/odgn-talk/issues/696) | call-restricted uses the call rate; refused restricted operations pay restricted-refusal only, with no operation allocation, Host charge or dynamic work; the frame restriction flag fits the existing frame header |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | `next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position |
 | [#115](https://github.com/odogono/odgn-talk/issues/115) | An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged |

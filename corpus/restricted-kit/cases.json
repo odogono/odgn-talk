@@ -1,0 +1,208 @@
+[
+  {
+    "name": "captures",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  put 3 into offset\n  put given n: n + offset into f\n  return invoke(f, 4)\nend go\n",
+    "result": "7"
+  },
+  {
+    "name": "local-mutation",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  put [1] into original\n  put given n\n    put 2 after n\n    return n\n  end given into f\n  return [invoke(f, original), original]\nend go\n",
+    "result": "[[1, 2], [1]]"
+  },
+  {
+    "name": "constant-helper",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  return invoke(callback, 4)\nend go\nconstant offset = 6\nfunction callback n\n return helper(n)\nend callback\nfunction helper n\n return n + offset\nend helper\n",
+    "result": "10"
+  },
+  {
+    "name": "reject-read",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 4)\n  catch e\n    return [the code of e, the instruction of e, state]\n  end try\nend go\nfunction callback n\n return state\nend callback\n",
+    "result": "[\"restricted operation\", \"load-var\", 7]"
+  },
+  {
+    "name": "reject-write",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 4)\n  catch e\n    return [the code of e, the instruction of e, state]\n  end try\nend go\nfunction callback n\n put n into state\nend callback\n",
+    "result": "[\"restricted operation\", \"store-var\", 7]"
+  },
+  {
+    "name": "reject-disposal",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 4)\n  catch e\n    return [the code of e, the instruction of e, state]\n  end try\nend go\nfunction callback n\n return isDisposed(n)\nend callback\n",
+    "result": "[\"restricted operation\", \"call-builtin\", 7]"
+  },
+  {
+    "name": "reject-offers",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 4)\n  catch e\n    return [the code of e, the instruction of e, state]\n  end try\nend go\nfunction callback n\n return offerAvailable(\"recover\")\nend callback\n",
+    "result": "[\"restricted operation\", \"call-builtin\", 7]"
+  },
+  {
+    "name": "caught-fallback",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  return invoke(callback, 4)\nend go\nfunction callback n\n try\n  put state into n\n catch e\n  put the instruction of e into first\n end try\n try\n  put n into state\n catch e\n  return [first, the instruction of e]\n end try\nend callback\n",
+    "result": "[\"load-var\", \"store-var\"]"
+  },
+  {
+    "name": "nested",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  put given n: invoke(given x: x + 1, n) into f\n  return invoke(f, 4)\nend go\n",
+    "result": "5"
+  },
+  {
+    "name": "nested-refusal",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  put given n: invoke(callback, n) into f\n  try\n    invoke(f, 4)\n  catch e\n    return [the code of e, state]\n  end try\nend go\nfunction callback n\n return state\nend callback\n",
+    "result": "[\"restricted operation\", 7]"
+  },
+  {
+    "name": "failure-cleanup",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 4)\n  catch e\n    put 9 into state\n    return [the code of e, the instruction of e, state]\n  end try\nend go\nfunction callback n\n try\n  throw \"original\"\n finally\n  put n into state\n end try\nend callback\n",
+    "result": "[\"restricted operation\", \"store-var\", 9]"
+  },
+  {
+    "name": "ordinary-error",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(given n: 1 / n, 0)\n  catch e\n    return the code of e\n  end try\nend go\n",
+    "result": "\"division by zero\""
+  },
+  {
+    "name": "wrong-kind",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(42, 1)\n  catch e\n    return the code of e\n  end try\nend go\n",
+    "result": "\"wrong kind\""
+  },
+  {
+    "name": "wrong-arity",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(given a, b: a + b, 1)\n  catch e\n    return the code of e\n  end try\nend go\n",
+    "result": "\"wrong arity\""
+  },
+  {
+    "name": "suspending",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  put given n\n    wait 1 s\n    return n\n  end given into f\n  try\n    invoke(f, 1)\n  catch e\n    return the code of e\n  end try\nend go\n",
+    "result": "\"would suspend\""
+  },
+  {
+    "name": "allowed-default",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  return invoke(callback, 4)\nend go\nfunction callback n, increment = 6\n return n + increment\nend callback\n",
+    "result": "10"
+  },
+  {
+    "name": "helper-refusal",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 1)\n  catch e\n    return [the instruction of e, state]\n  end try\nend go\nfunction callback n\n return helper(n)\nend callback\nfunction helper n\n return state\nend helper\n",
+    "result": "[\"load-var\", 7]"
+  },
+  {
+    "name": "recovery-refusal",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  invoke(callback, 1)\n catch e\n  return the code of e\n end try\nend go\nfunction callback n\n try\n  throw \"original\"\n offer recover result\n  return result\n catch \"original\" before unwind\n  choose offer recover(9)\n end try\nend callback\n",
+    "result": "\"restricted operation\""
+  },
+  {
+    "name": "fuel-exhaustion",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n  try\n    invoke(callback, 1)\n  catch e\n    return \"caught\"\n  end try\nend go\nfunction callback n\n repeat forever\n  add 1 to n\n end repeat\nend callback\n",
+    "result": "fault",
+    "fuelLimit": 100
+  },
+  {
+    "name": "object-getter",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n return the label of n\nend callback\n",
+    "result": "[\"restricted operation\", \"get-key\"]",
+    "object": true
+  },
+  {
+    "name": "object-computed-getter",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n return the (\"label\") of n\nend callback\n",
+    "result": "[\"restricted operation\", \"get-key-computed\"]",
+    "object": true
+  },
+  {
+    "name": "object-setter",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n set the label of n to \"changed\"\nend callback\n",
+    "result": "[\"restricted operation\", \"set-property\"]",
+    "object": true
+  },
+  {
+    "name": "object-computed-setter",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n set the (\"label\") of n to \"changed\"\nend callback\n",
+    "result": "[\"restricted operation\", \"set-property-computed\"]",
+    "object": true
+  },
+  {
+    "name": "object-disposed",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n return isDisposed(n)\nend callback\n",
+    "result": "[\"restricted operation\", \"call-builtin\"]",
+    "object": true
+  },
+  {
+    "name": "object-send",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n send ping to n\nend callback\n",
+    "result": "[\"restricted operation\", \"send\"]",
+    "object": true
+  },
+  {
+    "name": "object-identity",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n return invoke(callback, o)\nend go\nfunction callback n\n return [the id of n, objectKind(n), the (\"id\") of n, n is n]\nend callback\n",
+    "result": "[\"o1\", \"item\", \"o1\", true]",
+    "object": true,
+    "disposed": false
+  },
+  {
+    "name": "object-identity-disposed",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n return invoke(callback, o)\nend go\nfunction callback n\n return [the id of n, objectKind(n), the (\"id\") of n, n is n]\nend callback\n",
+    "result": "[\"o1\", \"item\", \"o1\", true]",
+    "object": true,
+    "disposed": true
+  },
+  {
+    "name": "foreign",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(o, 1)\n catch e\n  return the code of e\n end try\nend go\n",
+    "result": "\"would suspend\"",
+    "foreign": true
+  },
+  {
+    "name": "capability-ask",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  invoke(callback, 1)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n ask api to read n\nend callback\n",
+    "result": "[\"restricted operation\", \"ask\"]",
+    "host": true
+  },
+  {
+    "name": "capability-tell",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  invoke(callback, 1)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n tell api to write n\nend callback\n",
+    "result": "[\"restricted operation\", \"tell\"]",
+    "host": true
+  },
+  {
+    "name": "reject-me",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  invoke(callback, 1)\n catch e\n  return the instruction of e\n end try\nend go\nfunction callback n\n return me\nend callback\n",
+    "result": "\"me\""
+  },
+  {
+    "name": "reject-target",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  invoke(callback, 1)\n catch e\n  return the instruction of e\n end try\nend go\nfunction callback n\n return the target\nend callback\n",
+    "result": "\"target\""
+  },
+  {
+    "name": "allocation-exhaustion",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  return invoke(callback, 1)\n catch e\n  return \"caught\"\n end try\nend go\nfunction callback n\n return [n,n,n,n,n,n,n,n,n,n]\nend callback\n",
+    "result": "fault",
+    "allocLimit": 100
+  },
+  {
+    "name": "call-depth-exhaustion",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n try\n  return invoke(callback, 1)\n catch e\n  return \"caught\"\n end try\nend go\nfunction callback n\n return callback(n + 1)\nend callback\n",
+    "result": "fault",
+    "depthLimit": 8
+  },
+  {
+    "name": "data-dependent-allowed",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n put state into captured\n return invoke(given n\n  if n is 0 then return state\n  return n + captured\n end given, 3)\nend go\n",
+    "result": "10"
+  },
+  {
+    "name": "caller-offer-observation",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n put 7 into outer\n try\n  try\n   throw \"outer\"\n  offer recover result\n   put result into outer\n  catch \"outer\" before unwind\n   invoke(callback, 1)\n  end try\n catch e\n  return [the code of e, outer]\n end try\nend go\nfunction callback n\n return offerAvailable(\"recover\")\nend callback\n",
+    "result": "[\"restricted operation\", 7]"
+  },
+  {
+    "name": "caller-offer-escape",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n put 7 into outer\n try\n  try\n   throw \"outer\"\n  offer recover result\n   put result into outer\n  catch \"outer\" before unwind\n   invoke(callback, 1)\n  end try\n catch e\n  return [the code of e, outer]\n end try\nend go\nfunction callback n\n try\n  throw \"inner\"\n catch \"inner\" before unwind\n  choose offer recover(99)\n end try\nend callback\n",
+    "result": "[\"restricted operation\", 7]"
+  },
+  {
+    "name": "ordinary-call-unchanged",
+    "source": "use merge from map\nscript variable state = 7\non go invoke\n return restrictedCall(callback, 4)\nend go\nfunction restrictedCall f, n\n return f(n)\nend restrictedCall\nfunction callback n\n put n into state\n return state\nend callback\n",
+    "result": "4"
+  }
+]

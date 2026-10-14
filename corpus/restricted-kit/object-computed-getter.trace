@@ -1,0 +1,9 @@
+# Unblessed: restricted callback object-computed-getter (#696); first blessing awaits human review.
+> deliver d1 to=s message=go args=[<function s:map:restrictedCall>, <object item "o1">]
+> pump clock=1970-01-01T00:00:00Z
+raise s/r1 code="restricted operation" at=s:28 pos=11:9
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=59 alloc=132 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=["restricted operation", "get-key-computed"] fuel=59 alloc=132
+pumped state=idle fuel=59
+> vars
+vars s state=7

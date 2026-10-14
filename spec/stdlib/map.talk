@@ -146,3 +146,9 @@ end needMap
 private function needFunction v
   if v is not a function then wrongKind("function", v)
 end needFunction
+
+-- Core intrinsic entry, private to normative Standard Library code (#696).
+-- In trusted compilation only, this unary call lowers to call-restricted.
+private function restrictedCall f, value
+  return f(value)
+end restrictedCall

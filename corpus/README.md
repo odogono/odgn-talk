@@ -169,6 +169,12 @@ replacement and Session inspection, while runtime Text Values remain NFC
 received human first-blessing approval on 2026-10-09
 ([approval and evidence](../docs/reviews/trace-source/README.md)).
 
+The [restricted callback kit](restricted-kit/README.md) (#696) uses internal
+Hosts to reach the private normative stdlib intrinsic, without adding a public
+API. Its 38 Traces and full `map` Disassembly await human first blessing; see
+[the exact review inventory](../docs/reviews/restricted-callbacks/README.md).
+The kit runs separately from the ordinary Corpus runners.
+
 ## Seed blessing
 
 The `objects/implicit-property-targets` and

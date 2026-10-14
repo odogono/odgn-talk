@@ -1,0 +1,9 @@
+# Unblessed: restricted callback allocation-exhaustion (#696); first blessing awaits human review.
+> deliver d1 to=s message=go args=[<function s:map:restrictedCall>]
+> pump clock=1970-01-01T00:00:00Z
+fault s/r1 limit=alloc at=s:32 pos=11:9
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=38 alloc=32 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=alloc fuel=38 alloc=32
+pumped state=idle fuel=38
+> vars
+vars s state=7

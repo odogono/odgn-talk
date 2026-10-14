@@ -102,6 +102,7 @@ pub const Iterator = struct {
 };
 
 pub const Frame = struct {
+    restricted: bool = false,
     /// The Library whose code it runs, or null for its Script's.
     library: ?*Library = null,
     body: u32,
@@ -259,6 +260,8 @@ pub const Run = struct {
     /// Where its last error was raised, or it faulted, for its `run end`
     /// report.
     end_at: report.Location = .{},
+    /// Keeps the last error's handler alive after a catch releases the error.
+    end_handler: ?*Value = null,
     /// How a limit or an error ended its cleanup, once cancelled: the
     /// limit, or the error's code, which it holds.
     cleanup_limit: []const u8 = "",
@@ -810,6 +813,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         group.abandonUnwinding(&run);
         while (run.frames.items.len > 0) group.popFrame(&run);
         run.frames.deinit(gpa);
+        if (run.end_handler) |h| h.release();
     }
     try group.pushFrame(&run, 0, &.{});
     switch (try group.execute(&run, false)) {
@@ -867,6 +871,7 @@ pub fn stdlibLibrary(name: []const u8) ?*Library {
         switch (compiled) {
             .library => |l| {
                 l.stdlib = true;
+                lower.lowerStdlibIntrinsics(&l.unit);
                 stdlib_compiled[i] = l;
                 return l;
             },
@@ -1771,6 +1776,7 @@ pub const Group = struct {
             g.abandonUnwinding(&run);
             while (run.frames.items.len > 0) g.popFrame(&run);
             run.frames.deinit(g.gpa);
+            if (run.end_handler) |h| h.release();
         }
         try g.pushFrameIn(&run, library, 0, &.{});
         switch (try g.execute(&run, false)) {
@@ -2911,6 +2917,7 @@ pub const Group = struct {
         if (run.participant) |*p| p.grants.deinit(g.gpa);
         g.dropBase(run);
         if (run.cleanup_code) |c| c.release();
+        if (run.end_handler) |h| h.release();
         run.abandoned.deinit(g.gpa);
         while (run.frames.items.len > 0) g.popFrame(run);
         run.frames.deinit(g.gpa);
@@ -5604,7 +5611,7 @@ pub const Group = struct {
     /// `call-value` and `call-value-wait`: a Function Value whose Home
     /// Script is this one runs in the caller's Run, with its captures.
     fn callValue(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction) !Step {
-        const n: usize = @intCast(ins.operands[0].int);
+        const n: usize = if (ins.op == .call_restricted) 1 else @intCast(ins.operands[0].int);
         const args = try g.scratch.allocator().alloc(*Value, n);
         for (0..n) |i| args[n - 1 - i] = pop(frame);
         defer for (args) |v| v.release();
@@ -5650,6 +5657,7 @@ pub const Group = struct {
         }
         try g.callFunction(run, code.library, code.body, args);
         const callee = &run.frames.items[run.frames.items.len - 1];
+        if (ins.op == .call_restricted) callee.restricted = true;
         for (fv.data.function.captures.data.map, body.capture_slot..) |p, slot| {
             callee.locals[slot].release();
             callee.locals[slot] = p.value.retain();
@@ -5708,7 +5716,8 @@ pub const Group = struct {
             l.* = if (i >= 1 and i <= args.len) args[i - 1].retain() else try nothing(g.gpa);
             made += 1;
         }
-        try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals });
+        const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
+        try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
     }
 
     fn popFrame(g: *Group, run: *Run) void {
@@ -6108,7 +6117,11 @@ pub const Group = struct {
 
     fn writeRaise(g: *Group, run: *Run, err: *Value, pc: u32, ins: lower.Instruction) void {
         run.raised_at = ins.position;
-        const handler = if (err.get("at")) |at| if (at.get("handler")) |h| if (h.data == .text) h.data.text else "" else "" else "";
+        const held_handler = if (err.get("at")) |at| at.get("handler") else null;
+        if (held_handler) |h| _ = h.retain();
+        if (run.end_handler) |h| h.release();
+        run.end_handler = held_handler;
+        const handler = if (held_handler) |h| if (h.data == .text) h.data.text else "" else "";
         run.end_at = .{ .unit = topName(run), .line = ins.position.line, .column = ins.position.column, .handler = handler, .pc = pc };
         // An initialiser's error is the unit's load diagnostic, not a
         // `raise` record.
@@ -6847,6 +6860,17 @@ pub const Group = struct {
     }
 
     fn instruction(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction, m: *costs.Measures) !Step {
+        if (frame.restricted and restrictedOperation(frame, ins)) {
+            m.restricted_refusal = true;
+            // Match the ordinary failed-instruction stack shape. execute has
+            // retained these operands for any pending cleanup continuation.
+            const count = verify.popCount(unitOf(run, frame), ins).?;
+            for (0..count) |_| frame.stack.pop().?.release(g.gpa);
+            const name = machine_table.instruction[@backingInt(ins.op)].name;
+            const v = try model.text(g.gpa, name);
+            defer v.release();
+            return g.raise("restricted operation", &.{.{ .key = "instruction", .value = v }});
+        }
         const gpa = g.gpa;
         const a = g.scratch.allocator();
         const unit = unitOf(run, frame);
@@ -7719,7 +7743,7 @@ pub const Group = struct {
                 m.result = v.retain();
                 try g.push(frame, v);
             },
-            .call_value, .call_value_wait => return g.callValue(run, frame, ins),
+            .call_value, .call_restricted, .call_value_wait => return g.callValue(run, frame, ins),
             .call_import => {
                 // `<library>:<name>`: a function of a Library the unit
                 // imports, run in the caller's Run.
@@ -8834,8 +8858,25 @@ pub const Group = struct {
 };
 
 fn costKey(ins: lower.Instruction, m: *const costs.Measures) []const u8 {
+    if (m.restricted_refusal) return "restricted-refusal";
     if (m.builtin.len > 0) return m.builtin;
     return machine_table.instruction[@backingInt(ins.op)].cost;
+}
+
+fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
+    return switch (ins.op) {
+        .load_var, .store_var, .store_definition, .load_object, .me, .target, .set_property, .set_property_computed, .ask, .ask_wait, .tell, .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .send_up, .send_up_wait, .wait, .wait_for, .wait_for_any, .join_start, .join_ask, .join_send, .join_send_named, .join_send_spread, .join_end, .timeout_start, .timeout_end, .call_value_wait, .call_handler_wait, .veto, .pass, .choose_offer => true,
+        .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable"),
+        .get_key, .get_key_computed => blk: {
+            const stack = frame.stack.items;
+            if (stack[stack.len - 1].value.data != .object) break :blk false;
+            // Literal key operands are canonical display text, including quotes.
+            if (ins.op == .get_key) break :blk !std.mem.eql(u8, ins.operands[0].text, "\"id\"");
+            const key = stack[stack.len - 2].value;
+            break :blk key.data != .text or !std.mem.eql(u8, key.data.text, "id");
+        },
+        else => false,
+    };
 }
 
 /// The pairs `compare` scans: Characters of texts through the first that

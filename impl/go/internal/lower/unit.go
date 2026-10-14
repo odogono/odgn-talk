@@ -267,6 +267,26 @@ func (u *Unit) named(n *syntax.Node, store bool, pos syntax.Position) {
 // to this compilation; compiling it again does not mutate its semantic form.
 func Compile(checked *check.Unit, name string) (*Unit, error) { return compile(checked, name, nil) }
 
+// LowerStdlibIntrinsics is called only by the normative Standard Library loader.
+// Public Library compilation never takes this path, even for identical source.
+func LowerStdlibIntrinsics(u *Unit) {
+	if u.Name != "map" || u.Kind != "library" {
+		return
+	}
+	for _, body := range u.Bodies {
+		if body.Checked.Name != "restrictedCall" {
+			continue
+		}
+		for j := range body.Code {
+			i := &body.Code[j]
+			if i.Name == "call-value" {
+				i.Name, i.Op = "call-restricted", generated.OpCallRestricted
+				i.args, i.operands = nil, nil
+			}
+		}
+	}
+}
+
 // Extend appends code without moving an existing body, constant or variable slot.
 func Extend(checked *check.Unit, previous *Unit, name string) (*Unit, error) {
 	return compile(checked, name, previous)

@@ -1,0 +1,10 @@
+# Unblessed: restricted callback caller-offer-observation (#696); first blessing awaits human review.
+> deliver d1 to=s message=go args=[<function s:map:restrictedCall>]
+> pump clock=1970-01-01T00:00:00Z
+raise s/r1 code="outer" at=s:7 pos=7:4
+raise s/r1 code="restricted operation" at=s:43 pos=18:9
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=76 alloc=164 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go value=["restricted operation", 7] fuel=76 alloc=164
+pumped state=idle fuel=76
+> vars
+vars s state=7

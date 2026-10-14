@@ -27,6 +27,18 @@ pub const errors: ErrorsTable = .{
     },
     .@"error" = &.{
         .{
+            .code = "restricted operation",
+            .fields = &.{
+                "instruction",
+            },
+            .raised_when = "A restricted callback attempts an instruction or Built-in that observes live state, performs an effect or accesses recovery offers",
+            .sources = &.{
+                "ADR 0081",
+                "#696",
+            },
+            .message = "The instruction {instruction} is not allowed in a restricted callback",
+        },
+        .{
             .code = "bad throw",
             .fields = &.{},
             .raised_when = "`throw` is given something that isn't a map with a text `code`, or text",

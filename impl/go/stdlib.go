@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 )
 
@@ -42,6 +43,7 @@ func compileStandardLibraries() map[string]*Library {
 			panic(err)
 		}
 		l.state.Stdlib = true
+		lower.LowerStdlibIntrinsics(l.state.Unit)
 		libraries[name] = l
 		return l
 	}
