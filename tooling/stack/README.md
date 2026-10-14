@@ -388,3 +388,10 @@ cost proportionally more to rewind. The debugger never sets Script state or
 edits the recorded sources. Bun, Node and browser fixtures exercise replay and
 reverse navigation; corpus tests compare every Trace Case and Session
 Transcript's `case.trace` with replay-debugging output.
+
+The generated Standard Library catalogue includes `map.transform(value, mapping)`
+for completion, hover and Session descriptions. It is a Library export and is
+unavailable in Guards. Its [Mapping contract](../../spec/07-libraries-and-the-standard-library.md#checked-mappings)
+defines rule validation, wildcard/missing policies, restricted callbacks and
+complete output or diagnostics. No special syntax or public pure-call API is
+introduced.

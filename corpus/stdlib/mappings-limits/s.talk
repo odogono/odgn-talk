@@ -1,0 +1,23 @@
+use transform from map
+script variable out = "unchanged"
+script variable caught = false
+on go
+  try
+    put transform([1, 2, 3], {rules: [{from: [{each: true}], to: ["v"], transform: costly}]}) into out
+  catch e
+    put true into caught
+  end try
+end go
+function costly n
+  repeat 10000 times
+    add 1 to n
+  end repeat
+  return n
+end costly
+on reports
+  try
+    put transform(the items of (1..100), {rules: [{from: [{each: true}], to: ["v"], input: "text"}]}) into out
+  catch e
+    put true into caught
+  end try
+end reports

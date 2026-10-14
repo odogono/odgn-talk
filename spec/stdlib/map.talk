@@ -152,3 +152,278 @@ end needFunction
 private function restrictedCall f, value
   return f(value)
 end restrictedCall
+
+--| A complete fresh mapped value, or ordered diagnostics without partial output
+function transform value, mapping
+  validateMapping(mapping)
+  put {} into built
+  put [] into errors
+  put 0 into ruleNumber
+  repeat for each rule in the rules of mapping
+    add 1 to ruleNumber
+    put selectMapping(value, the from of rule) into selections
+    put [] into results
+    put 0 into position
+    put false into wrote
+    repeat for each selected in selections
+      add 1 to position
+      put mappingLocation(ruleNumber, rule, selected, position) into location
+      if "error" is in the keys of selected then
+        put mappingFailure(location, "source", the error of selected) after errors
+        next repeat
+      end if
+      if not the present of selected then
+        put "error" into policy
+        if "missing" is in the keys of rule then put the missing of rule into policy
+        if policy = "skip" then next repeat
+        if policy = "error" then
+          put mappingFailure(location, "source", {code: "missing selection", step: the failedStep of selected}) after errors
+          next repeat
+        end if
+        put the default of rule into itemValue
+      else
+        put the value of selected into itemValue
+      end if
+      if "input" is in the keys of rule then
+        put explain(itemValue, the input of rule) into failures
+        if failures is not empty then
+          repeat for each failure in failures
+            put mappingFailure(location, "input", failure) after errors
+          end repeat
+          next repeat
+        end if
+      end if
+      if "transform" is in the keys of rule then
+        try
+          put restrictedCall(the transform of rule, itemValue) into itemValue
+        catch failure
+          put mappingFailure(location, "transform", failure) after errors
+          next repeat
+        end try
+      end if
+      if "output" is in the keys of rule then
+        put explain(itemValue, the output of rule) into failures
+        if failures is not empty then
+          repeat for each failure in failures
+            put mappingFailure(location, "output", failure) after errors
+          end repeat
+          next repeat
+        end if
+      end if
+      put itemValue after results
+      put true into wrote
+    end repeat
+    if hasWildcard(the from of rule) then
+      put mappingWrite(built, the to of rule, results) into built
+    else
+      if wrote then put mappingWrite(built, the to of rule, item 1 of results) into built
+    end if
+  end repeat
+  if errors is not empty then return {ok: false, errors: errors}
+  return {ok: true, value: built}
+end transform
+
+-- Complete definition validation precedes selection and callback execution.
+private function validateMapping mapping
+  if mapping is not a map then invalidMapping("not a mapping", [], mapping)
+  mappingKeys(mapping, ["rules"], [])
+  if "rules" is not in the keys of mapping then invalidMapping("missing rules", [], mapping)
+  if the rules of mapping is not a list then invalidMapping("invalid rules", ["rules"], the rules of mapping)
+  put [] into destinations
+  put 0 into number
+  repeat for each rule in the rules of mapping
+    add 1 to number
+    put ["rules", number] into path
+    if rule is not a map then invalidMapping("invalid rule", path, rule)
+    mappingKeys(rule, ["from", "to", "input", "output", "transform", "missing", "default"], path)
+    if "from" is not in the keys of rule then invalidMapping("missing from", path, rule)
+    put [...path, "from"] into fromPath
+    if the from of rule is not a list then invalidMapping("invalid source path", fromPath, the from of rule)
+    put 0 into index
+    repeat for each step in the from of rule
+      add 1 to index
+      if not selectionStep(step) then invalidMapping("invalid selection step", [...fromPath, index], step)
+    end repeat
+    if "to" is not in the keys of rule then invalidMapping("missing to", path, rule)
+    put [...path, "to"] into toPath
+    if the to of rule is not a list then invalidMapping("invalid destination path", toPath, the to of rule)
+    if the to of rule is empty then invalidMapping("empty destination", toPath, the to of rule)
+    put 0 into index
+    repeat for each step in the to of rule
+      add 1 to index
+      if step is not a text then invalidMapping("invalid destination step", [...toPath, index], step)
+    end repeat
+    repeat for each stage in ["input", "output"]
+      if stage is in the keys of rule then
+        try
+          put conforms(nothing, the (stage) of rule) into ignored
+        catch failure
+          throw {code: "invalid mapping", reason: "invalid shape", path: [...path, stage], value: the (stage) of rule, error: failure}
+        end try
+      end if
+    end repeat
+    if "transform" is in the keys of rule then
+      if the transform of rule is not a function then invalidMapping("invalid transform", [...path, "transform"], the transform of rule)
+      if 1 is not in functionArity(the transform of rule) then invalidMapping("invalid transform arity", [...path, "transform"], the transform of rule)
+    end if
+    put "error" into policy
+    if "missing" is in the keys of rule then
+      put the missing of rule into policy
+      if policy is not in ["error", "skip", "default"] then invalidMapping("invalid missing policy", [...path, "missing"], policy)
+    end if
+    if policy = "default" then
+      if "default" is not in the keys of rule then invalidMapping("missing default", path, rule)
+    else
+      if "default" is in the keys of rule then invalidMapping("unexpected default", [...path, "default"], the default of rule)
+    end if
+    put 0 into previous
+    repeat for each destination in destinations
+      add 1 to previous
+      if overlappingPaths(destination, the to of rule) then
+        throw {code: "invalid mapping", reason: "overlapping destination", path: toPath, value: the to of rule, otherRule: previous}
+      end if
+    end repeat
+    put the to of rule after destinations
+  end repeat
+end validateMapping
+
+private function mappingKeys definition, allowed, path
+  repeat for each key in the keys of definition
+    if key is not in allowed then invalidMapping("unknown key", [...path, key], the (key) of definition)
+  end repeat
+end mappingKeys
+
+private function invalidMapping reason, path, value
+  throw {code: "invalid mapping", reason: reason, path: path, value: value}
+end invalidMapping
+
+private function selectionStep step
+  if step is a text then return true
+  if step is an integer then return step <> 0
+  if step is a map then return step = {each: true}
+  return false
+end selectionStep
+
+private function hasWildcard path
+  repeat for each step in path
+    if step is a map then return true
+  end repeat
+  return false
+end hasWildcard
+
+private function overlappingPaths a, b
+  put 1 into index
+  repeat while index <= the length of a and index <= the length of b
+    if item index of a <> item index of b then return false
+    add 1 to index
+  end repeat
+  return true
+end overlappingPaths
+
+-- Explicit work stack: no Script recursion or native depth limit. Children
+-- are pushed backwards so each wildcard is visited depth-first in source order.
+private function selectMapping value, path
+  put [{value: value, path: [], offset: 1}] into pending
+  put [] into selected
+  repeat while pending is not empty
+    put item -1 of pending into node
+    delete item -1 of pending
+    put the value of node into current
+    put the path of node into taken
+    put the offset of node into offset
+    if offset > the length of path then
+      put {present: true, value: current, path: taken} after selected
+      next repeat
+    end if
+    put item offset of path into step
+    if step is a map then
+      if current is a map then
+        put the keys of current into keys
+      else
+        if current is a list then
+          if current is empty then
+            put [] into keys
+          else
+            put the items of (1..(the length of current)) into keys
+          end if
+        else
+          put {present: false, path: taken, failedStep: step, error: {code: "wrong kind", expected: "map or list", got: kindOf(current), value: current}} after selected
+          next repeat
+        end if
+      end if
+      put the length of keys into index
+      repeat while index > 0
+        put item index of keys into key
+        if current is a map then
+          put the (key) of current into child
+        else
+          put item key of current into child
+        end if
+        put {value: child, path: [...taken, key], offset: offset + 1} after pending
+        subtract 1 from index
+      end repeat
+      next repeat
+    end if
+    if step is a text then
+      if current is not a map then
+        put {present: false, path: taken, failedStep: step, error: {code: "wrong kind", expected: "map", got: kindOf(current), value: current}} after selected
+        next repeat
+      end if
+      if step is not in the keys of current then
+        put {present: false, path: taken, failedStep: step} after selected
+        next repeat
+      end if
+      put the (step) of current into child
+      put step into resolved
+    else
+      if current is not a list then
+        put {present: false, path: taken, failedStep: step, error: {code: "wrong kind", expected: "list", got: kindOf(current), value: current}} after selected
+        next repeat
+      end if
+      put step into resolved
+      if step < 0 then put the length of current + step + 1 into resolved
+      if resolved < 1 or resolved > the length of current then
+        put {present: false, path: taken, failedStep: step} after selected
+        next repeat
+      end if
+      put item resolved of current into child
+    end if
+    put {value: child, path: [...taken, resolved], offset: offset + 1} after pending
+  end repeat
+  return selected
+end selectMapping
+
+private function mappingLocation number, rule, selected, position
+  put {rule: number, sourcePath: the path of selected, destinationPath: the to of rule} into location
+  if hasWildcard(the from of rule) then put position into the position of location
+  if "failedStep" is in the keys of selected then put the failedStep of selected into the failedStep of location
+  return location
+end mappingLocation
+
+private function mappingFailure location, stage, failure
+  put stage into the stage of location
+  put failure into the error of location
+  return location
+end mappingFailure
+
+-- Rebuild destination parents iteratively, from the leaf towards the root.
+private function mappingWrite built, path, value
+  put [] into parents
+  put built into current
+  put 1 into index
+  repeat while index < the length of path
+    put current after parents
+    put the (item index of path) of current into current
+    if current is nothing then put {} into current
+    add 1 to index
+  end repeat
+  put value into the (item index of path) of current
+  subtract 1 from index
+  repeat while index > 0
+    put item index of parents into parent
+    put current into the (item index of path) of parent
+    put parent into current
+    subtract 1 from index
+  end repeat
+  return current
+end mappingWrite

@@ -1,0 +1,16 @@
+
+> load s identity=9791a379a8e08104eb802006dbb563fc8451f724f9dc3f45b5b9444016fc9959
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T00:00:00Z
+raise s/r1 code="restricted operation" at=s:130 pos=20:10
+raise s/r1 code="restricted operation" at=s:134 pos=24:12
+raise s/r1 code="restricted operation" at=s:130 pos=20:10
+raise s/r1 code="restricted operation" at=s:179 pos=9:79
+raise s/r1 code="example failure" at=s:165 pos=34:5
+raise s/r1 code="restricted operation" at=s:170 pos=36:5
+raise s/r1 code="would suspend" at=map:420 pos=153:10
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=9407 alloc=69110 state=4760 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=9407 alloc=69110
+pumped state=idle fuel=9407
+> vars
+vars s log=[{ok: true, value: {v: 10}}, {ok: false, errors: [{rule: 1, sourcePath: [], destinationPath: ["v"], stage: "transform", error: {code: "restricted operation", instruction: "load-var", at: {unit: "s", handler: "readState", line: 20, column: 10}}}]}, {ok: false, errors: [{rule: 1, sourcePath: [], destinationPath: ["v"], failedStep: "state", stage: "source", error: {code: "wrong kind", expected: "map", got: "object", value: <object light "bulb-1">}}]}, {ok: false, errors: [{rule: 1, sourcePath: [], destinationPath: ["v"], stage: "transform", error: {code: "restricted operation", instruction: "get-key", at: {unit: "s", handler: "go", line: 9, column: 79}}}]}, {ok: false, errors: [{rule: 1, sourcePath: [], destinationPath: ["v"], stage: "transform", error: {code: "restricted operation", instruction: "store-var", at: {unit: "s", handler: "cleanup", line: 36, column: 5}, during: {code: "example failure", detail: 3, at: {unit: "s", handler: "cleanup", line: 34, column: 5}}}}]}, {ok: false, errors: [{rule: 1, sourcePath: [], destinationPath: ["v"], stage: "transform", error: {code: "would suspend", at: {unit: "s", handler: "go", line: 15, column: 7}}}]}, {ok: true, value: {v: 4}}, 7] state=7

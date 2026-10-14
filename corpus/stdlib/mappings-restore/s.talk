@@ -1,0 +1,17 @@
+use transform from map
+script variable out
+script variable state = 7
+on go
+  put transform([1, 2], {rules: [{from: [{each: true}], to: ["v"], transform: convert, output: "number"}]}) into out
+  put state into afterState
+end go
+function convert n
+  try
+    repeat 5 times
+      add 1 to n
+    end repeat
+    return state
+  catch e
+    return n
+  end try
+end convert

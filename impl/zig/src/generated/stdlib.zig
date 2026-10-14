@@ -866,6 +866,15 @@ pub const stdlib: StdlibTable = .{
             .gives = "The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing",
         },
         .{
+            .library = "map",
+            .name = "transform",
+            .call = "transform(value, mapping)",
+            .gives = "A complete fresh mapped value, or ordered diagnostics without partial output",
+            .errors = &.{
+                "invalid mapping",
+            },
+        },
+        .{
             .library = "bytes",
             .name = "toHex",
             .call = "toHex(b)",

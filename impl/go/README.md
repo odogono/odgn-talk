@@ -344,10 +344,16 @@ The trusted stdlib loader alone lowers private `map:restrictedCall` to
 `call-restricted`. Its inherited frame restriction rejects live Script state,
 Host effects and recovery-context access before acting, and survives catches,
 cleanup, preemption and restore. Host Library compilation cannot enable it.
-Snapshot format `go/7` rejects earlier formats. This implements the internal
-callback prerequisite; `map.transform` and a public pure-call API are not
-available. See [the normative contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)
+Snapshot format `go/7` rejects earlier formats. The `map.transform` Library export uses this boundary for callbacks; no
+public pure-call API is available. See [the normative contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)
 and [the cross-Core kit](../../corpus/restricted-kit/README.md).
+
+`map.transform` implements ordered, presence-aware Mappings from the shared
+normative Library source, including wildcard/default/skip selection, complete
+Shape checks, definition validation before callbacks and complete output or
+ordered diagnostics. Limit Faults escape. The [contract](../../spec/07-libraries-and-the-standard-library.md#checked-mappings)
+fixes definition precedence and concrete source locations; the `stdlib/mappings*`
+Corpus cases cover behavior, sliced restore and resource exhaustion.
 
 The first Group compiles these Libraries once per process; each WASI instance
 pays this cost independently. Library compilation reuses one compact syntax

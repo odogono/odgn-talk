@@ -1,0 +1,144 @@
+use transform from map
+script variable log = []
+on go
+  try
+    put transform(1, nothing) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {extra: 1, rules: false}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: false}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [nothing]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{typo: true}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: 1}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [0], to: []}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [{each: true, extra: 1}], to: ["x"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [1.5], to: ["x"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [nothing], to: ["x"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: []}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: 1}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: []}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: [1]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], input: {oneOf: ["number", "bogus"]}, transform: 1}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], output: {map: [{key: "a"}]}}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], transform: 1}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], transform: given a, b: a}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], missing: nothing}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], missing: "default"}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], default: nothing}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], missing: "skip", default: 1}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: ["missing"], to: ["x"], missing: "skip"}, {from: [], to: ["x"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"]}, {from: [], to: ["x", "y"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x", "y"]}, {from: [], to: ["x"]}]}) into ignored
+  catch e
+    put e after log
+  end try
+  try
+    put transform(1, {rules: [{from: [], to: ["x"], transform: given n: n / 0}, {from: [], to: ["y"], output: "bogus"}]}) into ignored
+  catch e
+    put e after log
+  end try
+end go

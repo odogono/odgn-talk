@@ -96,6 +96,14 @@ Before pushing, run `bun run corpus:check`,
 
 ## Case navigation
 
+The seven `stdlib/mappings*` Traces and `builtins/collection-comparison-fuel`
+cover checked Mappings, callback restrictions, restoration, resource faults and
+comparison Fuel (#697, #869, #870). The maintainer approved their first blessings,
+the Mapping additions to `restricted-kit/map.dis`, and the identity-only
+`stdlib/calls` and `stdlib/lookup` changes on 2026-10-14; see the
+[exact approval record](../docs/reviews/mappings/README.md). Current support and
+the existing Zig Value-depth limitation (#871) are described in the Core guides.
+
 The `names/handler-shared-names` Trace Case covers Script Variables and Constants
 sharing local Handler names in either declaration order, guarded clauses,
 Command Calls, Host Deliveries and value reads (#769). Its first blessing awaits

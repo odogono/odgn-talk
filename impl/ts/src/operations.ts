@@ -303,6 +303,9 @@ const scannedPairs = (a: Value, b: Value, fold: boolean): number => {
   if (a.kind === 'map') {
     let i = 0;
     for (const [k, v] of a.entries()) {
+      if (i >= b.mapSize) {
+        break;
+      }
       i++;
       const other = b.entries().find(([key]) => key === k);
       if (!other || !equals(v, other[1], fold).equal) {

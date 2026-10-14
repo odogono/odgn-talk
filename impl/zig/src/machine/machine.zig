@@ -8892,8 +8892,8 @@ fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     };
 }
 
-/// The pairs `compare` scans: Characters of texts through the first that
-/// differs, or to the end of the shorter.
+/// The pairs `compare` scans, through the first difference. Collection
+/// elements count once each; comparing their nested values adds no visits.
 fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
     if (x.data == .text and y.data == .text) {
         var i: usize = 0;
@@ -8918,7 +8918,22 @@ fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
         for (0..@min(b.len, c.len)) |i| if (b[i] != c[i]) return i + 1;
         return @min(b.len, c.len);
     }
-    if (x.data == .list and y.data == .list) return @min(x.data.list.len, y.data.list.len);
+    if (x.data == .list and y.data == .list) {
+        const xs = x.data.list;
+        const ys = y.data.list;
+        for (0..@min(xs.len, ys.len)) |i| {
+            if (!(xs[i].equal(ys[i]) catch false)) return i + 1;
+        }
+        return @min(xs.len, ys.len);
+    }
+    if (x.data == .map and y.data == .map) {
+        const count = @min(x.data.map.len, y.data.map.len);
+        for (x.data.map[0..count], 0..) |entry, i| {
+            const other = y.get(entry.key) orelse return i + 1;
+            if (!(entry.value.equal(other) catch false)) return i + 1;
+        }
+        return count;
+    }
     return 0;
 }
 

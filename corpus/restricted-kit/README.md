@@ -1,9 +1,9 @@
 # Restricted callback test kit
 
-**Unblessed:** the 38 `.trace` files and `map.dis` await human first-blessing
-review for [#696](https://github.com/odogono/odgn-talk/issues/696).
-[Review inventory and evidence](../../docs/reviews/restricted-callbacks/README.md).
-Agreement between Cores does not approve the expectations.
+The maintainer approved the original 38 `.trace` files and `map.dis` first blessing on
+2026-10-14 in the #697 implementation thread.
+[Approval inventory and evidence](../../docs/reviews/restricted-callbacks/README.md).
+The later Mapping additions to `map.dis` received [separate approval](../../docs/reviews/mappings/README.md) on the same date.
 
 This language-neutral kit exercises the private stdlib intrinsic specified in
 [chapter 8](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks).
@@ -35,8 +35,8 @@ bun tools/corpus/restricted-kit.ts
 ```
 
 `--update` writes candidate expectations with TS, checks Go and Zig, and restores
-all previous expectation bytes if a check fails. It retains the Unblessed
-markers. Use that wrapper, not the internal `UPDATE_RESTRICTED_KIT` environment
+all previous expectation bytes if a check fails. Updating expectations does
+not confer human approval; later changes need their own review. Use that wrapper, not the internal `UPDATE_RESTRICTED_KIT` environment
 switch. Human approval is recorded separately under the
 [corpus review policy](../README.md#seed-blessing).
 

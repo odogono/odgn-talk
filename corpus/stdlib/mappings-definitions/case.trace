@@ -1,0 +1,40 @@
+
+> load s identity=d35b4082b1abb3f8595de6b0d509143433dd3bbbc61721ab5b513716dae9fe83
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T00:00:00Z
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid shape" at=map:880 pos=259:15
+raise s/r1 code="invalid mapping" at=map:900 pos=261:11
+raise s/r1 code="invalid shape" at=map:880 pos=259:15
+raise s/r1 code="invalid mapping" at=map:900 pos=261:11
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1068 pos=297:3
+raise s/r1 code="invalid mapping" at=map:1024 pos=283:9
+raise s/r1 code="invalid mapping" at=map:1024 pos=283:9
+raise s/r1 code="invalid mapping" at=map:1024 pos=283:9
+raise s/r1 code="invalid shape" at=map:880 pos=259:15
+raise s/r1 code="invalid mapping" at=map:900 pos=261:11
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=12225 alloc=95303 state=20053 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=12225 alloc=95303
+pumped state=idle fuel=12225
+> vars
+vars s log=[{code: "invalid mapping", reason: "not a mapping", path: [], value: nothing, at: {unit: "s", handler: "go", line: 5, column: 9}}, {code: "invalid mapping", reason: "missing rules", path: [], value: {}, at: {unit: "s", handler: "go", line: 10, column: 9}}, {code: "invalid mapping", reason: "unknown key", path: ["extra"], value: 1, at: {unit: "s", handler: "go", line: 15, column: 9}}, {code: "invalid mapping", reason: "invalid rules", path: ["rules"], value: false, at: {unit: "s", handler: "go", line: 20, column: 9}}, {code: "invalid mapping", reason: "invalid rule", path: ["rules", 1], value: nothing, at: {unit: "s", handler: "go", line: 25, column: 9}}, {code: "invalid mapping", reason: "unknown key", path: ["rules", 1, "typo"], value: true, at: {unit: "s", handler: "go", line: 30, column: 9}}, {code: "invalid mapping", reason: "missing from", path: ["rules", 1], value: {}, at: {unit: "s", handler: "go", line: 35, column: 9}}, {code: "invalid mapping", reason: "invalid source path", path: ["rules", 1, "from"], value: 1, at: {unit: "s", handler: "go", line: 40, column: 9}}, {code: "invalid mapping", reason: "invalid selection step", path: ["rules", 1, "from", 1], value: 0, at: {unit: "s", handler: "go", line: 45, column: 9}}, {code: "invalid mapping", reason: "invalid selection step", path: ["rules", 1, "from", 1], value: {each: true, extra: 1}, at: {unit: "s", handler: "go", line: 50, column: 9}}, {code: "invalid mapping", reason: "invalid selection step", path: ["rules", 1, "from", 1], value: 1.5, at: {unit: "s", handler: "go", line: 55, column: 9}}, {code: "invalid mapping", reason: "invalid selection step", path: ["rules", 1, "from", 1], value: nothing, at: {unit: "s", handler: "go", line: 60, column: 9}}, {code: "invalid mapping", reason: "missing to", path: ["rules", 1], value: {from: []}, at: {unit: "s", handler: "go", line: 65, column: 9}}, {code: "invalid mapping", reason: "invalid destination path", path: ["rules", 1, "to"], value: 1, at: {unit: "s", handler: "go", line: 70, column: 9}}, {code: "invalid mapping", reason: "empty destination", path: ["rules", 1, "to"], value: [], at: {unit: "s", handler: "go", line: 75, column: 9}}, {code: "invalid mapping", reason: "invalid destination step", path: ["rules", 1, "to", 1], value: 1, at: {unit: "s", handler: "go", line: 80, column: 9}}, {code: "invalid mapping", reason: "invalid shape", path: ["rules", 1, "input"], value: {oneOf: ["number", "bogus"]}, error: {code: "invalid shape", reason: "unknown kind", path: ["oneOf", 2], value: "bogus", at: {unit: "s", handler: "go", line: 85, column: 9}}, at: {unit: "s", handler: "go", line: 85, column: 9}}, {code: "invalid mapping", reason: "invalid shape", path: ["rules", 1, "output"], value: {map: [{key: "a"}]}, error: {code: "invalid shape", reason: "missing field shape", path: ["map", 1], value: {key: "a"}, at: {unit: "s", handler: "go", line: 90, column: 9}}, at: {unit: "s", handler: "go", line: 90, column: 9}}, {code: "invalid mapping", reason: "invalid transform", path: ["rules", 1, "transform"], value: 1, at: {unit: "s", handler: "go", line: 95, column: 9}}, {code: "invalid mapping", reason: "invalid transform arity", path: ["rules", 1, "transform"], value: <function s:100:64>, at: {unit: "s", handler: "go", line: 100, column: 9}}, {code: "invalid mapping", reason: "invalid missing policy", path: ["rules", 1, "missing"], value: nothing, at: {unit: "s", handler: "go", line: 105, column: 9}}, {code: "invalid mapping", reason: "missing default", path: ["rules", 1], value: {from: [], to: ["x"], missing: "default"}, at: {unit: "s", handler: "go", line: 110, column: 9}}, {code: "invalid mapping", reason: "unexpected default", path: ["rules", 1, "default"], value: nothing, at: {unit: "s", handler: "go", line: 115, column: 9}}, {code: "invalid mapping", reason: "unexpected default", path: ["rules", 1, "default"], value: 1, at: {unit: "s", handler: "go", line: 120, column: 9}}, {code: "invalid mapping", reason: "overlapping destination", path: ["rules", 2, "to"], value: ["x"], otherRule: 1, at: {unit: "s", handler: "go", line: 125, column: 9}}, {code: "invalid mapping", reason: "overlapping destination", path: ["rules", 2, "to"], value: ["x", "y"], otherRule: 1, at: {unit: "s", handler: "go", line: 130, column: 9}}, {code: "invalid mapping", reason: "overlapping destination", path: ["rules", 2, "to"], value: ["x"], otherRule: 1, at: {unit: "s", handler: "go", line: 135, column: 9}}, {code: "invalid mapping", reason: "invalid shape", path: ["rules", 2, "output"], value: "bogus", error: {code: "invalid shape", reason: "unknown kind", path: [], value: "bogus", at: {unit: "s", handler: "go", line: 140, column: 9}}, at: {unit: "s", handler: "go", line: 140, column: 9}}]

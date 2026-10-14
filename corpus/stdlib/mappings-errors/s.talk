@@ -1,0 +1,9 @@
+use transform from map
+script variable log = []
+on go
+  put transform({x: [[1, "x", false]], y: 4}, {rules: [{from: ["x", {each: true}], to: ["first"], input: {list: "number"}, transform: given n: n / 0}, {from: ["y"], to: ["second"], transform: given n: n / 0}, {from: ["y"], to: ["third"], transform: given n: n + 1, output: {oneOf: ["text", "boolean"]}}, {from: ["y"], to: ["valid"]}]}) after log
+  put transform({x: [{}, {a: nothing}, {a: [4]}]}, {rules: [{from: ["x", {each: true}, "a", -2], to: ["v"], missing: "default", default: "bad", input: "number"}]}) after log
+  put transform([{}, {a: "bad"}, {a: {}}, {a: []}], {rules: [{from: [{each: true}, "a", {each: true}, "z"], to: ["v"], missing: "skip"}]}) after log
+  put transform({list: [1, 2]}, {rules: [{from: ["list", -1], to: ["v"], output: "text"}, {from: ["list", -3], to: ["missing"]}]}) after log
+  put transform({}, {rules: [{from: ["missing"], to: ["v"], missing: "default", default: "4", input: "text", transform: given n: n as number, output: "text"}]}) after log
+end go

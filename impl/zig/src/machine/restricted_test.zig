@@ -123,7 +123,7 @@ test "restricted callback kit Trace agreement" {
         defer a.free(path);
         const want = try std.Io.Dir.cwd().readFileAlloc(testing.io, path, a, .unlimited);
         defer a.free(want);
-        const start = std.mem.indexOfScalar(u8, want, '\n').? + 1;
+        const start = if (std.mem.startsWith(u8, want, "# ")) std.mem.indexOfScalar(u8, want, '\n').? + 1 else 0;
         if (!std.mem.eql(u8, want[start..], out.written())) std.debug.print("case {s}\n", .{c.name});
         try testing.expectEqualStrings(want[start..], out.written());
     }

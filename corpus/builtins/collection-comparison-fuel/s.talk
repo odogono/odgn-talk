@@ -1,0 +1,22 @@
+script variable log = []
+on go
+  put the items of (1..32) into a
+  put a into b
+  put 99 into item 1 of b
+  put a = b after log
+  put a < b after log
+  put a = a after log
+  put {a: 1} = {a: 1} after log
+  put {a: 1, b: 2} = {b: 2, a: 1} after log
+  put {a: 1} = {b: 1} after log
+  put {a: 1} = {} after log
+  put {} = {a: 1} after log
+  put {} into left
+  repeat for each n in 1..32
+    put n into the (n as text) of left
+  end repeat
+  put left into right
+  put 99 into the ("1") of right
+  put left = right after log
+  put left = left after log
+end go

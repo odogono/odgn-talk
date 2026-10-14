@@ -42,7 +42,7 @@ try {
   }
   passed = true;
   console.log(
-    'Restricted callback kit agrees on TS, Go and Zig. First blessing still requires human review.',
+    'Restricted callback kit agrees on TS, Go and Zig. Expectation changes require separate human review.',
   );
 } finally {
   if (update && !passed) {

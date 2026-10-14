@@ -587,7 +587,7 @@ A description of the values accepted at a boundary or by an explicit check, cons
 _Avoid_: schema (for a Shape), type (for a Shape)
 
 **Mapping**:
-An ordered description of how selected input values are checked and transformed into a new map. Its rules combine Selection Paths, destination Value Paths and optional Shapes and transformation functions.
+An ordered description of how selected input values are checked and transformed into a new map. Its rules combine Selection Paths, destination Value Paths and optional Shapes and transformation functions. The `map.transform` Library export executes a Mapping under [chapter 7](07-libraries-and-the-standard-library.md#checked-mappings), returning complete output or diagnostics; its callbacks use restricted execution.
 _Avoid_: transforming Shape, changeset
 
 **Function Value**:

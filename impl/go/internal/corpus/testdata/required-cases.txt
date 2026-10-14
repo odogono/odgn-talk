@@ -172,3 +172,11 @@ trace text-model/zwj-sequence-search
 trace text-patterns/matching-fuel-exhaustion
 trace text-patterns/pattern-size-literal-limit
 trace text-patterns/pattern-size-made-at-run-time
+trace builtins/collection-comparison-fuel
+trace stdlib/mappings
+trace stdlib/mappings-errors
+trace stdlib/mappings-definitions
+trace stdlib/mappings-restricted
+trace stdlib/mappings-restore
+trace stdlib/mappings-limits
+trace stdlib/mappings-depth

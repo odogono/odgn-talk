@@ -1,4 +1,3 @@
-# Unblessed: restricted callback foreign (#696); first blessing awaits human review.
 > deliver d1 to=s message=go args=[<function s:map:restrictedCall>, <function other:callback>]
 > pump clock=1970-01-01T00:00:00Z
 raise s/r1 code="would suspend" at=map:420 pos=153:10

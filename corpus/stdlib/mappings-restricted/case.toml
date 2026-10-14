@@ -1,0 +1,20 @@
+# mappings-restricted: checked Mappings (#697), spec chapter 7.
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "state", shape = "text" }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"' }
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

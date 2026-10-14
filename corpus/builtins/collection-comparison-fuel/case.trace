@@ -1,0 +1,8 @@
+> load s identity=0ac0d945f94a0b01f882192ab8488d2ebf1e874eceb0806110b642001d3fb498
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T00:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=1051 alloc=3025 state=176 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=1051 alloc=3025
+pumped state=idle fuel=1051
+> vars
+vars s log=[false, true, true, true, true, false, false, false, false, true]

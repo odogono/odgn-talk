@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import cases from '../../../corpus/restricted-kit/cases.json';
 import { newGroup, restore, type Group } from '../src/group';
@@ -156,8 +156,11 @@ for (const fixture of cases) {
         ? 'outcome=limit-fault'
         : `value=${fixture.result}`,
     );
-    const text = `# Unblessed: restricted callback ${fixture.name} (#696); first blessing awaits human review.\n${lines.join('\n')}\n`;
     const file = resolve(root, `${fixture.name}.trace`);
+    const header = existsSync(file)
+      ? (readFileSync(file, 'utf8').match(/^#.*\n/)?.[0] ?? '')
+      : `# Unblessed: restricted callback ${fixture.name} (#696); first blessing awaits human review.\n`;
+    const text = `${header}${lines.join('\n')}\n`;
     if (process.env.UPDATE_RESTRICTED_KIT === '1') {
       writeFileSync(file, text);
     }

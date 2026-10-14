@@ -2,9 +2,16 @@
 
 ## Approval status
 
-**Pending human first blessing.** No approval is inferred from implementation
-or cross-Core agreement. All new Trace headers and the kit README remain
-Unblessed. The exact expectation inventory is below.
+**First blessing approved on 2026-10-14.** In the #697 implementation thread,
+the maintainer explicitly confirmed: "I confirm that i approve the exact
+inventory" in this document. This covers the 38 Traces and `map.dis` listed
+below, as present at `7d79fe0b`; [the SHA-256 inventory](approved-sha256.txt)
+records their exact bytes before removal of the Unblessed Trace headers.
+Later expectation changes require their own review.
+
+The implementation merged in [#853](https://github.com/odogono/odgn-talk/pull/853)
+as `44c09f0f7c1bd9d7fffcce279b851ee41db8177d`. The explicit approval above completes the prerequisite for dependent
+[#697](https://github.com/odogono/odgn-talk/issues/697) implementation.
 
 ## Contract and implementation
 
@@ -26,7 +33,7 @@ Zig findings exposed by this coverage are tracked separately:
 validation) and [#848](https://github.com/odogono/odgn-talk/issues/848) (caught-error
 report metadata lifetime). Their fixes are included here.
 
-## Exact expectations awaiting review
+## Exact approved expectations
 
 - [allocation-exhaustion.trace](../../../corpus/restricted-kit/allocation-exhaustion.trace)
 - [allowed-default.trace](../../../corpus/restricted-kit/allowed-default.trace)
@@ -103,9 +110,10 @@ its removed `--check-passing` option is no longer used. All 414 cases pass.
 
 ## Implementation handoff
 
-Implementation is on `fix/issue-696`, based on `edec5912`
-(a descendant of required design commit `7ef52421b5ae46b904ce40c95eeffc4fe5357077`).
+Implementation merged as `44c09f0f7c1bd9d7fffcce279b851ee41db8177d` in #853,
+a descendant of required design commit
+`7ef52421b5ae46b904ce40c95eeffc4fe5357077`.
 The [file manifest](files.txt) names every changed/new implementation, Spec,
-generated, test and documentation file. No merged implementation is claimed.
-Remaining work is human first blessing of the exact inventory above and
-merge; #696 stays open until its acceptance is reconciled.
+generated, test and documentation file in that implementation. Implementation
+and first blessing are complete; no Core implementation is deferred. The
+dependent #697 base must also contain Shape checks from #852 (`fd2f13be`).

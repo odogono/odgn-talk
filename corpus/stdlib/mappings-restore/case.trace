@@ -1,0 +1,282 @@
+
+> load s identity=00686e37f8d36ffa2d62d0618fc8fcde11e0827933e103b261a04308563066a8
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 start delivery=d1 handler=go clause=1 by=slice fuel=20 alloc=192
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=377
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=701
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=77
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=15 alloc=69
+pumped state=sliced fuel=15
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=53
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=40
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=24 alloc=109
+pumped state=sliced fuel=24
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=240
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=17 alloc=133
+pumped state=sliced fuel=17
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=14 alloc=32
+pumped state=sliced fuel=14
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=8
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=15 alloc=8
+pumped state=sliced fuel=15
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=141
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=190
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=40
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=24
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=76
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=141
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=196
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=32
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=32
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=232
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=133
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=0
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=133
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=17 alloc=64
+pumped state=sliced fuel=17
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=24 alloc=141
+pumped state=sliced fuel=24
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=16 alloc=133
+pumped state=sliced fuel=16
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=24
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=81
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=40
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=26 alloc=215
+pumped state=sliced fuel=26
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=14 alloc=255
+pumped state=sliced fuel=14
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=231
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=16
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=76
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=136
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=40
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=88
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=374
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=32
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=96
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=374
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=16
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=223
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=0
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=184
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=383
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=16
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=16
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=360
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=40
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=16
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=214
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=32
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=24 alloc=128
+pumped state=sliced fuel=24
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=104
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=8
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=266
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=0
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=16 alloc=24
+pumped state=sliced fuel=16
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=32
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=16
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=32
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+raise s/r1 code="restricted operation" at=s:36 pos=13:12
+preempt s/r1 continue by=slice fuel=20 alloc=0
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=31 alloc=149
+pumped state=sliced fuel=31
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=9 alloc=16
+pumped state=sliced fuel=9
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=40
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=0
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=214
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=17 alloc=32
+pumped state=sliced fuel=17
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=128
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=18 alloc=104
+pumped state=sliced fuel=18
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=22 alloc=141
+pumped state=sliced fuel=22
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=133
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=24 alloc=0
+pumped state=sliced fuel=24
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=14 alloc=40
+pumped state=sliced fuel=14
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=19 alloc=16
+pumped state=sliced fuel=19
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=32
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+raise s/r1 code="restricted operation" at=s:36 pos=13:12
+preempt s/r1 continue by=slice fuel=20 alloc=16
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=133
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=24 alloc=16
+pumped state=sliced fuel=24
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=16 alloc=40
+pumped state=sliced fuel=16
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=24
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=25 alloc=8
+pumped state=sliced fuel=25
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=15 alloc=32
+pumped state=sliced fuel=15
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=89
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=20 alloc=16
+pumped state=sliced fuel=20
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+preempt s/r1 continue by=slice fuel=21 alloc=200
+pumped state=sliced fuel=21
+> pump clock=2026-10-14T00:00:00Z fuel-slice=20
+seg s/r1 continue fuel=5 alloc=0 state=200 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=1806 alloc=9554
+pumped state=idle fuel=5
+
+> vars
+vars s out={ok: true, value: {v: [6, 7]}} state=7

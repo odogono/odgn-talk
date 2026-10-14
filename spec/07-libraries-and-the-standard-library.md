@@ -526,6 +526,7 @@ A Guard may use the Built-in Constants, and a Script's own name may shadow them 
 | `fromEntries(pairs)` | The map with the entries of the list of pairs `pairs`, where a later pair wins for a repeated key |  |
 | `mapValues(m, f)` | `m` with each value replaced by what `f` gives for it, keys and order kept |  |
 | `lookup(m, path, default = nothing)` | The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing |  |
+| `transform(value, mapping)` | A complete fresh mapped value, or ordered diagnostics without partial output | `invalid mapping` |
 
 <!-- end -->
 
@@ -545,6 +546,129 @@ supports list positions, and reports a cumulative error path.
   put lookup(order, ["customer", "address", "city"], "unknown") into city
   put lookup(order, ["lines", -1, "sku"]) into lastSku
   ```
+
+### Checked Mappings
+
+`transform(value, mapping)` combines selection, comprehensive input/output Shape
+checks and restricted unary conversion ([ADR 0081](../docs/adr/0081-mappings-compose-shapes-with-restricted-transformations.md)).
+It gives `{ok: true, value: output}` or `{ok: false, errors: diagnostics}`.
+The output is a fresh map; any failure discards it. An empty rules list gives
+an empty map. It is a Library function, unavailable in Guards.
+
+**Definition.** A Mapping is a map containing only `rules`, an ordered list of
+rule maps. A rule contains required `from` and `to`, optional `input` and
+`output` Shapes, optional `transform` Function Value accepting one argument,
+and optional `missing` policy: `"error"` (default), `"skip"` or `"default"`.
+A `default` key must be present exactly for the `"default"` policy; its value
+may be any Kind, including Nothing. Unknown Mapping/rule keys are rejected;
+Shape metadata follows the Shape checks' separate rules above.
+
+`from` is a Selection Path: a list of text keys, nonzero integers or exactly
+`{each: true}`. An empty path selects the whole input; text `"*"` is literal.
+`to` is a nonempty list of text map keys (empty text is a valid key).
+It constructs intermediate maps, never list positions. Duplicate destinations
+and ancestor/descendant destination overlaps are rejected, even for rules that
+would skip. Sibling destinations share their intermediate map.
+
+**Definition precedence.** The whole definition is checked before selection or
+any callback. First check Mapping Kind, unknown keys in insertion order, presence
+of `rules`, then its Kind. Visit rules in declaration order. In each rule check:
+Kind; unknown keys in insertion order; presence/Kind of `from` then its steps in
+order; presence/Kind/nonemptiness of `to` then its steps in order; the complete
+`input` then `output` Shape definitions; `transform` Kind then acceptance of one
+argument; `missing` word; `default` presence or prohibition; finally destination
+overlaps against earlier rules in order. Each earlier check takes precedence
+over every later check, including failures in subsequent rules.
+
+`invalid mapping` carries `reason`, definition-relative `path` and offending
+`value`. A missing required key locates its enclosing definition and uses that
+map as `value`. Other locations include the field key and, for path steps, the
+1-based position. Reasons and their locations are fixed as follows:
+
+| Reason | Location / offending value |
+| --- | --- |
+| `not a mapping` | root / Mapping argument |
+| `unknown key` | unknown key / its value |
+| `missing rules` | root / Mapping map |
+| `invalid rules` | `rules` / its non-list value |
+| `invalid rule` | `rules`, rule number / its non-map value |
+| `missing from`, `missing to` | rule / rule map |
+| `invalid source path`, `invalid destination path` | rule's `from` or `to` / its non-list value |
+| `invalid selection step` | `from`, step number / neither text, nonzero integer nor exact wildcard |
+| `empty destination` | `to` / empty list |
+| `invalid destination step` | `to`, step number / non-text value |
+| `invalid shape` | `input` or `output` / whole embedded Shape, with the original `invalid shape` error in `error` |
+| `invalid transform`, `invalid transform arity` | `transform` / non-function or function unable to accept one argument |
+| `invalid missing policy` | `missing` / unrecognised value |
+| `missing default` | rule / rule map |
+| `unexpected default` | `default` / its value under error or skip |
+| `overlapping destination` | `to` / later path, with earliest conflicting 1-based rule in `otherRule` |
+
+Embedded Shape errors preserve their own `reason`, Shape-relative `path`,
+`value`, `message` and `at` in `error`. Validation uses `conforms(nothing, shape)`
+to validate each Shape without treating a false answer as failure; this also
+charges that ordinary Built-in's attempted match. Function eligibility beyond
+arity (foreign Home Script, suspension or stale code) is tested when called,
+and failures become transform-stage diagnostics.
+
+**Selection.** Every rule reads the original input. A text step requires a map,
+an integer step a list, and a wildcard either. Incompatible containers give
+source-stage `wrong kind` diagnostics, regardless of missing policy. Host Object
+properties are never traversed. A present Nothing is a selected value; traversing
+further through it is a container mismatch. Positive list positions are 1-based;
+negative positions count backwards and successful reads record positive indices.
+A missing key or out-of-range index terminates that branch: error emits a
+`missing selection` diagnostic, skip omits it, and default supplies one selected
+value without resuming traversal inside that default.
+
+Wildcards visit list items in index order and map values in insertion order,
+flattening nested matches depth-first. Empty containers contribute no items.
+Any path containing a wildcard writes a flat list, even when absence occurs
+before its first wildcard; skipping all branches writes an empty list. A skipped
+single-value rule omits its destination. Successful/defaulted values can be any
+Kind and complete lists pass through without flattening unless selected by a
+wildcard. Unmapped fields are omitted.
+
+**Execution and diagnostics.** For each rule, selection finishes before its
+items execute. Each present/defaulted item is checked comprehensively against
+`input`, if supplied. Failed input suppresses its callback. A successful input
+is passed to `transform`, if supplied, using the private restricted-call boundary
+of [chapter 8](08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks),
+then checked comprehensively against `output`. Output Shapes check individual
+items, never the final wildcard collection. Ordinary callback errors are
+collected unchanged inside a transform-stage diagnostic, qualifying the general
+stdlib callback-error propagation rule. Caught restriction errors may yield
+valid fallback values. Limit Faults escape; they never become diagnostics.
+
+Every diagnostic carries `rule` (1-based), `sourcePath`, `destinationPath`,
+`stage` (`source`, `input`, `transform` or `output`) and `error`. Field insertion
+order is those locations, optional `position`, optional `failedStep`, then
+`stage` and `error`, as the normative source fixes. A Shape diagnostic's inner
+path remains item-relative. Callback errors retain all their original details
+and metadata. Source errors are plain records without `message` or `at`.
+For a failed selection, `sourcePath` is the successfully resolved concrete
+prefix and `failedStep` is the original attempted token; the missing error's
+`step` repeats that token. No positive position is invented for an out-of-range
+negative index. Defaulted items keep these failed-selection locations through
+input, transform and output diagnostics.
+
+Wildcard rules additionally carry `position`: the 1-based depth-first ordinal
+of every terminal branch, counting present, missing and incompatible branches,
+including skipped branches. Empty wildcard containers contribute no ordinal.
+This ordinal is independent of the successful result list and identifies
+failures after skipped branches unambiguously. Diagnostic order is rule order,
+then terminal branch order, then comprehensive Shape traversal order. Failed
+items supply no output. Any collected error returns only `ok` and `errors`;
+otherwise the complete map is returned under `value`.
+
+**Resources.** Definition validation, selection, intermediate construction,
+callbacks and reports use ordinary Library instruction Fuel and Allocation
+Budgets, plus the existing Shape checker and restricted-call rates. All
+returned values and reports are charged by logical size, repeated offending
+values included. Iterative selection and destination construction introduce no
+recursion-based path limit, new depth cap or report truncation. Full results
+succeed or a Limit Fault escapes. Preemption/restore retains ordinary Library
+work and active callback boundaries; no additional snapshot format is needed.
 
 ## `bytes`
 
