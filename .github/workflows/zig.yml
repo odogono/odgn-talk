@@ -46,8 +46,8 @@ jobs:
       - run: bun run unicode:check
       - run: bun run zig:check
       - run: zig fmt --check impl/zig
-      # Fails on a talk.h name talk.go doesn't declare, and lists the talk.go
-      # names talk.h doesn't declare yet.
+      # Fails on a talk.h name talk.go doesn't declare, or a talk.go name
+      # talk.h doesn't.
       - run: bun tools/zig/api.ts
 
   test:
@@ -67,8 +67,9 @@ jobs:
       - run: zig build test --summary all
         working-directory: impl/zig
 
-  # Builds the library and runs the corpus in one invocation, so the two
-  # compile in parallel. The wasi job builds wasm32-wasi.
+  # Builds the library and runs the whole Corpus in one invocation, so the
+  # two compile in parallel. Any failing or unsupported case fails. The wasi
+  # job builds wasm32-wasi.
   corpus:
     runs-on: ubuntu-latest
     steps:
@@ -77,7 +78,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.17.0
-      - run: zig build install corpus -- --check-passing
+      - run: zig build install corpus
         working-directory: impl/zig
 
   # Runs the wasm32-wasi build in wasmtime through talk.h, and holds its

@@ -180,7 +180,7 @@ verifies the pinned UCD files the tests read.
 zig build test                    # the Zig tests and the talk.h C tests
 zig build                         # zig-out/lib/libtalk.a and zig-out/include/talk.h
 zig build -Dtarget=wasm32-wasi    # zig-out/bin/talk.wasm
-zig build corpus -- --check-passing
+zig build corpus                  # the whole Corpus, as CI runs it
 zig build corpus -- --list
 zig build corpus -- bytes/value-encoding
 zig fmt --check .
@@ -948,7 +948,7 @@ levels, independently of future Run budgets.
 
 ## Corpus runner
 
-`zig build corpus -- [--list] [--check-passing] [case directory ...]` discovers
+`zig build corpus -- [--list] [case directory ...]` discovers
 all case kinds and runs encoding cases through `talk.h`, and Disassembly
 Cases through the front end, since `talk.h` exposes no compiled unit, with the
 Go runner's messages. It holds each `case.toml` to the language and Cost Model versions
@@ -987,16 +987,12 @@ restores or settles next itself, before any later `call-value`, whose
 Function Value the original Group made, and where a later `answer` or `fail`
 is for a call the save doesn't hold, whose handle belongs to the original
 Group. A
-failure in this replay says so. Transcript replay and
-encoding cases that register Host Objects are not supported.
+failure in this replay says so. Encoding cases that register Host Objects are
+not supported.
 
-`--check-passing` takes no selection. `corpus-passing.txt` lists the cases the
-Zig Core must pass in CI: a listed case that fails, disappears or is
-unsupported fails the gate. Unlike the Go gate, a case that isn't listed is
-reported and skipped when it is unsupported or doesn't pass yet, as the
-decisions on #625 say, since the machine grows case by case. A passing case
-that isn't listed prints `NEW PASS`, for adding to the list. Expected corpus
-bytes are never rewritten. The runner's replay backend says which cases it
+With no selection the runner runs the whole Corpus, as CI does, and every
+case must pass: a failing or unsupported case fails the run. There is no
+passing list. Expected corpus bytes are never rewritten. The runner's replay backend says which cases it
 supports and replays each from its directory;
 [Trace parsing](src/corpus/trace.zig) uses generated record/key metadata,
 including filled input keys and optional ids, for the comparison.

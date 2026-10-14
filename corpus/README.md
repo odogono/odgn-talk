@@ -11,7 +11,7 @@ Use case names relative to `corpus/`, such as `text-model/chunk-write-padding`.
 | --- | --- | --- |
 | TS | [`impl/ts/tools/corpus.ts`](../impl/ts/tools/corpus.ts), via `bun run corpus:run` | A named case or category directory; `--list` reports support. No selection runs every case, blessed or not. |
 | Go | [`impl/go/cmd/corpus/main.go`](../impl/go/cmd/corpus/main.go), via `go -C impl/go run ./cmd/corpus` | One or more **individual case directories**, not category directories; `--list` reports support. `--check-passing` runs every case and enforces [the passing list](../impl/go/corpus-passing.txt); unsupported cases fail. |
-| Zig | [`impl/zig/src/corpus/main.zig`](../impl/zig/src/corpus/main.zig), via `(cd impl/zig && zig build corpus -- …)` | Case names or category directories; `--list` reports support. `--check-passing` enforces [the passing list](../impl/zig/corpus-passing.txt), including missing cases, but skips unlisted cases that fail or are unsupported while the Core is incomplete. An explicit unsupported selection fails. |
+| Zig | [`impl/zig/src/corpus/main.zig`](../impl/zig/src/corpus/main.zig), via `(cd impl/zig && zig build corpus -- …)` | Case names or category directories; `--list` reports support. With no selection it runs every case, and any failing or unsupported case fails. |
 
 After the implementation guide's build prerequisites:
 
@@ -21,7 +21,7 @@ bun run corpus:run recovery-offers/cleanup-restore # TS single case
 go -C impl/go run ./cmd/corpus recovery-offers/cleanup-restore recovery-offers/cancellation
 (cd impl/zig && zig build corpus -- recovery-offers)
 go -C impl/go run ./cmd/corpus --check-passing
-(cd impl/zig && zig build corpus -- --check-passing)
+(cd impl/zig && zig build corpus)
 ```
 
 For a Go category, discover its case directories rather than passing the category
@@ -76,6 +76,7 @@ A new case passes CI only when all of these hold:
 - **Unblessed header:** each expectation file (`case.trace`, and `session.transcript` for a Session case) starts with `# Unblessed: <what> (#issue); first blessing awaits human review.`; a Disassembly case carries it in `case.toml`. The reviewer removes it at first-blessing approval.
 - **Ends with `> vars`:** a hand-written `case.trace` ends with `> vars` and a `vars` record per Script ([running a case](../spec/11-the-trace-and-conformance.md#running-a-case)); `corpus:check` rejects it otherwise.
 - **Passes on Go:** `--check-passing` fails on every case Go cannot run, listed or not, so a case written against the TS Core alone fails the Go job. Add each case to [`corpus-passing.txt`](../impl/go/corpus-passing.txt) when the gate reports `NEW PASS`; Session Transcripts must be listed.
+- **Passes on Zig:** `zig build corpus` runs every case and fails on any the Zig Core can't run or doesn't pass. It has no passing list.
 - **Blessed by agreement:** write expectations with `bun run corpus:bless <case> …`, not the TS runner's `--bless`.
 
 Go's [acceptance tests](../impl/go/internal/corpus/execution_test.go) discover
@@ -84,13 +85,12 @@ new cases in their covered families automatically. The
 pins existing names and kinds so removing or reclassifying a case fails without
 making every addition change a numeric total. Add a baseline entry when a new
 case must also be protected from deletion; deliberate removals or kind changes
-must explain the corresponding baseline edit. Keep the passing lists current
-for each Core that supports the case.
+must explain the corresponding baseline edit. Keep Go's passing list current.
 
 Before pushing, run `bun run corpus:check`,
 `go -C impl/go test ./internal/corpus` and
-`go -C impl/go run ./cmd/corpus --check-passing`. For Zig cases, also run
-`(cd impl/zig && zig build corpus -- --check-passing)`.
+`go -C impl/go run ./cmd/corpus --check-passing` and
+`(cd impl/zig && zig build corpus)`.
 
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 

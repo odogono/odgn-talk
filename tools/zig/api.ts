@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 // Compares impl/zig/include/talk.h with spec/embedding/talk.go. A name talk.h
-// declares that talk.go doesn't is an error; a talk.go name talk.h lacks is
-// reported until step 6's conformance gate makes it an error too.
+// declares that talk.go doesn't, or a talk.go name talk.h lacks, is an error.
 //
 // Each talk.go name has one C spelling:
 //   type Group, func Text, var AnyShape    talk_group, talk_text, talk_any_shape
@@ -177,14 +176,13 @@ if (import.meta.main) {
     await readFile(resolve(root, 'spec/embedding/talk.go'), 'utf8'),
     await readFile(resolve(root, 'impl/zig/include/talk.h'), 'utf8'),
   );
-  // Missing names fail only from step 6's conformance gate (#625).
-  console.log(
-    `${missing.length} talk.go names talk.h doesn't declare yet: ${missing.join(', ')}`,
-  );
+  for (const name of missing) {
+    console.error(`talk.h: ${name} is declared in talk.go but not in talk.h`);
+  }
   for (const failure of failures) {
     console.error(`talk.h: ${failure}`);
   }
-  if (failures.length > 0) {
+  if (failures.length > 0 || missing.length > 0) {
     process.exit(1);
   }
 }
