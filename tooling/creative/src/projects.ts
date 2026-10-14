@@ -296,7 +296,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       );
       const link = h('a', {
         href: url,
-        download: `${project.name || 'Project'}.zip`,
+        download: `${project.name || 'Project'}.folio`,
       });
       link.click();
       if (currentId === id && JSON.stringify(editor.project) === source) {

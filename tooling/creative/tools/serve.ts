@@ -61,4 +61,4 @@ const server = Bun.serve({
     });
   },
 });
-console.log(`NorthTalk creative tool: ${server.url}`);
+console.log(`Folio: ${server.url}`);

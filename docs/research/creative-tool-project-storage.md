@@ -71,7 +71,7 @@ assets/9b02…e4.mp3             stored
 ### Extension and media type
 
 - **Media type:** `application/vnd.odgn.northtalk-project+zip`. The `+zip` suffix says the content follows `application/zip` ([RFC 6839 §3.6](https://www.rfc-editor.org/rfc/rfc6839#section-3.6)).
-- **Extension:** waits for the application's name, which is still in #154's Fog. A short, distinctive extension is wanted. A plain `.zip` is not, because the OS would open it in an archive tool.
+- **Extension:** `.folio`, after the application's name, Folio ([ADR 0087](../adr/0087-the-creative-tool-is-folio-and-projects-save-as-folio-files.md)). A plain `.zip` was ruled out because the OS would open it in an archive tool.
 
 ## 2. Versioning
 
@@ -272,7 +272,7 @@ The maintainer settled these on #739:
 
 - **Zip code:** we write our own small reader and writer, limited to methods 0 and 8, no encryption and no ZIP64. fflate stays the fallback if ours proves fragile.
 - **Asset size limits:** warn above 10 MB for one asset and refuse above 50 MB, as in section 3. These are a judgement, not a sourced figure, so revisit them once the acceptance example's assets exist.
-- **File extension:** it waits for the application's name, which is in #154's Fog. The media type could be registered in IANA's vendor tree later, but the app doesn't need that to work.
+- **File extension:** `.folio`, settled with the application's name on #818 and recorded in ADR 0087. The media type could be registered in IANA's vendor tree later, but the app doesn't need that to work.
 - **Stage 1 scope:** stage 1 includes a Project list and a panel for recovering earlier versions, besides autosave and export/import. Recovery is what makes autosave trustworthy for its audience.
 
 ## Open questions
