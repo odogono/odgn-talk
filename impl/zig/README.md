@@ -18,7 +18,7 @@ language 1.0-rc.3 and Cost Model 0
 Corpus case, every Trace Case in both replays and the pinned Unicode tests, its
 REPL reproduces every Session Transcript, and `talk.h` declares every `talk.go`
 name. Blessing needs it to agree with the Go and TS Cores, and the nightly
-differential fuzzer runs it. Its Message Layer is not yet complete (#635).
+differential fuzzer runs it. Its Message Layer carries `request-charge` alongside the other chapter 9 messages.
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -232,9 +232,10 @@ and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operati
 `op` needs, and a `grant` may name a
 shared `coordinator`; `store`'s hooks are one Coordinator's. A `pump`,
 `reload` or `replace-library` reply's `abandoned` lists the started calls the
-Core has abandoned since the last, once each. It does not yet conform:
-`request-charge` is a protocol error, since no Core implements Metered
-Operations yet ([#911](https://github.com/odogono/odgn-talk/issues/911)). A crossing pause, where a
+Core has abandoned since the last, once each. `request-charge` acknowledges
+enqueue with a Group-wide `q<N>` id; its later Pump returns a `charge result`
+report with `accepted`, `limit` or `inactive`. Post-start work needs this
+authorization; the starting need's local `fuelLeft` cannot fund it. A crossing pause, where a
 Host function answers `deferred`, is the transport's: it ends no Stretch and
 writes no record. Segment `begin`, `commit` and `rollback` hooks and automatic
 abandonment may defer at a Segment's end, while draining Stop, cancellation,
@@ -405,7 +406,44 @@ Store's name out of an opaque binding, so the router's options include
 
 ## The machine
 
-**Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. See [#472](https://github.com/odogono/odgn-talk/issues/472).
+**Metering support:** Operation Declarations carry `metering: "read-only"` or
+`"segment-bound"`, validated against mode, scope and coordinator metadata.
+It participates in the Host Manifest, Group Fingerprint and restore matching.
+`talk_call_charge` permits repeated callback-time increments, retains the
+accepted prefix and latches the first budget refusal even if the Host suppresses
+it. Invalid Fuel amounts are `invalid value` and do not latch a Limit Fault.
+
+A suspending read-only Operation may call `talk_call_request_charge`, including
+while starting, and receive a Group-owned `talk_charge_request`. The by-id
+`talk_request_charge` has the same admission rules for the Message Layer and
+restored issued ids. Admission is safe from Host threads: one unresolved request
+per call, Group-wide `q<N>` ids, and FIFO order with other queued inputs. Install
+`talk_group_on_ready` before starting workers to receive enqueue notifications;
+its hook runs outside the admission lock. `talk_charge_request_done` and
+`talk_charge_request_result` use the processing Pump's completed outcome. A
+starting callback must return before awaiting it. Check `talk_call_context`
+after acceptance and before work, since a later cancellation or timer in that
+Pump may already have abandoned the call.
+
+Accepted charges immediately contribute to Run accounting, Script counters,
+Pump Fuel and slice debt, including Pumps with only waiting Runs. Refusal faults
+at the originating call, including a Join Member, without a synthetic Segment.
+A preempted Join's open Segment rolls back; a suspended Run keeps its committed
+variables. `talk_save` refuses with `effects pending` for pending metered calls
+or unresolved requests, even after Reload ends their call. Successful saves
+preserve the request counter and issued-call eligibility in save format `zig/7`;
+older Zig snapshot layouts are refused.
+
+The [#472 handoff](../../docs/handoffs/472-metered-operations.md) still stages the
+shared executable catalogues and Go/TS target declarations. The maintainer
+authorized Zig to lead with Zig-only tests under
+[#911](https://github.com/odogono/odgn-talk/issues/911). Zig-only unit,
+C Host, Message Layer and replay tests exercise the target contract without
+blessing shared expectations. Its replay consumers understand the metering
+Trace/setup extensions, including accepted-prefix-plus-refusal replay. Existing
+shared SQLite fixtures use `talk_sqlite_legacy_capability` and their explicit
+up-front `perRow` replay Host until every consumer migrates; ordinary embedding
+uses the metered step factory below.
 
 `talk_new`, `talk_new_group`, `talk_load`, `talk_script_deliver`,
 `talk_script_request`, `talk_pending_result`, `talk_pump`, `talk_inspect` and
@@ -643,9 +681,15 @@ implementation gives; `change`, `begin`, `commit` and `rollback` are
 Segment-bound, and `begin` opens the scope `transaction` that `rollback`
 abandons. Before the call, uncharged, the Core checks `max` (`out of range`),
 then that `params` is a list or a map, then each value (`wrong kind` at
-argument 2, with its `path`). `query` and `change` then charge `max` times the
-per-row cost, `max` defaulting to the binding's cap, convert `params` to SQL
-values, and convert the rows back, raising `sql` for a column named twice and
+argument 2, with its `path`). `max` defaults to the binding's cap. The factory
+converts `params` to SQL values and supplies `before_step` and its opaque
+`step_context` to `query` and `change`. The driver calls it once immediately
+before every statement step and propagates refusal without stepping, including
+completion, SQL errors and the overflow probe. `per_step` is the factory's rate;
+N returned rows normally cost N+1 steps, an empty result or a non-returning
+change costs one. `max=0` still permits a completion step. Queries are metered
+read-only; changes are metered Segment-bound and roll back on refusal. The Core
+converts the rows back, raising `sql` for a column named twice and
 `unrepresentable` for a double it can't hold or text that isn't UTF-8. A
 malformed result is `host error`. `talk_store_coordinator` gives the Core's
 copy of a `store` implementation's coordinator, the same one for the same

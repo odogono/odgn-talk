@@ -22,6 +22,7 @@ const value_alignment: Alignment = .fromByteUnits(@alignOf(model.Value));
 
 pub const GroupAllocator = struct {
     parent: Allocator,
+    lock: @import("queue_lock.zig").Lock = .{},
     cap: usize,
     /// Bytes the Group holds now, and the most it has held. The Value
     /// cache below is held memory, so it is included.
@@ -81,6 +82,8 @@ pub const GroupAllocator = struct {
 
     fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        self.lock.lock();
+        defer self.lock.unlock();
         // A cached node is already counted in `used`, so reusing one
         // neither grows the Group nor reaches the parent.
         if (isValueNode(len, alignment)) {
@@ -104,6 +107,8 @@ pub const GroupAllocator = struct {
 
     fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        self.lock.lock();
+        defer self.lock.unlock();
         if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return false;
         if (!self.parent.rawResize(memory, alignment, new_len, ret_addr)) return false;
@@ -113,6 +118,8 @@ pub const GroupAllocator = struct {
 
     fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        self.lock.lock();
+        defer self.lock.unlock();
         if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return null;
         const p = self.parent.rawRemap(memory, alignment, new_len, ret_addr) orelse return null;
@@ -122,6 +129,8 @@ pub const GroupAllocator = struct {
 
     fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
+        self.lock.lock();
+        defer self.lock.unlock();
         if (isValueNode(memory.len, alignment) and self.cached_value_count < max_cached_values) {
             @as(*?[*]u8, @ptrCast(@alignCast(memory.ptr))).* = self.cached_values;
             self.cached_values = memory.ptr;

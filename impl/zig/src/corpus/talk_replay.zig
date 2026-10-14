@@ -6,7 +6,7 @@ const c = @import("talk-c");
 const northtalk = @import("northtalk");
 const case_setup = northtalk.corpus_case;
 
-const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "rewind-run", "call-value", "reload", "extend", "replace-library", "save", "restore", "settle" };
+const step1_inputs = [_][]const u8{ "load", "deliver", "request", "pump", "vars", "counters", "stub", "stub-effect", "decide", "broadcast", "decide-broadcast", "answer", "fail", "set-parent", "dispose", "add-library", "revoke", "cancel-run", "cancel-delivery", "stop", "rewind-run", "call-value", "reload", "extend", "replace-library", "save", "restore", "settle", "charge-request" };
 
 /// Why talk.h can't replay the case yet, or null.
 pub fn supports(a: std.mem.Allocator, setup: []const u8, trace: []const u8) ?[]const u8 {
@@ -342,7 +342,7 @@ fn check(code: c.talk_host_error_code) !void {
 // ---------------------------------------------------------------- Capabilities
 
 /// What a Stub queues for one call: a result or an error, and a charge.
-const Stub = struct { value: ?[]const u8 = null, err: ?[]const u8 = null, charge: ?i64 = null };
+const Stub = struct { value: ?[]const u8 = null, err: ?[]const u8 = null, charge: ?i64 = null, charge_refused: bool = false };
 
 /// The runner's Host function for one Operation: its Stubs, in order.
 /// The Host Inputs a case makes during a Pump, from inside a Host
@@ -377,6 +377,24 @@ fn crossInput(x: *Crossing, line: []const u8) !void {
     const name_end = std.mem.indexOfScalar(u8, input, ' ') orelse return error.MalformedCase;
     const name = input[0..name_end];
     const rest = input[name_end + 1 ..];
+    if (std.mem.eql(u8, name, "charge-request")) {
+        var ids = std.mem.tokenizeScalar(u8, rest, ' ');
+        const call = ids.next() orelse return error.MalformedCase;
+        const second = ids.next() orelse return error.MalformedCase;
+        const expected = if (std.mem.startsWith(u8, second, "fuel=")) null else second;
+        const shown = field(input, "fuel") orelse return error.MalformedCase;
+        const fuel = std.fmt.parseInt(i64, shown, 10) catch -1;
+        var q: ?*c.talk_charge_request = null;
+        const code = c.talk_request_charge(x.group, call.ptr, call.len, fuel, &q);
+        if (expected) |want| {
+            if (code != c.TALK_OK) return error.MalformedCase;
+            var id: [*c]const u8 = null;
+            var len: usize = 0;
+            c.talk_charge_request_id(q, &id, &len);
+            if (!std.mem.eql(u8, want, id[0..len])) return error.MalformedCase;
+        } else if (code == c.TALK_OK) return error.MalformedCase;
+        return;
+    }
     if (std.mem.eql(u8, name, "set-parent")) {
         const o = x.store.named(field(input, "object") orelse return error.MalformedCase) orelse return error.MalformedCase;
         const shown = field(input, "parent") orelse return error.MalformedCase;
@@ -428,6 +446,7 @@ const OperationHost = struct {
     mode: c.talk_mode,
     stubs: std.ArrayList(Stub) = .empty,
     next: usize = 0,
+    malformed: bool = false,
 };
 
 /// The Function Values the runner has received from the Core, in the order
@@ -496,7 +515,15 @@ fn host(context: ?*anyopaque, call: ?*c.talk_call, args: [*c]const ?*c.talk_valu
         h.next += 1;
         break :blk h.stubs.items[h.next - 1];
     } else if (h.mode != c.TALK_IMMEDIATE) .{} else return c.TALK_CALL_BROKEN;
-    if (stub.charge) |n| if (n > 0 and c.talk_call_charge(call, n) != c.TALK_OK) return c.TALK_CALL_LIMITED;
+    if (c.talk_call_automatic(call) and (stub.charge != null or stub.charge_refused)) {
+        h.malformed = true;
+        return c.TALK_CALL_BROKEN;
+    }
+    if (stub.charge) |n| if (n > 0 and c.talk_call_charge(call, n) != c.TALK_OK) {
+        if (stub.charge_refused) h.malformed = true;
+        return c.TALK_CALL_LIMITED;
+    };
+    if (stub.charge_refused) return c.TALK_CALL_LIMITED;
     if (h.mode == c.TALK_SUSPENDING and stub.err == null) {
         var id: [*c]const u8 = null;
         var id_len: usize = 0;
@@ -618,9 +645,13 @@ fn defineStandard(a: std.mem.Allocator, core: ?*c.talk_core, all: []const case_s
             try check(c.talk_store_capability(core, &impl, &all_costs, &def));
         } else if (std.mem.eql(u8, which, "sqlite")) {
             const context = try a.create(SqliteHost);
-            context.* = .{ .hosts = hosts, .effects = effects };
+            context.* = .{ .hosts = hosts, .effects = effects, .per_row = number(case_setup.field(t, "perRow")) };
             const impl: c.talk_sqlite_impl = .{ .context = context, .coordinator = databaseCoordinator, .query = sqlHost("sqlite.query"), .change = sqlHost("sqlite.change"), .begin = sqliteHost("sqlite.begin"), .commit = sqliteHost("sqlite.commit"), .rollback = sqliteHost("sqlite.rollback"), .release_rows = null };
-            try check(c.talk_sqlite_capability(core, &impl, &all_costs, number(case_setup.field(t, "perRow")), &def));
+            if (case_setup.field(t, "perStep")) |rate| {
+                if (case_setup.field(t, "perRow") != null) return error.MalformedCase;
+                context.per_step = true;
+                try check(c.talk_sqlite_capability(core, &impl, &all_costs, number(rate), &def));
+            } else try check(c.talk_sqlite_legacy_capability(core, &impl, &all_costs, &def));
         } else return error.Unsupported;
         try defs.put(a, which, def);
     }
@@ -803,7 +834,7 @@ fn coordinatorFor(context: ?*anyopaque, binding: ?*anyopaque) callconv(.c) [*c]c
 
 /// `sqlite`'s context: the Stubs for its Operations, and the case's Segment
 /// Coordinators for its databases.
-const SqliteHost = struct { hosts: *std.StringHashMapUnmanaged(*OperationHost), effects: *Effects };
+const SqliteHost = struct { per_step: bool = false, per_row: i64 = 0, hosts: *std.StringHashMapUnmanaged(*OperationHost), effects: *Effects };
 
 /// A `sqlite` database's coordinator: one per database.
 fn databaseCoordinator(context: ?*anyopaque, database: [*c]const u8, len: usize) callconv(.c) [*c]const c.talk_segment_lifecycle {
@@ -923,21 +954,29 @@ fn sqlRowsOf(a: std.mem.Allocator, shown: []const u8, rows: *c.talk_sql_rows) bo
 /// `query` or `change`: the next Stub for it, as rows or an error.
 fn sqlHost(comptime key: []const u8) c.talk_sql_fn {
     return struct {
-        fn f(context: ?*anyopaque, call: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        fn f(context: ?*anyopaque, call: ?*c.talk_call, sql: [*c]const u8, sql_len: usize, params: [*c]const c.talk_sql_params, max: i64, before_step: c.talk_before_step_fn, step_context: ?*anyopaque, rows: [*c]c.talk_sql_rows, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
             cross();
-            _ = call;
             _ = sql;
             _ = sql_len;
             _ = params;
-            _ = max;
-            const hosts = @as(*SqliteHost, @ptrCast(@alignCast(context.?))).hosts;
+            const sqlite_host: *SqliteHost = @ptrCast(@alignCast(context.?));
+            const amount = std.math.mul(i64, max, sqlite_host.per_row) catch return c.TALK_CALL_LIMITED;
+            if (amount > 0 and c.talk_call_charge(call, amount) != c.TALK_OK) return c.TALK_CALL_LIMITED;
+            const hosts = sqlite_host.hosts;
             const h = hosts.get(key) orelse return c.TALK_CALL_BROKEN;
             if (h.next >= h.stubs.items.len) return c.TALK_CALL_BROKEN;
             const stub = h.stubs.items[h.next];
             h.next += 1;
-            if (stub.err) |shown| return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
+            if (stub.err) |shown| {
+                if (sqlite_host.per_step and before_step.?(step_context) != c.TALK_OK) return c.TALK_CALL_LIMITED;
+                return if (scriptError(h.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
+            }
             const shown = stub.value orelse return c.TALK_CALL_BROKEN;
-            return if (sqlRowsOf(h.a, shown, rows)) c.TALK_CALL_ANSWERED else c.TALK_CALL_BROKEN;
+            if (!sqlRowsOf(h.a, shown, rows)) return c.TALK_CALL_BROKEN;
+            if (sqlite_host.per_step) for (0..@min(rows.*.rows_len, @as(usize, @intCast(max))) + 1) |_| {
+                if (before_step.?(step_context) != c.TALK_OK) return c.TALK_CALL_LIMITED;
+            };
+            return c.TALK_CALL_ANSWERED;
         }
     }.f;
 }
@@ -1023,6 +1062,8 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 .context = h,
                 .scope = scope,
                 .segment_bound = segment_bound,
+                .metering = if (case_setup.field(t, "metering")) |m| m.string.ptr else null,
+                .metering_len = if (case_setup.field(t, "metering")) |m| m.string.len else 0,
             });
         }
         var def: ?*c.talk_capability_def = null;
@@ -1337,6 +1378,34 @@ pub const Host = struct {
         return h.sink.out.items;
     }
 
+    fn prepareLive(h: *Host, recorded: []const u8) !void {
+        if (std.mem.indexOf(u8, recorded, "> stub ") != null) return;
+        const a = h.arena.allocator();
+        var lines = std.mem.splitScalar(u8, recorded, '\n');
+        while (lines.next()) |line| {
+            if (!std.mem.startsWith(u8, line, "call ")) continue;
+            const rest = line[5..];
+            const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase];
+            const slash = std.mem.lastIndexOfScalar(u8, id, '/') orelse return error.MalformedCase;
+            const op = field(line, "op") orelse return error.MalformedCase;
+            const dot = std.mem.indexOfScalar(u8, op, '.') orelse return error.MalformedCase;
+            const script = for (h.all) |table| {
+                if (std.mem.eql(u8, table.header, "[[scripts]]") and std.mem.eql(u8, case_setup.field(table, "name").?.string, id[0..slash])) break table;
+            } else return error.UnknownScript;
+            const named = case_setup.field(script, "grants") orelse return error.MalformedCase;
+            const grant = named.get(op[0..dot]) orelse return error.MalformedCase;
+            const capability = if (grant.get("capability")) |v| v.string else op[0..dot];
+            const key = try std.fmt.allocPrint(a, "{s}.{s}", .{ capability, op[dot + 1 ..] });
+            const host_ = h.hosts.get(key) orelse {
+                if (std.mem.eql(u8, capability, "clock")) continue;
+                return error.UnknownOperation;
+            };
+            const refused = field(line, "charge-refused") != null;
+            if (refused and (field(line, "result") != null or field(line, "error") != null)) return error.MalformedCase;
+            try host_.stubs.append(a, .{ .value = field(line, "result"), .err = field(line, "error"), .charge = if (field(line, "charged")) |n| try std.fmt.parseInt(i64, n, 10) else null, .charge_refused = refused });
+        }
+    }
+
     /// Takes one input line. inside are the inputs a Host function makes
     /// during it, for a Pump; later, when not null, are the inputs after it,
     /// and a Pump saves and restores before them.
@@ -1485,6 +1554,22 @@ pub const Host = struct {
             armCrossings(h.group);
             try rehandle(scripts, h.group);
             try store.moveTo(h.group);
+        } else if (std.mem.eql(u8, name, "charge-request")) {
+            var ids = std.mem.tokenizeScalar(u8, input[name_end + 1 ..], ' ');
+            const call = ids.next() orelse return error.MalformedCase;
+            const second = ids.next() orelse return error.MalformedCase;
+            const expected: ?[]const u8 = if (std.mem.startsWith(u8, second, "fuel=")) null else second;
+            const shown = field(input, "fuel") orelse return error.MalformedCase;
+            const fuel = std.fmt.parseInt(i64, shown, 10) catch -1;
+            var q: ?*c.talk_charge_request = null;
+            const code = c.talk_request_charge(h.group, call.ptr, call.len, fuel, &q);
+            if (expected) |want| {
+                if (code != c.TALK_OK) return error.MalformedCase;
+                var id: [*c]const u8 = null;
+                var len: usize = 0;
+                c.talk_charge_request_id(q, &id, &len);
+                if (!std.mem.eql(u8, want, id[0..len])) return error.MalformedCase;
+            } else if (code == c.TALK_OK) return error.MalformedCase;
         } else if (std.mem.eql(u8, name, "settle")) {
             const rest = input[name_end + 1 ..];
             const id = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse return error.MalformedCase];
@@ -1681,7 +1766,14 @@ pub const Host = struct {
             const rest = input[name_end + 1 ..];
             const op = rest[0 .. std.mem.indexOfScalar(u8, rest, ' ') orelse rest.len];
             const op_host = hosts.get(op) orelse return error.UnknownOperation;
-            try op_host.stubs.append(a, .{ .value = field(input, "value"), .err = field(input, "error"), .charge = if (field(input, "charge")) |n| try std.fmt.parseInt(i64, n, 10) else null });
+            const prefix = if (field(input, "charge")) |n| try std.fmt.parseInt(i64, n, 10) else null;
+            if (prefix) |n| if (n < 0 or n > 9_007_199_254_740_991) return error.MalformedCase;
+            const refusal = if (field(input, "charge-refused")) |v| blk: {
+                if (!std.mem.eql(u8, v, "yes")) return error.MalformedCase;
+                if (field(input, "value") != null or field(input, "error") != null) return error.MalformedCase;
+                break :blk true;
+            } else false;
+            try op_host.stubs.append(a, .{ .value = field(input, "value"), .err = field(input, "error"), .charge = prefix, .charge_refused = refusal });
             try sink.out.appendSlice(gpa, line);
             try sink.out.append(gpa, '\n');
         } else if (std.mem.eql(u8, name, "stub-effect")) {
@@ -1699,6 +1791,8 @@ pub const Host = struct {
             try sink.out.appendSlice(gpa, line);
             try sink.out.append(gpa, '\n');
         } else return error.Unsupported;
+        var checked = hosts.valueIterator();
+        while (checked.next()) |host_| if (host_.*.malformed) return error.MalformedCase;
     }
 };
 
@@ -1719,6 +1813,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     const a = arena.allocator();
     const h = try Host.create(gpa, .{ .dir = .{ .io = io, .dir = dir } }, try case_setup.tables(a, setup));
     defer h.destroy();
+    try h.prepareLive(trace);
     const order = (try hostOrder(a, trace)).items;
     // The inputs a Host function makes during a Pump, which the main order
     // skips.
@@ -1767,4 +1862,97 @@ test "a drained Stop or Rewind of a preempted Run defers its rollback and change
         try std.testing.expect(std.mem.indexOf(u8, out.plain, "action=abandoned") != null);
         try std.testing.expectEqualStrings(out.plain, out.deferred);
     }
+}
+
+const metered_setup =
+    \\kind = "trace"
+    \\language = "1.0-rc.3"
+    \\cost-model = "0"
+    \\[[scripts]]
+    \\name = "s"
+    \\source = "s.talk"
+    \\grants = { api = { ops = ["fetch"] } }
+    \\limits = { fuelPerRun = 1000 }
+    \\[[operations]]
+    \\capability = "api"
+    \\name = "fetch"
+    \\mode = "immediate"
+    \\metering = "read-only"
+    \\result = "any"
+    \\
+;
+
+test "metering replay simulates a synchronous accepted prefix plus refusal, with and without Stubs" {
+    const a = std.testing.allocator;
+    var arena: std.heap.ArenaAllocator = .init(a);
+    defer arena.deinit();
+    var texts: std.StringHashMapUnmanaged([]const u8) = .empty;
+    defer texts.deinit(a);
+    try texts.put(a, "s.talk", "on go\n ask api to fetch\nend go\n");
+    for ([_][]const u8{ "", "charge=31 " }) |prefix| {
+        const h = try Host.create(a, .{ .texts = &texts }, try case_setup.tables(arena.allocator(), metered_setup));
+        defer h.destroy();
+        const stub = try std.fmt.allocPrint(a, "> stub api.fetch {s}charge-refused=yes", .{prefix});
+        defer a.free(stub);
+        try h.apply(stub, &.{}, null);
+        try h.apply("> load s", &.{}, null);
+        try h.apply("> deliver d1 to=s message=go", &.{}, null);
+        try h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null);
+        const written = try a.dupe(u8, try h.trace());
+        defer a.free(written);
+        try std.testing.expect(std.mem.indexOf(u8, written, "charge-refused=yes") != null);
+        try std.testing.expect(std.mem.indexOf(u8, written, "outcome=limit-fault") != null);
+        // A live Trace has no runner-authored Stub; replay reconstructs the
+        // paid prefix and injects the latched refusal from its call record.
+        const live_trace = written[std.mem.indexOfScalar(u8, written, '\n').? + 1 ..];
+        const live = try Host.create(a, .{ .texts = &texts }, try case_setup.tables(arena.allocator(), metered_setup));
+        defer live.destroy();
+        try live.prepareLive(live_trace);
+        var lines = std.mem.splitScalar(u8, live_trace, '\n');
+        while (lines.next()) |line| if (std.mem.startsWith(u8, line, "> ")) try live.apply(line, &.{}, null);
+        try std.testing.expectEqualStrings(live_trace, try live.trace());
+    }
+}
+
+test "metering replay recomputes asynchronous outcomes and validates sequential request ids" {
+    const a = std.testing.allocator;
+    var arena: std.heap.ArenaAllocator = .init(a);
+    defer arena.deinit();
+    var texts: std.StringHashMapUnmanaged([]const u8) = .empty;
+    defer texts.deinit(a);
+    try texts.put(a, "s.talk", "on go\n ask api to fetch and wait\nend go\n");
+    const setup = try std.mem.replaceOwned(u8, a, metered_setup, "immediate", "suspending");
+    defer a.free(setup);
+    const h = try Host.create(a, .{ .texts = &texts }, try case_setup.tables(arena.allocator(), setup));
+    defer h.destroy();
+    try h.apply("> load s", &.{}, null);
+    try h.apply("> deliver d1 to=s message=go", &.{}, null);
+    try h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null);
+    try h.apply("> charge-request s/r1.c1 fuel=\"invalid\"", &.{}, null);
+    try h.apply("> charge-request s/r1.c1 q1 fuel=19", &.{}, null);
+    try h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null);
+    try h.apply("> charge-request s/r1.c1 q2 fuel=1000", &.{}, null);
+    try h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null);
+    try h.apply("> charge-request s/r1.c1 q3 fuel=0", &.{}, null);
+    try h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null);
+    const trace_ = try h.trace();
+    for ([_][]const u8{ "q1 fuel=19 status=accepted", "q2 fuel=1000 status=limit", "q3 fuel=0 status=inactive" }) |expected| try std.testing.expect(std.mem.indexOf(u8, trace_, expected) != null);
+    try std.testing.expectError(error.MalformedCase, h.apply("> charge-request s/r1.c1 q9 fuel=0", &.{}, null));
+}
+
+test "metering replay rejects contradictory and unaffordable accepted-prefix Stubs" {
+    const a = std.testing.allocator;
+    var arena: std.heap.ArenaAllocator = .init(a);
+    defer arena.deinit();
+    var texts: std.StringHashMapUnmanaged([]const u8) = .empty;
+    defer texts.deinit(a);
+    try texts.put(a, "s.talk", "on go\n ask api to fetch\nend go\n");
+    const h = try Host.create(a, .{ .texts = &texts }, try case_setup.tables(arena.allocator(), metered_setup));
+    defer h.destroy();
+    try std.testing.expectError(error.MalformedCase, h.apply("> stub api.fetch value=nothing charge-refused=yes", &.{}, null));
+    try std.testing.expectError(error.MalformedCase, h.apply("> stub api.fetch charge-refused=no", &.{}, null));
+    try h.apply("> stub api.fetch charge=1000 charge-refused=yes", &.{}, null);
+    try h.apply("> load s", &.{}, null);
+    try h.apply("> deliver d1 to=s message=go", &.{}, null);
+    try std.testing.expectError(error.MalformedCase, h.apply("> pump clock=2026-10-10T12:00:00Z", &.{}, null));
 }

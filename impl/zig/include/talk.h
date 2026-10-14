@@ -337,6 +337,10 @@ typedef struct talk_operation {
      * talk_define_coordinated_capability, which supply Segment
      * Coordinators. */
     bool segment_bound;
+    /* C only (staged metering target): NULL, "read-only", or
+     * "segment-bound". See spec/embedding/metered-operations.md. */
+    const char *metering;
+    size_t metering_len;
     /* For the Host Manifest only: plain text, and NorthTalk source texts
      * that each call the Operation. NULL or empty is none. */
     const char *description;
@@ -552,11 +556,16 @@ typedef struct talk_sqlite_binding {
     int64_t max_rows;
 } talk_sqlite_binding;
 
-/* C only: query or change. The Core has checked the Shapes and max,
- * converted params and charged max times the per-row cost. Fill rows, or
+/* C only: step authorization supplied by the SQLite factory. A driver calls
+ * this once immediately before every statement step, including completion,
+ * SQL errors and the row-limit probe, and must not step after refusal. */
+typedef talk_host_error_code (*talk_before_step_fn)(void *context);
+
+/* C only: query or change. The Core has checked the Shapes and max and
+ * converted params. Fill rows, or
  * fail with a Script error: sql {reason}, constraint {kind}, sqlite busy,
  * not read-only or too many rows {max}. */
-typedef talk_call_end (*talk_sql_fn)(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_sql_rows *rows, talk_script_error *error);
+typedef talk_call_end (*talk_sql_fn)(void *context, talk_call *call, const char *sql, size_t sql_len, const talk_sql_params *params, int64_t max, talk_before_step_fn before_step, void *step_context, talk_sql_rows *rows, talk_script_error *error);
 
 /* sqlite's implementation. coordinator maps a database to its Segment
  * Coordinator, the same one for the same database; begin, commit and
@@ -631,12 +640,15 @@ talk_host_error_code talk_store_capability(talk_core *c, const talk_store_impl *
  * (ADR 0070). The same hooks and context give the same pointer, for the
  * Core's life. NULL for a missing hook, or when it can't allocate. */
 const talk_segment_lifecycle *talk_store_coordinator(talk_core *c, const talk_store_impl *impl);
-/* sqlite is optional (chapter 7). per_row is whole Fuel charged per row of
- * max, from 0 to 9007199254740991. Each Grant's binding is a
+/* sqlite is optional (chapter 7). per_step is whole Fuel authorized immediately before each driver step,
+ * from 0 to 9007199254740991. Each Grant's binding is a
  * talk_sqlite_binding; a malformed one refuses the Grant. The Core converts
  * values and rows by chapter 7's rules, raising sql for a column named twice
  * and unrepresentable for a value it can't hold. */
-talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, int64_t per_row, talk_capability_def **out);
+talk_host_error_code talk_sqlite_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, int64_t per_step, talk_capability_def **out);
+/* C only: compatibility for staged executable perRow catalogue replay.
+ * Its Host owns up-front charging; ordinary embedding uses the step factory. */
+talk_host_error_code talk_sqlite_legacy_capability(talk_core *c, const talk_sqlite_impl *impl, const talk_costs *costs, talk_capability_def **out);
 /* user is optional (chapter 7), and has no binding. The Core refuses an
  * empty items with out of domain before calling choose. */
 talk_host_error_code talk_user_capability(talk_core *c, const talk_user_impl *impl, const talk_costs *costs, talk_capability_def **out);
@@ -1100,7 +1112,37 @@ typedef struct talk_causal_work {
     int64_t discarded_messages; /* cumulative lifecycle discards */
 } talk_causal_work;
 
-/* C only: which of talk.go's Report types a talk_report holds. */
+/* C only: a Metered Operation's charge request, owned by its Group. */
+typedef struct talk_charge_request talk_charge_request;
+/* C only: the outcome of a charge request; text is borrowed. */
+typedef struct talk_charge_result {
+    const char *request;
+    size_t request_len;
+    const char *call;
+    size_t call_len;
+    int64_t fuel;
+    const char *status; /* "accepted", "limit", "inactive" */
+    size_t status_len;
+} talk_charge_result;
+/* C only: admission is safe from Host threads. Enqueue only; a starting
+ * callback must return before awaiting a later Pump. Check cancellation
+ * before work. The future and its result live until the Group is released. */
+talk_host_error_code talk_call_request_charge(talk_call *c, int64_t fuel, talk_charge_request **out);
+/* C only: the same admission by issued call id, including after Restore.
+ * A never-issued id is TALK_UNKNOWN_CALL; an ineligible id is TALK_INVALID_VALUE. */
+talk_host_error_code talk_request_charge(talk_group *g, const char *call, size_t len, int64_t fuel, talk_charge_request **out);
+/* C only: install before starting workers; a successful charge enqueue invokes
+ * this readiness hook outside the admission lock. Wake the serialized worker;
+ * do not reenter a Pump from a starting callback. NULL clears it. */
+void talk_group_on_ready(talk_group *g, void (*hook)(void *context), void *context);
+/* C only: Group-wide q<N> identity, available immediately. */
+void talk_charge_request_id(const talk_charge_request *q, const char **id, size_t *len);
+/* C only: becomes true at the end of the processing Pump. */
+bool talk_charge_request_done(const talk_charge_request *q);
+/* C only: false before settlement; otherwise a borrowed result. */
+bool talk_charge_request_result(const talk_charge_request *q, talk_charge_result *out);
+
+/* C only: discriminant for the C report view. */
 typedef enum talk_report_kind {
     /* C only */
     TALK_REPORT_RUN_END,
@@ -1123,7 +1165,9 @@ typedef enum talk_report_kind {
     /* C only */
     TALK_REPORT_RUN_ACCOUNTING,
     /* C only */
-    TALK_REPORT_CAUSAL_WORK
+    TALK_REPORT_CAUSAL_WORK,
+    /* C only: metering target. */
+    TALK_REPORT_CHARGE_RESULT
 } talk_report_kind;
 
 /* One report, in the order they happened (ADR 0015). Every pointer in it
@@ -1142,6 +1186,7 @@ typedef struct talk_report {
         talk_run_discarded run_discarded;
         talk_run_accounting run_accounting;
         talk_causal_work causal_work;
+        talk_charge_result charge_result;
     } as;
 } talk_report;
 
