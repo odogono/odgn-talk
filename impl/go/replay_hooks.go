@@ -20,7 +20,7 @@ func init() {
 		g := group.(*Group)
 		out := []any{}
 		for name, l := range g.libraries {
-			if standardLibraries()[name] == nil {
+			if !isStandardLibrary(name) {
 				out = append(out, l)
 			}
 		}

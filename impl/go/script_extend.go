@@ -16,6 +16,7 @@ import (
 // Extend adds an Entry atomically, keeping existing frames and Function Values.
 func (s *Script) Extend(source string) error {
 	g := s.group
+	addStandardLibraries(g.libraries, usedNamesIn(source)...)
 	_, ids, _, _ := libraryOptions(g.libraries)
 	id := codeIdentity("extension", s.name, source, ids)
 	extendedID := extendedIdentity(s.identity, id)

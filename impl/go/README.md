@@ -355,8 +355,10 @@ ordered diagnostics. Limit Faults escape. The [contract](../../spec/07-libraries
 fixes definition precedence and concrete source locations; the `stdlib/mappings*`
 Corpus cases cover behavior, sliced restore and resource exhaustion.
 
-The first Group compiles these Libraries once per process; each WASI instance
-pays this cost independently. Library compilation reuses one compact syntax
+Each Library compiles once per process, after its own `use` dependencies, the
+first time a Script, Library or restored save in any Group names it. A Group
+holds only the Standard Libraries it has used, and each WASI instance pays only
+for those. Library compilation reuses one compact syntax
 tree for dependency discovery, code identity, checks, lowering and metadata,
 without retaining the tooling token tape. The cold-compilation benchmark is
 `go test . -run '^$' -bench BenchmarkColdStandardLibraries -benchmem`.
@@ -1452,10 +1454,8 @@ growth and reply retention, immediate and suspending Operations across exports,
 charging, a Script error followed by more requests, save, fingerprint and
 independent instances. Fresh instances must hold no more than 16 MiB of linear
 memory after `hello`, a Group, a small Script and one Pump; the check records
-twelve instances and enforces this limit before hostile workloads. Standard
-Libraries start compilation in sorted name order, with dependencies compiled
-first, so Go map iteration does not change the cold compilation allocation peak.
-It also prints
+twelve instances and enforces this limit before hostile workloads. The small
+Script names no Library, so no Standard Library compiles. It also prints
 the artifact's SHA-256 and raw, gzip
 level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
 of the stripped module, including Go's runtime; they aren't compiled-module
@@ -1476,6 +1476,10 @@ This covers `hello`, one Group, a small Script and one Pump, meeting the
 16 MiB startup target in [#585](https://github.com/odogono/odgn-talk/issues/585).
 The [measurement record](../../tools/wasi/results/2026-10-10-stdlib-memory.json)
 includes the build command, artifact hash and a separate Wasmtime 49.0.0 check.
+
+Adding `map.transform` (#697) pushed eager compilation to 17 MiB. Compiling each
+Standard Library on first use brought the same check to **7 MiB** on every one
+of twelve fresh instances on 2026-10-14 (Wasmtime 49.0.0, macOS arm64).
 
 #### List memory and Host caps
 

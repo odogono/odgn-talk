@@ -11,7 +11,6 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
-	"maps"
 	"math/big"
 	"slices"
 	"strconv"
@@ -161,7 +160,7 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	close(p.done)
 }
 func (c *Core) NewGroup(o GroupOptions) *Group {
-	return &Group{core: c, options: o, libraries: maps.Clone(standardLibraries())}
+	return &Group{core: c, options: o, libraries: map[string]*Library{}}
 }
 func (g *Group) Name() string               { return g.options.Name }
 func (g *Group) Script(name string) *Script { g.mu.Lock(); defer g.mu.Unlock(); return g.script(name) }
@@ -198,8 +197,9 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 	return &HostError{code, detail}
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
-	exports, ids, states, calls := libraryOptions(g.libraries)
 	tree, parseErr := syntax.ParseCompact(o.Source)
+	addStandardLibraries(g.libraries, usedNames(tree)...)
+	exports, ids, states, calls := libraryOptions(g.libraries)
 	id := parsedIdentity("script", o.Name, o.Source, ids, tree)
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("load", []string{o.Name}, map[string]string{"identity": fmt.Sprintf("%x", id)}, ReentrantCall)
