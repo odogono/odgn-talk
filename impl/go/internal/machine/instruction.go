@@ -142,11 +142,9 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 	case generated.OpLoadObject:
 		if v, ok := r.State.Objects[name(0)]; ok {
 			push(v)
-		} else if next := code.Unit.Bodies[f.Body].Code[f.PC+1].Op; slices.Contains(r.State.ScriptNames, name(0)) || namedSend(next) || spreadSend(next) {
-			// A computed name is checked first, so its send raises `object gone`.
-			receiver(name(0))
 		} else {
-			bad(failure("object gone", value.Pair{Key: "object", Val: text(name(0))}))
+			// A Script is named, and its send checks the Group holds it.
+			receiver(name(0))
 		}
 	case generated.OpMe:
 		next := code.Unit.Bodies[f.Body].Code[f.PC+1].Op
@@ -201,7 +199,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				bad(wrong("object", v))
 				break
 			}
-			if (namedSend(i.Op) || spreadSend(i.Op)) && name != "" && !slices.Contains(r.State.ScriptNames, name) {
+			if name != "" && !slices.Contains(r.State.ScriptNames, name) {
 				bad(failure("object gone", value.Pair{Key: "object", Val: text(name)}))
 				break
 			}

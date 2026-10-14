@@ -236,16 +236,26 @@ func TestOwnerlessPassCompletesRunThenAllowsAtEndOfPath(t *testing.T) {
 	}
 }
 
-func TestWaitForMissingNamedScriptRaisesObjectGone(t *testing.T) {
+func TestWaitForNamedScriptWaitsForOneLoadedLater(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on watch\n wait for go from absent\nend watch\n"})
+	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable got\non watch\n wait for go from later\n put \"go\" into got\nend watch\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "watch"})
-	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Error.Code != "object gone" {
+	now := time.Unix(0, 0)
+	if r, err := g.Pump(now, PumpOptions{}); err != nil || len(operationalReports(r.Reports)) != 0 {
 		t.Fatal(r, err)
+	}
+	later, err := g.Load(LoadOptions{Name: "later", Source: "on fire\n send go to s\nend fire\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	later.Deliver(Message{Name: "fire"})
+	g.Pump(now, PumpOptions{})
+	g.Pump(now, PumpOptions{})
+	if want, _ := Text("go"); !g.Inspect().Scripts[0].Vars[0].Val.Equal(want) {
+		t.Fatal(g.Inspect())
 	}
 }
 

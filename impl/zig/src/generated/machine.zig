@@ -197,7 +197,7 @@ pub const machine: MachineTable = .{
             .pushes = .{ .int = 1 },
             .suspends = false,
             .cost = "slot",
-            .does = "Pushes the well-known Host Object or Script bound to a name at load",
+            .does = "Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds",
         },
         .{
             .name = "me",
