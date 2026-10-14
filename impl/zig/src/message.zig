@@ -164,6 +164,8 @@ pub const Session = struct {
     oom: bool = false,
     /// The Group whose Pump is running, which a need belongs to.
     pumping_entry: ?*GroupEntry = null,
+    /// A `restore` waiting for its `resolve-result`.
+    restoring: ?Restoring = null,
 
     pub fn init(gpa: Allocator) ?*Session {
         const s = gpa.create(Session) catch return null;
@@ -178,6 +180,7 @@ pub const Session = struct {
     pub fn deinit(s: *Session) void {
         const gpa = s.gpa;
         if (s.need) |*n| n.release(gpa);
+        if (s.restoring) |*r| r.deinit();
         if (s.answer) |*a| a.release(gpa);
         for (s.groups.items) |e| {
             Direct.groupRelease(e.group);
@@ -2163,6 +2166,340 @@ fn grantsReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// The Grants and Host Objects a restore asks the Host for, as the Core
+/// asks for them, and, once the Host has answered, the answers.
+const Resolving = struct {
+    gpa: Allocator,
+    grants: std.ArrayList([2][]u8) = .empty,
+    objects: std.ArrayList([2][]u8) = .empty,
+    answered: bool = false,
+    grant_answers: []?*caps.Grant = &.{},
+    object_answers: []bool = &.{},
+    oom: bool = false,
+
+    fn deinit(r: *Resolving) void {
+        for ([_]*std.ArrayList([2][]u8){ &r.grants, &r.objects }) |list| {
+            for (list.items) |pair| {
+                r.gpa.free(pair[0]);
+                r.gpa.free(pair[1]);
+            }
+            list.deinit(r.gpa);
+        }
+        r.gpa.free(r.grant_answers);
+        r.gpa.free(r.object_answers);
+    }
+
+    /// The index of `(a, b)` in `list`, recorded on first sight when the
+    /// Host hasn't answered yet.
+    fn index(r: *Resolving, list: *std.ArrayList([2][]u8), a: []const u8, b: []const u8) ?usize {
+        for (list.items, 0..) |pair, i| if (std.mem.eql(u8, pair[0], a) and std.mem.eql(u8, pair[1], b)) return i;
+        if (r.answered) return null;
+        const x = r.gpa.dupe(u8, a) catch {
+            r.oom = true;
+            return null;
+        };
+        const y = r.gpa.dupe(u8, b) catch {
+            r.gpa.free(x);
+            r.oom = true;
+            return null;
+        };
+        list.append(r.gpa, .{ x, y }) catch {
+            r.gpa.free(x);
+            r.gpa.free(y);
+            r.oom = true;
+            return null;
+        };
+        return null;
+    }
+
+    fn rebind(context: ?*anyopaque, script: [*]const u8, script_len: usize, name: [*]const u8, name_len: usize) callconv(.c) ?*caps.Grant {
+        const r: *Resolving = @ptrCast(@alignCast(context.?));
+        const i = r.index(&r.grants, script[0..script_len], name[0..name_len]) orelse return null;
+        return r.grant_answers[i];
+    }
+
+    fn resolve(context: ?*anyopaque, kind: [*]const u8, kind_len: usize, id: [*]const u8, id_len: usize, native: *?*anyopaque) callconv(.c) bool {
+        const r: *Resolving = @ptrCast(@alignCast(context.?));
+        native.* = null;
+        const i = r.index(&r.objects, kind[0..kind_len], id[0..id_len]) orelse return false;
+        return r.object_answers[i];
+    }
+};
+
+/// A `restore` whose `resolve` need is open: its frame, read again when
+/// the Host answers, and what the Core asked for.
+const Restoring = struct {
+    ref: i64,
+    frame: []u8,
+    resolving: Resolving,
+
+    fn deinit(r: *Restoring) void {
+        r.resolving.gpa.free(r.frame);
+        r.resolving.deinit();
+    }
+};
+
+/// The fields `restore` reads: the save, the Libraries by identity and the
+/// mismatch policy.
+const RestoreRequest = struct {
+    save: []u8,
+    libraries: []*machine.Library,
+    mismatch: talk.MismatchPolicy,
+
+    fn of(s: *Session, msg: Json) ?RestoreRequest {
+        const text = asText(field(field(msg, "save") orelse return null, "$bytes")) orelse return null;
+        const codec = std.base64.standard.Decoder;
+        const save = s.gpa.alloc(u8, codec.calcSizeForSlice(text) catch return null) catch return null;
+        codec.decode(save, text) catch {
+            s.gpa.free(save);
+            return null;
+        };
+        var libraries: []*machine.Library = &.{};
+        if (field(msg, "libraries")) |given| {
+            if (given != .array) {
+                s.gpa.free(save);
+                return null;
+            }
+            libraries = s.gpa.alloc(*machine.Library, given.array.items.len) catch {
+                s.gpa.free(save);
+                return null;
+            };
+            for (given.array.items, libraries) |item, *slot| slot.* = libraryOf(s, item) orelse {
+                s.gpa.free(libraries);
+                s.gpa.free(save);
+                return null;
+            };
+        }
+        const policy = asText(field(msg, "mismatch")) orelse "reject";
+        const mismatch: talk.MismatchPolicy = if (std.mem.eql(u8, policy, "reject")) .reject_mismatch else if (std.mem.eql(u8, policy, "variables only")) .variables_only else {
+            s.gpa.free(libraries);
+            s.gpa.free(save);
+            return null;
+        };
+        return .{ .save = save, .libraries = libraries, .mismatch = mismatch };
+    }
+
+    fn deinit(r: RestoreRequest, gpa: Allocator) void {
+        gpa.free(r.save);
+        gpa.free(r.libraries);
+    }
+};
+
+/// `restore`: a first pass records every Grant and Host Object the Core
+/// asks for, answering none; the `resolve` need asks the Host for them,
+/// and `resolve-result` restores again with its answers. A restore that
+/// asks for nothing replies at once.
+fn restoreReply(s: *Session, msg: Json, ref: i64, frame: []const u8) []u8 {
+    const handle_name = asText(field(msg, "group")) orelse asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (s.groupNamed(handle_name) != null) return hostError(s.gpa, ref, .name_reused);
+    const request = RestoreRequest.of(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    defer request.deinit(s.gpa);
+    var resolving: Resolving = .{ .gpa = s.gpa };
+    var group: ?*talk.Group = null;
+    var result: ?*talk.RestoreResult = null;
+    const options: talk.RestoreOptions = .{ .name = handle_name.ptr, .name_len = handle_name.len, .trace = null, .trace_context = null, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = &resolving, .resolve = Resolving.resolve, .resolve_context = &resolving, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
+    const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
+    Direct.restoreResultRelease(result);
+    if (group) |g| Direct.groupRelease(g);
+    if (resolving.oom) {
+        resolving.deinit();
+        return hostError(s.gpa, ref, .out_of_memory);
+    }
+    if (code != .ok) {
+        resolving.deinit();
+        return hostError(s.gpa, ref, code);
+    }
+    resolving.answered = true;
+    if (resolving.grants.items.len == 0 and resolving.objects.items.len == 0) {
+        defer resolving.deinit();
+        return restoreWith(s, msg, ref, &resolving);
+    }
+    const kept = s.gpa.dupe(u8, frame) catch {
+        resolving.deinit();
+        return hostError(s.gpa, ref, .out_of_memory);
+    };
+    s.restoring = .{ .ref = ref, .frame = kept, .resolving = resolving };
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    o.raw("{\"ref\":") catch {};
+    o.int(ref) catch {};
+    o.raw(",\"need\":{\"m\":\"resolve\",\"grants\":[") catch {};
+    for (resolving.grants.items, 0..) |pair, i| {
+        if (i > 0) o.raw(",") catch {};
+        o.raw("[") catch {};
+        o.text(pair[0]) catch {};
+        o.raw(",") catch {};
+        o.text(pair[1]) catch {};
+        o.raw("]") catch {};
+    }
+    o.raw("],\"objects\":[") catch {};
+    for (resolving.objects.items, 0..) |pair, i| {
+        if (i > 0) o.raw(",") catch {};
+        o.raw("[") catch {};
+        o.text(pair[0]) catch {};
+        o.raw(",") catch {};
+        o.text(pair[1]) catch {};
+        o.raw("]") catch {};
+    }
+    o.raw("]}}") catch {};
+    return o.finish() catch oomReply();
+}
+
+/// `resolve-result`: `grants`, a handle or null for each asked, and
+/// `objects`, a boolean for each, in the need's order.
+fn resolveResultReply(s: *Session, msg: Json, ref: i64) []u8 {
+    var restoring = s.restoring.?;
+    s.restoring = null;
+    defer restoring.deinit();
+    const r = &restoring.resolving;
+    const grants = field(msg, "grants") orelse Json{ .null = {} };
+    const objects_given = field(msg, "objects") orelse Json{ .null = {} };
+    if (grants != .array or grants.array.items.len != r.grants.items.len) return hostError(s.gpa, ref, .invalid_value);
+    if (objects_given != .array or objects_given.array.items.len != r.objects.items.len) return hostError(s.gpa, ref, .invalid_value);
+    r.grant_answers = s.gpa.alloc(?*caps.Grant, grants.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
+    for (grants.array.items, r.grant_answers) |g, *slot| {
+        if (g == .null) {
+            slot.* = null;
+            continue;
+        }
+        const h = asInt(g) orelse return hostError(s.gpa, ref, .invalid_value);
+        if (h < 1 or h > @as(i64, @intCast(s.grants.items.len))) return hostError(s.gpa, ref, .invalid_value);
+        slot.* = s.grants.items[@intCast(h - 1)];
+    }
+    r.object_answers = s.gpa.alloc(bool, objects_given.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
+    for (objects_given.array.items, r.object_answers) |b, *slot| slot.* = asBool(b) orelse return hostError(s.gpa, ref, .invalid_value);
+    const parsed = std.json.parseFromSlice(Json, s.gpa, restoring.frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch return hostError(s.gpa, ref, .out_of_memory);
+    defer parsed.deinit();
+    return restoreWith(s, parsed.value, ref, r);
+}
+
+/// Restores for real, with the Host's answers, and replies with the
+/// result.
+fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
+    const handle_name = asText(field(msg, "group")) orelse asText(field(msg, "name")).?;
+    if (s.groupNamed(handle_name) != null) return hostError(s.gpa, ref, .name_reused);
+    const name = asText(field(msg, "name")) orelse handle_name;
+    const request = RestoreRequest.of(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    defer request.deinit(s.gpa);
+    const entry = s.gpa.create(GroupEntry) catch return hostError(s.gpa, ref, .out_of_memory);
+    entry.* = .{ .gpa = s.gpa, .name = s.gpa.dupe(u8, handle_name) catch {
+        s.gpa.destroy(entry);
+        return hostError(s.gpa, ref, .out_of_memory);
+    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false };
+    var group: ?*talk.Group = null;
+    var result: ?*talk.RestoreResult = null;
+    const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
+    const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
+    if (code != .ok) {
+        for (entry.pending_trace.items) |line| s.gpa.free(line);
+        entry.pending_trace.deinit(s.gpa);
+        s.gpa.free(entry.name);
+        s.gpa.destroy(entry);
+        return hostError(s.gpa, ref, code);
+    }
+    defer Direct.restoreResultRelease(result);
+    entry.group = group.?;
+    s.groups.append(s.gpa, entry) catch {
+        Direct.groupRelease(entry.group);
+        for (entry.pending_trace.items) |line| s.gpa.free(line);
+        entry.pending_trace.deinit(s.gpa);
+        s.gpa.free(entry.name);
+        s.gpa.destroy(entry);
+        return hostError(s.gpa, ref, .out_of_memory);
+    };
+    const res = result.?;
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    writeRestored(&o, entry, res) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    return finishOk(s, &o, entry);
+}
+
+fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (Allocator.Error || error{NotEncodable})!void {
+    try o.raw("\"variablesOnly\":");
+    try o.raw(if (res.variables_only) "true" else "false");
+    try o.raw(",\"pending\":[");
+    for (res.pending, 0..) |p, i| {
+        if (i > 0) try o.raw(",");
+        const id = p.id[0..p.id_len];
+        try o.raw("{\"call\":");
+        try o.text(id);
+        try o.raw(",\"script\":");
+        try o.text(p.script[0..p.script_len]);
+        try o.raw(",\"grant\":");
+        try o.text(p.grant[0..p.grant_len]);
+        try o.raw(",\"operation\":");
+        try o.text(p.operation[0..p.operation_len]);
+        try o.raw(",\"args\":[");
+        for (entry.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id)) {
+            for (c.args, 0..) |v, k| {
+                if (k > 0) try o.raw(",");
+                try o.value(v);
+            }
+        };
+        try o.raw("]}");
+    }
+    try o.raw("],\"disposed\":[");
+    for (res.disposed, 0..) |d, i| {
+        if (i > 0) try o.raw(",");
+        try o.raw("[");
+        try o.text(d.kind[0..d.kind_len]);
+        try o.raw(",");
+        try o.text(d.id[0..d.id_len]);
+        try o.raw("]");
+    }
+    try o.raw("]");
+    inline for (.{ .{ "discardedRuns", "discarded" }, .{ "droppedMessages", "dropped" }, .{ "abandonedCalls", "abandoned" } }) |f| {
+        try o.raw(",\"" ++ f[0] ++ "\":[");
+        for (@field(res, f[1]), 0..) |id, i| {
+            if (i > 0) try o.raw(",");
+            try o.text(id.data[0..id.len]);
+        }
+        try o.raw("]");
+    }
+    try o.raw(",");
+    if (res.reports) |reports| try writeHeld(o, &reports.held) else try o.raw("\"reports\":[]");
+}
+
+/// `settle`: a restored pending call's `settlement`, `{answer}`, `{fail}`,
+/// `{reissue: true}` or `{adopt: true}`; an adopted call is then answered
+/// with `answer` or `fail`.
+fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const call_id = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const given = field(msg, "settlement") orelse return hostError(s.gpa, ref, .invalid_value);
+    if (given != .object or given.object.count() != 1) return hostError(s.gpa, ref, .invalid_value);
+    var st: talk.Settlement = .{ .answer = null, .fail = null, .reissue = false, .adopt = false };
+    var answer: ?*Value = null;
+    defer if (answer) |v| v.release();
+    var data: ?*Value = null;
+    defer if (data) |v| v.release();
+    var failure: talk.ScriptError = undefined;
+    if (field(given, "answer")) |j| {
+        answer = decodeValue(s.gpa, j, entry) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+        st.answer = answer;
+    } else if (field(given, "fail")) |e| {
+        const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
+        const emessage = asText(field(e, "message"));
+        if (field(e, "data")) |d| if (d != .null) {
+            data = decodeValue(s.gpa, d, entry) catch return hostError(s.gpa, ref, .invalid_value);
+        };
+        failure = .{ .code = ecode.ptr, .code_len = ecode.len, .message = if (emessage) |m| m.ptr else null, .message_len = if (emessage) |m| m.len else 0, .data = data };
+        st.fail = &failure;
+    } else if (field(given, "reissue")) |j| {
+        st.reissue = asBool(j) orelse false;
+    } else if (field(given, "adopt")) |j| {
+        st.adopt = asBool(j) orelse false;
+    }
+    var adopted: ?*caps.Call = null;
+    const code = Direct.settle(entry.group, call_id.ptr, call_id.len, &st, &adopted);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -2265,6 +2602,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
+    if (s.restoring) |r| {
+        if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
+        return resolveResultReply(s, msg, ref);
+    }
     if (s.paused_ref) |paused| {
         const is_op = std.mem.eql(u8, m, "op-result");
         const is_prop = std.mem.eql(u8, m, "prop-result");
@@ -2321,6 +2662,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
         return changeCodeReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "restore")) {
+        return restoreReply(s, msg, ref, frame);
+    } else if (std.mem.eql(u8, m, "settle")) {
+        return settleRestoredReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "inspect")) {
         return inspectReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "grants")) {
@@ -2867,4 +3212,77 @@ test "inspect shows variables, a suspended Run and the mailbox, and grants lists
     try std.testing.expectEqualStrings("add", ops[0].string);
     try std.testing.expectEqualStrings("zap", ops[1].string);
     try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"grants\",\"ref\":{d},\"group\":\"g\",\"script\":\"nobody\"}}", .{16})));
+}
+
+test "restore asks the Host to resolve Grants and objects, then settle answers a pending call" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"suspending\",\"args\":[\"number\"],\"result\":\"number\",\"maxPending\":5000}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"hall\"}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"hall\"]}},\"grants\":{{\"api\":{d}}},\"source\":\"on fetch\\n  ask api to fetch 9 and wait\\n  return it\\nend fetch\\n\"}}", .{ 6, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{7}));
+    _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8})).object.get("need").?;
+    _ = try okOf(try c.sendRef(8, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{8}));
+    const save = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"g\"}}", .{9}))).object.get("save").?.object.get("$bytes").?.string;
+
+    // The Core asks for the Script's Grant and its owner.
+    const asked = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g2\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 10, save });
+    const need = asked.object.get("need") orelse return unexpected(asked);
+    try std.testing.expectEqualStrings("resolve", need.object.get("m").?.string);
+    const grants = need.object.get("grants").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), grants.len);
+    try std.testing.expectEqualStrings("s", grants[0].array.items[0].string);
+    try std.testing.expectEqualStrings("api", grants[0].array.items[1].string);
+    const objs = need.object.get("objects").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), objs.len);
+    try std.testing.expectEqualStrings("hall", objs[0].array.items[1].string);
+    // Nothing else is read until the Host answers.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{11})));
+    const restored = try okOf(try c.sendRef(10, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[true]}}", .{ 10, grant }));
+    try std.testing.expect(restored.object.get("variablesOnly").?.bool == false);
+    try std.testing.expectEqual(@as(usize, 0), restored.object.get("disposed").?.array.items.len);
+    const pending = restored.object.get("pending").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), pending.len);
+    try std.testing.expectEqualStrings("s", pending[0].object.get("script").?.string);
+    try std.testing.expectEqualStrings("api", pending[0].object.get("grant").?.string);
+    try std.testing.expectEqualStrings("fetch", pending[0].object.get("operation").?.string);
+    try std.testing.expectEqual(@as(i64, 9), pending[0].object.get("args").?.array.items[0].integer);
+    const call = pending[0].object.get("call").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"settle\",\"ref\":{d},\"group\":\"g2\",\"call\":\"{s}\",\"settlement\":{{\"answer\":42}}}}", .{ 12, call }));
+    // Settled once only.
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"settle\",\"ref\":{d},\"group\":\"g2\",\"call\":\"{s}\",\"settlement\":{{\"answer\":1}}}}", .{ 13, call })));
+    const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g2\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{14}));
+    try std.testing.expectEqual(@as(i64, 42), end.object.get("result").?.integer);
+
+    // An object the Host doesn't resolve restores disposed; a failed
+    // settlement ends the Run with its error.
+    _ = (try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g3\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 15, save })).object.get("need").?;
+    const lost = try okOf(try c.sendRef(15, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[false]}}", .{ 15, grant }));
+    const disposed = lost.object.get("disposed").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), disposed.len);
+    try std.testing.expectEqualStrings("room", disposed[0].array.items[0].string);
+    const call3 = lost.object.get("pending").?.array.items[0].object.get("call").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"settle\",\"ref\":{d},\"group\":\"g3\",\"call\":\"{s}\",\"settlement\":{{\"fail\":{{\"code\":\"nope\",\"message\":\"no\"}}}}}}", .{ 16, call3 }));
+    const failed = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g3\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{17}));
+    try std.testing.expectEqualStrings("errored", failed.object.get("outcome").?.string);
+    try std.testing.expectEqualStrings("nope", failed.object.get("error").?.object.get("code").?.string);
+
+    // A Group with nothing to resolve restores at once, its Variables kept.
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"plain\",\"name\":\"plain\"}}", .{19}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"plain\",\"name\":\"p\",\"source\":\"script variable n = 3\\non peek\\n  return n\\nend peek\\n\"}}", .{20}));
+    const plain = (try okOf(try c.send("{{\"m\":\"save\",\"ref\":{d},\"group\":\"plain\"}}", .{21}))).object.get("save").?.object.get("$bytes").?.string;
+    const direct = try okOf(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"plain2\",\"name\":\"plain\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 22, plain }));
+    try std.testing.expectEqual(@as(usize, 0), direct.object.get("pending").?.array.items.len);
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"plain2\",\"to\":{{\"script\":\"p\"}},\"message\":{{\"name\":\"peek\"}}}}", .{23}));
+    try std.testing.expectEqual(@as(i64, 3), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"plain2\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{24}))).object.get("result").?.integer);
+
+    // A save the Core can't read is refused, with no need.
+    const bad = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g4\",\"save\":{{\"$bytes\":\"AAAA\"}}}}", .{18});
+    try std.testing.expectEqualStrings("invalid save", bad.object.get("err").?.object.get("code").?.string);
 }
