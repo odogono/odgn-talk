@@ -1,0 +1,563 @@
+{
+  "commit": "f51ad856",
+  "binarySha256": "a6dfd2680130c83a9e65a215ddd46efe72775b0a29061e33a21f7e59fd33e278",
+  "mode": "native safe; C Host -O2",
+  "method": "Separate two-second CPU samples at 1 ms intervals, Pump stacks only, inclusive categories overlap. Host schedules 300 validated Run samples and is deliberately terminated after sampling, before Load. Timing data is the latest four-way comparison, not this profiling run.",
+  "profiles": [
+    {
+      "benchmark": "core/loop",
+      "report": "2026-10-14-zig-next-five-profiles/core-loop.txt.gz",
+      "reportSha256": "67e76fcf9a66fdbe9d2f10d2e2980df4b963356f081c4546d4a8f8fbea9265a2",
+      "samples": {
+        "pump": 1531,
+        "execute": 1463,
+        "charging": 298,
+        "formulaEvaluation": 242,
+        "instruction": 751,
+        "scratchReset": 91,
+        "operandRetention": 0,
+        "decimal": 106,
+        "valueConstruction": 53,
+        "allocator": 111,
+        "decimalComparison": 50,
+        "valueComparison": 61,
+        "unitParsing": 0,
+        "unitConversion": 0,
+        "unitDimensions": 0,
+        "unitCombine": 0,
+        "listSet": 0,
+        "chunksSet": 0,
+        "valueRelease": 66,
+        "memmove": 30,
+        "memset": 2,
+        "numberFormatting": 23
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 426
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 338
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 242
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 91
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 57
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 56
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 56
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 47
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 33
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 30
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 25
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 17
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.order",
+          "samples": 15
+        },
+        {
+          "symbol": "Io.Writer.printValue__func_778",
+          "samples": 15
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 14
+        },
+        {
+          "symbol": "Io.Writer.printIntAny__func_56",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 10
+        },
+        {
+          "symbol": "value.Comparer.deinit",
+          "samples": 10
+        },
+        {
+          "symbol": "Io.Writer.writeAll",
+          "samples": 7
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 7
+        }
+      ]
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "report": "2026-10-14-zig-next-five-profiles/numbers-quantity.txt.gz",
+      "reportSha256": "d05d3d94da8e9953a7d5b96db218347e20a064c65a6944611ad1f6b29f3e8cf8",
+      "samples": {
+        "pump": 1531,
+        "execute": 1486,
+        "charging": 199,
+        "formulaEvaluation": 158,
+        "instruction": 1017,
+        "scratchReset": 53,
+        "operandRetention": 0,
+        "decimal": 78,
+        "valueConstruction": 68,
+        "allocator": 82,
+        "decimalComparison": 0,
+        "valueComparison": 0,
+        "unitParsing": 37,
+        "unitConversion": 343,
+        "unitDimensions": 0,
+        "unitCombine": 56,
+        "listSet": 0,
+        "chunksSet": 0,
+        "valueRelease": 41,
+        "memmove": 37,
+        "memset": 2,
+        "numberFormatting": 0
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "units.Unit.convert__func_912",
+          "samples": 323
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 229
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 219
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 158
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 93
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 67
+        },
+        {
+          "symbol": "units.Unit.combine",
+          "samples": 56
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 53
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 41
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 37
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 35
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 31
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 30
+        },
+        {
+          "symbol": "mem.eqlBytes",
+          "samples": 29
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 27
+        },
+        {
+          "symbol": "machine.convert.convert",
+          "samples": 21
+        },
+        {
+          "symbol": "units.Unit.parse",
+          "samples": 18
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 8
+        }
+      ]
+    },
+    {
+      "benchmark": "numbers/add",
+      "report": "2026-10-14-zig-next-five-profiles/numbers-add.txt.gz",
+      "reportSha256": "29c284f84fbd54275fb5edb8531b7bb5fdf0a428a1e65de81799613b9b685178",
+      "samples": {
+        "pump": 1528,
+        "execute": 1463,
+        "charging": 306,
+        "formulaEvaluation": 247,
+        "instruction": 672,
+        "scratchReset": 94,
+        "operandRetention": 0,
+        "decimal": 61,
+        "valueConstruction": 78,
+        "allocator": 127,
+        "decimalComparison": 0,
+        "valueComparison": 0,
+        "unitParsing": 0,
+        "unitConversion": 0,
+        "unitDimensions": 0,
+        "unitCombine": 0,
+        "listSet": 0,
+        "chunksSet": 0,
+        "valueRelease": 68,
+        "memmove": 25,
+        "memset": 1,
+        "numberFormatting": 0
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 416
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 352
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 247
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 94
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 59
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 53
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 49
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 45
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 40
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 39
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 29
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 25
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 20
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 12
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1462",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 11
+        },
+        {
+          "symbol": "machine.builtins.numberValue",
+          "samples": 7
+        },
+        {
+          "symbol": "talk_pump",
+          "samples": 1
+        },
+        {
+          "symbol": "machine.machine.Group.afterGuard",
+          "samples": 1
+        }
+      ]
+    },
+    {
+      "benchmark": "collections/list-update",
+      "report": "2026-10-14-zig-next-five-profiles/collections-list-update.txt.gz",
+      "reportSha256": "80dbe1fdcdd776416f4d09b366b5c1505724d8ff49accac96ebec71b611ee456",
+      "samples": {
+        "pump": 1530,
+        "execute": 1443,
+        "charging": 266,
+        "formulaEvaluation": 197,
+        "instruction": 774,
+        "scratchReset": 101,
+        "operandRetention": 0,
+        "decimal": 12,
+        "valueConstruction": 23,
+        "allocator": 183,
+        "decimalComparison": 0,
+        "valueComparison": 0,
+        "unitParsing": 0,
+        "unitConversion": 0,
+        "unitDimensions": 0,
+        "unitCombine": 0,
+        "listSet": 83,
+        "chunksSet": 103,
+        "valueRelease": 137,
+        "memmove": 11,
+        "memset": 17,
+        "numberFormatting": 0
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 383
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 346
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 197
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 101
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 95
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 69
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 43
+        },
+        {
+          "symbol": "value.listSet",
+          "samples": 39
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 39
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 33
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 28
+        },
+        {
+          "symbol": "heap.SmpAllocator.free",
+          "samples": 18
+        },
+        {
+          "symbol": "heap.SmpAllocator.alloc",
+          "samples": 18
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 13
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 12
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1462",
+          "samples": 12
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 11
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 9
+        },
+        {
+          "symbol": "machine.machine.chunkKind",
+          "samples": 8
+        }
+      ]
+    },
+    {
+      "benchmark": "core/calls",
+      "report": "2026-10-14-zig-next-five-profiles/core-calls.txt.gz",
+      "reportSha256": "def9d90b0e898d90049218d60bbc1706af762488013aceae6483bdc082836f77",
+      "samples": {
+        "pump": 1527,
+        "execute": 1453,
+        "charging": 259,
+        "formulaEvaluation": 193,
+        "instruction": 718,
+        "scratchReset": 78,
+        "operandRetention": 0,
+        "decimal": 53,
+        "valueConstruction": 82,
+        "allocator": 171,
+        "decimalComparison": 0,
+        "valueComparison": 0,
+        "unitParsing": 0,
+        "unitConversion": 0,
+        "unitDimensions": 0,
+        "unitCombine": 0,
+        "listSet": 0,
+        "chunksSet": 0,
+        "valueRelease": 86,
+        "memmove": 39,
+        "memset": 10,
+        "numberFormatting": 0
+      },
+      "topExclusiveSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 365
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 362
+        },
+        {
+          "symbol": "machine.costs.evaluate",
+          "samples": 193
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 78
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 73
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 66
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 44
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 39
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 36
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 36
+        },
+        {
+          "symbol": "value.scalar",
+          "samples": 33
+        },
+        {
+          "symbol": "machine.machine.Group.pushFrameIn",
+          "samples": 29
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 28
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 24
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 21
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 18
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1462",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.recycleFrame",
+          "samples": 16
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 10
+        },
+        {
+          "symbol": "machine.machine.Group.callFunction",
+          "samples": 9
+        }
+      ]
+    }
+  ]
+}

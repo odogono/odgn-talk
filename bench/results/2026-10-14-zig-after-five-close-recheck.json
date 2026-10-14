@@ -1,0 +1,202 @@
+{
+  "commit": "f51ad856",
+  "method": "Three independent process pairs with alternating Zig/AppleScript order; five samples per process. Separate focused recheck after the complete four-way run. Native safe-mode Host unchanged.",
+  "measurements": [
+    {
+      "benchmark": "collections/list-build",
+      "pair": 1,
+      "zig": {
+        "medianNs": 223982.143,
+        "samples": [
+          238280.952,
+          225396.396,
+          223723.214,
+          223982.143,
+          222960.0
+        ],
+        "fuel": 19091,
+        "logicalAlloc": 3022112
+      },
+      "applescript": {
+        "minNs": 217436.197999632,
+        "samples": 5,
+        "medianNs": 218631.02210772922
+      }
+    },
+    {
+      "benchmark": "collections/list-build",
+      "pair": 2,
+      "applescript": {
+        "minNs": 217268.88007833622,
+        "samples": 5,
+        "medianNs": 218500.97618880682
+      },
+      "zig": {
+        "medianNs": 224191.964,
+        "samples": [
+          226877.828,
+          224659.193,
+          223248.889,
+          224191.964,
+          223214.286
+        ],
+        "fuel": 19091,
+        "logicalAlloc": 3022112
+      }
+    },
+    {
+      "benchmark": "collections/list-build",
+      "pair": 3,
+      "zig": {
+        "medianNs": 224484.305,
+        "samples": [
+          226533.937,
+          226099.099,
+          222724.444,
+          224142.857,
+          224484.305
+        ],
+        "fuel": 19091,
+        "logicalAlloc": 3022112
+      },
+      "applescript": {
+        "minNs": 215458.82145801443,
+        "samples": 5,
+        "medianNs": 217708.33336631767
+      }
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "pair": 1,
+      "zig": {
+        "medianNs": 1372783.784,
+        "samples": [
+          1375513.514,
+          1365567.568,
+          1370243.243,
+          1372783.784,
+          1375972.973
+        ],
+        "fuel": 67042,
+        "logicalAlloc": 80270
+      },
+      "applescript": {
+        "minNs": 1356401.691737119,
+        "samples": 5,
+        "medianNs": 1359605.4686786374
+      }
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "pair": 2,
+      "applescript": {
+        "minNs": 1369805.3389816778,
+        "samples": 5,
+        "medianNs": 1373054.687064723
+      },
+      "zig": {
+        "medianNs": 1376054.054,
+        "samples": [
+          1375648.649,
+          1373837.838,
+          1376054.054,
+          1379324.324,
+          1377567.568
+        ],
+        "fuel": 67042,
+        "logicalAlloc": 80270
+      }
+    },
+    {
+      "benchmark": "macro/game-tick",
+      "pair": 3,
+      "zig": {
+        "medianNs": 1377972.973,
+        "samples": [
+          1381621.622,
+          1376324.324,
+          1382756.757,
+          1373810.811,
+          1377972.973
+        ],
+        "fuel": 67042,
+        "logicalAlloc": 80270
+      },
+      "applescript": {
+        "minNs": 1372701.1719311122,
+        "samples": 5,
+        "medianNs": 1374458.9832640486
+      }
+    },
+    {
+      "benchmark": "text/build",
+      "pair": 1,
+      "zig": {
+        "medianNs": 410393.443,
+        "samples": [
+          410459.016,
+          409040.65,
+          409650.407,
+          410426.23,
+          410393.443
+        ],
+        "fuel": 28928,
+        "logicalAlloc": 383838
+      },
+      "applescript": {
+        "minNs": 345085.77482483815,
+        "samples": 5,
+        "medianNs": 346366.69897736283
+      }
+    },
+    {
+      "benchmark": "text/build",
+      "pair": 2,
+      "applescript": {
+        "minNs": 344943.6849223275,
+        "samples": 5,
+        "medianNs": 346813.31362662604
+      },
+      "zig": {
+        "medianNs": 418983.333,
+        "samples": [
+          418983.333,
+          416677.686,
+          419516.667,
+          418341.667,
+          419283.333
+        ],
+        "fuel": 28928,
+        "logicalAlloc": 383838
+      }
+    },
+    {
+      "benchmark": "text/build",
+      "pair": 3,
+      "zig": {
+        "medianNs": 424940.678,
+        "samples": [
+          424940.678,
+          421873.95,
+          432879.31,
+          422134.454,
+          429435.897
+        ],
+        "fuel": 28928,
+        "logicalAlloc": 383838
+      },
+      "applescript": {
+        "minNs": 347257.1611382591,
+        "samples": 5,
+        "medianNs": 349824.5441733161
+      }
+    }
+  ],
+  "binarySha256": "a6dfd2680130c83a9e65a215ddd46efe72775b0a29061e33a21f7e59fd33e278",
+  "settings": {
+    "pairs": 3,
+    "samplesPerProcess": 5,
+    "mode": "native safe; C Host -O2",
+    "machine": "Apple M5; darwin arm64; macOS 27.0.1"
+  }
+}
