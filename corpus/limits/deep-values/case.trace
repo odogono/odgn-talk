@@ -1,4 +1,3 @@
-# Unblessed: deep Value nesting (#871); first blessing awaits human review.
 # deep-values: `build` nests maps and lists 1000 deep. Equality, ordering
 # and the `vars` display reach the innermost item, and the Script Variables
 # survive save and restore in the restored replay. `roundTrip` sends a value
