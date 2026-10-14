@@ -1,0 +1,6 @@
+on helper
+  return 1
+end helper
+on invalid
+  helper and wait
+end invalid

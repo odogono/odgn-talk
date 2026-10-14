@@ -1,0 +1,7 @@
+on foo
+  return foo
+end foo
+constant foo = 1
+on invalid
+  foo and wait
+end invalid

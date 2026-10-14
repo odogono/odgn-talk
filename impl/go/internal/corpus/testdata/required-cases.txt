@@ -116,6 +116,7 @@ trace load-diagnostics/missing-handler-wait
 trace load-diagnostics/name-clash
 trace names/handler-shared-names
 trace load-diagnostics/needless-and-wait
+trace load-diagnostics/needless-handler-wait
 trace load-diagnostics/no-conversion
 trace load-diagnostics/no-item-chunk
 trace load-diagnostics/not-a-property

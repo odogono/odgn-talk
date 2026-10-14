@@ -1,9 +1,43 @@
 package northtalk
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
+
+func TestExtendChecksNeedlessHandlerWait(t *testing.T) {
+	for _, declaration := range []string{"", "script variable h = 1\n", "constant h = 1\n"} {
+		for _, suspends := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%ssuspends=%t", declaration, suspends), func(t *testing.T) {
+				body := " return 1\n"
+				if suspends {
+					body = " wait 1 s\n"
+				}
+				g := New().NewGroup(GroupOptions{})
+				s, err := g.Load(LoadOptions{Name: "s", Source: declaration + "on h\n" + body + "end h"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = s.Extend("on later\n h and wait\nend later")
+				if suspends {
+					if err != nil {
+						t.Fatal(err)
+					}
+					return
+				}
+				rejected, ok := err.(*LoadError)
+				if !ok || len(rejected.Diagnostics) != 1 {
+					t.Fatalf("want one load diagnostic, got %v", err)
+				}
+				d := rejected.Diagnostics[0]
+				if d.Code != "needless and wait" || d.Unit != "s+1" || d.Line != 2 || d.Col != 2 {
+					t.Fatal(d)
+				}
+			})
+		}
+	}
+}
 
 func TestExtendRetainsSharedHandlerAndValueNames(t *testing.T) {
 	for _, declaration := range []string{"script variable h = 1", "constant h = 1"} {

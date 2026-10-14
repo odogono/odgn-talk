@@ -89,7 +89,9 @@ func TestScopeAllowsLocalWaitMarkedCallsAndRefusesJoinAcquisition(t *testing.T) 
 				t.Fatal(err)
 			}
 			body := "ask r to open\n local and wait\n return it"
-			local := "return 7"
+			// The Handler may suspend statically, but this call reaches no
+			// Suspension Point, so the open Scope is still allowed.
+			local := "if false then wait 1 s\nreturn 7"
 			if joining {
 				body = "wait for all\n local\n send ping to me and wait\nend wait"
 				local = "ask r to open"
