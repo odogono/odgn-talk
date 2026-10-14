@@ -418,3 +418,70 @@ export const runBrowserTests = async () => {
     ],
   };
 };
+
+export const runElementsBrowserTests = async () => {
+  const project = createProject('Dynamic Elements');
+  const button = createElement('button', 'original');
+  button.script = 'on click\n tell elements to delete me\nend click';
+  project.pages[0]!.elements.push(button);
+  project.pages[0]!.script = `on openPage
+ ask elements to create "button", thisPage, "made"
+ set the label of it to "Created"
+ ask elements to clone original
+end openPage
+on click
+ ask elements to find "made", thisPage
+ tell elements to delete it
+ ask elements to create "button", thisPage, "made"
+ set the label of it to "Replacement"
+end click`;
+  const before = structuredClone(project);
+  const shell = mountStack(project);
+  mountPlay(shell);
+  const toggle = document.querySelector<HTMLButtonElement>(
+    '#menu [aria-pressed]',
+  )!;
+  const element = (name: string) =>
+    document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`);
+  toggle.click();
+  await until(
+    () => !!element('original2') && element('made')?.textContent === 'Created',
+  );
+  element('original2')!.click();
+  await until(() => !element('original2'));
+  assert(element('original'), 'Deleting clone removed original');
+  element('made')!.click();
+  await until(() => element('made')?.textContent === 'Replacement');
+  // Reusing a name must bind the DOM listeners to the new Element handle.
+  const firstReplacement = element('made');
+  element('made')!.click();
+  await until(
+    () =>
+      element('made') !== firstReplacement &&
+      element('made')?.textContent === 'Replacement',
+  );
+  element('original')!.click();
+  await until(() => !element('original'));
+  toggle.click();
+  assert(
+    JSON.stringify(project) === JSON.stringify(before),
+    'Dynamic Elements changed authored Project',
+  );
+  assert(
+    !document.querySelector('#page [data-element="made"]'),
+    'Created Element survived Edit',
+  );
+  assert(
+    document.querySelector('#page [data-element="original"]'),
+    'Authored Element missing in Edit',
+  );
+  return {
+    passed: true,
+    checks: [
+      'create and Page handler',
+      'clone Script and delete',
+      'reuse deleted name',
+      'exact Edit restore',
+    ],
+  };
+};
