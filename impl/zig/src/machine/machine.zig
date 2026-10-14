@@ -1382,6 +1382,16 @@ pub const Group = struct {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa), .reports = .init(gpa) };
     }
 
+    /// Worker calls cannot reenter a Pump or code-change lifecycle callback.
+    pub fn checkWorker(g: *const Group) error{ReentrantCall}!void {
+        if (g.pumping or g.reworking) return error.ReentrantCall;
+    }
+
+    fn checkCodeChange(g: *const Group) error{ ReentrantCall, EffectStateUnknown }!void {
+        try g.checkWorker();
+        if (g.fatal) return error.EffectStateUnknown;
+    }
+
     pub fn deinit(g: *Group) void {
         // A Reload or library replacement left paused holds its built code.
         if (g.paused_work) |work| switch (work) {
@@ -1390,6 +1400,7 @@ pub const Group = struct {
                 g.dropRebuilt(x.rebuilt);
                 for (x.made) |l| l.destroy();
                 g.gpa.free(x.made);
+                g.gpa.free(x.libraries);
             },
         };
         g.releaseInputs(g.inputs.items);
@@ -1614,6 +1625,7 @@ pub const Group = struct {
     /// Loads a Script: parses, checks and lowers it, and runs its
     /// initialiser. Writes the `load` record and any `diag` records.
     pub fn load(g: *Group, name: []const u8, source: []const u8, options: LoadOptions) !LoadResult {
+        try g.checkCodeChange();
         const s = try g.gpa.create(Script);
         s.* = .{ .name = undefined, .identity = undefined, .arena = .init(g.gpa), .code = .init(g.gpa), .unit = undefined, .variables = &.{}, .definitions = &.{}, .limits = options.limits };
         // Until it joins the Group, a refusal leaves nothing of it behind.
@@ -1878,6 +1890,7 @@ pub const Group = struct {
     /// and runs its initialiser. A LoadError, a name the Script already has,
     /// or a Persistent State over its cap leaves the Script unchanged.
     pub fn extend(g: *Group, s: *Script, source: []const u8) !ExtendResult {
+        try g.checkCodeChange();
         return g.addExtension(s, source, .input);
     }
 
@@ -2021,7 +2034,7 @@ pub const Group = struct {
     /// for a replacement, the Scripts still to replace from `next`.
     pub const PausedWork = union(enum) {
         reload: struct { script: *Script, fresh: *Script, keep_mailbox: bool },
-        replace: struct { rebuilt: []Rebuilt, next: usize, made: []*Library },
+        replace: struct { rebuilt: []Rebuilt, next: usize, made: []*Library, libraries: []*Library },
     };
     pub const Rebuilt = struct { script: *Script, fresh: *Script };
 
@@ -2042,7 +2055,7 @@ pub const Group = struct {
                 if (result != .paused) g.dropFresh(x.fresh);
                 return .{ .reload = result };
             },
-            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.made) },
+            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.made, x.libraries) },
         }
     }
 
@@ -2051,6 +2064,7 @@ pub const Group = struct {
     /// the Script with reason `reload` and replaces its code and every
     /// extension at once. A refusal leaves the Script unchanged.
     pub fn reload(g: *Group, s: *Script, source: []const u8, carry: bool, keep_mailbox: bool) !ReloadResult {
+        try g.checkCodeChange();
         const fresh = try g.newCode(s);
         // A paused Reload keeps its built code until it resumes.
         var owned = true;
@@ -2254,6 +2268,8 @@ pub const Group = struct {
         refused,
         unknown_library,
         state_too_large,
+        /// Fatal termination stopped the Group without publishing new code.
+        stopped,
         /// Paused at a lifecycle crossing: `resumeWork` goes on.
         paused,
     };
@@ -2265,6 +2281,7 @@ pub const Group = struct {
     /// fails, nothing changes. `compiler` makes the recompiled Libraries,
     /// which outlive the Group.
     pub fn replaceLibrary(g: *Group, l: *Library, carry: bool, compiler: Allocator) !ReplaceResult {
+        try g.checkCodeChange();
         if (g.trace) |out| {
             out.print("> replace-library {s} carry={s} source=", .{ l.name, if (carry) "yes" else "no" }) catch {};
             display.writeSource(out, l.source) catch {};
@@ -2275,7 +2292,8 @@ pub const Group = struct {
         } else return .unknown_library;
         // The Group's Libraries with the replacements in place.
         const given = try g.gpa.dupe(*Library, g.libraries.items);
-        defer g.gpa.free(given);
+        var owns_given = true;
+        defer if (owns_given) g.gpa.free(given);
         const old = try g.gpa.dupe(*Library, g.libraries.items);
         defer g.gpa.free(old);
         given[at] = l;
@@ -2350,7 +2368,6 @@ pub const Group = struct {
             made.deinit(g.gpa);
             return o;
         }
-        @memcpy(g.libraries.items, given);
         // Checked, the replacements' terminations may pause: the built code
         // and the recompiled Libraries wait with them.
         const owned_made = try made.toOwnedSlice(g.gpa);
@@ -2359,33 +2376,59 @@ pub const Group = struct {
             g.gpa.free(owned_made);
             return e;
         };
-        return g.finishReplace(pending, 0, owned_made);
+        owns_given = false;
+        return g.finishReplace(pending, 0, owned_made, given);
     }
 
     /// A checked library replacement's terminations and replacements, from
     /// the Script at `from`. Paused at a lifecycle crossing, it keeps its
     /// state in `paused_work`; otherwise it frees `rebuilt` and gives
     /// `made` to the caller.
-    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, made: []*Library) !ReplaceResult {
+    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, made: []*Library, libraries: []*Library) !ReplaceResult {
         g.reworking = true;
         defer g.reworking = false;
+        var paused = false;
+        var published = false;
+        defer if (!paused) {
+            g.dropRebuilt(rebuilt);
+            g.gpa.free(libraries);
+            if (!published) {
+                for (made) |l| l.destroy();
+                g.gpa.free(made);
+            }
+        };
         var i = from;
         while (i < rebuilt.len) : (i += 1) {
             const x = rebuilt[i];
-            // A stop that stops the Group leaves the rest stopped with it.
-            const replaced = g.replaceCode(x.script, x.fresh, false, "library replacement") catch |e| {
+            // Terminate every old Script before publishing any new code.
+            // A fatal stop may itself pause while cleaning up other Scripts.
+            g.stopScript(x.script, "reload", null, .{ .release = .reload, .discard = "library replacement" }) catch |e| {
                 if (e == error.Deferred) {
-                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made } };
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    paused = true;
                     return .paused;
                 }
-                g.dropRebuilt(rebuilt);
-                for (made) |l| l.destroy();
-                g.gpa.free(made);
                 return e;
             };
-            if (!replaced) break;
+            if (g.fatal) break;
         }
-        g.dropRebuilt(rebuilt);
+        if (g.fatal) {
+            for (g.scripts.items) |s| g.stopScript(s, "effect state unknown", null, .{}) catch |e| {
+                if (e == error.Deferred) {
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made, .libraries = libraries } };
+                    paused = true;
+                    return .paused;
+                }
+                return e;
+            };
+            return .stopped;
+        }
+        @memcpy(g.libraries.items, libraries);
+        for (rebuilt) |x| {
+            const replaced = try g.replaceCode(x.script, x.fresh, false, "library replacement");
+            std.debug.assert(replaced);
+        }
+        published = true;
         return .{ .replaced = made };
     }
 
@@ -2442,6 +2485,7 @@ pub const Group = struct {
     /// name`, a name the Group holds `name reused`, and an import the Group
     /// doesn't hold with the same identity `library mismatch`.
     pub fn addLibrary(g: *Group, l: *Library) !void {
+        try g.checkWorker();
         g.write("> add-library {s} identity={x}\n", .{ l.name, l.identity });
         const refusal: ?[]const u8 = blk: {
             for (stdlib_sources) |src| if (std.mem.eql(u8, src.name, l.name)) break :blk "reserved name";
@@ -3170,6 +3214,7 @@ pub const Group = struct {
     /// A Pump with a Fuel Slice per Script and a Fuel cap for the Group, 0
     /// for none (chapter 5, Fuel Slices).
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
+        try g.checkWorker();
         g.pumping = true;
         defer g.pumping = false;
         g.rewound = false;

@@ -35,6 +35,8 @@ pub fn status(err: anyerror) HostErrorCode {
         error.NameReused => .name_reused,
         error.ReservedName => .reserved_name,
         error.LibraryMismatch => .library_mismatch,
+        error.ReentrantCall => .reentrant_call,
+        error.EffectStateUnknown => .effect_state_unknown,
         else => .invalid_value,
     };
 }
@@ -1047,6 +1049,8 @@ export fn talk_group_release(g: ?*Group) void {
 
 export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorCode {
     out.* = null;
+    g.group.checkWorker() catch |err| return status(err);
+    if (g.group.fatal) return .effect_state_unknown;
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const name = bytes(o.name, o.name_len) catch return .invalid_value;
@@ -1253,6 +1257,7 @@ export fn talk_pending_done(p: *const Pending) bool {
 }
 
 export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
@@ -1287,6 +1292,7 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
 /// any of them are stop-and-reloaded. A refusal changes nothing.
 export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver, reports: ?*?*Reports) HostErrorCode {
     if (reports) |r| r.* = null;
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     defer giveReports(g, reports);
@@ -1308,6 +1314,7 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver,
         .refused => .load_refused,
         .unknown_library => .invalid_value,
         .state_too_large => .state_too_large,
+        .stopped => .effect_state_unknown,
     };
 }
 
@@ -1318,6 +1325,7 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver,
 /// way the attempt takes the next save id, and its `save` record.
 pub export fn talk_save(g: *Group, out: *Buffer) HostErrorCode {
     out.* = .{};
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     g.group.saves += 1;
@@ -1550,6 +1558,7 @@ pub const Settlement = extern struct {
 /// answers or fails through.
 export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settlement, adopted: ?*?*Call) HostErrorCode {
     if (adopted) |a| a.* = null;
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const call_id = bytes(id, len) catch return .invalid_value;
@@ -1728,6 +1737,7 @@ export fn talk_script_grants(s: *Script, out: *[*]const ScriptGrant) usize {
 
 /// The Group Fingerprint (chapter 9), 32 bytes, a worker call.
 export fn talk_fingerprint(g: *Group, out: *[32]u8) HostErrorCode {
+    g.group.checkWorker() catch |err| return status(err);
     out.* = g.group.groupFingerprint() catch return .out_of_memory;
     return .ok;
 }
@@ -1777,6 +1787,7 @@ const Inspecting = struct {
 
 export fn talk_inspect(g: *Group, out: ?*?*Inspection) HostErrorCode {
     if (out) |o| o.* = null;
+    g.group.checkWorker() catch |err| return status(err);
     g.group.vars();
     g.flush();
     const o = out orelse return .ok;
@@ -3200,6 +3211,7 @@ pub const ReloadOptions = extern struct { keep_mailbox: bool };
 export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry: CarryOver, o: ?*const ReloadOptions, reports: ?*?*Reports) HostErrorCode {
     if (reports) |r| r.* = null;
     const g = s.group;
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     defer giveReports(g, reports);
@@ -3222,6 +3234,7 @@ export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry
 /// Script, or it is refused and the Script unchanged.
 export fn talk_script_extend(s: *Script, source: ?[*]const u8, len: usize) HostErrorCode {
     const g = s.group;
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const src = bytes(source, len) catch return .invalid_value;
@@ -3498,6 +3511,7 @@ export fn talk_library_needs(l: *const machine.Library, out: *[*]const Operation
 /// record. A stdlib name is TALK_RESERVED_NAME, a name the Group holds
 /// TALK_NAME_REUSED, and an import it doesn't hold TALK_LIBRARY_MISMATCH.
 export fn talk_add_library(g: *Group, l: *machine.Library) HostErrorCode {
+    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     g.group.addLibrary(l) catch |err| return status(err);

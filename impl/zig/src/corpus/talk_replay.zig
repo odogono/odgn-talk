@@ -1431,7 +1431,7 @@ pub const Host = struct {
             const code = c.talk_replace_library(h.group, l, carry, null);
             if (code == c.TALK_OK) {
                 try libraries.put(a, library, l.?);
-            } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE) try check(code);
+            } else if (code != c.TALK_LOAD_REFUSED and code != c.TALK_STATE_TOO_LARGE and code != c.TALK_EFFECT_STATE_UNKNOWN) try check(code);
         } else if (std.mem.eql(u8, name, "save")) {
             // The save is kept under the id the Core gives it.
             var saved: c.talk_owned_bytes = .{ .data = null, .len = 0 };

@@ -71,6 +71,7 @@ test {
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
     _ = @import("machine/clause_charge_test.zig");
+    _ = @import("machine/lifecycle_test.zig");
     _ = notify;
     _ = @import("decimal/transcendental.zig");
     _ = @import("pattern.zig");

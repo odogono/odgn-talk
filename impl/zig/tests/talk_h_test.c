@@ -198,10 +198,26 @@ static int capability_test(void) {
 
 /* A release hook: counts its calls and keeps what the last one was told. */
 static int released = 0;
+static int lifecycle_reentry_bad = 0;
+static int lifecycle_reentry_seen = 0;
+
+/* Worker calls are refused before touching output or the outer Trace,
+ * including while Reload performs lifecycle work outside a Pump. */
+static void check_lifecycle_reentry(talk_group *group) {
+    talk_owned_bytes saved = {0};
+    unsigned char fingerprint[32];
+    lifecycle_reentry_seen++;
+    lifecycle_reentry_bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_REENTRANT_CALL;
+    lifecycle_reentry_bad |= talk_save(group, &saved) != TALK_REENTRANT_CALL;
+    lifecycle_reentry_bad |= saved.data != NULL || saved.len != 0;
+    lifecycle_reentry_bad |= talk_fingerprint(group, fingerprint) != TALK_REENTRANT_CALL;
+    lifecycle_reentry_bad |= talk_inspect(group, NULL) != TALK_REENTRANT_CALL;
+}
 static talk_release_reason released_reason = TALK_RELEASE_STOP;
 static char released_grant[16];
 static void release(void *context, const talk_grant_context *g) {
     (void)context;
+    check_lifecycle_reentry(g->group);
     released++;
     released_reason = g->reason;
     snprintf(released_grant, sizeof released_grant, "%.*s", (int)g->grant_name_len, g->grant_name);
@@ -248,7 +264,7 @@ static int revoke_test(void) {
     bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
     bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
     talk_inspect(group, NULL);
-    bad |= released != 1 || released_reason != TALK_RELEASE_REVOKE || strcmp(released_grant, "echo") != 0;
+    bad |= released != 1 || released_reason != TALK_RELEASE_REVOKE || strcmp(released_grant, "echo") != 0 || lifecycle_reentry_bad;
     bad |= strstr(trace, "> revoke s grant=echo\n> revoke s grant=echo\n> revoke s grant=other\n") == NULL;
     bad |= strstr(trace, "call s/r1.c1") != NULL;
     bad |= strstr(trace, "vars s said=\"capability revoked\"\n") == NULL;
@@ -263,6 +279,7 @@ static int revoke_test(void) {
 static char lifecycle_seen[512];
 static talk_call_end lifecycle(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
     (void)context; (void)args; (void)len; (void)error;
+    check_lifecycle_reentry(talk_call_group(call));
     const char *scope = NULL, *run = NULL, *segment = NULL;
     size_t scope_len = 0, run_len = 0, segment_len = 0;
     talk_call_scope_name(call, &scope, &scope_len);
@@ -342,6 +359,7 @@ static int scope_test(void) {
     bad |= strcmp(lifecycle_seen, "file s/r1 s/r1.s1 no\nfile s/r1 s/r1.s1 yes\n") != 0;
     bad |= strstr(trace, "scope s/r1.c1 grant=out name=file action=opened\n") == NULL;
     bad |= strstr(trace, "call s/r1.c2 op=out.close args=[] error={} automatic=yes\nscope s/r1.c2 grant=out name=file action=failed\neffect-failure s/r1 grant=out segment=s/r1.s1 phase=abandon status=unknown scope=file\n") == NULL;
+    bad |= lifecycle_reentry_bad;
     if (bad) fprintf(stderr, "%s%s", trace, lifecycle_seen);
     talk_group_release(group);
     talk_core_release(core);
@@ -353,6 +371,7 @@ static int scope_test(void) {
 static char effects_seen[512];
 static talk_effect_status commit_status = TALK_EFFECT_OK;
 static talk_effect_result saw(const char *phase, const talk_segment_context *s) {
+    check_lifecycle_reentry(s->group);
     size_t at = strlen(effects_seen);
     snprintf(effects_seen + at, sizeof effects_seen - at, "%s %.*s %.*s %zu\n", phase, (int)s->grant_name_len, s->grant_name, (int)s->segment_id_len, s->segment_id, s->grants_len);
     return (talk_effect_result){TALK_EFFECT_OK, NULL, 0};
@@ -419,6 +438,16 @@ static int segment_test(void) {
     bad |= strstr(effects_seen, "commit a s/r2.s1 2\nrollback a s/r2.s1 2\n") == NULL;
     /* The second Run's add was rolled back. */
     bad |= strstr(trace, "vars s n=1\n") == NULL;
+    /* Outside a Pump, a preempted Segment's rollback also refuses reentry. */
+    const char *spinning = "on spin\n ask a to write\n repeat forever\n end repeat\nend spin\n";
+    bad |= talk_script_reload(script, spinning, strlen(spinning), TALK_RESET_VARIABLES, NULL, NULL) != TALK_OK;
+    talk_message spin = {"spin", 4, NULL, 0, NULL};
+    talk_pump_options slice = {40, 0};
+    bad |= talk_script_deliver(script, &spin, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000002, 0, &slice, NULL) != TALK_OK;
+    int before_reload = lifecycle_reentry_seen;
+    bad |= talk_script_reload(script, source, strlen(source), TALK_RESET_VARIABLES, NULL, NULL) != TALK_OK;
+    bad |= lifecycle_reentry_bad || lifecycle_reentry_seen <= before_reload;
     if (bad) fprintf(stderr, "%s%s", trace, effects_seen);
     talk_group_release(group);
     talk_core_release(core);

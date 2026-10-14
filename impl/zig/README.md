@@ -237,8 +237,19 @@ Core has abandoned since the last, once each. It does not yet conform:
 Operations yet ([#911](https://github.com/odogono/odgn-talk/issues/911)). A crossing pause, where a
 Host function answers `deferred`, is the transport's: it ends no Stretch and
 writes no record. Segment `begin`, `commit` and `rollback` hooks and automatic
-abandonment at a Segment's end may defer too (#900);
-`zig build corpus -- --defer-crossings` defers each such crossing once and
+abandonment may defer at a Segment's end, while draining Stop, cancellation,
+owner disposal and Rewind inputs, and while Reload or Library replacement
+terminates old Runs. Library replacement holds every proposed Library and
+Script until all terminations finish; fatal cleanup prevents publication and
+returns `effect state unknown`. Load, Reload, Extend and Library replacement
+cannot revive a Group stopped by fatal cleanup. Pump, Save, Fingerprint, Inspect
+and code-change worker calls from lifecycle callbacks return `reentrant call`,
+during a Pump and during code changes.
+Grant release hooks queue Message Layer exchanges, sent before the next need
+or final reply. In-process landings during a Pump remain synchronous, as do
+the fatal effect stop and a landed Stop when cleaning up other Runs paused by
+a Fuel Slice (#900).
+`zig build corpus -- --defer-crossings` defers each eligible crossing once and
 holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
 Values are walked from heap work lists, never by native recursion.

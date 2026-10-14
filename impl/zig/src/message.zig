@@ -2498,6 +2498,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
             .refused => return workRefused(s, ref, entry),
             .unknown_library => return workError(s, ref, entry, .invalid_value),
             .state_too_large => return workError(s, ref, entry, .state_too_large),
+            .stopped => return workError(s, ref, entry, .effect_state_unknown),
             .paused => unreachable,
         },
     }
@@ -4219,6 +4220,37 @@ test "a reload's lifecycle crossings reach the Host as needs before its reply" {
     // The new code runs, its Variable carried.
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     try std.testing.expectEqual(@as(i64, 0), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\"}}", .{10}))).object.get("result").?.integer);
+}
+
+test "fatal Library replacement waits for release and returns effect state unknown" {
+    for ([_][]const u8{ "failed", "unknown" }) |status| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"resource\",\"segmentLifecycle\":true,\"release\":true,\"ops\":[{{\"name\":\"write\",\"mode\":\"immediate\",\"result\":\"nothing\",\"segmentBound\":true}}]}}", .{1}));
+        const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"resource\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+        const old = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"user\",\"source\":\"function one\\nreturn 1\\nend one\\n\"}}", .{3}))).object.get("identity").?.object.get("$bytes").?.string;
+        const fresh = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"user\",\"source\":\"function one\\nreturn 2\\nend one\\n\"}}", .{4}))).object.get("identity").?.object.get("$bytes").?.string;
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{5}));
+        _ = try okOf(try c.send("{{\"m\":\"add-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}}}}", .{ 6, old }));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"r\":{d}}},\"source\":\"use one from user\\non go\\nask r to write\\nrepeat forever\\nend repeat\\nend go\\n\"}}", .{ 7, grant }));
+        _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{8}));
+        var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\",\"fuelSlice\":40}}", .{9});
+        try std.testing.expectEqualStrings("begin", reply.object.get("need").?.object.get("phase").?.string);
+        reply = try c.sendRef(9, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{9});
+        try std.testing.expectEqualStrings("write", reply.object.get("need").?.object.get("operation").?.string);
+        _ = try okOf(try c.sendRef(9, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{9}));
+        reply = try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"carry variables\"}}", .{ 10, fresh });
+        try std.testing.expectEqualStrings("rollback", reply.object.get("need").?.object.get("phase").?.string);
+        reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"{s}\"}}", .{ 10, status });
+        try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+        const failed = try c.sendRef(10, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{10});
+        try std.testing.expectEqualStrings("host error", try errKind(failed));
+        try std.testing.expectEqualStrings("effect state unknown", failed.object.get("err").?.object.get("code").?.string);
+        // The Group keeps its original Library; replacement did not succeed.
+        try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"next\",\"source\":\"on go\\nend go\\n\"}}", .{11})));
+    }
 }
 
 test "store reaches the Host as op and effect needs, its Trace the corpus case's" {
