@@ -1,5 +1,7 @@
-//! Chapter 9's deterministic, lossless JSON Value Encoding. JSON is scanned
-//! for depth before parsing; decimal tokens never pass through binary floats.
+//! Chapter 9's deterministic, lossless JSON Value Encoding. Values are
+//! written and built from heap work lists, so nesting is bounded by memory
+//! rather than the native stack; decimal tokens never pass through binary
+//! floats.
 const std = @import("std");
 const model = @import("value.zig");
 const display = @import("display.zig");
@@ -25,8 +27,25 @@ fn tag(w: *std.Io.Writer, name: []const u8) !void {
     try w.writeAll(name);
     try w.writeAll("\":");
 }
+/// One step of writing a container: a value, literal punctuation, or a
+/// quoted key.
+const Step = union(enum) { value: *const Value, punctuation: []const u8, key: []const u8 };
+
 /// Writes `v`'s Value Encoding. A Function at any depth is NotEncodable.
-pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
+pub fn write(w: *std.Io.Writer, root: *const Value) Error!void {
+    const gpa = root.allocator;
+    var steps: std.ArrayList(Step) = .empty;
+    defer steps.deinit(gpa);
+    try steps.append(gpa, .{ .value = root });
+    while (steps.pop()) |step| switch (step) {
+        .punctuation => |p| try w.writeAll(p),
+        .key => |k| try quoted(w, k),
+        .value => |v| try writeOne(w, v, gpa, &steps),
+    };
+}
+
+/// Writes a scalar, or opens a container and pushes its parts last first.
+fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *std.ArrayList(Step)) Error!void {
     const a = v.allocator;
     switch (v.data) {
         .nothing => try w.writeAll("null"),
@@ -64,11 +83,14 @@ pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
         },
         .list => |xs| {
             try w.writeByte('[');
-            for (xs, 0..) |x, i| {
-                if (i > 0) try w.writeByte(',');
-                try write(w, x);
+            try steps.ensureUnusedCapacity(gpa, 2 * xs.len + 1);
+            steps.appendAssumeCapacity(.{ .punctuation = "]" });
+            var i = xs.len;
+            while (i > 0) {
+                i -= 1;
+                steps.appendAssumeCapacity(.{ .value = xs[i] });
+                if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = "," });
             }
-            try w.writeByte(']');
         },
         .map => |xs| {
             var escaped = false;
@@ -80,23 +102,28 @@ pub fn write(w: *std.Io.Writer, v: *const Value) Error!void {
                 try tag(w, "map");
                 try w.writeByte('[');
             } else try w.writeByte('{');
-            for (xs, 0..) |p, i| {
-                if (i > 0) try w.writeByte(',');
-                if (escaped) try w.writeByte('[');
-                try quoted(w, p.key);
-                try w.writeByte(if (escaped) ',' else ':');
-                try write(w, p.value);
-                if (escaped) try w.writeByte(']');
+            try steps.ensureUnusedCapacity(gpa, 6 * xs.len + 1);
+            steps.appendAssumeCapacity(.{ .punctuation = if (escaped) "]}" else "}" });
+            var i = xs.len;
+            while (i > 0) {
+                i -= 1;
+                const p = xs[i];
+                if (escaped) steps.appendAssumeCapacity(.{ .punctuation = "]" });
+                steps.appendAssumeCapacity(.{ .value = p.value });
+                steps.appendAssumeCapacity(.{ .punctuation = if (escaped) "," else ":" });
+                steps.appendAssumeCapacity(.{ .key = p.key });
+                if (escaped) steps.appendAssumeCapacity(.{ .punctuation = "[" });
+                if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = "," });
             }
-            try w.writeAll(if (escaped) "]}" else "}");
         },
         .range => |r| {
             try tag(w, "range");
             try w.writeByte('[');
-            try write(w, r.from);
-            try w.writeByte(',');
-            try write(w, r.to);
-            try w.writeAll("]}");
+            try steps.ensureUnusedCapacity(gpa, 4);
+            steps.appendAssumeCapacity(.{ .punctuation = "]}" });
+            steps.appendAssumeCapacity(.{ .value = r.to });
+            steps.appendAssumeCapacity(.{ .punctuation = "," });
+            steps.appendAssumeCapacity(.{ .value = r.from });
         },
         .civil_date => |f| {
             const s = try model.dates.string(a, f, false);
@@ -175,133 +202,184 @@ fn canonical(a: std.mem.Allocator, v: *Value, name: []const u8, payload: Json) m
     if (!std.mem.eql(u8, actual, spelled.written())) return error.InvalidValue;
     return v;
 }
-fn fromJson(a: std.mem.Allocator, j: Json, r: display.Resolver, depth: usize) model.Error!*Value {
-    if (depth >= model.max_depth) return error.TooDeep;
-    switch (j) {
-        .null => return model.scalar(a, .nothing),
-        .bool => |b| return model.scalar(a, .{ .bool = b }),
-        .string => |s| return model.text(a, s),
-        .number_string => |s| return canonical(a, try model.scalar(a, .{ .number = try model.Decimal.parse(s) }), "", j),
-        .array => |array| {
-            var out: std.ArrayList(*Value) = .empty;
-            defer {
-                for (out.items) |v| v.release();
-                out.deinit(a);
-            }
-            for (array.items) |child| {
-                const v = try fromJson(a, child, r, depth + 1);
-                out.append(a, v) catch {
+/// Which JSON a builder reads: the Value Encoding, or chapter 7's plain JSON.
+const Mode = enum { encoding, plain };
+
+/// A list, map or range whose children are still being built.
+const Building = struct {
+    kind: enum { list, map, range },
+    /// Items, a range's two ends, a plain map's member values, or a `$map`
+    /// payload's `[key, value]` pairs.
+    children: []const Json,
+    /// A plain map's member names.
+    keys: []const []const u8 = &.{},
+    tagged: bool = false,
+    next: usize = 0,
+    key: []const u8 = "",
+    escaped: bool = false,
+    items: std.ArrayList(*Value) = .empty,
+    pairs: std.ArrayList(model.Pair) = .empty,
+
+    fn deinit(b: *Building, a: std.mem.Allocator) void {
+        for (b.items.items) |v| v.release();
+        b.items.deinit(a);
+        for (b.pairs.items) |p| p.value.release();
+        b.pairs.deinit(a);
+    }
+};
+
+/// A leaf's value, or a container to build from its children.
+const Start = union(enum) { value: *Value, building: Building };
+
+/// Builds a Value from parsed JSON. Containers wait on a heap stack.
+fn build(a: std.mem.Allocator, root: Json, r: display.Resolver, mode: Mode) model.Error!*Value {
+    var stack: std.ArrayList(Building) = .empty;
+    defer {
+        for (stack.items) |*b| b.deinit(a);
+        stack.deinit(a);
+    }
+    var next = try startValue(a, root, r, mode);
+    while (true) {
+        var v = switch (next) {
+            .value => |v| v,
+            .building => |b| {
+                try stack.append(a, b);
+                next = try startValue(a, try nextChild(&stack.items[stack.items.len - 1], mode), r, mode);
+                continue;
+            },
+        };
+        // Hand the value to the container it belongs to, finishing each
+        // container whose last child it is.
+        while (true) {
+            if (stack.items.len == 0) return v;
+            const top = &stack.items[stack.items.len - 1];
+            switch (top.kind) {
+                .list, .range => top.items.append(a, v) catch {
                     v.release();
                     return error.OutOfMemory;
-                };
+                },
+                .map => top.pairs.append(a, .{ .key = top.key, .value = v }) catch {
+                    v.release();
+                    return error.OutOfMemory;
+                },
             }
-            return model.list(a, out.items);
+            if (top.next < top.children.len) {
+                next = try startValue(a, try nextChild(top, mode), r, mode);
+                break;
+            }
+            v = switch (top.kind) {
+                .list => try model.list(a, top.items.items),
+                .range => try model.range(a, top.items.items[0], top.items.items[1]),
+                .map => blk: {
+                    if (top.tagged and !top.escaped) return error.InvalidValue;
+                    break :blk try model.map(a, top.pairs.items);
+                },
+            };
+            var done = stack.pop().?;
+            done.deinit(a);
+        }
+    }
+}
+
+/// The next child to build, its map key checked and noted.
+fn nextChild(b: *Building, mode: Mode) model.Error!Json {
+    const i = b.next;
+    b.next += 1;
+    if (b.kind != .map) return b.children[i];
+    if (b.tagged) {
+        const p = try pair(b.children[i]);
+        const k = try string(p[0]);
+        if (k.len > 0 and k[0] == '$') b.escaped = true;
+        b.key = k;
+        return p[1];
+    }
+    const k = b.keys[i];
+    switch (mode) {
+        .encoding => if (k.len > 0 and k[0] == '$') return error.InvalidValue,
+        .plain => if (!@import("unicode/utf8.zig").validate(k)) return error.InvalidValue,
+    }
+    b.key = k;
+    return b.children[i];
+}
+
+fn startValue(a: std.mem.Allocator, j: Json, r: display.Resolver, mode: Mode) model.Error!Start {
+    switch (j) {
+        .array => |array| {
+            if (array.items.len == 0) return .{ .value = try model.list(a, &.{}) };
+            return .{ .building = .{ .kind = .list, .children = array.items } };
         },
         .object => |object| {
-            if (object.count() == 1) {
+            if (mode == .encoding and object.count() == 1) {
                 const name = object.keys()[0];
                 const payload = object.values()[0];
-                if (std.mem.eql(u8, name, "$dec")) return canonical(a, try model.scalar(a, .{ .number = try model.Decimal.parse(try string(payload)) }), name, payload);
-                if (std.mem.eql(u8, name, "$quantity")) {
-                    const p = try pair(payload);
-                    return canonical(a, try model.quantity(a, try model.Decimal.parse(try string(p[0])), try string(p[1])), name, payload);
-                }
-                if (std.mem.eql(u8, name, "$range")) {
-                    const p = try pair(payload);
-                    const from = try fromJson(a, p[0], r, depth + 1);
-                    defer from.release();
-                    const to = try fromJson(a, p[1], r, depth + 1);
-                    defer to.release();
-                    return model.range(a, from, to);
-                }
-                if (std.mem.eql(u8, name, "$date")) return canonical(a, try model.scalar(a, .{ .civil_date = try model.dates.parseCivil(try string(payload)) }), name, payload);
-                if (std.mem.eql(u8, name, "$instant")) return canonical(a, try model.scalar(a, .{ .instant = try model.dates.parseInstant(try string(payload)) }), name, payload);
-                if (std.mem.eql(u8, name, "$bytes")) {
-                    const s = try string(payload);
-                    const decoder = std.base64.standard.Decoder;
-                    const len = decoder.calcSizeForSlice(s) catch return error.InvalidValue;
-                    const b = try a.alloc(u8, len);
-                    defer a.free(b);
-                    decoder.decode(b, s) catch return error.InvalidValue;
-                    return canonical(a, try model.bytes(a, b), name, payload);
-                }
-                if (std.mem.eql(u8, name, "$object")) {
-                    const p = try pair(payload);
-                    const resolve = r.object orelse return error.InvalidValue;
-                    return resolve(r.context, try string(p[0]), try string(p[1]));
-                }
-                if (std.mem.eql(u8, name, "$pattern")) {
-                    return canonical(a, try @import("pattern.zig").parse(a, try string(payload)), name, payload);
-                }
+                if (std.mem.eql(u8, name, "$range")) return .{ .building = .{ .kind = .range, .children = try pair(payload) } };
                 if (std.mem.eql(u8, name, "$map")) {
                     if (payload != .array) return error.InvalidValue;
                     // A map with no `$` key is written as a plain object.
-                    var escaped = false;
-                    var pairs: std.ArrayList(model.Pair) = .empty;
-                    defer {
-                        for (pairs.items) |p| p.value.release();
-                        pairs.deinit(a);
-                    }
-                    for (payload.array.items) |item| {
-                        const p = try pair(item);
-                        const k = try string(p[0]);
-                        if (k.len > 0 and k[0] == '$') escaped = true;
-                        const v = try fromJson(a, p[1], r, depth + 1);
-                        pairs.append(a, .{ .key = k, .value = v }) catch {
-                            v.release();
-                            return error.OutOfMemory;
-                        };
-                    }
-                    if (!escaped) return error.InvalidValue;
-                    return model.map(a, pairs.items);
+                    if (payload.array.items.len == 0) return error.InvalidValue;
+                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true } };
                 }
+                if (name.len > 0 and name[0] == '$') return .{ .value = try taggedLeaf(a, name, payload, r) };
             }
-            var pairs: std.ArrayList(model.Pair) = .empty;
-            defer {
-                for (pairs.items) |p| p.value.release();
-                pairs.deinit(a);
-            }
-            for (object.keys(), object.values()) |k, child| {
-                if (k.len > 0 and k[0] == '$') return error.InvalidValue;
-                const v = try fromJson(a, child, r, depth + 1);
-                pairs.append(a, .{ .key = k, .value = v }) catch {
-                    v.release();
-                    return error.OutOfMemory;
-                };
-            }
-            return model.map(a, pairs.items);
+            if (object.count() == 0) return .{ .value = try model.map(a, &.{}) };
+            return .{ .building = .{ .kind = .map, .children = object.values(), .keys = object.keys() } };
         },
-        else => return error.InvalidValue,
+        else => return .{ .value = try switch (mode) {
+            .encoding => fromJsonLeaf(a, j),
+            .plain => fromPlainLeaf(a, j),
+        } },
     }
 }
-/// Reads one Value Encoding, refusing invalid UTF-8, nesting beyond
-/// `max_depth`, duplicate keys, unknown tags and any number, tag or payload
+
+fn fromJsonLeaf(a: std.mem.Allocator, j: Json) model.Error!*Value {
+    return switch (j) {
+        .null => model.scalar(a, .nothing),
+        .bool => |b| model.scalar(a, .{ .bool = b }),
+        .string => |s| model.text(a, s),
+        .number_string => |s| canonical(a, try model.scalar(a, .{ .number = try model.Decimal.parse(s) }), "", j),
+        else => error.InvalidValue,
+    };
+}
+
+/// A one-member object whose name is a `$` tag other than `$range` or
+/// `$map`. An unknown tag is refused, as a plain object's `$` key is.
+fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.Resolver) model.Error!*Value {
+    if (std.mem.eql(u8, name, "$dec")) return canonical(a, try model.scalar(a, .{ .number = try model.Decimal.parse(try string(payload)) }), name, payload);
+    if (std.mem.eql(u8, name, "$quantity")) {
+        const p = try pair(payload);
+        return canonical(a, try model.quantity(a, try model.Decimal.parse(try string(p[0])), try string(p[1])), name, payload);
+    }
+    if (std.mem.eql(u8, name, "$date")) return canonical(a, try model.scalar(a, .{ .civil_date = try model.dates.parseCivil(try string(payload)) }), name, payload);
+    if (std.mem.eql(u8, name, "$instant")) return canonical(a, try model.scalar(a, .{ .instant = try model.dates.parseInstant(try string(payload)) }), name, payload);
+    if (std.mem.eql(u8, name, "$bytes")) {
+        const s = try string(payload);
+        const decoder = std.base64.standard.Decoder;
+        const len = decoder.calcSizeForSlice(s) catch return error.InvalidValue;
+        const b = try a.alloc(u8, len);
+        defer a.free(b);
+        decoder.decode(b, s) catch return error.InvalidValue;
+        return canonical(a, try model.bytes(a, b), name, payload);
+    }
+    if (std.mem.eql(u8, name, "$object")) {
+        const p = try pair(payload);
+        const resolve = r.object orelse return error.InvalidValue;
+        return resolve(r.context, try string(p[0]), try string(p[1]));
+    }
+    if (std.mem.eql(u8, name, "$pattern")) {
+        return canonical(a, try @import("pattern.zig").parse(a, try string(payload)), name, payload);
+    }
+    return error.InvalidValue;
+}
+/// Reads one Value Encoding, refusing invalid UTF-8, duplicate keys,
+/// unknown tags and any number, tag or payload
 /// the encoder would not write. JSON white space and string escapes are
 /// syntax, and text is normalised to NFC as `talk_text` does. Host Objects
 /// come from `r`.
 pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Error!*Value {
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
-    try checkDepth(s);
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
-    return fromJson(a, parsed.value, r, 0);
-}
-/// Refuses JSON nested beyond `max_depth` before it is parsed.
-fn checkDepth(s: []const u8) model.Error!void {
-    var depth: usize = 0;
-    var quoted_string = false;
-    var escaped = false;
-    for (s) |c| {
-        if (quoted_string) {
-            if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') quoted_string = false;
-        } else if (c == '"') quoted_string = true else if (c == '[' or c == '{') {
-            depth += 1;
-            if (depth > model.max_depth) return error.TooDeep;
-        } else if (c == ']' or c == '}') {
-            if (depth == 0) return error.InvalidValue;
-            depth -= 1;
-        }
-    }
+    return build(a, parsed.value, r, .encoding);
 }
 /// Chapter 7's JSON mapping, the one rule for plain JSON that the `json`
 /// Library follows too: a text's `"` and `\`, its short escapes and its
@@ -321,37 +399,50 @@ fn plainQuoted(w: *std.Io.Writer, s: []const u8) !void {
     };
     try w.writeByte('"');
 }
-fn writePlain(w: *std.Io.Writer, v: *const Value) Error!void {
-    const a = v.allocator;
-    switch (v.data) {
-        .nothing => try w.writeAll("null"),
-        .bool => |b| try w.writeAll(if (b) "true" else "false"),
-        .number => |n| {
-            const s = try n.string(a);
-            defer a.free(s);
-            try w.writeAll(s);
+fn writePlain(w: *std.Io.Writer, root: *const Value) Error!void {
+    const gpa = root.allocator;
+    var steps: std.ArrayList(Step) = .empty;
+    defer steps.deinit(gpa);
+    try steps.append(gpa, .{ .value = root });
+    while (steps.pop()) |step| switch (step) {
+        .punctuation => |p| try w.writeAll(p),
+        .key => |k| try plainQuoted(w, k),
+        .value => |v| switch (v.data) {
+            .nothing => try w.writeAll("null"),
+            .bool => |b| try w.writeAll(if (b) "true" else "false"),
+            .number => |n| {
+                const s = try n.string(v.allocator);
+                defer v.allocator.free(s);
+                try w.writeAll(s);
+            },
+            .text => |s| try plainQuoted(w, s),
+            .list => |xs| {
+                try w.writeByte('[');
+                try steps.ensureUnusedCapacity(gpa, 2 * xs.len + 1);
+                steps.appendAssumeCapacity(.{ .punctuation = "]" });
+                var i = xs.len;
+                while (i > 0) {
+                    i -= 1;
+                    steps.appendAssumeCapacity(.{ .value = xs[i] });
+                    if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = "," });
+                }
+            },
+            .map => |xs| {
+                try w.writeByte('{');
+                try steps.ensureUnusedCapacity(gpa, 4 * xs.len + 1);
+                steps.appendAssumeCapacity(.{ .punctuation = "}" });
+                var i = xs.len;
+                while (i > 0) {
+                    i -= 1;
+                    steps.appendAssumeCapacity(.{ .value = xs[i].value });
+                    steps.appendAssumeCapacity(.{ .punctuation = ":" });
+                    steps.appendAssumeCapacity(.{ .key = xs[i].key });
+                    if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = "," });
+                }
+            },
+            else => return error.NotEncodable,
         },
-        .text => |s| try plainQuoted(w, s),
-        .list => |xs| {
-            try w.writeByte('[');
-            for (xs, 0..) |x, i| {
-                if (i > 0) try w.writeByte(',');
-                try writePlain(w, x);
-            }
-            try w.writeByte(']');
-        },
-        .map => |xs| {
-            try w.writeByte('{');
-            for (xs, 0..) |p, i| {
-                if (i > 0) try w.writeByte(',');
-                try plainQuoted(w, p.key);
-                try w.writeByte(':');
-                try writePlain(w, p.value);
-            }
-            try w.writeByte('}');
-        },
-        else => return error.NotEncodable,
-    }
+    };
 }
 /// `v` as compact plain JSON, owned by the caller. A kind JSON has no form
 /// for, at any depth, is NotEncodable (chapter 7, Encoding).
@@ -419,59 +510,27 @@ fn plainNumber(a: std.mem.Allocator, s: []const u8) model.Error!model.Decimal {
     }
     return model.Decimal.parse(text.items);
 }
-fn fromPlain(a: std.mem.Allocator, j: Json) model.Error!*Value {
-    switch (j) {
-        .null => return model.scalar(a, .nothing),
-        .bool => |b| return model.scalar(a, .{ .bool = b }),
+fn fromPlainLeaf(a: std.mem.Allocator, j: Json) model.Error!*Value {
+    return switch (j) {
+        .null => model.scalar(a, .nothing),
+        .bool => |b| model.scalar(a, .{ .bool = b }),
         .string => |s| {
             if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
             return model.text(a, s);
         },
-        .number_string => |s| return model.scalar(a, .{ .number = try plainNumber(a, s) }),
-        .array => |array| {
-            var out: std.ArrayList(*Value) = .empty;
-            defer {
-                for (out.items) |v| v.release();
-                out.deinit(a);
-            }
-            for (array.items) |child| {
-                const v = try fromPlain(a, child);
-                out.append(a, v) catch {
-                    v.release();
-                    return error.OutOfMemory;
-                };
-            }
-            return model.list(a, out.items);
-        },
-        .object => |object| {
-            var pairs: std.ArrayList(model.Pair) = .empty;
-            defer {
-                for (pairs.items) |p| p.value.release();
-                pairs.deinit(a);
-            }
-            for (object.keys(), object.values()) |k, child| {
-                if (!@import("unicode/utf8.zig").validate(k)) return error.InvalidValue;
-                const v = try fromPlain(a, child);
-                pairs.append(a, .{ .key = k, .value = v }) catch {
-                    v.release();
-                    return error.OutOfMemory;
-                };
-            }
-            return model.map(a, pairs.items);
-        },
-        else => return error.InvalidValue,
-    }
+        .number_string => |s| model.scalar(a, .{ .number = try plainNumber(a, s) }),
+        else => error.InvalidValue,
+    };
 }
 /// Reads one plain JSON value by chapter 7's mapping: numbers exactly, text
 /// normalised to NFC, and an object's members in order. Invalid JSON, a lone
-/// surrogate, two names equal after NFC, a number past the limits and
-/// nesting beyond `max_depth` are InvalidValue or TooDeep.
+/// surrogate, two names equal after NFC and a number past the limits are
+/// InvalidValue.
 pub fn decodeJson(a: std.mem.Allocator, s: []const u8) model.Error!*Value {
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
-    try checkDepth(s);
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
-    return fromPlain(a, parsed.value);
+    return build(a, parsed.value, .{}, .plain);
 }
 test "lossless encoding, escaping, map tags and strict Base64" {
     const a = std.testing.allocator;
@@ -493,10 +552,10 @@ test "lossless encoding, escaping, map tags and strict Base64" {
         try std.testing.expectEqualStrings(s, again);
     }
     for ([_][]const u8{ "{\"$bytes\":\"AB==\"}", "{\"$bytes\":\"AQ\"}", "{\"$bytes\":\"AQ===\"}", "{\"$wat\":0}", "{\"a\":1,\"a\":2}", "{\"$range\":[1,true]}" }) |s| try std.testing.expectError(error.InvalidValue, decode(a, s, .{}));
-    const deep = try a.alloc(u8, 300);
-    defer a.free(deep);
-    @memset(deep, '[');
-    try std.testing.expectError(error.TooDeep, decode(a, deep, .{}));
+    const unclosed = try a.alloc(u8, 300);
+    defer a.free(unclosed);
+    @memset(unclosed, '[');
+    try std.testing.expectError(error.InvalidValue, decode(a, unclosed, .{}));
 }
 
 fn allocationRoundTrip(a: std.mem.Allocator) !void {
@@ -663,4 +722,121 @@ test "plain JSON reads numbers exactly and writes chapter 7's escapes" {
     const q = try display.parse(a, "{total: 5 kg}", .{});
     defer q.release();
     try std.testing.expectError(error.NotEncodable, encodeJson(a, q));
+}
+
+/// Runs `f` on a thread with a small stack, so recursion on a value's depth
+/// would overflow it.
+fn onSmallStack(comptime f: fn () anyerror!void) !void {
+    var result: anyerror!void = {};
+    const t = try std.Thread.spawn(.{ .stack_size = 256 * 1024 }, struct {
+        fn go(out: *anyerror!void) void {
+            out.* = f();
+        }
+    }.go, .{&result});
+    t.join();
+    return result;
+}
+
+/// Maps and lists nested `depth` deep, alternately `{x: …}` and `[…]`,
+/// around `leaf`, with their logical size.
+fn deepValue(a: std.mem.Allocator, depth: usize, leaf: *Value) !struct { *Value, u64 } {
+    var v = leaf.retain();
+    errdefer v.release();
+    var size = model.logicalSize(leaf);
+    for (0..depth) |i| {
+        const next = if (i % 2 == 0) try model.map(a, &.{.{ .key = "x", .value = v }}) else try model.list(a, &.{v});
+        size += if (i % 2 == 0) 16 + 8 + 16 + 1 else 16 + 8;
+        v.release();
+        v = next;
+    }
+    return .{ v, size };
+}
+
+fn deepValues() !void {
+    const a = std.testing.allocator;
+    const depth = 100_000;
+    const one = try model.scalar(a, .{ .number = model.Decimal.fromInt(@as(i64, 1)) });
+    defer one.release();
+    const two = try model.scalar(a, .{ .number = model.Decimal.fromInt(@as(i64, 2)) });
+    defer two.release();
+    const x, const size = try deepValue(a, depth, one);
+    defer x.release();
+    const y, _ = try deepValue(a, depth, one);
+    defer y.release();
+    const z, _ = try deepValue(a, depth, two);
+    defer z.release();
+    try std.testing.expectEqual(size, model.logicalSize(x));
+    try std.testing.expect(try x.equal(y));
+    try std.testing.expect(!try x.equal(z));
+    // Lists order by their first unequal item, however deep; maps don't.
+    var lx = one.retain();
+    defer lx.release();
+    var lz = two.retain();
+    defer lz.release();
+    for (0..depth) |_| {
+        const nx = try model.list(a, &.{lx});
+        lx.release();
+        lx = nx;
+        const nz = try model.list(a, &.{ lz, one });
+        lz.release();
+        lz = nz;
+    }
+    try std.testing.expectEqual(std.math.Order.lt, try lx.order(lz));
+    try std.testing.expectEqual(std.math.Order.gt, try lz.order(lx));
+    try std.testing.expectError(error.CantCompare, x.order(z));
+
+    // Display, the Value Encoding and plain JSON each round trip.
+    const shown = try display.string(a, x);
+    defer a.free(shown);
+    try std.testing.expect(std.mem.startsWith(u8, shown, "[{x: [{x: "));
+    const parsed = try display.parse(a, shown, .{});
+    defer parsed.release();
+    try std.testing.expect(try x.equal(parsed));
+    const encoded = try encode(a, x);
+    defer a.free(encoded);
+    const decoded = try decode(a, encoded, .{});
+    defer decoded.release();
+    try std.testing.expect(try x.equal(decoded));
+    const json = try encodeJson(a, x);
+    defer a.free(json);
+    try std.testing.expectEqualStrings(encoded, json);
+    const plain = try decodeJson(a, json);
+    defer plain.release();
+    try std.testing.expect(try x.equal(plain));
+
+    // A Function Value deep inside is still refused.
+    const captures = try model.map(a, &.{});
+    defer captures.release();
+    const function = try model.function(a, "home", "<function f>", 1, captures);
+    defer function.release();
+    const holder, _ = try deepValue(a, depth, function);
+    defer holder.release();
+    try std.testing.expectError(error.NotEncodable, encode(a, holder));
+    try std.testing.expectError(error.NotEncodable, encodeJson(a, holder));
+}
+
+test "values nested 100,000 deep build, measure, compare, show, encode and free on a small stack" {
+    try onSmallStack(deepValues);
+}
+
+fn deepRoundTripAllocations(a: std.mem.Allocator) !void {
+    const leaf = try model.scalar(a, .nothing);
+    defer leaf.release();
+    const v, _ = try deepValue(a, 12, leaf);
+    defer v.release();
+    const shown = try display.string(a, v);
+    defer a.free(shown);
+    const parsed = try display.parse(a, shown, .{});
+    defer parsed.release();
+    const encoded = try encode(a, v);
+    defer a.free(encoded);
+    const decoded = try decode(a, encoded, .{});
+    defer decoded.release();
+    const plain = try decodeJson(a, encoded);
+    defer plain.release();
+    try std.testing.expect(try v.equal(decoded));
+}
+
+test "deep reading and building free everything after any allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, deepRoundTripAllocations, .{});
 }

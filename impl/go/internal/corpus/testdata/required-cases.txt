@@ -62,6 +62,7 @@ trace limits/alloc-exhaustion-point
 trace limits/ask-wait-retention
 trace limits/call-depth-minimum
 trace limits/cleanup-budget-minimum
+trace limits/deep-values
 trace limits/event-capture-block-retention
 trace limits/event-capture-wait-retention
 trace limits/event-object-block-retention

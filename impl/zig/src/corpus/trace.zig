@@ -39,7 +39,7 @@ fn token(r: *display.Reader) []const u8 {
 fn typed(r: *display.Reader, k: schema.CorpusTableRecordEntryKeyEntry) !void {
     const start = r.pos;
     if (std.mem.eql(u8, k.type, "value") or std.mem.eql(u8, k.type, "instant") or (std.mem.eql(u8, k.type, "target") and r.input[r.pos] == '<')) {
-        const v = try r.read(0);
+        const v = try r.read();
         defer v.release();
         if (std.mem.eql(u8, k.type, "instant") and v.data != .instant) return error.InvalidValue;
         return;

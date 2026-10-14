@@ -1,0 +1,37 @@
+-- deep.talk: the deep-values case's Script.
+
+use encodeJson, decodeJson from json
+
+script variable maps
+script variable lists
+script variable checks
+script variable json
+
+on build n
+  put 0 into m
+  put 0 into other
+  put 0 into xs
+  put 0 into ys
+  repeat for each i in 1..n
+    put {x: m} into m
+    put {x: other} into other
+    put [xs] into xs
+    put [ys, i] into ys
+  end repeat
+  put m into maps
+  put xs into lists
+  put [m = other, {x: m} = other, xs < ys, ys > xs] into checks
+end build
+
+on check
+  put [maps = {x: the x of maps}, the x of maps = the x of the x of {x: maps}, [lists] < [lists, 1]] into checks
+end check
+
+on roundTrip n
+  put [] into v
+  repeat for each i in 1..n
+    put [{x: v}] into v
+  end repeat
+  put encodeJson(v) into text
+  put [decodeJson(text) = v, the length of text] into json
+end roundTrip

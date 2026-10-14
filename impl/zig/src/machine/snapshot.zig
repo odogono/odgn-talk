@@ -206,67 +206,162 @@ const Tables = struct {
     }
 };
 
-/// A Script value. Containers nest as values do, so this recurses no deeper
-/// than a value may nest.
-fn writeValue(o: *Out, t: Tables, v: *const Value) !void {
-    var flags: u8 = 0;
-    if (v.core_message) flags |= 1;
-    if (v.script_name) flags |= 2;
-    switch (v.data) {
-        .nothing => try o.byte(@backingInt(Tag.nothing)),
-        .bool => |b| {
-            try o.byte(@backingInt(Tag.bool));
-            try o.flag(b);
-        },
-        .text => |s| {
-            try o.byte(@backingInt(Tag.text));
-            try o.byte(flags);
-            try o.str(s);
-        },
-        .bytes => |s| {
-            try o.byte(@backingInt(Tag.bytes));
-            try o.str(s);
-        },
-        .list => |items| {
-            try o.byte(@backingInt(Tag.list));
-            try o.int(items.len);
-            for (items) |x| try writeValue(o, t, x);
-        },
-        .map => |pairs| {
-            try o.byte(@backingInt(Tag.map));
-            try o.byte(flags);
-            try o.int(pairs.len);
-            for (pairs) |p| {
-                try o.str(p.key);
-                try writeValue(o, t, p.value);
+/// One step of writing a value: a value, or a map key before its value.
+const WriteStep = union(enum) { value: *const Value, key: []const u8 };
+
+/// A Script value. Containers push their children on a heap work list, so
+/// a deep value never deepens the native stack.
+fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
+    var steps: std.ArrayList(WriteStep) = .empty;
+    defer steps.deinit(o.gpa);
+    try steps.append(o.gpa, .{ .value = root });
+    while (steps.pop()) |step| {
+        const v = switch (step) {
+            .key => |k| {
+                try o.str(k);
+                continue;
+            },
+            .value => |v| v,
+        };
+        var flags: u8 = 0;
+        if (v.core_message) flags |= 1;
+        if (v.script_name) flags |= 2;
+        switch (v.data) {
+            .nothing => try o.byte(@backingInt(Tag.nothing)),
+            .bool => |b| {
+                try o.byte(@backingInt(Tag.bool));
+                try o.flag(b);
+            },
+            .text => |s| {
+                try o.byte(@backingInt(Tag.text));
+                try o.byte(flags);
+                try o.str(s);
+            },
+            .bytes => |s| {
+                try o.byte(@backingInt(Tag.bytes));
+                try o.str(s);
+            },
+            .list => |items| {
+                try o.byte(@backingInt(Tag.list));
+                try o.int(items.len);
+                try steps.ensureUnusedCapacity(o.gpa, items.len);
+                var i = items.len;
+                while (i > 0) {
+                    i -= 1;
+                    steps.appendAssumeCapacity(.{ .value = items[i] });
+                }
+            },
+            .map => |pairs| {
+                try o.byte(@backingInt(Tag.map));
+                try o.byte(flags);
+                try o.int(pairs.len);
+                try steps.ensureUnusedCapacity(o.gpa, 2 * pairs.len);
+                var i = pairs.len;
+                while (i > 0) {
+                    i -= 1;
+                    steps.appendAssumeCapacity(.{ .value = pairs[i].value });
+                    steps.appendAssumeCapacity(.{ .key = pairs[i].key });
+                }
+            },
+            .function => |f| {
+                try o.byte(@backingInt(Tag.function));
+                // A value this Group didn't make is gone: none of its code.
+                try o.ref(t.functionIndex(f.identity));
+                try o.str(f.display);
+                try o.str(f.home);
+                try steps.append(o.gpa, .{ .value = f.captures });
+            },
+            .object => |x| {
+                try o.byte(@backingInt(Tag.object));
+                try o.int(t.objectIndex(x.identity) orelse return error.OutOfMemory);
+            },
+            // Numbers, Quantities, ranges, Instants, dates and Text Patterns
+            // round-trip through the display form.
+            else => {
+                try o.byte(@backingInt(Tag.shown));
+                var shown: std.Io.Writer.Allocating = .init(o.gpa);
+                defer shown.deinit();
+                display.write(&shown.writer, v) catch return error.OutOfMemory;
+                try o.str(shown.written());
+            },
+        }
+    }
+}
+
+/// A container whose children are still being read.
+const Reading = struct {
+    kind: union(enum) {
+        list,
+        map: u8,
+        function: struct { code: ?usize, shown: []const u8, home: []const u8 },
+    },
+    /// How many children it has; a Function has its captures alone.
+    len: usize,
+    items: std.ArrayList(*Value) = .empty,
+    keys: std.ArrayList([]const u8) = .empty,
+
+    fn deinit(r: *Reading, gpa: Allocator) void {
+        for (r.items.items) |x| x.release();
+        r.items.deinit(gpa);
+        r.keys.deinit(gpa);
+    }
+};
+
+/// A Script value. Open containers wait on a heap stack, so a deep value
+/// never deepens the native stack.
+fn readValue(i: *In, gpa: Allocator, t: Tables) Error!*Value {
+    var stack: std.ArrayList(Reading) = .empty;
+    defer {
+        for (stack.items) |*r| r.deinit(gpa);
+        stack.deinit(gpa);
+    }
+    while (true) {
+        var v = (try readOne(i, gpa, t, &stack)) orelse continue;
+        // Hand the value to the container it belongs to, finishing each
+        // container whose last child it is.
+        while (true) {
+            if (stack.items.len == 0) return v;
+            const top = &stack.items[stack.items.len - 1];
+            top.items.append(gpa, v) catch {
+                v.release();
+                return error.OutOfMemory;
+            };
+            if (top.items.items.len < top.len) {
+                if (top.kind == .map) try top.keys.append(gpa, try i.str());
+                break;
             }
+            v = try finish(gpa, t, top);
+            var done = stack.pop().?;
+            done.deinit(gpa);
+        }
+    }
+}
+
+/// A finished container, from its children.
+fn finish(gpa: Allocator, t: Tables, r: *Reading) Error!*Value {
+    switch (r.kind) {
+        .list => return model.list(gpa, r.items.items) catch |e| return valueError(e),
+        .map => |flags| {
+            const pairs = try gpa.alloc(model.Pair, r.items.items.len);
+            defer gpa.free(pairs);
+            for (pairs, r.keys.items, r.items.items) |*p, k, x| p.* = .{ .key = k, .value = x };
+            const v = model.map(gpa, pairs) catch |e| return valueError(e);
+            v.core_message = flags & 1 != 0;
+            v.script_name = flags & 2 != 0;
+            return v;
         },
         .function => |f| {
-            try o.byte(@backingInt(Tag.function));
-            // A value this Group didn't make is gone: none of its code.
-            try o.ref(t.functionIndex(f.identity));
-            try o.str(f.display);
-            try o.str(f.home);
-            try writeValue(o, t, f.captures);
-        },
-        .object => |x| {
-            try o.byte(@backingInt(Tag.object));
-            try o.int(t.objectIndex(x.identity) orelse return error.OutOfMemory);
-        },
-        // Numbers, Quantities, ranges, Instants, dates and Text Patterns
-        // round-trip through the display form.
-        else => {
-            try o.byte(@backingInt(Tag.shown));
-            var shown: std.Io.Writer.Allocating = .init(o.gpa);
-            defer shown.deinit();
-            display.write(&shown.writer, v) catch return error.OutOfMemory;
-            try o.str(shown.written());
+            const captures = r.items.items[0];
+            if (captures.data != .map) return error.InvalidSave;
+            // A value whose code this Group never had stays gone.
+            const identity: usize = if (f.code) |c| @intFromPtr(t.functions[c]) else 0;
+            return model.function(gpa, f.home, f.shown, identity, captures) catch |e| return valueError(e);
         },
     }
 }
 
-fn readValue(i: *In, gpa: Allocator, t: Tables, depth: usize) Error!*Value {
-    if (depth >= model.max_depth) return error.InvalidSave;
+/// Reads a leaf, an empty container, or opens a container and returns null.
+fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Error!?*Value {
     const tag = std.enums.fromInt(Tag, try i.byte()) orelse return error.InvalidSave;
     return switch (tag) {
         .nothing => model.scalar(gpa, .nothing),
@@ -287,44 +382,31 @@ fn readValue(i: *In, gpa: Allocator, t: Tables, depth: usize) Error!*Value {
         },
         .list => blk: {
             const n = try i.count();
-            const items = try gpa.alloc(*Value, n);
-            defer gpa.free(items);
-            var made: usize = 0;
-            defer for (items[0..made]) |x| x.release();
-            for (items) |*x| {
-                x.* = try readValue(i, gpa, t, depth + 1);
-                made += 1;
-            }
-            break :blk model.list(gpa, items) catch |e| return valueError(e);
+            if (n == 0) break :blk model.list(gpa, &.{}) catch |e| return valueError(e);
+            try stack.append(gpa, .{ .kind = .list, .len = n });
+            break :blk null;
         },
         .map => blk: {
             const flags = try i.byte();
             if (flags > 3) return error.InvalidSave;
             const n = try i.count();
-            const pairs = try gpa.alloc(model.Pair, n);
-            defer gpa.free(pairs);
-            var made: usize = 0;
-            defer for (pairs[0..made]) |p| p.value.release();
-            for (pairs) |*p| {
-                const key = try i.str();
-                p.* = .{ .key = key, .value = try readValue(i, gpa, t, depth + 1) };
-                made += 1;
+            if (n == 0) {
+                const v = model.map(gpa, &.{}) catch |e| return valueError(e);
+                v.core_message = flags & 1 != 0;
+                v.script_name = flags & 2 != 0;
+                break :blk v;
             }
-            const v = model.map(gpa, pairs) catch |e| return valueError(e);
-            v.core_message = flags & 1 != 0;
-            v.script_name = flags & 2 != 0;
-            break :blk v;
+            try stack.append(gpa, .{ .kind = .{ .map = flags }, .len = n });
+            const top = &stack.items[stack.items.len - 1];
+            try top.keys.append(gpa, try i.str());
+            break :blk null;
         },
         .function => blk: {
             const code = try i.ref(t.functions.len);
             const shown = try i.str();
             const home = try i.str();
-            const captures = try readValue(i, gpa, t, depth + 1);
-            defer captures.release();
-            if (captures.data != .map) return error.InvalidSave;
-            // A value whose code this Group never had stays gone.
-            const identity: usize = if (code) |c| @intFromPtr(t.functions[c]) else 0;
-            break :blk model.function(gpa, home, shown, identity, captures) catch |e| return valueError(e);
+            try stack.append(gpa, .{ .kind = .{ .function = .{ .code = code, .shown = shown, .home = home } }, .len = 1 });
+            break :blk null;
         },
         .object => t.objects[try i.index(t.objects.len)].value.retain(),
         .shown => blk: {
@@ -370,7 +452,7 @@ fn readValues(i: *In, gpa: Allocator, t: Tables) Error![]*Value {
         gpa.free(out);
     }
     for (out) |*v| {
-        v.* = try readValue(i, gpa, t, 0);
+        v.* = try readValue(i, gpa, t);
         made += 1;
     }
     return out;
@@ -382,7 +464,7 @@ fn optValue(o: *Out, t: Tables, v: ?*const Value) !void {
 }
 
 fn readOptValue(i: *In, gpa: Allocator, t: Tables) Error!?*Value {
-    return if (try i.flag()) try readValue(i, gpa, t, 0) else null;
+    return if (try i.flag()) try readValue(i, gpa, t) else null;
 }
 
 // ---------------------------------------------------------------- saving
@@ -1140,7 +1222,7 @@ const Restoring = struct {
     }
 
     fn value(r: *Restoring) Error!*Value {
-        return readValue(&r.i, r.gpa(), r.tables, 0);
+        return readValue(&r.i, r.gpa(), r.tables);
     }
 
     fn optValue(r: *Restoring) Error!?*Value {
@@ -2904,4 +2986,38 @@ test "a hostile save that restores runs without a crash" {
             try hostile(gpa, bad);
         }
     }
+}
+
+fn deepSaveValue() !void {
+    const gpa = std.testing.allocator;
+    const tables: Tables = .{ .objects = &.{}, .functions = &.{} };
+    var v = try model.text(gpa, "leaf");
+    defer v.release();
+    for (0..100_000) |i| {
+        const next = if (i % 2 == 0) try model.map(gpa, &.{.{ .key = "x", .value = v }}) else try model.list(gpa, &.{v});
+        v.release();
+        v = next;
+    }
+    var o: Out = .{ .gpa = gpa };
+    defer o.bytes.deinit(gpa);
+    try writeValue(&o, tables, v);
+    var i: In = .{ .bytes = o.bytes.items };
+    const copy = try readValue(&i, gpa, tables);
+    defer copy.release();
+    try std.testing.expectEqual(o.bytes.items.len, i.pos);
+    try std.testing.expect(try v.equal(copy));
+    // A truncated save is refused, and what was read is freed.
+    var cut: In = .{ .bytes = o.bytes.items[0 .. o.bytes.items.len - 1] };
+    try std.testing.expectError(error.InvalidSave, readValue(&cut, gpa, tables));
+}
+
+test "a value nested 100,000 deep saves and restores on a small stack" {
+    var result: anyerror!void = {};
+    const t = try std.Thread.spawn(.{ .stack_size = 256 * 1024 }, struct {
+        fn go(out: *anyerror!void) void {
+            out.* = deepSaveValue();
+        }
+    }.go, .{&result});
+    t.join();
+    try result;
 }

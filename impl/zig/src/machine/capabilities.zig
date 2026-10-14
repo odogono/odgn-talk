@@ -232,25 +232,35 @@ const Checker = struct {
         _ = c.path.pop();
     }
 
-    /// A Function Value anywhere in `v`, for a data Shape.
-    fn function(c: *Checker, v: *Value) !?Mismatch {
-        switch (v.data) {
-            .function => return .{ .not_encodable = .{ .path = try c.a.dupe(*Value, c.path.items) } },
-            .list => |xs| for (xs, 1..) |x, i| {
-                try c.enter(.{ .index = i });
-                if (try c.function(x)) |m| return m;
-                c.leave();
-            },
-            .map => |pairs| for (pairs) |p| {
-                try c.enter(.{ .key = p.key });
-                if (try c.function(p.value)) |m| return m;
-                c.leave();
-            },
-            .range => |r| {
-                if (try c.function(r.from)) |m| return m;
-                if (try c.function(r.to)) |m| return m;
-            },
-            else => {},
+    /// A Function Value anywhere in `v`, for a data Shape, searched depth
+    /// first from a heap work list. Its path is made only when one is found.
+    fn function(c: *Checker, root: *Value) !?Mismatch {
+        const Step = union(enum) { none, index: usize, key: []const u8 };
+        const Frame = struct { v: *Value, step: Step = .none, next: usize = 0 };
+        var stack: std.ArrayList(Frame) = .empty;
+        defer stack.deinit(c.a);
+        try stack.append(c.a, .{ .v = root });
+        while (stack.items.len > 0) {
+            const top = &stack.items[stack.items.len - 1];
+            if (top.v.data == .function) {
+                for (stack.items) |f| switch (f.step) {
+                    .none => {},
+                    .index => |i| try c.enter(.{ .index = i }),
+                    .key => |k| try c.enter(.{ .key = k }),
+                };
+                return .{ .not_encodable = .{ .path = try c.a.dupe(*Value, c.path.items) } };
+            }
+            const i = top.next;
+            const child: ?Frame = switch (top.v.data) {
+                .list => |xs| if (i < xs.len) .{ .v = xs[i], .step = .{ .index = i + 1 } } else null,
+                .map => |pairs| if (i < pairs.len) .{ .v = pairs[i].value, .step = .{ .key = pairs[i].key } } else null,
+                .range => |r| if (i < 2) .{ .v = if (i == 0) r.from else r.to } else null,
+                else => null,
+            };
+            if (child) |f| {
+                top.next += 1;
+                try stack.append(c.a, f);
+            } else _ = stack.pop();
         }
         return null;
     }
