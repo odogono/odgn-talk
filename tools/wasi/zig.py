@@ -341,8 +341,8 @@ def message_layer(engine, module):
     ends = [r for r in done["reports"] if r["kind"] == "run end"]
     assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == 41, done
     h.ok("deliver", group="g", to={"script": "s"}, message={"name": "spin"})
-    spun = h.ok("pump", group="g", now=now)["reports"][-1]
-    assert spun["outcome"] == "limit fault" and spun["limit"] == "fuel", spun
+    spun = [r for r in h.ok("pump", group="g", now=now)["reports"] if r["kind"] == "run end"]
+    assert len(spun) == 1 and spun[0]["outcome"] == "limit fault" and spun[0]["limit"] == "fuel", spun
     assert h.ok("hello", protocol=1) == hello
     size = h.memory.data_len(h.store)
     assert size <= MEMORY_LIMIT, f"an instance holds {size} bytes (> 16 MiB)"
