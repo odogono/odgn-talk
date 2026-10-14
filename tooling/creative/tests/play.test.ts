@@ -141,6 +141,106 @@ const advance = async (play: PlaySession, now = 0n) => {
   throw new Error('Did not become idle');
 };
 
+test('wait suspends only its Run, resumes at its deadline and changes only Play State', async () => {
+  const project = fixture();
+  const [button, other] = project.pages[0]!.elements;
+  button!.script =
+    'on click\n set the label of me to "Waiting"\n wait 1 s\n set the label of me to "Finished"\nend click\non pointerEnter\n set the background of thisPage to "Responsive"\nend pointerEnter';
+  other!.script =
+    'on click\n wait 250 ms\n set the text of me to "Other finished"\nend click';
+  const original = structuredClone(project);
+  const play = new PlaySession(project);
+  await advance(play);
+  play.send(play.page.elements[0]!, 'click');
+  expect((await advance(play)).nextDeadline).toBe(1_000_000_000n);
+  expect(play.page.elements[0]).toHaveProperty('label', 'Waiting');
+
+  // Both another Handler in the same Script and another Script can run.
+  play.send(play.page.elements[0]!, 'pointerEnter');
+  play.send(play.page.elements[1]!, 'click');
+  expect((await advance(play)).nextDeadline).toBe(250_000_000n);
+  expect(play.page.background).toBe('Responsive');
+  const text = play.page.elements[1]!;
+  const beforeText = text.kind === 'text' && textOf(text);
+  await advance(play, 249_000_000n);
+  expect(text.kind === 'text' && textOf(text)).toBe(beforeText);
+  expect((await advance(play, 250_000_000n)).nextDeadline).toBe(1_000_000_000n);
+  expect(text.kind === 'text' && textOf(text)).toBe('Other finished');
+  await advance(play, 999_000_000n);
+  expect(play.page.elements[0]).toHaveProperty('label', 'Waiting');
+  expect((await advance(play, 1_000_000_000n)).nextDeadline).toBeUndefined();
+  expect(play.page.elements[0]).toHaveProperty('label', 'Finished');
+  expect(project).toEqual(original);
+  expect(play.problems).toEqual([]);
+});
+
+test('leaving a Page cancels both Page and Element waits without late effects', async () => {
+  const project = fixture();
+  project.pages.push(createPage('page2'));
+  project.script =
+    'on leaked\n set the background of page2 to "Leaked"\nend leaked';
+  const first = project.pages[0]!;
+  first.script =
+    'on openPage\n wait 2 s\n set the background of me to "Late Page"\n send leaked to project\nend openPage';
+  first.elements[0]!.script =
+    'on click\n wait 2 s\n set the label of me to "Late Element"\n send leaked to project\nend click';
+  first.elements[1]!.script = 'on click\n tell pages to show page2\nend click';
+  const play = new PlaySession(project);
+  await advance(play);
+  play.send(play.page.elements[0]!, 'click');
+  expect((await advance(play)).nextDeadline).toBe(2_000_000_000n);
+  play.send(play.page.elements[1]!, 'click');
+  expect((await advance(play)).nextDeadline).toBeUndefined();
+  expect(play.page.name).toBe('page2');
+  await advance(play, 3_000_000_000n);
+  expect(play.project.pages[0]!.background).toBe(first.background);
+  expect(play.project.pages[0]!.elements[0]).toHaveProperty('label', 'Button');
+  expect(play.page.background).not.toBe('Leaked');
+  expect(play.problems).toEqual([]);
+});
+
+test('a Project wait keeps its deadline across Page navigation', async () => {
+  const project = fixture();
+  project.pages.push(createPage('page2'));
+  project.script =
+    'on startPlay\n wait 2 s\n set the background of page2 to "Project finished"\nend startPlay';
+  project.pages[0]!.elements[0]!.script =
+    'on click\n tell pages to show page2\nend click';
+  const play = new PlaySession(project);
+  expect((await advance(play)).nextDeadline).toBe(2_000_000_000n);
+  play.send(play.page.elements[0]!, 'click');
+  expect((await advance(play, 500_000_000n)).nextDeadline).toBe(2_000_000_000n);
+  expect(play.page.name).toBe('page2');
+  await advance(play, 1_999_000_000n);
+  expect(play.page.background).not.toBe('Project finished');
+  expect((await advance(play, 2_000_000_000n)).nextDeadline).toBeUndefined();
+  expect(play.page.background).toBe('Project finished');
+  expect(play.problems).toEqual([]);
+});
+
+test('Stop cancels Project, Page and Element waits even when their deadline is due', async () => {
+  const project = fixture();
+  project.script =
+    'on startPlay\n wait 1 s\n set the height of page1 to 999\nend startPlay';
+  project.pages[0]!.script =
+    'on openPage\n wait 1 s\n set the background of me to "Late Page"\nend openPage';
+  project.pages[0]!.elements[0]!.script =
+    'on click\n wait 1 s\n set the label of me to "Late Element"\nend click';
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  expect((await advance(play)).nextDeadline).toBe(1_000_000_000n);
+  expect(play.group.inspect().scripts.flatMap(s => s.runs)).toHaveLength(3);
+  const frozen = structuredClone(play.project);
+  play.stop(1_000_000_000n);
+  play.send(play.page.elements[0]!, 'click');
+  expect((await advance(play, 2_000_000_000n)).nextDeadline).toBeUndefined();
+  expect(play.project).toEqual(frozen);
+  expect(play.group.inspect().scripts.every(s => s.runs.length === 0)).toBe(
+    true,
+  );
+  expect(play.problems).toEqual([]);
+});
+
 test('navigation keeps visuals, resets local variables and preserves Project variables', async () => {
   const project = fixture();
   const first = project.pages[0]!;
