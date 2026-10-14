@@ -224,15 +224,15 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `broadcast` and `decide`, `reload` and `extend`, `compile-library`,
 `add-library` and `replace-library`, `inspect` and `grants`, `restore`
 with its interim `resolve` need, `settle`, `$function` values and `call`, `export-manifest`,
-`standard-capability` for all but `store` (and `sqlite`, which the layer doesn't offer),
+`standard-capability` for all but `sqlite`, which the layer doesn't offer,
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operations, with
 `segmentLifecycle` and `release`. Their hooks reach the Host during a Pump,
 `reload` or `replace-library` as `effect` and `release` needs and automatic
 `op` needs, and a `grant` may name a
-shared `coordinator`. It does not yet conform: `standard-capability` for
-`store` and `request-charge` are protocol errors, and a Pump's `abandoned` is
-empty (all tracked on #635). A crossing pause, where a
+shared `coordinator`; `store`'s hooks are one Coordinator's. It does not yet
+conform: `request-charge` is a protocol error, and a Pump's `abandoned` is
+empty (both tracked on #635). A crossing pause, where a
 Host function answers `deferred`, is the transport's: it ends no Stretch and
 writes no record. Segment `begin`, `commit` and `rollback` hooks and automatic
 abandonment at a Segment's end may defer too (#900);
