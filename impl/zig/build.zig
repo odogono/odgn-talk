@@ -71,6 +71,18 @@ pub fn build(b: *std.Build) void {
     run_corpus.addPassthruArgs();
     b.step("corpus", "Run supported conformance cases through talk.h").dependOn(&run_corpus.step);
 
+    // The differential fuzz worker (tooling/fuzz/README.md), which
+    // northtalk-fuzz runs with --zig-runner.
+    const fuzz_module = b.createModule(.{
+        .root_source_file = b.path("src/corpus/fuzzworker.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    fuzz_module.addImport("northtalk", core);
+    fuzz_module.addImport("talk-c", c_module);
+    const fuzzworker = b.addExecutable(.{ .name = "talk-fuzzworker", .root_module = fuzz_module });
+    b.step("fuzzworker", "Build the differential fuzz worker").dependOn(&b.addInstallArtifact(fuzzworker, .{}).step);
+
     // The REPL: the Session Host at a terminal (chapter 12).
     const repl_module = b.createModule(.{
         .root_source_file = b.path("src/repl/main.zig"),

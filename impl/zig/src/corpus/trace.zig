@@ -217,6 +217,13 @@ fn anyFunction(context: ?*anyopaque, shown: []const u8) model.Error!*model.Value
     return model.function(a.*, "", shown, 0, captures);
 }
 
+/// A line a Core wrote, with any Host Object or Function Value it shows.
+pub fn parseWritten(a: std.mem.Allocator, line: []const u8) !?Record {
+    var gpa = a;
+    const objects: display.Resolver = .{ .context = @ptrCast(&gpa), .object = anyObject, .function = anyFunction };
+    return parseMode(a, line, objects, false);
+}
+
 pub fn matches(a: std.mem.Allocator, expected: []const u8, actual: []const u8) !bool {
     if (std.mem.eql(u8, expected, actual) and !std.mem.startsWith(u8, actual, "> ")) return true;
     // Host Objects are compared by their display form, kind and id, and

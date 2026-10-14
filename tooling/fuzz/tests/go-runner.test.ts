@@ -59,9 +59,15 @@ test('witnesses and mutations give identical complete Traces on both Cores', asy
       ).map(mutation => generate('1', { mutation })),
     ];
     for (const c of cases) {
-      const result = (await evaluate(c, ts, go)) as Result & { peer?: Result };
+      const result = (await evaluate(c, ts, [
+        { name: 'go', worker: go },
+      ])) as Result & {
+        peers?: { go?: Result };
+      };
       expect(result.findings).toEqual([]);
-      expect(result.peer?.execution?.trace).toEqual(result.execution!.trace);
+      expect(result.peers?.go?.execution?.trace).toEqual(
+        result.execution!.trace,
+      );
     }
   } finally {
     ts.close();

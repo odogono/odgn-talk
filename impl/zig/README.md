@@ -182,6 +182,7 @@ zig build                         # zig-out/lib/libtalk.a and zig-out/include/ta
 zig build -Dtarget=wasm32-wasi    # zig-out/bin/talk.wasm
 zig build corpus                  # the whole Corpus, as CI runs it
 zig build corpus -- --list
+zig build fuzzworker              # zig-out/bin/talk-fuzzworker, for the fuzzer
 zig build corpus -- bytes/value-encoding
 zig fmt --check .
 ```
@@ -996,6 +997,17 @@ passing list. Expected corpus bytes are never rewritten. The runner's replay bac
 supports and replays each from its directory;
 [Trace parsing](src/corpus/trace.zig) uses generated record/key metadata,
 including filled input keys and optional ids, for the comparison.
+
+## Fuzz worker
+
+`zig build fuzzworker` builds `talk-fuzzworker`, which the differential
+fuzzer runs with `--zig-runner` ([the fuzzer](../../tooling/fuzz/README.md#dual-core-mode)).
+It reads a Fuzz Case's setup as the Corpus runner reads case.toml, with each
+inline source under its `source` name, and takes the case's Host Inputs one
+at a time through the same replay Host, resolving each symbolic reference
+against its own Trace as the fuzzer's `runner.ts` does. A bare `> save` is
+kept under the id the Core gives it. It answers with the Trace, the action and
+record counts and the Group Fingerprints around each input.
 
 ## Regenerating tables
 

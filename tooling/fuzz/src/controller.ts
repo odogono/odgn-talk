@@ -230,10 +230,24 @@ const run = async (
     return { findings: [executionFailure(error as Error)] };
   }
 };
+/** Another Core's worker, by the name its findings and Trace carry. */
+export type Peer = { name: 'go' | 'zig'; worker: Worker };
+/** The peers a run compares with TS, from each runner's path. */
+export const peersOf = (runners: { go?: string; zig?: string }): Peer[] =>
+  (['go', 'zig'] as const).flatMap(name =>
+    runners[name]
+      ? [
+          {
+            name,
+            worker: new Worker({ entrypoint: runners[name], native: true }),
+          },
+        ]
+      : [],
+  );
 export const evaluate = async (
   c: FuzzCase,
   ts: Worker,
-  go?: Worker,
+  peers: readonly Peer[] = [],
   timeoutMs = 10_000,
 ): Promise<Result> => {
   let result = await run(c, ts, timeoutMs);
@@ -257,16 +271,20 @@ export const evaluate = async (
       };
     }
   }
-  if (go) {
+  // Go's findings keep the `differential` oracle; each other Core's is
+  // `differential-<name>`.
+  const others: Partial<Record<Peer['name'], Result>> = {};
+  const diffs: Finding[] = [];
+  for (const peer of peers) {
     const a = await ts.supports(c, timeoutMs),
-      b = await go.supports(c, timeoutMs);
+      b = await peer.worker.supports(c, timeoutMs);
     if (
       a.languageVersion !== b.languageVersion ||
       a.costModel !== b.costModel
     ) {
       throw new Error('Runner language/Cost Model versions differ');
     }
-    const other = await run(c, go, timeoutMs);
+    const other = await run(c, peer.worker, timeoutMs);
     if (other.findings.length) {
       return other;
     }
@@ -277,12 +295,20 @@ export const evaluate = async (
           : [executionFailure(new Error('Missing runner Trace'))],
       };
     }
-    const diff = compareTraces(result.execution.trace, other.execution.trace);
+    const diff = compareTraces(
+      result.execution.trace,
+      other.execution.trace,
+      peer.name === 'go' ? 'differential' : `differential-${peer.name}`,
+    );
     if (diff) {
-      result = { ...result, findings: [diff, ...result.findings] };
+      diffs.push(diff);
     }
-    // Keep the other Core's entire output in the result artifact.
-    Object.assign(result, { peer: other });
+    others[peer.name] = other;
+  }
+  if (peers.length) {
+    // Keep each other Core's entire output in the result artifact.
+    result = { ...result, findings: [...diffs, ...result.findings] };
+    Object.assign(result, { peers: others });
   }
   return result;
 };
@@ -297,6 +323,7 @@ export type CampaignOptions = {
   reductionMs?: number;
   searchMs?: number;
   seed: string;
+  zigRunner?: string;
 };
 const save = (path: string, value: unknown) =>
   writeFile(path, JSON.stringify(value, null, 2) + '\n');
@@ -310,9 +337,7 @@ export const campaign = async (options: CampaignOptions) => {
       ? deadline
       : Math.min(deadline, started + (options.searchMs ?? 1_200_000));
   const ts = new Worker(),
-    go = options.goRunner
-      ? new Worker({ entrypoint: options.goRunner, native: true })
-      : undefined;
+    peers = peersOf({ go: options.goRunner, zig: options.zigRunner });
   const retained = new Map<
     string,
     { case: FuzzCase; finding: Finding; path: string }
@@ -356,7 +381,7 @@ export const campaign = async (options: CampaignOptions) => {
         commit: summary.commit,
       });
       const timeoutMs = Math.min(10_000, searchDeadline - performance.now());
-      const result = await evaluate(c, ts, go, timeoutMs);
+      const result = await evaluate(c, ts, peers, timeoutMs);
       // A case cut short by the search budget is unfinished, not a Worker timeout.
       if (
         timeoutMs < 10_000 &&
@@ -393,12 +418,15 @@ export const campaign = async (options: CampaignOptions) => {
             result.execution.trace.join('\n') + '\n',
           );
         }
-        const peer = (result as Result & { peer?: Result }).peer;
-        if (peer?.execution) {
-          await writeFile(
-            join(path, 'peer.trace'),
-            peer.execution.trace.join('\n') + '\n',
-          );
+        const others =
+          (result as Result & { peers?: Record<string, Result> }).peers ?? {};
+        for (const [name, other] of Object.entries(others)) {
+          if (other.execution) {
+            await writeFile(
+              join(path, `${name}.trace`),
+              other.execution.trace.join('\n') + '\n',
+            );
+          }
         }
         retained.set(signatureKey(first.signature), {
           case: c,
@@ -427,7 +455,7 @@ export const campaign = async (options: CampaignOptions) => {
             await evaluate(
               c,
               ts,
-              go,
+              peers,
               Math.min(10_000, remaining, deadline - performance.now()),
             )
           ).findings,
@@ -452,7 +480,9 @@ export const campaign = async (options: CampaignOptions) => {
     return summary;
   } finally {
     ts.close();
-    go?.close();
+    for (const peer of peers) {
+      peer.worker.close();
+    }
     summary.elapsedMs = Math.round(performance.now() - started);
     await save(join(options.output, 'summary.json'), summary);
   }

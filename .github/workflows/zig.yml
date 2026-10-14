@@ -9,6 +9,7 @@ on:
       - 'tools/zig/**'
       - 'tools/unicode/**'
       - 'tools/wasi/zig.py'
+      - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - 'tools/zig/**'
       - 'tools/unicode/**'
       - 'tools/wasi/zig.py'
+      - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
 
 jobs:
@@ -80,6 +82,20 @@ jobs:
           version: 0.17.0
       - run: zig build install corpus
         working-directory: impl/zig
+
+  # The fuzzer's witnesses and mutations give the TS Core's complete Traces
+  # through the Zig fuzz worker. The nightly campaign fuzzes it further.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: ./.github/actions/setup-ts
+      - run: bun test tests/zig-runner.test.ts
+        working-directory: tooling/fuzz
 
   # Runs the wasm32-wasi build in wasmtime through talk.h, and holds its
   # memory per instance and payload to #532's thresholds (ADR 0078).
