@@ -1,0 +1,18 @@
+# Unblessed: a preempted Join Member's deadline counts from the Pump that started its call (#636); first blessing awaits human review.
+> load s identity=ae7afafebc33b84d9870c0186691c4ec0bf54c0608626e4121e879e50cfae26d
+> deliver d1 to=s message=gather
+> pump clock=2026-10-02T00:00:00Z fuel-slice=25
+call s/r1.c1 op=api.fetch args=[]
+preempt s/r1 start delivery=d1 handler=gather clause=1 by=slice fuel=27 alloc=0
+pumped state=sliced fuel=27
+> pump clock=2026-10-02T00:00:00.5Z
+seg s/r1 continue fuel=146 alloc=184 state=340 end=join-end
+pumped state=idle fuel=146 next=2026-10-02T00:00:01Z
+> pump clock=2026-10-02T00:00:01Z
+raise s/r1 code="timeout" at=s:20 pos=10:5
+abandon s/r1.c1
+seg s/r1 resume fuel=12 alloc=0 state=578 end=return
+run s/r1 outcome=completed delivery=d1 handler=gather fuel=185 alloc=184
+pumped state=idle fuel=12
+> vars
+vars s got={code: "timeout", after: 1000 ms, capability: "api", operation: "fetch", at: {unit: "s", handler: "gather", line: 10, column: 5}, index: 1}

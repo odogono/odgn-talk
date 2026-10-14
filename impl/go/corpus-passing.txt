@@ -357,6 +357,7 @@ suspension/capability-resumption
 suspension/event-test-group-cap
 suspension/event-test-slice-debt
 suspension/join-closing-position
+suspension/join-member-deadline
 suspension/join-preemption
 suspension/joins
 suspension/late-failure
