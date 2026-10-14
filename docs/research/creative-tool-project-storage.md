@@ -6,7 +6,7 @@ Answers [#739](https://github.com/odogono/odgn-talk/issues/739), part of [#154](
 
 - **The Project file is a zip.** It holds a `mimetype` entry, a `project.json` model and one file per asset, named by its SHA-256 hash. A zip stores images and audio as raw bytes, while a single JSON file must base64 them, which adds a third to their size. It can be read one entry at a time, and anyone can open it with an ordinary unzip tool to inspect or repair it. The browser can write and read one with no dependency: `CompressionStream("deflate-raw")` is in every target browser.
 - **The format has one integer version.** The app migrates older files step by step on open. It refuses to open a newer file, says why, and never overwrites it.
-- **Assets are PNG, JPEG, WebP, GIF and SVG images, and MP3 or AAC (`.m4a`) audio.** These play in every current target browser. AVIF, Ogg and WAV are accepted with a warning about older browsers. SVG is only ever shown through `<img>`, where scripts don't run. Each asset is stored once, keyed by its SHA-256.
+- **Assets are PNG, JPEG, WebP, GIF and SVG images, and MP3, AAC (`.m4a`) or WAV audio.** These play in every current target browser (WAV checked for #822, below). AVIF images are accepted with a warning about older browsers; Ogg sounds are not imported. SVG is only ever shown through `<img>`, where scripts don't run. Each asset is stored once, keyed by its SHA-256.
 - **Autosave uses IndexedDB only.** One transaction writes the model and any new assets together, so a save is all or nothing. The Origin Private File System (OPFS) adds no needed feature: its `createWritable()` reached Safari only in version 26, and its fast access handle works only in workers.
 - **Local storage is not a backup.** Chrome and Firefox evict best-effort data under storage pressure. Safari deletes all script-written storage after seven days of use without a visit, unless the site is a Home Screen or Dock web app. The app asks for `navigator.storage.persist()`, shows whether it was granted, and reminds the author to export.
 - **Autosave writes about a second after the last edit, and at once when the page is hidden.** It keeps the last few versions of the model for recovery. A Web Lock lets only one tab edit a Project at a time.
@@ -101,7 +101,7 @@ Audio:
 | MP3 (`audio/mpeg`) | Every target browser. Safari since 3.1 ([audio codecs guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs)). | Accept; recommended. |
 | AAC in MP4 (`.m4a`) | MDN's single best choice when only one format can be offered. Firefox decodes it through the operating system ([containers guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Containers)). | Accept. |
 | Ogg Opus or Vorbis | Safari only from 18.4 on macOS 15.4 and iOS 18.4 ([WebKit, Safari 18.4](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)). | Accept, with a warning. |
-| WAV (PCM) | MDN's tables don't cover playback by browser. Files are large. | Accept, with a size warning. |
+| WAV (PCM) | MDN's tables don't cover playback by browser. Files are large. Checked in Chrome, Firefox and iOS Safari for #822: see Device checks. | Accept, with a size warning. |
 | FLAC | "Not supported at all on iOS" ([containers guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Containers)). | Refuse, and suggest MP3. |
 
 On import, the app checks that each asset really decodes, rather than trusting the extension. Images use `createImageBitmap` or `img.decode()`. Audio uses `audio.canPlayType()` plus a trial decode. A file that doesn't decode is refused with its name and the reason.
@@ -277,7 +277,35 @@ The maintainer settled these on #739:
 
 ## Open questions
 
-These need testing on real devices, since no primary source documents them:
+Both are answered under Device checks below (#822); one human confirmation
+on a physical phone remains, and it is named there.
 
-- **How iOS Safari treats a custom extension in `<input accept>`.** Recipients on phones depend on it. Test before choosing an `accept` value, and fall back to no `accept` filter on iOS if needed.
-- **Which browsers play WAV.** MDN's compatibility tables don't cover it, which is why section 3 only accepts it with a warning.
+## Device checks from #739, recorded for #822
+
+Checked on 2026-10-14 against the browsers available here; a physical phone
+was not used, and the picker check below says what that leaves open.
+
+- **Which browsers play WAV.** A quarter-second 16-bit PCM WAV was served to
+  three engines. Headless Chrome 147 (Chrome 155 is also installed) answered
+  `canPlayType('audio/wav; codecs="1"')` with "probably", and Folio's own
+  browser checks trial-decoded and looped a WAV there. Firefox 136 answered
+  "probably" for the same query and decoded the file (`loadeddata`, duration
+  0.25). iOS Safari 26.3 in the iPhone 17 simulator (iOS 26.3.1) answered
+  "probably" for PCM WAV and decoded it the same way; plain `audio/wav`,
+  `audio/mpeg`, `audio/mp4` and `audio/aac` answered "maybe" in each engine,
+  which is why intake trial-decodes instead of trusting `canPlayType`. WAV is
+  therefore accepted like MP3 and AAC, keeping the warning that it is
+  uncompressed and makes Projects large; a WAV holding another codec fails
+  the trial decode on import rather than failing later in Play.
+- **iOS Safari's file picker and `.folio`.** The Project import picker keeps
+  no `accept` filter (`projects.ts` records why beside the picker), and with
+  no filter the iOS document picker offers every file, so a `.folio` file is
+  pickable today and import judges it by content. An `accept=".folio"`
+  filter must not be added: iOS maps each extension in `accept` to a
+  registered system type and greys out files whose extension has none, and
+  `.folio` has none until the installed app registers it (#823), so the
+  filter would make Project files unselectable on iPhones. Tapping through
+  the picker was not automated here — simulator device access was off and no
+  physical phone was available — so a human should still confirm the
+  unfiltered picker on a real phone once; nothing in this answer changes if
+  it behaves as documented, because the unfiltered picker is already shipped.

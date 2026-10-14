@@ -5,6 +5,7 @@ import { byId, h } from './dom';
 import { type Element, type TextElement } from './model';
 import { PlaySession } from './play';
 import { ReaderTextHistory } from './play-text';
+import { browserSoundBackend } from './sounds';
 import { renderElement, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 
@@ -322,7 +323,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     shell.setPlaying(true);
     generation = shell.editor.generation;
-    session = new PlaySession(shell.editor.project, shell.editor.pageIndex);
+    session = new PlaySession(shell.editor.project, shell.editor.pageIndex, {
+      soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
+    });
     histories.clear();
     problemCount = 0;
     document.body.classList.add('playing');

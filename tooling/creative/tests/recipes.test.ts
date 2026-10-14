@@ -219,3 +219,51 @@ test('conflicting imported Projects are preserved and refused before Play', () =
   expect(() => new PlaySession(project)).toThrow('Rename it in Info');
   expect(JSON.stringify(project)).toBe(before);
 });
+
+test('sound Recipes offer only audio assets and play through the Play Host', () => {
+  const { project, page, button } = fixture();
+  project.assets.push(
+    {
+      name: 'waves',
+      fileName: 'waves.mp3',
+      hash: 'a'.repeat(64),
+      mediaType: 'audio/mpeg',
+      size: 3,
+    },
+    {
+      name: 'lamp',
+      fileName: 'lamp.png',
+      hash: 'b'.repeat(64),
+      mediaType: 'image/png',
+      size: 3,
+    },
+  );
+  for (const owner of [project, page, button]) {
+    expect(recipeTargets(project, owner, 'playSound')).toEqual([
+      { name: 'waves', reference: 'waves' },
+    ]);
+  }
+  const targets = recipeTargets(project, button, 'playSound');
+  expect(recipeSource('playSound', targets[0]!)).toBe(
+    'tell sound to play "waves"',
+  );
+  expect(recipeSource('loopSound', targets[0]!)).toBe(
+    'tell sound to loop "waves"',
+  );
+  const stops = recipeTargets(project, button, 'stopSound');
+  expect(recipeSource('stopSound', stops[0]!)).toBe('tell sound to stop');
+  expect(recipeSource('stopSound', stops[1]!)).toBe(
+    'tell sound to stop "waves"',
+  );
+  button.script = insert('', recipeSource('loopSound', targets[0]!), 'new');
+  expect(parseSource(button.script).error).toBeNull();
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems).toEqual([]);
+  expect(play.sounds.playing()).toEqual([
+    { owner: 'element:page1/door', name: 'waves', loop: true },
+  ]);
+  play.stop(0n);
+  expect(play.sounds.playing()).toEqual([]);
+});

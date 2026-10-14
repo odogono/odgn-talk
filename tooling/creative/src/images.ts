@@ -1,5 +1,7 @@
 // Image intake and the session's content-addressed bytes. Decode before any
-// authored edit; retain bytes for undo and failed-save exports (#753).
+// authored edit; retain bytes for undo and failed-save exports (#753). The
+// bytes store is keyed by hash for every asset, so sound bytes (#822) live
+// here too; sound intake and playback are in sounds.ts.
 import type { Asset, Project } from './model';
 import { sha256Hex } from './project-file';
 import type { NewAsset } from './storage';
@@ -86,7 +88,7 @@ export const importImage = async (
   const mediaType = imageType(bytes);
   if (!mediaType) {
     throw new Error(
-      `${name}: unsupported image type. Choose PNG, JPEG, WebP, GIF, SVG or AVIF. Audio is not supported yet.`,
+      `${name}: unsupported image type. Choose PNG, JPEG, WebP, GIF, SVG or AVIF. To add a sound, use Add sound… in Info.`,
     );
   }
   try {
