@@ -979,6 +979,9 @@ fn needReply(s: *Session, ref: i64) []u8 {
 
 /// The Reports a Pump made, taken from the Group, as chapter 9 encodes them.
 fn writeReports(o: *Out, entry: *GroupEntry) Allocator.Error!void {
+    // The accounting tail first, as talk.h's report calls write it: its
+    // rows for ended Runs are held in the reports being taken.
+    entry.group.group.accountingTail();
     var held = entry.group.group.reports.take();
     defer held.deinit();
     try o.raw(",");
@@ -2143,23 +2146,31 @@ const Client = struct {
         const frame = try std.fmt.allocPrint(a, fmt, args);
         const reply = handle(c.s, frame);
         defer freeReply(c.s.gpa, reply);
-        const parsed = try std.json.parseFromSlice(Json, a, reply, .{});
+        const parsed = std.json.parseFromSlice(Json, a, reply, .{}) catch |e| {
+            std.debug.print("unparsable reply to {s}: {s}\n", .{ frame, reply });
+            return e;
+        };
         try std.testing.expectEqual(@as(i64, r), parsed.value.object.get("ref").?.integer);
         return parsed.value;
     }
 };
 
 fn okOf(reply: Json) !Json {
-    return reply.object.get("ok") orelse error.TestUnexpectedResult;
+    return reply.object.get("ok") orelse unexpected(reply);
 }
 fn errKind(reply: Json) ![]const u8 {
-    const e = reply.object.get("err") orelse return error.TestUnexpectedResult;
+    const e = reply.object.get("err") orelse return unexpected(reply);
     return e.object.get("kind").?.string;
+}
+/// Fails a test, printing the reply it didn't expect.
+fn unexpected(reply: Json) error{TestUnexpectedResult} {
+    std.debug.print("unexpected reply: {f}\n", .{std.json.fmt(reply, .{})});
+    return error.TestUnexpectedResult;
 }
 fn runEnd(reply: Json) !Json {
     const reports = (try okOf(reply)).object.get("reports").?.array.items;
     for (reports) |r| if (std.mem.eql(u8, r.object.get("kind").?.string, "run end")) return r;
-    return error.TestUnexpectedResult;
+    return unexpected(reply);
 }
 
 test "hello, framing refusals, and a Pump with no Operations" {
@@ -2474,10 +2485,21 @@ test "reload carries or resets variables, extend adds a handler, and a refused s
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable n = 5\\non bump\\n  put n + 1 into n\\n  return n\\nend bump\\n\"}}", .{2}));
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"bump\"}}}}", .{3}));
-    try std.testing.expectEqual(@as(i64, 6), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}))).object.get("result").?.integer);
+    const first = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4});
+    try std.testing.expectEqual(@as(i64, 6), (try runEnd(first)).object.get("result").?.integer);
+    // The Pump returns its ended Run's accounting row itself, not a later
+    // reply after its reports are freed.
+    var accounted = false;
+    for ((try okOf(first)).object.get("reports").?.array.items) |r| {
+        if (std.mem.eql(u8, "run accounting", r.object.get("kind").?.string)) {
+            try std.testing.expectEqualStrings("s", r.object.get("script").?.string);
+            accounted = true;
+        }
+    }
+    if (!accounted) return unexpected(first);
     // Carried, n stays 6 under the new code; reset, it starts again at 5.
     const reloaded = try okOf(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"carry variables\",\"source\":\"script variable n = 5\\non bump\\n  put n + 10 into n\\n  return n\\nend bump\\n\"}}", .{5}));
-    try std.testing.expect(reloaded.object.get("reports").? == .array);
+    if (reloaded.object.get("reports").? != .array) return unexpected(reloaded);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"bump\"}}}}", .{6}));
     try std.testing.expectEqual(@as(i64, 16), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{7}))).object.get("result").?.integer);
     _ = try okOf(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"keepMailbox\":true,\"source\":\"script variable n = 5\\non bump\\n  put n + 10 into n\\n  return n\\nend bump\\n\"}}", .{8}));
@@ -2487,10 +2509,10 @@ test "reload carries or resets variables, extend adds a handler, and a refused s
     try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"keep\",\"source\":\"\"}}", .{11})));
     const broken = try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"source\":\"on bump\\n\"}}", .{12});
     try std.testing.expectEqualStrings("load error", try errKind(broken));
-    try std.testing.expect(broken.object.get("err").?.object.get("diagnostics").?.array.items.len > 0);
+    if (broken.object.get("err").?.object.get("diagnostics").?.array.items.len == 0) return unexpected(broken);
     // Extend adds a handler beside the code it has.
     const extended = try okOf(try c.send("{{\"m\":\"extend\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"source\":\"on peek\\n  return n\\nend peek\\n\"}}", .{13}));
-    try std.testing.expect(extended.object.get("reports") == null);
+    if (extended.object.get("reports") != null) return unexpected(extended);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"peek\"}}}}", .{14}));
     try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:03Z\"}}", .{15}))).object.get("result").?.integer);
 }
