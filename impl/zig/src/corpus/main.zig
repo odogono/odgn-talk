@@ -1,5 +1,5 @@
-//! The corpus is read from disk and exercised through talk.h. Unsupported
-//! kinds are named and skipped; a passing-list entry must actually pass.
+//! The corpus is read from disk and exercised through talk.h. Every selected
+//! case must pass: one the runner can't run is named and fails.
 //! Messages match the Go runner's (impl/go/internal/corpus/runner.go).
 const std = @import("std");
 const c = @import("talk-c");
@@ -289,13 +289,12 @@ fn disassemblyCase(self: Runner, case: Case) !?usize {
         },
     }
 }
-/// A machine backend plugs into this function; flags, discovery, passing
-/// enforcement and first-divergence reporting stay in this runner.
+/// A machine backend plugs into this function; flags, discovery and
+/// first-divergence reporting stay in this runner.
 pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     const gpa = init.gpa;
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     var list_only = false;
-    var check = false;
     var paths: std.ArrayList([]const u8) = .empty;
     defer paths.deinit(gpa);
     var stdout_buffer: [8192]u8 = undefined;
@@ -307,14 +306,10 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     const e = &stderr.interface;
     defer e.flush() catch {};
     for (args[1..]) |arg| {
-        if (std.mem.eql(u8, arg, "--list")) list_only = true else if (std.mem.eql(u8, arg, "--check-passing")) check = true else if (std.mem.startsWith(u8, arg, "--")) {
+        if (std.mem.eql(u8, arg, "--list")) list_only = true else if (std.mem.startsWith(u8, arg, "--")) {
             try e.print("unknown flag: {s}\n", .{arg});
             return 2;
         } else try paths.append(gpa, arg);
-    }
-    if (check and (list_only or paths.items.len != 0)) {
-        try e.writeAll("--check-passing cannot be combined with other selections\n");
-        return 1;
     }
     var dir = try std.Io.Dir.cwd().openDir(init.io, "../../corpus", .{ .iterate = true });
     defer dir.close(init.io);
@@ -377,12 +372,11 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
         return 0;
     }
     const runner: Runner = .{ .init = init, .out = w, .replay = replay };
-    if (check) return checkPassing(runner, cases.items, e);
     var failures: usize = 0;
     for (cases.items) |case| {
         if (unsupported(case, replay)) |reason| {
-            try w.print("SKIP {s} ({s})\n", .{ case.name, reason });
-            if (paths.items.len > 0) failures += 1;
+            try w.print("FAIL {s} (unsupported: {s})\n", .{ case.name, reason });
+            failures += 1;
             continue;
         }
         if (try runner.execute(case)) |n| {
@@ -392,63 +386,6 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     if (failures > 0) {
         try w.flush();
         try e.print("{d} corpus case(s) failed\n", .{failures});
-        return 1;
-    }
-    return 0;
-}
-/// The CI gate, over the whole corpus. Every listed case must pass, and a
-/// listed case that no longer exists fails. Unlike the Go gate, a case the
-/// Zig Core can't run yet, or doesn't pass yet, is reported and skipped
-/// unless it is listed.
-fn checkPassing(runner: Runner, cases: []const Case, e: *std.Io.Writer) !u8 {
-    const gpa = runner.init.gpa;
-    const w = runner.out;
-    const passing = try read(runner.init, "corpus-passing.txt");
-    defer gpa.free(passing);
-    var required: std.StringArrayHashMapUnmanaged(void) = .empty;
-    defer required.deinit(gpa);
-    var lines = std.mem.splitScalar(u8, passing, '\n');
-    while (lines.next()) |line| {
-        if (line.len == 0 or line[0] == '#') continue;
-        if (!std.mem.eql(u8, std.mem.trim(u8, line, " \t\r"), line) or required.contains(line)) {
-            try e.print("invalid or duplicate passing-list entry \"{s}\"\n", .{line});
-            return 1;
-        }
-        try required.put(gpa, line, {});
-    }
-    var failed = false;
-    for (cases) |case| {
-        const must = required.swapRemove(case.name);
-        if (unsupported(case, runner.replay)) |reason| {
-            if (must) {
-                try w.print("FAIL {s} ({s})\n", .{ case.name, reason });
-                failed = true;
-            } else try w.print("SKIP {s} ({s})\n", .{ case.name, reason });
-            continue;
-        }
-        if (must) {
-            if (try runner.execute(case)) |n| {
-                try w.print("PASS {s} ({d} lines)\n", .{ case.name, n });
-            } else failed = true;
-            continue;
-        }
-        // An unlisted case is reported, never failed: the Zig Core's
-        // machine grows case by case.
-        var quiet: std.Io.Writer.Allocating = .init(runner.init.gpa);
-        defer quiet.deinit();
-        var unlisted = runner;
-        unlisted.out = &quiet.writer;
-        if (try unlisted.execute(case)) |n| {
-            try w.print("NEW PASS {s} ({d} lines; add to corpus-passing.txt)\n", .{ case.name, n });
-        } else try w.print("SKIP {s} (not passing yet)\n", .{case.name});
-    }
-    for (required.keys()) |name| {
-        try w.print("FAIL {s} (listed case does not exist)\n", .{name});
-        failed = true;
-    }
-    if (failed) {
-        try w.flush();
-        try e.writeAll("Zig corpus gate failed\n");
         return 1;
     }
     return 0;

@@ -5,7 +5,7 @@
 //   bun tools/corpus/bless.ts CASE …   CASE is relative to corpus/
 //
 // The TS runner writes the Disassembly, Trace or Transcript expectations
-// from its own output, in both replays. The TS and Go runners must then
+// from its own output, in both replays. The TS, Go and Zig runners must then
 // each pass the written files, in both replays. If any step fails, every
 // file in the case's directory is put back as it was and the first
 // divergence is reported. Blessing doesn't approve a first blessing: a
@@ -27,9 +27,13 @@ import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '../..');
 
-/** A runner command; the case name is appended as its last argument. */
+/**
+ * A runner command; the case name is appended as its last argument. It runs
+ * in cwd, relative to the repository root, or the root itself.
+ */
 export type Step = {
   command: readonly [string, ...string[]];
+  cwd?: string;
   name: string;
 };
 
@@ -82,7 +86,7 @@ export const blessCase = (
   for (const step of [write, ...checks]) {
     const [command, ...args] = step.command;
     const result = spawnSync(command, [...args, name], {
-      cwd: ROOT,
+      cwd: resolve(ROOT, step.cwd ?? '.'),
       encoding: 'utf8',
     });
     if (result.status !== 0) {
@@ -117,17 +121,34 @@ const main = (names: string[]): number => {
       );
       return 1;
     }
+    // The Zig runner is built once here, and then by `zig build corpus` for
+    // each case from its cache.
+    const zig = spawnSync('zig', ['build'], {
+      cwd: resolve(ROOT, 'impl/zig'),
+      stdio: 'inherit',
+    });
+    if (zig.status !== 0) {
+      console.error(
+        'bless needs every available Core; the Zig runner did not build',
+      );
+      return 1;
+    }
     const ts = ['bun', 'impl/ts/tools/corpus.ts'] as const;
     const write: Step = { command: [...ts, '--bless'], name: 'TS bless' };
     const checks: Step[] = [
       { command: ts, name: 'TS Core' },
       { command: [go], name: 'Go Core' },
+      {
+        command: ['zig', 'build', 'corpus', '--'],
+        cwd: 'impl/zig',
+        name: 'Zig Core',
+      },
     ];
     let failures = 0;
     for (const name of names) {
       const outcome = blessCase(resolve(ROOT, 'corpus'), name, write, checks);
       if (outcome.blessed) {
-        console.log(`BLESSED ${name} (TS and Go agree)`);
+        console.log(`BLESSED ${name} (TS, Go and Zig agree)`);
       } else {
         failures++;
         console.error(

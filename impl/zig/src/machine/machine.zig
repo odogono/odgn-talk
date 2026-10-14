@@ -378,6 +378,11 @@ pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Val
 
 /// A suspended Run's wait, with its deadline in nanoseconds: a suspending
 /// Capability call or a `wait`.
+/// Marks a Capability call whose wait ends without its answer abandoned.
+fn abandonCall(p: *const Pending) void {
+    if (p.call) |c| c.abandoned.store(true, .release);
+}
+
 pub const Pending = struct {
     /// A `send … and wait`'s call id; a Capability call's is its Call's.
     id: []const u8 = "",
@@ -656,13 +661,15 @@ pub const Library = struct {
     operations: []const OperationRef = &.{},
     stdlib: bool = false,
     /// The Grant declarations it was compiled against, which recompiling it
-    /// for a replaced import uses again; null for none.
-    declarations: ?[]const NamedGrant = null,
+    /// for a replaced import uses again; null for none. It holds a
+    /// reference to each Shape.
+    declarations: ?[]const capabilities.GrantDecls = null,
     /// For a Script's extension, its number since the Script's last Load or
     /// Reload, which names it `<script>+<n>`; 0 for a Library.
     extension: u32 = 0,
 
     pub fn destroy(l: *Library) void {
+        releaseDeclarations(l.declarations);
         for (l.definitions) |v| v.release();
         l.gpa.free(l.definitions);
         for (l.unit.values) |v| if (v == .value) v.value.release();
@@ -693,7 +700,7 @@ pub const Diagnostic = struct { code: []const u8, line: u32, column: u32 };
 
 /// Compiles a Library against the Libraries it imports, which must hold
 /// every one its `use` lines name besides the stdlib's.
-pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, source: []const u8, given: []const *Library, declarations: ?[]const NamedGrant) !Compiled {
+pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, source: []const u8, given: []const *Library, declarations: ?[]const capabilities.GrantDecls) !Compiled {
     var arena: std.heap.ArenaAllocator = .init(gpa);
     var owns_arena = true;
     defer if (owns_arena) arena.deinit();
@@ -726,9 +733,26 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     var context: check.Context = .{ .library = true, .libraries = views.items };
     // Grant declarations by the names its source uses: the modes and
     // Shapes its Capability calls are checked and lowered against.
-    if (declarations) |named| {
+    // They are kept, their Shapes retained, for recompiling it.
+    var shapes_kept = false;
+    const grant_declarations: ?[]const capabilities.GrantDecls = if (declarations) |named| blk: {
+        const declared = try kept.alloc(capabilities.GrantDecls, named.len);
+        for (named, declared) |n, *k| {
+            const checks = try kept.alloc(capabilities.OperationCheck, n.operations.len);
+            for (n.operations, checks) |o, *x| x.* = .{ .name = try kept.dupe(u8, o.name), .mode = o.mode, .args = try kept.dupe(*capabilities.Shape, o.args) };
+            k.* = .{ .name = try kept.dupe(u8, n.name), .operations = checks };
+        }
+        for (declared) |k| for (k.operations) |o| for (o.args) |x| {
+            _ = x.retain();
+        };
+        shapes_kept = true;
+        break :blk declared;
+    } else null;
+    // Until the Library holds them, on a refusal too.
+    defer if (shapes_kept) releaseDeclarations(grant_declarations);
+    if (grant_declarations) |named| {
         const viewed = try a.alloc(check.Grant, named.len);
-        for (named, viewed) |n, *v| v.* = .{ .name = try a.dupe(u8, n.name), .operations = try capabilities.checkOperations(a, n.grant) };
+        for (named, viewed) |n, *v| v.* = .{ .name = n.name, .operations = try capabilities.declaredOperations(a, n.operations) };
         context.grants = viewed;
     }
     const checked = try check.check(a, t, context);
@@ -755,11 +779,6 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     const held_needs = try storage.copy(kept, needs.items);
     const operations = try operationRefs(kept, held_needs);
     const version_label = try kept.dupe(u8, label);
-    const grant_declarations: ?[]const NamedGrant = if (declarations) |named| blk: {
-        const declared = try kept.alloc(NamedGrant, named.len);
-        for (named, declared) |n, *k| k.* = .{ .name = try kept.dupe(u8, n.name), .grant = n.grant };
-        break :blk declared;
-    } else null;
     const l = try gpa.create(Library);
     l.* = .{
         .gpa = gpa,
@@ -778,6 +797,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     };
     owns_arena = false;
     owns_values = false;
+    shapes_kept = false;
     errdefer l.destroy();
     // Its Constants and defaults: its initialiser, which may use only
     // literals, Constants and Built-ins, run once.
@@ -1082,6 +1102,10 @@ fn oversizedPatterns(a: Allocator, unit: *const lower.Unit, limit: u64) ![]lower
 pub const NamedObject = struct { name: []const u8, object: *objects.Object };
 
 /// A Grant the Host binds at Load, by the name the Script uses.
+fn releaseDeclarations(declarations: ?[]const capabilities.GrantDecls) void {
+    for (declarations orelse return) |k| for (k.operations) |o| for (o.args) |x| x.release();
+}
+
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 
 /// An Operation by the Grant name that calls it, laid out as talk.h's
@@ -2565,6 +2589,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             const id = if (p.call) |c| c.id else p.id;
             if (id.len > 0) try r.abandoned.append(g.gpa, id);
             g.destroyPending(p);
@@ -2876,6 +2901,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
@@ -3150,6 +3176,7 @@ pub const Group = struct {
                 } else for (g.pending.items, 0..) |p, i| {
                     const c = p.call orelse continue;
                     if (!std.mem.eql(u8, c.id, id)) continue;
+                    abandonCall(p);
                     try g.ready(g.pending.orderedRemove(i), .lost);
                     break;
                 }
@@ -3186,6 +3213,7 @@ pub const Group = struct {
             const i = first orelse break;
             const p = g.pending.orderedRemove(i);
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
+            abandonCall(p);
             try g.ready(p, with);
         }
         g.turn_at = 0;
@@ -3332,6 +3360,7 @@ pub const Group = struct {
                         _ = g.pending.orderedRemove(i);
                         break;
                     };
+                    abandonCall(w);
                     g.destroyPending(w);
                     x.pending = null;
                     x.cut = true;
@@ -4547,6 +4576,7 @@ pub const Group = struct {
                     _ = g.pending.orderedRemove(i);
                     break;
                 };
+                abandonCall(p);
                 g.destroyPending(p);
             }
             if (x.with) |w| g.releaseResume(w);
@@ -5387,7 +5417,19 @@ pub const Group = struct {
             cancelling = i;
             break;
         };
-        if (cancelling) |k| total += cancelSize(run, k) else for (run.frames.items) |*f| {
+        // A cancellation not yet started keeps the same: every cleanup is
+        // still ahead of it, and the cleanups it was preempted in end.
+        const pending_cancel = cancelling == null and run.resume_with != null and run.resume_with.? == .cancelled;
+        if (pending_cancel) {
+            var k = run.controls.items.len;
+            while (k > 0 and run.controls.items[k - 1] == .cleanup) k -= 1;
+            cancelling = k;
+            total += cancelSize(run, run.frames.items.len, run.controls.items[0..k]);
+        } else if (cancelling) |k| {
+            const u = &run.controls.items[k].cleanup;
+            const running: usize = if (u.next > 0 and !u.cleanups.items[u.next - 1].leave) u.cleanups.items[u.next - 1].frame else run.frames.items.len;
+            total += cancelSize(run, running, run.controls.items[0..k]);
+        } else for (run.frames.items) |*f| {
             total += frameSize(f);
         }
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
@@ -5422,6 +5464,9 @@ pub const Group = struct {
         // its Error's context, an acceptance's activation, a transfer's
         // arguments and the failed continuation's operands (chapter 8,
         // Pending cleanup state).
+        // Its interrupted dispatch contexts are gone, and the cleanups it
+        // was preempted in end when it starts.
+        if (pending_cancel) return total;
         for (run.controls.items, 0..) |c, i| switch (c) {
             .dispatch => |d| {
                 if (cancelling) |k| if (i < k) continue;
@@ -5446,15 +5491,13 @@ pub const Group = struct {
     }
 
     /// The frames and dispatch activations a cancellation's remaining
-    /// cleanup needs, the cleanup being control `k` (chapter 8, Pending
-    /// cleanup state). The running cleanup copy, and what it calls, keep
+    /// cleanup needs, with frame `running` running its cleanup and
+    /// `dispatches` the controls it interrupted (chapter 8, Pending cleanup
+    /// state). The running cleanup copy, and what it calls, keep
     /// their whole stacks; each interrupted stack keeps only the prefix
     /// its `finally` entries need, and an owner or activation none of them
     /// needs is gone. The interrupted dispatch contexts count nothing.
-    fn cancelSize(run: *const Run, k: usize) u64 {
-        const u = &run.controls.items[k].cleanup;
-        const running: usize = if (u.next > 0 and !u.cleanups.items[u.next - 1].leave) u.cleanups.items[u.next - 1].frame else run.frames.items.len;
-        const dispatches = run.controls.items[0..k];
+    fn cancelSize(run: *const Run, running: usize, dispatches: []const Control) u64 {
         var total: u64 = 0;
         for (run.frames.items, 0..) |*f, i| {
             if (i > running) {
@@ -6733,6 +6776,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             g.destroyPending(p);
             run.waiting = null;
         }

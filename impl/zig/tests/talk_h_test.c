@@ -145,7 +145,7 @@ static int capability_test(void) {
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
-    int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
+    int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     bad |= talk_grant_capability(grant) != def;
@@ -174,6 +174,22 @@ static int capability_test(void) {
     talk_script *refused = NULL;
     bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
     bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:21\n") == NULL;
+    /* A Library is checked against declarations, not a Grant: here those
+     * the definition gives, and a hand-written pair. */
+    talk_operation_check checks[2];
+    bad |= talk_capability_def_checks(def, NULL, 0) != 1 || talk_capability_def_checks(def, checks, 2) != 1;
+    bad |= checks[0].name_len != 5 || memcmp(checks[0].name, "twice", 5) != 0 || checks[0].mode != TALK_IMMEDIATE || checks[0].args_len != 1;
+    const talk_shape *number_args[] = {talk_number_shape()};
+    talk_operation_check by_hand[] = {{"twice", 5, TALK_IMMEDIATE, number_args, 1}};
+    talk_grant_decls from_def[] = {{"echo", 4, checks, 1}};
+    talk_grant_decls handwritten[] = {{"echo", 4, by_hand, 1}};
+    const char *lib_text = "function shout s\n  ask echo to twice \"a\"\n  return it\nend shout\n";
+    talk_library_source lib_src = {"shouts", 6, "1", 1, lib_text, strlen(lib_text)};
+    talk_library *lib = NULL;
+    bad |= talk_compile_library(core, &lib_src, NULL, 0, from_def, 1, &lib, NULL) != TALK_OK;
+    lib_src.name = "numbers";
+    lib_src.name_len = 7;
+    bad |= talk_compile_library(core, &lib_src, NULL, 0, handwritten, 1, &lib, NULL) != TALK_LOAD_REFUSED;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -204,10 +220,13 @@ static int revoke_test(void) {
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
-    int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
-    bad |= talk_with_release_hook(core, def, NULL, NULL) != TALK_INVALID_VALUE;
-    bad |= talk_with_release_hook(core, def, release, NULL) != TALK_OK;
-    bad |= talk_with_release_hook(core, def, release, NULL) != TALK_INVALID_VALUE;
+    /* One release hook, given with the definition. */
+    talk_capability_option none[] = {talk_with_release_hook(NULL, NULL)};
+    talk_capability_option twice_over[] = {talk_with_release_hook(release, NULL), talk_with_release_hook(release, NULL)};
+    talk_capability_option hooked[] = {talk_with_release_hook(release, NULL)};
+    int bad = talk_define_capability(core, "echo", 4, ops, 1, none, 1, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "echo", 4, ops, 1, twice_over, 2, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "echo", 4, ops, 1, hooked, 1, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"echo", 4, grant}};
@@ -275,34 +294,34 @@ static int scope_test(void) {
     /* An opener whose abandonment Operation is missing, takes arguments,
      * closes another scope or disagrees with another opener's. */
     talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0}};
-    bad |= talk_define_capability(core, "a", 1, missing, 1, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "a", 1, missing, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation with_args[] = {
         {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
         {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
     };
-    bad |= talk_define_capability(core, "b", 1, with_args, 2, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "b", 1, with_args, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation disagreeing[] = {
         {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
         {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false, NULL, 0, NULL, NULL, 0},
         {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
         {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
     };
-    bad |= talk_define_capability(core, "c", 1, disagreeing, 4, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "c", 1, disagreeing, 4, NULL, 0, &def) != TALK_INVALID_VALUE;
     /* A suspending lifecycle Operation, and a Segment-bound one with no
      * Segment Coordinator. */
     talk_operation suspending[] = {
         {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
         {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
     };
-    bad |= talk_define_capability(core, "d", 1, suspending, 2, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "d", 1, suspending, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, NULL, 0}};
-    bad |= talk_define_capability(core, "e", 1, bound, 1, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_capability(core, "e", 1, bound, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
 
     talk_operation ops[] = {
         {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, NULL, 0},
         {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, NULL, 0},
     };
-    bad |= talk_define_capability(core, "files", 5, ops, 2, &def) != TALK_OK;
+    bad |= talk_define_capability(core, "files", 5, ops, 2, NULL, 0, &def) != TALK_OK;
     /* A Grant keeps an opener's abandonment Operation. */
     talk_grant *grant = NULL;
     const char *names[] = {"open"};
@@ -373,10 +392,10 @@ static int segment_test(void) {
     /* A coordinator without all three hooks, and a suspending Segment-bound
      * Operation. */
     talk_segment_lifecycle partial = {begin_hook, commit_hook, NULL, NULL};
-    bad |= talk_define_segment_capability(core, "a", 1, ops, 1, &partial, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_segment_capability(core, "a", 1, ops, 1, &partial, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, NULL, 0}};
-    bad |= talk_define_segment_capability(core, "b", 1, suspending, 1, &shared_lifecycle, &def) != TALK_INVALID_VALUE;
-    bad |= talk_define_coordinated_capability(core, "db", 2, ops, 1, coordinator_of, NULL, &def) != TALK_OK;
+    bad |= talk_define_segment_capability(core, "b", 1, suspending, 1, &shared_lifecycle, NULL, 0, &def) != TALK_INVALID_VALUE;
+    bad |= talk_define_coordinated_capability(core, "db", 2, ops, 1, coordinator_of, NULL, NULL, 0, &def) != TALK_OK;
     talk_grant *refused = NULL, *one = NULL, *two = NULL;
     bad |= talk_capability_def_grant_all(def, "other", &refused) != TALK_INVALID_VALUE;
     bad |= talk_capability_def_grant_all(def, "shared", &one) != TALK_OK;
@@ -495,8 +514,13 @@ static int store_test(void) {
     talk_store_impl impl = {NULL, store_get, unused, unused, unused, unused, unused, unused, unused, {NULL, NULL, NULL, NULL}, NULL};
     talk_capability_def *def = NULL;
     int bad = talk_store_capability(core, &impl, &costs, &def) != TALK_INVALID_VALUE;
+    bad |= talk_store_coordinator(core, &impl) != NULL;
     impl.coordinator = (talk_segment_lifecycle){begin_hook, commit_hook, rollback_hook, NULL};
+    /* The coordinator a sqlite impl may share: the Core's copy, the same
+     * one before and after the definition. */
+    const talk_segment_lifecycle *shared = talk_store_coordinator(core, &impl);
     bad |= talk_store_capability(core, &impl, &costs, &def) != TALK_OK;
+    bad |= shared == NULL || shared == &impl.coordinator || shared != talk_store_coordinator(core, &impl);
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, "scores", &grant) != TALK_OK;
     talk_load_grant grants[] = {{"st", 2, grant}};
@@ -1189,7 +1213,7 @@ static int suspension_test(void) {
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *def = NULL;
-    int bad = talk_define_capability(core, "feed", 4, ops, 1, &def) != TALK_OK;
+    int bad = talk_define_capability(core, "feed", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_load_grant grants[] = {{"feed", 4, grant}};
@@ -1218,6 +1242,15 @@ static int suspension_test(void) {
     talk_inspect(group, NULL);
     bad |= strstr(trace, "> answer waiter/r1.c1 value=42 fuel=3\n") == NULL;
     bad |= strstr(trace, "vars waiter got=42\n") == NULL;
+    /* An answered call was never abandoned; one that times out is. */
+    bad |= started == NULL || talk_call_context(started);
+    started = NULL;
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000010, 0, NULL, NULL) != TALK_OK;
+    talk_call *timing_out = started;
+    bad |= timing_out == NULL || talk_call_context(timing_out);
+    bad |= talk_pump(group, 1790000012, 0, NULL, NULL) != TALK_OK;
+    bad |= timing_out == NULL || !talk_call_context(timing_out);
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -1260,7 +1293,7 @@ static int object_test(void) {
     const talk_shape *see_args[] = {lamp_shape};
     talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false, NULL, 0, NULL, NULL, 0}};
     talk_capability_def *probe = NULL;
-    bad |= talk_define_capability(core, "probe", 5, see_ops, 1, &probe) != TALK_OK;
+    bad |= talk_define_capability(core, "probe", 5, see_ops, 1, NULL, 0, &probe) != TALK_OK;
     talk_shape_release(lamp_shape);
     talk_grant *probe_grant = NULL;
     bad |= talk_capability_def_grant_all(probe, NULL, &probe_grant) != TALK_OK;
@@ -1317,7 +1350,7 @@ static int manifest_test(void) {
     const size_t examples_lens[] = {22};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, "Doubles a text.", 15, examples, examples_lens, 1}};
     talk_capability_def *def = NULL;
-    int bad = talk_define_capability(core, "echo", 4, ops, 1, &def) != TALK_OK;
+    int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, (void *)1, &grant) != TALK_OK;
     const char *says_source = "function shout\n  say \"a\"\nend shout\n";

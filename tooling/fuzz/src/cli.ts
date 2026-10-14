@@ -1,14 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { Worker, campaign, evaluate } from './controller';
+import { Worker, campaign, evaluate, peersOf } from './controller';
 import { minimize } from './minimize';
 import { features, readCase, type Feature } from './model';
 
 const usage = `Usage:
-  northtalk-fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>] [--go-runner <path>]
-  northtalk-fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>] [--go-runner <path>]
-  northtalk-fuzz reproduce <case.json> [--go-runner <path>]
-  northtalk-fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--go-runner <path>]`;
+  northtalk-fuzz smoke [--seed <n>] [--count <n>] [--output <dir>] [--budget-ms <n>] [--profile <features>] [--go-runner <path>] [--zig-runner <path>]
+  northtalk-fuzz campaign [--seed <n>] [--output <dir>] [--budget-ms <n>] [--search-ms <n>] [--reduction-ms <n>] [--profile <features>] [--go-runner <path>] [--zig-runner <path>]
+  northtalk-fuzz reproduce <case.json> [--go-runner <path>] [--zig-runner <path>]
+  northtalk-fuzz minimize <case.json> [--output <file>] [--budget-ms <n>] [--go-runner <path>] [--zig-runner <path>]`;
 
 class UsageError extends Error {}
 
@@ -60,6 +60,7 @@ const main = async (argv: string[]): Promise<number> => {
       'reduction-ms': { type: 'string' },
       profile: { type: 'string' },
       'go-runner': { type: 'string' },
+      'zig-runner': { type: 'string' },
       help: { type: 'boolean' },
     },
   });
@@ -69,8 +70,8 @@ const main = async (argv: string[]): Promise<number> => {
     return 0;
   }
   const goRunner = values['go-runner'];
-  const go = () =>
-    goRunner ? new Worker({ entrypoint: goRunner, native: true }) : undefined;
+  const zigRunner = values['zig-runner'];
+  const others = () => peersOf({ go: goRunner, zig: zigRunner });
   switch (command) {
     case 'smoke':
     case 'campaign': {
@@ -84,6 +85,7 @@ const main = async (argv: string[]): Promise<number> => {
         reductionMs: integer(values['reduction-ms'], 'reduction-ms'),
         profile: profile(values.profile),
         goRunner,
+        zigRunner,
         commit: process.env.GITHUB_SHA,
       });
       console.log(JSON.stringify(summary, null, 2));
@@ -92,20 +94,22 @@ const main = async (argv: string[]): Promise<number> => {
     case 'reproduce': {
       const c = await loadCase(path);
       const ts = new Worker();
-      const other = go();
+      const other = others();
       try {
         const result = await evaluate(c, ts, other);
         console.log(JSON.stringify(result.findings, null, 2));
         return result.findings.length ? 1 : 0;
       } finally {
         ts.close();
-        other?.close();
+        for (const peer of other) {
+          peer.worker.close();
+        }
       }
     }
     case 'minimize': {
       const c = await loadCase(path);
       const ts = new Worker();
-      const other = go();
+      const other = others();
       try {
         const [first] = (await evaluate(c, ts, other)).findings;
         if (!first) {
@@ -144,7 +148,9 @@ const main = async (argv: string[]): Promise<number> => {
         return 0;
       } finally {
         ts.close();
-        other?.close();
+        for (const peer of other) {
+          peer.worker.close();
+        }
       }
     }
     default:

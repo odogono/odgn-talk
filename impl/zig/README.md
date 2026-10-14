@@ -11,12 +11,14 @@ translated from the Go or TS Core
 design decisions that bind it are recorded on
 [#625](https://github.com/odogono/odgn-talk/issues/625#issuecomment-6111271797).
 
-It is under construction, step by step through
-[Appendix B](../../spec/appendix-b-implementation-order.md). So far it has its
-generated tables, Unicode text primitives, reference-counted values, native
-decimal arithmetic, the display form, the Value Encoding, a corpus runner, and
-the front end's lexer, lossless parser, checker and lowering, and the first
-part of the Abstract Machine, driven through `talk.h`.
+Built step by step through
+[Appendix B](../../spec/appendix-b-implementation-order.md), it conforms to
+language 1.0-rc.3 and Cost Model 0
+([#636](https://github.com/odogono/odgn-talk/issues/636)): it passes every
+Corpus case, every Trace Case in both replays and the pinned Unicode tests, its
+REPL reproduces every Session Transcript, and `talk.h` declares every `talk.go`
+name. Blessing needs it to agree with the Go and TS Cores, and the nightly
+differential fuzzer runs it. Its Message Layer is not yet complete (#635).
 
 Use the [Zig task map](NAVIGATION.md) for implementation files, Spec links,
 tests and check commands.
@@ -180,8 +182,9 @@ verifies the pinned UCD files the tests read.
 zig build test                    # the Zig tests and the talk.h C tests
 zig build                         # zig-out/lib/libtalk.a and zig-out/include/talk.h
 zig build -Dtarget=wasm32-wasi    # zig-out/bin/talk.wasm
-zig build corpus -- --check-passing
+zig build corpus                  # the whole Corpus, as CI runs it
 zig build corpus -- --list
+zig build fuzzworker              # zig-out/bin/talk-fuzzworker, for the fuzzer
 zig build corpus -- bytes/value-encoding
 zig fmt --check .
 ```
@@ -237,8 +240,8 @@ the shared [reactor harness](../../tools/wasi/check.py):
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless
-the declaration is marked `C only`, and lists the `talk.go` names `talk.h`
-doesn't declare yet. Those fail only from step 6's conformance gate.
+the declaration is marked `C only`, and on a `talk.go` name `talk.h` doesn't
+declare.
 
 ## The Session Host
 
@@ -533,10 +536,10 @@ revocation of a name the Script keeps marks that Grant revoked, and later
 calls through it raise `capability revoked`, uncharged, after the
 `capability disabled` check. A call in flight is left to the Host, and its
 answer still resumes the Run. A repeat, or a name the Script doesn't keep, is
-recorded and does nothing. A Capability's release hook, from
-`talk_with_release_hook` or `store`'s `release`, is called with the reason
-`revoke` then, and with `disable` right after the `effect-failure` record of a
-failed abandonment. Stop releases with `stop`, and Reload and Library
+recorded and does nothing. A Capability's release hook, a
+`talk_with_release_hook` option given with its definition or `store`'s
+`release`, is called with the reason `revoke` then, and with `disable` right
+after the `effect-failure` record of a failed abandonment. Stop releases with `stop`, and Reload and Library
 replacement with `reload`, only once the new code is accepted.
 
 Segment-bound Operations come from `talk_define_segment_capability`, which
@@ -587,8 +590,10 @@ argument 2, with its `path`). `query` and `change` then charge `max` times the
 per-row cost, `max` defaulting to the binding's cap, convert `params` to SQL
 values, and convert the rows back, raising `sql` for a column named twice and
 `unrepresentable` for a double it can't hold or text that isn't UTF-8. A
-malformed result is `host error`. `talk_store_coordinator`, for a Store kept
-in a database, comes later.
+malformed result is `host error`. `talk_store_coordinator` gives the Core's
+copy of a `store` implementation's coordinator, the same one for the same
+hooks and context, which the implementation's `coordinator` may give for the
+database that keeps the Stores, so both share a Segment's participant.
 
 `timer` (`talk_timer_capability`) forwards `schedule`'s name, Instant, message
 and arguments and `cancel`'s name to the Host, both fire-and-forget. The Host
@@ -609,7 +614,8 @@ queue of messages and ready Runs, in the order each became ready. A
 suspending call's `talk_call` outlives the call, and `talk_call_answer`,
 `talk_call_answer_with_cost` and `talk_call_fail` queue Host Inputs that the
 next Pump drains; an answer for a call that no longer waits becomes a
-`late-answer` note. Each Pump then fires due deadlines, `maxPending` or the
+`late-answer` note. `talk_call_context` turns true, readable from any thread,
+once a call's wait ends without its answer, so the Host may give up its work. Each Pump then fires due deadlines, `maxPending` or the
 default `MaxWait` for a call, in deadline order, and a timed-out call raises
 `timeout` and is abandoned. A resumed Run is charged its answer's terms over
 the result and any cost the answer brought. Persistent State counts each
@@ -655,8 +661,10 @@ parent of `me`. A message with no Owning Script left is reported `unhandled`.
 
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are
-checked and lowered against. Their Constants are evaluated at compile time,
-since an initialiser may use only literals, Constants and Built-ins. A code
+checked and lowered against: each Operation's mode and argument Shapes, as
+`talk_grant_decls`, which `talk_capability_def_checks` gives for a definition
+the Host holds. Their Constants are evaluated at compile time, since an
+initialiser may use only literals, Constants and Built-ins. A code
 identity covers each imported Library's identity, in the order the `use` lines
 first name them. `talk_add_library` writes the `add-library` record and refuses
 a stdlib name, a name the Group holds, or an import the Group doesn't hold.
@@ -943,7 +951,7 @@ levels, independently of future Run budgets.
 
 ## Corpus runner
 
-`zig build corpus -- [--list] [--check-passing] [case directory ...]` discovers
+`zig build corpus -- [--list] [case directory ...]` discovers
 all case kinds and runs encoding cases through `talk.h`, and Disassembly
 Cases through the front end, since `talk.h` exposes no compiled unit, with the
 Go runner's messages. It holds each `case.toml` to the language and Cost Model versions
@@ -982,19 +990,26 @@ restores or settles next itself, before any later `call-value`, whose
 Function Value the original Group made, and where a later `answer` or `fail`
 is for a call the save doesn't hold, whose handle belongs to the original
 Group. A
-failure in this replay says so. Transcript replay and
-encoding cases that register Host Objects are not supported.
+failure in this replay says so. Encoding cases that register Host Objects are
+not supported.
 
-`--check-passing` takes no selection. `corpus-passing.txt` lists the cases the
-Zig Core must pass in CI: a listed case that fails, disappears or is
-unsupported fails the gate. Unlike the Go gate, a case that isn't listed is
-reported and skipped when it is unsupported or doesn't pass yet, as the
-decisions on #625 say, since the machine grows case by case. A passing case
-that isn't listed prints `NEW PASS`, for adding to the list. Expected corpus
-bytes are never rewritten. The runner's replay backend says which cases it
+With no selection the runner runs the whole Corpus, as CI does, and every
+case must pass: a failing or unsupported case fails the run. There is no
+passing list. Expected corpus bytes are never rewritten. The runner's replay backend says which cases it
 supports and replays each from its directory;
 [Trace parsing](src/corpus/trace.zig) uses generated record/key metadata,
 including filled input keys and optional ids, for the comparison.
+
+## Fuzz worker
+
+`zig build fuzzworker` builds `talk-fuzzworker`, which the differential
+fuzzer runs with `--zig-runner` ([the fuzzer](../../tooling/fuzz/README.md#dual-core-mode)).
+It reads a Fuzz Case's setup as the Corpus runner reads case.toml, with each
+inline source under its `source` name, and takes the case's Host Inputs one
+at a time through the same replay Host, resolving each symbolic reference
+against its own Trace as the fuzzer's `runner.ts` does. A bare `> save` is
+kept under the id the Core gives it. It answers with the Trace, the action and
+record counts and the Group Fingerprints around each input.
 
 ## Regenerating tables
 

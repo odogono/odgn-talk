@@ -1,5 +1,5 @@
 // A Play Session owns its Group and a disposable copy of the authored Project.
-import { scriptNameProblems } from './script-names';
+import { elementNamesTaken, scriptNameProblems } from './script-names';
 import {
   bool,
   defineObjectKind,
@@ -12,10 +12,23 @@ import {
   shape,
   text,
   type HostObject,
+  type ObjectKind,
   type PropDef,
   type Value,
 } from '@odgn/northtalk';
-import { replacePlainText, textOf, type Project } from './model';
+import {
+  createElement,
+  duplicateElement,
+  ELEMENT_KINDS,
+  freshName,
+  isIdentifierName,
+  replacePlainText,
+  textOf,
+  type Element,
+  type ElementKind,
+  type Page,
+  type Project,
+} from './model';
 import {
   scriptManifest,
   scriptPage,
@@ -33,6 +46,13 @@ export type PlayMessage =
   | 'keyDown'
   | 'textChanged';
 
+// Construction/disposal consumes a Pump's budget so queued Core parent and
+// disposal inputs land before a Script can use the changed object graph.
+const PUMP_FUEL = 5000;
+const elementShape = shape.oneOf(
+  ...ELEMENT_KINDS.map(kind => ({ k: 'object' as const, kind })),
+);
+
 export class PlaySession {
   readonly project: Project;
   readonly group = newGroup({ name: 'play', trace: line => this.#trace(line) });
@@ -43,6 +63,120 @@ export class PlaySession {
   readonly objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
   readonly authored = new Map<ScriptOwner, ScriptOwner>();
   readonly owners = new Map<string, ScriptOwner>();
+  #kinds = new Map<string, ObjectKind<ScriptOwner>>();
+  #nextObject = 0;
+  #pendingClones: Element[] = [];
+  #elements = defineCapability('elements', {
+    create: {
+      mode: 'immediate',
+      args: [
+        shape.text,
+        { k: 'object', kind: 'page' },
+        shape.optional(shape.text),
+      ],
+      result: elementShape,
+      cost: { fuel: PUMP_FUEL },
+      do: (_call, kindValue, pageValue, nameValue) => {
+        const kind = kindValue!.asText()! as ElementKind;
+        if (!ELEMENT_KINDS.includes(kind)) {
+          throw new ScriptError('out of domain', 'Unknown Element kind');
+        }
+        const page = this.#elementPage(pageValue!);
+        const taken = elementNamesTaken(this.project, page);
+        const name = nameValue?.asText() ?? freshName(`${kind}1`, taken);
+        if (!isIdentifierName(name) || taken.has(name)) {
+          throw new ScriptError('out of domain', 'Element name is unavailable');
+        }
+        return this.#addElement(page, createElement(kind, name)).value;
+      },
+    },
+    clone: {
+      mode: 'immediate',
+      args: [elementShape],
+      result: elementShape,
+      cost: { fuel: PUMP_FUEL },
+      do: (_call, value) => {
+        const { page, element } = this.#element(value!);
+        const copy = duplicateElement(
+          element,
+          elementNamesTaken(this.project, page),
+        );
+        copy.left += 20;
+        copy.top += 20;
+        const object = this.#addElement(page, copy);
+        this.authored.set(copy, this.authored.get(element)!);
+        this.#pendingClones.push(copy);
+        return object.value;
+      },
+    },
+    delete: {
+      mode: 'fire-and-forget',
+      args: [elementShape],
+      cost: { fuel: PUMP_FUEL },
+      fire: (_call, value) => {
+        const { page, element } = this.#element(value!);
+        page.elements.splice(page.elements.indexOf(element), 1);
+        for (const [name, owner] of this.owners) {
+          if (owner === element) {
+            this.group.script(name)?.stop('Element deleted');
+          }
+        }
+        this.group.dispose(this.objects.get(element)!);
+        this.changed = true;
+      },
+    },
+    find: {
+      mode: 'immediate',
+      args: [shape.text, { k: 'object', kind: 'page' }],
+      result: elementShape,
+      cost: { fuel: 1 },
+      do: (_call, name, value) => {
+        const page = this.#elementPage(value!);
+        const element = page.elements.find(e => e.name === name!.asText());
+        if (!element) {
+          throw new ScriptError('out of domain', 'Element not found');
+        }
+        return this.objects.get(element)!.value;
+      },
+    },
+  });
+
+  #elementPage(value: Value): Page {
+    const page = this.project.pages.find(
+      p => this.objects.get(p) === value.asObject(),
+    );
+    if (!page) {
+      throw new ScriptError('out of domain', 'Unknown Page');
+    }
+    return page;
+  }
+
+  #element(value: Value): { element: Element; page: Page } {
+    for (const page of this.project.pages) {
+      const element = page.elements.find(
+        e => this.objects.get(e) === value.asObject(),
+      );
+      if (element) {
+        return { page, element };
+      }
+    }
+    throw new ScriptError('out of domain', 'Unknown Element');
+  }
+
+  #addElement(page: Page, element: Element): HostObject<ScriptOwner> {
+    const object = this.group.object(
+      this.#kinds.get(element.kind)!,
+      `dynamic:${this.#nextObject++}`,
+      element,
+    );
+    this.objects.set(element, object);
+    this.authored.set(element, this.authored.get(page)!);
+    page.elements.push(element);
+    this.group.setParent(object, this.objects.get(page)!);
+    this.changed = true;
+    return object;
+  }
+
   #requestedPage: number | undefined;
   #closing:
     | {
@@ -91,7 +225,7 @@ export class PlaySession {
       this.project,
       ...this.project.pages.flatMap(p => [p, ...p.elements]),
     ];
-    const kinds = new Map(
+    this.#kinds = new Map(
       scriptManifest(project, project).objectKinds.map(def => {
         const props: Record<string, PropDef<ScriptOwner>> = {};
         for (const prop of def.props) {
@@ -160,7 +294,7 @@ export class PlaySession {
             : 'page';
       this.objects.set(
         owner,
-        this.group.object(kinds.get(kind)!, String(i), owner),
+        this.group.object(this.#kinds.get(kind)!, String(i), owner),
       );
     }
     for (const page of this.project.pages) {
@@ -196,12 +330,14 @@ export class PlaySession {
       if (!owner.script?.trim()) {
         continue;
       }
+      const id = this.objects.get(owner)!.id;
+      const suffix = id.startsWith('dynamic:') ? `:${id}` : '';
       const name =
         owner === this.project
           ? 'project'
           : owner === this.page
             ? `page:${this.page.name}`
-            : `element:${this.page.name}/${owner.name}`;
+            : `element:${this.page.name}/${owner.name}${suffix}`;
       this.owners.set(name, owner);
       const objects = owner === this.project ? pages : pageObjects;
       try {
@@ -215,7 +351,10 @@ export class PlaySession {
           source: owner.script,
           owner: this.objects.get(owner),
           objects,
-          grants: { pages: this.#pages.grant(['show'], undefined) },
+          grants: {
+            pages: this.#pages.grant(['show'], undefined),
+            elements: this.#elements.grant('all', undefined),
+          },
         });
       } catch (error) {
         if (!(error instanceof LoadError)) {
@@ -328,7 +467,17 @@ export class PlaySession {
     ) {
       this.#finishNavigation();
     }
-    const result = this.group.pump(now, { fuelSlice: 1000, fuelCap: 5000 });
+    const result = this.group.pump(now, {
+      fuelSlice: 1000,
+      fuelCap: PUMP_FUEL,
+    });
+    const clones = this.#pendingClones;
+    this.#pendingClones = [];
+    if (!this.stopped) {
+      this.#load(
+        clones.filter(element => this.page.elements.includes(element)),
+      );
+    }
     for (const report of result.reports) {
       if (
         report.kind === 'run end' &&

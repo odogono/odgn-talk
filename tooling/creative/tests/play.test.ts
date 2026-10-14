@@ -338,3 +338,186 @@ test('a CPU-bound closePage cannot exceed the navigation deadline', async () => 
   expect(play.pageIndex).toBe(1);
   expect(play.problems).toEqual([]);
 });
+
+for (const kind of [
+  'text',
+  'image',
+  'button',
+  'rectangle',
+  'ellipse',
+  'line',
+]) {
+  test(`elements creates ${kind} with defaults and routes clicks to its Page`, () => {
+    const project = fixture();
+    project.pages[0]!.script = `on openPage
+ ask elements to create "${kind}", thisPage
+ set the left of it to 99
+end openPage
+on click
+ set the background of me to "Clicked"
+end click`;
+    const play = new PlaySession(project);
+    drain(play);
+    const created = play.page.elements.at(-1)!;
+    expect(created).toMatchObject({ kind, left: 99 });
+    expect(created.script).toBeUndefined();
+    play.send(created, 'click');
+    drain(play);
+    expect(play.page.background).toBe('Clicked');
+    expect(play.problems).toEqual([]);
+  });
+}
+
+test('clone copies properties and Script, attaches after the creating Pump, and reports against its source', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = `on click
+ set the label of me to "Clone clicked"
+end click
+on pointerEnter
+ put 1 / 0 into x
+end pointerEnter`;
+  project.pages[0]!.script = `on openPage
+ ask elements to clone button1
+ send click to it
+end openPage
+on click
+ set the background of me to "Before attachment"
+end click`;
+  const play = new PlaySession(project);
+  drain(play);
+  const clone = play.page.elements.at(-1)!;
+  expect(clone).toMatchObject({
+    name: 'button2',
+    left: 60,
+    top: 60,
+    label: 'Clone clicked',
+    script: project.pages[0]!.elements[0]!.script,
+  });
+  expect(play.page.background).toBe(project.pages[0]!.background);
+  play.send(clone, 'click');
+  drain(play);
+  expect(clone).toHaveProperty('label', 'Clone clicked');
+  expect(play.page.elements[0]).toHaveProperty('label', 'Button');
+  play.send(clone, 'pointerEnter');
+  drain(play);
+  expect(play.problems[0]?.owner).toBe(project.pages[0]!.elements[0]);
+});
+
+test('find reaches another Page; creation, cloning and deletion never alter authored content', () => {
+  const project = fixture();
+  const second = createPage('page2');
+  second.elements.push(createElement('button', 'remote'));
+  project.pages.push(second);
+  project.pages[0]!.script = `on openPage
+ ask elements to find "remote", page2
+ set the label of it to "Found"
+ ask elements to clone it
+ tell elements to delete button1
+ ask elements to create "text", thisPage, "journal"
+end openPage`;
+  const before = structuredClone(project);
+  const play = new PlaySession(project);
+  drain(play);
+  expect(play.project.pages[1]!.elements[0]).toHaveProperty('label', 'Found');
+  expect(play.project.pages[1]!.elements[1]).toHaveProperty('name', 'remote2');
+  expect(play.page.elements.map(e => e.name)).toEqual(['text1', 'journal']);
+  expect(play.problems).toEqual([]);
+  play.stop(0n);
+  expect(project).toEqual(before);
+  expect(new PlaySession(project).project).toEqual(before);
+});
+
+test('deleting the running Element stops immediately and stale handles cannot change it', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = `on click
+ tell elements to delete me
+ set the background of thisPage to "Leaked"
+end click`;
+  project.pages[0]!.script = `on pointerEnter
+ set the label of button1 to "Gone"
+end pointerEnter`;
+  const play = new PlaySession(project);
+  drain(play);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.page.elements.map(e => e.name)).toEqual(['text1']);
+  expect(play.page.background).toBe(project.pages[0]!.background);
+  play.send(play.page, 'pointerEnter');
+  drain(play);
+  expect(play.problems).toHaveLength(1);
+});
+
+for (const operation of [
+  'create "unknown", thisPage',
+  'create "button", thisPage, "button1"',
+  'create "button", thisPage, "page1"',
+  'create "button", thisPage, "elements"',
+  'create "button", thisPage, "bad name"',
+  'find "missing", thisPage',
+  'clone thisPage',
+]) {
+  test(`invalid elements operation reports a Script error: ${operation}`, () => {
+    const project = fixture();
+    project.pages[0]!.script = `on openPage\n ask elements to ${operation}\nend openPage`;
+    const play = new PlaySession(project);
+    drain(play);
+    expect(play.problems).toHaveLength(1);
+    expect(play.page.elements).toHaveLength(2);
+  });
+}
+
+test('created messages route immediately after create, through Page to Project', () => {
+  const project = fixture();
+  project.script =
+    'on click\n set the background of page1 to "Project handled"\nend click';
+  project.pages[0]!.script = `on openPage
+ ask elements to create "button", thisPage
+ send click to it
+end openPage
+on click
+ pass click
+end click`;
+  const play = new PlaySession(project);
+  drain(play);
+  expect(play.page.background).toBe('Project handled');
+  expect(play.problems).toEqual([]);
+});
+
+test('off-Page clones load on entry, restart on revisit and retain visual state', async () => {
+  const project = fixture();
+  const second = createPage('page2');
+  const remote = createElement('button', 'remote');
+  remote.script = `script variable clicks = 0
+on click
+ add 1 to clicks
+ set the label of me to "" & clicks
+end click`;
+  second.elements.push(remote);
+  project.pages.push(second);
+  project.script = `on startPlay
+ ask elements to find "remote", page2
+ ask elements to clone it
+ tell pages to show page2
+end startPlay`;
+  project.pages[0]!.elements[0]!.script =
+    'on click\n tell pages to show page2\nend click';
+  second.script =
+    'on pointerEnter\n tell pages to show page1\nend pointerEnter';
+  const play = new PlaySession(project);
+  await advance(play);
+  const clone = play.page.elements[1]!;
+  play.send(clone, 'click');
+  await advance(play);
+  expect(clone).toHaveProperty('label', '1');
+  play.send(play.page, 'pointerEnter');
+  await advance(play);
+  expect(play.page.name).toBe('page1');
+  play.send(play.page.elements[0]!, 'click');
+  await advance(play);
+  expect(play.page.name).toBe('page2');
+  expect(clone).toHaveProperty('label', '1');
+  play.send(clone, 'click');
+  await advance(play);
+  expect(clone).toHaveProperty('label', '1');
+  expect(play.problems).toEqual([]);
+});

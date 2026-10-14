@@ -26,16 +26,22 @@ jobs:
         with:
           go-version: '1.27'
           cache: false
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: go -C impl/go build -o "$PWD/.cache/fuzzworker" ./cmd/fuzzworker
-      - name: Fuzz both Cores
+      - run: zig build fuzzworker --prefix "$PWD/../../.cache/zig-fuzz"
+        working-directory: impl/zig
+      - name: Fuzz every Core
         env:
           SEED: ${{ inputs.seed || github.run_id }}
           BUDGET_MINUTES: ${{ inputs.budget-minutes || '30' }}
-        run: bun run fuzz campaign --seed "$SEED" --budget-ms "$((BUDGET_MINUTES * 60000))" --output fuzz-findings --go-runner .cache/fuzzworker
+        run: bun run fuzz campaign --seed "$SEED" --budget-ms "$((BUDGET_MINUTES * 60000))" --output fuzz-findings --go-runner .cache/fuzzworker --zig-runner .cache/zig-fuzz/bin/talk-fuzzworker
       # Each finding keeps its raw case, Traces and minimized case; see tooling/fuzz/README.md to reproduce one.
       - if: always()
         uses: actions/upload-artifact@v4

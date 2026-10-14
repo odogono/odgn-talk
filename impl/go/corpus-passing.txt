@@ -22,6 +22,7 @@ cancellation/policy-clause-selection
 cancellation/policy-dispatch-limits
 cancellation/queueing-policies
 cancellation/refused-host-crossings
+cancellation/replaced-wait-state
 capabilities/argument-shapes
 capabilities/calls
 capabilities/charge-faults
