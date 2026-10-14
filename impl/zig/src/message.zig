@@ -2048,6 +2048,121 @@ fn carryOf(j: ?Json) ?talk.CarryOver {
     return null;
 }
 
+/// `inspect`: every Script's variables, live Runs and mailbox, as
+/// `talk.ts`'s Inspection.
+fn inspectReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    var inspection: ?*talk.Inspection = null;
+    const code = Direct.inspect(entry.group, &inspection);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    defer Direct.inspectionRelease(inspection);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    writeInspection(&o, s.gpa, inspection.?) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    return finishOk(s, &o, entry);
+}
+
+fn writeInspection(o: *Out, gpa: Allocator, i: *const talk.Inspection) (Allocator.Error || error{NotEncodable})!void {
+    try o.raw("\"scripts\":[");
+    for (i.scripts[0..i.scripts_len], 0..) |sv, n| {
+        if (n > 0) try o.raw(",");
+        try o.raw("{\"name\":");
+        try o.text(sv.name[0..sv.name_len]);
+        if (sv.disabled_grants_len > 0) {
+            try o.raw(",\"disabledGrants\":[");
+            for (sv.disabled_grants[0..sv.disabled_grants_len], 0..) |g, k| {
+                if (k > 0) try o.raw(",");
+                try o.text(g.data[0..g.len]);
+            }
+            try o.raw("]");
+        }
+        try o.raw(",\"vars\":[");
+        for (sv.vars[0..sv.vars_len], 0..) |pair, k| {
+            if (k > 0) try o.raw(",");
+            try o.raw("[");
+            try o.text(pair.key.?[0..pair.key_len]);
+            try o.raw(",");
+            try o.value(pair.value);
+            try o.raw("]");
+        }
+        try o.raw("],\"runs\":[");
+        for (sv.runs[0..sv.runs_len], 0..) |r, k| {
+            if (k > 0) try o.raw(",");
+            try o.raw("{\"id\":");
+            try o.text(r.id[0..r.id_len]);
+            try o.raw(",\"status\":");
+            try o.text(@tagName(r.status));
+            try o.raw(",\"handler\":");
+            try o.text(r.handler[0..r.handler_len]);
+            if (r.status == .suspended) {
+                try o.raw(",\"wait\":");
+                try o.text(r.wait[0..r.wait_len]);
+                if (r.has_until) {
+                    try o.raw(",\"until\":");
+                    try o.instant(gpa, .{ .seconds = r.until_seconds, .nanos = r.until_nanos });
+                }
+                try o.raw(",\"calls\":[");
+                for (r.calls[0..r.calls_len], 0..) |c, m| {
+                    if (m > 0) try o.raw(",");
+                    try o.text(c.data[0..c.len]);
+                }
+                try o.raw("]");
+            }
+            try o.raw("}");
+        }
+        try o.raw("],\"mailbox\":[");
+        for (sv.mailbox[0..sv.mailbox_len], 0..) |mv, k| {
+            if (k > 0) try o.raw(",");
+            try o.raw("{");
+            if (mv.delivery_len > 0) {
+                try o.raw("\"delivery\":");
+                try o.text(mv.delivery[0..mv.delivery_len]);
+                try o.raw(",");
+            }
+            if (mv.from_len > 0) {
+                try o.raw("\"from\":");
+                try o.text(mv.from[0..mv.from_len]);
+                try o.raw(",");
+            }
+            try o.raw("\"message\":{\"name\":");
+            try o.text(mv.message.name.?[0..mv.message.name_len]);
+            try o.raw(",\"args\":[");
+            const args: []const *Value = if (mv.message.args_len == 0) &.{} else mv.message.args.?[0..mv.message.args_len];
+            for (args, 0..) |v, m| {
+                if (m > 0) try o.raw(",");
+                try o.value(v);
+            }
+            try o.raw("]}}");
+        }
+        try o.raw("]}");
+    }
+    try o.raw("]");
+}
+
+/// `grants`: each name the Script keeps, with its kept Operations, as the
+/// reply's fields.
+fn grantsReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const script = scriptOf(entry, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    var views: [*]const talk.ScriptGrant = undefined;
+    const n = Direct.scriptGrants(script, &views);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    for (views[0..n], 0..) |g, k| {
+        if (k > 0) o.raw(",") catch {};
+        o.text(g.name[0..g.name_len]) catch {};
+        o.raw(":[") catch {};
+        for (g.operations[0..g.operations_len], 0..) |op, m| {
+            if (m > 0) o.raw(",") catch {};
+            o.text(op.data[0..op.len]) catch {};
+        }
+        o.raw("]") catch {};
+    }
+    return finishOk(s, &o, entry);
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -2206,6 +2321,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
         return changeCodeReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "inspect")) {
+        return inspectReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "grants")) {
+        return grantsReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "counters")) {
         return countersReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "stop")) {
@@ -2695,4 +2814,57 @@ test "compile-library gives identity and needs, add-library serves a load, and r
     try std.testing.expect(replaced.object.get("reports").? == .array);
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{12}));
     try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{13}))).object.get("result").?.integer);
+}
+
+test "inspect shows variables, a suspended Run and the mailbox, and grants lists kept Operations" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"zap\",\"mode\":\"immediate\",\"result\":\"nothing\"}},{{\"name\":\"add\",\"mode\":\"immediate\",\"result\":\"nothing\"}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"script variable n = 7\\non nap x, queued\\n  wait 2 s\\nend nap\\n\"}}", .{ 4, grant.object.get("grant").?.integer }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"nap\",\"args\":[1]}}}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"nap\",\"args\":[2]}}}}", .{6}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{7}));
+    const seen = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8}));
+    const scripts = seen.object.get("scripts").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), scripts.len);
+    const view = scripts[0];
+    try std.testing.expectEqualStrings("s", view.object.get("name").?.string);
+    try std.testing.expect(view.object.get("disabledGrants") == null);
+    const vars = view.object.get("vars").?.array.items;
+    try std.testing.expectEqualStrings("n", vars[0].array.items[0].string);
+    try std.testing.expectEqual(@as(i64, 7), vars[0].array.items[1].integer);
+    // The second `queued` message's Run starts and parks behind the first.
+    const runs = view.object.get("runs").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), runs.len);
+    try std.testing.expectEqualStrings("suspended", runs[0].object.get("status").?.string);
+    try std.testing.expectEqualStrings("nap", runs[0].object.get("handler").?.string);
+    try std.testing.expectEqualStrings("2026-10-10T12:00:02Z", runs[0].object.get("until").?.string);
+    try std.testing.expectEqualStrings("parked", runs[1].object.get("status").?.string);
+    try std.testing.expect(runs[1].object.get("until") == null);
+    try std.testing.expectEqual(@as(usize, 0), view.object.get("mailbox").?.array.items.len);
+    // Behind a Run a Fuel Slice preempted, a message waits in the mailbox.
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"t\",\"source\":\"on spin\\n  repeat 100 times\\n  end repeat\\nend spin\\non ping x\\nend ping\\n\"}}", .{11}));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"t\"}},\"message\":{{\"name\":\"spin\"}}}}", .{12}));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"t\"}},\"message\":{{\"name\":\"ping\",\"args\":[\"hi\"]}}}}", .{13}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\",\"fuelSlice\":5}}", .{14}));
+    const later = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{15}));
+    const t = later.object.get("scripts").?.array.items[1];
+    try std.testing.expectEqualStrings("preempted", t.object.get("runs").?.array.items[0].object.get("status").?.string);
+    const mailbox = t.object.get("mailbox").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), mailbox.len);
+    try std.testing.expectEqualStrings("d4", mailbox[0].object.get("delivery").?.string);
+    try std.testing.expect(mailbox[0].object.get("from") == null);
+    try std.testing.expectEqualStrings("ping", mailbox[0].object.get("message").?.object.get("name").?.string);
+    try std.testing.expectEqualStrings("hi", mailbox[0].object.get("message").?.object.get("args").?.array.items[0].string);
+    const grants = try okOf(try c.send("{{\"m\":\"grants\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{9}));
+    const ops = grants.object.get("api").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), ops.len);
+    try std.testing.expectEqualStrings("add", ops[0].string);
+    try std.testing.expectEqualStrings("zap", ops[1].string);
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"grants\",\"ref\":{d},\"group\":\"g\",\"script\":\"nobody\"}}", .{16})));
 }
