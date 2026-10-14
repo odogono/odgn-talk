@@ -7,7 +7,8 @@ defmodule TalkHost.Artifacts do
   def root, do: Path.expand("../../..", File.cwd!())
 
   @doc "The reactor module, the Go build by default; TALK_WASM selects another (issue #635)."
-  def wasm, do: System.get_env("TALK_WASM") || Path.join(root(), ".cache/messagelayer.wasm")
+  def wasm, do: System.get_env("TALK_WASM") || go_wasm()
+  defp go_wasm, do: Path.join(root(), ".cache/messagelayer.wasm")
   def sidecar, do: Path.join(root(), ".cache/messagelayer")
   @doc "The minimal C Host, built by bench/message-layer-c/run.sh."
   def c_host, do: Path.join(root(), "bench/message-layer-c/out/host")
@@ -21,7 +22,7 @@ defmodule TalkHost.Artifacts do
       "-buildmode=c-shared",
       "-ldflags=-s -w",
       "-o",
-      out.(wasm()),
+      out.(go_wasm()),
       "./cmd/messagelayer-wasi"
     ])
 

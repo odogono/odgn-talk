@@ -1,0 +1,288 @@
+{
+  "wasmtime": "49.0.2",
+  "compile_ms": 1078.6875416524708,
+  "instantiate_initialize_hello_ms": [
+    1.2622500071302056,
+    1.1489583412185311,
+    1.1232499964535236,
+    1.1013750918209553,
+    1.1157083790749311,
+    1.1050415923818946,
+    1.0930834105238318,
+    1.0970833245664835
+  ],
+  "instances": 8,
+  "rss_before_bytes": 656048128,
+  "rss_with_instances_bytes": 706641920,
+  "rss_delta_per_instance_bytes": 6324224,
+  "linear_memory_per_instance_bytes": 7340032,
+  "core_versions": {
+    "core": "go/0.1.0",
+    "costModel": "0",
+    "language": "1.0-rc.3",
+    "saveFormat": "go/7",
+    "unicode": "18.0.0"
+  },
+  "idle_pump_us": [
+    23.884083377197385,
+    27.31737494468689,
+    24.59204162005335,
+    24.6620416874066,
+    26.727208402007818,
+    22.378958179615438,
+    26.40929166227579
+  ],
+  "empty_handler_pump_us": [
+    61.97841349057853,
+    62.30891856830567,
+    62.15566978789866,
+    61.41974811907858,
+    61.23504461720586,
+    58.82274801842868,
+    58.819082216359675
+  ],
+  "calls_per_pump": 1000,
+  "number": [
+    31.152458395808935,
+    31.00829164031893,
+    27.64037495944649,
+    28.86504167690873,
+    30.765874893404543,
+    31.098541687242687,
+    29.40487500745803
+  ],
+  "nested_value": [
+    70.22875000257045,
+    72.02162500470877,
+    70.6602083519101,
+    71.78854173980653,
+    71.71300007030368,
+    72.62174994684756,
+    71.7008749488741
+  ],
+  "thresholds": {
+    "sizes": {
+      "runs": 3,
+      "samples": 5000,
+      "warmup": 500,
+      "instances": 5000,
+      "memory": 20
+    },
+    "call": {
+      "n": 5000,
+      "p50": 42.3333840444684,
+      "p99": 226.6668016090989,
+      "mean": 49.9824499245733,
+      "min": 35.87489482015371,
+      "max": 619.3333538249135,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 42.58332774043083,
+          "p99": 204.58328071981668,
+          "mean": 49.9086334835738,
+          "min": 36.33333835750818,
+          "max": 697.2082192078233
+        },
+        {
+          "n": 5000,
+          "p50": 42.29170735925436,
+          "p99": 237.08341177552938,
+          "mean": 49.81690836139023,
+          "min": 36.5417217835784,
+          "max": 632.541603408754
+        },
+        {
+          "n": 5000,
+          "p50": 42.3333840444684,
+          "p99": 226.6668016090989,
+          "mean": 49.9824499245733,
+          "min": 35.87489482015371,
+          "max": 619.3333538249135
+        }
+      ]
+    },
+    "pump": {
+      "n": 5000,
+      "p50": 69.25000343471766,
+      "p99": 365.5834589153528,
+      "mean": 79.79985068086535,
+      "min": 60.08334457874298,
+      "max": 769.1666251048446,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 69.25000343471766,
+          "p99": 365.5834589153528,
+          "mean": 79.79985068086535,
+          "min": 60.08334457874298,
+          "max": 769.1666251048446
+        },
+        {
+          "n": 5000,
+          "p50": 69.20844316482544,
+          "p99": 372.0000386238098,
+          "mean": 80.25939834769815,
+          "min": 59.249927289783955,
+          "max": 670.5416599288583
+        },
+        {
+          "n": 5000,
+          "p50": 69.6249771863222,
+          "p99": 365.8331697806716,
+          "mean": 79.91755886469036,
+          "min": 61.66682578623295,
+          "max": 688.7917406857014
+        }
+      ]
+    },
+    "instantiation": {
+      "n": 5000,
+      "p50": 931.750051677227,
+      "p99": 1115.9582063555717,
+      "mean": 949.9514834489673,
+      "min": 896.29169087857,
+      "max": 2785.62493622303,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 937.458244152367,
+          "p99": 1090.3750080615282,
+          "mean": 952.7092317817733,
+          "min": 898.958300240338,
+          "max": 2034.9165424704552
+        },
+        {
+          "n": 5000,
+          "p50": 931.750051677227,
+          "p99": 1115.9582063555717,
+          "mean": 949.9514834489673,
+          "min": 896.29169087857,
+          "max": 2785.62493622303
+        },
+        {
+          "n": 5000,
+          "p50": 928.6249987781048,
+          "p99": 1077.958382666111,
+          "mean": 941.3042180240154,
+          "min": 895.416596904397,
+          "max": 1392.4167724326253
+        }
+      ]
+    },
+    "memory": {
+      "instances": 20,
+      "medianBytes": 16515072,
+      "maxBytes": 16515072
+    }
+  },
+  "fault_checks": {
+    "spin": {
+      "alloc": 0,
+      "at": {
+        "col": 3,
+        "handler": "spin",
+        "line": 5,
+        "pc": 11,
+        "unit": "faults"
+      },
+      "delivery": "d8017",
+      "fuel": 5000,
+      "handler": "spin",
+      "kind": "run end",
+      "limit": "fuel",
+      "outcome": "limit fault",
+      "run": "faults/r1",
+      "script": "faults"
+    },
+    "boom": {
+      "alloc": 48,
+      "at": {
+        "col": 3,
+        "handler": "boom",
+        "line": 9,
+        "pc": 16,
+        "unit": "faults"
+      },
+      "delivery": "d8037",
+      "error": {
+        "code": "deliberate",
+        "data": {
+          "at": {
+            "unit": "faults",
+            "handler": "boom",
+            "line": 9,
+            "column": 3
+          }
+        },
+        "message": ""
+      },
+      "fuel": 19,
+      "handler": "boom",
+      "kind": "run end",
+      "outcome": "errored",
+      "run": "faults/r11",
+      "script": "faults"
+    },
+    "dive": {
+      "alloc": 3184,
+      "at": {
+        "col": 10,
+        "handler": "down",
+        "line": 2,
+        "pc": 5,
+        "unit": "faults"
+      },
+      "delivery": "d8057",
+      "fuel": 2791,
+      "handler": "dive",
+      "kind": "run end",
+      "limit": "depth",
+      "outcome": "limit fault",
+      "run": "faults/r21",
+      "script": "faults"
+    },
+    "script_faults_checked": 30,
+    "hostile_frames_checked": 5,
+    "same_instance_healthy_after_each": true
+  },
+  "linear_memory_after_workloads_bytes": 25690112,
+  "payload": {
+    "sha256": "9851b3976cfdd0b8d6d0788b124b3acc1cc850e9151ce5275a850b94c0cca1b3",
+    "raw_bytes": 13068371,
+    "gzip_9_bytes": 3125324,
+    "brotli_11_bytes": 2199290,
+    "brotli_lgwin": 22
+  },
+  "provenance": {
+    "date_utc": "2026-10-14T08:29:31.230089+00:00",
+    "checkout_commit": "fd2f13be1a8964e180ef14b4e79c2b31ed1b7906",
+    "checkout_status": "M ../message-layer/elixir/lib/talk_host/artifacts.ex\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-go.json\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-go.md\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-zig.json\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-zig.md",
+    "go_source_status": "",
+    "reactor_revision": "fd2f13be1a8964e180ef14b4e79c2b31ed1b7906",
+    "host_sha256": "e5f899c59767318847cc4b54c0139c3de9285186ee53aac3a5d773d151397042",
+    "runner_sha256": "bb10df0a1311dd2bc0158a657e7a69ea0d1f364fd308071a132bd10083e84bab",
+    "metadata_sha256": "30890debdbc979898528ae9fb907bdec5af7d04eed2fd7ddcd989a3ec9bb8140",
+    "executable_sha256": "fee0e6c9795897678406d8f7290198b5bd1587962da201aad04ff43e7dcfe65b",
+    "cjson_c_sha256": "298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d",
+    "cjson_h_sha256": "25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "go": "go version go1.27.2 darwin/arm64",
+    "python": "3.15.0",
+    "zlib": "1.2.12",
+    "brotli": "brotli 1.2.0",
+    "cjson": "1.7.19",
+    "samples": 7,
+    "iterations": 1000,
+    "memory_backstop_bytes": 268435456,
+    "reactor_build_flags": "GOOS=wasip1 GOARCH=wasm -buildmode=c-shared -trimpath -buildvcs=false -ldflags=\"-s -w\"",
+    "cflags": "",
+    "ldflags": "",
+    "wasmtime_prefix": "/opt/homebrew/opt/wasmtime",
+    "threshold_decision": "The thresholds block is judged against #532 in docs/research/message-layer-measurements.md (#554); the rest is descriptive.",
+    "reactor_source_sha256": "a6474237abd606c2bc6fee5d9b445d3c21a4d431bc6385505e8bd335f44cf6d2"
+  }
+}
