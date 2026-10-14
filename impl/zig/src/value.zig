@@ -458,29 +458,36 @@ fn listGrowthAllocations(gpa: std.mem.Allocator) !void {
 /// A map in insertion order that retains each value and copies each key as
 /// NFC. A key duplicated after normalisation is refused.
 pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
-    var depth: u32 = 1;
-    for (pairs) |p| depth = @max(depth, p.value.depth + 1);
-    if (depth > max_depth) return error.TooDeep;
-    var out: std.ArrayList(Pair) = .empty;
-    errdefer {
-        for (out.items) |p| {
-            gpa.free(p.key);
-            p.value.release();
-        }
-        out.deinit(gpa);
-    }
+    const out = try gpa.alloc(Pair, pairs.len);
+    var initialized: usize = 0;
+    errdefer freePairs(gpa, out[0..initialized], out);
     for (pairs) |p| {
         if (!unicode.utf8.validate(p.key)) return error.InvalidValue;
         const key = try unicode.nfc(gpa, p.key);
         errdefer gpa.free(key);
-        for (out.items) |old| if (std.mem.eql(u8, old.key, key)) return error.InvalidValue;
-        try out.append(gpa, .{ .key = key, .value = p.value });
-        _ = p.value.retain();
+        for (out[0..initialized]) |old| if (std.mem.eql(u8, old.key, key)) return error.InvalidValue;
+        out[initialized] = .{ .key = key, .value = p.value.retain() };
+        initialized += 1;
     }
+    return mapOwned(gpa, out);
+}
+/// Releases the first `initialized` pairs of `storage`, then `storage`.
+fn freePairs(gpa: std.mem.Allocator, initialized: []const Pair, storage: []Pair) void {
+    for (initialized) |p| {
+        gpa.free(p.key);
+        p.value.release();
+    }
+    gpa.free(storage);
+}
+/// A map over valid, NFC and unique owned keys with retained values. Takes
+/// ownership of `pairs` only on success.
+fn mapOwned(gpa: std.mem.Allocator, pairs: []Pair) Error!*Value {
+    var depth: u32 = 1;
+    for (pairs) |p| depth = @max(depth, p.value.depth + 1);
+    if (depth > max_depth) return error.TooDeep;
+    const rank = try ownershipRank(.{ .map = pairs });
     const v = try gpa.create(Value);
-    errdefer gpa.destroy(v);
-    const rank = try ownershipRank(.{ .map = out.items });
-    v.* = .{ .allocator = gpa, .data = .{ .map = try out.toOwnedSlice(gpa) }, .depth = depth, .ownership_rank = rank };
+    v.* = .{ .allocator = gpa, .data = .{ .map = pairs }, .depth = depth, .ownership_rank = rank };
     return v;
 }
 /// A range that retains both ends, which must be numbers or compatible
@@ -579,20 +586,29 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
     const old = root.*;
     if (old.data != .map) return error.InvalidValue;
     const gpa = old.allocator;
-    const normalized = try text(gpa, key);
-    defer normalized.release();
-    var pairs: std.ArrayList(Pair) = .empty;
-    defer pairs.deinit(gpa);
-    try pairs.appendSlice(gpa, old.data.map);
-    var found = false;
-    for (pairs.items) |*p| if (std.mem.eql(u8, p.key, normalized.data.text)) {
-        p.value = item;
-        found = true;
+    if (!unicode.utf8.validate(key)) return error.InvalidValue;
+    const normalized = try unicode.nfc(gpa, key);
+    defer gpa.free(normalized);
+    var index: usize = old.data.map.len;
+    for (old.data.map, 0..) |p, i| if (std.mem.eql(u8, p.key, normalized)) {
+        index = i;
         break;
     };
-    if (!found) try pairs.append(gpa, .{ .key = normalized.data.text, .value = item });
-    const next = try map(gpa, pairs.items);
-    next.core_message = old.core_message and !std.mem.eql(u8, normalized.data.text, "message");
+
+    // Existing keys are already valid, NFC and unique, so copy their owned
+    // bytes without the external constructor's scans. Build privately so
+    // refusal cannot change the old root or children.
+    const pairs = try gpa.alloc(Pair, old.data.map.len + @intFromBool(index == old.data.map.len));
+    var initialized: usize = 0;
+    errdefer freePairs(gpa, pairs[0..initialized], pairs);
+    for (pairs, 0..) |*p, i| {
+        const source_key = if (i < old.data.map.len) old.data.map[i].key else normalized;
+        const child = if (i == index) item else old.data.map[i].value;
+        p.* = .{ .key = try gpa.dupe(u8, source_key), .value = child.retain() };
+        initialized += 1;
+    }
+    const next = try mapOwned(gpa, pairs);
+    next.core_message = old.core_message and !std.mem.eql(u8, normalized, "message");
     root.* = next;
     old.release();
 }
@@ -728,6 +744,77 @@ test "map copy-on-write and preserved insertion order" {
     try std.testing.expectEqualStrings("a", copy.data.map[0].key);
     try std.testing.expectEqualStrings("b", copy.data.map[1].key);
     try std.testing.expect(copy.get("a").? != copy);
+}
+
+fn mapUpdateAllocations(gpa: std.mem.Allocator) !void {
+    const one = try scalar(gpa, .nothing);
+    defer one.release();
+    var root = try map(gpa, &.{ .{ .key = "é", .value = one }, .{ .key = "tail", .value = one } });
+    defer root.release();
+    const snapshot = root.retain();
+    defer snapshot.release();
+    root.core_message = true;
+    try checkedMapSet(&root, "e\u{0301}", snapshot);
+    try std.testing.expectEqual(@as(usize, 2), root.data.map.len);
+    try std.testing.expectEqualStrings("é", root.data.map[0].key);
+    try std.testing.expectEqualStrings("tail", root.data.map[1].key);
+    try std.testing.expectEqual(snapshot, root.get("é").?);
+    try std.testing.expectEqual(one, snapshot.get("é").?);
+    try std.testing.expectEqual(@as(u32, 3), root.depth);
+    try std.testing.expect(root.ownership_rank > snapshot.ownership_rank);
+    try std.testing.expect(root.core_message);
+    const nested = try list(gpa, &.{root});
+    defer nested.release();
+    try checkedMapSet(&root, "nested", nested);
+    try std.testing.expectEqualStrings("nested", root.data.map[2].key);
+    try std.testing.expect(root.ownership_rank > nested.ownership_rank);
+    try checkedMapSet(&root, "message", one);
+    try std.testing.expect(!root.core_message);
+    const before = root;
+    try std.testing.expectError(error.InvalidValue, mapSet(&root, "\xff", one));
+    try std.testing.expectEqual(before, root);
+}
+
+fn checkedMapSet(root: **Value, key: []const u8, item: *Value) !void {
+    const old = root.*;
+    const old_references = old.references;
+    const item_references = item.references;
+    mapSet(root, key, item) catch |err| {
+        try std.testing.expectEqual(old, root.*);
+        try std.testing.expectEqual(old_references, old.references);
+        try std.testing.expectEqual(item_references, item.references);
+        return err;
+    };
+}
+
+test "Map writes normalize only incoming keys and preserve nested snapshots on refusal" {
+    try mapUpdateAllocations(std.testing.allocator);
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, mapUpdateAllocations, .{});
+}
+
+test "Map replacement recomputes depth and refuses an overdeep child atomically" {
+    const gpa = std.testing.allocator;
+    const leaf = try scalar(gpa, .nothing);
+    defer leaf.release();
+    var deep = leaf.retain();
+    defer deep.release();
+    for (1..max_depth) |_| {
+        const next = try list(gpa, &.{deep});
+        deep.release();
+        deep = next;
+    }
+    var root = try map(gpa, &.{.{ .key = "a", .value = leaf }});
+    defer root.release();
+    const before = root;
+    try std.testing.expectError(error.TooDeep, mapSet(&root, "a", deep));
+    try std.testing.expectError(error.TooDeep, mapSet(&root, "b", deep));
+    try std.testing.expectEqual(before, root);
+    try std.testing.expectEqual(leaf, root.get("a").?);
+    try std.testing.expect(root.get("b") == null);
+    try mapSet(&root, "a", root);
+    try std.testing.expectEqual(@as(u32, 3), root.depth);
+    try mapSet(&root, "a", leaf);
+    try std.testing.expectEqual(@as(u32, 2), root.depth);
 }
 
 /// Objects are made by a Group, not a Host value constructor. These identity

@@ -14,12 +14,31 @@ static double now(void) {
     if (clock_gettime(CLOCK_MONOTONIC, &t)) exit(1);
     return (double)t.tv_sec * 1e9 + t.tv_nsec;
 }
+/* Opt-in allocation probe, separate from default-allocator timings. Counts
+ * Group requests only; process-owned Host values and returned bytes are outside
+ * this allocator. Frees do not subtract from cumulative requested bytes. */
+static size_t host_bytes, host_allocs;
+static void *count_alloc(void *context, size_t size, size_t alignment) {
+    (void)context;
+    void *ptr = NULL;
+    if (posix_memalign(&ptr, alignment < sizeof(void *) ? sizeof(void *) : alignment, size)) return NULL;
+    host_bytes += size;
+    ++host_allocs;
+    return ptr;
+}
+static void count_free(void *context, void *ptr, size_t size, size_t alignment) {
+    (void)context; (void)size; (void)alignment;
+    free(ptr);
+}
+static const talk_allocator counting = {.alloc = count_alloc, .free = count_free};
+static bool count_allocations;
 static talk_group *load(talk_core *core, const char *source, talk_script **script) {
     static unsigned serial;
     char name[64];
     snprintf(name, sizeof name, "load%u", ++serial);
     talk_group *group;
     talk_group_options go = {.name = "bench", .name_len = 5};
+    if (count_allocations) go.allocator = &counting;
     CHECK(talk_new_group(core, &go, &group));
     talk_limits limits = {.fuel_per_run = 1000000000, .alloc_per_run = 268435456, .call_depth = 1000};
     talk_load_options opts = {.name = name, .name_len = strlen(name), .source = source, .source_len = strlen(source), .limits = &limits};
@@ -81,12 +100,20 @@ int main(int argc, char **argv) {
     bool smoke = atoi(argv[6]) != 0;
     if (count < 1) return 1;
     int64_t n = strtoll(argv[2], NULL, 10), slice = strtoll(argv[4], NULL, 10);
+    count_allocations = getenv("NORTHTALK_BENCH_ALLOCATIONS") != NULL;
     talk_core *core = talk_new();
     if (!core) return 1;
     talk_script *script;
     talk_group *group = load(core, source, &script);
+    size_t bytes_before = host_bytes, allocs_before = host_allocs;
     accounting checked = run(group, script, n, slice, argv[3]);
-    printf("{\"fuel\":%" PRId64 ",\"logicalAlloc\":%" PRId64 ",\"run\":[", checked.fuel, checked.alloc);
+    printf("{\"fuel\":%" PRId64 ",\"logicalAlloc\":%" PRId64, checked.fuel, checked.alloc);
+    if (count_allocations) {
+        talk_memory memory;
+        talk_group_memory(group, &memory);
+        printf(",\"hostBytes\":%zu,\"hostAllocs\":%zu,\"groupPeak\":%zu", host_bytes - bytes_before, host_allocs - allocs_before, memory.peak);
+    }
+    printf(",\"run\":[");
     for (int sample = 0; sample < count; ++sample) {
         double start = now(), elapsed;
         unsigned iterations = 0;

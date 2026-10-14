@@ -147,14 +147,13 @@ def instance_memory(engine, module, source="on ping\nend ping\n"):
     return {"linearMemory": size, "group": h.group_memory(group), "fuel": fuel}
 
 
-def containment(engine, module):
-    """A Script that doubles a text past the Group's physical cap: the Pump
-    is refused, and the instance goes on to run a fresh Group."""
+def contained(engine, module, cap, name, source):
+    """Run `source` until the Pump is refused at the Group's physical `cap`,
+    then show the instance goes on to run a fresh Group."""
     h = Host(engine, module, memory_limit=64 << 20)
     core = h.call("talk_new") & 0xFFFFFFFF
-    group = h.new_group(core, cap=1 << 20)
-    source = 'script variable s\non grow\n  put "x" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n'
-    code, script = h.load(group, "hog", source)
+    group = h.new_group(core, cap=cap)
+    code, script = h.load(group, name, source)
     assert code == OK, code
     assert h.deliver(script, "grow") == OK
     code, _ = h.pump(group, 1791633600)
@@ -168,6 +167,21 @@ def containment(engine, module):
     assert h.deliver(script, "ping") == OK
     assert h.pump(fresh, 1791633600)[0] == OK
     return memory
+
+
+def containment(engine, module):
+    """A Script that doubles a text past the Group's physical cap."""
+    source = 'script variable s\non grow\n  put "x" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n'
+    return contained(engine, module, 1 << 20, "hog", source)
+
+
+def map_containment(engine, module):
+    """Map construction uses the Group allocator and cannot exceed its cap."""
+    source = ('on grow\n  put {} into values\n'
+              '  repeat for each i in 1..1000\n'
+              '    put i into the (i as text) of values\n'
+              '  end repeat\nend grow\n')
+    return contained(engine, module, 64 << 10, "maps", source)
 
 
 def large_loads(engine, module):
@@ -340,6 +354,21 @@ def message_layer(engine, module):
     done = h.send("op-result", is_result=True, result=40, charged=3)["ok"]
     ends = [r for r in done["reports"] if r["kind"] == "run end"]
     assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == 41, done
+    h.ok(
+        "load", group="g", name="maps",
+        source=('on go\n  put {"é": 1, tail: 2} into values\n'
+                '  put values into original\n  put values into values\'s self\n'
+                '  put 3 into the ("e\u0301") of values\n'
+                '  return [the keys of values, original, values]\nend go\n'),
+    )
+    h.ok("request", group="g", to={"script": "maps"}, message={"name": "go"})
+    mapped = h.ok("pump", group="g", now=now)
+    ends = [r for r in mapped["reports"] if r["kind"] == "run end"]
+    assert len(ends) == 1 and ends[0]["outcome"] == "completed", mapped
+    assert ends[0]["result"] == [
+        ["é", "tail", "self"], {"é": 1, "tail": 2},
+        {"é": 3, "tail": 2, "self": {"é": 1, "tail": 2}},
+    ], mapped
     h.ok("deliver", group="g", to={"script": "s"}, message={"name": "spin"})
     spun = [r for r in h.ok("pump", group="g", now=now)["reports"] if r["kind"] == "run end"]
     assert len(spun) == 1 and spun[0]["outcome"] == "limit fault" and spun[0]["limit"] == "fuel", spun
@@ -429,6 +458,7 @@ def main():
     # use, as the Go reactor's #585 found costly.
     with_stdlib = instance_memory(engine, module, 'use padLeft from text\non ping\n  put padLeft("7", 3, "0") into x\nend ping\n')
     refused = containment(engine, module)
+    maps = map_containment(engine, module)
     nesting = deep(engine, module)
     loads = large_loads(engine, module)
     messages = message_layer(engine, module)
@@ -452,6 +482,7 @@ def main():
                 "instance": measured,
                 "instanceWithStdlib": with_stdlib,
                 "containment": refused,
+                "mapContainment": maps,
                 "nesting": nesting,
                 "largeLoads": loads,
                 "messageLayer": messages,

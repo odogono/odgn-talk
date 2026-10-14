@@ -29,6 +29,10 @@ covers 39 workloads on an Apple M5, with Zig on 30 of them, including all 21
 Peer Language workloads. Its [JSON](results/2026-10-14-darwin-arm64-apple-m5.json)
 records 276 measurements with matching Fuel across the overlapping Cores.
 
+The [Zig Map write measurements](results/2026-10-14-zig-map-writes.md) record
+three paired before/after runs, construction scaling and Group allocation
+probes for [#876](https://github.com/odogono/odgn-talk/issues/876).
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
@@ -54,7 +58,24 @@ one untimed validation Run first. Every timed Run checks its output and accounti
 Fuel must agree with the TS and Go Cores. Load uses a fresh Script name each time,
 with Group destruction outside the Load timer. Run includes Delivery, pumping,
 report collection and result display on an already loaded Script. Native memory
-allocation is not measured. Smoke timings are not performance measurements.
+allocation is not measured by the default suite. Smoke timings are not
+performance measurements.
+
+For a focused Map construction size sweep, build the native Host as
+`ts/src/measure-zig.ts` does, then run:
+
+```sh
+python3 bench/zig/map-scaling.py .cache/bench-zig/host --count 5
+```
+
+This checks output, Fuel and logical allocation at 100, 300, 1,000 and 3,000
+entries under the Host's existing budgets. Timings use the default allocator;
+separate untimed probes set `NORTHTALK_BENCH_ALLOCATIONS=1` to use a counting
+Host allocator. `hostBytes` and `hostAllocs` count cumulative Group allocation
+requests during one Run, excluding Load and process-owned Host values/returned
+bytes; frees do not subtract. `groupPeak` is the Group's physical high-water
+mark, including Load. These figures describe this allocator's requests, not
+resident memory or allocation by the default Zig allocator.
 
 ## Workloads
 
