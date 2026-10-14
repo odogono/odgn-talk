@@ -1901,6 +1901,12 @@ pub const direct = struct {
     pub const groupObject = talk_group_object;
     pub const setParent = talk_set_parent;
     pub const dispose = talk_dispose;
+    pub const scriptCounters = talk_script_counters;
+    pub const scriptStop = talk_script_stop;
+    pub const scriptCancelRun = talk_script_cancel_run;
+    pub const scriptRewindRun = talk_script_rewind_run;
+    pub const scriptRevoke = talk_script_revoke;
+    pub const cancelDelivery = talk_cancel_delivery;
     pub const ownedBytesRelease = talk_owned_bytes_release;
     pub const valueRelease = talk_value_release;
 };
