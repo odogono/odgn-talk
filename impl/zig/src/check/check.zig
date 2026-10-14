@@ -475,6 +475,8 @@ const Checker = struct {
     /// Handler names, the first word of each selector.
     handler_names: std.StringHashMapUnmanaged(u32) = .empty,
     imports: std.StringHashMapUnmanaged(Import) = .empty,
+    /// Inherited message names remain separate from inherited value names.
+    inherited_handlers: std.StringHashMapUnmanaged(Import) = .empty,
     /// In an initialiser: the Constants declared so far.
     constants_above: u32 = 0,
     /// The first offending token of the initialiser being checked.
@@ -526,7 +528,10 @@ const Checker = struct {
         for (c.context.inherited) |x| {
             if (x.variable) {
                 try c.variables.put(c.a, x.name, @intCast(c.variables.count()));
-            } else try c.imports.put(c.a, x.name, .{ .decl = std.math.maxInt(u32), .name = 0, .export_ = x.export_ });
+            } else {
+                const names = if (x.export_.kind == .handler) &c.inherited_handlers else &c.imports;
+                try names.put(c.a, x.name, .{ .decl = std.math.maxInt(u32), .name = 0, .export_ = x.export_ });
+            }
         }
         // The unit's names, and their clashes.
         for (decls, 0..) |*d, i| {
@@ -625,10 +630,7 @@ const Checker = struct {
         var it = c.imports.iterator();
         while (it.next()) |e| {
             const name = e.key_ptr.*;
-            // An extension's Handler and one its Script's other units hold
-            // share the Script's Handlers, told apart by Selector.
-            const inherited_handler = e.value_ptr.decl == std.math.maxInt(u32) and if (e.value_ptr.export_) |x| x.kind == .handler else false;
-            const handler_clash = c.handler_names.contains(name) and !inherited_handler;
+            const handler_clash = c.handler_names.contains(name);
             if (c.functions.contains(name) or c.constants.contains(name) or c.variables.contains(name) or handler_clash or c.objectIndex(name) != null) {
                 try c.report(.name_clash, e.value_ptr.name);
             }
@@ -1007,7 +1009,7 @@ const Checker = struct {
         }
         if (c.variables.get(name)) |v| return .{ .variable = v };
         if (c.constants.get(name)) |k| return .{ .constant = k };
-        if (c.imports.get(name)) |im| return .{ .imported = im.decl };
+        if (c.importByName(name)) |im| return .{ .imported = im.decl };
         if (c.functions.get(name)) |f| return .{ .function = f.decl };
         if (c.handler_names.get(name)) |h| return .{ .handler = h };
         if (c.objectIndex(name)) |o| return .{ .object = o };
@@ -1333,8 +1335,12 @@ const Checker = struct {
         if (waits) try c.intrinsic(s, first, w);
     }
 
+    fn importByName(c: *Checker, name: []const u8) ?Import {
+        return c.imports.get(name) orelse c.inherited_handlers.get(name);
+    }
+
     fn importedHandler(c: *Checker, sel: []const u8) ?Export {
-        const im = c.imports.get(sel) orelse return null;
+        const im = c.inherited_handlers.get(sel) orelse c.imports.get(sel) orelse return null;
         const ex = im.export_ orelse return null;
         return if (ex.kind == .handler) ex else null;
     }
@@ -1809,7 +1815,7 @@ const Checker = struct {
             .handler, .builtin_function => try c.report(.not_a_value, t),
             .imported => |d| {
                 _ = d;
-                if (c.imports.get(c.text(t))) |im| if (im.export_) |ex| if (ex.kind == .handler) try c.report(.not_a_value, t);
+                if (c.importByName(c.text(t))) |im| if (im.export_) |ex| if (ex.kind == .handler) try c.report(.not_a_value, t);
             },
             else => {},
         }
@@ -2022,7 +2028,7 @@ const Checker = struct {
                 try c.site(s, .function_style, call.name, name, waits, .{});
             },
             .imported => {
-                const ex = c.imports.get(name).?.export_;
+                const ex = c.importByName(name).?.export_;
                 if (ex) |x| {
                     if (x.kind == .function and (call.args.len < x.required or call.args.len > x.total)) try c.report(.wrong_argument_count, call.name);
                     if (x.may_suspend) try c.report(.cant_suspend_here, call.name);
@@ -2313,6 +2319,31 @@ test "Built-in calls check arity but shadowing variables remain dynamic" {
         \\  return [min(), max(1, 2), round(), given: min(1, 2)]
         \\end t
     , .{}, "");
+}
+
+test "extensions preserve inherited Handler and value lookup in either order" {
+    const variable: Inherited = .{ .name = "foo", .variable = true };
+    const constant: Inherited = .{ .name = "bar", .unit = "@s", .export_ = .{ .name = "bar", .kind = .constant } };
+    const foo: Inherited = .{ .name = "foo", .unit = "@s", .export_ = .{ .name = "foo", .kind = .handler } };
+    const bar: Inherited = .{ .name = "bar", .unit = "@s", .export_ = .{ .name = "bar", .kind = .handler, .may_suspend = true } };
+    for ([_][4]Inherited{ .{ variable, constant, foo, bar }, .{ foo, bar, variable, constant } }) |names| {
+        const context: Context = .{ .inherited = &names };
+        try expectDiagnostics("constant copy = bar\non later\nfoo\nbar and wait\nreturn it + foo + copy\nend\n", context, "");
+        try expectDiagnostics("on later\nbar\nend\n", context, "missing and wait at 2:1\n");
+        try expectDiagnostics("on later\nfoo and wait\nend\n", context, "needless and wait at 2:1\n");
+        try expectDiagnostics("function f\nbar and wait\nend\n", context, "can't suspend here at 2:1\n");
+    }
+}
+
+test "Library Imports still clash with local Handlers" {
+    for ([_]Export{
+        .{ .name = "foo", .kind = .constant },
+        .{ .name = "foo", .kind = .handler },
+    }) |export_| {
+        const context: Context = .{ .libraries = &.{.{ .name = "lib", .exports = &.{export_} }} };
+        try expectDiagnostics("use foo from lib\non foo\nend\n", context, "name clash at 1:5\n");
+        try expectDiagnostics("on foo\nend\nuse foo from lib\n", context, "name clash at 3:5\n");
+    }
 }
 
 test "names resolve, and unknown ones are reported" {

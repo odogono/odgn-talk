@@ -1,0 +1,11 @@
+# Shared Handler/value names survive extension linking in both declaration
+# orders; calls, suspension checks, name reuse and Save/Restore (#830).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "s"
+source = "s.talk"

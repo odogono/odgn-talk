@@ -23,9 +23,10 @@ tests and check commands.
 
 A local Handler may share a Script Variable's or Constant's name in either
 declaration order. Value references read the variable or Constant; Command
-Calls and Deliveries reach the Handler. Extensions inheriting these shared
-names currently fail or lose a binding; [#830](https://github.com/odogono/odgn-talk/issues/830)
-tracks preserving both lookups when extending.
+Calls and Deliveries reach the Handler. Extensions preserve both inherited
+lookups and Handler suspension checking, including after Save/Restore. An
+extension that redeclares an existing name is still refused with `name reused`;
+Library Import clashes retain chapter 7's rules.
 
 `it` is a body local. In a Constant or Script Variable initialiser or a
 parameter default, each unbound `it` reports `unknown name`, alongside

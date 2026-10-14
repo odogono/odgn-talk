@@ -298,6 +298,7 @@ recovery-offers/cleanup-restore
 recovery-offers/costs
 recovery-offers/nested
 reload/decomposed-source
+reload/extend-shared-names
 reload/extend-units
 reload/extension-state-cap
 reload/function-staleness
