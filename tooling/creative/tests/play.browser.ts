@@ -85,6 +85,114 @@ export const runBrowserTests = async () => {
     'Revisit lost visual state or reused the wrong click listener',
   );
   toggle.click();
+  button.script =
+    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Finished"\nend click';
+  input.script =
+    'on pointerEnter\n set the text of me to "Responsive"\nend pointerEnter';
+  toggle.click();
+  readerButton().click();
+  await until(() => readerButton().textContent === 'Waiting');
+  document
+    .querySelector('#reader [data-element="input1"]')!
+    .dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+  await until(
+    () =>
+      document.querySelector('#reader [data-element="input1"]')!.textContent ===
+      'Responsive',
+  );
+  assert(
+    readerButton().textContent === 'Waiting',
+    'Wait blocked other Scripts',
+  );
+  await until(() => readerButton().textContent === 'Finished');
+  toggle.click();
+
+  // The Page and Element Runs must be cancelled, while the Project Run lives.
+  project.script =
+    'on startPlay\n wait 400 ms\n set the background of page2 to "rgb(1, 2, 3)"\nend startPlay\non leaked\n set the height of page2 to 999\nend leaked';
+  project.pages[0]!.script =
+    'on openPage\n wait 200 ms\n send leaked to project\nend openPage';
+  button.script =
+    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\n send leaked to project\nend click';
+  input.script = 'on click\n tell pages to show page2\nend click';
+  toggle.click();
+  readerButton().click();
+  await until(() => readerButton().textContent === 'Waiting');
+  document
+    .querySelector<HTMLElement>('#reader [data-element="input1"]')!
+    .click();
+  await until(() => !document.querySelector('#reader [data-element="input1"]'));
+  await until(
+    () =>
+      document.querySelector<HTMLElement>('#reader .page')!.style.background ===
+      'rgb(1, 2, 3)',
+  );
+  assert(
+    document.querySelector<HTMLElement>('#reader .page')!.style.height !==
+      '999px',
+    'Departed Page or Element wait sent a late message',
+  );
+  readerButton().click();
+  await until(
+    () => !!document.querySelector('#reader [data-element="input1"]'),
+  );
+  assert(readerButton().textContent === 'Waiting', 'Departed Element wait ran');
+  toggle.click();
+
+  project.script =
+    'on startPlay\n wait 200 ms\n set the height of page1 to 999\nend startPlay';
+  project.pages[0]!.script =
+    'on openPage\n wait 200 ms\n set the background of me to "rgb(1, 2, 3)"\nend openPage';
+  button.script =
+    'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\nend click';
+  const waitingOriginal = structuredClone(project);
+  for (const action of ['Stop', 'Escape', 'Edit']) {
+    toggle.click();
+    readerButton().click();
+    await until(() => readerButton().textContent === 'Waiting');
+    if (action === 'Edit') {
+      toggle.click();
+    } else if (action === 'Escape') {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+    } else {
+      [...document.querySelectorAll<HTMLButtonElement>('#menu button')]
+        .find(b => b.textContent === 'Stop')!
+        .click();
+    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+    if (action === 'Edit') {
+      assert(!shell.readOnly, 'Wait blocked return to Edit');
+      assert(
+        document.querySelector<HTMLElement>('#reader')!.hidden,
+        'Play visible',
+      );
+      assert(
+        document.querySelector('#page [data-element="button1"]')!
+          .textContent === 'Button',
+        'Wait changed Edit after returning',
+      );
+    } else {
+      assert(
+        readerButton().textContent === 'Waiting',
+        `${action} leaked Element wait`,
+      );
+      const page = document.querySelector<HTMLElement>('#reader .page')!;
+      assert(page.style.height !== '999px', `${action} leaked Project wait`);
+      assert(
+        page.style.background !== 'rgb(1, 2, 3)',
+        `${action} leaked Page wait`,
+      );
+      toggle.click();
+    }
+    assert(
+      JSON.stringify(project) === JSON.stringify(waitingOriginal),
+      `${action} allowed a wait to change authored data`,
+    );
+  }
+  project.script = '';
+  project.pages[0]!.script = '';
   button.script = 'on click\n repeat forever\n end repeat\nend click';
   toggle.click();
   readerButton().click();
@@ -126,6 +234,9 @@ export const runBrowserTests = async () => {
       'reader textChanged',
       'authored isolation',
       'fresh session',
+      'wait resumes visibly without blocking reader input or other Scripts',
+      'navigation cancels Page and Element waits while Project waits continue',
+      'Stop, Esc and Back to Edit cancel waits without late effects',
       'Esc stops runaway',
       'return to Edit',
       'error link selects Script line',

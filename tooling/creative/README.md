@@ -286,6 +286,38 @@ use the last destination. The Pages strip stays hidden during Play.
 Only the current Page's and its Elements' Scripts run alongside the Project
 Script. The `elements` and `sound` Grants are not implemented yet.
 
+### Delays with `wait`
+
+Use `wait` in a handler to pause its Run before changing what the reader sees:
+
+```talk
+on click
+  set the label of me to "Wait for it…"
+  wait 3 s
+  set the label of me to "Ready!"
+end click
+```
+
+The browser schedules the next Pump from the Core's earliest deadline; a wait
+does not block reader input, other handlers or other Scripts. A handler can
+repeat an effect by waiting and then sending itself another message. No timer
+Capability or additional Grant is needed.
+
+Leaving a Page cancels its Page and Element Scripts' pending waits, including
+`closePage` if it exceeds the one-second navigation deadline. The Project
+Script's waits keep their deadlines across navigation. Stop, Escape and Back
+to Edit cancel every Script's waits, so none can produce a late property write
+or message. Revisiting a Page reloads its Scripts; returning to Play starts a
+fresh session. Timers are subject to browser suspension and may resume later
+than their deadline.
+
+Play unit tests use an explicit Clock to check exact deadlines, concurrent
+handlers, Page cancellation and Project continuity. The browser checks below
+exercise visible delayed writes and cancellation through navigation, Stop,
+Escape and Back to Edit with the real scheduler.
+
+### Browser checks
+
 Browser regression checks run on a dedicated page without `main.js`:
 
 ```sh
