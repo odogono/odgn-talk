@@ -44,6 +44,9 @@ class Host:
         return self.read_reply(self.exports["talk_send"](self.store, length))
 
     def read_reply(self, packed):
+        return json.loads(self.raw_reply(packed))
+
+    def raw_reply(self, packed):
         # wasmtime represents i64 as signed; unpack the underlying u64 bits.
         packed &= (1 << 64) - 1
         pointer, size = packed >> 32, packed & 0xFFFFFFFF
@@ -51,13 +54,16 @@ class Host:
         assert pointer + size <= self.memory.data_len(self.store)
         # Copy the reply before another export can replace it. Memory.read/write
         # fetch the current memory base, including after a Go memory.grow.
-        return json.loads(self.memory.read(self.store, pointer, pointer + size))
+        return bytes(self.memory.read(self.store, pointer, pointer + size))
 
     def frame(self, data):
+        return json.loads(self.frame_raw(data))
+
+    def frame_raw(self, data):
         pointer = self.exports["talk_buffer"](self.store, len(data)) & 0xFFFFFFFF
         assert pointer > 0
         self.memory.write(self.store, data, pointer)
-        return self.reply(len(data))
+        return self.raw_reply(self.exports["talk_send"](self.store, len(data)))
 
     def send(self, message, /, *, is_result=False, **fields):
         if not is_result:
@@ -118,35 +124,37 @@ def check(engine, module):
     assert h.frame(b"{")["err"]["kind"] == "protocol error"
     assert h.ok("add", a=20, b=22)["value"] == 42
 
-    # Hostile nesting must be refused before it exhausts wasmtime's stack.
-    # A good request after each refusal proves the same instance remains usable.
+    # Frames and Values have no transport nesting cap. Use raw reply bytes
+    # beyond Python's own JSON nesting ceiling; do not mistake a Host decoder
+    # limit for a reactor refusal. Error data must preserve the entire Value.
     for opening, closing in (("[", "]"), ('{"a":', "}")):
-        for depth in (63, 64, 100_000):
+        for depth in (63, 64, 10_000, 100_000):
             value = opening * depth + "1" + closing * depth
             frame = ('{"m":"hello","ref":1,"protocol":1,"ignored":' + value + '}').encode()
-            reply = h.frame(frame)
-            if depth == 63:  # The envelope is the 64th level.
-                assert "ok" in reply, reply
-                frame = ('{"m":"add","ref":1,"a":' + value + ',"b":1}').encode()
-                decoded = h.frame(frame)  # Decode the value, then refuse its kind.
-                assert decoded["ok"]["fail"]["code"] == "wrong kind", decoded
-            else:
-                assert reply["err"]["kind"] == "protocol error", reply
+            assert "ok" in h.frame(frame)
+            frame = ('{"m":"add","ref":1,"a":' + value + ',"b":1}').encode()
+            reply = h.frame_raw(frame)
+            assert b'"wrong kind"' in reply and value.encode() in reply
+            # Malformed deep input is still refused, and the instance recovers.
+            assert h.frame(frame[:-1])["err"]["kind"] == "protocol error"
             assert h.ok("add", a=20, b=22)["value"] == 42
 
     # Force memory growth while keeping a reply reachable through Go's GC.
     # JSON whitespace pads a valid frame without growing Script state.
-    retained = h.exports["talk_send"](h.store, 0)
-    previous = h.read_reply(retained)
-    before = h.memory.data_len(h.store)
+    # Use a fresh instance: the deep-input checks may already have grown h's
+    # memory beyond the size this allocation is meant to cross.
+    growth = Host(engine, module)
+    retained = growth.exports["talk_send"](growth.store, 0)
+    previous = growth.read_reply(retained)
+    before = growth.memory.data_len(growth.store)
     large = b' {"m":"hello","ref":100,"protocol":1}' + b" " * (16 << 20)
-    pointer = h.exports["talk_buffer"](h.store, len(large)) & 0xFFFFFFFF
+    pointer = growth.exports["talk_buffer"](growth.store, len(large)) & 0xFFFFFFFF
     assert pointer > 0
-    assert h.memory.data_len(h.store) > before
-    assert h.read_reply(retained) == previous
-    h.memory.write(h.store, large, pointer)
-    assert h.reply(len(large))["ok"] == hello
-    assert h.ok("hello", protocol=1) == hello
+    assert growth.memory.data_len(growth.store) > before
+    assert growth.read_reply(retained) == previous
+    growth.memory.write(growth.store, large, pointer)
+    assert growth.reply(len(large))["ok"] == hello
+    assert growth.ok("hello", protocol=1) == hello
 
     h.ok(
         "define-capability",
@@ -245,6 +253,12 @@ end bad
         {"m": "op-result", "ref": h.ref + 100, "result": 40}
     ).encode()
     assert h.frame(wrong_ref)["err"]["kind"] == "protocol error"
+    deep_result = (
+        '{"m":"op-result","ref":' + str(h.ref) + ',"result":'
+        + '[' * 100_000 + '1' + ']' * 100_000
+    ).encode()
+    rejected = h.frame(deep_result)
+    assert rejected["err"]["kind"] == "protocol error", rejected
     done = h.send("op-result", is_result=True, result=40, charged=3)
     end = run_end(done)
     assert end["outcome"] == "completed" and end["result"] == 41, end
@@ -284,6 +298,67 @@ end bad
         other.send("counters", group="g", script="s")["err"]["kind"] == "protocol error"
     )
     other.ok("new-group", group="g", name="g")
+
+    # Round-trip a Host-provided Value through a real Run and an immediate
+    # Host exchange, well beyond encoding/json's former ceiling. This also
+    # exercises Group ownership, Trace rendering, logical size and AnyShape.
+    exchange = Host(engine, module)
+    exchange.ok("define-capability", name="echo", ops=[
+        {"name": "echo", "mode": "immediate", "args": ["any"],
+         "result": "any", "cost": {"fuel": 1}}
+    ])
+    grant = exchange.ok("grant", capability="echo", ops="all")["grant"]
+    exchange.ok("new-group", group="g", name="g", trace=True)
+    exchange.ok("load", group="g", name="s", grants={"echo": grant},
+                source="on echo v\nask echo to echo v\nreturn it\nend echo\n")
+    deep = '[' * 20_000 + '1' + ']' * 20_000
+    queued = exchange.frame((
+        '{"m":"request","ref":1,"group":"g","to":{"script":"s"},'
+        '"message":{"name":"echo","args":[' + deep + ']}}'
+    ).encode())
+    assert "ok" in queued, queued
+    need = exchange.frame_raw((
+        '{"m":"pump","ref":2,"group":"g","now":"' + now + '"}'
+    ).encode())
+    assert b'"need"' in need and deep.encode() in need
+    ended = exchange.frame_raw((
+        '{"m":"op-result","ref":2,"result":' + deep + '}'
+    ).encode())
+    assert b'"completed"' in ended and deep.encode() in ended
+    assert exchange.ok("add", a=20, b=22)["value"] == 42
+
+    # Script-produced Values are equally deep on outbound frames.
+    # Exercise both an interim Operation's args and a final Report's result.
+    h.ok(
+        "define-capability", name="sink",
+        ops=[{"name": "take", "mode": "immediate", "args": ["any"],
+              "result": "number", "cost": {"fuel": 1}}],
+    )
+    grant = h.ok("grant", capability="sink", ops="all")["grant"]
+    h.ok(
+        "load", group="g", name="deep-reply", grants={"sink": grant},
+        source="""on go
+  put 1 into v
+  repeat 200 times
+    put [v] into v
+  end repeat
+  ask sink to take v
+  return v
+end go
+""",
+    )
+    h.ok("request", group="g", to={"script": "deep-reply"}, message={"name": "go"})
+    def check_value(value):
+        for _ in range(200):
+            assert isinstance(value, list) and len(value) == 1
+            value = value[0]
+        assert value == 1
+    need = h.send("pump", group="g", now=now)["need"]
+    check_value(need["args"][0])
+    end = run_end(h.send("op-result", is_result=True, result=42))
+    assert end["outcome"] == "completed", end
+    check_value(end["result"])
+    assert h.ok("add", a=20, b=22)["value"] == 42
     return hello
 
 

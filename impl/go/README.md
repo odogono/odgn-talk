@@ -1371,12 +1371,21 @@ transport with an error. The WASI check also loads 1 MiB of blank lines,
 100,000-term addition and exponentiation chains receive a Load nesting
 diagnostic, and each instance continues answering requests.
 
-Incoming frames may nest JSON arrays and objects at most 64 levels, including
-the envelope object. `Send` checks this iteratively before JSON or Value
-Encoding decoding, including ignored fields and declaration Shapes. Deeper
-frames receive a protocol error with `ref: -1`; the Session remains usable,
-including any pending Host exchange. Quoted delimiters do not count. This
-transport limit is identical on native and WASI builds.
+Frames have no JSON nesting-depth cap, on native or WASI builds. A heap-stack
+parser validates the entire frame, including ignored fields, and retains raw
+Value Encoding spans while reading the layer's finite envelope and declaration
+structures. The Core's Value reader and writer also walk heap work stacks;
+encoding error paths are built only on failure, so deeply nested Values do not
+require quadratic path copying. Group ownership checks, display and Trace
+rendering, container size accounting and `any` Shape's Function scan also use
+heap work stacks, so admission and Host exchanges can carry deep Values on WASI.
+Replies embed encoded Values without
+revalidating them through `encoding/json`'s 10,000-level input ceiling.
+The frame-size and available-memory limits still apply. Malformed deep JSON
+is a protocol error; the Session and a pending Host exchange remain usable.
+Hosts must decode deep replies within their own resources. These are
+[chapter 9's nesting rules](../../spec/09-embedding.md#rules)
+([ADR 0088](../../docs/adr/0088-the-message-layer-accepts-deep-values.md)).
 
 A `pump`, `reload` or `replace-library` runs on its own goroutine. Each
 Operation, property or Grant release hook it reaches returns a `need` (`op`,

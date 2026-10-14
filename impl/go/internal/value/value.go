@@ -212,6 +212,24 @@ func (v Value) Items() []Value {
 	x, _ := v.data.([]Value)
 	return x
 }
+
+// CachedContents returns a container's previously computed logical contents.
+// Size uses it to walk uncached descendants iteratively, retaining the fast
+// path for Values shared across instructions.
+func (v Value) CachedContents() (int64, bool) {
+	var cached int64
+	if v.Kind == List {
+		if view := v.view(); view != nil {
+			cached = view.contents.Load()
+		}
+	}
+	if v.Kind == Map {
+		if view, ok := v.data.(*mapView); ok {
+			cached = view.contents.Load()
+		}
+	}
+	return cached - 1, cached != 0
+}
 func (v Value) WithItems(x []Value) Value {
 	if v.Kind == List || v.Kind == Range {
 		v.data = x

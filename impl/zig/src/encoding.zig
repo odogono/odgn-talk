@@ -400,7 +400,13 @@ pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Er
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
-    return build(a, parsed.value, r, .encoding);
+    return decodeParsed(a, parsed.value, r);
+}
+
+/// Builds a Value directly from a parsed frame, without recursively writing
+/// and reparsing its JSON. The caller owns the JSON; the Value owns its data.
+pub fn decodeParsed(a: std.mem.Allocator, j: Json, r: display.Resolver) model.Error!*Value {
+    return build(a, j, r, .encoding);
 }
 /// Chapter 7's JSON mapping, the one rule for plain JSON that the `json`
 /// Library follows too: a text's `"` and `\`, its short escapes and its

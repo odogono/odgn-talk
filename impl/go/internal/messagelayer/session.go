@@ -68,11 +68,8 @@ func NewSession() *Session {
 // Send takes one message frame and returns its reply frame: a final reply, or
 // a need that the Host answers with the matching result message.
 func (s *Session) Send(frame []byte) []byte {
-	if err := checkNesting(frame); err != nil {
-		return replyFrame(-1, nil, err)
-	}
 	var f fields
-	if err := json.Unmarshal(frame, &f); err != nil {
+	if err := unmarshalFrame(frame, &f); err != nil {
 		return replyFrame(-1, nil, protocolErrorf("malformed frame: %v", err))
 	}
 	ref, err := f.int("ref")
@@ -199,7 +196,7 @@ func errorForm(err error) map[string]any {
 }
 
 func mustMarshal(v any) []byte {
-	b, err := json.Marshal(v)
+	b, err := marshalReply(v)
 	if err != nil {
 		b, _ = json.Marshal(map[string]any{"ref": -1, "err": map[string]any{"kind": "protocol error", "detail": err.Error()}})
 	}

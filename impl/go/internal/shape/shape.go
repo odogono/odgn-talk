@@ -59,18 +59,43 @@ func child(path []value.Value, v value.Value) []value.Value {
 	out := append([]value.Value{}, path...)
 	return append(out, v)
 }
-func DeepFunction(v value.Value, path []value.Value) *Mismatch {
-	if v.Kind == value.Function {
-		return &Mismatch{Expected: "any", Got: "function", Value: v, Path: path, Unencodable: true}
+func DeepFunction(root value.Value, initial []value.Value) *Mismatch {
+	type pathNode struct {
+		parent *pathNode
+		key    value.Value
 	}
-	for i, x := range v.Items() {
-		if m := DeepFunction(x, child(path, value.Fields{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))}.Value())); m != nil {
-			return m
+	type step struct {
+		v    value.Value
+		path *pathNode
+	}
+	var path *pathNode
+	for _, key := range initial {
+		path = &pathNode{path, key}
+	}
+	stack := []step{{root, path}}
+	for len(stack) > 0 {
+		next := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		v := next.v
+		if v.Kind == value.Function {
+			var keys []value.Value
+			for p := next.path; p != nil; p = p.parent {
+				keys = append(keys, p.key)
+			}
+			for i, j := 0, len(keys)-1; i < j; i, j = i+1, j-1 {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+			return &Mismatch{Expected: "any", Got: "function", Value: v, Path: keys, Unencodable: true}
 		}
-	}
-	for _, p := range v.Entries() {
-		if m := DeepFunction(p.Val, child(path, pathKey(p.Key))); m != nil {
-			return m
+		pairs := v.Entries()
+		for i := len(pairs) - 1; i >= 0; i-- {
+			p := pairs[i]
+			stack = append(stack, step{p.Val, &pathNode{next.path, pathKey(p.Key)}})
+		}
+		items := v.Items()
+		for i := len(items) - 1; i >= 0; i-- {
+			key := value.Fields{Kind: value.Number, Number: decimal.FromInt(int64(i + 1))}.Value()
+			stack = append(stack, step{items[i], &pathNode{next.path, key}})
 		}
 	}
 	return nil

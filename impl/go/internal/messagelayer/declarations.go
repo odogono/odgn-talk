@@ -120,7 +120,7 @@ func shape(raw json.RawMessage) (talk.Shape, error) {
 		return talk.Shape{}, protocolErrorf("unknown Shape %q", name)
 	}
 	var d shapeDecl
-	if err := json.Unmarshal(raw, &d); err != nil {
+	if err := unmarshalFrame(raw, &d); err != nil {
 		return talk.Shape{}, protocolErrorf("malformed Shape %s", raw)
 	}
 	switch {

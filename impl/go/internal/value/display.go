@@ -54,7 +54,97 @@ func Word(s string) bool {
 	}
 	return true
 }
+
+// Display walks containers with a heap stack of open containers and their
+// next child; a deep transport error must be printable on WASI's bounded
+// native stack too, and a long List costs one frame rather than one per item.
 func (v Value) Display() string {
+	type frame struct {
+		value Value
+		next  int
+	}
+	var stack []frame
+	var out strings.Builder
+	open := func(v Value) {
+		switch v.Kind {
+		case List:
+			out.WriteByte('[')
+		case Map:
+			out.WriteByte('{')
+		case Range:
+		case Function:
+			f := *v.Function()
+			if len(f.Captures) == 0 {
+				out.WriteString(v.displayLeaf())
+				return
+			}
+			f.Captures = nil
+			fields := v.Fields()
+			fields.Function = &f
+			out.WriteString(strings.TrimSuffix(fields.Value().displayLeaf(), ">") + " ")
+		default:
+			out.WriteString(v.displayLeaf())
+			return
+		}
+		stack = append(stack, frame{value: v})
+	}
+	open(v)
+	for len(stack) > 0 {
+		top := &stack[len(stack)-1]
+		v, i := top.value, top.next
+		top.next++
+		switch v.Kind {
+		case List:
+			items := v.Items()
+			if i == len(items) {
+				out.WriteByte(']')
+				break
+			}
+			if i > 0 {
+				out.WriteString(", ")
+			}
+			open(items[i])
+			continue
+		case Map:
+			pairs := v.Entries()
+			if i == len(pairs) {
+				out.WriteByte('}')
+				break
+			}
+			if i > 0 {
+				out.WriteString(", ")
+			}
+			key := pairs[i].Key
+			// A Word key is bare, except offer, which source reserves as a key (chapter 2).
+			if !Word(key) || key == "offer" {
+				key = DisplayText(key)
+				if !strings.HasPrefix(key, `"`) {
+					key = `"" & ` + key
+				}
+			}
+			out.WriteString(key + ": ")
+			open(pairs[i].Val)
+			continue
+		case Range:
+			if i < 2 {
+				if i == 1 {
+					out.WriteString("..")
+				}
+				open(v.Items()[i])
+				continue
+			}
+		case Function:
+			if i == 0 {
+				open(Fields{Kind: Map, Entries: v.Function().Captures}.Value())
+				continue
+			}
+			out.WriteByte('>')
+		}
+		stack = stack[:len(stack)-1]
+	}
+	return out.String()
+}
+func (v Value) displayLeaf() string {
 	switch v.Kind {
 	case Nothing:
 		return "nothing"
@@ -72,28 +162,6 @@ func (v Value) Display() string {
 			pieces[i] = fmt.Sprintf("0x%02X", b)
 		}
 		return "<<" + strings.Join(pieces, ", ") + ">>"
-	case List:
-		pieces := make([]string, len(v.Items()))
-		for i, item := range v.Items() {
-			pieces[i] = item.Display()
-		}
-		return "[" + strings.Join(pieces, ", ") + "]"
-	case Range:
-		return v.Items()[0].Display() + ".." + v.Items()[1].Display()
-	case Map:
-		pieces := make([]string, len(v.Entries()))
-		for i, p := range v.Entries() {
-			key := p.Key
-			// A Word key is bare, except offer, which source reserves as a key (chapter 2).
-			if !Word(key) || key == "offer" {
-				key = DisplayText(key)
-				if !strings.HasPrefix(key, `"`) {
-					key = `"" & ` + key
-				}
-			}
-			pieces[i] = key + ": " + p.Val.Display()
-		}
-		return "{" + strings.Join(pieces, ", ") + "}"
 	case CivilDate:
 		return civilText(v.Date())
 	case Instant:
@@ -115,9 +183,6 @@ func (v Value) Display() string {
 			place = v.Function().Code
 		}
 		s := "<function " + place
-		if len(v.Function().Captures) > 0 {
-			s += " " + (Fields{Kind: Map, Entries: v.Function().Captures}.Value()).Display()
-		}
 		return s + ">"
 	}
 	panic("unknown value kind")
