@@ -1176,6 +1176,7 @@ fn roundTrip(a: std.mem.Allocator, core: ?*c.talk_core, sink: *Sink, group: ?*c.
     var restored: ?*c.talk_group = null;
     var result: ?*c.talk_restore_result = null;
     try check(c.talk_restore(core, saved.data, saved.len, &options, &restored, &result));
+    armCrossings(restored);
     defer c.talk_restore_result_release(result);
     var pending: [*c]const c.talk_pending_call = null;
     const n = c.talk_restore_result_pending(result, &pending);
@@ -1307,6 +1308,7 @@ pub const Host = struct {
         // physical cap allows while they build their values.
         const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &h.sink, .memory_cap = 1 << 30 };
         try check(c.talk_new_group(h.core, &options, &h.group));
+        armCrossings(h.group);
         try defineCapabilities(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineStandard(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);
         try defineObjects(a, h.core, h.group, all, &h.store);
@@ -1480,6 +1482,7 @@ pub const Host = struct {
             // until the end, since its handles may still be read.
             try retired.append(a, h.group);
             h.group = restored;
+            armCrossings(h.group);
             try rehandle(scripts, h.group);
             try store.moveTo(h.group);
         } else if (std.mem.eql(u8, name, "settle")) {
@@ -1700,6 +1703,16 @@ pub const Host = struct {
 };
 
 /// Replays the case in `dir` and returns the Trace the Core wrote.
+/// `--defer-crossings`: every Group defers each lifecycle crossing that
+/// may defer once, as the Message Layer's Hosts do.
+pub var defer_crossings = false;
+
+fn armCrossings(group: ?*c.talk_group) void {
+    if (!defer_crossings) return;
+    const g: *northtalk.talk.Group = @ptrCast(@alignCast(group orelse return));
+    g.group.defer_crossings = true;
+}
+
 pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []const u8, trace: []const u8, round_trip: bool) ![]u8 {
     var arena: std.heap.ArenaAllocator = .init(gpa);
     defer arena.deinit();

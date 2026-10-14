@@ -1265,6 +1265,9 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
         return .clock_backwards;
     };
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
+    // A C Host answers inside its calls, so a crossing pause here is only
+    // `defer_crossings`' (a testing aid): take the Pump up again at once.
+    while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
     const reports = takeReports(g);
     const r = out orelse {
         talk_reports_release(reports);
