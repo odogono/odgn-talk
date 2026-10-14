@@ -91,9 +91,6 @@ Verified on 2026-10-14 in `fix/issue-697`, based on `7d79fe0b`:
 - Full Zig tests, the WASI build and `tools/wasi/zig.py` runtime/containment checks pass. Go's focused Corpus acceptance suite also passes after adding the new required cases.
 - Spec/grammar/reference lowering/Corpus checks, generated consumer checks, typecheck, lint, formatting and `git diff --check` pass.
 
-The implementation is uncommitted in
-`/Users/alex/.t3/worktrees/odgn-talk/t3-c797b3c5` at preparation of this record;
-[the file manifest](files.txt) lists its exact files. No merged Mapping
-implementation is claimed. First blessing is approved as recorded above.
-#697 and parent #579 remain open pending implementation review and delivery; the existing Zig depth follow-up
-is tracked explicitly rather than silently deferred.
+The implementation merged in #874, which closed #697; parent #579 is closed.
+[The file manifest](files.txt) lists the files reviewed before merge. The
+existing Zig depth follow-up is tracked in #871 rather than silently deferred.
