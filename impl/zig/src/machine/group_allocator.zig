@@ -20,12 +20,28 @@ const max_cached_values: usize = 128;
 const value_size = @sizeOf(model.Value);
 const value_alignment: Alignment = .fromByteUnits(@alignOf(model.Value));
 
+// Only dead frame buffers enter this cache. Its intrusive header replaces
+// released local/operand references; it never keeps Values or code alive.
+const FrameBuffer = struct { next: ?*FrameBuffer, len: u16, alignment: Alignment };
+const max_cached_frames: usize = 32;
+const max_frame_buffer: usize = 1024;
+
+/// Gives a frame's empty storage back, retaining small buffers only when
+/// this is a Group allocator. Plain allocators (including tests) free it.
+pub fn freeFrameBuffer(gpa: Allocator, comptime T: type, buffer: []T) void {
+    if (buffer.len == 0) return;
+    if (gpa.vtable == &GroupAllocator.vtable) {
+        const self: *GroupAllocator = @ptrCast(@alignCast(gpa.ptr));
+        self.recycleFrame(std.mem.sliceAsBytes(buffer), .fromByteUnits(@alignOf(T)), @returnAddress());
+    } else gpa.free(buffer);
+}
+
 pub const GroupAllocator = struct {
     parent: Allocator,
     lock: @import("queue_lock.zig").Lock = .{},
     cap: usize,
-    /// Bytes the Group holds now, and the most it has held. The Value
-    /// cache below is held memory, so it is included.
+    /// Bytes the Group holds now, and the most it has held. Both caches
+    /// below are held memory, so they are included.
     used: usize = 0,
     peak: usize = 0,
     /// Whether an allocation has been refused: past the cap, or by the
@@ -36,15 +52,52 @@ pub const GroupAllocator = struct {
     /// word, at most `max_cached_values` of them.
     cached_values: ?[*]u8 = null,
     cached_value_count: usize = 0,
+    cached_frames: ?*FrameBuffer = null,
+    cached_frame_count: usize = 0,
+    cached_frame_bytes: usize = 0,
 
     pub fn init(parent: Allocator, cap: usize) GroupAllocator {
         return .{ .parent = parent, .cap = if (cap == 0) default_cap else cap };
     }
 
-    /// Returns every cached Value node to the parent. The owner calls this
+    /// Returns every cached node and frame buffer to the parent. The owner calls this
     /// once the Group is gone; nothing may allocate through here after.
     pub fn deinit(self: *GroupAllocator) void {
         self.flushValues();
+        self.flushFrames();
+    }
+
+    fn flushFrames(self: *GroupAllocator) void {
+        while (self.cached_frames) |block| {
+            const header = block.*;
+            self.cached_frames = header.next;
+            self.parent.rawFree(@as([*]u8, @ptrCast(block))[0..header.len], header.alignment, @returnAddress());
+            self.used -= header.len;
+        }
+        self.cached_frame_count = 0;
+        self.cached_frame_bytes = 0;
+    }
+
+    fn flushCaches(self: *GroupAllocator) void {
+        self.flushValues();
+        self.flushFrames();
+    }
+
+    fn recycleFrame(self: *GroupAllocator, memory: []u8, alignment: Alignment, ret_addr: usize) void {
+        self.lock.lock();
+        defer self.lock.unlock();
+        if (memory.len >= @sizeOf(FrameBuffer) and memory.len <= max_frame_buffer and
+            alignment.toByteUnits() >= @alignOf(FrameBuffer) and self.cached_frame_count < max_cached_frames)
+        {
+            const block: *FrameBuffer = @ptrCast(@alignCast(memory.ptr));
+            block.* = .{ .next = self.cached_frames, .len = @intCast(memory.len), .alignment = alignment };
+            self.cached_frames = block;
+            self.cached_frame_count += 1;
+            self.cached_frame_bytes += memory.len;
+            return;
+        }
+        self.parent.rawFree(memory, alignment, ret_addr);
+        self.used -= memory.len;
     }
 
     fn flushValues(self: *GroupAllocator) void {
@@ -93,9 +146,19 @@ pub const GroupAllocator = struct {
                 return block;
             }
         }
+        var link = &self.cached_frames;
+        while (link.*) |block| {
+            if (block.len == len and block.alignment == alignment) {
+                link.* = block.next;
+                self.cached_frame_count -= 1;
+                self.cached_frame_bytes -= len;
+                return @ptrCast(block);
+            }
+            link = &block.next;
+        }
         // Retained nodes must never cause a refusal other memory could
         // have avoided: give them back before deciding the cap is hit.
-        if (len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
+        if (len > self.cap - self.used) self.flushCaches();
         if (!self.admit(len)) return null;
         const p = self.parent.rawAlloc(len, alignment, ret_addr) orelse {
             self.refused = true;
@@ -109,7 +172,7 @@ pub const GroupAllocator = struct {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
         self.lock.lock();
         defer self.lock.unlock();
-        if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
+        if (new_len > memory.len and new_len - memory.len > self.cap - self.used) self.flushCaches();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return false;
         if (!self.parent.rawResize(memory, alignment, new_len, ret_addr)) return false;
         self.settle(memory.len, new_len);
@@ -120,7 +183,7 @@ pub const GroupAllocator = struct {
         const self: *GroupAllocator = @ptrCast(@alignCast(ctx));
         self.lock.lock();
         defer self.lock.unlock();
-        if (new_len > memory.len and new_len - memory.len > self.cap - self.used and self.cached_value_count != 0) self.flushValues();
+        if (new_len > memory.len and new_len - memory.len > self.cap - self.used) self.flushCaches();
         if (new_len > memory.len and !self.admit(new_len - memory.len)) return null;
         const p = self.parent.rawRemap(memory, alignment, new_len, ret_addr) orelse return null;
         self.settle(memory.len, new_len);
@@ -201,6 +264,114 @@ test "cap pressure flushes the Value cache instead of refusing" {
     const big = try a.alloc(u8, 512);
     defer a.free(big);
     try std.testing.expect(!memory.refused);
+}
+
+test "dead frame buffers are reused by exact size and alignment, bounded and counted" {
+    var memory: GroupAllocator = .init(std.testing.allocator, 1 << 20);
+    const a = memory.allocator();
+    const locals = try a.alloc(*model.Value, 3);
+    const address = @intFromPtr(locals.ptr);
+    freeFrameBuffer(a, *model.Value, locals);
+    try std.testing.expectEqual(@as(usize, 24), memory.cached_frame_bytes);
+    try std.testing.expectEqual(@as(usize, 24), memory.used);
+    const reused = try a.alloc(*model.Value, 3);
+    try std.testing.expectEqual(address, @intFromPtr(reused.ptr));
+    try std.testing.expectEqual(@as(usize, 0), memory.cached_frame_bytes);
+    a.free(reused);
+    var buffers: [max_cached_frames + 2][]u64 = undefined;
+    for (&buffers) |*buffer| buffer.* = try a.alloc(u64, max_frame_buffer / @sizeOf(u64));
+    for (buffers) |buffer| freeFrameBuffer(a, u64, buffer);
+    try std.testing.expectEqual(max_cached_frames, memory.cached_frame_count);
+    try std.testing.expectEqual(max_cached_frames * max_frame_buffer, memory.used);
+    // Large buffers never stay retained, and every retained byte returns.
+    const big = try a.alloc(u64, max_frame_buffer);
+    freeFrameBuffer(a, u64, big);
+    try std.testing.expectEqual(max_cached_frames * max_frame_buffer, memory.used);
+    memory.deinit();
+    try std.testing.expectEqual(@as(usize, 0), memory.used);
+}
+
+test "cap pressure evicts dead frame buffers before refusing other storage" {
+    var memory: GroupAllocator = .init(std.testing.allocator, 400);
+    defer memory.deinit();
+    const a = memory.allocator();
+    const locals = try a.alloc(u64, 3);
+    freeFrameBuffer(a, u64, locals);
+    const stack = try a.alloc(u64, 18);
+    freeFrameBuffer(a, u64, stack);
+    const other = try a.alloc(u8, 300);
+    defer a.free(other);
+    try std.testing.expect(!memory.refused);
+    try std.testing.expectEqual(@as(usize, 0), memory.cached_frame_bytes);
+    try std.testing.expectEqual(@as(usize, 300), memory.used);
+}
+
+test "frame reuse across recursive Runs leaves captures intact and retention stable" {
+    const machine = @import("machine.zig");
+    var memory: GroupAllocator = .init(std.testing.allocator, 1 << 20);
+    defer memory.deinit();
+    var group: machine.Group = .init(memory.allocator(), null);
+    {
+        defer group.deinit();
+        const source =
+            \\script variable saved = nothing
+            \\script variable result = nothing
+            \\function capture n
+            \\  put n into k
+            \\  if n = 0 then return given x: x + k
+            \\  return capture(n - 1)
+            \\end capture
+            \\on go
+            \\  put capture(80) into saved
+            \\  put saved(7) into result
+            \\end go
+        ;
+        try std.testing.expect(try group.load("s", source, .{ .limits = .{ .call_depth = 100 } }) == .loaded);
+        var retained: usize = 0;
+        for (0..20) |i| {
+            _ = try group.deliver("s", "go", &.{}, false);
+            try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+            const result = group.script("s").?.variables[1];
+            try std.testing.expect(result.data == .number);
+            try std.testing.expectEqual(model.Decimal.fromInt(7), result.data.number);
+            try std.testing.expect(memory.cached_frame_bytes <= max_cached_frames * max_frame_buffer);
+            // The Group also retains reporting and Function identities;
+            // this assertion isolates capacity owned by frame reuse.
+            if (i == 1) retained = memory.cached_frame_bytes;
+            if (i > 1) try std.testing.expectEqual(retained, memory.cached_frame_bytes);
+        }
+    }
+    memory.deinit();
+    try std.testing.expectEqual(@as(usize, 0), memory.used);
+}
+
+fn callStorageAllocations(parent: Allocator) !void {
+    const machine = @import("machine.zig");
+    var memory: GroupAllocator = .init(parent, 1 << 20);
+    defer memory.deinit();
+    var group: machine.Group = .init(memory.allocator(), null);
+    defer group.deinit();
+    const source =
+        \\script variable f = nothing
+        \\function recurse n
+        \\  put n into k
+        \\  if n = 0 then return given x: x + k
+        \\  return recurse(n - 1)
+        \\end recurse
+        \\on go
+        \\  put recurse(7) into f
+        \\  put f(3) into it
+        \\end go
+    ;
+    _ = try group.load("s", source, .{});
+    for (0..2) |_| {
+        _ = try group.deliver("s", "go", &.{}, false);
+        try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    }
+}
+
+test "recursive call storage and retained captures release on every parent refusal" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, callStorageAllocations, .{});
 }
 
 test "Map updates obey the Group physical cap and leave the prior root intact on refusal" {

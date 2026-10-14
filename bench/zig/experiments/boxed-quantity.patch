@@ -1,0 +1,90 @@
+diff --git a/impl/zig/src/value.zig b/impl/zig/src/value.zig
+index 6a2b5c14..80286fb3 100644
+--- a/impl/zig/src/value.zig
++++ b/impl/zig/src/value.zig
+@@ -29,7 +29,7 @@ const ListStorage = struct {
+     end: usize,
+ };
+ /// A value's payload, one variant per Kind. Slices and children are owned.
+-pub const Data = union(Kind) {
++pub const ScalarData = union(Kind) {
+     nothing: void,
+     bool: bool,
+     number: Decimal,
+@@ -45,6 +45,22 @@ pub const Data = union(Kind) {
+     function: Function,
+     object: Object,
+ };
++pub const Data = union(Kind) {
++    nothing: void,
++    bool: bool,
++    number: Decimal,
++    quantity: *Quantity,
++    text: []const u8,
++    bytes: []const u8,
++    list: []*Value,
++    map: []Pair,
++    range: Range,
++    instant: dates.Instant,
++    civil_date: dates.Fields,
++    pattern: []const u8,
++    function: Function,
++    object: Object,
++};
+ /// One reference-counted, immutable node. Release each owned reference once.
+ pub const Value = struct {
+     references: usize = 1,
+@@ -87,6 +103,7 @@ pub const Value = struct {
+             pending = node.release_next;
+             const gpa = node.allocator;
+             switch (node.data) {
++                .quantity => |q| gpa.destroy(q),
+                 .text, .bytes, .pattern => |s| gpa.free(s),
+                 .list => |items| {
+                     if (node.list_storage) |storage| {
+@@ -574,7 +591,7 @@ fn queueRelease(node: *Value, pending: *?*Value) void {
+     pending.* = node;
+ }
+ 
+-fn ownershipRank(data: Data) error{OutOfMemory}!u64 {
++fn ownershipRank(data: ScalarData) error{OutOfMemory}!u64 {
+     var child_rank: u64 = 0;
+     switch (data) {
+         .list => |items| for (items) |item| {
+@@ -590,10 +607,19 @@ fn ownershipRank(data: Data) error{OutOfMemory}!u64 {
+     return std.math.add(u64, child_rank, 1) catch error.OutOfMemory;
+ }
+ /// A value with no children, which takes ownership of `data`'s slices.
+-pub fn scalar(gpa: std.mem.Allocator, data: Data) !*Value {
++pub fn scalar(gpa: std.mem.Allocator, data: ScalarData) !*Value {
+     const rank = try ownershipRank(data);
+     const v = try gpa.create(Value);
+-    v.* = .{ .allocator = gpa, .data = data, .ownership_rank = rank };
++    errdefer gpa.destroy(v);
++    const stored: Data = switch (data) {
++        .quantity => |q| blk: {
++            const payload = try gpa.create(Quantity);
++            payload.* = q;
++            break :blk .{ .quantity = payload };
++        },
++        inline else => |payload, tag| @unionInit(Data, @tagName(tag), payload),
++    };
++    v.* = .{ .allocator = gpa, .data = stored, .ownership_rank = rank };
+     return v;
+ }
+ /// Text from UTF-8, normalised to NFC. Invalid UTF-8 is refused.
+@@ -983,12 +1009,12 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
+         return scalar(gpa, .{ .quantity = .{ .number = try decimal.calculate(gpa, op, l.number, rhs), .unit = l.unit } });
+     }
+     const l: Quantity = switch (x.data) {
+-        .quantity => |q| q,
++        .quantity => |q| q.*,
+         .number => |n| .{ .number = n, .unit = .{} },
+         else => return error.InvalidValue,
+     };
+     const r: Quantity = switch (y.data) {
+-        .quantity => |q| q,
++        .quantity => |q| q.*,
+         .number => |n| .{ .number = n, .unit = .{} },
+         else => return error.InvalidValue,
+     };
