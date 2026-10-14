@@ -982,9 +982,64 @@ const Operands = struct {
     fn release(o: *Operands, gpa: Allocator) void {
         for (o.slots()) |slot| slot.release(gpa);
         if (o.more.len > 0) gpa.free(o.more);
-        o.* = .{};
+        // Only these fields describe live slots. take writes every retained
+        // slot before publishing len; resetting the unused buffer needlessly
+        // copies bytes that describe no owned state.
+        o.more = &.{};
+        o.len = 0;
     }
 };
+
+test "operand storage is reusable after inline, overflow, empty and refused retention" {
+    const gpa = std.testing.allocator;
+    const value = try model.text(gpa, "retained operand");
+    defer value.release();
+    const unit: lower.Unit = .{
+        .name = "test",
+        .library = false,
+        .constants = &.{},
+        .values = &.{},
+        .definitions = &.{},
+        .variables = &.{},
+        .objects = &.{},
+        .bodies = &.{},
+        .code = &.{},
+        .offers = &.{},
+        .events = &.{},
+        .unwind = &.{.{ .first = 0, .last = 0, .kind = .finally, .target = 1, .depth = 0 }},
+    };
+    var stack: [9]Slot = @splat(.{ .value = value });
+    var frame: Frame = .{ .body = 0, .pc = 0, .locals = &.{} };
+    frame.stack.items = &stack;
+    var held: Operands = .{};
+    defer held.release(gpa);
+    // Change between overflow and inline storage, then skip retention with
+    // stale bytes still present. Only live slots may be read or released.
+    for ([_]i64{ 9, 8, 1, 0, 9, 1 }) |n| {
+        const ins: lower.Instruction = .{ .op = .list, .operands = &.{.{ .int = n }}, .position = .{ .line = 1, .column = 1 }, .note = "" };
+        try held.take(gpa, &unit, &frame, 0, ins);
+        try std.testing.expectEqual(@as(usize, @intCast(n)), held.slots().len);
+        try std.testing.expectEqual(@as(usize, @intCast(n)) + 1, value.references);
+        // Every live retained slot remains readable until release.
+        for (held.slots()) |slot| try std.testing.expectEqualStrings("retained operand", slot.value.data.text);
+        held.release(gpa);
+        try std.testing.expectEqual(@as(usize, 1), value.references);
+        try std.testing.expectEqual(@as(usize, 0), held.slots().len);
+    }
+    const ins: lower.Instruction = .{ .op = .list, .operands = &.{.{ .int = 9 }}, .position = .{ .line = 1, .column = 1 }, .note = "" };
+    var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, held.take(failing.allocator(), &unit, &frame, 0, ins));
+    held.release(gpa);
+    try held.take(gpa, &unit, &frame, 1, ins); // outside the finally scope
+    held.release(gpa);
+    var thrown = ins;
+    thrown.op = .throw;
+    try held.take(gpa, &unit, &frame, 0, thrown);
+    held.release(gpa);
+    try std.testing.expectEqual(@as(usize, 1), value.references);
+    try held.take(gpa, &unit, &frame, 0, ins);
+    try std.testing.expectEqual(@as(usize, 10), value.references);
+}
 
 /// A retained frame's size: its slots, their values and its operand stack.
 fn frameSize(f: *const Frame) u64 {
@@ -6293,6 +6348,9 @@ pub const Group = struct {
     /// Runs until the bottom frame returns. `charged` is false for the
     /// initialiser, which costs nothing.
     fn execute(g: *Group, run: *Run, charged: bool) !Outcome {
+        // Reuse the inline storage within this execution. The per-instruction
+        // defer releases its owners and clears its metadata on every path.
+        var held: Operands = .{};
         while (true) {
             _ = g.scratch.reset(.retain_capacity);
             // A clause a Command Call tried pays its rate with the clause
@@ -6328,7 +6386,6 @@ pub const Group = struct {
             // Its operands, which stay on its failed continuation's stack
             // if it fails in a `finally` block's scope (chapter 8, Pending
             // cleanup state).
-            var held: Operands = .{};
             try held.take(g.gpa, unitOf(run, frame), frame, pc, ins);
             defer held.release(g.gpa);
             frame.pc += 1;

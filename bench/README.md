@@ -72,6 +72,11 @@ record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node
 cache in [#878](https://github.com/odogono/odgn-talk/issues/878).
 
+The [Zig operand storage measurements](results/2026-10-14-zig-operand-storage.md)
+record paired sliced/unsliced timings, native disassembly and CPU samples for
+reusing protected-operand storage in
+[#925](https://github.com/odogono/odgn-talk/issues/925).
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
@@ -87,7 +92,7 @@ The default run includes the native Zig Core through `talk.h`, built with the
 pinned Zig 0.17.0 compiler in its default `safe` mode (bounds and overflow checks
 kept). A C compiler builds the Host with `-O2`; both builds finish before timing.
 `bun run bench --only zig` selects it alone. Zig runs all 21 Peer Language
-workloads, the Fuel Slice sweep, graphemes, empty Pump, suspension and Load
+workloads, the Fuel Slice sweep, graphemes, empty Handler Delivery/Pump, suspension and Load
 workloads. The nine workloads requiring additional Host bindings are explicitly
 skipped in the manifest: these are benchmark Host limitations, not missing Core
 features.
