@@ -1294,7 +1294,12 @@ export fn talk_replace_library(g: *Group, l: *machine.Library, carry: CarryOver,
     // Room for every Library it could recompile, so that once the Group
     // uses them the Core can own them.
     c.libraries.ensureUnusedCapacity(c.gpa, g.group.libraries.items.len) catch return .out_of_memory;
-    return switch (g.group.replaceLibrary(l, carry == .carry_variables, c.gpa) catch |err| return status(err)) {
+    var replaced = g.group.replaceLibrary(l, carry == .carry_variables, c.gpa) catch |err| return status(err);
+    // A C Host answers inside its calls, so a pause here is only
+    // `defer_crossings`' (a testing aid): go on at once.
+    while (replaced == .paused) replaced = (g.group.resumeWork() catch |err| return status(err)).replace;
+    return switch (replaced) {
+        .paused => unreachable,
         .replaced => |made| {
             defer g.group.gpa.free(made);
             c.libraries.appendSliceAssumeCapacity(made);
@@ -3186,7 +3191,10 @@ export fn talk_script_reload(s: *Script, source: ?[*]const u8, len: usize, carry
     if (!std.unicode.utf8ValidateSlice(src)) return .invalid_value;
     const script = g.group.script(s.name) orelse return .invalid_value;
     const keep = if (o) |x| x.keep_mailbox else false;
-    return switch (g.group.reload(script, src, carry == .carry_variables, keep) catch |err| return status(err)) {
+    var reloaded = g.group.reload(script, src, carry == .carry_variables, keep) catch |err| return status(err);
+    while (reloaded == .paused) reloaded = (g.group.resumeWork() catch |err| return status(err)).reload;
+    return switch (reloaded) {
+        .paused => unreachable,
         .reloaded => .ok,
         .refused => .load_refused,
         .state_too_large => .state_too_large,
