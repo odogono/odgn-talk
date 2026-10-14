@@ -1,0 +1,18 @@
+script variable foo = 1
+constant bar = 2
+on foo
+  return foo
+end foo
+on bar
+  wait 1 ms
+  return bar
+end bar
+on baz
+  return baz
+end baz
+on qux
+  wait 1 ms
+  return qux
+end qux
+script variable baz = 3
+constant qux = 4

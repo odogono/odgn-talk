@@ -1,0 +1,43 @@
+# Unblessed: inherited shared Handler and value names (#830); first blessing awaits human review.
+
+> load s identity=4f0bef13d58f7e3d527de81fbfebf7380d41fa45d8a405134c39babc615753b8
+> extend s source="constant copy = bar + qux" & newline & "script variable result = []" & newline & "on later" & newline & "  foo" & newline & "  put it into seen" & newline & "  bar and wait" & newline & "  put [seen, it] into seen" & newline & "  baz" & newline & "  put it after seen" & newline & "  qux and wait" & newline & "  put [foo, bar, baz, qux, copy, seen, it] into result" & newline & "  return result" & newline & "end later" identity=be5841ab2e4d7fcaa9284ab52ed2ecd446a845b6b67d7cca7ccb13b3808b3390
+> extend s source="on invalid" & newline & "  bar" & newline & "end invalid" identity=40d7507854bd068a791eafb8ea17e58a6dde55258633d345ef38f83d97af42a7
+diag s+2 code="missing and wait" pos=2:3
+> extend s source="on invalid" & newline & "  qux" & newline & "end invalid" identity=d8b6a878a9027e5dc51cb260df276c41321ea2ac8f81908f7701fd9e7b149f4e
+diag s+2 code="missing and wait" pos=2:3
+> extend s source="function invalid" & newline & "  qux and wait" & newline & "end invalid" identity=de6f2e7e7a945de9661769d90609c133558132345596f507f31a1be21f28d5ba
+diag s+2 code="can't suspend here" pos=2:3
+> extend s source="script variable foo = 9" identity=b0530cdda531eb7bd7e2dcddbff980191cd9403ec5fd97c1a175e79225d99229
+refused code="name reused"
+> extend s source="constant bar = 9" identity=7c85bfedb5aa4eaec1f74a1edc9db6826ea840f55fef00447aa491d95c4b8f6c
+refused code="name reused"
+> extend s source="on foo" & newline & "end foo" identity=70eb4b1a9fd70ab2e6baf82225dd0207eb2f2294bc49b5ded66b146cd4710a4e
+refused code="name reused"
+> extend s source="on bar" & newline & "end bar" identity=916f70cb82e55974f64d47cfdcb21930845c528bea5762e855abc3dee9dfc01b
+refused code="name reused"
+> deliver d1 to=s message=later
+> pump clock=1970-01-01T00:00:00Z
+seg s/r1 start delivery=d1 handler=later clause=1 fuel=45 alloc=0 state=352 end=wait until=1970-01-01T00:00:00.001Z
+pumped state=idle fuel=45 next=1970-01-01T00:00:00.001Z
+> pump clock=1970-01-01T00:00:00.001Z
+seg s/r1 resume fuel=59 alloc=88 state=432 end=wait until=1970-01-01T00:00:00.002Z
+pumped state=idle fuel=59 next=1970-01-01T00:00:00.002Z
+> pump clock=1970-01-01T00:00:00.002Z
+seg s/r1 resume fuel=26 alloc=256 state=288 end=return
+run s/r1 outcome=completed delivery=d1 handler=later value=[1, 2, 3, 4, 6, [1, 2, 3], 4] fuel=130 alloc=344
+pumped state=idle fuel=26
+> extend s source="on again" & newline & "  later and wait" & newline & "  return [copy, result]" & newline & "end again" identity=8122f1f63339a0c1ddfab324d69798721368be206820cece6505b0411869c141
+> deliver d2 to=s message=again
+> pump clock=1970-01-01T00:00:00.002Z
+seg s/r2 start delivery=d2 handler=again clause=1 fuel=57 alloc=0 state=672 end=wait until=1970-01-01T00:00:00.003Z
+pumped state=idle fuel=57 next=1970-01-01T00:00:00.003Z
+> pump clock=1970-01-01T00:00:00.003Z
+seg s/r2 resume fuel=59 alloc=88 state=752 end=wait until=1970-01-01T00:00:00.004Z
+pumped state=idle fuel=59 next=1970-01-01T00:00:00.004Z
+> pump clock=1970-01-01T00:00:00.004Z
+seg s/r2 resume fuel=36 alloc=560 state=288 end=return
+run s/r2 outcome=completed delivery=d2 handler=again value=[6, [1, 2, 3, 4, 6, [1, 2, 3], 4]] fuel=152 alloc=648
+pumped state=idle fuel=36
+> vars
+vars s foo=1 baz=3 result=[1, 2, 3, 4, 6, [1, 2, 3], 4]

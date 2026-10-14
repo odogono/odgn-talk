@@ -189,6 +189,7 @@ const Lowerer = struct {
     bodies: std.ArrayList(?*BodyCode) = .empty,
     events: std.ArrayList(Event) = .empty,
     imports: std.StringHashMapUnmanaged(Import) = .empty,
+    inherited_handlers: std.StringHashMapUnmanaged(Import) = .empty,
     /// The definition index of each own Constant and parameter default.
     definition_index: std.StringHashMapUnmanaged(u32) = .empty,
     functions: std.StringHashMapUnmanaged(u32) = .empty,
@@ -306,7 +307,8 @@ const Lowerer = struct {
                 try l.variables.append(l.a, x.name);
                 continue;
             }
-            try l.imports.put(l.a, x.name, .{ .library = x.unit, .name = x.export_.name, .kind = x.export_.kind });
+            const names = if (x.export_.kind == .handler) &l.inherited_handlers else &l.imports;
+            try names.put(l.a, x.name, .{ .library = x.unit, .name = x.export_.name, .kind = x.export_.kind });
             if (x.export_.kind == .constant) try l.definitions.append(l.a, try l.print("{s}:{s}", .{ x.unit, x.export_.name }));
         }
         // Imports, by local name.
@@ -479,8 +481,12 @@ const Lowerer = struct {
         return .immediate;
     }
 
+    fn importByName(l: *Lowerer, name: []const u8) ?Import {
+        return l.imports.get(name) orelse l.inherited_handlers.get(name);
+    }
+
     fn importedHandler(l: *Lowerer, name: []const u8) bool {
-        const im = l.imports.get(name) orelse return false;
+        const im = l.inherited_handlers.get(name) orelse l.imports.get(name) orelse return false;
         return im.kind == .handler;
     }
 
@@ -1419,7 +1425,7 @@ const Frame = struct {
         const r = l.checked.refs.get(c.name).?;
         const value_call = switch (r) {
             .local, .captured, .variable, .constant, .object, .script => true,
-            .imported => l.imports.get(name).?.kind == .constant,
+            .imported => l.importByName(name).?.kind == .constant,
             else => false,
         };
         switch (value_call) {
@@ -1439,7 +1445,7 @@ const Frame = struct {
             },
             .handler => try f.emit(.call_handler, &.{ .{ .text = name }, .{ .int = n } }, c.name, ""),
             .imported => {
-                const im = l.imports.get(name).?;
+                const im = l.importByName(name).?;
                 if (im.kind == .handler) {
                     try f.emit(.call_handler, &.{ .{ .text = im.name }, .{ .int = n } }, c.name, "");
                 } else try f.emit(.call_import, &.{ .{ .text = try l.print("{s}:{s}", .{ im.library, im.name }) }, .{ .int = n } }, c.name, "");
@@ -2092,7 +2098,7 @@ const Frame = struct {
             .variable => |v| try f.emit(.load_var, &.{.{ .int = v }}, t, name),
             .constant => try f.emit(.load_definition, &.{.{ .text = name }}, t, ""),
             .imported => {
-                const im = l.imports.get(name).?;
+                const im = l.importByName(name).?;
                 const shown = try l.print("{s}:{s}", .{ im.library, im.name });
                 if (im.kind == .constant) {
                     try f.emit(.load_definition, &.{.{ .text = shown }}, t, "");
