@@ -513,6 +513,11 @@ the name the Script uses. `ask` and `tell` call immediate and fire-and-forget
 Operations: each argument is checked against its Shape first, with nothing
 charged for a mismatch, then the declared cost and any `Charge` are charged,
 the Host function runs, and its result is checked against the result Shape.
+Function Values that break scalar, container or closed-map Shapes raise
+`wrong kind` with `got: "function"`. Data scans under `any` and open maps'
+undeclared fields raise `not encodable`. A mismatching Quantity reports
+`got: "quantity"` unless the failing Shape constrains its Unit or Unit Kind,
+in which case it reports the Unit; an Optional preserves that diagnostic.
 A `Fail` raises its code with its Data as fields, unless it misuses a
 catalogue code, a reserved key or an undeclared code, which the Script sees
 as `host error`, with a `call-failed` record. The loader checks each literal

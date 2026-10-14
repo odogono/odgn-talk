@@ -183,7 +183,7 @@ pub const Shape = struct {
 pub const Mismatch = union(enum) {
     /// `wrong kind`: what was expected, what the node is, and its path.
     wrong_kind: struct { expected: []const u8, got: []const u8, value: *Value, path: []const *Value },
-    /// `not encodable`: a Function Value where a data Shape takes it.
+    /// `not encodable`: a Function Value found by an `any` or open-map data scan.
     not_encodable: struct { path: []const *Value },
 };
 
@@ -194,9 +194,11 @@ const Checker = struct {
     /// Path values live in the scratch list until the caller copies them.
     kept: std.ArrayList(*Value) = .empty,
 
-    fn got(c: *Checker, v: *const Value) ![]const u8 {
+    fn got(c: *Checker, s: *const Shape, v: *const Value) ![]const u8 {
+        if ((s.data == .quantity_of or s.data == .quantity_kind) and v.data == .quantity) {
+            return try v.data.quantity.unit.string(c.a, false);
+        }
         return switch (v.data) {
-            .quantity => |q| try q.unit.string(c.a, false),
             .bool => "boolean",
             .civil_date => "civil date",
             else => @tagName(v.data),
@@ -204,7 +206,7 @@ const Checker = struct {
     }
 
     fn wrong(c: *Checker, s: *const Shape, v: *Value) !Mismatch {
-        return .{ .wrong_kind = .{ .expected = try s.expected(c.a), .got = try c.got(v), .value = v, .path = try c.a.dupe(*Value, c.path.items) } };
+        return .{ .wrong_kind = .{ .expected = try s.expected(c.a), .got = try c.got(s, v), .value = v, .path = try c.a.dupe(*Value, c.path.items) } };
     }
 
     fn missing(c: *Checker, s: *const Shape) !Mismatch {
@@ -262,7 +264,6 @@ const Checker = struct {
                     .any => return c.function(v),
                     else => {},
                 }
-                if (v.data == .function) return try c.function(v);
                 const ok = switch (k) {
                     .nothing => v.data == .nothing,
                     .boolean => v.data == .bool,
@@ -282,22 +283,18 @@ const Checker = struct {
                 return if (ok) null else try c.wrong(s, v);
             },
             .quantity_of => |q| {
-                if (v.data == .function) return try c.function(v);
                 if (v.data == .quantity and std.meta.eql(v.data.quantity.unit, q.unit)) return null;
                 return try c.wrong(s, v);
             },
             .quantity_kind => |name| {
-                if (v.data == .function) return try c.function(v);
                 if (v.data == .quantity and ofKind(v.data.quantity.unit, name)) return null;
                 return try c.wrong(s, v);
             },
             .object => {
-                if (v.data == .function) return try c.function(v);
                 if (v.data == .object and std.mem.eql(u8, v.data.object.kind, s.data.object)) return null;
                 return try c.wrong(s, v);
             },
             .list => |inner| {
-                if (v.data == .function) return try c.function(v);
                 if (v.data != .list) return try c.wrong(s, v);
                 for (v.data.list, 1..) |x, i| {
                     try c.enter(.{ .index = i });
@@ -307,7 +304,6 @@ const Checker = struct {
                 return null;
             },
             .map => |m| {
-                if (v.data == .function) return try c.function(v);
                 if (v.data != .map) return try c.wrong(s, v);
                 for (m.fields) |f| {
                     try c.enter(.{ .key = f.key });
@@ -329,7 +325,6 @@ const Checker = struct {
                 for (v.data.map) |p| {
                     if (field(m.fields, p.key) != null) continue;
                     try c.enter(.{ .key = p.key });
-                    if (p.value.data == .function) return try c.function(p.value);
                     const nothing_shape: Shape = .{ .allocator = c.a, .data = .{ .kind = .nothing } };
                     return try c.wrong(&nothing_shape, p.value);
                 }
@@ -341,15 +336,14 @@ const Checker = struct {
                     if (try c.shape(x, v) == null) return null;
                     c.path.shrinkRetainingCapacity(depth);
                 }
-                if (v.data == .function) return try c.function(v);
                 return try c.wrong(s, v);
             },
             .optional => |inner| {
                 if (v.data == .nothing) return null;
                 const depth = c.path.items.len;
-                const bad = try c.shape(inner, v) orelse return null;
+                var bad = try c.shape(inner, v) orelse return null;
                 // A mismatch at this node expects the Shape or Nothing.
-                if (bad == .wrong_kind and bad.wrong_kind.path.len == depth) return try c.wrong(s, v);
+                if (bad == .wrong_kind and bad.wrong_kind.path.len == depth) bad.wrong_kind.expected = try s.expected(c.a);
                 return bad;
             },
         }
@@ -892,4 +886,35 @@ test "Shapes name what they expect and find the first node that breaks them" {
     const fine = try checkValue(a, gpa, form, ok);
     defer fine.release();
     try testing.expect(fine.mismatch == null);
+}
+
+test "Function Values under scalar Shapes are wrong kind" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const gpa = testing.allocator;
+    const text = try Shape.kind(gpa, .text);
+    defer text.release();
+    const captures = try model.list(gpa, &.{});
+    defer captures.release();
+    const f = try model.function(gpa, "s", "given x: x", 1, captures);
+    defer f.release();
+    const checked = try checkValue(a, gpa, text, f);
+    defer checked.release();
+    try testing.expect(checked.mismatch.? == .wrong_kind);
+    try testing.expectEqualStrings("function", checked.mismatch.?.wrong_kind.got);
+}
+
+test "Quantity diagnostics use the Unit only for Quantity Shapes" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const gpa = testing.allocator;
+    const text = try Shape.kind(gpa, .text);
+    defer text.release();
+    const q = try @import("../display.zig").parse(gpa, "5 m", .{});
+    defer q.release();
+    const checked = try checkValue(a, gpa, text, q);
+    defer checked.release();
+    try testing.expectEqualStrings("quantity", checked.mismatch.?.wrong_kind.got);
 }

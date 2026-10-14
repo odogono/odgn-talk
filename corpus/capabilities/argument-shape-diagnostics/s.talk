@@ -1,0 +1,111 @@
+-- Host Capability Shape diagnostics (#846).
+
+script variable seen = []
+
+on go
+  put given x: x into f
+  put try_scalar(f) after seen
+  put try_sequence(f) after seen
+  put try_sequence(["ok", f]) after seen
+  put try_closed(f) after seen
+  put try_closed({name: f}) after seen
+  put try_closed({name: "ok", extra: f}) after seen
+  put try_open({name: f}) after seen
+  put try_open({name: "ok", extra: [f]}) after seen
+  put try_data(f) after seen
+  put try_data({extra: [f]}) after seen
+  put try_exact(f) after seen
+  put try_unitkind(f) after seen
+  put try_choice(f) after seen
+  put try_maybe(f) after seen
+  put try_maybequantity(f) after seen
+  put try_scalar(5 m) after seen
+  put try_sequence(5 m) after seen
+  put try_sequence([5 m]) after seen
+  put try_closed({name: "ok", extra: 5 m}) after seen
+  put try_choice(5 m) after seen
+  put try_maybe(5 m) after seen
+  put try_exact(5 m) after seen
+  put try_unitkind(5 m) after seen
+  put try_maybequantity(5 m) after seen
+end go
+
+on try_scalar entry
+  try
+    tell shapes to scalar entry
+  catch e
+    return e
+  end try
+end try_scalar
+
+on try_sequence entry
+  try
+    tell shapes to sequence entry
+  catch e
+    return e
+  end try
+end try_sequence
+
+on try_closed entry
+  try
+    tell shapes to closed entry
+  catch e
+    return e
+  end try
+end try_closed
+
+on try_open entry
+  try
+    tell shapes to open entry
+  catch e
+    return e
+  end try
+end try_open
+
+on try_data entry
+  try
+    tell shapes to data entry
+  catch e
+    return e
+  end try
+end try_data
+
+on try_exact entry
+  try
+    tell shapes to exact entry
+  catch e
+    return e
+  end try
+end try_exact
+
+on try_unitkind entry
+  try
+    tell shapes to unitkind entry
+  catch e
+    return e
+  end try
+end try_unitkind
+
+on try_choice entry
+  try
+    tell shapes to choice entry
+  catch e
+    return e
+  end try
+end try_choice
+
+on try_maybe entry
+  try
+    tell shapes to maybe entry
+  catch e
+    return e
+  end try
+end try_maybe
+
+on try_maybequantity entry
+  try
+    tell shapes to maybequantity entry
+  catch e
+    return e
+  end try
+end try_maybequantity
