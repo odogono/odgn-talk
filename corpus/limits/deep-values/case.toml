@@ -1,0 +1,13 @@
+# deep-values: Lists and maps nested a thousand deep are ordinary Values: no
+# Core caps how deep a Value nests (spec chapter 3, Values; #871).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "deep"
+source = "deep.talk"
+limits = { allocPerRun = 268435456, callDepth = 1000 }

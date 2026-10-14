@@ -101,8 +101,13 @@ cover checked Mappings, callback restrictions, restoration, resource faults and
 comparison Fuel (#697, #869, #870). The maintainer approved their first blessings,
 the Mapping additions to `restricted-kit/map.dis`, and the identity-only
 `stdlib/calls` and `stdlib/lookup` changes on 2026-10-14; see the
-[exact approval record](../docs/reviews/mappings/README.md). Current support and
-the existing Zig Value-depth limitation (#871) are described in the Core guides.
+[exact approval record](../docs/reviews/mappings/README.md). Current support is
+described in the Core guides.
+
+The `limits/deep-values` Trace Case nests lists and maps 1000 deep, through
+equality, ordering, `vars`, save and restore, the `json` Library at 300 levels
+and an Allocation Budget fault (#871). TS, Go and Zig agree on it; its first
+blessing awaits human review.
 
 The `names/handler-shared-names` Trace Case covers Script Variables and Constants
 sharing local Handler names in either declaration order, guarded clauses,
