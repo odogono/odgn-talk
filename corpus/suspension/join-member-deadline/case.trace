@@ -1,4 +1,4 @@
-# Unblessed: a preempted Join Member's deadline counts from the Pump that started its call (#636); first blessing awaits human review.
+# First blessing approved for #854 on 2026-10-14; see docs/reviews/zig-fuzzing-regressions/README.md.
 > load s identity=ae7afafebc33b84d9870c0186691c4ec0bf54c0608626e4121e879e50cfae26d
 > deliver d1 to=s message=gather
 > pump clock=2026-10-02T00:00:00Z fuel-slice=25
