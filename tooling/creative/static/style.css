@@ -31,6 +31,7 @@ body {
 }
 #menu {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   padding: 0.3rem 0.8rem;
@@ -580,7 +581,11 @@ button:disabled {
 .playing #versions-window,
 .playing #edit-menu,
 .playing #show-projects,
-.playing #show-versions {
+.playing #show-versions,
+.playing #save-file,
+.playing #save-file-as,
+.playing #save-status,
+.playing #core {
   display: none;
 }
 #reader {
@@ -588,8 +593,13 @@ button:disabled {
   overflow: auto;
   flex: 1;
 }
-#reader .page {
+#reader .play-scale {
   position: relative;
+}
+#reader .page {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 #reader .el[hidden] {
   display: none;
