@@ -15,6 +15,7 @@ import {
   type Results,
 } from './report';
 import { peersDir } from './peers';
+import { bunPeers, goPeers, selectRunners } from './runners';
 import { manifest, scriptsDir, selected, skipped } from './suite';
 
 const { values: flags } = parseArgs({
@@ -27,19 +28,9 @@ const { values: flags } = parseArgs({
     smoke: { default: false, type: 'boolean' },
   },
 });
-// The Cores, and `peers` for every Peer Language runner.
-const runners = flags.only ? [flags.only] : ['go', 'ts', 'zig', 'peers'];
-for (const runner of runners) {
-  if (
-    runner !== 'go' &&
-    runner !== 'ts' &&
-    runner !== 'zig' &&
-    runner !== 'peers'
-  ) {
-    throw new Error(`--only takes go, ts, zig or peers, not ${runner}`);
-  }
-}
-const peers = runners.includes('peers');
+const runners = selectRunners(flags.only);
+const selectedBunPeers = bunPeers.filter(peer => runners.includes(peer));
+const selectedGoPeers = goPeers.filter(peer => runners.includes(peer));
 const benchDir = join(scriptsDir, '..');
 const filter = flags.filter ?? '';
 
@@ -94,7 +85,7 @@ if (runners.includes('ts')) {
     ) as Measurement[]),
   );
 }
-if (peers) {
+if (selectedBunPeers.length) {
   console.error('Measuring the Peer Languages on Bun…');
   measurements.push(
     ...(JSON.parse(
@@ -104,11 +95,14 @@ if (peers) {
           join(import.meta.dir, 'measure-peers.ts'),
           filter,
           flags.smoke ? 'smoke' : '',
+          selectedBunPeers.join(','),
         ],
         benchDir,
       ),
     ) as Measurement[]),
   );
+}
+if (runners.includes('cpython')) {
   console.error('Measuring CPython…');
   measurements.push(
     ...(JSON.parse(
@@ -130,6 +124,8 @@ if (peers) {
       ),
     ) as Measurement[]),
   );
+}
+if (runners.includes('applescript')) {
   // AppleScript runs only on macOS; elsewhere its runner is left out.
   if (platform() === 'darwin') {
     console.error('Measuring AppleScript…');
@@ -151,35 +147,28 @@ if (peers) {
     console.error('Skipping AppleScript, which runs only on macOS.');
   }
 }
-if (runners.includes('go') || peers) {
-  console.error(
-    runners.includes('go')
-      ? 'Measuring the Go Core…'
-      : 'Measuring the Peer Languages on Go…',
-  );
+const goRuns = [
+  ...(runners.includes('go')
+    ? [{ label: 'the Go Core', pattern: '^Benchmark(Load|Run)$' }]
+    : []),
+  ...(selectedGoPeers.length
+    ? [
+        {
+          label: `the Peer Languages on Go (${selectedGoPeers.join(', ')})`,
+          pattern: `^BenchmarkPeer$/^(${selectedGoPeers.join('|')})$`,
+        },
+      ]
+    : []),
+];
+for (const { label, pattern } of goRuns) {
+  console.error(`Measuring ${label}…`);
   const goArgs = flags.smoke
     ? ['-count', '1', '-benchtime', '1x']
     : ['-count', flags.count];
-  // BenchmarkLoad and BenchmarkRun measure the Go Core, BenchmarkPeer the
-  // Peer Languages on Go.
-  const goBenchmarks = runners.includes('go')
-    ? peers
-      ? '.'
-      : '^Benchmark(Load|Run)$'
-    : '^BenchmarkPeer$';
   measurements.push(
     ...parseGoBench(
       run(
-        [
-          'go',
-          'test',
-          '-run',
-          '^$',
-          '-bench',
-          goBenchmarks,
-          '-benchmem',
-          ...goArgs,
-        ],
+        ['go', 'test', '-run', '^$', '-bench', pattern, '-benchmem', ...goArgs],
         join(benchDir, 'go'),
         {
           NORTHTALK_BENCH_FILTER: filter,
@@ -199,24 +188,22 @@ const peerVersions = (): Record<string, string> => {
       readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8'),
     ) as { dependencies: Record<string, string> }
   ).dependencies;
+  const modules = [
+    ...(runners.includes('gopher-lua') ? ['github.com/yuin/gopher-lua'] : []),
+    ...(runners.includes('starlark-go') ? ['go.starlark.net'] : []),
+  ];
   const goModules = Object.fromEntries(
-    run(
-      [
-        'go',
-        'list',
-        '-m',
-        '-f',
-        '{{.Path}} {{.Version}}',
-        'github.com/yuin/gopher-lua',
-        'go.starlark.net',
-      ],
-      join(benchDir, 'go'),
-    )
-      .split('\n')
-      .map(line => line.split(' ')),
+    modules.length
+      ? run(
+          ['go', 'list', '-m', '-f', '{{.Path}} {{.Version}}', ...modules],
+          join(benchDir, 'go'),
+        )
+          .split('\n')
+          .map(line => line.split(' '))
+      : [],
   ) as Record<string, string>;
   return {
-    ...(platform() === 'darwin'
+    ...(runners.includes('applescript') && platform() === 'darwin'
       ? {
           applescript: [
             run(['osascript', '-e', "AppleScript's version"], benchDir),
@@ -224,14 +211,24 @@ const peerVersions = (): Record<string, string> => {
           ].join(' '),
         }
       : {}),
-    cpython: readFileSync(
-      join(peersDir, 'python', '.python-version'),
-      'utf8',
-    ).trim(),
-    'gopher-lua': goModules['github.com/yuin/gopher-lua'] ?? '',
-    'quickjs-emscripten': npm['quickjs-emscripten'] ?? '',
-    'starlark-go': goModules['go.starlark.net'] ?? '',
-    wasmoon: npm.wasmoon ?? '',
+    ...(runners.includes('cpython')
+      ? {
+          cpython: readFileSync(
+            join(peersDir, 'python', '.python-version'),
+            'utf8',
+          ).trim(),
+        }
+      : {}),
+    ...(runners.includes('gopher-lua')
+      ? { 'gopher-lua': goModules['github.com/yuin/gopher-lua'] ?? '' }
+      : {}),
+    ...(runners.includes('quickjs')
+      ? { 'quickjs-emscripten': npm['quickjs-emscripten'] ?? '' }
+      : {}),
+    ...(runners.includes('starlark-go')
+      ? { 'starlark-go': goModules['go.starlark.net'] ?? '' }
+      : {}),
+    ...(runners.includes('wasmoon') ? { wasmoon: npm.wasmoon ?? '' } : {}),
   };
 };
 
@@ -280,12 +277,9 @@ const results: Results = {
         }
       : {}),
     'cost model': versions.costModel,
-    go:
-      runners.includes('go') || peers
-        ? run(['go', 'env', 'GOVERSION'], benchDir)
-        : '',
+    go: goRuns.length ? run(['go', 'env', 'GOVERSION'], benchDir) : '',
     language: versions.language,
-    ...(peers ? peerVersions() : {}),
+    ...peerVersions(),
   },
 };
 
@@ -298,7 +292,9 @@ if (!flags.smoke && !flags['no-save']) {
     .replaceAll(/^-|-$/g, '');
   const dir = join(benchDir, 'results');
   mkdirSync(dir, { recursive: true });
-  const base = join(dir, `${date}-${slug}`);
+  // A selected run must not overwrite the full comparison from the same day.
+  const selection = flags.only === undefined ? '' : `-${runners.join('-')}`;
+  const base = join(dir, `${date}-${slug}${selection}`);
   writeFileSync(`${base}.json`, JSON.stringify(results, null, 2) + '\n');
   writeFileSync(`${base}.md`, report);
   console.error(`Wrote ${base}.json and .md`);

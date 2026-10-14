@@ -7,18 +7,31 @@ fault isolation. Its measurements are separate from the Core/Peer suite below.
 Measures how fast each Core runs the same Scripts, to find slow paths and to compare NorthTalk with its Peer Languages. Nothing here is normative. [ADR 0054](../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md) records why the suite lives outside the Cores and only advises the Cost Model.
 
 ```sh
-bun run bench [--filter <text>] [--only go|ts|zig|peers] [--count <n>] [--smoke] [--no-save] [--outlier-factor <k>]
+bun run bench [--filter <text>] [--only <runner,...>] [--count <n>] [--smoke] [--no-save] [--outlier-factor <k>]
 ```
 
 - **`--filter`** keeps the Benchmarks whose names contain the text, such as `core` or `core/fib`.
-- **`--only`** runs one Core, or only the [Peer Languages](#peer-languages). With multiple Cores, a Benchmark whose Fuel differs between them fails the run.
-- **`--count`** is the Go `-count` and the number of Zig and CPython repeats, 10 by default. mitata picks the sample count on Bun.
+- **`--only`** runs a comma-separated selection of Cores (`go`, `ts`, `zig`) and [Peer Language runners](#peer-languages). `peers` selects every Peer Language. With multiple Cores, a Benchmark whose Fuel differs between them fails the run. Only selected runners start; version collection also uses only their dependencies.
+- **`--count`** is the Go `-count` and the number of Zig, CPython and AppleScript repeats, 10 by default. mitata picks the sample count on Bun.
 - **`--smoke`** runs each Benchmark once at its smoke size and checks output and Fuel parity, without saving anything. Its timings mean nothing.
 - **`--no-save`** prints the report without writing it to `results/`.
 - **`--outlier-factor`** sets the Cost Model outlier threshold, 3 by default.
 - **Exit codes:** 0 when every Benchmark and every port produced its expected output and Fuel agreed, 1 otherwise.
 
-The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pinned CPython on first use. AppleScript runs only on macOS, and is left out of runs elsewhere. A full wave 1 run takes about 20–30 minutes with the default ten Go samples. It prints a Markdown report and writes it, with the JSON it came from, to `results/<date>-<os>-<arch>-<cpu>.{md,json}`. Each file records the commit, machine, and Bun, Go, Zig, language, Cost Model and Peer Language versions.
+The CPython runner needs [uv](https://docs.astral.sh/uv/), which downloads the pinned CPython on first use. AppleScript runs only on macOS, and is left out of runs elsewhere. A full wave 1 run takes about 20–30 minutes with the default ten Go samples. It prints a Markdown report and writes it, with the JSON it came from, to `results/<date>-<os>-<arch>-<cpu>.{md,json}`. Runs with `--only` append the expanded runner selection to the filename, so a selected comparison does not replace that day's full report. Each file records the commit, machine, and the selected runners' versions alongside the language and Cost Model versions.
+
+To compare the native Zig and TS Cores with AppleScript and Lua, without the
+WASM peers or other languages:
+
+```sh
+bun run bench --only zig,ts,applescript,gopher-lua --count 3
+```
+
+`ts` is the NorthTalk TS Core; `ts-native` is the peer's native TypeScript port.
+`gopher-lua` is Lua 5.1 hosted in Go; `wasmoon` is the WASM Lua runner. The command
+above uses Go only to host Lua. Add `--filter core` for a smaller workload set,
+or `--smoke` to check outputs and Fuel before measuring. Elixir and the separate
+WASI embedding benchmarks are outside this suite and are not started.
 
 The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements. The [first full results with wave 2](results/2026-10-08-darwin-arm64-apple-m5.md) cover all 38 workloads, including the four Fuel Slice sweep runs, on an Apple M5. Their [JSON](results/2026-10-08-darwin-arm64-apple-m5.json) records 216 measurements.
 
@@ -28,6 +41,12 @@ The [first native Zig comparison](results/2026-10-14-darwin-arm64-apple-m5.md)
 covers 39 workloads on an Apple M5, with Zig on 30 of them, including all 21
 Peer Language workloads. Its [JSON](results/2026-10-14-darwin-arm64-apple-m5.json)
 records 276 measurements with matching Fuel across the overlapping Cores.
+
+The [focused Zig, TS, AppleScript and Lua comparison](results/2026-10-14-darwin-arm64-apple-m5-zig-ts-applescript-gopher-lua.md)
+records 111 measurements on an Apple M5: 30 Zig workloads, 39 TS workloads and
+21 each on AppleScript and GopherLua, with matching Fuel on the overlapping
+Cores. Its [JSON](results/2026-10-14-darwin-arm64-apple-m5-zig-ts-applescript-gopher-lua.json)
+records three repeats for Zig and the peers, and mitata's automatic TS samples.
 
 The [Zig Map write measurements](results/2026-10-14-zig-map-writes.md) record
 three paired before/after runs, construction scaling and Group allocation

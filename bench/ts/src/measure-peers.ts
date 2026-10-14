@@ -7,7 +7,7 @@ import { loadPeer, peers } from './peers';
 import { type Measurement, statsOf } from './report';
 import { manifest, selected, sizeOf } from './suite';
 
-const [filter, smokeFlag] = process.argv.slice(2);
+const [filter, smokeFlag, only] = process.argv.slice(2);
 const smoke = smokeFlag === 'smoke';
 const heap = () => memoryUsage().current;
 const options = smoke
@@ -15,7 +15,9 @@ const options = smoke
   : { heap };
 
 const measurements: Measurement[] = [];
-for (const peer of peers) {
+for (const peer of peers.filter(
+  p => only === undefined || only.split(',').includes(p.name),
+)) {
   for (const b of manifest().filter(
     b => selected(b, filter || undefined) && !b.skip?.peers,
   )) {
