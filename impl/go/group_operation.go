@@ -136,7 +136,9 @@ func (g *Group) operation(s *Script, x *execution, grantName, opName string, arg
 			g.calls[call.id] = &operationCall{call: call, cancel: cancel, s: s, x: x, op: op, name: opName, pending: true, args: slices.Clone(vs), rebound: true}
 			if x.run.Join != nil {
 				x.run.AddJoinMember(string(call.id))
-				x.run.Join.Members[len(x.run.Join.Members)-1].WaitMS = int64(operationWait(op, x) / time.Millisecond)
+				m := &x.run.Join.Members[len(x.run.Join.Members)-1]
+				m.WaitMS = int64(operationWait(op, x) / time.Millisecond)
+				m.Deadline = g.deadlineAfter(m.WaitMS)
 			} else {
 				x.waitCall = call.id
 				x.run.SendWait = true

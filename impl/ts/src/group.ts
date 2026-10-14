@@ -3194,9 +3194,11 @@ export class Group {
       if (block) {
         join.deadline = this.timer(block.at, deadline({ join }), running);
       }
+      // A member's wait started with its call, which a preempted Join made
+      // in an earlier Pump.
       for (const m of sus.members) {
         const timer = this.timer(
-          now + BigInt(m.ms) * 1_000_000n,
+          m.at,
           { k: 'call', id: m.id, ms: m.ms },
           running,
         );

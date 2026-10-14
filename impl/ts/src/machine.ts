@@ -709,6 +709,8 @@ export type Member = {
   abort: AbortController | null;
   /** An answer that arrived early, which Persistent State counts. */
   answer?: Value;
+  /** Its deadline: the Clock of the Pump that started it, plus `ms`. */
+  at: bigint;
   call: CallContext | null;
   id: string;
   ms: number;
@@ -3879,7 +3881,13 @@ export class Run {
       this.hostCrossing({ ...record, charged });
       const ms = op.maxPendingMs ?? this.limits.maxWaitMs;
       if (member) {
-        this.join!.members.push({ id, call: ctx, abort, ms });
+        this.join!.members.push({
+          id,
+          call: ctx,
+          abort,
+          ms,
+          at: this.host!.now + BigInt(ms) * 1_000_000n,
+        });
       } else {
         // The Host has consumed the operands. Retain the call, not another
         // copy of its arguments on the frame's operand stack.
@@ -4823,6 +4831,7 @@ export class Run {
             call: null,
             abort: null,
             ms: this.limits.maxWaitMs,
+            at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1_000_000n,
           });
           return next();
         }

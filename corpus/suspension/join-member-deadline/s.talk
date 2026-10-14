@@ -1,0 +1,15 @@
+script variable got = "none"
+on gather
+  put 0 into busy
+  try
+    wait for all
+      ask api to fetch and wait
+      repeat 10 times
+        add 1 to busy
+      end repeat
+    end wait
+    put it into got
+  catch e
+    put e into got
+  end try
+end gather
