@@ -223,7 +223,7 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `dispose`, `{object}` Delivery targets and load `owner`/`objects`,
 `broadcast` and `decide`, `reload` and `extend`, `compile-library`,
 `add-library` and `replace-library`, `inspect` and `grants`, `restore`
-with its interim `resolve` need, `settle`, `$function` values and `call`,
+with its interim `resolve` need, `settle`, `$function` values and `call`, `export-manifest`,
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. It does not yet conform: `standard-capability`, `effect`/`release` needs and
 `request-charge` are protocol errors, and a
