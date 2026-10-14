@@ -625,6 +625,12 @@ talk_host_error_code talk_console_capability(talk_core *c, const talk_console_im
  * store full {limit} or store busy {key}, and from increment with the error
  * + would raise (chapter 7). */
 talk_host_error_code talk_store_capability(talk_core *c, const talk_store_impl *impl, const talk_costs *costs, talk_capability_def **out);
+/* The Core's copy of impl's coordinator, the one talk_store_capability maps
+ * every Store to, which a talk_sqlite_impl's coordinator may give for the
+ * database that keeps the Stores, so both share a Segment's participant
+ * (ADR 0070). The same hooks and context give the same pointer, for the
+ * Core's life. NULL for a missing hook, or when it can't allocate. */
+const talk_segment_lifecycle *talk_store_coordinator(talk_core *c, const talk_store_impl *impl);
 /* sqlite is optional (chapter 7). per_row is whole Fuel charged per row of
  * max, from 0 to 9007199254740991. Each Grant's binding is a
  * talk_sqlite_binding; a malformed one refuses the Grant. The Core converts
@@ -653,6 +659,12 @@ void talk_call_scope_name(const talk_call *c, const char **s, size_t *len);
 /* True only when the Core abandons a scope its Run left open. Such a call
  * may not charge, and only a normal return counts as success. */
 bool talk_call_automatic(const talk_call *c);
+/* Call.Context as a cancellation flag: true once the call is abandoned, by a
+ * failed Join, a cancelled Run, a stop, a timeout or a restore that lost it,
+ * when the Host may give up its work. Safe from any thread while the
+ * talk_call is valid; an immediate or fire-and-forget call is never
+ * abandoned. */
+bool talk_call_context(const talk_call *c);
 /* The Group that made the call, whatever its mode. */
 talk_group *talk_call_group(const talk_call *c);
 /* Answer, AnswerWithCost and Fail settle a suspending call. Its talk_call

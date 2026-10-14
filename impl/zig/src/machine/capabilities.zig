@@ -664,6 +664,10 @@ pub const Call = struct {
     args: []*Value = &.{},
     /// The Group's allocator, which owns a failure's code and message.
     gpa: std.mem.Allocator,
+    /// Whether its wait ended without its answer: a failed Join, a
+    /// cancelled Run, a stop, a timeout or a lost restore. The Host may
+    /// read it from any thread.
+    abandoned: std.atomic.Value(bool) = .init(false),
 
     /// Draws Fuel before the work; false when the Run can't cover it.
     pub fn charge(c: *Call, fuel: u64) bool {

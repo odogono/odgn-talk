@@ -378,6 +378,11 @@ pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Val
 
 /// A suspended Run's wait, with its deadline in nanoseconds: a suspending
 /// Capability call or a `wait`.
+/// Marks a Capability call whose wait ends without its answer abandoned.
+fn abandonCall(p: *const Pending) void {
+    if (p.call) |c| c.abandoned.store(true, .release);
+}
+
 pub const Pending = struct {
     /// A `send … and wait`'s call id; a Capability call's is its Call's.
     id: []const u8 = "",
@@ -2584,6 +2589,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             const id = if (p.call) |c| c.id else p.id;
             if (id.len > 0) try r.abandoned.append(g.gpa, id);
             g.destroyPending(p);
@@ -2895,6 +2901,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
@@ -3169,6 +3176,7 @@ pub const Group = struct {
                 } else for (g.pending.items, 0..) |p, i| {
                     const c = p.call orelse continue;
                     if (!std.mem.eql(u8, c.id, id)) continue;
+                    abandonCall(p);
                     try g.ready(g.pending.orderedRemove(i), .lost);
                     break;
                 }
@@ -3205,6 +3213,7 @@ pub const Group = struct {
             const i = first orelse break;
             const p = g.pending.orderedRemove(i);
             const with: Resume = if (p.call != null or p.id.len > 0 or p.block) .timeout else if (p.event != null) .{ .event = .{ .message = null, .branch = p.branch } } else .woke;
+            abandonCall(p);
             try g.ready(p, with);
         }
         g.turn_at = 0;
@@ -3351,6 +3360,7 @@ pub const Group = struct {
                         _ = g.pending.orderedRemove(i);
                         break;
                     };
+                    abandonCall(w);
                     g.destroyPending(w);
                     x.pending = null;
                     x.cut = true;
@@ -4566,6 +4576,7 @@ pub const Group = struct {
                     _ = g.pending.orderedRemove(i);
                     break;
                 };
+                abandonCall(p);
                 g.destroyPending(p);
             }
             if (x.with) |w| g.releaseResume(w);
@@ -6752,6 +6763,7 @@ pub const Group = struct {
                 _ = g.pending.orderedRemove(i);
                 break;
             };
+            abandonCall(p);
             g.destroyPending(p);
             run.waiting = null;
         }

@@ -2670,6 +2670,9 @@ pub export fn talk_call_group(c: *const Call) ?*Group {
 export fn talk_call_automatic(c: *const Call) bool {
     return c.automatic;
 }
+export fn talk_call_context(c: *const Call) bool {
+    return c.abandoned.load(.acquire);
+}
 export fn talk_call_charge(c: *Call, fuel: i64) HostErrorCode {
     if (fuel < 0) return .invalid_value;
     return if (c.charge(@intCast(fuel))) .ok else .err_limit;
@@ -2780,18 +2783,27 @@ fn storeCoordinator(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinato
     return .{ .identity = @intFromPtr(context.?), .hook = segmentHook, .context = context };
 }
 
+/// The Core's own copy of a store coordinator, whose address is its
+/// identity: one for each distinct set of hooks and context.
+fn storeLifecycle(c: *Core, hooks: SegmentLifecycle) error{ InvalidValue, OutOfMemory }!*SegmentLifecycle {
+    if (hooks.begin == null or hooks.commit == null or hooks.rollback == null) return error.InvalidValue;
+    for (c.lifecycles.items) |l| if (l.begin == hooks.begin and l.commit == hooks.commit and l.rollback == hooks.rollback and l.context == hooks.context) return l;
+    const lifecycle = try c.gpa.create(SegmentLifecycle);
+    lifecycle.* = hooks;
+    c.lifecycles.append(c.gpa, lifecycle) catch |err| {
+        c.gpa.destroy(lifecycle);
+        return err;
+    };
+    return lifecycle;
+}
+
+export fn talk_store_coordinator(c: *Core, impl: *const StoreImpl) ?*const SegmentLifecycle {
+    return storeLifecycle(c, impl.coordinator) catch null;
+}
+
 export fn talk_store_capability(c: *Core, impl: *const StoreImpl, costs: ?*const Costs, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
-    const hooks = impl.coordinator;
-    if (hooks.begin == null or hooks.commit == null or hooks.rollback == null) return .invalid_value;
-    // The Core keeps its own copy of the coordinator, whose address is its
-    // identity.
-    const lifecycle = c.gpa.create(SegmentLifecycle) catch return .out_of_memory;
-    lifecycle.* = hooks;
-    c.lifecycles.append(c.gpa, lifecycle) catch {
-        c.gpa.destroy(lifecycle);
-        return .out_of_memory;
-    };
+    const lifecycle = storeLifecycle(c, impl.coordinator) catch |err| return status(err);
     // In name order: delete, get, increment, keys, set, swap, unwatch, watch.
     const code = defineStandardWith(c, .store, &.{ impl.del, impl.get, impl.increment, impl.keys, impl.set, impl.swap, impl.unwatch, impl.watch }, &.{}, impl.context, costs, .{ .call = storeCoordinator, .context = lifecycle }, out);
     if (code != .ok) return code;

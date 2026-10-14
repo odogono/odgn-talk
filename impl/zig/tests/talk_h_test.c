@@ -514,8 +514,13 @@ static int store_test(void) {
     talk_store_impl impl = {NULL, store_get, unused, unused, unused, unused, unused, unused, unused, {NULL, NULL, NULL, NULL}, NULL};
     talk_capability_def *def = NULL;
     int bad = talk_store_capability(core, &impl, &costs, &def) != TALK_INVALID_VALUE;
+    bad |= talk_store_coordinator(core, &impl) != NULL;
     impl.coordinator = (talk_segment_lifecycle){begin_hook, commit_hook, rollback_hook, NULL};
+    /* The coordinator a sqlite impl may share: the Core's copy, the same
+     * one before and after the definition. */
+    const talk_segment_lifecycle *shared = talk_store_coordinator(core, &impl);
     bad |= talk_store_capability(core, &impl, &costs, &def) != TALK_OK;
+    bad |= shared == NULL || shared == &impl.coordinator || shared != talk_store_coordinator(core, &impl);
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, "scores", &grant) != TALK_OK;
     talk_load_grant grants[] = {{"st", 2, grant}};
@@ -1237,6 +1242,15 @@ static int suspension_test(void) {
     talk_inspect(group, NULL);
     bad |= strstr(trace, "> answer waiter/r1.c1 value=42 fuel=3\n") == NULL;
     bad |= strstr(trace, "vars waiter got=42\n") == NULL;
+    /* An answered call was never abandoned; one that times out is. */
+    bad |= started == NULL || talk_call_context(started);
+    started = NULL;
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000010, 0, NULL, NULL) != TALK_OK;
+    talk_call *timing_out = started;
+    bad |= timing_out == NULL || talk_call_context(timing_out);
+    bad |= talk_pump(group, 1790000012, 0, NULL, NULL) != TALK_OK;
+    bad |= timing_out == NULL || !talk_call_context(timing_out);
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);

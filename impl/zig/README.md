@@ -587,8 +587,10 @@ argument 2, with its `path`). `query` and `change` then charge `max` times the
 per-row cost, `max` defaulting to the binding's cap, convert `params` to SQL
 values, and convert the rows back, raising `sql` for a column named twice and
 `unrepresentable` for a double it can't hold or text that isn't UTF-8. A
-malformed result is `host error`. `talk_store_coordinator`, for a Store kept
-in a database, comes later.
+malformed result is `host error`. `talk_store_coordinator` gives the Core's
+copy of a `store` implementation's coordinator, the same one for the same
+hooks and context, which the implementation's `coordinator` may give for the
+database that keeps the Stores, so both share a Segment's participant.
 
 `timer` (`talk_timer_capability`) forwards `schedule`'s name, Instant, message
 and arguments and `cancel`'s name to the Host, both fire-and-forget. The Host
@@ -609,7 +611,8 @@ queue of messages and ready Runs, in the order each became ready. A
 suspending call's `talk_call` outlives the call, and `talk_call_answer`,
 `talk_call_answer_with_cost` and `talk_call_fail` queue Host Inputs that the
 next Pump drains; an answer for a call that no longer waits becomes a
-`late-answer` note. Each Pump then fires due deadlines, `maxPending` or the
+`late-answer` note. `talk_call_context` turns true, readable from any thread,
+once a call's wait ends without its answer, so the Host may give up its work. Each Pump then fires due deadlines, `maxPending` or the
 default `MaxWait` for a call, in deadline order, and a timed-out call raises
 `timeout` and is abandoned. A resumed Run is charged its answer's terms over
 the result and any cost the answer brought. Persistent State counts each
