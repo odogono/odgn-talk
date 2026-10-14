@@ -105,6 +105,34 @@ test "the cap refuses an allocation past it, and frees count back" {
     try std.testing.expect(g.used <= 1024);
 }
 
+test "Map updates obey the Group physical cap and leave the prior root intact on refusal" {
+    var memory: GroupAllocator = .init(std.testing.allocator, 16 << 10);
+    {
+        const gpa = memory.allocator();
+        const item = try model.scalar(gpa, .nothing);
+        defer item.release();
+        var root = try model.map(gpa, &.{});
+        defer root.release();
+        var refused = false;
+        for (0..1000) |i| {
+            var buffer: [20]u8 = undefined;
+            const key = try std.fmt.bufPrint(&buffer, "{d}", .{i});
+            const old = root;
+            model.mapSet(&root, key, item) catch |err| {
+                try std.testing.expectEqual(error.OutOfMemory, err);
+                try std.testing.expectEqual(old, root);
+                try std.testing.expectEqual(i, root.data.map.len);
+                try std.testing.expect(root.get(key) == null);
+                refused = true;
+                break;
+            };
+        }
+        try std.testing.expect(refused and memory.refused);
+        try std.testing.expect(memory.used <= memory.cap and memory.peak <= memory.cap);
+    }
+    try std.testing.expectEqual(@as(usize, 0), memory.used);
+}
+
 test "a Group past its cap refuses mid-Pump and gives back every byte" {
     const machine = @import("machine.zig");
     var memory: GroupAllocator = .init(std.testing.allocator, 256 * 1024);

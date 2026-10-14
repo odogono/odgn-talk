@@ -2687,6 +2687,57 @@ test "a save restores to the same save, and a restored Group goes on" {
     try testing.expectEqualSlices(u8, x, y);
 }
 
+test "Map updates retain insertion order and originals across restore and Segment rollback" {
+    const gpa = testing.allocator;
+    var group: Group = .init(gpa, null);
+    defer group.deinit();
+    const source =
+        \\script variable values = {"é": 1, tail: 2}
+        \\script variable original = nothing
+        \\on edit
+        \\  put values into original
+        \\  put values into values's self
+        \\  put 3 into the ("é") of values
+        \\  wait 1 s
+        \\  put 4 into values's tail
+        \\end edit
+        \\on fault
+        \\  put 5 into values's tail
+        \\  repeat forever
+        \\  end repeat
+        \\end fault
+        \\
+    ;
+    try testing.expect(try group.load("s", source, .{ .limits = .{ .fuel_per_run = 10_000 } }) == .loaded);
+    _ = try group.deliver("s", "edit", &.{}, false);
+    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    const saved = try save(&group, gpa, try group.groupFingerprint());
+    defer gpa.free(saved);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.full, try restore(&restored, saved, .{}, &result));
+    const original = try display.parse(gpa, "{\"é\": 1, tail: 2}", .{});
+    defer original.release();
+    for ([_]*Group{ &group, &restored }) |g| {
+        try g.pump(.{ .seconds = 1790000001, .nanos = 0 });
+        const script = g.script("s").?;
+        const values = script.variables[0].retain();
+        defer values.release();
+        try testing.expect(try original.equal(script.variables[1]));
+        try testing.expect(try original.equal(values.get("self").?));
+        try testing.expectEqualStrings("é", values.data.map[0].key);
+        try testing.expectEqualStrings("tail", values.data.map[1].key);
+        try testing.expectEqualStrings("self", values.data.map[2].key);
+        try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(3), values.get("é").?.data.number));
+        try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(4), values.get("tail").?.data.number));
+        _ = try g.deliver("s", "fault", &.{}, false);
+        try g.pump(.{ .seconds = 1790000002, .nanos = 0 });
+        try testing.expect(try values.equal(script.variables[0]));
+    }
+}
+
 test "a corrupt or hostile save is refused, never a crash" {
     const gpa = testing.allocator;
     var g = try busyGroup(gpa);

@@ -948,10 +948,13 @@ Each returned value owns one reference. Constructors copy byte input and
 retain child values; text and map keys become NFC. Map keys preserve insertion
 order and refuse NFC duplicates. Container writes rebind the root, preserving
 aliases and preventing cycles, including insertion of the previous root into
-its replacement. Every node remembers its allocator, so Zig tests use the
-leak-detecting test allocator. C values use the process allocator; a Group's
-own values use its Group allocator. Handles require Host synchronization
-when shared across threads.
+its replacement. Map writes validate and normalise the incoming key, then copy
+the ordered entries and their owned key bytes; existing keys are already NFC
+and unique, so writes do not repeat constructor validation. Maps still use
+linear lookup and copy their entries on each write. Every node remembers its
+allocator, so Zig tests use the leak-detecting test allocator. C values use the
+process allocator; a Group's own values use its Group allocator. Handles require
+Host synchronization when shared across threads.
 
 Text and Decimal accessor pointers borrow their value. Byte accessors copy
 out, and display, encoding and canonical Unit strings return an owned
