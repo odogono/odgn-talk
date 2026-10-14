@@ -1254,6 +1254,22 @@ static int object_test(void) {
     talk_object_kind *lamp = NULL, *room = NULL;
     int bad = talk_define_object_kind(core, &lamp_def, &lamp) != TALK_OK;
     bad |= talk_define_object_kind(core, &room_def, &room) != TALK_OK;
+    /* An Operation that takes a lamp refuses a number at load. */
+    talk_shape *lamp_shape = NULL;
+    bad |= talk_object_shape(lamp, &lamp_shape) != TALK_OK;
+    const talk_shape *see_args[] = {lamp_shape};
+    talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false}};
+    talk_capability_def *probe = NULL;
+    bad |= talk_define_capability(core, "probe", 5, see_ops, 1, &probe) != TALK_OK;
+    talk_shape_release(lamp_shape);
+    talk_grant *probe_grant = NULL;
+    bad |= talk_capability_def_grant_all(probe, NULL, &probe_grant) != TALK_OK;
+    talk_load_grant probe_grants[] = {{"probe", 5, probe_grant}};
+    const char *peek_source = "on go\n  ask probe to see 5\nend go\n";
+    talk_load_options peek = {"peek", 4, peek_source, strlen(peek_source), probe_grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *peeking = NULL;
+    bad |= talk_load(group, &peek, &peeking) != TALK_LOAD_REFUSED;
+    bad |= strstr(trace, "diag peek code=\"wrong argument\"") == NULL;
     talk_object *light = NULL, *hall = NULL, *again = NULL, *found = NULL;
     bad |= talk_group_object(group, lamp, "l1", 2, NULL, &light) != TALK_OK;
     bad |= talk_group_object(group, room, "hall", 4, NULL, &hall) != TALK_OK;
@@ -1568,6 +1584,7 @@ int main(void) {
     talk_owned_bytes_release(&buffer); talk_value_release(value);
     expect(talk_instant(-1, 999999999, &value) == TALK_OK, "negative epoch constructor");
     int64_t seconds = 0; int32_t nanos = 0;
+    const char *text_out = NULL; size_t text_len = 0;
     expect(talk_value_as_instant(value, &seconds, &nanos) && seconds == -1 && nanos == 999999999, "instant accessor");
     talk_value_release(value);
     expect(talk_instant(0, -1, &value) == TALK_INVALID_VALUE, "invalid nanoseconds refused");
@@ -1579,6 +1596,46 @@ int main(void) {
     expect(talk_value_index(value, 1, &copy) == TALK_OK && talk_value_kind(copy) == TALK_KIND_NOTHING, "missing item is Nothing");
     talk_value_release(copy); talk_value_release(value);
     talk_value_release(NULL);
+    /* talk_kv builds talk_map's entries. */
+    talk_value *one = NULL;
+    talk_int(1, &one);
+    talk_pair entries[] = {talk_kv("a", 1, one)};
+    expect(talk_map(entries, 1, &value) == TALK_OK && talk_value_get(value, "a", 1, &copy) == TALK_OK && talk_value_kind(copy) == TALK_KIND_NUMBER, "talk_kv builds a map entry");
+    talk_value_release(copy); talk_value_release(value);
+    struct timespec moment = {1790000000, 250000000};
+    expect(talk_instant_from_time(&moment, &value) == TALK_OK && talk_value_as_instant(value, &seconds, &nanos) && seconds == 1790000000 && nanos == 250000000, "an Instant from a timespec");
+    talk_value_release(value);
+    moment.tv_nsec = 1000000000;
+    expect(talk_instant_from_time(&moment, &value) == TALK_INVALID_VALUE && value == NULL, "a timespec past its nanoseconds is refused");
+    /* Plain JSON keeps a number's digits, both ways. */
+    const char *json = "{\"name\":\"Ann\",\"scores\":[2.50,null]}";
+    expect(talk_decode_json((const unsigned char *)json, strlen(json), &value) == TALK_OK, "plain JSON decodes");
+    expect(talk_encode_json(value, &buffer) == TALK_OK && buffer.len == strlen(json) && memcmp(buffer.data, json, buffer.len) == 0, "plain JSON encodes back");
+    talk_owned_bytes_release(&buffer); talk_value_release(value);
+    expect(talk_decode_json((const unsigned char *)"1e5", 3, &value) == TALK_OK && talk_value_string(value, &buffer) == TALK_OK && buffer.len == 6 && memcmp(buffer.data, "100000", 6) == 0, "a JSON exponent is applied");
+    talk_owned_bytes_release(&buffer); talk_value_release(value);
+    expect(talk_decode_json((const unsigned char *)"[1,]", 4, &value) == TALK_INVALID_VALUE && value == NULL, "invalid JSON is refused");
+    expect(talk_instant(0, 0, &copy) == TALK_OK && talk_encode_json(copy, &buffer) == TALK_INVALID_VALUE, "an Instant has no plain JSON form");
+    /* Add is `+`, outside any Run: dates too, and its errors are a Run's. */
+    talk_value *two = NULL, *sum = NULL;
+    talk_int(2, &two);
+    talk_script_error added = {0};
+    expect(talk_add(one, two, &sum, &added) == TALK_OK && talk_value_as_dec(sum, &decimal) && talk_decimal_int64(decimal, &integer) == TALK_OK && integer == 3, "1 + 2");
+    talk_value_release(sum);
+    talk_value *later = NULL, *minute = NULL;
+    talk_parse_display("1 min", 5, &minute);
+    expect(talk_add(copy, minute, &later, &added) == TALK_OK && talk_value_as_instant(later, &seconds, &nanos) && seconds == 60, "an Instant plus a duration");
+    talk_value_release(later);
+    talk_value *text = NULL;
+    talk_text("x", 1, &text);
+    expect(talk_add(one, text, &sum, &added) == TALK_SCRIPT_FAILED && sum == NULL, "1 + \"x\" fails");
+    expect(added.code_len == 10 && memcmp(added.code, "wrong kind", 10) == 0 && added.message_len > 0, "with wrong kind and its message");
+    talk_value *field = NULL;
+    expect(talk_value_get(added.data, "expected", 8, &field) == TALK_OK && talk_value_as_text(field, &text_out, &text_len) && text_len == 6 && memcmp(text_out, "number", 6) == 0, "and its fields as data");
+    talk_value_release(field);
+    talk_script_error_release(&added);
+    expect(added.data == NULL && added.message == NULL, "the error released");
+    talk_value_release(text); talk_value_release(minute); talk_value_release(copy); talk_value_release(two); talk_value_release(one);
     talk_versions versions;
     talk_core_versions(&versions);
     expect(versions.language_len > 0 && versions.cost_model_len > 0 && versions.unicode_len > 0, "the versions are named");

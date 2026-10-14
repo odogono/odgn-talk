@@ -100,6 +100,14 @@ export fn talk_instant(seconds: i64, nanos: i32, out: *?*Value) HostErrorCode {
     model.dates.validateInstant(t) catch return .invalid_value;
     return result(out, model.scalar(allocator, .{ .instant = t }));
 }
+/// `struct timespec`, whose `time_t` is 64 bits on every target the Core
+/// builds for.
+pub const Timespec = extern struct { sec: i64, nsec: c_long };
+export fn talk_instant_from_time(t: *const Timespec, out: *?*Value) HostErrorCode {
+    out.* = null;
+    if (t.nsec < 0 or t.nsec >= std.time.ns_per_s) return .invalid_value;
+    return talk_instant(t.sec, @intCast(t.nsec), out);
+}
 export fn talk_bytes(s: ?[*]const u8, len: usize, out: *?*Value) HostErrorCode {
     out.* = null;
     return result(out, model.bytes(allocator, bytes(s, len) catch return .invalid_value));
@@ -116,6 +124,9 @@ export fn talk_map(input: ?[*]const Pair, len: usize, out: *?*Value) HostErrorCo
     defer allocator.free(pairs);
     for (ps, pairs) |p, *q| q.* = .{ .key = bytes(p.key, p.key_len) catch return .invalid_value, .value = p.value };
     return result(out, model.map(allocator, pairs));
+}
+export fn talk_kv(key: ?[*]const u8, len: usize, value: *Value) Pair {
+    return .{ .key = key, .key_len = len, .value = value };
 }
 export fn talk_range(from: *Value, to: *Value, out: *?*Value) HostErrorCode {
     return result(out, model.range(allocator, from, to));
@@ -248,6 +259,13 @@ export fn talk_decode_value(s: ?[*]const u8, len: usize, resolve: ?ResolveObject
     }
     return result(out, encoding.decode(allocator, bytes(s, len) catch return .invalid_value, resolver));
 }
+export fn talk_decode_json(s: ?[*]const u8, len: usize, out: *?*Value) HostErrorCode {
+    out.* = null;
+    return result(out, encoding.decodeJson(allocator, bytes(s, len) catch return .invalid_value));
+}
+export fn talk_encode_json(v: *const Value, out: *Buffer) HostErrorCode {
+    return buffer(out, encoding.encodeJson(allocator, v));
+}
 // C-only display reader for the corpus and Host diagnostics.
 export fn talk_parse_display(s: ?[*]const u8, len: usize, out: *?*Value) HostErrorCode {
     out.* = null;
@@ -304,6 +322,7 @@ pub const HostErrorCode = enum(c_int) {
     err_mailbox_full,
     load_refused,
     out_of_memory,
+    script_failed,
 };
 
 // ---------------------------------------------------------------- Groups
@@ -625,6 +644,7 @@ pub fn hostCodeName(code: HostErrorCode) []const u8 {
         .err_mailbox_full => "mailbox full",
         .load_refused => "load error",
         .out_of_memory => "out of memory",
+        .script_failed => "script error",
     };
 }
 
@@ -2125,6 +2145,27 @@ export fn talk_script_error_error(e: *const ScriptError, out: *Buffer) HostError
     return errorText(out, bytes(e.code, e.code_len) catch return .invalid_value, if (e.message) |m| m[0..e.message_len] else "");
 }
 
+/// `a + b` outside any Run, on a Group of its own that runs nothing.
+export fn talk_add(a: *const Value, b: *const Value, out: *?*Value, err: *ScriptError) HostErrorCode {
+    out.* = null;
+    err.* = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+    var g = machine.Group.init(allocator, null);
+    defer g.deinit();
+    out.* = g.arithmetic(.add, @constCast(a), @constCast(b)) catch |e| {
+        if (e != error.Raised) return status(e);
+        const f = g.takeFailure() catch |taken| return status(taken);
+        err.* = .{ .code = f.code.ptr, .code_len = f.code.len, .message = f.message.ptr, .message_len = f.message.len, .data = f.data };
+        return .script_failed;
+    };
+    return .ok;
+}
+
+export fn talk_script_error_release(e: *ScriptError) void {
+    if (e.message) |m| allocator.free(m[0..e.message_len]);
+    if (e.data) |d| d.release();
+    e.* = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+}
+
 pub const CallEnd = enum(c_int) { answered, failed, limited, broken, started };
 
 pub const OperationFn = ?*const fn (context: ?*anyopaque, call: *Call, args: [*]const *Value, args_len: usize, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
@@ -2905,6 +2946,10 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
     c.kinds.append(gpa, k) catch return .out_of_memory;
     out.* = k;
     return .ok;
+}
+
+export fn talk_object_shape(k: *const objects.Kind, out: *?*Shape) HostErrorCode {
+    return shapeResult(out, Shape.objectOf(allocator, k.name));
 }
 
 /// Makes the Group's handle for a Host-owned thing; a duplicate id within

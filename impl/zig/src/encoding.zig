@@ -281,6 +281,13 @@ fn fromJson(a: std.mem.Allocator, j: Json, r: display.Resolver, depth: usize) mo
 /// come from `r`.
 pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Error!*Value {
     if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
+    try checkDepth(s);
+    const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+    defer parsed.deinit();
+    return fromJson(a, parsed.value, r, 0);
+}
+/// Refuses JSON nested beyond `max_depth` before it is parsed.
+fn checkDepth(s: []const u8) model.Error!void {
     var depth: usize = 0;
     var quoted_string = false;
     var escaped = false;
@@ -295,9 +302,176 @@ pub fn decode(a: std.mem.Allocator, s: []const u8, r: display.Resolver) model.Er
             depth -= 1;
         }
     }
+}
+/// Chapter 7's JSON mapping, the one rule for plain JSON that the `json`
+/// Library follows too: a text's `"` and `\`, its short escapes and its
+/// other characters below U+0020 escaped, every other character as itself.
+fn plainQuoted(w: *std.Io.Writer, s: []const u8) !void {
+    try w.writeByte('"');
+    for (s) |c| switch (c) {
+        '"' => try w.writeAll("\\\""),
+        '\\' => try w.writeAll("\\\\"),
+        8 => try w.writeAll("\\b"),
+        9 => try w.writeAll("\\t"),
+        10 => try w.writeAll("\\n"),
+        12 => try w.writeAll("\\f"),
+        13 => try w.writeAll("\\r"),
+        0...7, 11, 14...31 => try w.print("\\u00{x:0>2}", .{c}),
+        else => try w.writeByte(c),
+    };
+    try w.writeByte('"');
+}
+fn writePlain(w: *std.Io.Writer, v: *const Value) Error!void {
+    const a = v.allocator;
+    switch (v.data) {
+        .nothing => try w.writeAll("null"),
+        .bool => |b| try w.writeAll(if (b) "true" else "false"),
+        .number => |n| {
+            const s = try n.string(a);
+            defer a.free(s);
+            try w.writeAll(s);
+        },
+        .text => |s| try plainQuoted(w, s),
+        .list => |xs| {
+            try w.writeByte('[');
+            for (xs, 0..) |x, i| {
+                if (i > 0) try w.writeByte(',');
+                try writePlain(w, x);
+            }
+            try w.writeByte(']');
+        },
+        .map => |xs| {
+            try w.writeByte('{');
+            for (xs, 0..) |p, i| {
+                if (i > 0) try w.writeByte(',');
+                try plainQuoted(w, p.key);
+                try w.writeByte(':');
+                try writePlain(w, p.value);
+            }
+            try w.writeByte('}');
+        },
+        else => return error.NotEncodable,
+    }
+}
+/// `v` as compact plain JSON, owned by the caller. A kind JSON has no form
+/// for, at any depth, is NotEncodable (chapter 7, Encoding).
+pub fn encodeJson(a: std.mem.Allocator, v: *const Value) Error![]u8 {
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    writePlain(&out.writer, v) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
+    return out.toOwnedSlice();
+}
+/// A JSON number read exactly: its exponent applied, and a positive result
+/// exponent rescaled to 0, so `1e5` is 100000 and `2.50e1` is 25.0. One past
+/// the number limits is InvalidValue (chapter 7, Decoding).
+fn plainNumber(a: std.mem.Allocator, s: []const u8) model.Error!model.Decimal {
+    var i: usize = 0;
+    const negative = s[0] == '-';
+    if (negative) i += 1;
+    const whole_start = i;
+    while (i < s.len and std.ascii.isDigit(s[i])) i += 1;
+    const whole = s[whole_start..i];
+    var fraction: []const u8 = "";
+    if (i < s.len and s[i] == '.') {
+        const start = i + 1;
+        i = start;
+        while (i < s.len and std.ascii.isDigit(s[i])) i += 1;
+        fraction = s[start..i];
+    }
+    var exp_negative = false;
+    var exp_digits: []const u8 = "";
+    if (i < s.len and (s[i] == 'e' or s[i] == 'E')) {
+        i += 1;
+        if (s[i] == '+' or s[i] == '-') {
+            exp_negative = s[i] == '-';
+            i += 1;
+        }
+        exp_digits = std.mem.trimStart(u8, s[i..], "0");
+    }
+    const digits = try std.mem.concat(a, u8, &.{ whole, fraction });
+    defer a.free(digits);
+    const significant = std.mem.trimStart(u8, digits, "0");
+    if (exp_digits.len > 9) {
+        if (significant.len == 0 and !exp_negative) return model.Decimal.parse("0");
+        return error.InvalidValue;
+    }
+    var e: i64 = if (exp_digits.len == 0) 0 else std.fmt.parseInt(i64, exp_digits, 10) catch unreachable;
+    if (exp_negative) e = -e;
+    const q = e - @as(i64, @intCast(fraction.len));
+    if (significant.len == 0 and q >= 0) return model.Decimal.parse("0");
+    if (significant.len > 34) return error.InvalidValue;
+    var text: std.ArrayList(u8) = .empty;
+    defer text.deinit(a);
+    if (negative) try text.append(a, '-');
+    if (q >= 0) {
+        if (significant.len + @as(usize, @intCast(q)) > 34) return error.InvalidValue;
+        try text.appendSlice(a, significant);
+        try text.appendNTimes(a, '0', @intCast(q));
+    } else {
+        if (-q > 6176) return error.InvalidValue;
+        const places: usize = @intCast(-q);
+        // The whole part keeps one digit, a zero if it has no other.
+        const kept = significant[0..@min(significant.len, significant.len -| places)];
+        if (kept.len == 0) try text.append(a, '0') else try text.appendSlice(a, kept);
+        try text.append(a, '.');
+        if (places > significant.len) try text.appendNTimes(a, '0', places - significant.len);
+        try text.appendSlice(a, significant[kept.len..]);
+    }
+    return model.Decimal.parse(text.items);
+}
+fn fromPlain(a: std.mem.Allocator, j: Json) model.Error!*Value {
+    switch (j) {
+        .null => return model.scalar(a, .nothing),
+        .bool => |b| return model.scalar(a, .{ .bool = b }),
+        .string => |s| {
+            if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
+            return model.text(a, s);
+        },
+        .number_string => |s| return model.scalar(a, .{ .number = try plainNumber(a, s) }),
+        .array => |array| {
+            var out: std.ArrayList(*Value) = .empty;
+            defer {
+                for (out.items) |v| v.release();
+                out.deinit(a);
+            }
+            for (array.items) |child| {
+                const v = try fromPlain(a, child);
+                out.append(a, v) catch {
+                    v.release();
+                    return error.OutOfMemory;
+                };
+            }
+            return model.list(a, out.items);
+        },
+        .object => |object| {
+            var pairs: std.ArrayList(model.Pair) = .empty;
+            defer {
+                for (pairs.items) |p| p.value.release();
+                pairs.deinit(a);
+            }
+            for (object.keys(), object.values()) |k, child| {
+                if (!@import("unicode/utf8.zig").validate(k)) return error.InvalidValue;
+                const v = try fromPlain(a, child);
+                pairs.append(a, .{ .key = k, .value = v }) catch {
+                    v.release();
+                    return error.OutOfMemory;
+                };
+            }
+            return model.map(a, pairs.items);
+        },
+        else => return error.InvalidValue,
+    }
+}
+/// Reads one plain JSON value by chapter 7's mapping: numbers exactly, text
+/// normalised to NFC, and an object's members in order. Invalid JSON, a lone
+/// surrogate, two names equal after NFC, a number past the limits and
+/// nesting beyond `max_depth` are InvalidValue or TooDeep.
+pub fn decodeJson(a: std.mem.Allocator, s: []const u8) model.Error!*Value {
+    if (!@import("unicode/utf8.zig").validate(s)) return error.InvalidValue;
+    try checkDepth(s);
     const parsed = std.json.parseFromSlice(Json, a, s, .{ .parse_numbers = false, .duplicate_field_behavior = .@"error" }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
     defer parsed.deinit();
-    return fromJson(a, parsed.value, r, 0);
+    return fromPlain(a, parsed.value);
 }
 test "lossless encoding, escaping, map tags and strict Base64" {
     const a = std.testing.allocator;
@@ -448,4 +622,45 @@ test "every encodable kind round trips through encode and decode" {
     var expected = std.EnumSet(model.Kind).full;
     expected.remove(.function);
     try std.testing.expect(seen.eql(expected));
+}
+
+test "plain JSON reads numbers exactly and writes chapter 7's escapes" {
+    const a = std.testing.allocator;
+    const reads = .{
+        .{ " {\"name\": \"Ann\", \"scores\": [2.50, null]} ", "{name: \"Ann\", scores: [2.50, nothing]}" },
+        .{ "1e5", "100000" },
+        .{ "2.50e1", "25.0" },
+        .{ "-0", "0" },
+        .{ "0.05e1", "0.5" },
+        .{ "12.345e-5", "0.00012345" },
+        .{ "0e99999999999", "0" },
+        .{ "\"Cafe\\u0301\"", "\"Café\"" },
+        .{ "\"\\ud83d\\ude00\"", "\"😀\"" },
+    };
+    inline for (reads) |c| {
+        const v = try decodeJson(a, c[0]);
+        defer v.release();
+        const want = try display.parse(a, c[1], .{});
+        defer want.release();
+        const got = try display.string(a, v);
+        defer a.free(got);
+        const expected = try display.string(a, want);
+        defer a.free(expected);
+        try std.testing.expectEqualStrings(expected, got);
+    }
+    for ([_][]const u8{ "\"\\ud800\"", "\"a\x01\"", "{\"e\\u0301\":1,\"\\u00e9\":2}", "1e34", "0.1e-6176", "01", "[1,]", "1 2", "1e-99999999999" }) |s| {
+        if (decodeJson(a, s)) |v| {
+            v.release();
+            std.debug.print("accepted {s}\n", .{s});
+            return error.TestUnexpectedResult;
+        } else |err| try std.testing.expectEqual(error.InvalidValue, err);
+    }
+    const v = try display.parse(a, "{name: \"Ann\", scores: [2.50, nothing], s: fromCodePoint(8) & tab & fromCodePoint(31) & quote & \"\\\"}", .{});
+    defer v.release();
+    const s = try encodeJson(a, v);
+    defer a.free(s);
+    try std.testing.expectEqualStrings("{\"name\":\"Ann\",\"scores\":[2.50,null],\"s\":\"\\b\\t\\u001f\\\"\\\\\"}", s);
+    const q = try display.parse(a, "{total: 5 kg}", .{});
+    defer q.release();
+    try std.testing.expectError(error.NotEncodable, encodeJson(a, q));
 }

@@ -6008,6 +6008,32 @@ pub const Group = struct {
         return full;
     }
 
+    /// A Core error raised outside any Run, as a Host's ScriptError sees
+    /// it: its catalogue code and message, and its other fields in catalogue
+    /// order. The caller owns the message and the data.
+    pub fn takeFailure(g: *Group) !struct { code: []const u8, message: []u8, data: *Value } {
+        const raw = g.pending_error.?;
+        defer {
+            raw.release();
+            g.pending_error = null;
+            g.pending_core = false;
+        }
+        const entry = errorEntry(raw.get("code").?.data.text) orelse return error.InvalidValue;
+        const message = try g.gpa.dupe(u8, try g.messageText(entry, raw));
+        errdefer g.gpa.free(message);
+        var pairs: std.ArrayList(model.Pair) = .empty;
+        defer pairs.deinit(g.gpa);
+        for (entry.fields) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
+        if (entry.optional) |opt| for (opt) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
+        for (raw.data.map) |p| {
+            const listed = std.mem.eql(u8, p.key, "code") or for (pairs.items) |q| {
+                if (std.mem.eql(u8, q.key, p.key)) break true;
+            } else false;
+            if (!listed) try pairs.append(g.gpa, p);
+        }
+        return .{ .code = entry.code, .message = message, .data = try model.map(g.gpa, pairs.items) };
+    }
+
     fn messageText(g: *Group, entry: ?errors_table.ErrorsTableErrorEntry, raw: *Value) ![]const u8 {
         const a = g.scratch.allocator();
         const template = if (entry) |e| e.message else return raw.get("code").?.data.text;
@@ -6888,14 +6914,7 @@ pub const Group = struct {
                     .div => .div,
                     else => .mod,
                 };
-                const dated = x.data == .instant or x.data == .civil_date or y.data == .instant or y.data == .civil_date;
-                if (dated and (op == .add or op == .subtract)) {
-                    const r = try g.dateArithmetic(op == .subtract, x, y);
-                    m.result = r.retain();
-                    try g.push(frame, r);
-                    return .next;
-                }
-                const r = model.arithmetic(gpa, op, x, y) catch |e| return g.arithmeticError(e, x, y);
+                const r = try g.arithmetic(op, x, y);
                 m.result = r.retain();
                 try g.push(frame, r);
             },
@@ -8133,6 +8152,15 @@ pub const Group = struct {
     fn raiseBuiltin(g: *Group, raised: builtins.Raised) error{ Raised, OutOfMemory } {
         defer for (raised.fields[0..raised.len]) |f| f.value.release();
         return g.raise(raised.code, raised.fields[0..raised.len]);
+    }
+
+    /// `x op y` for the arithmetic operators, dates included (chapter 4).
+    /// An error is raised into `pending_error`, so `Add` uses it outside
+    /// any Run too.
+    pub fn arithmetic(g: *Group, op: model.decimal.Operator, x: *Value, y: *Value) !*Value {
+        const dated = x.data == .instant or x.data == .civil_date or y.data == .instant or y.data == .civil_date;
+        if (dated and (op == .add or op == .subtract)) return g.dateArithmetic(op == .subtract, x, y);
+        return model.arithmetic(g.gpa, op, x, y) catch |e| return g.arithmeticError(e, x, y);
     }
 
     fn arithmeticError(g: *Group, e: model.Error, x: *Value, y: *Value) error{ Raised, OutOfMemory } {
