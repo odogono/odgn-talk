@@ -170,9 +170,11 @@ fn absolute(i: i64, n: usize) i64 {
     return if (i < 0) @as(i64, @intCast(n)) + 1 + i else i;
 }
 
+const Covered = struct { first: usize, last: usize };
+
 /// The chunks an index covers, as positions from 1, or null when there are
 /// none: out of range, at 0, before the start or reversed.
-fn covered(index: Index, n: usize) ?struct { first: usize, last: usize } {
+fn covered(index: Index, n: usize) ?Covered {
     switch (index) {
         .one => |i| {
             const p = absolute(i, n);
@@ -189,6 +191,39 @@ fn covered(index: Index, n: usize) ?struct { first: usize, last: usize } {
             return .{ .first = @intCast(first), .last = @intCast(last) };
         },
     }
+}
+
+/// Forward Character reads need only two byte offsets. Negative bounds use
+/// full segmentation so they don't pay for a count followed by another walk.
+/// Null selects that fallback; empty text is a completed, missing read.
+fn readCharacters(text: []const u8, index: Index, effect: *Effect) ?[]const u8 {
+    if (switch (index) {
+        .one => |i| i < 0,
+        .range => |r| r.from < 0 or r.to < 0,
+    }) return null;
+    const forward: ?Covered = switch (index) {
+        .one => |i| if (i > 0 and i <= text.len) .{ .first = @intCast(i), .last = @intCast(i) } else null,
+        .range => |r| if (r.from >= 0 and r.to >= @max(r.from, 1) and @max(r.from, 1) <= text.len)
+            .{ .first = @intCast(@max(r.from, 1)), .last = @intCast(@min(r.to, text.len)) }
+        else
+            null,
+    };
+    const c = forward orelse {
+        // Missing/reversed reads charge the whole input, not zero. Checking
+        // byte-length bounds first also keeps i64 indexes safe on wasm32.
+        effect.scanned = unicode.grapheme.count(text);
+        return "";
+    };
+    var at: usize = 0;
+    var n: usize = 0;
+    var start: ?usize = null;
+    while (at < text.len and n < c.last) {
+        n += 1;
+        if (n == c.first) start = at;
+        at = unicode.grapheme.end(text, at);
+    }
+    effect.scanned = n;
+    return if (start) |s| text[s..at] else "";
 }
 
 pub fn kindName(kind: Kind) []const u8 {
@@ -210,6 +245,9 @@ pub fn get(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value:
     switch (whole.data) {
         .text => |text| {
             if (kind == .byte) return wrongKind(effect, "bytes");
+            if (kind == .character) {
+                if (readCharacters(text, index, effect)) |part| return model.text(gpa, part) catch error.OutOfMemory;
+            }
             const seg = try segment(a, text, kind, delimiter);
             const c = covered(index, seg.spans.len) orelse {
                 effect.scanned = seg.total;
@@ -601,4 +639,77 @@ test "reading chunks of text" {
     try expectRead("a,b,c,d,e", .item, .{ .range = .{ .from = 2, .to = 4 } }, ",", "b,c,d");
     try expectRead("x\r\ny\nz\n", .line, .{ .one = -1 }, ",", "z");
     try expectRead("a;;c", .item, .{ .one = 2 }, ";", "");
+}
+
+fn testIndex(a: Allocator, index: Index) !*Value {
+    return switch (index) {
+        .one => |i| numberValue(a, i),
+        .range => |r| blk: {
+            const from = try numberValue(a, r.from);
+            defer from.release();
+            const to = try numberValue(a, r.to);
+            defer to.release();
+            break :blk try model.range(a, from, to);
+        },
+    };
+}
+
+test "Character reads match full segmentation output and scanned input" {
+    const texts = [_][]const u8{
+        "",           "a",          "NorthTalk rocks!", "a\r\nb\rc\nd", "\n\r",      "\x00\x7f",
+        "q\u{0301}a", "a\u{0301}b", "a\u{200d}b",       "\r\u{0301}a",  "\u{0301}a", "\u{0600}ab",
+        "é👨‍👩‍👧q́🇬🇧🇫",
+        "क्\u{0937}a",
+    };
+    for (texts) |text| {
+        var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const whole = try model.text(a, text);
+        const seg = try segment(a, whole.data.text, .character, ",");
+        const bound: i64 = @intCast(seg.total + 2);
+        var from = -bound;
+        while (from <= bound) : (from += 1) {
+            var to = -bound;
+            while (to <= bound + 1) : (to += 1) {
+                const index: Index = if (to == bound + 1) .{ .one = from } else .{ .range = .{ .from = from, .to = to } };
+                const iv = try testIndex(a, index);
+                var effect: Effect = .{};
+                const result = try get(a, testing.allocator, whole, .character, iv, ",", &effect);
+                defer result.release();
+                const selected = covered(index, seg.spans.len);
+                const want = if (selected) |c| whole.data.text[seg.spans[c.first - 1].start..seg.spans[c.last - 1].end] else "";
+                try testing.expectEqualStrings(want, result.data.text);
+                try testing.expectEqual(if (selected) |c| @as(u64, c.last) else seg.total, effect.scanned);
+                try testing.expect(effect.raise == null);
+            }
+        }
+        for ([_]Index{
+            .{ .one = std.math.minInt(i64) },                                            .{ .one = std.math.maxInt(i64) },
+            .{ .range = .{ .from = std.math.minInt(i64), .to = std.math.maxInt(i64) } },
+        }) |index| {
+            const iv = try testIndex(a, index);
+            var effect: Effect = .{};
+            const result = try get(a, testing.allocator, whole, .character, iv, ",", &effect);
+            defer result.release();
+            const c = covered(index, seg.spans.len);
+            try testing.expectEqualStrings(if (c != null) whole.data.text else "", result.data.text);
+            try testing.expectEqual(seg.total, effect.scanned);
+        }
+    }
+}
+
+test "forward Character reads need no segmentation storage and still propagate result refusal" {
+    const whole = try model.text(testing.allocator, "a\r\nq́👨‍👩‍👧🇬🇧z");
+    defer whole.release();
+    var buffer: [0]u8 = .{};
+    var scratch: std.heap.FixedBufferAllocator = .init(&buffer);
+    for ([_]Index{ .{ .one = 3 }, .{ .one = 0 }, .{ .one = 99 }, .{ .range = .{ .from = 2, .to = 5 } } }) |index| {
+        const iv = try testIndex(testing.allocator, index);
+        defer iv.release();
+        var effect: Effect = .{};
+        const result = try get(scratch.allocator(), testing.allocator, whole, .character, iv, ",", &effect);
+        result.release();
+        try testing.expectError(error.OutOfMemory, get(scratch.allocator(), scratch.allocator(), whole, .character, iv, ",", &effect));
+    }
 }

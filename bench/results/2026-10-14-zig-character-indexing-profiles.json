@@ -1,0 +1,33 @@
+{
+  "method": "Separate macOS sample captures, under talk_pump only; inclusive categories overlap. Both hosts terminated after sampling while repeating validated Runs.",
+  "profiles": [
+    {
+      "binary": "before",
+      "name": "probe/ascii-4096-last",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-character-indexing-before-negative.sample.txt.gz",
+      "reportSha256": "5f5f92afbfd55a8e64a8beef8db6a6cbc09399679a9f7d8845f7e0b3f667d8f8",
+      "samples": {
+        "pump": 1510,
+        "segment": 1357,
+        "grapheme": 1071,
+        "decimal": 0
+      }
+    },
+    {
+      "binary": "after",
+      "name": "probe/ascii-4096-last",
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "2026-10-14-zig-character-indexing-after-negative.sample.txt.gz",
+      "reportSha256": "873040c4621933df22e889107ab6dc1d2eacfb404a4dec879bb088c2b64ac5ca",
+      "samples": {
+        "pump": 1511,
+        "segment": 1366,
+        "grapheme": 1094,
+        "decimal": 0
+      }
+    }
+  ]
+}

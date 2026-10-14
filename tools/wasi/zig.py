@@ -508,6 +508,34 @@ def text_containment(engine, module):
     return measurements
 
 
+def character_indexing(engine, module):
+    """Forward reads retain Character boundaries and handle i64 indexes on wasm32."""
+    h = MessageHost(engine, module)
+    h.ok("hello", protocol=1)
+    h.ok("new-group", group="g", name="g")
+    h.ok("load", group="g", name="s", source=(
+        'on go\n'
+        '  return [character 2 of (<<0x61, 0x0d, 0x0a, 0x62>> as text), character 2 of "aq́z", '
+        'character 2 of "a👨‍👩‍👧z", character 2 of "a🇬🇧z", '
+        'character -1 of "abc", character 1 of "", character 0 of "abc", '
+        'character 9223372036854775807 of "abc", '
+        'characters 9223372036854775807..9223372036854775807 of "abc", '
+        'characters 1..9223372036854775807 of "aq́🇬🇧", '
+        'characters 2..9 of "abc", characters 3..2 of "abc", '
+        'characters -2..-1 of "abc"]\nend go\n'
+    ))
+    expected = ["\r\n", "q́", "👨‍👩‍👧", "🇬🇧", "c", "", "", "", "", "aq́🇬🇧", "bc", "", "bc"]
+    accounting = []
+    for _ in range(3):
+        h.ok("request", group="g", to={"script": "s"}, message={"name": "go"})
+        reports = h.ok("pump", group="g", now="2026-10-14T12:00:00Z")["reports"]
+        ends = [r for r in reports if r["kind"] == "run end"]
+        assert len(ends) == 1 and ends[0]["outcome"] == "completed" and ends[0]["result"] == expected, reports
+        accounting.append({key: ends[0][key] for key in ("fuel", "alloc")})
+    assert accounting[1:] == accounting[:1] * 2, accounting
+    return {"runs": len(accounting), **accounting[0]}
+
+
 def main():
     if len(sys.argv) != 2:
         sys.exit("usage: uv run tools/wasi/zig.py path/to/talk.wasm")
@@ -529,6 +557,7 @@ def main():
     metering = metered_operations(engine, module)
     profiles = supported_limits(engine, module)
     texts = text_containment(engine, module)
+    characters = character_indexing(engine, module)
     compressed = brotli.compress(payload, quality=11)
     zipped = gzip.compress(payload, compresslevel=9, mtime=0)
     assert brotli.decompress(compressed) == payload
@@ -554,6 +583,7 @@ def main():
                 "metering": metering,
                 "supportedLimits": profiles,
                 "textContainment": texts,
+                "characterIndexing": characters,
                 "bytes": {
                     "raw": len(payload),
                     "gzip9": len(zipped),

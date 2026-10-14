@@ -555,6 +555,11 @@ contents. Spare capacity and retained
 items outside an older slice count against the Group's physical cap; Cost
 Model 0 still charges only the specified logical allocation.
 
+Forward Character reads walk only through the requested end and keep byte
+offsets instead of segmentation arrays. Missing and reversed reads still
+charge every Character as scanned input. Negative indexes retain full
+segmentation; there is no retained Text index or cache.
+
 So far the machine runs straight-line code, branches, loops, functions, chunks
 and properties, keys, lists and maps, `match` with its destructuring tests,
 Bytes builds and Binary Patterns, `as` conversions, number, Quantity and date
