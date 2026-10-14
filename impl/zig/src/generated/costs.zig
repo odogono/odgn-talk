@@ -2,11 +2,16 @@
 
 pub const CostsTable = struct {
     version: i64,
+    change: []const CostsTableChangeEntry,
     measure: CostsTableMeasure,
     subject: CostsTableSubject,
     size: []const CostsTableSizeEntry,
     rate: []const CostsTableRateEntry,
-    change: []const CostsTableChangeEntry,
+};
+
+pub const CostsTableChangeEntry = struct {
+    issue: []const u8,
+    change: []const u8,
 };
 
 pub const CostsTableMeasure = struct {
@@ -47,13 +52,46 @@ pub const CostsTableRateEntry = struct {
     input: ?[]const u8 = null,
 };
 
-pub const CostsTableChangeEntry = struct {
-    issue: []const u8,
-    change: []const u8,
-};
-
 pub const costs: CostsTable = .{
     .version = 0,
+    .change = &.{
+        .{
+            .issue = "#696",
+            .change = "call-restricted uses the call rate; refused restricted operations pay restricted-refusal only, with no operation allocation, Host charge or dynamic work; the frame restriction flag fits the existing frame header",
+        },
+        .{
+            .issue = "#115",
+            .change = "`next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass",
+        },
+        .{
+            .issue = "#115",
+            .change = "Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position",
+        },
+        .{
+            .issue = "#115",
+            .change = "An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged",
+        },
+        .{
+            .issue = "#126",
+            .change = "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit",
+        },
+        .{
+            .issue = "#388",
+            .change = "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
+        },
+        .{
+            .issue = "#719",
+            .change = "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
+        },
+        .{
+            .issue = "#722",
+            .change = "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
+        },
+        .{
+            .issue = "#788",
+            .change = "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
+        },
+    },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
         .contents = "the sum of the logical sizes of the values the value holds: a list's items, a map's keys and values, a range's ends, a Function Value's captures",
@@ -328,6 +366,10 @@ pub const costs: CostsTable = .{
         .{
             .key = "call",
             .fuel = "8",
+        },
+        .{
+            .key = "restricted-refusal",
+            .fuel = "1",
         },
         .{
             .key = "clause",
@@ -632,40 +674,6 @@ pub const costs: CostsTable = .{
         .{
             .key = "offer-lookup",
             .fuel = "4 * frames",
-        },
-    },
-    .change = &.{
-        .{
-            .issue = "#115",
-            .change = "`next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass",
-        },
-        .{
-            .issue = "#115",
-            .change = "Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position",
-        },
-        .{
-            .issue = "#115",
-            .change = "An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged",
-        },
-        .{
-            .issue = "#126",
-            .change = "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit",
-        },
-        .{
-            .issue = "#388",
-            .change = "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
-        },
-        .{
-            .issue = "#719",
-            .change = "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
-        },
-        .{
-            .issue = "#722",
-            .change = "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
-        },
-        .{
-            .issue = "#788",
-            .change = "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
         },
     },
 };

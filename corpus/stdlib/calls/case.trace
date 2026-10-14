@@ -3,7 +3,7 @@
 # imports. Its Fuel, allocation and state figures are Cost Model 0's, as the
 # TS Core blessed them, so they pin the stdlib source's Fuel too.
 
-> load report identity=6518cf01714fde5b1bdb7c53f2f00caeec5ff9cec2187f2f397ef16935f12fa1
+> load report identity=6c08f22bed0560ccc4b52e05b45287cced2b5f0e02aaedf1d35f6b1f8021e47d
 > deliver d1 to=report message=go
 > pump clock=2026-09-30T09:00:00Z
 seg report/r1 start delivery=d1 handler=go clause=1 fuel=9123 alloc=23951 state=391 end=return

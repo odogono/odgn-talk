@@ -12,6 +12,8 @@
     "docs",
     "corpus/bless.ts",
     "corpus/bless.test.ts",
-    "lints"
+    "lints",
+    "corpus/restricted-kit.ts",
+    "corpus/restricted-intrinsic.test.ts"
   ]
 }

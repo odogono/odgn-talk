@@ -340,6 +340,15 @@ errors from stdlib code name the nearest call in user code, while user
 Library errors retain the Library location. Reviewed traces pin ordinary calls,
 Function metadata, registration, faults, unwind charges and stdlib caller errors.
 
+The trusted stdlib loader alone lowers private `map:restrictedCall` to
+`call-restricted`. Its inherited frame restriction rejects live Script state,
+Host effects and recovery-context access before acting, and survives catches,
+cleanup, preemption and restore. Host Library compilation cannot enable it.
+Snapshot format `go/7` rejects earlier formats. This implements the internal
+callback prerequisite; `map.transform` and a public pure-call API are not
+available. See [the normative contract](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks)
+and [the cross-Core kit](../../corpus/restricted-kit/README.md).
+
 The first Group compiles these Libraries once per process; each WASI instance
 pays this cost independently. Library compilation reuses one compact syntax
 tree for dependency discovery, code identity, checks, lowering and metadata,
@@ -1470,7 +1479,7 @@ tagged Value on 64-bit Hosts (16 bytes on `wasip1`), with kind-specific payloads
 shared across immutable copies. Persistent List trees copy a small chunk and
 its path during growth; contiguous internal reads materialize an array on demand.
 Segment checkpoints and Go's garbage-collection headroom also consume memory. Sharing changes neither Fuel nor logical accounting; the public
-Value API and `go/6` saves remain compatible.
+Value API remains compatible. Value compaction preserves its codec representation; the current snapshot format is `go/7` because restricted callback frames add execution state.
 
 For a fresh Message Layer Session running one of the flat List-growth
 workloads below, set a memory backstop of **64 MiB + 12 × Allocation Budget**:

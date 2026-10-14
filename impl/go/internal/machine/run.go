@@ -61,6 +61,7 @@ type handlerDispatch struct {
 	Args   []value.Value
 }
 type Frame struct {
+	Restricted    bool
 	ID            int
 	ControlID     int // continuation whose active scope identities are inherited
 	OwnerID       int
@@ -245,6 +246,9 @@ func (r *Run) pushCodeFrame(code *State, body int, args []value.Value) {
 	b := code.Unit.Bodies[body]
 	r.FrameCounter++
 	f := Frame{ID: r.FrameCounter, Code: code, Body: body, Clause: b.Clause > 0}
+	if len(r.Frames) > 0 {
+		f.Restricted = r.Frames[len(r.Frames)-1].Restricted
+	}
 	if n := len(r.spareFrames); n > 0 {
 		spare := r.spareFrames[n-1]
 		r.spareFrames[n-1] = Frame{}
@@ -366,6 +370,21 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		i := b.Code[f.PC]
 		r.At = i
 		r.PC = b.First + f.PC
+		if f.Restricted && restrictedOperation(f, i) {
+			fuel, _ := Charge("restricted-refusal", Measures{})
+			if f.Clause {
+				fuel += 4
+			}
+			if !r.pay(fuel, 0) {
+				break
+			}
+			f.Clause = false
+			r.raise(failure("restricted operation", value.Pair{Key: "instruction", Val: text(i.Name)}))
+			if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
+				r.Status = Preempted
+			}
+			continue
+		}
 		foreign := r.foreignWaitCall(f, i)
 		if !Supported(i) || foreign && send == nil || r.unrepresentableWait(f, i) || sends(i.Op) && send == nil {
 			r.Status = Blocked
@@ -478,7 +497,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		t := &r.trial
 		t.begin(f)
 		m, effect, err := r.evaluate(f, t, i)
-		if (i.Op == generated.OpCallImport || i.Op == generated.OpCall || i.Op == generated.OpCallValue || i.Op == generated.OpCallHandler || i.Op == generated.OpCallValueWait || i.Op == generated.OpCallHandlerWait) && !foreign && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
+		if (i.Op == generated.OpCallImport || i.Op == generated.OpCall || i.Op == generated.OpCallValue || i.Op == generated.OpCallRestricted || i.Op == generated.OpCallHandler || i.Op == generated.OpCallValueWait || i.Op == generated.OpCallHandlerWait) && !foreign && err == nil && r.Limits.Depth > 0 && r.realDepth() >= r.Limits.Depth {
 			t.restore(f)
 			r.fault("depth")
 			break

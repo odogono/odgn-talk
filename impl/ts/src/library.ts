@@ -19,7 +19,12 @@ import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import { libraryExports, diagnosticCodes } from './generated/syntax';
 import { compareText } from './text';
-import { exportsOf, importsOf, lowerTree } from './lowering';
+import {
+  exportsOf,
+  importsOf,
+  lowerTree,
+  lowerStdlibIntrinsics,
+} from './lowering';
 import { loadLibrary, UnitLoadError, type Code } from './machine';
 import { stdlibSources } from './generated/stdlib';
 import type { LibraryExport } from './semantic';
@@ -296,7 +301,11 @@ const build = (
     throw new LoadError(p.diagnostics);
   }
   // The same source compiled to name its caller is a separate code unit.
-  const key = atCaller && !isStdlib ? `${p.identity} at caller` : p.identity;
+  const key = isStdlib
+    ? `${p.identity} trusted stdlib`
+    : atCaller
+      ? `${p.identity} at caller`
+      : p.identity;
   let entry = cache.get(key);
   if (!entry) {
     const tree = p.checked.tree!;
@@ -304,7 +313,11 @@ const build = (
       exports: exportsOf(tree),
       code: loadOrReject(src.name, () =>
         loadLibrary(
-          lowerTree(tree, { name: src.name, unit: 'library' }),
+          isStdlib
+            ? lowerStdlibIntrinsics(
+                lowerTree(tree, { name: src.name, unit: 'library' }),
+              )
+            : lowerTree(tree, { name: src.name, unit: 'library' }),
           linksOf(p.imports),
           p.identity,
         ),

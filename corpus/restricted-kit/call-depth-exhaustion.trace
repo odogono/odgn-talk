@@ -1,0 +1,9 @@
+# Unblessed: restricted callback call-depth-exhaustion (#696); first blessing awaits human review.
+> deliver d1 to=s message=go args=[<function s:map:restrictedCall>]
+> pump clock=1970-01-01T00:00:00Z
+fault s/r1 limit=depth at=s:25 pos=11:9
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=104 alloc=128 state=16 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=depth fuel=104 alloc=128
+pumped state=idle fuel=104
+> vars
+vars s state=7

@@ -866,6 +866,14 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "call-restricted",
+    "cost": "call",
+    "operands": [],
+    "pops": 2,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
     "name": "call-value-wait",
     "cost": "call",
     "operands": [
@@ -1392,6 +1400,7 @@ export const instructions = [
 ] as const;
 export const languageVersion = "1.0-rc.3";
 export const errorMessages = {
+  "restricted operation": "The instruction {instruction} is not allowed in a restricted callback",
   "bad throw": "Only a map with a text `code`, or a text, can be thrown",
   "no match": "The value doesn't match the pattern",
   "send failed": "No answer came: the receiver's Run ended {reason}",
@@ -1815,6 +1824,13 @@ export const costModel = {
       "key": "call",
       "fuel": [
         [0, 0, 8, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "restricted-refusal",
+      "fuel": [
+        [0, 0, 1, 1]
       ],
       "alloc": []
     },

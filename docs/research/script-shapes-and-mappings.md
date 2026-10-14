@@ -1,5 +1,8 @@
 # Script Shapes and Mappings
 
+Implementation follow-up: [#696](https://github.com/odogono/odgn-talk/issues/696) specifies and implements the private restricted-call prerequisite in all three Cores. Its current contract is [chapter 8](../../spec/08-the-abstract-machine-and-the-cost-model.md#restricted-stdlib-callbacks); [the kit](../../corpus/restricted-kit/README.md) records verification and first-blessing status. The Shape/Mapping APIs below remain design work. The original handoff at the end records this design revision, not the later implementation.
+
+
 Design for [#579](https://github.com/odogono/odgn-talk/issues/579), agreed in the design interview on 2026-10-12. **This is a proposed behavior contract and implementation handoff, not a description of shipped APIs.** Revision 1 records the combined design, including the later JSONPointer-inspired Mapping decisions. Its base is `aaf120c19dacd4bc4b9ec61f80681f33214127b6`; the documentation is delivered from branch `docs/grill-issue-579`. See [Implementation handoff](#implementation-handoff) for the required design revision and remaining work.
 
 [ADR 0080](../adr/0080-scripts-check-shapes-through-built-ins.md) records the choice of Shape Built-ins; [ADR 0081](../adr/0081-mappings-compose-shapes-with-restricted-transformations.md) records Mapping composition and restricted callbacks. The [glossary](../../GLOSSARY.md) distinguishes a Shape, a Mapping, a Selection Path and a concrete Value Path. New glossary vocabulary does not imply runtime availability.

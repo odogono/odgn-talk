@@ -2500,6 +2500,24 @@ export const lowerTree = (
   return unit.finish();
 };
 
+/** Only the normative stdlib loader calls this; source names convey no trust. */
+export const lowerStdlibIntrinsics = (unit: CodeUnit): CodeUnit => {
+  if (unit.name === 'map' && unit.kind === 'library') {
+    const body = unit.bodies.find(b => b.name === 'restrictedCall');
+    if (!body) {
+      throw new Error('Missing normative restrictedCall intrinsic');
+    }
+    for (const ins of unit.code.slice(body.start, body.end)) {
+      if (ins.op === 'call-value') {
+        ins.op = 'call-restricted';
+        ins.opcode = opcodes.get('call-restricted')!;
+        ins.operands = [];
+      }
+    }
+  }
+  return unit;
+};
+
 /**
  * Parse, check and lower a Script or Library. The first syntax error, or any
  * load diagnostic the checker reports, leaves no code unit.

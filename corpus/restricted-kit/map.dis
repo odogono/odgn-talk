@@ -1,0 +1,465 @@
+unit map library
+constants
+  0 nothing
+  1 []
+  2 2
+  3 "fromEntries"
+  4 1
+  5 "map"
+  6 "list"
+  7 "wrong kind"
+  8 ["code", "expected", "got", "value", "path"]
+  9 ["code", "expected", "got", "value"]
+  10 "out of domain"
+  11 ["code", "function", "value"]
+  12 "text"
+  13 "number"
+  14 "integer"
+  15 "function"
+definitions
+  0 lookup.default
+bodies
+  0 init initialiser () locals 1 0000..0003
+  1 function merge (a, b) locals 8 0004..0035
+  2 function without (m, keys) locals 8 0036..0072
+  3 function pick (m, keys) locals 8 0073..0108
+  4 function entries (m) locals 5 0109..0134
+  5 function fromEntries (pairs) locals 7 0135..0187
+  6 function mapValues (m, f) locals 8 0188..0221
+  7 function lookup (m, path, default = 0) locals 8 0222..0305
+  8 function needKeys (keys) locals 3 0306..0319
+  9 function wrongKindAt (expected, v, path) locals 5 0320..0331
+  10 function wrongKind (expected, v) locals 4 0332..0342
+  11 function outOfDomain (fn, v) locals 3 0343..0349
+  12 function needText (v) locals 2 0350..0359
+  13 function needNumber (v) locals 2 0360..0369
+  14 function needInteger (v) locals 2 0370..0387
+  15 function needList (v) locals 2 0388..0397
+  16 function needMap (v) locals 2 0398..0407
+  17 function needFunction (v) locals 2 0408..0417
+  18 function restrictedCall (f, value) locals 3 0418..0423
+code
+  0000 75:36 const 0 ; nothing
+  0001 75:26 store-definition lookup.default
+  0002 1:1 const 0 ; nothing
+  0003 1:1 return
+  0004 7:11 load 1 ; a
+  0005 7:3 call 16 1 ; needMap
+  0006 7:3 store 0 ; it
+  0007 8:11 load 2 ; b
+  0008 8:3 call 16 1 ; needMap
+  0009 8:3 store 0 ; it
+  0010 9:7 load 1 ; a
+  0011 9:3 store 3 ; merged
+  0012 10:36 load 2 ; b
+  0013 10:24 property keys
+  0014 10:3 iterate
+  0015 10:3 next 0031
+  0016 10:3 store 4 ; k
+  0017 11:14 load 4 ; k
+  0018 11:20 load 2 ; b
+  0019 11:9 get-key-computed
+  0020 11:5 store 5 ; (5)
+  0021 11:32 load 4 ; k
+  0022 11:27 store 6 ; (6)
+  0023 11:5 load 3 ; merged
+  0024 11:5 store 7 ; (7)
+  0025 11:27 load 6 ; (6)
+  0026 11:27 load 7 ; (7)
+  0027 11:5 load 5 ; (5)
+  0028 11:27 set-key-computed
+  0029 11:5 store 3 ; merged
+  0030 10:3 jump 0015
+  0031 10:3 pop
+  0032 13:10 load 3 ; merged
+  0033 13:3 return
+  0034 14:1 const 0 ; nothing
+  0035 14:1 return
+  0036 18:11 load 1 ; m
+  0037 18:3 call 16 1 ; needMap
+  0038 18:3 store 0 ; it
+  0039 19:12 load 2 ; keys
+  0040 19:3 call 8 1 ; needKeys
+  0041 19:3 store 0 ; it
+  0042 20:7 map 1 0 ; []
+  0043 20:3 store 3 ; kept
+  0044 21:36 load 1 ; m
+  0045 21:24 property keys
+  0046 21:3 iterate
+  0047 21:3 next 0068
+  0048 21:3 store 4 ; k
+  0049 22:8 load 4 ; k
+  0050 22:20 load 2 ; keys
+  0051 22:10 member
+  0052 22:10 not
+  0053 22:5 branch-false 0067
+  0054 22:39 load 4 ; k
+  0055 22:45 load 1 ; m
+  0056 22:34 get-key-computed
+  0057 22:30 store 5 ; (5)
+  0058 22:57 load 4 ; k
+  0059 22:52 store 6 ; (6)
+  0060 22:30 load 3 ; kept
+  0061 22:30 store 7 ; (7)
+  0062 22:52 load 6 ; (6)
+  0063 22:52 load 7 ; (7)
+  0064 22:30 load 5 ; (5)
+  0065 22:52 set-key-computed
+  0066 22:30 store 3 ; kept
+  0067 21:3 jump 0047
+  0068 21:3 pop
+  0069 24:10 load 3 ; kept
+  0070 24:3 return
+  0071 25:1 const 0 ; nothing
+  0072 25:1 return
+  0073 29:11 load 1 ; m
+  0074 29:3 call 16 1 ; needMap
+  0075 29:3 store 0 ; it
+  0076 30:12 load 2 ; keys
+  0077 30:3 call 8 1 ; needKeys
+  0078 30:3 store 0 ; it
+  0079 31:7 map 1 0 ; []
+  0080 31:3 store 3 ; picked
+  0081 32:36 load 1 ; m
+  0082 32:24 property keys
+  0083 32:3 iterate
+  0084 32:3 next 0104
+  0085 32:3 store 4 ; k
+  0086 33:8 load 4 ; k
+  0087 33:16 load 2 ; keys
+  0088 33:10 member
+  0089 33:5 branch-false 0103
+  0090 33:35 load 4 ; k
+  0091 33:41 load 1 ; m
+  0092 33:30 get-key-computed
+  0093 33:26 store 5 ; (5)
+  0094 33:53 load 4 ; k
+  0095 33:48 store 6 ; (6)
+  0096 33:26 load 3 ; picked
+  0097 33:26 store 7 ; (7)
+  0098 33:48 load 6 ; (6)
+  0099 33:48 load 7 ; (7)
+  0100 33:26 load 5 ; (5)
+  0101 33:48 set-key-computed
+  0102 33:26 store 3 ; picked
+  0103 32:3 jump 0084
+  0104 32:3 pop
+  0105 35:10 load 3 ; picked
+  0106 35:3 return
+  0107 36:1 const 0 ; nothing
+  0108 36:1 return
+  0109 40:11 load 1 ; m
+  0110 40:3 call 16 1 ; needMap
+  0111 40:3 store 0 ; it
+  0112 41:7 list 0
+  0113 41:3 store 2 ; pairs
+  0114 42:36 load 1 ; m
+  0115 42:24 property keys
+  0116 42:3 iterate
+  0117 42:3 next 0130
+  0118 42:3 store 3 ; k
+  0119 43:10 load 3 ; k
+  0120 43:18 load 3 ; k
+  0121 43:24 load 1 ; m
+  0122 43:13 get-key-computed
+  0123 43:9 list 2
+  0124 43:5 store 4 ; (4)
+  0125 43:5 load 2 ; pairs
+  0126 43:5 load 4 ; (4)
+  0127 43:5 append
+  0128 43:5 store 2 ; pairs
+  0129 42:3 jump 0117
+  0130 42:3 pop
+  0131 45:10 load 2 ; pairs
+  0132 45:3 return
+  0133 46:1 const 0 ; nothing
+  0134 46:1 return
+  0135 50:12 load 1 ; pairs
+  0136 50:3 call 15 1 ; needList
+  0137 50:3 store 0 ; it
+  0138 51:27 load 1 ; pairs
+  0139 51:3 iterate
+  0140 51:3 next 0160
+  0141 51:3 store 2 ; pair
+  0142 52:14 load 2 ; pair
+  0143 52:5 call 15 1 ; needList
+  0144 52:5 store 0 ; it
+  0145 53:22 load 2 ; pair
+  0146 53:8 property length
+  0147 53:30 const 2 ; 2
+  0148 53:27 not-equal
+  0149 53:5 branch-false 0154
+  0150 53:49 const 3 ; "fromEntries"
+  0151 53:64 load 2 ; pair
+  0152 53:37 call 11 2 ; outOfDomain
+  0153 53:37 store 0 ; it
+  0154 54:19 const 4 ; 1
+  0155 54:24 load 2 ; pair
+  0156 54:14 chunk-get item
+  0157 54:5 call 12 1 ; needText
+  0158 54:5 store 0 ; it
+  0159 51:3 jump 0140
+  0160 51:3 pop
+  0161 56:7 map 1 0 ; []
+  0162 56:3 store 3 ; built
+  0163 57:27 load 1 ; pairs
+  0164 57:3 iterate
+  0165 57:3 next 0183
+  0166 57:3 store 2 ; pair
+  0167 58:14 const 2 ; 2
+  0168 58:19 load 2 ; pair
+  0169 58:9 chunk-get item
+  0170 58:5 store 4 ; (4)
+  0171 58:39 const 4 ; 1
+  0172 58:44 load 2 ; pair
+  0173 58:34 chunk-get item
+  0174 58:29 store 5 ; (5)
+  0175 58:5 load 3 ; built
+  0176 58:5 store 6 ; (6)
+  0177 58:29 load 5 ; (5)
+  0178 58:29 load 6 ; (6)
+  0179 58:5 load 4 ; (4)
+  0180 58:29 set-key-computed
+  0181 58:5 store 3 ; built
+  0182 57:3 jump 0165
+  0183 57:3 pop
+  0184 60:10 load 3 ; built
+  0185 60:3 return
+  0186 61:1 const 0 ; nothing
+  0187 61:1 return
+  0188 65:11 load 1 ; m
+  0189 65:3 call 16 1 ; needMap
+  0190 65:3 store 0 ; it
+  0191 66:16 load 2 ; f
+  0192 66:3 call 17 1 ; needFunction
+  0193 66:3 store 0 ; it
+  0194 67:7 map 1 0 ; []
+  0195 67:3 store 3 ; mapped
+  0196 68:36 load 1 ; m
+  0197 68:24 property keys
+  0198 68:3 iterate
+  0199 68:3 next 0217
+  0200 68:3 store 4 ; k
+  0201 69:9 load 2 ; f
+  0202 69:16 load 4 ; k
+  0203 69:22 load 1 ; m
+  0204 69:11 get-key-computed
+  0205 69:9 call-value 1
+  0206 69:5 store 5 ; (5)
+  0207 69:35 load 4 ; k
+  0208 69:30 store 6 ; (6)
+  0209 69:5 load 3 ; mapped
+  0210 69:5 store 7 ; (7)
+  0211 69:30 load 6 ; (6)
+  0212 69:30 load 7 ; (7)
+  0213 69:5 load 5 ; (5)
+  0214 69:30 set-key-computed
+  0215 69:5 store 3 ; mapped
+  0216 68:3 jump 0199
+  0217 68:3 pop
+  0218 71:10 load 3 ; mapped
+  0219 71:3 return
+  0220 72:1 const 0 ; nothing
+  0221 72:1 return
+  0222 76:12 load 2 ; path
+  0223 76:3 call 15 1 ; needList
+  0224 76:3 store 0 ; it
+  0225 77:27 load 2 ; path
+  0226 77:3 iterate
+  0227 77:3 next 0243
+  0228 77:3 store 4 ; step
+  0229 78:8 load 4 ; step
+  0230 78:13 is-kind number
+  0231 78:5 branch-false 0235
+  0232 78:42 load 4 ; step
+  0233 78:30 call 14 1 ; needInteger
+  0234 78:30 store 0 ; it
+  0235 79:8 load 4 ; step
+  0236 79:13 is-kind number
+  0237 79:13 not
+  0238 79:5 branch-false 0242
+  0239 79:43 load 4 ; step
+  0240 79:34 call 12 1 ; needText
+  0241 79:34 store 0 ; it
+  0242 77:3 jump 0227
+  0243 77:3 pop
+  0244 81:7 load 1 ; m
+  0245 81:3 store 5 ; v
+  0246 82:7 list 0
+  0247 82:3 store 6 ; taken
+  0248 83:27 load 2 ; path
+  0249 83:3 iterate
+  0250 83:3 next 0295
+  0251 83:3 store 4 ; step
+  0252 84:8 load 5 ; v
+  0253 84:13 const 0 ; nothing
+  0254 84:10 equal
+  0255 84:5 branch-false 0258
+  0256 84:33 load 3 ; default
+  0257 84:26 return
+  0258 85:8 load 4 ; step
+  0259 85:13 is-kind text
+  0260 85:5 branch-false 0275
+  0261 86:10 load 5 ; v
+  0262 86:12 is-kind map
+  0263 86:12 not
+  0264 86:7 branch-false 0270
+  0265 86:42 const 5 ; "map"
+  0266 86:49 load 5 ; v
+  0267 86:52 load 6 ; taken
+  0268 86:30 call 9 3 ; wrongKindAt
+  0269 86:30 store 0 ; it
+  0270 87:16 load 4 ; step
+  0271 87:25 load 5 ; v
+  0272 87:11 get-key-computed
+  0273 87:7 store 5 ; v
+  0274 85:5 jump 0288
+  0275 89:10 load 5 ; v
+  0276 89:12 is-kind list
+  0277 89:12 not
+  0278 89:7 branch-false 0284
+  0279 89:43 const 6 ; "list"
+  0280 89:51 load 5 ; v
+  0281 89:54 load 6 ; taken
+  0282 89:31 call 9 3 ; wrongKindAt
+  0283 89:31 store 0 ; it
+  0284 90:16 load 4 ; step
+  0285 90:24 load 5 ; v
+  0286 90:11 chunk-get item
+  0287 90:7 store 5 ; v
+  0288 92:9 load 4 ; step
+  0289 92:5 store 7 ; (7)
+  0290 92:5 load 6 ; taken
+  0291 92:5 load 7 ; (7)
+  0292 92:5 append
+  0293 92:5 store 6 ; taken
+  0294 83:3 jump 0250
+  0295 83:3 pop
+  0296 94:6 load 5 ; v
+  0297 94:11 const 0 ; nothing
+  0298 94:8 equal
+  0299 94:3 branch-false 0302
+  0300 94:31 load 3 ; default
+  0301 94:24 return
+  0302 95:10 load 5 ; v
+  0303 95:3 return
+  0304 96:1 const 0 ; nothing
+  0305 96:1 return
+  0306 100:12 load 1 ; keys
+  0307 100:3 call 15 1 ; needList
+  0308 100:3 store 0 ; it
+  0309 101:24 load 1 ; keys
+  0310 101:3 iterate
+  0311 101:3 next 0317
+  0312 101:3 store 2 ; k
+  0313 102:14 load 2 ; k
+  0314 102:5 call 12 1 ; needText
+  0315 102:5 store 0 ; it
+  0316 101:3 jump 0311
+  0317 101:3 pop
+  0318 104:1 const 0 ; nothing
+  0319 104:1 return
+  0320 108:14 load 2 ; v
+  0321 108:7 call-builtin kindOf 1
+  0322 108:3 store 4 ; got
+  0323 109:16 const 7 ; "wrong kind"
+  0324 109:40 load 1 ; expected
+  0325 109:55 load 4 ; got
+  0326 109:67 load 2 ; v
+  0327 109:76 load 3 ; path
+  0328 109:9 map 8 5 ; ["code", "expected", "got", "value", "path"]
+  0329 109:3 throw
+  0330 110:1 const 0 ; nothing
+  0331 110:1 return
+  0332 117:14 load 2 ; v
+  0333 117:7 call-builtin kindOf 1
+  0334 117:3 store 3 ; got
+  0335 118:16 const 7 ; "wrong kind"
+  0336 118:40 load 1 ; expected
+  0337 118:55 load 3 ; got
+  0338 118:67 load 2 ; v
+  0339 118:9 map 9 4 ; ["code", "expected", "got", "value"]
+  0340 118:3 throw
+  0341 119:1 const 0 ; nothing
+  0342 119:1 return
+  0343 122:16 const 10 ; "out of domain"
+  0344 122:43 load 1 ; fn
+  0345 122:54 load 2 ; v
+  0346 122:9 map 11 3 ; ["code", "function", "value"]
+  0347 122:3 throw
+  0348 123:1 const 0 ; nothing
+  0349 123:1 return
+  0350 126:6 load 1 ; v
+  0351 126:8 is-kind text
+  0352 126:8 not
+  0353 126:3 branch-false 0358
+  0354 126:37 const 12 ; "text"
+  0355 126:45 load 1 ; v
+  0356 126:27 call 10 2 ; wrongKind
+  0357 126:27 store 0 ; it
+  0358 127:1 const 0 ; nothing
+  0359 127:1 return
+  0360 130:6 load 1 ; v
+  0361 130:8 is-kind number
+  0362 130:8 not
+  0363 130:3 branch-false 0368
+  0364 130:39 const 13 ; "number"
+  0365 130:49 load 1 ; v
+  0366 130:29 call 10 2 ; wrongKind
+  0367 130:29 store 0 ; it
+  0368 131:1 const 0 ; nothing
+  0369 131:1 return
+  0370 134:6 load 1 ; v
+  0371 134:8 is-kind number
+  0372 134:8 not
+  0373 134:3 branch-false 0378
+  0374 134:39 const 13 ; "number"
+  0375 134:49 load 1 ; v
+  0376 134:29 call 10 2 ; wrongKind
+  0377 134:29 store 0 ; it
+  0378 135:6 load 1 ; v
+  0379 135:8 is-kind integer
+  0380 135:8 not
+  0381 135:3 branch-false 0386
+  0382 135:41 const 14 ; "integer"
+  0383 135:52 load 1 ; v
+  0384 135:31 call 10 2 ; wrongKind
+  0385 135:31 store 0 ; it
+  0386 136:1 const 0 ; nothing
+  0387 136:1 return
+  0388 139:6 load 1 ; v
+  0389 139:8 is-kind list
+  0390 139:8 not
+  0391 139:3 branch-false 0396
+  0392 139:37 const 6 ; "list"
+  0393 139:45 load 1 ; v
+  0394 139:27 call 10 2 ; wrongKind
+  0395 139:27 store 0 ; it
+  0396 140:1 const 0 ; nothing
+  0397 140:1 return
+  0398 143:6 load 1 ; v
+  0399 143:8 is-kind map
+  0400 143:8 not
+  0401 143:3 branch-false 0406
+  0402 143:36 const 5 ; "map"
+  0403 143:43 load 1 ; v
+  0404 143:26 call 10 2 ; wrongKind
+  0405 143:26 store 0 ; it
+  0406 144:1 const 0 ; nothing
+  0407 144:1 return
+  0408 147:6 load 1 ; v
+  0409 147:8 is-kind function
+  0410 147:8 not
+  0411 147:3 branch-false 0416
+  0412 147:41 const 15 ; "function"
+  0413 147:53 load 1 ; v
+  0414 147:31 call 10 2 ; wrongKind
+  0415 147:31 store 0 ; it
+  0416 148:1 const 0 ; nothing
+  0417 148:1 return
+  0418 153:10 load 1 ; f
+  0419 153:12 load 2 ; value
+  0420 153:10 call-restricted
+  0421 153:3 return
+  0422 154:1 const 0 ; nothing
+  0423 154:1 return

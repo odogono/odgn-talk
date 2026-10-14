@@ -350,7 +350,11 @@ const lower = (
 ): Unit | null => {
   compilePatterns(src, where);
   try {
-    const unit = compileSource(name, kind, src, { libraries, lenient });
+    const unit = compileSource(name, kind, src, {
+      libraries,
+      lenient,
+      trustedStdlib: resolve(ROOT, where).startsWith(STDLIB + '/'),
+    });
     verify(unit, where);
     return unit;
   } catch (error) {

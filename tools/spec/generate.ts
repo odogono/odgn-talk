@@ -1135,7 +1135,12 @@ const keyTable = (d: Data, input: boolean): string => {
 // costs.toml (ADRs 0006 and 0010): every formula parses and uses only the
 // measures and subjects it lists, where they apply; every Cost Model key in
 // machine.toml, and every Built-in, has one rate; and every kind has a size.
-const COST_ONLY_KEYS = new Set(['clause', 'unwind', 'offer-lookup']);
+const COST_ONLY_KEYS = new Set([
+  'clause',
+  'unwind',
+  'offer-lookup',
+  'restricted-refusal',
+]);
 const KINDS = [
   'nothing',
   'boolean',

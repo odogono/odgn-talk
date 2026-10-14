@@ -89,6 +89,26 @@ func TestDisassemblyCorpus(t *testing.T) {
 			}
 		})
 	}
+	// Private instructions are covered by the intrinsic kit's normative stdlib
+	// disassembly, never by granting ordinary Corpus source compiler privilege.
+	tree, err := syntax.Parse(generated.StandardLibraries["map"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit, err := Compile(check.Check(tree, check.Options{Library: true}), "map")
+	if err != nil {
+		t.Fatal(err)
+	}
+	LowerStdlibIntrinsics(unit)
+	want, err := os.ReadFile("../../../../corpus/restricted-kit/map.dis")
+	if err != nil || unit.Disassemble() != string(want) {
+		t.Fatalf("private intrinsic disassembly: %v", err)
+	}
+	for _, b := range unit.Bodies {
+		for _, i := range b.Code {
+			emitted[i.Name] = true
+		}
+	}
 	for _, entry := range generated.Machine.Instruction {
 		if !emitted[entry.Name] {
 			t.Errorf("Corpus does not emit %s", entry.Name)

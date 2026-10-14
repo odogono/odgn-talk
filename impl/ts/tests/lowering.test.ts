@@ -13,6 +13,7 @@ import {
 } from '../src/index';
 import { patternSource, quantityText } from '../src/canonical';
 import { instructionSpec, operandKinds } from '../src/code-unit';
+import { codeOf, stdlibLibrary } from '../src/library';
 import { instructions } from '../src/generated/machine';
 import { viewSource } from '../src/view';
 
@@ -247,12 +248,17 @@ describe('the lowering of every source', () => {
     },
   );
 
-  test('the Disassembly Cases emit every instruction of machine.toml', () => {
+  test('the Disassembly Cases and private intrinsic kit emit every instruction of machine.toml', () => {
     const used = new Set<string>();
     for (const path of files(join(root, 'corpus/disassembly'))) {
       for (const ins of compileFile(path).code) {
         used.add(ins.op);
       }
+    }
+    // The kit pins this trusted unit's full disassembly. Ordinary source must
+    // never be able to emit its private instruction merely to satisfy coverage.
+    for (const ins of codeOf(stdlibLibrary('map')).unit.code) {
+      used.add(ins.op);
     }
     expect(instructions.map(i => i.name).filter(n => !used.has(n))).toEqual([]);
   });

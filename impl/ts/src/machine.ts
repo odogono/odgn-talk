@@ -123,6 +123,7 @@ export const defaultLimits: Limits = {
 
 // The rates charged outside an instruction's own.
 const CALL = rateOf('call');
+const RESTRICTED_REFUSAL = rateOf('restricted-refusal');
 const CAPABILITY = rateOf('capability');
 const CHOOSE_OFFER = rateOf('choose-offer');
 const CLAUSE = rateOf('clause');
@@ -532,6 +533,8 @@ type Frame = {
   locals: Value[];
   owner?: Frame;
   pc: number;
+  /** Inherited by calls and retained recovery/cleanup activations. */
+  restricted: boolean;
   stack: Item[];
 };
 type RecoveryDispatch = {
@@ -1551,6 +1554,7 @@ export class Run {
           f.locals.every(Value.isValue),
       );
       requireSnapshot(Array.isArray(f.stack));
+      requireSnapshot(typeof f.restricted === 'boolean');
       requireSnapshot(f.activation === undefined || f.activation === true);
       if (f.activation) {
         requireSnapshot(f.owner);
@@ -1559,7 +1563,8 @@ export class Run {
         requireSnapshot(
           f.owner.code === f.code &&
             f.owner.body === f.body &&
-            f.owner.locals === f.locals,
+            f.owner.locals === f.locals &&
+            f.owner.restricted === f.restricted,
         );
       }
       const chain = new Set<Frame>();
@@ -2070,6 +2075,7 @@ export class Run {
       locals[body.duringSlot] = this.during;
     }
     this.frames.push({
+      restricted: this.frames.at(-1)?.restricted ?? false,
       body,
       code: code === this.script ? this.script.codeFor(body) : code,
       pc: body.start,
@@ -4042,8 +4048,74 @@ export class Run {
 
   // ------------------------------------------------------------- instructions
 
+  private restrictedOperation(ins: Instruction): boolean {
+    switch (ins.opcode) {
+      case Op.LoadVar:
+      case Op.StoreVar:
+      case Op.StoreDefinition:
+      case Op.LoadObject:
+      case Op.Me:
+      case Op.Target:
+      case Op.SetProperty:
+      case Op.SetPropertyComputed:
+      case Op.Ask:
+      case Op.AskWait:
+      case Op.Tell:
+      case Op.Send:
+      case Op.SendWait:
+      case Op.SendNamed:
+      case Op.SendNamedWait:
+      case Op.SendSpread:
+      case Op.SendSpreadWait:
+      case Op.SendUp:
+      case Op.SendUpWait:
+      case Op.Wait:
+      case Op.WaitFor:
+      case Op.WaitForAny:
+      case Op.JoinStart:
+      case Op.JoinAsk:
+      case Op.JoinSend:
+      case Op.JoinSendNamed:
+      case Op.JoinSendSpread:
+      case Op.JoinEnd:
+      case Op.TimeoutStart:
+      case Op.TimeoutEnd:
+      case Op.CallValueWait:
+      case Op.CallHandlerWait:
+      case Op.Veto:
+      case Op.Pass:
+      case Op.ChooseOffer:
+        return true;
+      case Op.CallBuiltin:
+        return (
+          ins.operands[0] === 'isDisposed' ||
+          ins.operands[0] === 'offerAvailable'
+        );
+      case Op.GetKey:
+      case Op.GetKeyComputed:
+        return (
+          this.peek().kind === 'object' &&
+          (ins.opcode === Op.GetKey
+            ? ins.operands[0] !== 'id'
+            : this.peek(1).asText() !== 'id')
+        );
+      default:
+        return false;
+    }
+  }
+
   private execute(ins: Instruction, rate: number) {
     const frame = this.frame;
+    if (frame.restricted && this.restrictedOperation(ins)) {
+      this.pay(RESTRICTED_REFUSAL);
+      throw new ThrownError(
+        this.errorMap(
+          'restricted operation',
+          [['instruction', text(ins.op)]],
+          ins,
+        ),
+      );
+    }
     const [a, b, c] = ins.operands;
     const m = this.m;
     const next = () => {
@@ -4942,8 +5014,9 @@ export class Run {
         return this.replace(n, rate);
       }
       case Op.CallValue:
+      case Op.CallRestricted:
       case Op.CallValueWait: {
-        const n = a as number;
+        const n = ins.opcode === Op.CallRestricted ? 1 : (a as number);
         const fn = this.peek(n);
         const args = this.frame.stack.slice(
           this.frame.stack.length - n,
@@ -4956,7 +5029,7 @@ export class Run {
           throw new ScriptError('function gone');
         }
         const foreign = (ref.code as FunctionCode).home !== this.script;
-        if (ins.opcode === Op.CallValue && (foreign || ref.maySuspend)) {
+        if (ins.opcode !== Op.CallValueWait && (foreign || ref.maySuspend)) {
           throw new ScriptError('would suspend');
         }
         const { code: home, body } = ref.code as FunctionCode;
@@ -4980,6 +5053,7 @@ export class Run {
         this.callBody(home, body, filled);
         frame.stack.length -= n + 1;
         const callee = this.frame;
+        callee.restricted ||= ins.opcode === Op.CallRestricted;
         ref.captures.forEach(([, v], i) => {
           callee.locals[body.captureStart + i] = v;
         });

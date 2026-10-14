@@ -35,6 +35,10 @@
 
 version = 0
 
+[[change]]
+issue = "#696"
+change = "call-restricted uses the call rate; refused restricted operations pay restricted-refusal only, with no operation allocation, Host charge or dynamic work; the frame restriction flag fits the existing frame header"
+
 [measure]
 size = "the logical size of the value, as the [[size]] table gives it"
 contents = "the sum of the logical sizes of the values the value holds: a list's items, a map's keys and values, a range's ends, a Function Value's captures"
@@ -314,6 +318,10 @@ alloc = "size(result)"
 [[rate]]
 key = "call"
 fuel = "8"
+
+[[rate]]
+key = "restricted-refusal"
+fuel = "1"
 
 [[rate]]
 key = "clause"
