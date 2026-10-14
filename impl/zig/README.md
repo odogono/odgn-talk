@@ -533,10 +533,10 @@ revocation of a name the Script keeps marks that Grant revoked, and later
 calls through it raise `capability revoked`, uncharged, after the
 `capability disabled` check. A call in flight is left to the Host, and its
 answer still resumes the Run. A repeat, or a name the Script doesn't keep, is
-recorded and does nothing. A Capability's release hook, from
-`talk_with_release_hook` or `store`'s `release`, is called with the reason
-`revoke` then, and with `disable` right after the `effect-failure` record of a
-failed abandonment. Stop releases with `stop`, and Reload and Library
+recorded and does nothing. A Capability's release hook, a
+`talk_with_release_hook` option given with its definition or `store`'s
+`release`, is called with the reason `revoke` then, and with `disable` right
+after the `effect-failure` record of a failed abandonment. Stop releases with `stop`, and Reload and Library
 replacement with `reload`, only once the new code is accepted.
 
 Segment-bound Operations come from `talk_define_segment_capability`, which
@@ -655,8 +655,10 @@ parent of `me`. A message with no Owning Script left is reported `unhandled`.
 
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are
-checked and lowered against. Their Constants are evaluated at compile time,
-since an initialiser may use only literals, Constants and Built-ins. A code
+checked and lowered against: each Operation's mode and argument Shapes, as
+`talk_grant_decls`, which `talk_capability_def_checks` gives for a definition
+the Host holds. Their Constants are evaluated at compile time, since an
+initialiser may use only literals, Constants and Built-ins. A code
 identity covers each imported Library's identity, in the order the `use` lines
 first name them. `talk_add_library` writes the `add-library` record and refuses
 a stdlib name, a name the Group holds, or an import the Group doesn't hold.

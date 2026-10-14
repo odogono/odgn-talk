@@ -86,19 +86,13 @@ fn usedLibraries(a: std.mem.Allocator, source: []const u8) ![]const []const u8 {
 }
 
 /// Compiles the case's Libraries, each once those it imports are compiled.
-fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), effects: *Effects, out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_load_grant)) !void {
+fn compileLibraries(a: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, core: ?*c.talk_core, all: []const case_setup.Table, defs: *std.StringHashMapUnmanaged(?*c.talk_capability_def), out: *std.StringHashMapUnmanaged(*c.talk_library), declarations: *std.ArrayList(c.talk_grant_decls)) !void {
     // The Grant declarations: each Capability the case defines, by its name.
     var it = defs.iterator();
     while (it.next()) |e| {
-        var grant: ?*c.talk_grant = null;
-        // A coordinated Grant needs a binding of its own.
-        var binding: ?*anyopaque = if (std.mem.eql(u8, e.key_ptr.*, "sqlite")) &effects.sqlite_binding else null;
-        if (effects.coordinated.contains(e.key_ptr.*)) {
-            binding = @ptrCast(@constCast((try a.dupeSentinel(u8, "", 0)).ptr));
-            try effects.names.put(a, @intFromPtr(binding), null);
-        }
-        try check(c.talk_capability_def_grant_all(e.value_ptr.*, binding, &grant));
-        try declarations.append(a, .{ .name = e.key_ptr.ptr, .name_len = e.key_ptr.len, .grant = grant });
+        const checks = try a.alloc(c.talk_operation_check, c.talk_capability_def_checks(e.value_ptr.*, null, 0));
+        _ = c.talk_capability_def_checks(e.value_ptr.*, checks.ptr, checks.len);
+        try declarations.append(a, .{ .name = e.key_ptr.ptr, .name_len = e.key_ptr.len, .operations = checks.ptr, .operations_len = checks.len });
     }
     var left: std.ArrayList(case_setup.Table) = .empty;
     for (all) |t| if (std.mem.eql(u8, t.header, "[[libraries]]")) try left.append(a, t);
@@ -772,9 +766,6 @@ const Effects = struct {
     /// The coordinated Capabilities, whose Grants need a binding of their
     /// own.
     coordinated: std.StringHashMapUnmanaged(void) = .empty,
-    /// A `sqlite` binding for Grants the case gives none, such as a
-    /// Library's declarations.
-    sqlite_binding: c.talk_sqlite_binding = .{ .database = "", .database_len = 0, .tables = null, .table_lens = null, .tables_len = 0, .has_tables = false, .max_rows = 0 },
 
     fn lifecycle(e: *Effects) !*c.talk_segment_lifecycle {
         const l = try e.a.create(c.talk_segment_lifecycle);
@@ -1037,8 +1028,8 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
         var def: ?*c.talk_capability_def = null;
         if (bound) {
             try effects.coordinated.put(a, capability, {});
-            try check(c.talk_define_coordinated_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, coordinatorFor, effects, &def));
-        } else try check(c.talk_define_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, &def));
+            try check(c.talk_define_coordinated_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, coordinatorFor, effects, null, 0, &def));
+        } else try check(c.talk_define_capability(core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, null, 0, &def));
         for (ops.items) |op| {
             for (op.args[0..op.args_len]) |x| c.talk_shape_release(x);
             if (op.result) |r| c.talk_shape_release(r);
@@ -1272,7 +1263,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
     try defineObjects(a, core, group, all, &store);
     // The version of each Library the runner compiled last, by name.
     var libraries: std.StringHashMapUnmanaged(*c.talk_library) = .empty;
-    var declarations: std.ArrayList(c.talk_load_grant) = .empty;
+    var declarations: std.ArrayList(c.talk_grant_decls) = .empty;
     // Saves by id, each Script's Grants as loaded, which a restore re-binds,
     // and the Groups a restore replaced.
     var saves: std.StringHashMapUnmanaged([]const u8) = .empty;
@@ -1289,7 +1280,7 @@ pub fn replay(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir, setup: []cons
         received = null;
         held.deinit();
     }
-    try compileLibraries(a, io, dir, core, all, &defs, &effects, &libraries, &declarations);
+    try compileLibraries(a, io, dir, core, all, &defs, &libraries, &declarations);
     const order = (try hostOrder(a, trace)).items;
     // The inputs a Host function makes during a Pump, which the main order
     // skips.

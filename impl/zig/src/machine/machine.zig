@@ -656,13 +656,15 @@ pub const Library = struct {
     operations: []const OperationRef = &.{},
     stdlib: bool = false,
     /// The Grant declarations it was compiled against, which recompiling it
-    /// for a replaced import uses again; null for none.
-    declarations: ?[]const NamedGrant = null,
+    /// for a replaced import uses again; null for none. It holds a
+    /// reference to each Shape.
+    declarations: ?[]const capabilities.GrantDecls = null,
     /// For a Script's extension, its number since the Script's last Load or
     /// Reload, which names it `<script>+<n>`; 0 for a Library.
     extension: u32 = 0,
 
     pub fn destroy(l: *Library) void {
+        releaseDeclarations(l.declarations);
         for (l.definitions) |v| v.release();
         l.gpa.free(l.definitions);
         for (l.unit.values) |v| if (v == .value) v.value.release();
@@ -693,7 +695,7 @@ pub const Diagnostic = struct { code: []const u8, line: u32, column: u32 };
 
 /// Compiles a Library against the Libraries it imports, which must hold
 /// every one its `use` lines name besides the stdlib's.
-pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, source: []const u8, given: []const *Library, declarations: ?[]const NamedGrant) !Compiled {
+pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, source: []const u8, given: []const *Library, declarations: ?[]const capabilities.GrantDecls) !Compiled {
     var arena: std.heap.ArenaAllocator = .init(gpa);
     var owns_arena = true;
     defer if (owns_arena) arena.deinit();
@@ -726,9 +728,26 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     var context: check.Context = .{ .library = true, .libraries = views.items };
     // Grant declarations by the names its source uses: the modes and
     // Shapes its Capability calls are checked and lowered against.
-    if (declarations) |named| {
+    // They are kept, their Shapes retained, for recompiling it.
+    var shapes_kept = false;
+    const grant_declarations: ?[]const capabilities.GrantDecls = if (declarations) |named| blk: {
+        const declared = try kept.alloc(capabilities.GrantDecls, named.len);
+        for (named, declared) |n, *k| {
+            const checks = try kept.alloc(capabilities.OperationCheck, n.operations.len);
+            for (n.operations, checks) |o, *x| x.* = .{ .name = try kept.dupe(u8, o.name), .mode = o.mode, .args = try kept.dupe(*capabilities.Shape, o.args) };
+            k.* = .{ .name = try kept.dupe(u8, n.name), .operations = checks };
+        }
+        for (declared) |k| for (k.operations) |o| for (o.args) |x| {
+            _ = x.retain();
+        };
+        shapes_kept = true;
+        break :blk declared;
+    } else null;
+    // Until the Library holds them, on a refusal too.
+    defer if (shapes_kept) releaseDeclarations(grant_declarations);
+    if (grant_declarations) |named| {
         const viewed = try a.alloc(check.Grant, named.len);
-        for (named, viewed) |n, *v| v.* = .{ .name = try a.dupe(u8, n.name), .operations = try capabilities.checkOperations(a, n.grant) };
+        for (named, viewed) |n, *v| v.* = .{ .name = n.name, .operations = try capabilities.declaredOperations(a, n.operations) };
         context.grants = viewed;
     }
     const checked = try check.check(a, t, context);
@@ -755,11 +774,6 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     const held_needs = try storage.copy(kept, needs.items);
     const operations = try operationRefs(kept, held_needs);
     const version_label = try kept.dupe(u8, label);
-    const grant_declarations: ?[]const NamedGrant = if (declarations) |named| blk: {
-        const declared = try kept.alloc(NamedGrant, named.len);
-        for (named, declared) |n, *k| k.* = .{ .name = try kept.dupe(u8, n.name), .grant = n.grant };
-        break :blk declared;
-    } else null;
     const l = try gpa.create(Library);
     l.* = .{
         .gpa = gpa,
@@ -778,6 +792,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     };
     owns_arena = false;
     owns_values = false;
+    shapes_kept = false;
     errdefer l.destroy();
     // Its Constants and defaults: its initialiser, which may use only
     // literals, Constants and Built-ins, run once.
@@ -1082,6 +1097,10 @@ fn oversizedPatterns(a: Allocator, unit: *const lower.Unit, limit: u64) ![]lower
 pub const NamedObject = struct { name: []const u8, object: *objects.Object };
 
 /// A Grant the Host binds at Load, by the name the Script uses.
+fn releaseDeclarations(declarations: ?[]const capabilities.GrantDecls) void {
+    for (declarations orelse return) |k| for (k.operations) |o| for (o.args) |x| x.release();
+}
+
 pub const NamedGrant = struct { name: []const u8, grant: *capabilities.Grant };
 
 /// An Operation by the Grant name that calls it, laid out as talk.h's

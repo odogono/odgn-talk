@@ -433,6 +433,15 @@ typedef struct talk_grant_context {
  * disables a Grant. */
 typedef void (*talk_release_hook)(void *context, const talk_grant_context *g);
 
+/* A definition option, which the define calls take in an array beside the
+ * Operations. A NULL hook, or a second release hook, is TALK_INVALID_VALUE
+ * there. */
+typedef struct talk_capability_option {
+    talk_release_hook release_hook;
+    void *release_context;
+} talk_capability_option;
+talk_capability_option talk_with_release_hook(talk_release_hook hook, void *context);
+
 /* A Capability's definition, owned by its Core. */
 typedef struct talk_capability_def talk_capability_def;
 /* A reusable Grant, owned by its Core. */
@@ -1169,17 +1178,15 @@ void talk_group_memory(const talk_group *g, talk_memory *out);
 /* Group.Name: the name it was made with, borrowed from the Group. */
 void talk_name(const talk_group *g, const char **s, size_t *len);
 /* Defines a Capability, once per process: its Operations, which the Core
- * orders by name. The definition lives as long as the Core. */
-talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_capability_def **out);
+ * orders by name, and its options. The definition lives as long as the
+ * Core. */
+talk_host_error_code talk_define_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 /* talk_define_capability with Segment-bound Operations. The first makes each
  * Grant its own Segment Coordinator, with lifecycle's hooks, which must
  * outlive the Core. The second maps each Grant's binding to one, so Grants
  * mapped to the same coordinator share a Segment's participant. */
-talk_host_error_code talk_define_segment_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_segment_lifecycle *lifecycle, talk_capability_def **out);
-talk_host_error_code talk_define_coordinated_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_coordinator_fn coordinator, void *context, talk_capability_def **out);
-/* Gives a definition its release hook, before any Grant is made from it.
- * A second hook is TALK_INVALID_VALUE. */
-talk_host_error_code talk_with_release_hook(talk_core *c, talk_capability_def *def, talk_release_hook hook, void *context);
+talk_host_error_code talk_define_segment_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, const talk_segment_lifecycle *lifecycle, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
+talk_host_error_code talk_define_coordinated_capability(talk_core *c, const char *name, size_t len, const talk_operation *ops, size_t ops_len, talk_coordinator_fn coordinator, void *context, const talk_capability_option *options, size_t options_len, talk_capability_def **out);
 /* C only: ends the Group and every handle it gave out. */
 void talk_group_release(talk_group *g);
 /* Loads a Script. A refusal with diagnostics is TALK_LOAD_REFUSED. The Script
@@ -1320,14 +1327,34 @@ typedef struct talk_library_source {
     const char *source;
     size_t source_len;
 } talk_library_source;
+/* An Operation's compile-time mode and argument Shapes, by its name. */
+typedef struct talk_operation_check {
+    const char *name;
+    size_t name_len;
+    talk_mode mode;
+    const talk_shape *const *args;
+    size_t args_len;
+} talk_operation_check;
+/* One Grant's Operation checks, by the name the source uses for the Grant.
+ * An array of them is talk.go's GrantDecls. */
+typedef struct talk_grant_decls {
+    const char *name;
+    size_t name_len;
+    const talk_operation_check *operations;
+    size_t operations_len;
+} talk_grant_decls;
+/* C only: the checks for every Operation of d, in the order the Core keeps
+ * them, in out, up to cap of them; it returns how many d has. Names and
+ * Shapes are borrowed from d. */
+size_t talk_capability_def_checks(const talk_capability_def *d, talk_operation_check *out, size_t cap);
 /* Compiles a Library. imports must hold every Library its `use` lines name,
- * besides the stdlib's. declarations are talk.go's GrantDecls: Grants by the
- * names the source uses, whose Operations' modes and Shapes its Capability
- * calls are checked and lowered against; NULL gives none, enough only for a
- * Library that makes no direct Capability call. A source that fails to
+ * besides the stdlib's. declarations give the modes and Shapes its
+ * Capability calls are checked and lowered against; the Library holds its
+ * own copy, and a reference to each Shape. NULL gives none, enough only for
+ * a Library that makes no direct Capability call. A source that fails to
  * parse or check is TALK_LOAD_REFUSED, with its diagnostics in *error when
  * error isn't NULL, which the caller releases. */
-talk_host_error_code talk_compile_library(talk_core *c, const talk_library_source *src, talk_library *const *imports, size_t imports_len, const talk_load_grant *declarations, size_t declarations_len, talk_library **out, talk_load_error **error);
+talk_host_error_code talk_compile_library(talk_core *c, const talk_library_source *src, talk_library *const *imports, size_t imports_len, const talk_grant_decls *declarations, size_t declarations_len, talk_library **out, talk_load_error **error);
 void talk_library_name(const talk_library *l, const char **s, size_t *len);
 void talk_library_version(const talk_library *l, const char **s, size_t *len);
 void talk_library_identity(const talk_library *l, uint8_t out[32]);
