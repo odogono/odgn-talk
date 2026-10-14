@@ -1520,7 +1520,17 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
     const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
-    if (field(msg, "owner") != null or field(msg, "objects") != null) return hostError(s.gpa, ref, .invalid_value);
+    const owner = if (field(msg, "owner")) |j| objectOf(entry, j) orelse return hostError(s.gpa, ref, .invalid_value) else null;
+    var load_objects: []talk.LoadObject = &.{};
+    defer s.gpa.free(load_objects);
+    if (field(msg, "objects")) |given| {
+        if (given != .object) return hostError(s.gpa, ref, .invalid_value);
+        load_objects = s.gpa.alloc(talk.LoadObject, given.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
+        for (given.object.keys(), given.object.values(), load_objects) |k, v, *slot| {
+            const object = objectOf(entry, v) orelse return hostError(s.gpa, ref, .invalid_value);
+            slot.* = .{ .name = k.ptr, .name_len = k.len, .object = object };
+        }
+    }
     var load_grants: []talk.LoadGrant = &.{};
     defer s.gpa.free(load_grants);
     if (field(msg, "grants")) |g| {
@@ -1546,6 +1556,9 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         .grants = if (load_grants.len == 0) null else load_grants.ptr,
         .grants_len = load_grants.len,
         .grants_as_used = asBool(field(msg, "grantsAsUsed")) orelse false,
+        .owner = owner,
+        .objects = if (load_objects.len == 0) null else load_objects.ptr,
+        .objects_len = load_objects.len,
         .limits = limits,
     };
     const code = Direct.load(entry.group, &options, &script);
@@ -1570,8 +1583,16 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
 fn deliverReply(s: *Session, msg: Json, ref: i64, request: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const to = field(msg, "to") orelse return hostError(s.gpa, ref, .invalid_value);
-    const script_name = asText(field(to, "script")) orelse return hostError(s.gpa, ref, .invalid_value);
-    const script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value);
+    // `to` names a Script or a Host Object, never both.
+    var script: ?*talk.Script = null;
+    var target: ?*objects.Object = null;
+    if (field(to, "script")) |j| {
+        if (field(to, "object") != null) return hostError(s.gpa, ref, .invalid_value);
+        const script_name = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
+        script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value);
+    } else {
+        target = objectOf(entry, field(to, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+    }
     const message = field(msg, "message") orelse return hostError(s.gpa, ref, .invalid_value);
     const mname = asText(field(message, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
     var args: []*Value = &.{};
@@ -1597,10 +1618,13 @@ fn deliverReply(s: *Session, msg: Json, ref: i64, request: bool) []u8 {
     const override = overrideOf(field(message, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
     const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
     var id: talk.Buffer = .{};
-    const code = if (request) blk: {
+    const code = if (script) |sc| (if (request) blk: {
         var pending: ?*talk.Pending = null;
-        break :blk Direct.scriptRequest(script, &m, &id, &pending);
-    } else Direct.scriptDeliver(script, &m, &id);
+        break :blk Direct.scriptRequest(sc, &m, &id, &pending);
+    } else Direct.scriptDeliver(sc, &m, &id)) else (if (request) blk: {
+        var pending: ?*talk.Pending = null;
+        break :blk Direct.request(entry.group, target.?, &m, &id, &pending);
+    } else Direct.deliver(entry.group, target.?, &m, &id));
     if (code != .ok) return hostError(s.gpa, ref, code);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
@@ -1792,6 +1816,32 @@ fn objectReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// The Host Object `{"$object":[kind,id]}` names in `entry`'s Group,
+/// disposed or not; null if the Group never made it.
+fn objectOf(entry: *GroupEntry, j: Json) ?*objects.Object {
+    const pair = field(j, "$object") orelse return null;
+    if (pair != .array or pair.array.items.len != 2) return null;
+    const kind = asText(pair.array.items[0]) orelse return null;
+    const id = asText(pair.array.items[1]) orelse return null;
+    var out: ?*objects.Object = null;
+    return if (Direct.objectById(entry.group, kind.ptr, kind.len, id.ptr, id.len, &out)) out else null;
+}
+
+/// `set-parent` (a missing or null `parent` ends the chain) and `dispose`.
+fn objectInputReply(s: *Session, msg: Json, ref: i64, is_dispose: bool) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const object = objectOf(entry, field(msg, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+    const code = if (is_dispose) Direct.dispose(entry.group, object) else blk: {
+        const parent = if (field(msg, "parent")) |j| (if (j == .null) null else objectOf(entry, j) orelse return hostError(s.gpa, ref, .invalid_value)) else null;
+        break :blk Direct.setParent(entry.group, object, parent);
+    };
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -1932,6 +1982,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return defineObjectKindReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "object")) {
         return objectReply(s, msg, ref);
+    } else if (std.mem.eql(u8, m, "set-parent")) {
+        return objectInputReply(s, msg, ref, false);
+    } else if (std.mem.eql(u8, m, "dispose")) {
+        return objectInputReply(s, msg, ref, true);
     } else if (std.mem.eql(u8, m, "counters")) {
         return countersReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "stop")) {
@@ -2264,4 +2318,41 @@ test "rewind-run restarts a sliced Run and cancel-run ends it" {
     _ = try okOf(try c.send("{{\"m\":\"cancel-run\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"{s}\"}}", .{ 9, rerun }));
     const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
     try std.testing.expectEqualStrings("cancelled", end.object.get("outcome").?.string);
+}
+
+test "Host Objects route Deliveries to their owner, take parents, and stop it when disposed" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"hall\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"lamp\"}}", .{4}));
+    // An unknown handle is refused before the Core sees it.
+    const unknown = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"nowhere\"]}},\"source\":\"\"}}", .{5});
+    try std.testing.expectEqualStrings("host error", try errKind(unknown));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"hall\"]}},\"objects\":{{\"lamp\":{{\"$object\":[\"room\",\"lamp\"]}}}},\"source\":\"on ping\\n  return the id of lamp\\nend ping\\n\"}}", .{6}));
+    // The lamp, parented to the hall, routes to the hall's Owning Script.
+    _ = try okOf(try c.send("{{\"m\":\"set-parent\",\"ref\":{d},\"group\":\"g\",\"object\":{{\"$object\":[\"room\",\"lamp\"]}},\"parent\":{{\"$object\":[\"room\",\"hall\"]}}}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"object\":{{\"$object\":[\"room\",\"lamp\"]}}}},\"message\":{{\"name\":\"ping\"}}}}", .{9}));
+    const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
+    try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
+    try std.testing.expectEqualStrings("s", end.object.get("script").?.string);
+    try std.testing.expectEqualStrings("lamp", end.object.get("result").?.string);
+    // With the parent applied, the reverse is a cycle at admission.
+    const cycle = try c.send("{{\"m\":\"set-parent\",\"ref\":{d},\"group\":\"g\",\"object\":{{\"$object\":[\"room\",\"hall\"]}},\"parent\":{{\"$object\":[\"room\",\"lamp\"]}}}}", .{8});
+    try std.testing.expectEqualStrings("parent cycle", cycle.object.get("err").?.object.get("code").?.string);
+    // `to` names one target.
+    const both = try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\",\"object\":{{\"$object\":[\"room\",\"hall\"]}}}},\"message\":{{\"name\":\"ping\"}}}}", .{11});
+    try std.testing.expectEqualStrings("host error", try errKind(both));
+    // Disposing the owner stops its Owning Script.
+    _ = try okOf(try c.send("{{\"m\":\"dispose\",\"ref\":{d},\"group\":\"g\",\"object\":{{\"$object\":[\"room\",\"hall\"]}}}}", .{12}));
+    const pumped = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{13}));
+    var stopped = false;
+    for (pumped.object.get("reports").?.array.items) |r| {
+        if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stopped = true;
+    }
+    try std.testing.expect(stopped);
 }
