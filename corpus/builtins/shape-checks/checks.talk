@@ -1,0 +1,38 @@
+-- checks.talk: the shape-checks case's Script.
+
+script variable log = []
+
+on go
+  put [conforms(3, "number"), conforms("x", "number"), conforms(5 m, {quantity: "m"}), conforms(500 cm, {quantity: "m"}), conforms(5 m, {unitKind: "length"}), conforms(5 m^2, {unitKind: "length"})] after log
+  put [conforms(bulb, {object: "light"}), conforms(bulb, {object: "door"}), conforms(bulb, "object"), conforms([given x: x], "any"), conforms([given x: x], "value"), conforms(given x: x, "function")] after log
+  put [conforms({}, {map: [{key: "a", shape: {optional: "text"}}]}), conforms({}, {map: [{key: "a", shape: "text", optional: true}]}), conforms({a: nothing}, {map: [{key: "a", shape: {optional: "text"}}]}), conforms({a: 1, b: 2}, {map: [{key: "a", shape: "number"}]}), conforms({a: 1, b: 2}, {map: [{key: "a", shape: "number"}], open: true}), conforms({a: 1, b: [given x: x]}, {map: [{key: "a", shape: "number"}], open: true})] after log
+  put check([1, 2], {list: "number"}) after log
+  put explain([1, "x", true], {list: "number"}) after log
+  put explain(true, {oneOf: ["text", {list: "number"}]}) after log
+  put explain({b: 2}, {map: [{key: "a", shape: "number"}]}) after log
+  put explain([given x: x], "any") after log
+  put [pick([1, 2]), pick("x")] after log
+  try
+    put check(3, {optional: "text"}) into bad
+  catch e
+    put e after log
+  end try
+  try
+    put conforms(3, {oneOf: ["number", "bogus"]}) into bad
+  catch e
+    put e after log
+  end try
+  try
+    put conforms(3, {map: [{key: "a", shape: "number"}, {key: "a", shape: "text"}]}) into bad
+  catch e
+    put e after log
+  end try
+end go
+
+on pick v where conforms(v, {list: "number"})
+  return "numbers"
+end pick
+
+on pick v
+  return "other"
+end pick

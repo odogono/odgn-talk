@@ -128,6 +128,40 @@ var Builtins = BuiltinsTable{
 			Total:    1,
 		},
 		BuiltinsTableBuiltinEntry{
+			Name:  "conforms",
+			Group: "values",
+			Call:  "conforms(value, shape)",
+			Gives: "Whether `value` fits the Shape `shape`",
+			Errors: []string{
+				"invalid shape",
+			},
+			Required: 2,
+			Total:    2,
+		},
+		BuiltinsTableBuiltinEntry{
+			Name:  "check",
+			Group: "values",
+			Call:  "check(value, shape)",
+			Gives: "`value` unchanged, if it fits the Shape `shape`; raises the first mismatch otherwise",
+			Errors: []string{
+				"invalid shape",
+				"not encodable",
+			},
+			Required: 2,
+			Total:    2,
+		},
+		BuiltinsTableBuiltinEntry{
+			Name:  "explain",
+			Group: "values",
+			Call:  "explain(value, shape)",
+			Gives: "The list of every mismatch of `value` against the Shape `shape`, empty if it fits",
+			Errors: []string{
+				"invalid shape",
+			},
+			Required: 2,
+			Total:    2,
+		},
+		BuiltinsTableBuiltinEntry{
 			Name:     "functionArity",
 			Group:    "values",
 			Call:     "functionArity(f)",

@@ -9,7 +9,15 @@ import {
 } from './errors';
 import type { ObjectKind } from './objects';
 import { parseUnit, unitEntry, unitText } from './units';
-import { nothing, type Value } from './values';
+import {
+  dec,
+  listValues,
+  map as mapValue,
+  nothing,
+  text,
+  type Value,
+} from './values';
+import { unitKinds } from './generated/syntax';
 import type { Group } from './group';
 
 export type Shape =
@@ -255,6 +263,662 @@ const deepFunction = (v: Value, path: (string | number)[]): Mismatch | null => {
     }
   }
   return null;
+};
+
+// ---------------------------------------------------------------------------
+// Script Shape checks (chapter 7): Shapes as data, decoded and checked
+// iteratively so depth is bounded by the budgets, not the native stack.
+// `scanned` counts what the Built-in rates measure, failed work included.
+// ---------------------------------------------------------------------------
+
+export type Path = readonly (string | number)[];
+export type ShapeDefinitionError = {
+  path: (string | number)[];
+  reason: string;
+  value: Value;
+};
+export type ShapeDiagnostic = Mismatch & {
+  alternatives?: ShapeDiagnostic[][];
+};
+
+const scalarKinds = new Set([
+  'nothing',
+  'boolean',
+  'number',
+  'quantity',
+  'text',
+  'bytes',
+  'list',
+  'map',
+  'range',
+  'instant',
+  'civil date',
+  'pattern',
+  'function',
+  'object',
+]);
+const wrapperKeys = [
+  'quantity',
+  'unitKind',
+  'object',
+  'list',
+  'oneOf',
+  'optional',
+  'map',
+] as const;
+const scalarsOf = (s: string): number => [...s].length;
+
+type FieldAcc = { key: string; optional: boolean; shape: Shape }[];
+type DecodeFrame =
+  | { data: Value; path: (string | number)[]; t: 'enter' }
+  | { k: 'list' | 'optional'; t: 'wrap' }
+  | { n: number; t: 'oneOf' }
+  | { acc: FieldAcc; open: boolean; t: 'mapDone' }
+  | {
+      acc: FieldAcc;
+      data: Value;
+      path: (string | number)[];
+      seen: Set<string>;
+      t: 'field';
+    }
+  | { acc: FieldAcc; key: string; optional: boolean; t: 'fieldDone' };
+
+/** Reads Shape data into a Shape, or gives the first definition error. */
+export const decodeShape = (
+  data: Value,
+): { error?: ShapeDefinitionError; scanned: number; shape?: Shape } => {
+  let scanned = 0;
+  const results: Shape[] = [];
+  const stack: DecodeFrame[] = [{ data, path: [], t: 'enter' }];
+  const fail = (
+    reason: string,
+    path: (string | number)[],
+    value: Value,
+  ): { error: ShapeDefinitionError; scanned: number } => ({
+    error: { path, reason, value },
+    scanned,
+  });
+  while (stack.length) {
+    const frame = stack.pop()!;
+    switch (frame.t) {
+      case 'wrap':
+        results.push({ k: frame.k, of: results.pop()! });
+        break;
+      case 'oneOf':
+        results.push({
+          k: 'oneOf',
+          of: results.splice(results.length - frame.n, frame.n),
+        });
+        break;
+      case 'mapDone':
+        results.push({ fields: frame.acc, k: 'map', open: frame.open });
+        break;
+      case 'fieldDone':
+        frame.acc.push({
+          key: frame.key,
+          optional: frame.optional,
+          shape: results.pop()!,
+        });
+        break;
+      case 'field': {
+        const { data: decl, path } = frame;
+        if (decl.kind !== 'map') {
+          return fail('invalid field', path, decl);
+        }
+        const entries = new Map(decl.entries());
+        scanned += entries.size;
+        const key = entries.get('key');
+        if (key === undefined) {
+          return fail('invalid field key', path, decl);
+        }
+        if (key.kind !== 'text') {
+          return fail('invalid field key', [...path, 'key'], key);
+        }
+        const inner = entries.get('shape');
+        if (inner === undefined) {
+          return fail('missing field shape', path, decl);
+        }
+        const flag = entries.get('optional');
+        if (flag !== undefined && flag.kind !== 'boolean') {
+          return fail('invalid flag', [...path, 'optional'], flag);
+        }
+        const name = key.asText()!;
+        if (frame.seen.has(name)) {
+          return fail('duplicate field', [...path, 'key'], key);
+        }
+        frame.seen.add(name);
+        stack.push(
+          {
+            acc: frame.acc,
+            key: name,
+            optional: flag?.asBool() ?? false,
+            t: 'fieldDone',
+          },
+          { data: inner, path: [...path, 'shape'], t: 'enter' },
+        );
+        break;
+      }
+      case 'enter': {
+        const { data: node, path } = frame;
+        scanned++;
+        if (node.kind === 'text') {
+          const name = node.asText()!;
+          scanned += scalarsOf(name);
+          if (name === 'any' || name === 'value') {
+            results.push({ k: name });
+          } else if (scalarKinds.has(name)) {
+            results.push({ k: 'kind', kind: name });
+          } else {
+            return fail('unknown kind', path, node);
+          }
+          break;
+        }
+        if (node.kind !== 'map') {
+          return fail('not a shape', path, node);
+        }
+        const entries = new Map(node.entries());
+        scanned += entries.size;
+        const present = wrapperKeys.filter(k => entries.has(k));
+        if (present.length === 0) {
+          return fail('not a shape', path, node);
+        }
+        if (present.length > 1) {
+          return fail('ambiguous shape', path, node);
+        }
+        const key = present[0]!;
+        const payload = entries.get(key)!;
+        switch (key) {
+          case 'quantity': {
+            if (payload.kind !== 'text') {
+              return fail('invalid unit', [...path, key], payload);
+            }
+            scanned += scalarsOf(payload.asText()!);
+            try {
+              results.push({
+                k: 'quantity',
+                unit: unitText(parseUnit(payload.asText()!)),
+              });
+            } catch {
+              return fail('invalid unit', [...path, key], payload);
+            }
+            break;
+          }
+          case 'unitKind': {
+            if (payload.kind === 'text') {
+              scanned += scalarsOf(payload.asText()!);
+            }
+            if (
+              payload.kind !== 'text' ||
+              !unitKinds.includes(payload.asText()! as never)
+            ) {
+              return fail('unknown unit kind', [...path, key], payload);
+            }
+            results.push({ k: 'unitKind', kind: payload.asText()! });
+            break;
+          }
+          case 'object': {
+            if (payload.kind !== 'text') {
+              return fail('invalid object kind', [...path, key], payload);
+            }
+            results.push({ k: 'object', kind: payload.asText()! });
+            break;
+          }
+          case 'list':
+          case 'optional':
+            stack.push(
+              { k: key, t: 'wrap' },
+              { data: payload, path: [...path, key], t: 'enter' },
+            );
+            break;
+          case 'oneOf': {
+            if (payload.kind !== 'list') {
+              return fail('invalid alternatives', [...path, key], payload);
+            }
+            if (payload.length === 0) {
+              return fail('empty union', [...path, key], payload);
+            }
+            stack.push({ n: payload.length, t: 'oneOf' });
+            for (let i = payload.length; i >= 1; i--) {
+              stack.push({
+                data: payload.index(i),
+                path: [...path, key, i],
+                t: 'enter',
+              });
+            }
+            break;
+          }
+          case 'map': {
+            const flag = entries.get('open');
+            if (flag !== undefined && flag.kind !== 'boolean') {
+              return fail('invalid flag', [...path, 'open'], flag);
+            }
+            if (payload.kind !== 'list') {
+              return fail('invalid fields', [...path, key], payload);
+            }
+            const acc: FieldAcc = [];
+            const seen = new Set<string>();
+            stack.push({ acc, open: flag?.asBool() ?? false, t: 'mapDone' });
+            for (let i = payload.length; i >= 1; i--) {
+              stack.push({
+                acc,
+                data: payload.index(i),
+                path: [...path, key, i],
+                seen,
+                t: 'field',
+              });
+            }
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+  return { scanned, shape: results[0]! };
+};
+
+type Sink = { diags: ShapeDiagnostic[] };
+type CheckFrame =
+  | {
+      path: (string | number)[];
+      s: Shape;
+      sink: Sink;
+      t: 'node';
+      trial: number;
+      v: Value;
+    }
+  | {
+      path: (string | number)[];
+      sink: Sink;
+      t: 'deep';
+      trial: number;
+      v: Value;
+    }
+  | {
+      path: (string | number)[];
+      s: Extract<Shape, { k: 'map' }>;
+      sink: Sink;
+      t: 'extras';
+      trial: number;
+      v: Value;
+    }
+  | {
+      expected: string;
+      path: (string | number)[];
+      sink: Sink;
+      t: 'missing';
+      trial: number;
+    }
+  | {
+      mark: number;
+      path: (string | number)[];
+      sink: Sink;
+      t: 'adjust';
+      trial: number;
+    }
+  | {
+      alts: readonly Shape[];
+      collected: ShapeDiagnostic[][];
+      current: Sink | null;
+      index: number;
+      path: (string | number)[];
+      s: Extract<Shape, { k: 'oneOf' }>;
+      sink: Sink;
+      t: 'union';
+      trial: number;
+      v: Value;
+    };
+
+/**
+ * Every mismatch of `v` against `s`, or only the first when `first`:
+ * the traversal of chapter 7, with failed union alternatives grouped.
+ */
+export const shapeDiagnostics = (
+  v: Value,
+  s: Shape,
+  first: boolean,
+  scanned: number,
+): { diags: ShapeDiagnostic[]; scanned: number } => {
+  const root: Sink = { diags: [] };
+  const discarded = new Set<number>();
+  let trials = 0;
+  let halted = false;
+  const stack: CheckFrame[] = [
+    { path: [], s, sink: root, t: 'node', trial: 0, v },
+  ];
+  const emit = (sink: Sink, trial: number, diag: ShapeDiagnostic): void => {
+    sink.diags.push(diag);
+    if (!first) {
+      return;
+    }
+    if (trial === 0) {
+      // The first mismatch is in: only enclosing Optional adjustments,
+      // already on the stack as ancestors, may still run.
+      halted = true;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i]!.t !== 'adjust') {
+          stack.splice(i, 1);
+        }
+      }
+      return;
+    }
+    discarded.add(trial);
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i]!.trial === trial) {
+        stack.splice(i, 1);
+      }
+    }
+  };
+  const wrong = (
+    sink: Sink,
+    trial: number,
+    value: Value,
+    shape: Shape,
+    path: (string | number)[],
+  ): void =>
+    emit(sink, trial, {
+      expected: expectedOf(shape),
+      got: gotOf(value, shape),
+      path,
+      value,
+    });
+  while (stack.length) {
+    const frame = stack.pop()!;
+    if (discarded.has(frame.trial)) {
+      continue;
+    }
+    switch (frame.t) {
+      case 'adjust': {
+        for (let i = frame.mark; i < frame.sink.diags.length; i++) {
+          const d = frame.sink.diags[i]!;
+          if (
+            !d.unencodable &&
+            d.path.length === frame.path.length &&
+            d.path.every((p, j) => p === frame.path[j])
+          ) {
+            d.expected += ' or nothing';
+            break;
+          }
+        }
+        break;
+      }
+      case 'missing':
+        scanned++;
+        emit(frame.sink, frame.trial, {
+          expected: frame.expected,
+          got: 'nothing',
+          path: frame.path,
+          value: nothing,
+        });
+        break;
+      case 'deep': {
+        scanned++;
+        const { path, sink, trial, v: value } = frame;
+        if (value.kind === 'function') {
+          emit(sink, trial, {
+            expected: 'any',
+            got: 'function',
+            path,
+            unencodable: true,
+            value,
+          });
+        } else if (value.kind === 'list') {
+          for (let i = value.length; i >= 1; i--) {
+            stack.push({
+              path: [...path, i],
+              sink,
+              t: 'deep',
+              trial,
+              v: value.index(i),
+            });
+          }
+        } else if (value.kind === 'map') {
+          const entries = value.entries();
+          for (let i = entries.length - 1; i >= 0; i--) {
+            stack.push({
+              path: [...path, entries[i]![0]],
+              sink,
+              t: 'deep',
+              trial,
+              v: entries[i]![1],
+            });
+          }
+        }
+        break;
+      }
+      case 'extras': {
+        const declared = new Set(frame.s.fields.map(f => f.key));
+        const deeps: CheckFrame[] = [];
+        for (const [key, item] of frame.v.entries()) {
+          if (declared.has(key)) {
+            continue;
+          }
+          if (!frame.s.open) {
+            scanned++;
+            emit(frame.sink, frame.trial, {
+              expected: 'nothing',
+              got: item.kind,
+              path: [...frame.path, key],
+              value: item,
+            });
+            if (halted || discarded.has(frame.trial)) {
+              break;
+            }
+          } else {
+            deeps.push({
+              path: [...frame.path, key],
+              sink: frame.sink,
+              t: 'deep',
+              trial: frame.trial,
+              v: item,
+            });
+          }
+        }
+        for (let i = deeps.length - 1; i >= 0; i--) {
+          stack.push(deeps[i]!);
+        }
+        break;
+      }
+      case 'union': {
+        if (frame.current) {
+          if (frame.current.diags.length === 0) {
+            break;
+          }
+          frame.collected.push(frame.current.diags);
+          frame.current = null;
+          frame.index++;
+        }
+        if (frame.index >= frame.alts.length) {
+          emit(frame.sink, frame.trial, {
+            alternatives: frame.collected,
+            expected: expectedOf(frame.s),
+            got: gotOf(frame.v, frame.s),
+            path: frame.path,
+            value: frame.v,
+          });
+          break;
+        }
+        const sink: Sink = { diags: [] };
+        frame.current = sink;
+        stack.push(frame, {
+          path: frame.path,
+          s: frame.alts[frame.index]!,
+          sink,
+          t: 'node',
+          trial: ++trials,
+          v: frame.v,
+        });
+        break;
+      }
+      case 'node': {
+        scanned++;
+        const { path, s: shape, sink, trial, v: value } = frame;
+        switch (shape.k) {
+          case 'value':
+            break;
+          case 'any':
+            stack.push({ path, sink, t: 'deep', trial, v: value });
+            break;
+          case 'kind':
+            if (value.kind !== shape.kind) {
+              wrong(sink, trial, value, shape, path);
+            }
+            break;
+          case 'object':
+            if (value.asObjectRef()?.kind !== shape.kind) {
+              wrong(sink, trial, value, shape, path);
+            }
+            break;
+          case 'quantity': {
+            const q = value.asQuantityRef();
+            if (!q || unitText(q.unit) !== shape.unit) {
+              wrong(sink, trial, value, shape, path);
+            }
+            break;
+          }
+          case 'unitKind': {
+            const q = value.asQuantityRef();
+            const slot = q?.unit.length === 1 ? q.unit[0]! : undefined;
+            if (
+              !slot ||
+              slot.exponent !== 1 ||
+              unitEntry(slot.unit)?.kind !== shape.kind
+            ) {
+              wrong(sink, trial, value, shape, path);
+            }
+            break;
+          }
+          case 'list': {
+            if (value.kind !== 'list') {
+              wrong(sink, trial, value, shape, path);
+              break;
+            }
+            for (let i = value.length; i >= 1; i--) {
+              stack.push({
+                path: [...path, i],
+                s: shape.of,
+                sink,
+                t: 'node',
+                trial,
+                v: value.index(i),
+              });
+            }
+            break;
+          }
+          case 'map': {
+            if (value.kind !== 'map') {
+              wrong(sink, trial, value, shape, path);
+              break;
+            }
+            stack.push({
+              path,
+              s: shape,
+              sink,
+              t: 'extras',
+              trial,
+              v: value,
+            });
+            const entries = new Map(value.entries());
+            for (let i = shape.fields.length - 1; i >= 0; i--) {
+              const f = shape.fields[i]!;
+              const item = entries.get(f.key);
+              if (item !== undefined) {
+                stack.push({
+                  path: [...path, f.key],
+                  s: f.shape,
+                  sink,
+                  t: 'node',
+                  trial,
+                  v: item,
+                });
+              } else if (!f.optional) {
+                stack.push({
+                  expected: expectedOf(f.shape),
+                  path: [...path, f.key],
+                  sink,
+                  t: 'missing',
+                  trial,
+                });
+              }
+            }
+            break;
+          }
+          case 'oneOf':
+            stack.push({
+              alts: shape.of,
+              collected: [],
+              current: null,
+              index: 0,
+              path,
+              s: shape,
+              sink,
+              t: 'union',
+              trial,
+              v: value,
+            });
+            break;
+          case 'optional': {
+            if (nothingValue(value)) {
+              break;
+            }
+            stack.push(
+              {
+                mark: sink.diags.length,
+                path,
+                sink,
+                t: 'adjust',
+                trial,
+              },
+              {
+                path,
+                s: shape.of,
+                sink,
+                t: 'node',
+                trial,
+                v: value,
+              },
+            );
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+  return { diags: root.diags, scanned };
+};
+
+/** A Value Path as a Script value: text keys and 1-based positions. */
+export const pathValue = (path: Path): Value =>
+  listValues(path.map(p => (typeof p === 'number' ? dec(String(p)) : text(p))));
+
+/** One `explain` record: the error's fields as a plain map, without `message` or `at`. */
+export const diagnosticRecord = (d: ShapeDiagnostic): Value => {
+  if (d.unencodable) {
+    return mapValue([
+      ['code', text('not encodable')],
+      ['kind', text(d.got)],
+      ['path', pathValue(d.path)],
+    ]);
+  }
+  const fields: [string, Value][] = [
+    ['code', text('wrong kind')],
+    ['expected', text(d.expected)],
+    ['got', text(d.got)],
+    ['value', d.value],
+  ];
+  if (d.path.length) {
+    fields.push(['path', pathValue(d.path)]);
+  }
+  if (d.alternatives) {
+    fields.push([
+      'alternatives',
+      listValues(
+        d.alternatives.map(alt => listValues(alt.map(diagnosticRecord))),
+      ),
+    ]);
+  }
+  return mapValue(fields);
 };
 
 export type ScopeDecl = { abandon: string; opens: string } | { closes: string };

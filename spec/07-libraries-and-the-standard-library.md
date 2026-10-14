@@ -209,6 +209,9 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 | `rangeStart(r)` | The first end of the range `r`, as written |  |
 | `rangeEnd(r)` | The second end of the range `r`, as written |  |
 | `kindOf(x)` | The name of the kind of `x`, as text, such as `"number"` or `"civil date"` |  |
+| `conforms(value, shape)` | Whether `value` fits the Shape `shape` | `invalid shape` |
+| `check(value, shape)` | `value` unchanged, if it fits the Shape `shape`; raises the first mismatch otherwise | `invalid shape`, `not encodable` |
+| `explain(value, shape)` | The list of every mismatch of `value` against the Shape `shape`, empty if it fits | `invalid shape` |
 | `functionArity(f)` | The range of argument counts the Function Value `f` accepts, from its required parameters to all of them |  |
 | `functionName(f)` | The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda |  |
 | `offerAvailable(textName)` | Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name |  |
@@ -227,6 +230,41 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 - **`functionArity(f)`** gives the range of argument counts `f` accepts, the range `wrong arity` checks: from a named function's required parameters to all of them ([ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md)), or `n..n` for a Lambda with `n` parameters. So a function with no parameters gives `0..0`, and `2 is in functionArity(f)` tests a call before it is made.
 - **`functionName(f)`** gives the name of the named function `f` was made from, as the code unit that defines it writes it, or Nothing for a Lambda, a Library's included. An Import renamed with `use … as` keeps its Library name, so after `use pad from text as padLeft`, `functionName(padLeft)` is `"pad"`.
 - **`functionArity` and `functionName`** take a Function Value, and anything else raises `wrong kind`. They read data the value holds, so a stale Function Value still answers both, and only calling it raises `function gone` ([chapter 3](03-values.md#function-values)).
+
+### Shape checks
+
+`conforms(value, shape)`, `check(value, shape)` and `explain(value, shape)` test a value against a Shape written as data, with the acceptance of [chapter 9's Shapes](09-embedding.md#shapes) ([ADR 0080](../docs/adr/0080-scripts-check-shapes-through-built-ins.md)). They are ordinary Built-ins, so a Guard may call them. Each validates the whole Shape definition first, unused `oneOf` alternatives included, and only then looks at the value. A definition that isn't a Shape raises `invalid shape` from all three; it is never a false answer or a mismatch. Resource exhaustion during validation or matching is a Limit Fault, never a truncated report or a false answer.
+
+- **`conforms`** gives true exactly when the value fits.
+- **`check`** gives the value itself, unchanged and uncopied, when it fits, and raises the first mismatch otherwise.
+- **`explain`** gives a list of every mismatch, empty when the value fits. It continues through independently checkable siblings, but doesn't descend into a node whose container kind is wrong: expecting a list and finding text is one mismatch, not a missing item per position.
+
+**The data spelling** is the Host Manifest's ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)). A Shape is a kind name from [chapter 3's Kinds table](03-values.md#kinds), `"any"` or `"value"` as text, or a one-key wrapper map: `{quantity: unit}`, `{unitKind: kind}`, `{object: kind}`, `{list: shape}`, `{oneOf: [shape, …]}`, `{optional: shape}`, or a map Shape `{map: [{key: text, shape: shape, optional: boolean}, …], open: boolean}`, whose two boolean flags may be left out and then mean false. A Quantity's Unit is parsed and normalised with the Unit Catalogue, and matching is by the exact normalised Unit, as at the Host boundary. A Unit Kind name must be one of the Catalogue's. An Object Kind name is only a text label: defining or checking an Object Shape never queries a Host registry or reads a Host Object's properties, and a disposed handle still answers with its Object Kind. Unknown keys in a wrapper map or a field declaration are ignored metadata: they are not read as Shapes, never change acceptance or diagnostic order, and a misspelling such as `opne` doesn't open a map.
+
+**Definition errors.** `invalid shape` carries `reason`, a Shape-relative `path` (wrapper keys as text, `oneOf` alternatives and map fields by 1-based position, an empty list for the Shape itself) and the offending `value`. Validation is depth-first over the recognised structure, in field-declaration and alternative order, with each node's own errors found before its children's; the first error in that walk is the one raised, whichever metadata surrounds it. Within one field declaration, its key is read first, then the presence of its Shape, then its `optional` flag, then whether its key duplicates an earlier field's, and only then is its Shape validated. A map Shape's `open` flag is read before its fields. The reasons are:
+
+| Reason | When | `value` |
+| --- | --- | --- |
+| `not a shape` | the node is neither text nor a map, or a map with no recognised wrapper key | the node |
+| `unknown kind` | a text node names no kind, and isn't `"any"` or `"value"` | the text |
+| `ambiguous shape` | a map holds more than one of `quantity`, `unitKind`, `object`, `list`, `oneOf`, `optional` and `map` | the map |
+| `invalid unit` | a `quantity` payload isn't text, or doesn't parse as a Unit | the payload |
+| `unknown unit kind` | a `unitKind` payload isn't text naming a Unit Kind | the payload |
+| `invalid object kind` | an `object` payload isn't text | the payload |
+| `invalid alternatives` | a `oneOf` payload isn't a list | the payload |
+| `empty union` | a `oneOf` payload is an empty list | the payload |
+| `invalid fields` | a `map` payload isn't a list | the payload |
+| `invalid field` | a field declaration isn't a map | the declaration |
+| `invalid field key` | a declaration's `key` is missing or isn't text | the key, or the declaration when missing |
+| `missing field shape` | a declaration has no `shape` | the declaration |
+| `invalid flag` | an `open` or field `optional` flag is present and isn't a boolean | the flag |
+| `duplicate field` | two fields of one map Shape share a key | the repeated key |
+
+**Acceptance** is exactly a Capability Shape's, including that `any` refuses Function Values at any depth while `value` and `function` take them, that an open map's undeclared fields must still be data, that a map field whose Shape is `{optional: …}` is still required unless its `optional` flag is true, that Units match exactly rather than by convertibility, and that a Unit Kind Shape takes only a Quantity whose Unit is a single Unit of that Kind at exponent 1.
+
+**Mismatches** keep the Host boundary's errors, without its context. A mismatch is `wrong kind` with `expected`, `got` and `value`, or `not encodable` with `kind` and `path`, for a Function Value where the Shape takes only data. Paths are relative to the checked value, with text map keys and 1-based list positions: `wrong kind` omits `path` when the value itself mismatches, as a Capability argument's does, and `not encodable` always carries it, empty at the root. No `capability`, `operation` or `argument` is added. List items are visited in position order, declared map fields in declaration order and then extra fields in the value's insertion order; the first mismatch in that order is `check`'s. A missing required field mismatches with `got` `"nothing"` and Nothing as its `value`, an extra field of a closed map with `expected` `"nothing"`, and an Optional Shape adds `" or nothing"` only to a mismatch at its own node. A failed `oneOf` mismatches at the union's node, its `expected` the alternatives' joined with `" or "`; in an `explain` report that record also carries `alternatives`, the list of each alternative's own mismatch list, in alternative order, its paths still relative to the checked value. A union some alternative fits contributes nothing, in either Built-in. The records `explain` returns are plain maps of the same fields, `code` included, but with no `message` and no `at`; an error `check` raises gets both in the usual way at the call.
+
+**Charging.** Shape checks are metered, unlike the Host boundary's uncharged check: each rate's `scanned` counts the definition work (every Shape node and every entry of a visited wrapper or field map, metadata entries included, plus the scalar values of each kind, Unit and Unit Kind text read) and the matching work (every value/Shape pair attempted, every value node a data scan under `any` or an open map's extra fields visits, a missing or extra field counting one pair). Failed validation, failed alternatives and work before a raised mismatch are charged; `conforms` and `check` stop at the first mismatch, and `explain` counts the whole traversal and allocates its report by logical size, repeated offending values included. Traversal is stack-safe at any depth the budgets allow, under the ordinary Fuel and Allocation Budgets, with no Shape-specific depth or report limit.
 
 ### Offer availability
 

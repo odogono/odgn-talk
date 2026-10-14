@@ -1,0 +1,25 @@
+# shape-checks: `conforms`, `check` and `explain` test a value against a
+# Shape written as data (spec chapter 7, Shape checks; ADR 0080). The
+# definition is validated first, mismatches keep `wrong kind` and
+# `not encodable` without Capability context, a failed union groups its
+# alternatives in `explain`, and a Guard may call `conforms`.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "light"
+props = [{ name = "state", shape = "text" }]
+
+[[objects]]
+kind = "light"
+id = "bulb-1"
+props = { state = '"off"' }
+
+[[scripts]]
+name = "checks"
+source = "checks.talk"
+objects = { bulb = { kind = "light", id = "bulb-1" } }

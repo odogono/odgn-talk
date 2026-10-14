@@ -297,7 +297,7 @@
         },
         {
           "name": "support.function.builtin.northtalk",
-          "match": "(?<![A-Za-z0-9_])(?:offerAvailable|fromCodePoint|functionArity|functionName|fromFloat32|fromFloat64|isoWeekYear|isDisposed|nanosecond|objectKind|rangeStart|codePoint|dayOfYear|toFloat32|toFloat64|toInstant|rangeEnd|truncate|ceiling|hasTime|isoWeek|toCivil|weekday|kindOf|minute|offset|second|atan2|floor|log10|lower|month|power|round|upper|acos|asin|atan|hour|sqrt|year|abs|cos|day|exp|max|min|sin|tan|ln)(?![A-Za-z0-9_])"
+          "match": "(?<![A-Za-z0-9_])(?:offerAvailable|fromCodePoint|functionArity|functionName|fromFloat32|fromFloat64|isoWeekYear|isDisposed|nanosecond|objectKind|rangeStart|codePoint|dayOfYear|toFloat32|toFloat64|toInstant|conforms|rangeEnd|truncate|ceiling|explain|hasTime|isoWeek|toCivil|weekday|kindOf|minute|offset|second|atan2|check|floor|log10|lower|month|power|round|upper|acos|asin|atan|hour|sqrt|year|abs|cos|day|exp|max|min|sin|tan|ln)(?![A-Za-z0-9_])"
         }
       ]
     },

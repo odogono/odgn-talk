@@ -137,6 +137,7 @@ The Host function receives only the arguments supplied, in order. The Core inser
 - **At run time:** the Core checks each argument before the Host function runs. A mismatch raises `wrong kind` in the Script, the Host function never runs, and nothing is charged ([chapter 6](06-errors-and-limits.md#errors-from-capabilities)).
 - **Results:** a result that breaks its Shape is the Host's fault. The call ends as `host error`, and the detail goes in a `call failed` report.
 - **Messages** have Shapes only in the Host Manifest, for tooling. The Core never checks a Delivery against them.
+- **From a Script:** the Built-ins `conforms`, `check` and `explain` check a value against a Shape written in this same data spelling, with this same acceptance, under the Script's own budgets ([chapter 7](07-libraries-and-the-standard-library.md#shape-checks)). They change nothing at this boundary: a Capability argument is still checked as above, uncharged, whatever a Script checked earlier.
 
 ## Capabilities
 

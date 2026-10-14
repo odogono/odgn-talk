@@ -291,7 +291,7 @@ var Errors = ErrorsTable{
 				"kind",
 				"path",
 			},
-			RaisedWhen: "JSON encoding, or a data-Shaped Capability argument, meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded",
+			RaisedWhen: "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded or checked",
 			Sources: []string{
 				"ADR 0017",
 				"ADR 0021",
@@ -520,6 +520,20 @@ var Errors = ErrorsTable{
 				"ADR 0060",
 			},
 			Message: "The recovery offer {name} is unavailable",
+		},
+		ErrorsTableErrorEntry{
+			Code: "invalid shape",
+			Fields: []string{
+				"reason",
+				"path",
+				"value",
+			},
+			RaisedWhen: "A Shape check Built-in is given data that isn't a Shape; `reason` is the chapter 7 reason for the first definition error, `path` locates it inside the Shape data, and `value` is the offending part",
+			Sources: []string{
+				"ADR 0080",
+				"#695",
+			},
+			Message: "The Shape is invalid: {reason}",
 		},
 		ErrorsTableErrorEntry{
 			Code:       "invalid key",

@@ -796,6 +796,30 @@ export const builtins = [
     }
   },
   {
+    "name": "conforms",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
+  },
+  {
+    "name": "check",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
+  },
+  {
+    "name": "explain",
+    "kind": "function",
+    "contract": {
+      "required": 2,
+      "total": 2
+    }
+  },
+  {
     "name": "functionArity",
     "kind": "function",
     "contract": {

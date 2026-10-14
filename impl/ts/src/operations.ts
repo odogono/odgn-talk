@@ -21,6 +21,12 @@ import {
 } from './decimal';
 import { functionHead } from './code-unit';
 import {
+  decodeShape,
+  diagnosticRecord,
+  pathValue,
+  shapeDiagnostics,
+} from './capabilities';
+import {
   cacheListExtension,
   cacheListEdit,
   cacheMapWrite,
@@ -1943,6 +1949,49 @@ export const builtin = (
     }
     case 'kindOf':
       return { result: text(kindName(x!)) };
+    case 'conforms':
+    case 'check':
+    case 'explain': {
+      const decoded = decodeShape(y!);
+      measure.scanned = decoded.scanned;
+      if (decoded.error) {
+        throw new ScriptError('invalid shape', [
+          ['reason', text(decoded.error.reason)],
+          ['path', pathValue(decoded.error.path)],
+          ['value', decoded.error.value],
+        ]);
+      }
+      const { diags, scanned } = shapeDiagnostics(
+        x!,
+        decoded.shape!,
+        name !== 'explain',
+        decoded.scanned,
+      );
+      measure.scanned = scanned;
+      if (name === 'conforms') {
+        return { result: bool(diags.length === 0), scanned };
+      }
+      if (name === 'explain') {
+        return { result: listValues(diags.map(diagnosticRecord)), scanned };
+      }
+      if (diags.length === 0) {
+        return { result: x!, scanned };
+      }
+      const d = diags[0]!;
+      throw d.unencodable
+        ? new ScriptError('not encodable', [
+            ['kind', text(d.got)],
+            ['path', pathValue(d.path)],
+          ])
+        : new ScriptError('wrong kind', [
+            ['expected', text(d.expected)],
+            ['got', text(d.got)],
+            ['value', d.value],
+            ...(d.path.length
+              ? [['path', pathValue(d.path)] as [string, Value]]
+              : []),
+          ]);
+    }
     case 'functionArity':
     case 'functionName': {
       if (x!.kind !== 'function') {

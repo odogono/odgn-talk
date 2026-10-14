@@ -290,7 +290,7 @@ pub const errors: ErrorsTable = .{
                 "kind",
                 "path",
             },
-            .raised_when = "JSON encoding, or a data-Shaped Capability argument, meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded",
+            .raised_when = "JSON encoding, a data-Shaped Capability argument or a Shape check meets a value plain data can't hold, such as a Quantity or Bytes; `path` locates it inside the value being encoded or checked",
             .sources = &.{
                 "ADR 0017",
                 "ADR 0021",
@@ -519,6 +519,20 @@ pub const errors: ErrorsTable = .{
                 "ADR 0060",
             },
             .message = "The recovery offer {name} is unavailable",
+        },
+        .{
+            .code = "invalid shape",
+            .fields = &.{
+                "reason",
+                "path",
+                "value",
+            },
+            .raised_when = "A Shape check Built-in is given data that isn't a Shape; `reason` is the chapter 7 reason for the first definition error, `path` locates it inside the Shape data, and `value` is the offending part",
+            .sources = &.{
+                "ADR 0080",
+                "#695",
+            },
+            .message = "The Shape is invalid: {reason}",
         },
         .{
             .code = "invalid key",

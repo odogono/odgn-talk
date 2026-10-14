@@ -1435,6 +1435,7 @@ export const errorMessages = {
   "segment participant conflict": "The Segment already participates through {participant}, so {capability} cannot join",
   "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called",
   "offer unavailable": "The recovery offer {name} is unavailable",
+  "invalid shape": "The Shape is invalid: {reason}",
   "invalid key": "A Store key can't be empty text",
   "invalid watch": "A watch's {field} isn't valid",
   "watch limit": "The Store's {limit} limit for watches would be exceeded",
@@ -2024,6 +2025,32 @@ export const costModel = {
       "key": "builtin.kindOf",
       "fuel": [
         [0, 0, 2, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
+      "key": "builtin.conforms",
+      "fuel": [
+        [0, 0, 4, 1],
+        [10, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.check",
+      "fuel": [
+        [0, 0, 4, 1],
+        [10, 0, 1, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "builtin.explain",
+      "fuel": [
+        [0, 0, 4, 1],
+        [10, 0, 1, 1]
       ],
       "alloc": [
         [1, 2, 1, 1]

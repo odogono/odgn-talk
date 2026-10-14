@@ -48,6 +48,18 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
     "call": "kindOf(x)",
     "gives": "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`"
   },
+  "conforms": {
+    "call": "conforms(value, shape)",
+    "gives": "Whether `value` fits the Shape `shape`"
+  },
+  "check": {
+    "call": "check(value, shape)",
+    "gives": "`value` unchanged, if it fits the Shape `shape`; raises the first mismatch otherwise"
+  },
+  "explain": {
+    "call": "explain(value, shape)",
+    "gives": "The list of every mismatch of `value` against the Shape `shape`, empty if it fits"
+  },
   "functionArity": {
     "call": "functionArity(f)",
     "gives": "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them"

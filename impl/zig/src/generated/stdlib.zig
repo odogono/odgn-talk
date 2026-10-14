@@ -178,6 +178,40 @@ pub const stdlib: StdlibTable = .{
             .total = 1,
         },
         .{
+            .name = "conforms",
+            .group = "values",
+            .call = "conforms(value, shape)",
+            .gives = "Whether `value` fits the Shape `shape`",
+            .errors = &.{
+                "invalid shape",
+            },
+            .required = 2,
+            .total = 2,
+        },
+        .{
+            .name = "check",
+            .group = "values",
+            .call = "check(value, shape)",
+            .gives = "`value` unchanged, if it fits the Shape `shape`; raises the first mismatch otherwise",
+            .errors = &.{
+                "invalid shape",
+                "not encodable",
+            },
+            .required = 2,
+            .total = 2,
+        },
+        .{
+            .name = "explain",
+            .group = "values",
+            .call = "explain(value, shape)",
+            .gives = "The list of every mismatch of `value` against the Shape `shape`, empty if it fits",
+            .errors = &.{
+                "invalid shape",
+            },
+            .required = 2,
+            .total = 2,
+        },
+        .{
             .name = "functionArity",
             .group = "values",
             .call = "functionArity(f)",

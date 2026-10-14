@@ -307,6 +307,18 @@ export const builtins = [
     "kind": "function"
   },
   {
+    "name": "conforms",
+    "kind": "function"
+  },
+  {
+    "name": "check",
+    "kind": "function"
+  },
+  {
+    "name": "explain",
+    "kind": "function"
+  },
+  {
     "name": "functionArity",
     "kind": "function"
   },

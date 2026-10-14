@@ -121,6 +121,27 @@ call = "kindOf(x)"
 gives = "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`"
 
 [[builtin]]
+name = "conforms"
+group = "values"
+call = "conforms(value, shape)"
+gives = "Whether `value` fits the Shape `shape`"
+errors = ["invalid shape"]
+
+[[builtin]]
+name = "check"
+group = "values"
+call = "check(value, shape)"
+gives = "`value` unchanged, if it fits the Shape `shape`; raises the first mismatch otherwise"
+errors = ["invalid shape", "not encodable"]
+
+[[builtin]]
+name = "explain"
+group = "values"
+call = "explain(value, shape)"
+gives = "The list of every mismatch of `value` against the Shape `shape`, empty if it fits"
+errors = ["invalid shape"]
+
+[[builtin]]
 name = "functionArity"
 group = "values"
 call = "functionArity(f)"
