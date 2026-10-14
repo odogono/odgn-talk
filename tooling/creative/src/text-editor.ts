@@ -29,6 +29,7 @@ export class InPlaceTextEditor {
     readonly history: TextHistory,
     readonly changed: () => void,
     readonly finished: () => void,
+    readonly options: { escape?: () => void; selectAll?: boolean } = {},
   ) {
     node.contentEditable = 'true';
     node.classList.add('text-editing');
@@ -95,7 +96,7 @@ export class InPlaceTextEditor {
       if (key.key === 'Escape') {
         key.preventDefault();
         key.stopPropagation();
-        finished();
+        (options.escape ?? finished)();
         return;
       }
       if (key.ctrlKey || key.metaKey) {
@@ -135,10 +136,10 @@ export class InPlaceTextEditor {
       }
     });
     node.focus();
-    this.#selection = {
-      start: 0,
-      end: plainTextOf(history.element.richText).length,
-    };
+    this.#selection =
+      options.selectAll === false
+        ? (selectionInText(node) ?? { start: 0, end: 0 })
+        : { start: 0, end: plainTextOf(history.element.richText).length };
     selectTextRange(node, this.#selection);
     this.#updateToolbar();
   }
@@ -226,6 +227,13 @@ export class InPlaceTextEditor {
           command,
         ),
       });
+    }
+  }
+  /** Refresh Script changes without interrupting an in-progress composition. */
+  refresh(): void {
+    if (!this.#composing) {
+      this.#selection = selectionInText(this.node) ?? this.#selection;
+      this.#render();
     }
   }
   destroy(): void {

@@ -3,6 +3,11 @@ import { EditorView } from '@codemirror/view';
 import { createElement, createPage, createProject } from '../src/model';
 import { mountStack } from '../src/stack';
 import { mountPlay } from '../src/play-view';
+import {
+  readRichText,
+  selectTextRange,
+  selectionInText,
+} from '../src/rich-text-dom';
 
 const assert = (value: unknown, message: string) => {
   if (!value) {
@@ -25,6 +30,9 @@ export const runBrowserTests = async () => {
   const input = createElement('text', 'input1');
   if (input.kind === 'text') {
     input.editable = true;
+    input.richText = [
+      { runs: [{ text: 'Authored journal', italic: true, color: '#123456' }] },
+    ];
   }
   input.top = 110;
   input.script =
@@ -33,6 +41,11 @@ export const runBrowserTests = async () => {
   const original = structuredClone(project);
   const shell = mountStack(project);
   mountPlay(shell);
+  const authoredRichText = JSON.stringify(
+    readRichText(
+      document.querySelector<HTMLElement>('#page [data-element="input1"]')!,
+    ),
+  );
   const toggle = document.querySelector<HTMLButtonElement>(
     '#menu [aria-pressed]',
   )!;
@@ -46,14 +59,113 @@ export const runBrowserTests = async () => {
   )!;
   field.focus();
   field.innerText = 'Reader input';
-  field.blur();
+  field.dispatchEvent(new InputEvent('input', { bubbles: true }));
   await until(() => readerButton().textContent === 'Reader input');
+  const toolbar = document.querySelector<HTMLElement>('#play-text-toolbar')!;
+  const command = (name: string) =>
+    toolbar
+      .querySelector<HTMLButtonElement>(`[data-text-command="${name}"]`)!
+      .click();
+  assert(!toolbar.hidden, 'Reader toolbar missing');
+  assert(
+    field.getAttribute('role') === 'textbox',
+    'Reader text is not accessible',
+  );
+  selectTextRange(field, { start: 0, end: 6 });
+  for (const mark of ['bold', 'italic', 'underline']) {
+    command(mark);
+    assert(
+      readRichText(field)[0]!.runs[0]![mark as 'bold' | 'italic' | 'underline'],
+      `Reader ${mark} missing`,
+    );
+  }
+  const color = toolbar.querySelector<HTMLInputElement>('input[type="color"]')!;
+  color.focus();
+  assert(!toolbar.hidden, 'Colour focus closed reader editing');
+  color.value = '#ff0000';
+  color.dispatchEvent(new Event('input', { bubbles: true }));
+  await until(() => readerButton().textContent === 'Reader input');
+  assert(
+    readRichText(field)[0]!.runs[0]!.color === 'rgb(255, 0, 0)',
+    'Reader colour missing',
+  );
+  assert(selectionInText(field)?.end === 6, 'Script redraw lost selection');
+  const formatted = JSON.stringify(readRichText(field));
+  command('undo');
+  assert(!readRichText(field)[0]!.runs[0]!.color, 'Reader undo failed');
+  command('redo');
+  assert(
+    JSON.stringify(readRichText(field)) === formatted,
+    'Reader redo failed',
+  );
+  command('done');
+  assert(
+    toolbar.hidden && field.contentEditable === 'true',
+    'Done disabled later editing',
+  );
+  field.focus();
+  assert(!toolbar.hidden, 'Reader cannot reopen editing');
+  const paste = new DataTransfer();
+  paste.setData(
+    'text/html',
+    '<p><b>Clue</b> <a href="https://example.com">one</a><img src="bad"><script>bad()</script></p><p><u>Journal</u></p>',
+  );
+  selectTextRange(field, { start: 0, end: 12 });
+  field.dispatchEvent(
+    new ClipboardEvent('paste', {
+      clipboardData: paste,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(() => readerButton().textContent === 'Clue one\nJournal');
+  assert(
+    !field.querySelector('a,img,script'),
+    'Reader paste kept unsupported HTML',
+  );
+  assert(
+    readRichText(field)[1]!.runs[0]!.underline,
+    'Reader paste lost formatting',
+  );
+  field.dispatchEvent(
+    new InputEvent('beforeinput', {
+      inputType: 'insertParagraph',
+      cancelable: true,
+    }),
+  );
+  await until(() => readerButton().textContent === 'Clue one\nJournal\n');
+  command('undo');
+  await until(() => readerButton().textContent === 'Clue one\nJournal');
+  field.dispatchEvent(new CompositionEvent('compositionstart'));
+  field.querySelector('span')!.textContent = '日本語';
+  field.dispatchEvent(new InputEvent('input', { isComposing: true }));
+  assert(
+    readerButton().textContent === 'Clue one\nJournal',
+    'IME committed before composition ended',
+  );
+  readerButton().click();
+  await until(() => readerButton().textContent === 'Clicked');
+  assert(
+    field.querySelector('span')!.textContent === '日本語',
+    'Unrelated Script redraw interrupted IME',
+  );
+  field.dispatchEvent(new CompositionEvent('compositionend'));
+  await until(() => readerButton().textContent === '日本語 one\nJournal');
   assert(
     JSON.stringify(project) === JSON.stringify(original),
     'Play mutated authored data',
   );
   toggle.click();
   assert(!shell.readOnly, 'Edit remains locked');
+  assert(toolbar.hidden, 'Reader toolbar visible in Edit');
+  assert(
+    JSON.stringify(
+      readRichText(
+        document.querySelector<HTMLElement>('#page [data-element="input1"]')!,
+      ),
+    ) === authoredRichText,
+    'Edit did not restore authored text and formatting',
+  );
   assert(
     document.querySelector('#page [data-element="button1"]')!.textContent ===
       'Button',
@@ -61,6 +173,34 @@ export const runBrowserTests = async () => {
   );
   toggle.click();
   assert(readerButton().textContent === 'Button', 'New Play kept old state');
+  assert(
+    document.querySelector('#reader [data-element="input1"]')!.textContent ===
+      'Authored journal',
+    'New Play kept reader text',
+  );
+  toggle.click();
+  button.script =
+    'on click\n set the text of input1 to "Authored journal"\nend click';
+  toggle.click();
+  const replaced = document.querySelector<HTMLElement>(
+    '#reader [data-element="input1"]',
+  )!;
+  replaced.focus();
+  selectTextRange(replaced, { start: 0, end: 8 });
+  command('bold');
+  readerButton().click();
+  await until(
+    () => !replaced.querySelector('[style*="bold"], [style*="italic"]'),
+  );
+  assert(
+    replaced === document.activeElement,
+    'Script text replacement lost reader focus',
+  );
+  assert(
+    toolbar.querySelector<HTMLButtonElement>('[data-text-command="undo"]')!
+      .disabled,
+    'Script replacement kept stale reader undo',
+  );
   toggle.click();
   const second = createPage('page2');
   const back = createElement('button', 'button1');
@@ -69,13 +209,24 @@ export const runBrowserTests = async () => {
   project.pages.push(second);
   button.script =
     'on click\n set the label of me to "Kept"\n tell pages to show page2\nend click';
+  input.script = '';
   toggle.click();
+  const journal = document.querySelector<HTMLElement>(
+    '#reader [data-element="input1"]',
+  )!;
+  journal.focus();
+  journal.innerText = 'Kept journal';
+  journal.dispatchEvent(new InputEvent('input'));
+  selectTextRange(journal, { start: 0, end: 4 });
+  command('bold');
+  const keptRichText = JSON.stringify(readRichText(journal));
   assert(
     getComputedStyle(document.querySelector('#strip')!).display === 'none',
     'Pages strip visible in Play',
   );
   readerButton().click();
   await until(() => !document.querySelector('#reader [data-element="input1"]'));
+  assert(toolbar.hidden, 'Navigation kept departed text toolbar');
   readerButton().click();
   await until(
     () => !!document.querySelector('#reader [data-element="input1"]'),
@@ -83,6 +234,14 @@ export const runBrowserTests = async () => {
   assert(
     readerButton().textContent === 'Kept',
     'Revisit lost visual state or reused the wrong click listener',
+  );
+  assert(
+    JSON.stringify(
+      readRichText(
+        document.querySelector<HTMLElement>('#reader [data-element="input1"]')!,
+      ),
+    ) === keptRichText,
+    'Navigation lost reader text or formatting',
   );
   toggle.click();
   button.script =
@@ -153,10 +312,17 @@ export const runBrowserTests = async () => {
     if (action === 'Edit') {
       toggle.click();
     } else if (action === 'Escape') {
-      document.dispatchEvent(
+      const editing = document.querySelector<HTMLElement>(
+        '#reader [data-element="input1"]',
+      )!;
+      editing.focus();
+      editing.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
       );
     } else {
+      document
+        .querySelector<HTMLElement>('#reader [data-element="input1"]')!
+        .focus();
       [...document.querySelectorAll<HTMLButtonElement>('#menu button')]
         .find(b => b.textContent === 'Stop')!
         .click();
@@ -174,6 +340,12 @@ export const runBrowserTests = async () => {
         'Wait changed Edit after returning',
       );
     } else {
+      assert(toolbar.hidden, `${action} left reader formatting active`);
+      assert(
+        document.querySelector<HTMLElement>('#reader [data-element="input1"]')!
+          .contentEditable === 'false',
+        `${action} left reader typing active`,
+      );
       assert(
         readerButton().textContent === 'Waiting',
         `${action} leaked Element wait`,
@@ -232,6 +404,8 @@ export const runBrowserTests = async () => {
       'navigation, same-named Elements, retained visuals and hidden strip',
       'visible property writes',
       'reader textChanged',
+      'reader rich text, selection colour, undo/redo, paste, paragraphs and IME',
+      'reader formatting retained across navigation and restored exactly in Edit',
       'authored isolation',
       'fresh session',
       'wait resumes visibly without blocking reader input or other Scripts',
