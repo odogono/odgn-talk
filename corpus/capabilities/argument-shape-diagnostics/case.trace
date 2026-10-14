@@ -1,0 +1,36 @@
+# First blessing approved by the maintainer on 2026-10-14 (#846).
+# See docs/reviews/host-shape-diagnostics/README.md.
+
+> load s identity=fc360d08cc0f56074394c8bd7b2f7e6cd6f4ad0bf88a14134aa12225292a56d8
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T09:00:00Z
+raise s/r1 code="wrong kind" at=s:192 pos=35:5
+raise s/r1 code="wrong kind" at=s:207 pos=43:5
+raise s/r1 code="wrong kind" at=s:207 pos=43:5
+raise s/r1 code="wrong kind" at=s:222 pos=51:5
+raise s/r1 code="wrong kind" at=s:222 pos=51:5
+raise s/r1 code="wrong kind" at=s:222 pos=51:5
+raise s/r1 code="wrong kind" at=s:237 pos=59:5
+raise s/r1 code="not encodable" at=s:237 pos=59:5
+raise s/r1 code="not encodable" at=s:252 pos=67:5
+raise s/r1 code="not encodable" at=s:252 pos=67:5
+raise s/r1 code="wrong kind" at=s:267 pos=75:5
+raise s/r1 code="wrong kind" at=s:282 pos=83:5
+raise s/r1 code="wrong kind" at=s:297 pos=91:5
+raise s/r1 code="wrong kind" at=s:312 pos=99:5
+raise s/r1 code="wrong kind" at=s:327 pos=107:5
+raise s/r1 code="wrong kind" at=s:192 pos=35:5
+raise s/r1 code="wrong kind" at=s:207 pos=43:5
+raise s/r1 code="wrong kind" at=s:207 pos=43:5
+raise s/r1 code="wrong kind" at=s:222 pos=51:5
+raise s/r1 code="wrong kind" at=s:297 pos=91:5
+raise s/r1 code="wrong kind" at=s:312 pos=99:5
+raise s/r1 code="wrong kind" at=s:267 pos=75:5
+raise s/r1 code="wrong kind" at=s:282 pos=83:5
+raise s/r1 code="wrong kind" at=s:327 pos=107:5
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=783 alloc=18363 state=17467 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=783 alloc=18363
+pumped state=idle fuel=783
+
+> vars
+vars s seen=[{code: "wrong kind", expected: "text", got: "function", value: <function s:6:7>, capability: "shapes", operation: "scalar", argument: 1, at: {unit: "s", handler: "try_scalar", line: 35, column: 5}}, {code: "wrong kind", expected: "list", got: "function", value: <function s:6:7>, capability: "shapes", operation: "sequence", argument: 1, at: {unit: "s", handler: "try_sequence", line: 43, column: 5}}, {code: "wrong kind", expected: "text", got: "function", value: <function s:6:7>, capability: "shapes", operation: "sequence", argument: 1, path: [2], at: {unit: "s", handler: "try_sequence", line: 43, column: 5}}, {code: "wrong kind", expected: "map", got: "function", value: <function s:6:7>, capability: "shapes", operation: "closed", argument: 1, at: {unit: "s", handler: "try_closed", line: 51, column: 5}}, {code: "wrong kind", expected: "text", got: "function", value: <function s:6:7>, capability: "shapes", operation: "closed", argument: 1, path: ["name"], at: {unit: "s", handler: "try_closed", line: 51, column: 5}}, {code: "wrong kind", expected: "nothing", got: "function", value: <function s:6:7>, capability: "shapes", operation: "closed", argument: 1, path: ["extra"], at: {unit: "s", handler: "try_closed", line: 51, column: 5}}, {code: "wrong kind", expected: "text", got: "function", value: <function s:6:7>, capability: "shapes", operation: "open", argument: 1, path: ["name"], at: {unit: "s", handler: "try_open", line: 59, column: 5}}, {code: "not encodable", kind: "function", path: [1, "extra", 1], at: {unit: "s", handler: "try_open", line: 59, column: 5}}, {code: "not encodable", kind: "function", path: [1], at: {unit: "s", handler: "try_data", line: 67, column: 5}}, {code: "not encodable", kind: "function", path: [1, "extra", 1], at: {unit: "s", handler: "try_data", line: 67, column: 5}}, {code: "wrong kind", expected: "kg", got: "function", value: <function s:6:7>, capability: "shapes", operation: "exact", argument: 1, at: {unit: "s", handler: "try_exact", line: 75, column: 5}}, {code: "wrong kind", expected: "mass", got: "function", value: <function s:6:7>, capability: "shapes", operation: "unitkind", argument: 1, at: {unit: "s", handler: "try_unitkind", line: 83, column: 5}}, {code: "wrong kind", expected: "text or kg", got: "function", value: <function s:6:7>, capability: "shapes", operation: "choice", argument: 1, at: {unit: "s", handler: "try_choice", line: 91, column: 5}}, {code: "wrong kind", expected: "text or nothing", got: "function", value: <function s:6:7>, capability: "shapes", operation: "maybe", argument: 1, at: {unit: "s", handler: "try_maybe", line: 99, column: 5}}, {code: "wrong kind", expected: "kg or nothing", got: "function", value: <function s:6:7>, capability: "shapes", operation: "maybequantity", argument: 1, at: {unit: "s", handler: "try_maybequantity", line: 107, column: 5}}, {code: "wrong kind", expected: "text", got: "quantity", value: 5 m, capability: "shapes", operation: "scalar", argument: 1, at: {unit: "s", handler: "try_scalar", line: 35, column: 5}}, {code: "wrong kind", expected: "list", got: "quantity", value: 5 m, capability: "shapes", operation: "sequence", argument: 1, at: {unit: "s", handler: "try_sequence", line: 43, column: 5}}, {code: "wrong kind", expected: "text", got: "quantity", value: 5 m, capability: "shapes", operation: "sequence", argument: 1, path: [1], at: {unit: "s", handler: "try_sequence", line: 43, column: 5}}, {code: "wrong kind", expected: "nothing", got: "quantity", value: 5 m, capability: "shapes", operation: "closed", argument: 1, path: ["extra"], at: {unit: "s", handler: "try_closed", line: 51, column: 5}}, {code: "wrong kind", expected: "text or kg", got: "quantity", value: 5 m, capability: "shapes", operation: "choice", argument: 1, at: {unit: "s", handler: "try_choice", line: 91, column: 5}}, {code: "wrong kind", expected: "text or nothing", got: "quantity", value: 5 m, capability: "shapes", operation: "maybe", argument: 1, at: {unit: "s", handler: "try_maybe", line: 99, column: 5}}, {code: "wrong kind", expected: "kg", got: "m", value: 5 m, capability: "shapes", operation: "exact", argument: 1, at: {unit: "s", handler: "try_exact", line: 75, column: 5}}, {code: "wrong kind", expected: "mass", got: "m", value: 5 m, capability: "shapes", operation: "unitkind", argument: 1, at: {unit: "s", handler: "try_unitkind", line: 83, column: 5}}, {code: "wrong kind", expected: "kg or nothing", got: "m", value: 5 m, capability: "shapes", operation: "maybequantity", argument: 1, at: {unit: "s", handler: "try_maybequantity", line: 107, column: 5}}]

@@ -12,6 +12,7 @@ trace cancellation/policy-clause-selection
 trace cancellation/policy-dispatch-limits
 trace cancellation/queueing-policies
 trace cancellation/refused-host-crossings
+trace capabilities/argument-shape-diagnostics
 trace capabilities/effect-abandon-failed
 trace capabilities/effect-begin-failed
 trace capabilities/effect-begin-unknown

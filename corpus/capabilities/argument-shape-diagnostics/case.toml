@@ -1,0 +1,84 @@
+# Host Shape mismatch diagnostics: Function Values are wrong kind under
+# scalar/container/closed-map Shapes, and not encodable only in data scans.
+# Quantities report their Kind unless a Quantity or Unit Kind Shape fails.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "shapes"
+name = "scalar"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "sequence"
+mode = "fire-and-forget"
+args = [{ list = "text" }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "closed"
+mode = "fire-and-forget"
+args = [{ map = [{ key = "name", shape = "text" }] }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "open"
+mode = "fire-and-forget"
+args = [{ map = [{ key = "name", shape = "text" }], open = true }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "data"
+mode = "fire-and-forget"
+args = ["any"]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "exact"
+mode = "fire-and-forget"
+args = [{ quantity = "kg" }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "unitkind"
+mode = "fire-and-forget"
+args = [{ unitKind = "mass" }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "choice"
+mode = "fire-and-forget"
+args = [{ oneOf = ["text", { quantity = "kg" }] }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "maybe"
+mode = "fire-and-forget"
+args = [{ optional = "text" }]
+cost = { fuel = 5 }
+
+[[operations]]
+capability = "shapes"
+name = "maybequantity"
+mode = "fire-and-forget"
+args = [{ optional = { quantity = "kg" } }]
+cost = { fuel = 5 }
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { shapes = { ops = "all" } }

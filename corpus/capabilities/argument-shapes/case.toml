@@ -2,8 +2,9 @@
 # before the Host function runs, and nothing is charged. Its fields describe
 # the first node that doesn't match, depth-first, with `argument` and `path`;
 # a missing key `got` "nothing" and an extra key in a closed map `expected`
-# "nothing". A Function Value under a data Shape raises `not encodable`
-# (spec chapter 6, Errors from Capabilities).
+# "nothing". A Function Value found by the data scan under `any` or an
+# open map's undeclared field raises `not encodable`; other Shape mismatches
+# raise `wrong kind` (spec chapter 6, Errors from Capabilities).
 
 kind = "trace"
 
