@@ -31,8 +31,20 @@ fn tag(w: *std.Io.Writer, name: []const u8) !void {
 /// quoted key.
 const Step = union(enum) { value: *const Value, punctuation: []const u8, key: []const u8 };
 
+/// How the message layer writes a Function Value; storage has none.
+pub const FunctionWriter = struct {
+    context: ?*anyopaque,
+    write: *const fn (?*anyopaque, *std.Io.Writer, *const Value) Error!void,
+};
+
 /// Writes `v`'s Value Encoding. A Function at any depth is NotEncodable.
 pub fn write(w: *std.Io.Writer, root: *const Value) Error!void {
+    return writeWith(w, root, null);
+}
+
+/// Writes `v`'s Value Encoding, each Function through `functions`, or
+/// NotEncodable without it.
+pub fn writeWith(w: *std.Io.Writer, root: *const Value, functions: ?FunctionWriter) Error!void {
     const gpa = root.allocator;
     var steps: std.ArrayList(Step) = .empty;
     defer steps.deinit(gpa);
@@ -40,12 +52,12 @@ pub fn write(w: *std.Io.Writer, root: *const Value) Error!void {
     while (steps.pop()) |step| switch (step) {
         .punctuation => |p| try w.writeAll(p),
         .key => |k| try quoted(w, k),
-        .value => |v| try writeOne(w, v, gpa, &steps),
+        .value => |v| try writeOne(w, v, gpa, &steps, functions),
     };
 }
 
 /// Writes a scalar, or opens a container and pushes its parts last first.
-fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *std.ArrayList(Step)) Error!void {
+fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *std.ArrayList(Step), functions: ?FunctionWriter) Error!void {
     const a = v.allocator;
     switch (v.data) {
         .nothing => try w.writeAll("null"),
@@ -152,7 +164,10 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *
             try quoted(w, o.id);
             try w.writeAll("]}");
         },
-        .function => return error.NotEncodable,
+        .function => {
+            const f = functions orelse return error.NotEncodable;
+            try f.write(f.context, w, v);
+        },
     }
 }
 /// `v`'s Value Encoding, owned by the caller.
@@ -364,6 +379,12 @@ fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.
         const p = try pair(payload);
         const resolve = r.object orelse return error.InvalidValue;
         return resolve(r.context, try string(p[0]), try string(p[1]));
+    }
+    if (std.mem.eql(u8, name, "$function")) {
+        const resolve = r.function_token orelse return error.InvalidValue;
+        if (payload != .array or payload.array.items.len != 3) return error.InvalidValue;
+        const parts = payload.array.items;
+        return resolve(r.context, try string(parts[0]), try string(parts[1]), try string(parts[2]));
     }
     if (std.mem.eql(u8, name, "$pattern")) {
         return canonical(a, try @import("pattern.zig").parse(a, try string(payload)), name, payload);
