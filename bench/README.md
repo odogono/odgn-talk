@@ -33,6 +33,11 @@ The [Zig Map write measurements](results/2026-10-14-zig-map-writes.md) record
 three paired before/after runs, construction scaling and Group allocation
 probes for [#876](https://github.com/odogono/odgn-talk/issues/876).
 
+The [Zig Decimal arithmetic measurements](results/2026-10-14-zig-decimal-paths.md)
+record three paired runs across all 30 supported workloads, separate allocation
+probes and native/WASI equivalence checks for
+[#877](https://github.com/odogono/odgn-talk/issues/877).
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
