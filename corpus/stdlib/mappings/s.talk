@@ -26,7 +26,7 @@ on go
   put transform({customer: {contact: {email: "ann@example.com"}}, orders: [{total: "12"}, {total: "7"}]}, mapping) after log
   put transform({customer: {contact: {email: "ann@example.com"}}, orders: [{total: "12"}, {total: 7}]}, mapping) after log
   put transform({customer: {contact: {email: "ann@example.com"}}, orders: []}, mapping) after log
-  put transform([nothing, true, 5 cm, <<1, 2>>, 1..3, "2026-10-14T00:00:00Z" as instant, given n: n + 1], {rules: [{from: [], to: ["whole"], input: "value"}]}) after log
+  put transform([nothing, true, 5 cm, << 1, 2 >>, 1..3, "2026-10-14T00:00:00Z" as instant, given n: n + 1], {rules: [{from: [], to: ["whole"], input: "value"}]}) after log
   put transform({"": 8}, {rules: [{from: [""], to: [""]}]}) after log
   put transform([nothing, {}, {v: nothing}], {rules: [{from: [{each: true}, "v"], to: ["v"], missing: "default", default: 9, input: {optional: "number"}}]}) after log
 end go

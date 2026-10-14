@@ -12,6 +12,13 @@ before removal of the eight Unblessed headers. Those headers alone are removed;
 all expectation records and the other three files remain byte-identical.
 Execution agreement and human approval are recorded separately.
 
+A later formatter fix spaced the bytes literal on line 29 of
+`corpus/stdlib/mappings/s.talk` as `<< 1, 2 >>`. That changed two values in
+`corpus/stdlib/mappings/case.trace`: the source identity and the lambda name
+(`s:29:90` became `s:29:92`). Fuel and allocation are unchanged. The maintainer
+approved this change on 2026-10-14 in the same thread; the approved file's
+SHA-256 is `54a97c4d279636ca7558087982536e6ee4f39b56fbe6203220be44060e8a78fa`.
+
 The original #696 inventory was approved earlier on the same date, as recorded
 [separately](../restricted-callbacks/README.md). This later approval covers the
 Mapping changes that the original approval did not cover.
