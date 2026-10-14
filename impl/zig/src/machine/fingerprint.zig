@@ -22,7 +22,7 @@ pub fn writeString(w: *std.Io.Writer, s: []const u8) !void {
     try w.writeByte('"');
 }
 
-fn writeShape(w: *std.Io.Writer, s: *const capabilities.Shape) std.Io.Writer.Error!void {
+pub fn writeShape(w: *std.Io.Writer, s: *const capabilities.Shape) std.Io.Writer.Error!void {
     switch (s.data) {
         .kind => |k| try writeString(w, k.name()),
         .quantity_of => |q| {
@@ -81,8 +81,10 @@ fn writeFields(w: *std.Io.Writer, fields: []const capabilities.Field) std.Io.Wri
     try w.writeByte(']');
 }
 
-/// One Operation Declaration, as the Fingerprint writes it.
-pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation) !void {
+/// One Operation Declaration, as the Fingerprint writes it, or with its
+/// `description` and then its `examples` after its other keys, each only
+/// when present, as the Host Manifest does.
+pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation, documented: bool) !void {
     try w.writeAll("{\"name\":");
     try writeString(w, op.name);
     try w.writeAll(",\"mode\":");
@@ -144,6 +146,18 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation) !voi
         },
     }
     if (op.segment_bound) try w.writeAll(",\"segmentBound\":true");
+    if (documented and op.description.len > 0) {
+        try w.writeAll(",\"description\":");
+        try writeString(w, op.description);
+    }
+    if (documented and op.examples.len > 0) {
+        try w.writeAll(",\"examples\":[");
+        for (op.examples, 0..) |e, i| {
+            if (i > 0) try w.writeByte(',');
+            try writeString(w, e);
+        }
+        try w.writeByte(']');
+    }
     try w.writeByte('}');
 }
 
@@ -152,11 +166,16 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation) !voi
 pub fn grantJson(a: Allocator, capability: *const capabilities.Capability, kept: []const bool) Allocator.Error![]u8 {
     var out: std.Io.Writer.Allocating = .init(a);
     errdefer out.deinit();
-    writeGrant(a, &out.writer, capability, kept) catch return error.OutOfMemory;
+    const w = &out.writer;
+    w.writeByte('{') catch return error.OutOfMemory;
+    writeGrant(a, w, capability, kept, false) catch return error.OutOfMemory;
+    w.writeByte('}') catch return error.OutOfMemory;
     return out.toOwnedSlice();
 }
 
-fn writeGrant(a: Allocator, w: *std.Io.Writer, capability: *const capabilities.Capability, kept: []const bool) !void {
+/// A Grant's `"capability"` and `"operations"` keys, the Host Manifest's
+/// with each Operation's documentation.
+pub fn writeGrant(a: Allocator, w: *std.Io.Writer, capability: *const capabilities.Capability, kept: []const bool, documented: bool) !void {
     var order: std.ArrayList(usize) = .empty;
     defer order.deinit(a);
     for (kept, 0..) |k, i| if (k) try order.append(a, i);
@@ -165,14 +184,14 @@ fn writeGrant(a: Allocator, w: *std.Io.Writer, capability: *const capabilities.C
             return std.mem.order(u8, ops[x].name, ops[y].name) == .lt;
         }
     }.less);
-    try w.writeAll("{\"capability\":");
+    try w.writeAll("\"capability\":");
     try writeString(w, capability.name);
     try w.writeAll(",\"operations\":[");
     for (order.items, 0..) |op, i| {
         if (i > 0) try w.writeByte(',');
-        try writeOperation(w, &capability.operations[op]);
+        try writeOperation(w, &capability.operations[op], documented);
     }
-    try w.writeAll("]}");
+    try w.writeByte(']');
 }
 
 pub const Library = struct { name: []const u8, identity: [32]u8 };

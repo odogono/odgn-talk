@@ -1581,6 +1581,61 @@ export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settle
     return .ok;
 }
 
+const manifest = @import("machine/manifest.zig");
+pub const MessageDecl = extern struct { name: ?[*]const u8, name_len: usize, args: ?[*]const *const Shape, args_len: usize, receivers: ?[*]const *const objects.Kind, receivers_len: usize };
+pub const ManifestObject = extern struct { name: ?[*]const u8, name_len: usize, kind: *const objects.Kind };
+pub const ManifestSpec = extern struct {
+    kind: ?[*]const u8,
+    kind_len: usize,
+    version: ?[*]const u8,
+    version_len: usize,
+    grants: ?[*]const LoadGrant,
+    grants_len: usize,
+    libraries: ?[*]const *const machine.Library,
+    libraries_len: usize,
+    messages: ?[*]const MessageDecl,
+    messages_len: usize,
+    object_kinds: ?[*]const *const objects.Kind,
+    object_kinds_len: usize,
+    objects: ?[*]const ManifestObject,
+    objects_len: usize,
+};
+
+fn listOf(comptime T: type, items: ?[*]const T, len: usize) error{InvalidValue}![]const T {
+    return if (len == 0) &.{} else (items orelse return error.InvalidValue)[0..len];
+}
+
+fn exportManifest(a: std.mem.Allocator, m: *const ManifestSpec) ![]u8 {
+    var arena: std.heap.ArenaAllocator = .init(a);
+    defer arena.deinit();
+    const t = arena.allocator();
+    const given_grants = try listOf(LoadGrant, m.grants, m.grants_len);
+    const grants = try t.alloc(manifest.Grant, given_grants.len);
+    for (given_grants, grants) |x, *y| y.* = .{ .name = try bytes(x.name, x.name_len), .grant = x.grant };
+    const given_messages = try listOf(MessageDecl, m.messages, m.messages_len);
+    const messages = try t.alloc(manifest.Message, given_messages.len);
+    for (given_messages, messages) |x, *y| {
+        const args = try listOf(*const Shape, x.args, x.args_len);
+        y.* = .{ .name = try bytes(x.name, x.name_len), .args = @ptrCast(args), .receivers = try listOf(*const objects.Kind, x.receivers, x.receivers_len) };
+    }
+    const given_objects = try listOf(ManifestObject, m.objects, m.objects_len);
+    const named = try t.alloc(manifest.Object, given_objects.len);
+    for (given_objects, named) |x, *y| y.* = .{ .name = try bytes(x.name, x.name_len), .kind = x.kind };
+    return manifest.write(a, .{
+        .kind = try bytes(m.kind, m.kind_len),
+        .version = try bytes(m.version, m.version_len),
+        .grants = grants,
+        .libraries = try listOf(*const machine.Library, m.libraries, m.libraries_len),
+        .messages = messages,
+        .object_kinds = try listOf(*const objects.Kind, m.object_kinds, m.object_kinds_len),
+        .objects = named,
+    });
+}
+
+export fn talk_export_manifest(m: *const ManifestSpec, out: *Buffer) HostErrorCode {
+    return buffer(out, exportManifest(allocator, m));
+}
+
 /// The handle of the Group's Script with that name, or NULL.
 pub const FunctionInfo = extern struct { home: [*]const u8, home_len: usize, name: [*]const u8, name_len: usize, required: i64, total: i64, unit: [32]u8, stale: bool };
 
@@ -2185,6 +2240,11 @@ pub const Operation = extern struct {
     context: ?*anyopaque,
     scope: ?*const ScopeDecl,
     segment_bound: bool,
+    description: ?[*]const u8 = null,
+    description_len: usize = 0,
+    examples: ?[*]const ?[*]const u8 = null,
+    examples_lens: ?[*]const usize = null,
+    examples_len: usize = 0,
 };
 
 /// A C Host function and its context, behind the Core's Host function.
@@ -2234,6 +2294,9 @@ fn releaseOperation(gpa: std.mem.Allocator, op: caps.Operation) void {
         gpa.free(e.fields);
     }
     gpa.free(op.errors);
+    gpa.free(op.description);
+    for (op.examples) |e| gpa.free(e);
+    gpa.free(op.examples);
 }
 
 fn operationOf(c: *Core, o: Operation) !caps.Operation {
@@ -2261,6 +2324,13 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     };
     const args = try gpa.alloc(*Shape, args_in.len);
     for (args_in, args) |x, *y| y.* = retained(x);
+    const description = try gpa.dupe(u8, try bytes(o.description, o.description_len));
+    var examples: std.ArrayList([]const u8) = .empty;
+    if (o.examples_len > 0) {
+        const texts = o.examples orelse return error.InvalidValue;
+        const lens = o.examples_lens orelse return error.InvalidValue;
+        for (0..o.examples_len) |i| try examples.append(gpa, try gpa.dupe(u8, try bytes(texts[i], lens[i])));
+    }
     const decls = try gpa.alloc(caps.ErrorDecl, errors_in.len);
     for (errors_in, decls) |e, *d| {
         const fields: []const Field = if (e.fields_len == 0) &.{} else (e.fields orelse return error.InvalidValue)[0..e.fields_len];
@@ -2284,6 +2354,8 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
             .closes => |n| .{ .closes = try gpa.dupe(u8, n) },
         },
         .segment_bound = o.segment_bound,
+        .description = description,
+        .examples = try examples.toOwnedSlice(gpa),
         .host = .{ .call = bridged, .context = bridge },
     };
 }

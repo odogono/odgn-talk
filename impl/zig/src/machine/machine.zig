@@ -9109,7 +9109,7 @@ pub fn hostMessageName(name: []const u8, count: usize) bool {
     return count >= 2 and messageName(name, count);
 }
 
-fn messageName(name: []const u8, count: usize) bool {
+pub fn messageName(name: []const u8, count: usize) bool {
     if (std.mem.indexOfScalar(u8, name, ':') == null) return nameWord(name);
     if (name[name.len - 1] != ':') return false;
     var parts: usize = 0;

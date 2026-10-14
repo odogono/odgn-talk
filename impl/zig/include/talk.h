@@ -337,6 +337,13 @@ typedef struct talk_operation {
      * talk_define_coordinated_capability, which supply Segment
      * Coordinators. */
     bool segment_bound;
+    /* For the Host Manifest only: plain text, and NorthTalk source texts
+     * that each call the Operation. NULL or empty is none. */
+    const char *description;
+    size_t description_len;
+    const char *const *examples;
+    const size_t *examples_lens;
+    size_t examples_len;
 } talk_operation;
 
 /* A Segment Coordinator's hooks report one of these
@@ -1437,6 +1444,53 @@ typedef struct talk_settlement {
  * receives the call, which the Host answers or fails through; adopted may be
  * NULL. A call still unsettled at the first Pump fails as `call lost`. */
 talk_host_error_code talk_settle(talk_group *g, const char *id, size_t len, const talk_settlement *s, talk_call **adopted);
+
+/* Host Manifest (ADR 0028). */
+
+/* A message tooling may expect, for the manifest only: the Core never
+ * checks a Delivery against it. Its name is a Name, or a Selector for a
+ * labelled message. */
+typedef struct talk_message_decl {
+    const char *name;
+    size_t name_len;
+    const talk_shape *const *args;
+    size_t args_len;
+    /* The kinds of object it is delivered to; none for a message addressed
+     * to a Script. */
+    const talk_object_kind *const *receivers;
+    size_t receivers_len;
+} talk_message_decl;
+/* C only: a well-known name bound at load, and its object's kind. */
+typedef struct talk_manifest_object {
+    const char *name;
+    size_t name_len;
+    const talk_object_kind *kind;
+} talk_manifest_object;
+/* One kind of Script, described for tooling with the same Grants, Libraries
+ * and Object Kinds as talk_load_options, so one Host config builds both. */
+typedef struct talk_manifest_spec {
+    const char *kind; /* "tenant rule", "game NPC" */
+    size_t kind_len;
+    const char *version; /* the Host's own manifest version */
+    size_t version_len;
+    const talk_load_grant *grants;
+    size_t grants_len;
+    talk_library *const *libraries;
+    size_t libraries_len;
+    const talk_message_decl *messages;
+    size_t messages_len;
+    const talk_object_kind *const *object_kinds;
+    size_t object_kinds_len;
+    const talk_manifest_object *objects;
+    size_t objects_len;
+} talk_manifest_spec;
+/* Writes the Host Manifest as deterministic JSON, in an owned buffer: the
+ * same definitions always give the same bytes (chapter 9, The Host Manifest
+ * format). It is a pure function of the definitions, not of a live Group,
+ * and never includes a Grant's binding. Each list is ordered by name; a
+ * name given twice in one list, or a message name that isn't a Name or a
+ * Selector for its arguments, is TALK_INVALID_VALUE. */
+talk_host_error_code talk_export_manifest(const talk_manifest_spec *m, talk_owned_bytes *out);
 /* The handle of the Group's Script with that name, or NULL; a restored
  * Group's Scripts are reached this way. */
 talk_script *talk_group_script(talk_group *g, const char *name, size_t len);
