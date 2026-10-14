@@ -2863,68 +2863,122 @@ pub const Session = struct {
     /// A Value from a crossing's JSON: the Value Encoding, with each
     /// `{"$sessionFunction": <handle>}` the Function Value it names.
     fn valueOf(s: *Session, v: std.json.Value) !?*c.talk_value {
-        const marked = try s.markHandles(v);
-        var text: std.Io.Writer.Allocating = .init(s.alloc());
-        try std.json.Stringify.value(marked, .{}, &text.writer);
+        const text = try s.markHandles(v);
         var out: ?*c.talk_value = null;
-        if (c.talk_decode_value(text.written().ptr, text.written().len, resolveObject, s, &out) != c.TALK_OK) return null;
+        if (c.talk_decode_value(text.ptr, text.len, resolveObject, s, &out) != c.TALK_OK) return null;
         defer c.talk_value_release(out);
         return s.unmarkHandles(out);
     }
 
     const handle_mark = "\u{1}session-function:";
 
-    fn markHandles(s: *Session, v: std.json.Value) !std.json.Value {
-        switch (v) {
-            .object => |o| {
-                if (o.count() == 1) if (o.get("$sessionFunction")) |h| if (h == .string) return .{ .string = s.print("{s}{s}", .{ handle_mark, h.string }) };
-                var out: std.json.ObjectMap = .{};
-                var it = o.iterator();
-                while (it.next()) |e| try out.put(s.alloc(), e.key_ptr.*, try s.markHandles(e.value_ptr.*));
-                return .{ .object = out };
+    /// Writes the Value Encoding with Function handles marked as text.
+    /// Containers use heap work, including serialization: std.json's
+    /// recursive Value stringifier would otherwise overflow at this seam.
+    fn markHandles(s: *Session, v: std.json.Value) ![]const u8 {
+        const Step = union(enum) { value: std.json.Value, key: []const u8, raw: []const u8 };
+        var steps: std.ArrayList(Step) = .empty;
+        defer steps.deinit(s.gpa);
+        var text: std.Io.Writer.Allocating = .init(s.alloc());
+        try steps.append(s.gpa, .{ .value = v });
+        while (steps.pop()) |step| switch (step) {
+            .raw => |raw| try text.writer.writeAll(raw),
+            .key => |key| try std.json.Stringify.value(key, .{}, &text.writer),
+            .value => |value| switch (value) {
+                .object => |o| {
+                    if (o.count() == 1) if (o.get("$sessionFunction")) |h| if (h == .string) {
+                        const marked = try std.fmt.allocPrint(s.alloc(), "{s}{s}", .{ handle_mark, h.string });
+                        try std.json.Stringify.value(marked, .{}, &text.writer);
+                        continue;
+                    };
+                    try text.writer.writeByte('{');
+                    try steps.append(s.gpa, .{ .raw = "}" });
+                    var i = o.count();
+                    while (i > 0) {
+                        i -= 1;
+                        try steps.append(s.gpa, .{ .value = o.values()[i] });
+                        try steps.append(s.gpa, .{ .raw = ":" });
+                        try steps.append(s.gpa, .{ .key = o.keys()[i] });
+                        if (i != 0) try steps.append(s.gpa, .{ .raw = "," });
+                    }
+                },
+                .array => |array| {
+                    try text.writer.writeByte('[');
+                    try steps.append(s.gpa, .{ .raw = "]" });
+                    var i = array.items.len;
+                    while (i > 0) {
+                        i -= 1;
+                        try steps.append(s.gpa, .{ .value = array.items[i] });
+                        if (i != 0) try steps.append(s.gpa, .{ .raw = "," });
+                    }
+                },
+                else => try std.json.Stringify.value(value, .{}, &text.writer),
             },
-            .array => |a| {
-                var out: std.json.Array = .init(s.alloc());
-                for (a.items) |x| try out.append(try s.markHandles(x));
-                return .{ .array = out };
-            },
-            else => return v,
-        }
+        };
+        return text.written();
     }
 
     /// A new reference with each marked text replaced by its handle's
     /// Function Value.
     fn unmarkHandles(s: *Session, v: ?*c.talk_value) ?*c.talk_value {
-        var p: [*c]const u8 = null;
-        var n: usize = 0;
-        if (c.talk_value_as_text(v, &p, &n) and std.mem.startsWith(u8, p[0..n], handle_mark)) {
-            const f = s.handles.get(p[handle_mark.len..n]) orelse return null;
-            c.talk_value_retain(f);
-            return f;
+        const Value = northtalk.value.Value;
+        const Step = union(enum) { visit: *const Value, finish: *const Value };
+        var steps: std.ArrayList(Step) = .empty;
+        defer steps.deinit(s.gpa);
+        // Completed children own references until their parent retains them.
+        // On an unknown handle or allocation failure, release all of them.
+        var values: std.ArrayList(?*c.talk_value) = .empty;
+        defer {
+            for (values.items) |x| c.talk_value_release(x);
+            values.deinit(s.gpa);
         }
-        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v.?));
-        switch (value.data) {
-            .list => |items| {
-                const out = s.alloc().alloc(?*c.talk_value, items.len) catch return null;
-                for (items, out) |x, *o| o.* = s.unmarkHandles(@ptrCast(x)) orelse return null;
-                defer for (out) |x| c.talk_value_release(x);
-                var made: ?*c.talk_value = null;
-                if (c.talk_list(@ptrCast(out.ptr), out.len, &made) != c.TALK_OK) return null;
-                return made;
-            },
-            .map => |pairs| {
-                const out = s.alloc().alloc(c.talk_pair, pairs.len) catch return null;
-                for (pairs, out) |x, *o| o.* = .{ .key = x.key.ptr, .key_len = x.key.len, .value = s.unmarkHandles(@ptrCast(x.value)) orelse return null };
-                defer for (out) |x| c.talk_value_release(x.value);
-                var made: ?*c.talk_value = null;
-                if (c.talk_map(out.ptr, out.len, &made) != c.TALK_OK) return null;
-                return made;
-            },
-            else => {
-                c.talk_value_retain(@constCast(v));
-                return @constCast(v);
-            },
+        const root = v orelse return null;
+        steps.append(s.gpa, .{ .visit = @ptrCast(@alignCast(root)) }) catch return null;
+        while (steps.pop()) |step| {
+            var made: ?*c.talk_value = null;
+            switch (step) {
+                .visit => |value| switch (value.data) {
+                    .list, .map => {
+                        steps.append(s.gpa, .{ .finish = value }) catch return null;
+                        var i = if (value.data == .list) value.data.list.len else value.data.map.len;
+                        while (i > 0) {
+                            i -= 1;
+                            const child = if (value.data == .list) value.data.list[i] else value.data.map[i].value;
+                            steps.append(s.gpa, .{ .visit = child }) catch return null;
+                        }
+                        continue;
+                    },
+                    else => {
+                        made = if (value.data == .text and std.mem.startsWith(u8, value.data.text, handle_mark))
+                            s.handles.get(value.data.text[handle_mark.len..]) orelse return null
+                        else
+                            @ptrCast(@constCast(value));
+                        c.talk_value_retain(made);
+                    },
+                },
+                .finish => |value| {
+                    const len = if (value.data == .list) value.data.list.len else value.data.map.len;
+                    const children = values.items[values.items.len - len ..];
+                    switch (value.data) {
+                        .list => if (c.talk_list(@ptrCast(children.ptr), len, &made) != c.TALK_OK) return null,
+                        .map => |map| {
+                            const pairs = s.gpa.alloc(c.talk_pair, len) catch return null;
+                            defer s.gpa.free(pairs);
+                            for (map, children, pairs) |x, child, *pair| pair.* = .{ .key = x.key.ptr, .key_len = x.key.len, .value = child };
+                            if (c.talk_map(pairs.ptr, len, &made) != c.TALK_OK) return null;
+                        },
+                        else => unreachable,
+                    }
+                    for (children) |x| c.talk_value_release(x);
+                    values.items.len -= len;
+                },
+            }
+            values.append(s.gpa, made) catch {
+                c.talk_value_release(made);
+                return null;
+            };
         }
+        return values.pop().?;
     }
 
     /// A Value exposure: each Function Value leaf, depth first, binds the
@@ -3239,4 +3293,125 @@ test "an Entry is complete when its syntax doesn't end early" {
     for (waits) |t| try std.testing.expect(!try s.complete(t));
     const whole = [_][]const u8{ "on greet name\n  say \"hi \" & name\nend greet", "1 + 2", ":vars", ":library add x lib.talk", "say \"abc", "1 2", ":inspect 1\n2", "put [1, 2] into xs" };
     for (whole) |t| try std.testing.expect(try s.complete(t));
+}
+
+fn deepSessionValue() !void {
+    const a = std.testing.allocator;
+    // valueOf needs only the arena and Function handles for this crossing.
+    var s: Session = undefined;
+    s.gpa = a;
+    s.arena = .init(a);
+    defer s.arena.deinit();
+    s.handles = .empty;
+    const captures = try northtalk.value.map(a, &.{});
+    defer captures.release();
+    const function = try northtalk.value.function(a, "session", "<function f>", 1, captures);
+    defer function.release();
+    try s.handles.put(s.alloc(), "f1", @ptrCast(function));
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, s.alloc(),
+        \\[{"$sessionFunction":"f1"}, null, "text", [], {}]
+    , .{});
+    var json = parsed.value;
+    const depth = 100_000;
+    for (0..depth) |i| {
+        if (i % 2 == 0) {
+            var object: std.json.ObjectMap = .{};
+            try object.put(s.alloc(), "x", json);
+            json = .{ .object = object };
+        } else {
+            var array: std.json.Array = .init(s.alloc());
+            try array.append(json);
+            json = .{ .array = array };
+        }
+    }
+    const out = (try s.valueOf(json)) orelse return error.TestUnexpectedResult;
+    defer c.talk_value_release(out);
+    var value: *const northtalk.value.Value = @ptrCast(@alignCast(out));
+    var left: usize = depth;
+    while (left > 0) {
+        left -= 1;
+        if (left % 2 == 0) {
+            try std.testing.expect(value.data == .map);
+            try std.testing.expectEqual(@as(usize, 1), value.data.map.len);
+            try std.testing.expectEqualStrings("x", value.data.map[0].key);
+            value = value.data.map[0].value;
+        } else {
+            try std.testing.expect(value.data == .list);
+            try std.testing.expectEqual(@as(usize, 1), value.data.list.len);
+            value = value.data.list[0];
+        }
+    }
+    try std.testing.expect(value.data == .list);
+    const items = value.data.list;
+    try std.testing.expectEqual(@as(usize, 5), items.len);
+    try std.testing.expect(items[0] == function);
+    try std.testing.expect(items[1].data == .nothing);
+    try std.testing.expectEqualStrings("text", items[2].data.text);
+    try std.testing.expectEqual(@as(usize, 0), items[3].data.list.len);
+    try std.testing.expectEqual(@as(usize, 0), items[4].data.map.len);
+}
+
+test "a crossing Value nested 100,000 deep resolves Function handles on a small stack" {
+    var result: anyerror!void = {};
+    const t = try std.Thread.spawn(.{ .stack_size = 256 * 1024 }, struct {
+        fn go(out: *anyerror!void) void {
+            out.* = deepSessionValue();
+        }
+    }.go, .{&result});
+    t.join();
+    try result;
+}
+
+fn sessionHandleAllocations(a: Allocator) !void {
+    var s: Session = undefined;
+    s.gpa = a;
+    s.arena = .init(a);
+    defer s.arena.deinit();
+    s.handles = .empty;
+    // Keep the Function on the testing allocator so leaked references from
+    // an interrupted rebuild are detected even though talk.h allocates its
+    // containers independently.
+    const captures = try northtalk.value.map(std.testing.allocator, &.{});
+    defer captures.release();
+    const function = try northtalk.value.function(std.testing.allocator, "session", "<function f>", 1, captures);
+    defer function.release();
+    try s.handles.put(s.alloc(), "f1", @ptrCast(function));
+    const parsed = try std.json.parseFromSlice(std.json.Value, s.alloc(),
+        \\[{"x":[{"$sessionFunction":"f1"},null]}, {"$sessionFunction":"f1"}, {"$map":[["$sessionFunction","literal"],["a\"b",true]]}]
+    , .{});
+    // The allocating Writer reports its allocator's failure as WriteFailed.
+    const maybe = s.valueOf(parsed.value) catch |err| return if (err == error.WriteFailed) error.OutOfMemory else err;
+    const out = maybe orelse return error.OutOfMemory;
+    defer c.talk_value_release(out);
+    const value: *const northtalk.value.Value = @ptrCast(@alignCast(out));
+    const items = value.data.list;
+    try std.testing.expect(items[0].data.map[0].value.data.list[0] == function);
+    try std.testing.expect(items[1] == function);
+    try std.testing.expectEqualStrings("$sessionFunction", items[2].data.map[0].key);
+    try std.testing.expectEqualStrings("literal", items[2].data.map[0].value.data.text);
+    try std.testing.expectEqualStrings("a\"b", items[2].data.map[1].key);
+    try std.testing.expect(items[2].data.map[1].value.data.bool);
+}
+
+test "Session handle walks release completed children after every allocation failure" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, sessionHandleAllocations, .{});
+}
+
+test "an unresolved Session handle releases earlier completed children" {
+    const a = std.testing.allocator;
+    var s: Session = undefined;
+    s.gpa = a;
+    s.arena = .init(a);
+    defer s.arena.deinit();
+    s.handles = .empty;
+    const captures = try northtalk.value.map(a, &.{});
+    defer captures.release();
+    const function = try northtalk.value.function(a, "session", "<function f>", 1, captures);
+    defer function.release();
+    try s.handles.put(s.alloc(), "f1", @ptrCast(function));
+    const parsed = try std.json.parseFromSlice(std.json.Value, s.alloc(),
+        \\[{"x":[{"$sessionFunction":"f1"}]}, {"$sessionFunction":"missing"}]
+    , .{});
+    try std.testing.expect((try s.valueOf(parsed.value)) == null);
 }
