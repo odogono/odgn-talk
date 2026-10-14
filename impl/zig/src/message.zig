@@ -84,6 +84,55 @@ const GroupEntry = struct {
     pending_trace: std.ArrayList([]u8) = .empty,
     /// Whether the last value read held another Group's Function Value.
     wrong_group: bool = false,
+    /// The calls the Host answered `started`, or adopted, and hasn't
+    /// answered or failed: those the Core abandons are listed in the next
+    /// reply's `abandoned`, once.
+    started: std.ArrayList([]u8) = .empty,
+
+    /// Remembers a call the Host is working on.
+    fn track(e: *GroupEntry, id: []const u8) void {
+        const owned = e.gpa.dupe(u8, id) catch return;
+        e.started.append(e.gpa, owned) catch e.gpa.free(owned);
+    }
+
+    /// Forgets a call the Host has answered or failed.
+    fn untrack(e: *GroupEntry, id: []const u8) void {
+        for (e.started.items, 0..) |x, i| if (std.mem.eql(u8, x, id)) {
+            e.gpa.free(e.started.orderedRemove(i));
+            return;
+        };
+    }
+
+    /// Writes `,"abandoned":[…]`: the tracked calls the Core has abandoned
+    /// since the last reply, in call id order, each forgotten once listed.
+    fn writeAbandoned(e: *GroupEntry, o: *Out) Allocator.Error!void {
+        var listed: std.ArrayList([]u8) = .empty;
+        defer {
+            for (listed.items) |x| e.gpa.free(x);
+            listed.deinit(e.gpa);
+        }
+        var i: usize = 0;
+        while (i < e.started.items.len) {
+            const id = e.started.items[i];
+            const abandoned = for (e.group.group.calls.items) |c| {
+                if (std.mem.eql(u8, c.id, id)) break c.abandoned.load(.acquire);
+            } else false;
+            if (abandoned) {
+                try listed.append(e.gpa, e.started.orderedRemove(i));
+            } else i += 1;
+        }
+        std.mem.sort([]u8, listed.items, {}, struct {
+            fn less(_: void, x: []u8, y: []u8) bool {
+                return machine.callOrder(x, y);
+            }
+        }.less);
+        try o.raw(",\"abandoned\":[");
+        for (listed.items, 0..) |id, k| {
+            if (k > 0) try o.raw(",");
+            try o.text(id);
+        }
+        try o.raw("]");
+    }
 };
 
 /// What an `op-result` or `prop-result` brought back, for the re-made
@@ -216,6 +265,8 @@ pub const Session = struct {
         for (s.groups.items) |e| {
             Direct.groupRelease(e.group);
             for (e.pending_trace.items) |line| gpa.free(line);
+            for (e.started.items) |x| gpa.free(x);
+            e.started.deinit(gpa);
             e.pending_trace.deinit(gpa);
             gpa.free(e.name);
             gpa.destroy(e);
@@ -727,6 +778,9 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
             },
             .started => {
                 if (!chargeAnswer(call, answer.charged)) return .limited;
+                // The Host works on it now, until it answers or the Core
+                // abandons it.
+                if (s.pumping_entry) |e| e.track(call.id);
                 return .started;
             },
             .done => {
@@ -1579,7 +1633,7 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     o.raw(",\"fuelUsed\":") catch {};
     o.int(mg.pump_fuel) catch {};
     writeReports(&o, entry) catch return oomReply();
-    o.raw(",\"abandoned\":[]") catch {};
+    entry.writeAbandoned(&o) catch return oomReply();
     return finishOk(s, &o, entry);
 }
 
@@ -2078,6 +2132,7 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         break :blk Direct.callAnswer(c, v);
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
+    entry.untrack(call_id);
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -2453,6 +2508,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     var held = mg.reports.take();
     defer held.deinit();
     writeHeld(&o, &held) catch return oomReply();
+    entry.writeAbandoned(&o) catch return oomReply();
     return holdForReleases(s, ref, finishOk(s, &o, entry));
 }
 
@@ -2928,6 +2984,8 @@ fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
     var adopted: ?*caps.Call = null;
     const code = Direct.settle(entry.group, call_id.ptr, call_id.len, &st, &adopted);
     if (code != .ok) return hostError(s.gpa, ref, code);
+    // An adopted call is the Host's to answer, like a started one.
+    if (st.adopt) entry.track(call_id);
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -4222,4 +4280,36 @@ test "store reaches the Host as op and effect needs, its Trace the corpus case's
     try std.testing.expectEqualStrings("release", release.object.get("m").?.string);
     try std.testing.expectEqualStrings("st", release.object.get("grant").?.string);
     _ = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+}
+
+test "a started call the Core abandons is listed once in abandoned; an answered one never" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"suspending\",\"result\":\"number\",\"maxPending\":1000}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on fetch\\n  ask api to fetch and wait\\n  return it\\nend fetch\\n\"}}", .{ 4, grant }));
+    // Two calls, both started.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fetch\"}}}}", .{6}));
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{7});
+    var calls: [2][]const u8 = undefined;
+    for (&calls) |*id| {
+        const need = reply.object.get("need") orelse return unexpected(reply);
+        id.* = need.object.get("call").?.string;
+        reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":{d},\"started\":true}}", .{7});
+    }
+    try std.testing.expectEqual(@as(usize, 0), (try okOf(reply)).object.get("abandoned").?.array.items.len);
+    // The second is answered; the first outlives its maxPending.
+    _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":1}}", .{ 8, calls[1] }));
+    const timed_out = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{9}));
+    const abandoned = timed_out.object.get("abandoned").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), abandoned.len);
+    try std.testing.expectEqualStrings(calls[0], abandoned[0].string);
+    // Listed once.
+    const after = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:03Z\"}}", .{10}));
+    try std.testing.expectEqual(@as(usize, 0), after.object.get("abandoned").?.array.items.len);
 }

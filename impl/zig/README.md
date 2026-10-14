@@ -230,9 +230,11 @@ and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operati
 `segmentLifecycle` and `release`. Their hooks reach the Host during a Pump,
 `reload` or `replace-library` as `effect` and `release` needs and automatic
 `op` needs, and a `grant` may name a
-shared `coordinator`; `store`'s hooks are one Coordinator's. It does not yet
-conform: `request-charge` is a protocol error, and a Pump's `abandoned` is
-empty (both tracked on #635). A crossing pause, where a
+shared `coordinator`; `store`'s hooks are one Coordinator's. A `pump`,
+`reload` or `replace-library` reply's `abandoned` lists the started calls the
+Core has abandoned since the last, once each. It does not yet conform:
+`request-charge` is a protocol error, since no Core implements Metered
+Operations yet ([#911](https://github.com/odogono/odgn-talk/issues/911)). A crossing pause, where a
 Host function answers `deferred`, is the transport's: it ends no Stretch and
 writes no record. Segment `begin`, `commit` and `rollback` hooks and automatic
 abandonment at a Segment's end may defer too (#900);
