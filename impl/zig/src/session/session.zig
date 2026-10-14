@@ -2934,20 +2934,36 @@ pub const Session = struct {
     }
 
     fn exposeOne(s: *Session, maybe: ?*const c.talk_value) void {
-        const v = maybe orelse return;
-        const value: *const northtalk.value.Value = @ptrCast(@alignCast(v));
-        switch (value.data) {
+        const root = maybe orelse return;
+        // Depth first and in order, from a heap work list: children are
+        // pushed last first.
+        var stack: std.ArrayList(*const northtalk.value.Value) = .empty;
+        stack.append(s.alloc(), @ptrCast(@alignCast(root))) catch return;
+        while (stack.pop()) |value| switch (value.data) {
             .function => {
-                const record = s.peekCrossing() orelse return;
-                if (!std.mem.eql(u8, jsonText(record, "type"), "function")) return;
+                const record = s.peekCrossing() orelse continue;
+                if (!std.mem.eql(u8, jsonText(record, "type"), "function")) continue;
                 s.takeCrossing();
-                c.talk_value_retain(@constCast(v));
-                s.handles.put(s.alloc(), s.dupe(jsonText(record, "handle")), @constCast(v)) catch {};
+                const v: *c.talk_value = @ptrCast(@constCast(value));
+                c.talk_value_retain(v);
+                s.handles.put(s.alloc(), s.dupe(jsonText(record, "handle")), v) catch {};
             },
-            .list => |items| for (items) |x| s.exposeOne(@ptrCast(x)),
-            .map => |pairs| for (pairs) |p| s.exposeOne(@ptrCast(p.value)),
+            .list => |items| {
+                var i = items.len;
+                while (i > 0) {
+                    i -= 1;
+                    stack.append(s.alloc(), items[i]) catch return;
+                }
+            },
+            .map => |pairs| {
+                var i = pairs.len;
+                while (i > 0) {
+                    i -= 1;
+                    stack.append(s.alloc(), pairs[i].value) catch return;
+                }
+            },
             else => {},
-        }
+        };
     }
 
     /// A report's Values, as one exposure.

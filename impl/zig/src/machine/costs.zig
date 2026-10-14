@@ -139,51 +139,14 @@ fn items(v: *const Value) u64 {
     };
 }
 
+/// The logical size of a container's contents, or a Function's captured
+/// values (chapter 8, Logical sizes). Values keep it as they are built.
 pub fn contents(v: *const Value) u64 {
-    var total: u64 = 0;
-    switch (v.data) {
-        .list => |l| for (l) |x| {
-            total += size(x);
-        },
-        .map => |m| for (m) |p| {
-            total += 16 + p.key.len + size(p.value);
-        },
-        .range => |r| total = size(r.from) + size(r.to),
-        .function => |f| total = captured(f.captures),
-        else => {},
-    }
-    return total;
+    return model.contentsSize(v);
 }
 
-/// The sizes of a Function Value's captured values, without their names.
-fn captured(captures: *const Value) u64 {
-    var total: u64 = 0;
-    switch (captures.data) {
-        .map => |m| for (m) |p| {
-            total += size(p.value);
-        },
-        .list => |l| for (l) |x| {
-            total += size(x);
-        },
-        else => {},
-    }
-    return total;
-}
-
-/// A value's logical size (chapter 8, Logical sizes).
+/// A value's logical size (chapter 8, Logical sizes), read without walking
+/// its children.
 pub fn size(v: *const Value) u64 {
-    return switch (v.data) {
-        .nothing, .bool => 8,
-        .number => 16,
-        .quantity => 24,
-        .text => |t| 16 + t.len,
-        .bytes => |b| 16 + b.len,
-        .list => |l| 16 + 8 * l.len + contents(v),
-        .map => |m| 16 + 8 * m.len + contents(v),
-        .range => 16 + contents(v),
-        .instant, .civil_date, .object => 16,
-        .pattern => 16 + 8 * matcher.programSize(v),
-        // `items` is 0 for a Function Value; `contents` is its captures.
-        .function => |f| 32 + captured(f.captures),
-    };
+    return model.logicalSize(v);
 }

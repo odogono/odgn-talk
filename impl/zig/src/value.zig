@@ -7,9 +7,7 @@ pub const Decimal = decimal.Decimal;
 pub const units = @import("units.zig");
 pub const dates = @import("dates.zig");
 /// Every refusal a value operation can report.
-pub const Error = units.Error || error{ TooDeep, CantCompare, NotEncodable };
-/// The deepest nesting a value may have; deeper construction is refused.
-pub const max_depth = 128;
+pub const Error = units.Error || error{ CantCompare, NotEncodable };
 /// talk.h's `talk_kind`, in the same order.
 pub const Kind = enum(c_int) { nothing, bool, number, quantity, text, bytes, list, map, range, instant, civil_date, pattern, function, object };
 /// One map entry. A key is NFC text, unique within its map.
@@ -51,10 +49,13 @@ pub const Data = union(Kind) {
 pub const Value = struct {
     references: usize = 1,
     allocator: std.mem.Allocator,
-    depth: u32 = 1,
+    /// The logical size of a container's or Function's contents (chapter 8,
+    /// Logical sizes), kept as it is built so that measuring never walks a
+    /// deep value; for a Text Pattern, its program size once measured, or 0.
+    /// Sums saturate: no budget reaches 2^64.
+    measure: u64 = 0,
     /// A Core-raised error map, whose `message` the Trace leaves out
-    /// (chapter 11): its wording is outside parity. It sits beside `depth`
-    /// so that a Value's size doesn't grow.
+    /// (chapter 11): its wording is outside parity.
     core_message: bool = false,
     /// A Script's name as `load-object` pushes it: a Script is not a
     /// value, so retained state doesn't count it (chapter 8).
@@ -132,76 +133,175 @@ pub const Value = struct {
         return null;
     }
     /// Script equality: numbers by value, Quantities in Base Units, maps
-    /// regardless of order, Objects and Functions by identity.
+    /// regardless of order, Objects and Functions by identity. Containers
+    /// are compared from a heap work list, never by native recursion.
     pub fn equal(self: *const Value, other: *const Value) Error!bool {
-        if (self.kind() != other.kind()) return false;
-        return switch (self.data) {
+        if (try self.shallowEqual(other)) |same| return same;
+        const gpa = self.allocator;
+        var stack: std.ArrayList([2]*const Value) = .empty;
+        defer stack.deinit(gpa);
+        try stack.append(gpa, .{ self, other });
+        while (stack.pop()) |pair| {
+            const x = pair[0];
+            const y = pair[1];
+            if (try x.shallowEqual(y)) |same| {
+                if (!same) return false;
+                continue;
+            }
+            // Children are pushed last first, so they compare in order.
+            switch (x.data) {
+                .list => |xs| {
+                    try stack.ensureUnusedCapacity(gpa, xs.len);
+                    var i = xs.len;
+                    while (i > 0) {
+                        i -= 1;
+                        stack.appendAssumeCapacity(.{ xs[i], y.data.list[i] });
+                    }
+                },
+                .map => |xs| {
+                    try stack.ensureUnusedCapacity(gpa, xs.len);
+                    var i = xs.len;
+                    while (i > 0) {
+                        i -= 1;
+                        stack.appendAssumeCapacity(.{ xs[i].value, y.get(xs[i].key) orelse return false });
+                    }
+                },
+                .range => |r| {
+                    try stack.ensureUnusedCapacity(gpa, 2);
+                    stack.appendAssumeCapacity(.{ r.to, y.data.range.to });
+                    stack.appendAssumeCapacity(.{ r.from, y.data.range.from });
+                },
+                .function => |f| try stack.append(gpa, .{ f.captures, y.data.function.captures }),
+                else => unreachable,
+            }
+        }
+        return true;
+    }
+    /// Equality decided at this node, or null when a container's children
+    /// decide it: lists and maps of equal length, ranges, and Functions of
+    /// the same identity.
+    fn shallowEqual(x: *const Value, y: *const Value) Error!?bool {
+        if (x.kind() != y.kind()) return false;
+        return switch (x.data) {
             .nothing => true,
-            .bool => |b| b == other.data.bool,
-            .number => |n| Decimal.order(n, other.data.number) == .eq,
+            .bool => |b| b == y.data.bool,
+            .number => |n| Decimal.order(n, y.data.number) == .eq,
             .quantity => |q| blk: {
-                const r = other.data.quantity;
+                const r = y.data.quantity;
                 if (!q.unit.compatible(r.unit)) break :blk false;
-                break :blk Decimal.order(try q.unit.comparisonBase(self.allocator, q.number), try r.unit.comparisonBase(self.allocator, r.number)) == .eq;
+                break :blk Decimal.order(try q.unit.comparisonBase(x.allocator, q.number), try r.unit.comparisonBase(x.allocator, r.number)) == .eq;
             },
-            .text, .bytes, .pattern => |s| std.mem.eql(u8, s, switch (other.data) {
+            .text, .bytes, .pattern => |t| std.mem.eql(u8, t, switch (y.data) {
                 .text, .bytes, .pattern => |v| v,
                 else => unreachable,
             }),
-            .list => |xs| blk: {
-                const ys = other.data.list;
-                if (xs.len != ys.len) break :blk false;
-                for (xs, ys) |x, y| if (!try x.equal(y)) break :blk false;
-                break :blk true;
-            },
-            .map => |xs| blk: {
-                if (xs.len != other.data.map.len) break :blk false;
-                for (xs) |x| {
-                    const y = other.get(x.key) orelse break :blk false;
-                    if (!try x.value.equal(y)) break :blk false;
-                }
-                break :blk true;
-            },
-            .range => |r| try r.from.equal(other.data.range.from) and try r.to.equal(other.data.range.to),
-            .instant => |t| t.seconds == other.data.instant.seconds and t.nanos == other.data.instant.nanos,
-            .civil_date => |f| std.meta.eql(f, other.data.civil_date),
-            .object => |o| o.identity == other.data.object.identity,
-            .function => |f| f.identity == other.data.function.identity and std.mem.eql(u8, f.home, other.data.function.home) and try f.captures.equal(other.data.function.captures),
+            .list => |xs| if (xs.len != y.data.list.len) false else if (xs.len == 0) true else null,
+            .map => |xs| if (xs.len != y.data.map.len) false else if (xs.len == 0) true else null,
+            .range => null,
+            .instant => |t| t.seconds == y.data.instant.seconds and t.nanos == y.data.instant.nanos,
+            .civil_date => |f| std.meta.eql(f, y.data.civil_date),
+            .object => |o| o.identity == y.data.object.identity,
+            .function => |f| if (f.identity != y.data.function.identity or !std.mem.eql(u8, f.home, y.data.function.home)) false else null,
         };
     }
     /// Script ordering, refused with CantCompare for unordered kinds or
-    /// incompatible Units.
+    /// incompatible Units. A list orders by its first unequal item, so the
+    /// descent is a loop.
     pub fn order(self: *const Value, other: *const Value) Error!std.math.Order {
-        if (self.kind() != other.kind()) return error.CantCompare;
-        return switch (self.data) {
-            .number => |n| Decimal.order(n, other.data.number),
-            .quantity => |q| blk: {
-                const r = other.data.quantity;
-                if (!q.unit.compatible(r.unit)) return error.CantCompare;
-                break :blk Decimal.order(try q.unit.comparisonBase(self.allocator, q.number), try r.unit.comparisonBase(self.allocator, r.number));
-            },
-            .text => |s| std.mem.order(u8, s, other.data.text), // UTF-8 preserves scalar order.
-            .bytes => |s| std.mem.order(u8, s, other.data.bytes),
-            .list => |xs| blk: {
-                const ys = other.data.list;
-                for (xs[0..@min(xs.len, ys.len)], ys[0..@min(xs.len, ys.len)]) |x, y| if (!try x.equal(y)) break :blk try x.order(y);
-                break :blk std.math.order(xs.len, ys.len);
-            },
-            .instant => |t| blk: {
-                const r = other.data.instant;
-                const o = std.math.order(t.seconds, r.seconds);
-                break :blk if (o == .eq) std.math.order(t.nanos, r.nanos) else o;
-            },
-            .civil_date => |f| blk: {
-                const r = other.data.civil_date;
-                if (f.has_time != r.has_time) return error.CantCompare;
-                const o = std.math.order(dates.seconds(f), dates.seconds(r));
-                break :blk if (o == .eq) std.math.order(f.nanosecond, r.nanosecond) else o;
-            },
-            else => error.CantCompare,
-        };
+        var x = self;
+        var y = other;
+        while (true) {
+            if (x.kind() != y.kind()) return error.CantCompare;
+            return switch (x.data) {
+                .number => |n| Decimal.order(n, y.data.number),
+                .quantity => |q| blk: {
+                    const r = y.data.quantity;
+                    if (!q.unit.compatible(r.unit)) return error.CantCompare;
+                    break :blk Decimal.order(try q.unit.comparisonBase(self.allocator, q.number), try r.unit.comparisonBase(self.allocator, r.number));
+                },
+                .text => |s| std.mem.order(u8, s, y.data.text), // UTF-8 preserves scalar order.
+                .bytes => |s| std.mem.order(u8, s, y.data.bytes),
+                .list => |xs| {
+                    const ys = y.data.list;
+                    const n = @min(xs.len, ys.len);
+                    for (xs[0..n], ys[0..n]) |a, b| {
+                        if (try a.equal(b)) continue;
+                        x = a;
+                        y = b;
+                        break;
+                    } else return std.math.order(xs.len, ys.len);
+                    continue;
+                },
+                .instant => |t| blk: {
+                    const r = y.data.instant;
+                    const o = std.math.order(t.seconds, r.seconds);
+                    break :blk if (o == .eq) std.math.order(t.nanos, r.nanos) else o;
+                },
+                .civil_date => |f| blk: {
+                    const r = y.data.civil_date;
+                    if (f.has_time != r.has_time) return error.CantCompare;
+                    const o = std.math.order(dates.seconds(f), dates.seconds(r));
+                    break :blk if (o == .eq) std.math.order(f.nanosecond, r.nanosecond) else o;
+                },
+                else => error.CantCompare,
+            };
+        }
     }
 };
+/// The logical size of `v` (chapter 8, Logical sizes). Containers and
+/// Functions carry their contents' size, so this never walks children.
+pub fn logicalSize(v: *const Value) u64 {
+    return switch (v.data) {
+        .nothing, .bool => 8,
+        .number => 16,
+        .quantity => 24,
+        .text => |t| 16 +| t.len,
+        .bytes => |b| 16 +| b.len,
+        .list => |l| 16 +| (8 *| l.len) +| v.measure,
+        .map => |m| 16 +| (8 *| m.len) +| v.measure,
+        .range => 16 +| v.measure,
+        .instant, .civil_date, .object => 16,
+        .pattern => 16 +| (8 *| programSize(v)),
+        .function => 32 +| v.measure,
+    };
+}
+/// The logical size of a container's or Function's contents: its items',
+/// a map's entries with their keys, a range's ends or a Function's
+/// captured values, without their names.
+pub fn contentsSize(v: *const Value) u64 {
+    return switch (v.data) {
+        .list, .map, .range, .function => v.measure,
+        else => 0,
+    };
+}
+fn programSize(v: *const Value) u64 {
+    if (v.measure != 0) return v.measure;
+    const n = @import("machine/matcher.zig").programSize(v);
+    // A failed measure is 0 and is not kept, so it is tried again.
+    @constCast(v).measure = n;
+    return n;
+}
+fn itemsSize(items: []const *Value) u64 {
+    var total: u64 = 0;
+    for (items) |x| total +|= logicalSize(x);
+    return total;
+}
+fn pairsSize(pairs: []const Pair) u64 {
+    var total: u64 = 0;
+    for (pairs) |p| total +|= 16 +| p.key.len +| logicalSize(p.value);
+    return total;
+}
+fn capturedSize(captures: *const Value) u64 {
+    return switch (captures.data) {
+        .map => |m| blk: {
+            var total: u64 = 0;
+            for (m) |p| total +|= logicalSize(p.value);
+            break :blk total;
+        },
+        .list => |l| itemsSize(l),
+        else => 0,
+    };
+}
 fn queueRelease(node: *Value, pending: *?*Value) void {
     node.references -= 1;
     if (node.references != 0) return;
@@ -281,13 +381,10 @@ pub fn bytes(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
 }
 /// A list that retains each item.
 pub fn list(gpa: std.mem.Allocator, items: []const *Value) Error!*Value {
-    var depth: u32 = 1;
-    for (items) |v| depth = @max(depth, v.depth + 1);
-    if (depth > max_depth) return error.TooDeep;
     const copy = try gpa.dupe(*Value, items);
     errdefer gpa.free(copy);
     const v = try scalar(gpa, .{ .list = copy });
-    v.depth = depth;
+    v.measure = itemsSize(items);
     for (items) |item| _ = item.retain();
     return v;
 }
@@ -297,13 +394,9 @@ pub fn list(gpa: std.mem.Allocator, items: []const *Value) Error!*Value {
 /// New storage belongs to `gpa`; a different allocator's spine is copied.
 pub fn listGrow(gpa: std.mem.Allocator, old: *Value, items: []const *Value, after: bool) Error!*Value {
     if (old.data != .list) return error.InvalidValue;
-    var depth = old.depth;
     var child_rank: u64 = 0;
-    for (items) |item| {
-        depth = @max(depth, item.depth + 1);
-        child_rank = @max(child_rank, item.ownership_rank);
-    }
-    if (depth > max_depth) return error.TooDeep;
+    for (items) |item| child_rank = @max(child_rank, item.ownership_rank);
+    const measure = old.measure +| itemsSize(items);
     if (items.len == 0) return old.retain();
     const same_allocator = gpa.ptr == old.allocator.ptr and gpa.vtable == old.allocator.vtable;
     const length = std.math.add(usize, old.data.list.len, items.len) catch return error.OutOfMemory;
@@ -325,7 +418,7 @@ pub fn listGrow(gpa: std.mem.Allocator, old: *Value, items: []const *Value, afte
             storage.end = end;
             storage.references += 1;
             next.list_storage = storage;
-            next.depth = depth;
+            next.measure = measure;
             return next;
         }
     }
@@ -343,7 +436,7 @@ pub fn listGrow(gpa: std.mem.Allocator, old: *Value, items: []const *Value, afte
     next.* = .{ .allocator = gpa, .data = .{ .list = buffer[start..end] }, .ownership_rank = rank };
     storage.* = .{ .buffer = buffer, .start = start, .end = end };
     next.list_storage = storage;
-    next.depth = depth;
+    next.measure = measure;
     const first = if (after) old.data.list else items;
     const second = if (after) items else old.data.list;
     for (buffer[start..][0..first.len], first) |*slot, item| slot.* = item.retain();
@@ -426,7 +519,7 @@ test "constant-size snapshot growth preserves shallow visible values" {
         root.release();
         root = prefix;
     }
-    try std.testing.expectEqual(@as(u32, 2), root.depth);
+    try std.testing.expectEqual(@as(u64, 8), root.measure);
     const grown = try listGrow(gpa, root, &.{item}, true);
     defer grown.release();
 }
@@ -482,12 +575,9 @@ fn freePairs(gpa: std.mem.Allocator, initialized: []const Pair, storage: []Pair)
 /// A map over valid, NFC and unique owned keys with retained values. Takes
 /// ownership of `pairs` only on success.
 fn mapOwned(gpa: std.mem.Allocator, pairs: []Pair) Error!*Value {
-    var depth: u32 = 1;
-    for (pairs) |p| depth = @max(depth, p.value.depth + 1);
-    if (depth > max_depth) return error.TooDeep;
     const rank = try ownershipRank(.{ .map = pairs });
     const v = try gpa.create(Value);
-    v.* = .{ .allocator = gpa, .data = .{ .map = pairs }, .depth = depth, .ownership_rank = rank };
+    v.* = .{ .allocator = gpa, .data = .{ .map = pairs }, .measure = pairsSize(pairs), .ownership_rank = rank };
     return v;
 }
 /// A range that retains both ends, which must be numbers or compatible
@@ -496,7 +586,7 @@ pub fn range(gpa: std.mem.Allocator, from: *Value, to: *Value) Error!*Value {
     if (from.kind() != to.kind() or (from.data != .number and from.data != .quantity)) return error.InvalidValue;
     if (from.data == .quantity and !from.data.quantity.unit.compatible(to.data.quantity.unit)) return error.IncompatibleUnits;
     const v = try scalar(gpa, .{ .range = .{ .from = from, .to = to } });
-    v.depth = @max(from.depth, to.depth) + 1;
+    v.measure = logicalSize(from) +| logicalSize(to);
     _ = from.retain();
     _ = to.retain();
     return v;
@@ -516,41 +606,44 @@ pub fn listSet(root: **Value, index: usize, item: *Value) Error!void {
     const unique_storage = if (old.list_storage) |storage| storage.references == 1 else true;
     const rank = std.math.add(u64, item.ownership_rank, 1) catch return error.OutOfMemory;
     if (old.references == 1 and unique_storage and !contains(item, old)) {
-        if (item.depth + 1 > max_depth) return error.TooDeep;
         _ = item.retain();
         old.data.list[index].release();
         old.data.list[index] = item;
         old.ownership_rank = @max(old.ownership_rank, rank);
-        old.depth = 1;
-        for (old.data.list) |v| old.depth = @max(old.depth, v.depth + 1);
+        old.measure = itemsSize(old.data.list);
     } else {
         const v = try list(old.allocator, old.data.list);
-        errdefer v.release();
-        if (item.depth + 1 > max_depth) return error.TooDeep;
         _ = item.retain();
         v.data.list[index].release();
         v.data.list[index] = item;
         v.ownership_rank = @max(v.ownership_rank, rank);
-        v.depth = @max(v.depth, item.depth + 1);
+        v.measure = itemsSize(v.data.list);
         root.* = v;
         old.release();
     }
 }
+/// Whether `target` is reachable from `v`. Ranks fall along every
+/// ownership edge, so only higher-ranked nodes are searched. A work list
+/// that can't grow answers yes, which only costs the caller a copy.
 fn contains(v: *Value, target: *Value) bool {
     if (v == target) return true;
-    return switch (v.data) {
-        .list => |xs| blk: {
-            for (xs) |x| if (contains(x, target)) break :blk true;
-            break :blk false;
-        },
-        .map => |xs| blk: {
-            for (xs) |x| if (contains(x.value, target)) break :blk true;
-            break :blk false;
-        },
-        .range => |r| contains(r.from, target) or contains(r.to, target),
-        .function => |f| contains(f.captures, target),
-        else => false,
-    };
+    if (v.ownership_rank <= target.ownership_rank) return false;
+    const gpa = target.allocator;
+    var stack: std.ArrayList(*Value) = .empty;
+    defer stack.deinit(gpa);
+    stack.append(gpa, v) catch return true;
+    while (stack.pop()) |x| {
+        if (x == target) return true;
+        if (x.ownership_rank <= target.ownership_rank) continue;
+        switch (x.data) {
+            .list => |xs| stack.appendSlice(gpa, xs) catch return true,
+            .map => |xs| for (xs) |p| stack.append(gpa, p.value) catch return true,
+            .range => |r| stack.appendSlice(gpa, &.{ r.from, r.to }) catch return true,
+            .function => |f| stack.append(gpa, f.captures) catch return true,
+            else => {},
+        }
+    }
+    return false;
 }
 test "copy-on-write never changes an alias and every reference is freed" {
     const gpa = std.testing.allocator;
@@ -760,7 +853,6 @@ fn mapUpdateAllocations(gpa: std.mem.Allocator) !void {
     try std.testing.expectEqualStrings("tail", root.data.map[1].key);
     try std.testing.expectEqual(snapshot, root.get("é").?);
     try std.testing.expectEqual(one, snapshot.get("é").?);
-    try std.testing.expectEqual(@as(u32, 3), root.depth);
     try std.testing.expect(root.ownership_rank > snapshot.ownership_rank);
     try std.testing.expect(root.core_message);
     const nested = try list(gpa, &.{root});
@@ -792,31 +884,6 @@ test "Map writes normalize only incoming keys and preserve nested snapshots on r
     try std.testing.checkAllAllocationFailures(std.testing.allocator, mapUpdateAllocations, .{});
 }
 
-test "Map replacement recomputes depth and refuses an overdeep child atomically" {
-    const gpa = std.testing.allocator;
-    const leaf = try scalar(gpa, .nothing);
-    defer leaf.release();
-    var deep = leaf.retain();
-    defer deep.release();
-    for (1..max_depth) |_| {
-        const next = try list(gpa, &.{deep});
-        deep.release();
-        deep = next;
-    }
-    var root = try map(gpa, &.{.{ .key = "a", .value = leaf }});
-    defer root.release();
-    const before = root;
-    try std.testing.expectError(error.TooDeep, mapSet(&root, "a", deep));
-    try std.testing.expectError(error.TooDeep, mapSet(&root, "b", deep));
-    try std.testing.expectEqual(before, root);
-    try std.testing.expectEqual(leaf, root.get("a").?);
-    try std.testing.expect(root.get("b") == null);
-    try mapSet(&root, "a", root);
-    try std.testing.expectEqual(@as(u32, 3), root.depth);
-    try mapSet(&root, "a", leaf);
-    try std.testing.expectEqual(@as(u32, 2), root.depth);
-}
-
 /// Objects are made by a Group, not a Host value constructor. These identity
 /// fields are the seam for step 1.4's handles and the encoding resolver.
 pub fn object(gpa: std.mem.Allocator, kind: []const u8, id: []const u8, identity: usize) Error!*Value {
@@ -829,13 +896,12 @@ pub fn object(gpa: std.mem.Allocator, kind: []const u8, id: []const u8, identity
 }
 /// A Function Value that retains its captures.
 pub fn function(gpa: std.mem.Allocator, home: []const u8, source: []const u8, identity: usize, captures: *Value) Error!*Value {
-    if (captures.depth + 1 > max_depth) return error.TooDeep;
     const h = try gpa.dupe(u8, home);
     errdefer gpa.free(h);
     const s = try gpa.dupe(u8, source);
     errdefer gpa.free(s);
     const v = try scalar(gpa, .{ .function = .{ .home = h, .display = s, .identity = identity, .captures = captures } });
     _ = captures.retain();
-    v.depth = captures.depth + 1;
+    v.measure = capturedSize(captures);
     return v;
 }

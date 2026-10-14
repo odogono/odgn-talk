@@ -224,7 +224,8 @@ with its interim `resolve` need, `settle`,
 and `cancel-delivery`. It does not yet conform: `standard-capability`, `effect`/`release` needs and
 `$function` values, `call` and `request-charge` are protocol errors, and a
 Pump's `abandoned` is empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
-stack sits in linear memory and nothing recurses past the depth guards.
+stack sits in linear memory: source recursion stops at the depth guards, and
+Values are walked from heap work lists, never by native recursion.
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
 memory per instance and payload to #532's thresholds, in CI; the [first
 figures](../../docs/research/zig-wasi-figures.md) are 2 MiB per instance and
@@ -702,11 +703,8 @@ Shape checks, definition validation before callbacks and complete output or
 ordered diagnostics. Limit Faults escape. The [contract](../../spec/07-libraries-and-the-standard-library.md#checked-mappings)
 fixes definition precedence and concrete source locations; the `stdlib/mappings*`
 Corpus cases cover behavior, sliced restore and resource exhaustion.
-The existing Core-wide Value nesting guard still refuses construction beyond
-128 levels with a Host error; [#871](https://github.com/odogono/odgn-talk/issues/871)
-tracks stack-safe removal, including encodings and snapshots. Mapping introduces
-no depth cap; its depth case verifies 96-step paths under a 12-frame call-depth
-limit within the currently supported Value depth.
+Mapping introduces no depth cap; its depth case verifies 96-step paths under a
+12-frame call-depth limit.
 
 A Lambda makes a Function Value with its captures, by name in slot order, and
 a function's bare name makes one with none. Each Group keeps one record of
@@ -978,8 +976,17 @@ must re-encode to the number, tag and payload the input spelled, so `{"$dec":
 "3"}`, `1.0` and a non-UTC or non-shortest `$instant` are refused. JSON white
 space and string escapes are syntax, and text is normalised to NFC. Pattern
 decoding reparses canonical source; compilation and matching belong to the
-front end. Value construction and decoding guard nesting at 128
-levels, independently of future Run budgets.
+front end.
+
+Values nest without a Core cap, as in the Go and TS Cores: only the Allocation
+Budget, the Persistent State cap and the Group's physical cap bound them, each
+with its specified fault (#871). Every container and Function Value keeps its
+contents' logical size as it is built, so measuring one never walks it.
+Equality, ordering, display, both JSON encodings, decoding, snapshots, Shape
+scans and teardown keep their pending work on heap stacks, so a value nested
+100,000 deep runs on a 256 KiB native stack. The `json` Library's source
+recurses on nesting, so a deep value there meets the call-depth Limit Fault;
+[`limits/deep-values`](../../corpus/limits/deep-values/case.trace) shows both.
 
 ## Corpus runner
 

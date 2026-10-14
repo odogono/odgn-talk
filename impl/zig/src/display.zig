@@ -78,7 +78,28 @@ pub fn writeTrace(w: *std.Io.Writer, v: *const Value) Error!void {
     return writeWith(w, v, true);
 }
 
-fn writeWith(w: *std.Io.Writer, v: *const Value, trace: bool) Error!void {
+/// One step of writing a value: a value, literal punctuation, or a map
+/// key with its `: `. Containers push their parts, so nesting deepens a
+/// heap work list rather than the native stack.
+const Step = union(enum) { value: *const Value, punctuation: []const u8, key: []const u8 };
+
+fn writeWith(w: *std.Io.Writer, root: *const Value, trace: bool) Error!void {
+    const gpa = root.allocator;
+    var steps: std.ArrayList(Step) = .empty;
+    defer steps.deinit(gpa);
+    try steps.append(gpa, .{ .value = root });
+    while (steps.pop()) |step| switch (step) {
+        .punctuation => |s| try w.writeAll(s),
+        .key => |k| {
+            try key(w, k);
+            try w.writeAll(": ");
+        },
+        .value => |v| try writeOne(w, v, trace, gpa, &steps),
+    };
+}
+
+/// Writes a scalar, or opens a container and pushes its parts last first.
+fn writeOne(w: *std.Io.Writer, v: *const Value, trace: bool, gpa: std.mem.Allocator, steps: *std.ArrayList(Step)) Error!void {
     const a = v.allocator;
     switch (v.data) {
         .nothing => try w.writeAll("nothing"),
@@ -108,29 +129,40 @@ fn writeWith(w: *std.Io.Writer, v: *const Value, trace: bool) Error!void {
         },
         .list => |xs| {
             try w.writeByte('[');
-            for (xs, 0..) |x, i| {
-                if (i > 0) try w.writeAll(", ");
-                try writeWith(w, x, trace);
+            try steps.ensureUnusedCapacity(gpa, 2 * xs.len + 1);
+            steps.appendAssumeCapacity(.{ .punctuation = "]" });
+            var i = xs.len;
+            while (i > 0) {
+                i -= 1;
+                steps.appendAssumeCapacity(.{ .value = xs[i] });
+                if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = ", " });
             }
-            try w.writeByte(']');
         },
         .map => |xs| {
             try w.writeByte('{');
-            var first = true;
-            for (xs) |x| {
+            try steps.ensureUnusedCapacity(gpa, 3 * xs.len + 1);
+            steps.appendAssumeCapacity(.{ .punctuation = "}" });
+            var first: ?usize = null;
+            for (xs, 0..) |x, i| {
                 if (trace and v.core_message and std.mem.eql(u8, x.key, "message")) continue;
-                if (!first) try w.writeAll(", ");
-                first = false;
-                try key(w, x.key);
-                try w.writeAll(": ");
-                try writeWith(w, x.value, trace);
+                first = i;
+                break;
             }
-            try w.writeByte('}');
+            var i = xs.len;
+            while (i > 0) {
+                i -= 1;
+                const x = xs[i];
+                if (trace and v.core_message and std.mem.eql(u8, x.key, "message")) continue;
+                steps.appendAssumeCapacity(.{ .value = x.value });
+                steps.appendAssumeCapacity(.{ .key = x.key });
+                if (i != first.?) steps.appendAssumeCapacity(.{ .punctuation = ", " });
+            }
         },
         .range => |r| {
-            try writeWith(w, r.from, trace);
-            try w.writeAll("..");
-            try writeWith(w, r.to, trace);
+            try steps.ensureUnusedCapacity(gpa, 3);
+            steps.appendAssumeCapacity(.{ .value = r.to });
+            steps.appendAssumeCapacity(.{ .punctuation = ".." });
+            steps.appendAssumeCapacity(.{ .value = r.from });
         },
         .civil_date => |f| {
             const s = try model.dates.string(a, f, false);
@@ -217,9 +249,109 @@ pub const Reader = struct {
         while (self.take(" & ")) try self.textPiece(&out);
         return model.text(self.allocator, out.items);
     }
-    /// Reads the value at `pos`; `depth` is the nesting already entered.
-    pub fn read(self: *Reader, depth: usize) model.Error!*Value {
-        if (depth >= model.max_depth) return error.TooDeep;
+    /// A list or map whose items are still being read.
+    const Open = union(enum) {
+        list: std.ArrayList(*Value),
+        map: struct { pairs: std.ArrayList(model.Pair) = .empty, key: ?[]u8 = null },
+
+        fn deinit(o: *Open, a: std.mem.Allocator) void {
+            switch (o.*) {
+                .list => |*items| {
+                    for (items.items) |v| v.release();
+                    items.deinit(a);
+                },
+                .map => |*m| {
+                    for (m.pairs.items) |p| {
+                        a.free(p.key);
+                        p.value.release();
+                    }
+                    m.pairs.deinit(a);
+                    if (m.key) |k| a.free(k);
+                },
+            }
+        }
+    };
+    /// Reads the value at `pos`. Open lists and maps wait on a heap stack,
+    /// so a deeply nested value never deepens the native stack.
+    pub fn read(self: *Reader) model.Error!*Value {
+        const a = self.allocator;
+        var open: std.ArrayList(Open) = .empty;
+        defer {
+            for (open.items) |*o| o.deinit(a);
+            open.deinit(a);
+        }
+        while (true) {
+            var v: *Value = undefined;
+            if (self.take("[")) {
+                if (!self.take("]")) {
+                    try open.append(a, .{ .list = .empty });
+                    continue;
+                }
+                v = try model.list(a, &.{});
+            } else if (self.take("{")) {
+                if (!self.take("}")) {
+                    try open.append(a, .{ .map = .{} });
+                    open.items[open.items.len - 1].map.key = try self.mapKey();
+                    continue;
+                }
+                v = try model.map(a, &.{});
+            } else v = try self.leaf();
+            // Hand the finished value to the container it completes, closing
+            // each container it finishes in turn.
+            while (true) {
+                if (open.items.len == 0) return v;
+                const top = &open.items[open.items.len - 1];
+                switch (top.*) {
+                    .list => |*items| {
+                        items.append(a, v) catch {
+                            v.release();
+                            return error.OutOfMemory;
+                        };
+                        if (!self.take("]")) {
+                            try self.expect(", ");
+                            break;
+                        }
+                        v = try model.list(a, items.items);
+                    },
+                    .map => |*m| {
+                        m.pairs.append(a, .{ .key = m.key.?, .value = v }) catch {
+                            v.release();
+                            return error.OutOfMemory;
+                        };
+                        m.key = null;
+                        if (!self.take("}")) {
+                            try self.expect(", ");
+                            m.key = try self.mapKey();
+                            break;
+                        }
+                        v = try model.map(a, m.pairs.items);
+                    },
+                }
+                var done = open.pop().?;
+                done.deinit(a);
+            }
+        }
+    }
+    /// A map key and its `: `, owned by the caller.
+    fn mapKey(self: *Reader) model.Error![]u8 {
+        const a = self.allocator;
+        var k: []u8 = undefined;
+        if (self.pos < self.input.len and self.input[self.pos] == '"') {
+            const v = try self.readText();
+            defer v.release();
+            k = try a.dupe(u8, v.data.text);
+        } else {
+            const begin = self.pos;
+            while (self.pos < self.input.len and (std.ascii.isAlphanumeric(self.input[self.pos]) or self.input[self.pos] == '_')) : (self.pos += 1) {}
+            if (!word(self.input[begin..self.pos])) return error.InvalidValue;
+            k = try a.dupe(u8, self.input[begin..self.pos]);
+        }
+        errdefer a.free(k);
+        try self.expect(": ");
+        return k;
+    }
+    /// Reads a value that is not a list or map.
+    fn leaf(self: *Reader) model.Error!*Value {
         const a = self.allocator;
         const start = self.pos;
         if (self.pos >= self.input.len) return error.InvalidValue;
@@ -241,56 +373,6 @@ pub const Reader = struct {
             };
             return model.bytes(a, out.items);
         }
-        if (self.take("[")) {
-            var items: std.ArrayList(*Value) = .empty;
-            defer {
-                for (items.items) |v| v.release();
-                items.deinit(a);
-            }
-            if (!self.take("]")) while (true) {
-                const v = try self.read(depth + 1);
-                items.append(a, v) catch {
-                    v.release();
-                    return error.OutOfMemory;
-                };
-                if (self.take("]")) break;
-                try self.expect(", ");
-            };
-            return model.list(a, items.items);
-        }
-        if (self.take("{")) {
-            var pairs: std.ArrayList(model.Pair) = .empty;
-            defer {
-                for (pairs.items) |p| {
-                    a.free(p.key);
-                    p.value.release();
-                }
-                pairs.deinit(a);
-            }
-            if (!self.take("}")) while (true) {
-                {
-                    var k: []const u8 = undefined;
-                    if (self.pos < self.input.len and self.input[self.pos] == '"') {
-                        const v = try self.readText();
-                        defer v.release();
-                        k = try a.dupe(u8, v.data.text);
-                    } else {
-                        const begin = self.pos;
-                        while (self.pos < self.input.len and (std.ascii.isAlphanumeric(self.input[self.pos]) or self.input[self.pos] == '_')) : (self.pos += 1) {}
-                        if (!word(self.input[begin..self.pos])) return error.InvalidValue;
-                        k = try a.dupe(u8, self.input[begin..self.pos]);
-                    }
-                    errdefer a.free(k);
-                    try self.expect(": ");
-                    const v = try self.read(depth + 1);
-                    errdefer v.release();
-                    try pairs.append(a, .{ .key = k, .value = v });
-                }
-                if (self.take("}")) break;
-                try self.expect(", ");
-            };
-            return model.map(a, pairs.items);
-        }
         if (self.take("<object ")) {
             const begin = self.pos;
             while (self.pos < self.input.len and self.input[self.pos] != ' ') : (self.pos += 1) {}
@@ -309,10 +391,7 @@ pub const Reader = struct {
                 const c = self.input[self.pos];
                 if (c == '"') quoted = !quoted;
                 if (!quoted) {
-                    if (c == '<') {
-                        nesting += 1;
-                        if (nesting >= model.max_depth) return error.TooDeep;
-                    }
+                    if (c == '<') nesting += 1;
                     if (c == '>') nesting -= 1;
                 }
             }
@@ -329,27 +408,12 @@ pub const Reader = struct {
             if (s[s.len - 1] == 'Z') return model.scalar(a, .{ .instant = try model.dates.parseInstant(s) });
             return model.scalar(a, .{ .civil_date = try model.dates.parseCivil(s) });
         }
-        if (self.input[self.pos] == '-') self.pos += 1;
-        while (self.pos < self.input.len and std.ascii.isDigit(self.input[self.pos])) : (self.pos += 1) {}
-        if (self.pos < self.input.len and self.input[self.pos] == '.' and !std.mem.startsWith(u8, self.input[self.pos..], "..")) {
-            self.pos += 1;
-            while (self.pos < self.input.len and std.ascii.isDigit(self.input[self.pos])) : (self.pos += 1) {}
-        }
-        const n = try model.Decimal.parse(self.input[start..self.pos]);
-        var v: *Value = undefined;
-        // Never consume the next Trace key as a Unit (chapter 11).
-        if (self.pos < self.input.len and self.input[self.pos] == ' ') {
-            const unit_start = self.pos + 1;
-            var end = unit_start;
-            while (end < self.input.len and (std.ascii.isAlphanumeric(self.input[end]) or std.mem.indexOfScalar(u8, "*/^", self.input[end]) != null)) : (end += 1) {}
-            if (end > unit_start and !(end < self.input.len and self.input[end] == '=')) {
-                v = try model.quantity(a, n, self.input[unit_start..end]);
-                self.pos = end;
-            } else v = try model.scalar(a, .{ .number = n });
-        } else v = try model.scalar(a, .{ .number = n });
+        const v = try self.number();
         errdefer v.release();
         if (self.take("..")) {
-            const to = try self.read(depth + 1);
+            // A range's ends are numbers or Quantities.
+            if (self.pos >= self.input.len) return error.InvalidValue;
+            const to = try self.number();
             defer to.release();
             const r = try model.range(a, v, to);
             v.release();
@@ -357,12 +421,36 @@ pub const Reader = struct {
         }
         return v;
     }
+    /// Reads a number, or a Quantity with its Unit.
+    fn number(self: *Reader) model.Error!*Value {
+        const a = self.allocator;
+        const start = self.pos;
+        if (self.input[self.pos] == '-') self.pos += 1;
+        while (self.pos < self.input.len and std.ascii.isDigit(self.input[self.pos])) : (self.pos += 1) {}
+        if (self.pos < self.input.len and self.input[self.pos] == '.' and !std.mem.startsWith(u8, self.input[self.pos..], "..")) {
+            self.pos += 1;
+            while (self.pos < self.input.len and std.ascii.isDigit(self.input[self.pos])) : (self.pos += 1) {}
+        }
+        const n = try model.Decimal.parse(self.input[start..self.pos]);
+        // Never consume the next Trace key as a Unit (chapter 11).
+        if (self.pos < self.input.len and self.input[self.pos] == ' ') {
+            const unit_start = self.pos + 1;
+            var end = unit_start;
+            while (end < self.input.len and (std.ascii.isAlphanumeric(self.input[end]) or std.mem.indexOfScalar(u8, "*/^", self.input[end]) != null)) : (end += 1) {}
+            if (end > unit_start and !(end < self.input.len and self.input[end] == '=')) {
+                const v = try model.quantity(a, n, self.input[unit_start..end]);
+                self.pos = end;
+                return v;
+            }
+        }
+        return model.scalar(a, .{ .number = n });
+    }
 };
 /// Reads `input` as exactly one display-form value.
 pub fn parse(a: std.mem.Allocator, input: []const u8, resolver: Resolver) model.Error!*Value {
     if (!utf8.validate(input)) return error.InvalidValue;
     var r: Reader = .{ .allocator = a, .input = input, .resolver = resolver };
-    const v = try r.read(0);
+    const v = try r.read();
     errdefer v.release();
     if (r.pos != input.len) return error.InvalidValue;
     return v;

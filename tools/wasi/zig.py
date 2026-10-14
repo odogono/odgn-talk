@@ -234,8 +234,8 @@ def large_loads(engine, module):
 
 def deep(engine, module):
     """The deepest source the depth guards accept loads and runs on the
-    1 MiB stack, a Value nested until its guard stops it raises, and deeper
-    source is refused: never a crash (ADR 0078; the Go Core's #582)."""
+    1 MiB stack, and deeper source is refused: never a crash (ADR 0078; the
+    Go Core's #582). Values nested far deeper run, save and restore."""
     h = Host(engine, module)
     core = h.call("talk_new") & 0xFFFFFFFF
     group = h.new_group(core)
@@ -270,13 +270,37 @@ def deep(engine, module):
         code, _ = h.pump(group, 1791633600)
         assert code == OK, (name, code)
         assert loads(make(depths[name] * 50))[0] == LOAD_REFUSED, name
-    # A list nested at run time just inside the Value depth guard, then
-    # compared and copied, which walk it to the bottom.
-    source = "script variable v\non go\n  put 1 into v\n  repeat 120 times\n    put [v] into v\n  end repeat\n  put [v = v, v] into v\nend go\n"
+    # Values nest without a cap (#871): a list and a map nested far past
+    # the old 128-level guard, within the default Allocation Budget, are
+    # compared and copied, then saved and restored, which walk them to the
+    # bottom on the 1 MiB stack.
+    source = (
+        "script variable v\nscript variable m\non go\n  put 1 into v\n  put 1 into m\n"
+        "  repeat 900 times\n    put [v] into v\n  end repeat\n"
+        "  repeat 500 times\n    put {x: m} into m\n  end repeat\n"
+        "  put [v = v, m = m, v, m] into v\nend go\n"
+    )
     code, script = loads(source)
     assert code == OK, code
     assert h.deliver(script, "go") == OK
     code, _ = h.pump(group, 1791633600)
+    assert code == OK, code
+    saved = h.out()
+    assert h.call("talk_save", group, saved) == OK
+    data, size = struct.unpack("<2I", h.read(saved, 8))
+    # A fault would have rolled the variables back: the save holds every
+    # level, at least two bytes for each list and four for each map.
+    assert size > 900 * 2 + 500 * 4, size
+    # talk_restore_options: name, name_len, trace, trace_context, libraries,
+    # libraries_len, grants, grants_context, resolve, resolve_context,
+    # mismatch, allocator, memory_cap.
+    name, name_len = h.text("restored")
+    options = h.alloc(struct.pack("<13I", name, name_len, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    restored, result = h.out(), h.out()
+    assert h.call("talk_restore", core, data, size, options, restored, result) == OK
+    h.call("talk_restore_result_release", h.pointer_at(result))
+    h.call("talk_owned_bytes_release", saved)
+    code, _ = h.pump(h.pointer_at(restored), 1791633601)
     assert code == OK, code
     return depths
 

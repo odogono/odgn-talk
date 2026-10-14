@@ -74,17 +74,20 @@ pub const Stores = struct {
         return .{ .encoded = s.a().dupe(u8, buf.data[0..buf.len]) catch @panic("out of memory"), .size = northtalk.machine.costs.size(value) };
     }
 
+    /// Whether a Host Object is anywhere in `v`, searched from a heap work
+    /// list. A list that can't grow is out of memory, as elsewhere here.
     fn holdsObject(v: *const Value) bool {
-        return switch (v.data) {
-            .object => true,
-            .list => |items| for (items) |x| {
-                if (holdsObject(x)) break true;
-            } else false,
-            .map => |pairs| for (pairs) |p| {
-                if (holdsObject(p.value)) break true;
-            } else false,
-            else => false,
+        const gpa = std.heap.page_allocator;
+        var stack: std.ArrayList(*const Value) = .empty;
+        defer stack.deinit(gpa);
+        stack.append(gpa, v) catch @panic("out of memory");
+        while (stack.pop()) |x| switch (x.data) {
+            .object => return true,
+            .list => |items| for (items) |item| stack.append(gpa, item) catch @panic("out of memory"),
+            .map => |pairs| for (pairs) |p| stack.append(gpa, p.value) catch @panic("out of memory"),
+            else => {},
         };
+        return false;
     }
 
     /// A held value, as a new reference the caller owns.

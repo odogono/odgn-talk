@@ -230,7 +230,7 @@ const Parser = struct {
         }
         if (s[0] == '"' or s[0] == '(') {
             const parens = p.reader.take("(");
-            const v = try p.reader.read(0);
+            const v = try p.reader.read();
             defer v.release();
             if (v.data != .text) return error.InvalidValue;
             if (parens) try p.expect(")");
