@@ -330,6 +330,7 @@ The message layer is the language-neutral form of this interface, for a Host tha
 ### Rules
 
 - **One message per call:** each call in `talk.go` is one JSON message with a reply. Values use [the Value Encoding](#json-and-the-value-encoding), and declarations and Shapes use the Host Manifest's data model.
+- **Nesting:** frames and their Value Encodings have no fixed nesting-depth limit. A valid deeply nested frame is decoded and dispatched normally, subject to available memory and the transport's frame-size limit; nesting alone is not a protocol error. This holds on native and WASI builds alike ([ADR 0088](../docs/adr/0088-the-message-layer-accepts-deep-values.md)). This applies to incoming Values, ignored fields, and Values in replies and interim needs. A malformed frame, including malformed deep JSON, is still a protocol error and leaves the Session and any pending Host exchange available for a corrected frame. Hosts must choose a JSON decoder that can read deep replies within their own resources.
 - **The Host starts every exchange:** Host code runs through interim replies: Operations, properties and lifecycle hooks reply to `pump`; scope abandonment and rollback may also reply to `reload` or `replace-library`, and the Host answers it before sending anything else to that Group. The Core never calls the Host, so a WASI build needs no reentrant imports.
 - **Received means read:** a queued call sent while a Pump runs may wait in the Host's outbox, and it is received when the Core reads it. Its delivery id is assigned then, and `mailbox full` is decided then.
 - **Stops land at a crossing:** `stop`, `cancel-run` and `rewind-run` land at the latest at the running Pump's next `op` or `prop`, or at its end. The Trace records where.
@@ -455,6 +456,6 @@ Non-normative ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tag
 - **Wording:** a `HostError`'s detail, and a diagnostic's message. Their codes are normative.
 - **Helpers** built only on this interface, versioned with each Core: the drivers (`github.com/odogono/odgn-talk/impl/go/driver` in Go, with a worker pool, a run queue and a timer per Group, and `autoDrive(group)` from `@odgn/northtalk/driver` in TS), the `Must*` value constructors, Trace file sinks and the corpus runner. Game Hosts pump by hand.
 - **The TS Core's debug-pause hook** ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md), [Appendix C](appendix-c-handed-off-open.md)).
-- **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative.
+- **The message layer's framing, and protocol errors** (an unknown message, a malformed frame or an unexpected `ref`), which are the transport's. Its messages, fields and encodings are normative; a frame may not be refused solely for its nesting depth.
 - **The Host Manifest** is for tooling, and the Core never reads it.
 - **Host conventions** such as lowercase HTTP header names.

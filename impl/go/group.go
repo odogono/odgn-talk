@@ -497,25 +497,30 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 	}
 	return id, p, nil
 }
-func validGroup(v corevalue.Value, g *Group) bool {
-	if v.Kind == corevalue.Function {
-		return v.Function() != nil && v.Function().Group == g
-	}
-	if v.Kind == corevalue.Object {
-		if v.Object() == nil {
-			return false
+func validGroup(root corevalue.Value, g *Group) bool {
+	stack := []corevalue.Value{root}
+	for len(stack) > 0 {
+		v := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if v.Kind == corevalue.Function {
+			if v.Function() == nil || v.Function().Group != g {
+				return false
+			}
+			continue
 		}
-		o, ok := v.Object().Handle.(*Object)
-		return ok && o != nil && o.group == g
-	}
-	for _, x := range v.Items() {
-		if !validGroup(x, g) {
-			return false
+		if v.Kind == corevalue.Object {
+			if v.Object() == nil {
+				return false
+			}
+			o, ok := v.Object().Handle.(*Object)
+			if !ok || o == nil || o.group != g {
+				return false
+			}
+			continue
 		}
-	}
-	for _, p := range v.Entries() {
-		if !validGroup(p.Val, g) {
-			return false
+		stack = append(stack, v.Items()...)
+		for _, p := range v.Entries() {
+			stack = append(stack, p.Val)
 		}
 	}
 	return true

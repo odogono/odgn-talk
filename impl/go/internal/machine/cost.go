@@ -110,7 +110,57 @@ func measure(code uint8, v value.Value) int64 {
 }
 
 // Size evaluates the logical size formula for the value's kind.
-func Size(v value.Value) int64 {
+func Size(root value.Value) int64 {
+	type frame struct {
+		v       value.Value
+		items   []value.Value
+		pairs   []value.Pair
+		next    int
+		total   int64
+		entered bool
+	}
+	stack := []frame{{v: root}}
+	for {
+		f := &stack[len(stack)-1]
+		container := f.v.Kind == value.List || f.v.Kind == value.Map
+		_, cached := f.v.CachedContents()
+		var result int64
+		if !container || cached {
+			result = shallowSize(f.v)
+		} else {
+			if !f.entered {
+				f.items = f.v.Items()
+				f.pairs = f.v.Entries()
+				f.entered = true
+			}
+			if f.next < len(f.items)+len(f.pairs) {
+				var child value.Value
+				if f.next < len(f.items) {
+					child = f.items[f.next]
+				} else {
+					p := f.pairs[f.next-len(f.items)]
+					child = p.Val
+					f.total += int64(16 + len(p.Key))
+				}
+				f.next++
+				stack = append(stack, frame{v: child})
+				continue
+			}
+			if f.v.Kind == value.List {
+				f.v.CacheListContents(f.total)
+			} else {
+				f.v.CacheMapContents(f.total)
+			}
+			result = evaluate(sizes[f.v.Kind], Measures{}, f.v, f.total)
+		}
+		stack = stack[:len(stack)-1]
+		if len(stack) == 0 {
+			return result
+		}
+		stack[len(stack)-1].total += result
+	}
+}
+func shallowSize(v value.Value) int64 {
 	if int(v.Kind) < len(sizes) && sizes[v.Kind] != nil {
 		return evaluate(sizes[v.Kind], Measures{}, v)
 	}
@@ -131,7 +181,7 @@ var sizes = func() [][]generated.CostTerm {
 	return out
 }()
 
-func evaluate(terms []generated.CostTerm, m Measures, v value.Value) int64 {
+func evaluate(terms []generated.CostTerm, m Measures, v value.Value, knownContents ...int64) int64 {
 	var total int64
 	for _, t := range terms {
 		factor, divisor := t.Factor, t.Divisor
@@ -158,7 +208,11 @@ func evaluate(terms []generated.CostTerm, m Measures, v value.Value) int64 {
 					x = m.Args[arg]
 				}
 			}
-			n = measure(t.Measure, x)
+			if t.Subject == generated.SubjectV && t.Measure == generated.MeasureContents && len(knownContents) > 0 {
+				n = knownContents[0]
+			} else {
+				n = measure(t.Measure, x)
+			}
 			if t.Subject == generated.SubjectInput && t.Measure == generated.MeasureSize && m.InputSize > 0 {
 				n = m.InputSize
 			}

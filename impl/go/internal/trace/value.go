@@ -8,23 +8,31 @@ import (
 // Display omits a Core-generated error message wherever the error is nested.
 // Script/Host message fields are ordinary values and remain in the Trace.
 func Display(v value.Value) string { return parityValue(v).Display() }
-func parityValue(v value.Value) value.Value {
-	v = v.WithItems(slices.Clone(v.Items()))
-	for j, x := range v.Items() {
-		v.Items()[j] = parityValue(x)
-	}
-	if v.Kind == value.Map {
-		entries := make([]value.Pair, 0, len(v.Entries()))
-		for _, p := range v.Entries() {
-			if v.CoreMessage && p.Key == "message" {
-				continue
-			}
-			p.Val = parityValue(p.Val)
-			entries = append(entries, p)
+func parityValue(root value.Value) value.Value {
+	stack := []*value.Value{&root}
+	for len(stack) > 0 {
+		v := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		items := slices.Clone(v.Items())
+		*v = v.WithItems(items)
+		for i := range items {
+			stack = append(stack, &items[i])
 		}
-		v = v.WithEntries(entries)
+		if v.Kind == value.Map {
+			entries := make([]value.Pair, 0, len(v.Entries()))
+			for _, p := range v.Entries() {
+				if v.CoreMessage && p.Key == "message" {
+					continue
+				}
+				entries = append(entries, p)
+			}
+			*v = v.WithEntries(entries)
+			for i := range entries {
+				stack = append(stack, &entries[i].Val)
+			}
+		}
 	}
-	return v
+	return root
 }
 
 // Host displays a northtalk.Value as the Trace does, for the Session Host's

@@ -26,9 +26,6 @@ const Direct = talk.direct;
 
 /// The largest frame a Host may write, as the harnesses measure it.
 pub const max_frame: usize = 64 << 20;
-/// The deepest JSON in a frame, its envelope included.
-const max_depth: usize = 64;
-
 const protocol_version: i64 = 1;
 
 const quoted = encoding.quoted;
@@ -417,11 +414,8 @@ fn resolveObject(context: ?*anyopaque, kind: []const u8, id: []const u8) model.E
 /// Reads a Value Encoding held in a parsed frame, against `entry`'s
 /// Group (or no Group, for `add`).
 fn decodeValue(gpa: Allocator, j: Json, entry: ?*GroupEntry) model.Error!*Value {
-    var text: std.Io.Writer.Allocating = .init(gpa);
-    defer text.deinit();
-    text.writer.print("{f}", .{std.json.fmt(j, .{})}) catch return error.OutOfMemory;
     if (entry) |e| e.wrong_group = false;
-    return encoding.decode(gpa, text.written(), resolverOf(entry));
+    return encoding.decodeParsed(gpa, j, resolverOf(entry));
 }
 
 fn resolverOf(entry: ?*GroupEntry) display.Resolver {
@@ -503,10 +497,7 @@ fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, to
     if (index >= functions.len) return error.InvalidValue;
     const code = functions[@intCast(index)];
     const display_text = asText(field(parsed.value, "d")) orelse return error.InvalidValue;
-    var text: std.Io.Writer.Allocating = .init(gpa);
-    defer text.deinit();
-    text.writer.print("{f}", .{std.json.fmt(field(parsed.value, "c") orelse return error.InvalidValue, .{})}) catch return error.OutOfMemory;
-    const captures = try encoding.decode(gpa, text.written(), resolverOf(e));
+    const captures = try encoding.decodeParsed(gpa, field(parsed.value, "c") orelse return error.InvalidValue, resolverOf(e));
     defer captures.release();
     return model.function(gpa, code.home, display_text, @intFromPtr(code), captures);
 }
@@ -2835,23 +2826,6 @@ fn cancelDeliveryReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
-/// A frame's JSON nesting, brackets outside strings.
-fn frameDepth(frame: []const u8) usize {
-    var depth: usize = 0;
-    var peak: usize = 0;
-    var in_string = false;
-    var escaped = false;
-    for (frame) |c| {
-        if (in_string) {
-            if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') in_string = false;
-        } else if (c == '"') in_string = true else if (c == '[' or c == '{') {
-            depth += 1;
-            peak = @max(peak, depth);
-        } else if (c == ']' or c == '}') depth -|= 1;
-    }
-    return peak;
-}
-
 /// Handles one frame and returns its reply frame, owned by the caller
 /// (free it with `freeReply`). Never fails: a malformed frame is a
 /// protocol error, and the instance carries on.
@@ -2859,7 +2833,6 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     handling = s;
     defer handling = null;
     if (!std.unicode.utf8ValidateSlice(frame)) return protocolError(s.gpa, 0, "the frame is not UTF-8");
-    if (frameDepth(frame) > max_depth) return protocolError(s.gpa, 0, "the frame nests too deep");
     const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch |e| return if (e == error.OutOfMemory) oomReply() else protocolError(s.gpa, 0, "the frame is not JSON");
     defer parsed.deinit();
     const msg = parsed.value;
@@ -3055,6 +3028,39 @@ fn runEnd(reply: Json) !Json {
     return unexpected(reply);
 }
 
+/// JSON containers around one leaf; the envelope adds another level.
+fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    for (0..depth) |_| try out.writer.writeAll(if (objects_only) "{\"a\":" else "[");
+    try out.writer.writeByte('1');
+    for (0..depth) |_| try out.writer.writeAll(if (objects_only) "}" else "]");
+    return out.toOwnedSlice();
+}
+
+test "incoming frames have no nesting cap and preserve the Session" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    for ([_]bool{ false, true }) |objects_only| {
+        for ([_]usize{ 63, 64, 10_000, 100_000 }) |depth| {
+            const nested = try nestedJson(gpa, depth, objects_only);
+            defer gpa.free(nested);
+            const reply = try c.common(1, "{{\"m\":\"hello\",\"ref\":1,\"protocol\":1,\"ignored\":{s}}}", .{nested});
+            _ = try okOf(reply);
+            const decoded = try okOf(try c.send("{{\"m\":\"add\",\"ref\":{d},\"a\":{s},\"b\":1}}", .{ 2, nested }));
+            try std.testing.expectEqualStrings("wrong kind", decoded.object.get("fail").?.object.get("code").?.string);
+            _ = try okOf(try c.send("{{\"m\":\"add\",\"ref\":{d},\"a\":20,\"b\":22}}", .{3}));
+        }
+    }
+    // Brackets, escaped quotes and backslashes inside a string are text.
+    const text = try nestedJson(gpa, 1000, false);
+    defer gpa.free(text);
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"ignored\":\"{s}\\\"\\\\\"}}", .{ 4, text }));
+}
+
 test "hello, framing refusals, and a Pump with no Operations" {
     const gpa = std.testing.allocator;
     const s = Session.init(gpa).?;
@@ -3104,6 +3110,10 @@ test "an immediate op pauses the Pump and resumes on its result" {
     try std.testing.expectEqualStrings("protocol error", try errKind(stray));
     const other = try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{7});
     try std.testing.expectEqualStrings("protocol error", try errKind(other));
+    const nested = try nestedJson(gpa, 100_000, false);
+    defer gpa.free(nested);
+    const rejected = try c.common(0, "{{\"m\":\"op-result\",\"ref\":6,\"result\":{s}", .{nested});
+    try std.testing.expectEqualStrings("protocol error", try errKind(rejected));
     const done = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":40,\"charged\":3}}", .{6});
     const end = try runEnd(done);
     try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);

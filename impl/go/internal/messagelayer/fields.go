@@ -85,7 +85,7 @@ func (f fields) decode(key string, into any) error {
 	if !ok {
 		return protocolErrorf("missing field %q", key)
 	}
-	if err := json.Unmarshal(raw, into); err != nil {
+	if err := unmarshalFrame(raw, into); err != nil {
 		return protocolErrorf("field %q: %v", key, err)
 	}
 	return nil

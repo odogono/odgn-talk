@@ -236,6 +236,16 @@ abandonment at a Segment's end may defer too (#900);
 holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
 Values are walked from heap work lists, never by native recursion.
+Message Layer frames have no JSON nesting-depth cap. Parsed Value Encodings,
+including Function captures, go directly to the Core's heap-stack Value builder
+without recursive JSON re-encoding. Replies use the iterative Value writer.
+Native tests and the WASI Message Layer check exercise arrays and maps nested
+100,000 levels, including deep error data in replies. The frame-size and
+available-memory limits still apply; malformed deep JSON is a protocol error
+and leaves the Session and any pending Host exchange usable. Hosts must decode
+deep replies within their own resources, as
+[chapter 9 specifies](../../spec/09-embedding.md#rules)
+([ADR 0088](../../docs/adr/0088-the-message-layer-accepts-deep-values.md)).
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
 memory per instance and payload to #532's thresholds, in CI; the [first
 figures](../../docs/research/zig-wasi-figures.md) are 2 MiB per instance and
