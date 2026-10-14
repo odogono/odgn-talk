@@ -85,6 +85,8 @@ const GroupEntry = struct {
     traced: bool,
     /// Trace lines not yet carried by a reply, from the sink.
     pending_trace: std.ArrayList([]u8) = .empty,
+    /// Whether the last value read held another Group's Function Value.
+    wrong_group: bool = false,
 };
 
 /// What an `op-result` or `prop-result` brought back, for the re-made
@@ -257,7 +259,8 @@ const Out = struct {
         writeInt(o.w(), n) catch return error.OutOfMemory;
     }
     fn value(o: *Out, v: *const Value) (Allocator.Error || error{NotEncodable})!void {
-        encoding.write(o.w(), v) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
+        const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction } else null;
+        encoding.writeWith(o.w(), v, functions) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
     }
     /// `{"$bytes":…}`, chapter 9's byte-string encoding.
     fn bytesTag(o: *Out, gpa: Allocator, b: []const u8) Allocator.Error!void {
@@ -417,10 +420,95 @@ fn decodeValue(gpa: Allocator, j: Json, entry: ?*GroupEntry) model.Error!*Value 
     var text: std.Io.Writer.Allocating = .init(gpa);
     defer text.deinit();
     text.writer.print("{f}", .{std.json.fmt(j, .{})}) catch return error.OutOfMemory;
-    return encoding.decode(gpa, text.written(), .{
+    if (entry) |e| e.wrong_group = false;
+    return encoding.decode(gpa, text.written(), resolverOf(entry));
+}
+
+fn resolverOf(entry: ?*GroupEntry) display.Resolver {
+    return .{
         .context = if (entry) |e| @ptrCast(e) else null,
         .object = if (entry != null) resolveObject else null,
-    });
+        .function_token = if (entry != null) resolveFunction else null,
+    };
+}
+
+/// The host error for a value `decodeValue` refused.
+fn decodeError(e: model.Error, entry: ?*GroupEntry) talk.HostErrorCode {
+    if (e == error.OutOfMemory) return .out_of_memory;
+    if (entry) |x| if (x.wrong_group) return .wrong_group;
+    return .invalid_value;
+}
+
+/// The Session whose frame `handle` is reading, which writes Function
+/// Values' tokens.
+var handling: ?*Session = null;
+
+/// `{"$function": [home, display, token]}`. The token is the base64 of
+/// `{"g": group, "f": code, "d": display, "c": captures}`: the Group's
+/// handle, the index of the value's code in it, and its captures, so
+/// reading it needs nothing the Host must release.
+fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encoding.Error!void {
+    const s: *Session = @ptrCast(@alignCast(context.?));
+    const f = v.data.function;
+    var at: ?struct { *GroupEntry, usize } = null;
+    for (s.groups.items) |e| {
+        for (e.group.group.functions.items, 0..) |code, i| if (@intFromPtr(code) == f.identity) {
+            at = .{ e, i };
+        };
+    }
+    const found = at orelse return error.NotEncodable;
+    var inner: std.Io.Writer.Allocating = .init(s.gpa);
+    defer inner.deinit();
+    const iw = &inner.writer;
+    iw.writeAll("{\"g\":") catch return error.OutOfMemory;
+    std.json.Stringify.value(found[0].name, .{}, iw) catch return error.OutOfMemory;
+    iw.print(",\"f\":{d},\"d\":", .{found[1]}) catch return error.OutOfMemory;
+    std.json.Stringify.value(f.display, .{}, iw) catch return error.OutOfMemory;
+    iw.writeAll(",\"c\":") catch return error.OutOfMemory;
+    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunction });
+    iw.writeAll("}") catch return error.OutOfMemory;
+    const codec = std.base64.standard.Encoder;
+    const token = try s.gpa.alloc(u8, codec.calcSize(inner.written().len));
+    defer s.gpa.free(token);
+    _ = codec.encode(token, inner.written());
+    w.writeAll("{\"$function\":[") catch return error.WriteFailed;
+    std.json.Stringify.value(f.home, .{}, w) catch return error.WriteFailed;
+    w.writeAll(",") catch return error.WriteFailed;
+    std.json.Stringify.value(f.display, .{}, w) catch return error.WriteFailed;
+    w.writeAll(",") catch return error.WriteFailed;
+    std.json.Stringify.value(token, .{}, w) catch return error.WriteFailed;
+    w.writeAll("]}") catch return error.WriteFailed;
+}
+
+/// Reads a `$function` token against `context`'s Group: another Group's is
+/// `wrong group`, and anything this layer didn't write is invalid.
+fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, token: []const u8) model.Error!*Value {
+    _ = home;
+    _ = shown;
+    const e: *GroupEntry = @ptrCast(@alignCast(context orelse return error.InvalidValue));
+    const gpa = e.gpa;
+    const codec = std.base64.standard.Decoder;
+    const raw = try gpa.alloc(u8, codec.calcSizeForSlice(token) catch return error.InvalidValue);
+    defer gpa.free(raw);
+    codec.decode(raw, token) catch return error.InvalidValue;
+    const parsed = std.json.parseFromSlice(Json, gpa, raw, .{ .parse_numbers = false }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+    defer parsed.deinit();
+    const g = asText(field(parsed.value, "g")) orelse return error.InvalidValue;
+    if (!std.mem.eql(u8, g, e.name)) {
+        e.wrong_group = true;
+        return error.InvalidValue;
+    }
+    const index = asU64(field(parsed.value, "f") orelse return error.InvalidValue) orelse return error.InvalidValue;
+    const functions = e.group.group.functions.items;
+    if (index >= functions.len) return error.InvalidValue;
+    const code = functions[@intCast(index)];
+    const display_text = asText(field(parsed.value, "d")) orelse return error.InvalidValue;
+    var text: std.Io.Writer.Allocating = .init(gpa);
+    defer text.deinit();
+    text.writer.print("{f}", .{std.json.fmt(field(parsed.value, "c") orelse return error.InvalidValue, .{})}) catch return error.OutOfMemory;
+    const captures = try encoding.decode(gpa, text.written(), resolverOf(e));
+    defer captures.release();
+    return model.function(gpa, code.home, display_text, @intFromPtr(code), captures);
 }
 
 const Invalid = error{InvalidValue};
@@ -1342,7 +1430,7 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
     if (is_prop) {
         if (field(msg, "value")) |v| {
             answer.kind = .result;
-            answer.value = decodeValue(s.gpa, v, entry) catch return hostError(s.gpa, ref, .invalid_value);
+            answer.value = decodeValue(s.gpa, v, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         } else if (field(msg, "ok") != null) {
             answer.kind = .done;
         } else if (field(msg, "fail")) |f| {
@@ -1354,7 +1442,7 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
     } else {
         if (field(msg, "result")) |v| {
             answer.kind = .result;
-            answer.value = decodeValue(s.gpa, v, entry) catch return hostError(s.gpa, ref, .invalid_value);
+            answer.value = decodeValue(s.gpa, v, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         } else if (field(msg, "started") != null) {
             answer.kind = .started;
         } else if (field(msg, "done") != null) {
@@ -1652,7 +1740,7 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
                 for (args[0..made]) |v| v.release();
                 s.gpa.free(args);
                 args = &.{};
-                return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+                return hostError(s.gpa, ref, decodeError(e, entry));
             };
             made += 1;
         }
@@ -1706,14 +1794,14 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         const emessage = asText(field(e, "message"));
         var data: ?*Value = null;
         if (field(e, "data")) |d| if (d != .null) {
-            data = decodeValue(s.gpa, d, entry) catch return hostError(s.gpa, ref, .invalid_value);
+            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err, entry));
         };
         defer if (data) |d| d.release();
         const failure: talk.ScriptError = .{ .code = ecode.ptr, .code_len = ecode.len, .message = if (emessage) |m| m.ptr else null, .message_len = if (emessage) |m| m.len else 0, .data = data };
         break :blk Direct.callFail(c, &failure);
     } else blk: {
         const vj = field(msg, "value") orelse return hostError(s.gpa, ref, .invalid_value);
-        const v = decodeValue(s.gpa, vj, entry) catch return hostError(s.gpa, ref, .invalid_value);
+        const v = decodeValue(s.gpa, vj, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         defer v.release();
         break :blk Direct.callAnswer(c, v);
     };
@@ -2476,13 +2564,13 @@ fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
     defer if (data) |v| v.release();
     var failure: talk.ScriptError = undefined;
     if (field(given, "answer")) |j| {
-        answer = decodeValue(s.gpa, j, entry) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+        answer = decodeValue(s.gpa, j, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         st.answer = answer;
     } else if (field(given, "fail")) |e| {
         const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
         const emessage = asText(field(e, "message"));
         if (field(e, "data")) |d| if (d != .null) {
-            data = decodeValue(s.gpa, d, entry) catch return hostError(s.gpa, ref, .invalid_value);
+            data = decodeValue(s.gpa, d, entry) catch |err| return hostError(s.gpa, ref, decodeError(err, entry));
         };
         failure = .{ .code = ecode.ptr, .code_len = ecode.len, .message = if (emessage) |m| m.ptr else null, .message_len = if (emessage) |m| m.len else 0, .data = data };
         st.fail = &failure;
@@ -2497,6 +2585,42 @@ fn settleRestoredReply(s: *Session, msg: Json, ref: i64) []u8 {
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
+}
+
+/// `call`: a Request to a Function Value's Home Script, with `fn`, `args`
+/// and `limits`.
+fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const f = decodeValue(s.gpa, field(msg, "fn") orelse return hostError(s.gpa, ref, .invalid_value), entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+    defer f.release();
+    var args: std.ArrayList(*Value) = .empty;
+    defer {
+        for (args.items) |v| v.release();
+        args.deinit(s.gpa);
+    }
+    if (field(msg, "args")) |given| {
+        if (given != .array) return hostError(s.gpa, ref, .invalid_value);
+        for (given.array.items) |item| {
+            const v = decodeValue(s.gpa, item, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
+            args.append(s.gpa, v) catch {
+                v.release();
+                return hostError(s.gpa, ref, .out_of_memory);
+            };
+        }
+    }
+    var override_slot: talk.LimitOverride = undefined;
+    const override = overrideOf(field(msg, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
+    var id: talk.Buffer = .{};
+    var pending: ?*talk.Pending = null;
+    const code = Direct.call(entry.group, f, args.items.ptr, args.items.len, override, &id, &pending);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    defer Direct.ownedBytesRelease(&id);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"delivery\":") catch {};
+    o.text(if (id.data) |d| d[0..id.len] else "") catch {};
     return finishOk(s, &o, entry);
 }
 
@@ -2594,6 +2718,8 @@ fn frameDepth(frame: []const u8) usize {
 /// (free it with `freeReply`). Never fails: a malformed frame is a
 /// protocol error, and the instance carries on.
 pub fn handle(s: *Session, frame: []const u8) []u8 {
+    handling = s;
+    defer handling = null;
     if (!std.unicode.utf8ValidateSlice(frame)) return protocolError(s.gpa, 0, "the frame is not UTF-8");
     if (frameDepth(frame) > max_depth) return protocolError(s.gpa, 0, "the frame nests too deep");
     const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch |e| return if (e == error.OutOfMemory) oomReply() else protocolError(s.gpa, 0, "the frame is not JSON");
@@ -2662,6 +2788,8 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
         return changeCodeReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "call")) {
+        return callReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "restore")) {
         return restoreReply(s, msg, ref, frame);
     } else if (std.mem.eql(u8, m, "settle")) {
@@ -3285,4 +3413,39 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     // A save the Core can't read is refused, with no need.
     const bad = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g4\",\"save\":{{\"$bytes\":\"AAAA\"}}}}", .{18});
     try std.testing.expectEqualStrings("invalid save", bad.object.get("err").?.object.get("code").?.string);
+}
+
+test "Function Values cross as $function tokens, are called with call, and stay in their Group" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on make n\\n  return given x: x + n\\nend make\\n\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\",\"args\":[5]}}}}", .{3}));
+    const made = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}));
+    const tag = made.object.get("result").?.object.get("$function") orelse return unexpected(made);
+    const parts = tag.array.items;
+    try std.testing.expectEqualStrings("s", parts[0].string);
+    try std.testing.expect(parts[2].string.len > 0);
+    var fn_json: std.Io.Writer.Allocating = .init(gpa);
+    defer fn_json.deinit();
+    try fn_json.writer.print("{f}", .{std.json.fmt(made.object.get("result").?, .{})});
+    // Called, it runs in its Home Script with its capture.
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[3]}}", .{ 5, fn_json.written() }));
+    const called = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{6}));
+    try std.testing.expectEqualStrings("completed", called.object.get("outcome").?.string);
+    try std.testing.expectEqual(@as(i64, 8), called.object.get("result").?.integer);
+    // Inside a message's arguments it crosses back as the same value.
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"t\",\"source\":\"on use f\\n  f(10) and wait\\n  return it\\nend use\\n\"}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"t\"}},\"message\":{{\"name\":\"use\",\"args\":[{s}]}}}}", .{ 8, fn_json.written() }));
+    const used = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{9}));
+    try std.testing.expectEqual(@as(i64, 15), used.object.get("result").?.integer);
+    // Another Group refuses it, and a token this layer didn't write is invalid.
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"h\",\"name\":\"h\"}}", .{10}));
+    const other = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"h\",\"fn\":{s}}}", .{ 11, fn_json.written() });
+    try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
+    const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
+    try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
 }

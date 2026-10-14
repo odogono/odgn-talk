@@ -200,6 +200,9 @@ pub const Resolver = struct {
     context: ?*anyopaque = null,
     object: ?*const fn (?*anyopaque, []const u8, []const u8) model.Error!*Value = null,
     function: ?*const fn (?*anyopaque, []const u8) model.Error!*Value = null,
+    /// The message layer's `{"$function": [home, display, token]}`; the
+    /// tag is refused without it.
+    function_token: ?*const fn (?*anyopaque, []const u8, []const u8, []const u8) model.Error!*Value = null,
 };
 /// Reads one display-form value from `input` at `pos`, leaving `pos` after it.
 pub const Reader = struct {

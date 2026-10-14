@@ -1921,6 +1921,7 @@ pub const direct = struct {
     pub const restore = talk_restore;
     pub const restoreResultRelease = talk_restore_result_release;
     pub const settle = talk_settle;
+    pub const call = talk_group_call;
     pub const scriptCounters = talk_script_counters;
     pub const scriptStop = talk_script_stop;
     pub const scriptCancelRun = talk_script_cancel_run;
