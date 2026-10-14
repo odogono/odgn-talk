@@ -8159,13 +8159,9 @@ pub const Group = struct {
                 defer v.release();
                 const l = pop(frame);
                 defer l.release();
-                var out: std.ArrayList(*Value) = .empty;
-                try out.appendSlice(a, l.data.list);
-                if (ins.op == .list_extend) {
-                    if (v.data != .list) return g.wrongKind("list", v);
-                    try out.appendSlice(a, v.data.list);
-                } else try out.append(a, v);
-                const r = model.list(gpa, out.items) catch return error.OutOfMemory;
+                if (ins.op == .list_extend and v.data != .list) return g.wrongKind("list", v);
+                const items = if (ins.op == .list_extend) v.data.list else &.{v};
+                const r = model.listGrow(gpa, l, items, true) catch return error.OutOfMemory;
                 m.result = r.retain();
                 try g.push(frame, r);
             },
