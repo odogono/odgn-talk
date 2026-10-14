@@ -246,10 +246,12 @@ fn calculateInternal(a: Allocator, op: Operator, x: Decimal, y: Decimal, bounded
     return calculateGeneral(a, op, x, y, bounded);
 }
 
-/// Exact results already at the ideal exponent need neither rounding nor
-/// exponent selection. Checked u128 intermediates include aligned operands
-/// larger than 34 digits, so cancellation can still take this path. Anything
-/// needing rounding, exponent adjustment or wider storage uses the general
+/// Exact results need no rounding. Addition, subtraction and multiplication
+/// take this path at their ideal exponent; terminating division and the
+/// integer `div`/`mod` pair take it at the exponent nearest their ideal
+/// (see `finishExact`). Checked fixed-width intermediates include aligned
+/// operands larger than 34 digits, so cancellation can still take this
+/// path. Anything needing rounding or wider storage uses the general
 /// rational implementation below (also the independent oracle in tests).
 fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal {
     var coefficient: u128 = undefined;
@@ -280,7 +282,8 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
             if (product[1] != 0) return null;
             coefficient = product[0];
         },
-        else => return null,
+        .divide => return divideExact(x, y, bounded),
+        .div, .mod => return divModExact(op, x, y, bounded),
     }
     if (coefficient == 0) return zero(exponent);
     if (coefficient >= coefficient_limit or exponent < -6176 or (bounded and exponent > 0)) return null;
@@ -300,6 +303,107 @@ fn scaleExact(coefficient: u128, places: i32) ?u128 {
     if (places > 38) return null;
     const product = @mulWithOverflow(coefficient, powers[@intCast(places)]);
     return if (product[1] == 0) product[0] else null;
+}
+
+fn digitCount128(n: u128) i64 {
+    var digits: i64 = 1;
+    var v = n;
+    while (v >= 10) : (v /= 10) digits += 1;
+    return digits;
+}
+
+/// The exponent selection of `finish` for a value already exact at its
+/// reduced coefficient `c * 10^e0` (`c` nonzero, below the limit once its
+/// trailing zeros are stripped): of the ways to write it with at most 34
+/// digits, an exponent at least -6176, and at most 0 when bounded, take the
+/// exponent nearest `ideal`. Null when there is no such way, or when the
+/// reduced exponent is below -6176, where `finish` would have to round at
+/// the subnormal boundary instead.
+fn finishExact(c_in: u128, e_in: i64, ideal: i64, negative: bool, bounded: bool) ?Decimal {
+    if (c_in == 0) return null;
+    var c = c_in;
+    var e0 = e_in;
+    while (c % 10 == 0) : (e0 += 1) c /= 10;
+    if (c >= coefficient_limit or e0 < -6176) return null;
+    const hi = if (bounded) @min(e0, 0) else e0;
+    const lo = @max(@as(i64, -6176), e0 - (34 - digitCount128(c)));
+    if (lo > hi) return null;
+    const e = std.math.clamp(ideal, lo, hi);
+    if (e > std.math.maxInt(i32)) return null;
+    const coefficient = scaleExact(c, @intCast(e0 - e)) orelse return null;
+    if (coefficient >= coefficient_limit) return null;
+    return .{ .coefficient = coefficient, .exponent = @intCast(e), .negative = negative };
+}
+
+/// `x / y` when the quotient terminates within the fixed-width bounds: in
+/// lowest terms the denominator is then 2^a * 5^b, and the quotient is the
+/// numerator scaled by the complementary factors over 10^max(a, b).
+/// Division by zero returns null, so the general path reports it.
+fn divideExact(x: Decimal, y: Decimal, bounded: bool) ?Decimal {
+    if (y.coefficient == 0) return null;
+    const ideal: i64 = @as(i64, x.exponent) - y.exponent;
+    if (x.coefficient == 0) return zero(ideal);
+    const common = std.math.gcd(x.coefficient, y.coefficient);
+    const numerator = x.coefficient / common;
+    var denominator = y.coefficient / common;
+    var twos: u32 = 0;
+    while (denominator % 2 == 0) : (twos += 1) denominator /= 2;
+    var fives: u32 = 0;
+    while (denominator % 5 == 0) : (fives += 1) denominator /= 5;
+    if (denominator != 1) return null;
+    const places = @max(twos, fives);
+    var c: u256 = numerator;
+    for (0..places - twos) |_| {
+        const product = @mulWithOverflow(c, @as(u256, 2));
+        if (product[1] != 0) return null;
+        c = product[0];
+    }
+    for (0..places - fives) |_| {
+        const product = @mulWithOverflow(c, @as(u256, 5));
+        if (product[1] != 0) return null;
+        c = product[0];
+    }
+    var e0 = ideal - places;
+    while (c % 10 == 0) : (e0 += 1) c /= 10;
+    if (c >= coefficient_limit) return null;
+    return finishExact(@intCast(c), e0, ideal, x.negative != y.negative, bounded);
+}
+
+fn scaleExact256(coefficient: u128, places: i64) ?u256 {
+    if (coefficient == 0) return 0;
+    // 10^77 is past u256, so no nonzero scaling further can fit either.
+    if (places < 0 or places > 76) return null;
+    var v: u256 = coefficient;
+    for (0..@intCast(places)) |_| {
+        const product = @mulWithOverflow(v, @as(u256, 10));
+        if (product[1] != 0) return null;
+        v = product[0];
+    }
+    return v;
+}
+
+/// `x div y` and `x mod y` over operands aligned at the smaller exponent,
+/// as in the general path, when both align within `scaleExact256` and the
+/// quotient or remainder is representable without rounding. `div` reports
+/// its quotient at exponent 0; `mod` keeps `x`'s sign.
+fn divModExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal {
+    if (y.coefficient == 0) return null;
+    const exp: i64 = @min(x.exponent, y.exponent);
+    if (x.coefficient == 0) return zero(if (op == .div) 0 else exp);
+    const n = scaleExact256(x.coefficient, @as(i64, x.exponent) - exp) orelse return null;
+    const m = scaleExact256(y.coefficient, @as(i64, y.exponent) - exp) orelse return null;
+    if (op == .div) {
+        const q = n / m;
+        if (q == 0) return zero(0);
+        if (q >= coefficient_limit) return null;
+        return .{ .coefficient = @intCast(q), .negative = x.negative != y.negative };
+    }
+    var c = n % m;
+    if (c == 0) return zero(exp);
+    var e0 = exp;
+    while (c % 10 == 0) : (e0 += 1) c /= 10;
+    if (c >= coefficient_limit) return null;
+    return finishExact(@intCast(c), e0, exp, x.negative, bounded);
 }
 
 fn calculateGeneral(a: Allocator, op: Operator, x: Decimal, y: Decimal, bounded: bool) Error!Decimal {
@@ -794,7 +898,7 @@ test "fixed-width operators agree with general arithmetic at precision and expon
                 x.negative = x_negative and x.coefficient != 0;
                 y.negative = y_negative and y.coefficient != 0;
                 for ([_]bool{ false, true }) |bounded| {
-                    for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+                    for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| try expectGeneralAgreement(op, x, y, bounded);
                 }
             }
         }
@@ -818,9 +922,53 @@ test "generated fixed-width operators retain signs and ideal exponents" {
         const x = randomDecimal(random, wide);
         const y = randomDecimal(random, wide);
         for ([_]bool{ false, true }) |bounded| {
-            for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+            for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| try expectGeneralAgreement(op, x, y, bounded);
         }
     }
+}
+
+test "terminating division and integer division take the exact path" {
+    const exact = .{
+        .{ Operator.divide, "1", "8", "0.125" },
+        .{ Operator.divide, "10", "4", "2.5" },
+        .{ Operator.divide, "7.50", "3", "2.50" },
+        .{ Operator.divide, "1", "0.01", "100" },
+        .{ Operator.divide, "-1", "8", "-0.125" },
+        .{ Operator.divide, "1", "-40", "-0.025" },
+        .{ Operator.divide, "0.00", "8", "0.00" },
+        .{ Operator.div, "-7.5", "2", "-3" },
+        .{ Operator.div, "7.5", "-2", "-3" },
+        .{ Operator.div, "1", "16", "0" },
+        .{ Operator.mod, "-7.5", "2", "-1.5" },
+        .{ Operator.mod, "7.50", "3", "1.50" },
+        .{ Operator.mod, "29", "16", "13" },
+        .{ Operator.mod, "0.00", "3", "0.00" },
+    };
+    inline for (exact) |ex| {
+        const x = try Decimal.parse(ex[1]);
+        const y = try Decimal.parse(ex[2]);
+        const result = calculateExact(ex[0], x, y, true) orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqualStrings(ex[3], tryString(result));
+        try expectGeneralAgreement(ex[0], x, y, true);
+        try expectGeneralAgreement(ex[0], x, y, false);
+    }
+    // Rounding, endless expansions, overflow and wider quotients fall back.
+    const fallback = .{
+        .{ Operator.divide, "1", "3" },
+        .{ Operator.divide, "1", "0" },
+        .{ Operator.div, "1", "0" },
+        .{ Operator.mod, "1", "0" },
+        .{ Operator.divide, "9999999999999999999999999999999999", "0.5" },
+    };
+    inline for (fallback) |ex| {
+        try std.testing.expect(calculateExact(ex[0], try Decimal.parse(ex[1]), try Decimal.parse(ex[2]), true) == null);
+    }
+    // A subnormal tie and a quotient below the smallest exponent fall back,
+    // so the general path owns their single half-even rounding.
+    try std.testing.expect(calculateExact(.divide, .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 2 }, true) == null);
+    try std.testing.expect(calculateExact(.divide, .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 8 }, true) == null);
+    try expectGeneralAgreement(.divide, .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 2 }, true);
+    try expectGeneralAgreement(.div, .{ .coefficient = coefficient_limit - 1 }, .{ .coefficient = 1, .exponent = -34 }, true);
 }
 
 fn fallbackAllocationTest(a: Allocator, op: Operator, x: Decimal, y: Decimal) !void {
@@ -843,8 +991,10 @@ test "exact arithmetic avoids scratch allocations and fallback cleans up on refu
         .{ .{ .coefficient = 1 }, .{ .coefficient = 1, .exponent = -40 } },
         .{ .{ .coefficient = coefficient_limit - 1, .exponent = -34 }, .{ .coefficient = coefficient_limit - 1, .exponent = -34 } },
         .{ .{ .coefficient = 3, .exponent = -6176 }, .{ .coefficient = 5, .exponent = -1 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 3 } },
+        .{ .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 2 } },
     };
-    for (pairs, [_]Operator{ .add, .multiply, .multiply }) |pair, op| {
+    for (pairs, [_]Operator{ .add, .multiply, .multiply, .divide, .divide }) |pair, op| {
         try std.testing.expect(calculateExact(op, pair[0], pair[1], true) == null);
         var refusing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
         try std.testing.expectError(error.OutOfMemory, calculate(refusing.allocator(), op, pair[0], pair[1]));

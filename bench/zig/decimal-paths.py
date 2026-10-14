@@ -62,7 +62,7 @@ result = {
     "samplesPerProcess": args.count,
     "pairs": args.pairs,
     "binarySha256": {name: sha(host) for name, host in (("before", args.before), ("after", args.after))},
-    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/decimal/decimal.zig", "impl/zig/src/value.zig", "bench/zig/host.c")},
+    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/decimal/decimal.zig", "impl/zig/src/units.zig", "impl/zig/src/value.zig", "bench/zig/host.c")},
     "manifestSha256": sha(root / "bench/scripts/benchmarks.json"),
     "measurements": [],
 }

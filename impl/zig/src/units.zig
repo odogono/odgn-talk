@@ -7,6 +7,36 @@ const Decimal = dec.Decimal;
 pub const Error = dec.Error || error{IncompatibleUnits};
 /// One Unit Kind's factor: the catalogue Unit spelt in it and its power.
 pub const Slot = struct { unit: usize = 0, exponent: i32 = 0 };
+/// The catalogue's factor strings, parsed once at compile time. Conversions
+/// apply these Decimals step by step instead of re-reading their text.
+const unit_factors = blk: {
+    @setEvalBranchQuota(100_000);
+    var result: [table.unit.len]Decimal = undefined;
+    for (table.unit, 0..) |u, i| result[i] = Decimal.parse(u.factor orelse "1") catch unreachable;
+    break :blk result;
+};
+const kind_factors = blk: {
+    @setEvalBranchQuota(100_000);
+    var result: [table.kind.len]?Decimal = @splat(null);
+    for (table.kind, 0..) |k, i| {
+        if (k.factor) |f| result[i] = Decimal.parse(f) catch unreachable;
+    }
+    break :blk result;
+};
+/// The `degF` ratio's factors, as the catalogue's only `ratio`.
+const ratio_numerator = Decimal{ .coefficient = 5 };
+const ratio_denominator = Decimal{ .coefficient = 9 };
+/// One conversion step, rounded as every step is. A factor of exactly 1 at
+/// exponent 0 leaves a nonzero value unchanged, coefficient, exponent and
+/// sign alike, for both operators, so that step needs no calculation at
+/// all; a zero value still goes through `calculate` for its exponent
+/// clamping. Power-of-ten factors need no step of their own here: the
+/// Decimal operators already take their exact paths for them.
+fn applyFactor(a: std.mem.Allocator, comptime comparison: bool, op: dec.Operator, value: Decimal, f: Decimal) Error!Decimal {
+    if (value.coefficient != 0 and f.coefficient == 1 and f.exponent == 0 and !f.negative) return value;
+    const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
+    return calculate(a, op, value, f);
+}
 /// Each Unit Kind's base dimension, as the slot of the Kind whose dimension it
 /// is and a power, read from the catalogue's `dimension` (volume's
 /// "length^3" counts three times in length's slot). Calendar duration has no
@@ -150,12 +180,12 @@ pub const Unit = struct {
                 const applies = (slot.exponent > 0) == numerator_phase;
                 for (0..@abs(slot.exponent)) |_| {
                     if (u.ratio != null) {
-                        value = try dec.calculate(a, op, value, try Decimal.parse(if (applies) "5" else "9"));
+                        value = try applyFactor(a, false, op, value, if (applies) ratio_numerator else ratio_denominator);
                     } else if (applies) {
-                        value = try dec.calculate(a, op, value, try Decimal.parse(u.factor orelse "1"));
+                        value = try applyFactor(a, false, op, value, unit_factors[slot.unit]);
                     }
-                    if (table.kind[kind].factor) |extra| if (applies) {
-                        value = try dec.calculate(a, op, value, try Decimal.parse(extra));
+                    if (kind_factors[kind]) |extra| if (applies) {
+                        value = try applyFactor(a, false, op, value, extra);
                     };
                 }
             };
@@ -228,7 +258,6 @@ pub const Unit = struct {
         return self.convert(a, n, false, true);
     }
     fn convert(self: Unit, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
-        const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
         var value = n;
         // Numerator factors precede denominator factors, both in kind order;
         // converting from Base Units reverses the phases.
@@ -242,12 +271,12 @@ pub const Unit = struct {
                 const applies = (s.exponent > 0) == numerator_phase;
                 for (0..count) |_| {
                     if (u.ratio != null) {
-                        value = try calculate(a, op, value, try Decimal.parse(if (applies) "5" else "9"));
+                        value = try applyFactor(a, comparison, op, value, if (applies) ratio_numerator else ratio_denominator);
                     } else if (applies) {
-                        value = try calculate(a, op, value, try Decimal.parse(u.factor orelse "1"));
+                        value = try applyFactor(a, comparison, op, value, unit_factors[s.unit]);
                     }
-                    if (table.kind[k].factor) |extra| if (applies) {
-                        value = try calculate(a, op, value, try Decimal.parse(extra));
+                    if (kind_factors[k]) |extra| if (applies) {
+                        value = try applyFactor(a, comparison, op, value, extra);
                     };
                 }
             }
@@ -263,6 +292,56 @@ fn factor(w: *std.Io.Writer, s: Slot, plural: bool) !void {
     const u = table.unit[s.unit];
     try w.writeAll(if (plural) u.plural orelse u.name else u.name);
     if (@abs(s.exponent) != 1) try w.print("^{d}", .{@abs(s.exponent)});
+}
+
+test "pre-parsed factors match the catalogue text" {
+    for (table.unit, unit_factors) |u, parsed| {
+        try std.testing.expectEqual(try Decimal.parse(u.factor orelse "1"), parsed);
+    }
+    for (table.kind, kind_factors) |k, parsed| {
+        if (k.factor) |text| try std.testing.expectEqual(try Decimal.parse(text), parsed.?) else try std.testing.expect(parsed == null);
+    }
+}
+
+test "factor-one conversions are allocation-free and preserve the value" {
+    const a = std.testing.allocator;
+    const value = try Decimal.parse("2.50");
+    for ([_][]const u8{ "kg", "m", "s", "month", "USD", "kg*m/s" }) |name| {
+        const unit = try Unit.parse(name);
+        var refusing = std.testing.FailingAllocator.init(a, .{ .fail_index = 0 });
+        try std.testing.expectEqual(value, try unit.toBase(refusing.allocator(), value));
+        try std.testing.expectEqual(value, try unit.fromBase(refusing.allocator(), value));
+        try std.testing.expectEqual(value, try unit.comparisonBase(refusing.allocator(), value));
+        try std.testing.expect(!refusing.has_induced_failure);
+    }
+    // A zero value keeps calculate's exponent clamping, not the shortcut.
+    const kg = try Unit.parse("kg");
+    try std.testing.expectEqual(Decimal{}, try kg.comparisonBase(a, .{ .exponent = 5 }));
+    try std.testing.expectEqual(try Decimal.parse("0.00"), try kg.fromBase(a, try Decimal.parse("0.00")));
+}
+
+fn convertAllocationTest(a: std.mem.Allocator, unit: Unit, n: Decimal) !void {
+    _ = try unit.toBase(a, n);
+}
+
+test "compound conversions keep factor order and clean up on refusal" {
+    const a = std.testing.allocator;
+    // Numerator factors precede denominator factors, each rounded in turn:
+    // 9 degF is (9 * 5) / 9 in Base Units, and a litre also takes its
+    // Kind's 0.001 factor after its own factor of 1.
+    try std.testing.expectEqual(try Decimal.parse("5"), try (try Unit.parse("degF")).toBase(a, try Decimal.parse("9")));
+    try std.testing.expectEqual(try Decimal.parse("0.001"), try (try Unit.parse("L")).toBase(a, try Decimal.parse("1")));
+    try std.testing.expectEqual(std.math.Order.eq, Decimal.order(try (try Unit.parse("mL")).toBase(a, try Decimal.parse("1000")), try Decimal.parse("0.001")));
+    const speed = try Unit.parse("mi/hr");
+    const base = try speed.toBase(a, try Decimal.parse("60"));
+    try std.testing.expectEqual(std.math.Order.eq, Decimal.order(try speed.fromBase(a, base), try Decimal.parse("60")));
+    // 1 degF needs the general division path (5 / 9 does not terminate):
+    // refusal propagates and every partial allocation is freed.
+    const deg_f = try Unit.parse("degF");
+    const one = try Decimal.parse("1");
+    var refusing = std.testing.FailingAllocator.init(a, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, deg_f.toBase(refusing.allocator(), one));
+    try std.testing.checkAllAllocationFailures(a, convertAllocationTest, .{ deg_f, one });
 }
 
 test "source units normalize repeated slots and reject calendar compounds" {
