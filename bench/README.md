@@ -57,6 +57,11 @@ record three paired runs across all 30 supported workloads, separate allocation
 probes and native/WASI equivalence checks for
 [#877](https://github.com/odogono/odgn-talk/issues/877).
 
+The [Zig division and Unit measurements](results/2026-10-14-zig-division-paths.md)
+record paired exact division, `div`/`mod` and Quantity timings, allocation
+probes, native/WASI equivalence and the residual AppleScript gaps for
+[#923](https://github.com/odogono/odgn-talk/issues/923).
+
 The [Zig Value allocation measurements](results/2026-10-14-zig-value-allocations.md)
 record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node
