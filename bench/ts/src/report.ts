@@ -50,7 +50,7 @@ export type Results = {
 };
 
 /** The runners that are Cores, whose Fuel must agree. */
-export const cores = ['go', 'ts'];
+export const cores = ['go', 'ts', 'zig'];
 
 export const median = (xs: readonly number[]): number => {
   const sorted = [...xs].sort((a, b) => a - b);

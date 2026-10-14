@@ -190,7 +190,8 @@
       },
       "host": "immediate",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install immediate bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -203,7 +204,8 @@
       },
       "host": "suspending",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install suspending bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -216,7 +218,8 @@
       },
       "host": "properties",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install properties bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -229,7 +232,8 @@
       },
       "host": "conversion",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install conversion bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -281,7 +285,8 @@
       },
       "host": "partner",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -294,7 +299,8 @@
       },
       "host": "parents",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install parents bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -307,7 +313,8 @@
       },
       "host": "partner",
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install partner bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -357,7 +364,8 @@
       "host": "restore",
       "outlier": false,
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install restore bindings; this is a runner limitation, not a Core limitation."
       }
     },
     {
@@ -369,7 +377,8 @@
         "expect": "2"
       },
       "skip": {
-        "peers": "NorthTalk embedding API; no peer counterpart."
+        "peers": "NorthTalk embedding API; no peer counterpart.",
+        "zig": "The native benchmark Host does not yet install suspending bindings; this is a runner limitation, not a Core limitation."
       },
       "host": "suspending"
     }

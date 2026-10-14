@@ -28,10 +28,15 @@ const { values: flags } = parseArgs({
   },
 });
 // The Cores, and `peers` for every Peer Language runner.
-const runners = flags.only ? [flags.only] : ['go', 'ts', 'peers'];
+const runners = flags.only ? [flags.only] : ['go', 'ts', 'zig', 'peers'];
 for (const runner of runners) {
-  if (runner !== 'go' && runner !== 'ts' && runner !== 'peers') {
-    throw new Error(`--only takes go, ts or peers, not ${runner}`);
+  if (
+    runner !== 'go' &&
+    runner !== 'ts' &&
+    runner !== 'zig' &&
+    runner !== 'peers'
+  ) {
+    throw new Error(`--only takes go, ts, zig or peers, not ${runner}`);
   }
 }
 const peers = runners.includes('peers');
@@ -56,6 +61,23 @@ const run = (cmd: string[], cwd: string, env: Record<string, string> = {}) => {
 };
 
 const measurements: Measurement[] = [];
+if (runners.includes('zig')) {
+  console.error('Measuring the Zig Core…');
+  measurements.push(
+    ...(JSON.parse(
+      run(
+        [
+          'bun',
+          join(import.meta.dir, 'measure-zig.ts'),
+          filter,
+          flags.smoke ? 'smoke' : '',
+          flags.count,
+        ],
+        benchDir,
+      ),
+    ) as Measurement[]),
+  );
+}
 if (runners.includes('ts')) {
   console.error('Measuring the TS Core…');
   measurements.push(
@@ -251,6 +273,12 @@ const results: Results = {
     .flatMap(b => skipped(b, runners)),
   versions: {
     bun: Bun.version,
+    ...(runners.includes('zig')
+      ? {
+          zig: run(['zig', 'version'], benchDir),
+          'zig build': 'native safe; C Host -O2',
+        }
+      : {}),
     'cost model': versions.costModel,
     go:
       runners.includes('go') || peers

@@ -70,6 +70,7 @@ export default [
       'bench/ts/src/main.ts',
       'bench/ts/src/measure-peers.ts',
       'bench/ts/src/measure-ts.ts',
+      'bench/ts/src/measure-zig.ts',
     ],
     rules: {
       // These command-line Hosts print their reports and diagnostics.
