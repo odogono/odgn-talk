@@ -1002,9 +1002,9 @@ test "exact number arithmetic still allocates an immutable result and refuses at
     const gpa = std.testing.allocator;
     const x = try scalar(gpa, .{ .number = try Decimal.parse("2.50") });
     defer x.release();
-    const y = try scalar(gpa, .{ .number = try Decimal.parse("3") });
+    const y = try scalar(gpa, .{ .number = try Decimal.parse("2") });
     defer y.release();
-    for ([_]decimal.Operator{ .add, .subtract, .multiply }) |op| {
+    for ([_]decimal.Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| {
         var counting = std.testing.FailingAllocator.init(gpa, .{});
         const result = try arithmetic(counting.allocator(), op, x, y);
         try std.testing.expectEqual(@as(usize, 1), counting.allocations);
@@ -1014,7 +1014,7 @@ test "exact number arithmetic still allocates an immutable result and refuses at
         var refusing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 0 });
         try std.testing.expectError(error.OutOfMemory, arithmetic(refusing.allocator(), op, x, y));
         try std.testing.expectEqual(try Decimal.parse("2.50"), x.data.number);
-        try std.testing.expectEqual(try Decimal.parse("3"), y.data.number);
+        try std.testing.expectEqual(try Decimal.parse("2"), y.data.number);
     }
 }
 

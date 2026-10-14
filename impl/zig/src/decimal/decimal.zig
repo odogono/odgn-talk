@@ -246,10 +246,10 @@ fn calculateInternal(a: Allocator, op: Operator, x: Decimal, y: Decimal, bounded
     return calculateGeneral(a, op, x, y, bounded);
 }
 
-/// Exact results already at the ideal exponent need neither rounding nor
-/// exponent selection. Checked u128 intermediates include aligned operands
-/// larger than 34 digits, so cancellation can still take this path. Anything
-/// needing rounding, exponent adjustment or wider storage uses the general
+/// Checked u128 intermediates cover exact arithmetic and aligned operands
+/// larger than 34 digits, so cancellation can still take this path. Division
+/// expands only terminating fractions and preserves the nearest ideal quantum.
+/// Anything needing rounding or wider storage uses the general
 /// rational implementation below (also the independent oracle in tests).
 fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal {
     var coefficient: u128 = undefined;
@@ -280,7 +280,55 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
             if (product[1] != 0) return null;
             coefficient = product[0];
         },
-        else => return null,
+        .divide => {
+            if (y.coefficient == 0) return null;
+            const ideal = x.exponent - y.exponent;
+            exponent = ideal;
+            coefficient = x.coefficient / y.coefficient;
+            var remainder = x.coefficient % y.coefficient;
+            if (remainder != 0) {
+                // The quotient terminates only when the divisor in lowest
+                // terms has no prime factors but 2 and 5. Reject the rest
+                // before the digit loop, so repeating fractions reach the
+                // general path at once.
+                var d = y.coefficient / std.math.gcd(remainder, y.coefficient);
+                while (d % 2 == 0) d /= 2;
+                while (d % 5 == 0) d /= 5;
+                if (d != 1) return null;
+            }
+            // At most 34 leading fractional zeros and 34 significant digits.
+            // Each remainder is below a catalogue/Decimal coefficient (10^34),
+            // so multiplying it by ten fits u128. Nonterminating or over-wide
+            // results fall back without allocating or rounding a partial result.
+            for (0..68) |_| {
+                if (remainder == 0) break;
+                if (coefficient >= coefficient_limit / 10) return null;
+                remainder *= 10;
+                coefficient = coefficient * 10 + remainder / y.coefficient;
+                remainder %= y.coefficient;
+                exponent -= 1;
+            }
+            if (remainder != 0) return null;
+            // Terminating fractions can carry removable fractional zeros.
+            while (coefficient != 0 and exponent < ideal and coefficient % 10 == 0) : (exponent += 1) coefficient /= 10;
+            if (bounded and exponent > 0) {
+                coefficient = scaleExact(coefficient, exponent) orelse return null;
+                exponent = 0;
+            }
+        },
+        .div, .mod => {
+            if (y.coefficient == 0) return null;
+            exponent = @min(x.exponent, y.exponent);
+            const n = scaleExact(x.coefficient, x.exponent - exponent) orelse return null;
+            const m = scaleExact(y.coefficient, y.exponent - exponent) orelse return null;
+            if (op == .div) {
+                coefficient = n / m;
+                exponent = 0;
+            } else {
+                coefficient = n % m;
+                negative = x.negative;
+            }
+        },
     }
     if (coefficient == 0) return zero(exponent);
     if (coefficient >= coefficient_limit or exponent < -6176 or (bounded and exponent > 0)) return null;
@@ -794,7 +842,7 @@ test "fixed-width operators agree with general arithmetic at precision and expon
                 x.negative = x_negative and x.coefficient != 0;
                 y.negative = y_negative and y.coefficient != 0;
                 for ([_]bool{ false, true }) |bounded| {
-                    for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+                    for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| try expectGeneralAgreement(op, x, y, bounded);
                 }
             }
         }
@@ -818,7 +866,7 @@ test "generated fixed-width operators retain signs and ideal exponents" {
         const x = randomDecimal(random, wide);
         const y = randomDecimal(random, wide);
         for ([_]bool{ false, true }) |bounded| {
-            for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
+            for ([_]Operator{ .add, .subtract, .multiply, .divide, .div, .mod }) |op| try expectGeneralAgreement(op, x, y, bounded);
         }
     }
 }
@@ -949,4 +997,67 @@ test "noninteger powers are correctly rounded, with trailing zeros dropped" {
     try std.testing.expectError(error.DivisionByZero, power(a, .{}, try Decimal.parse("-0.5")));
     try std.testing.expectError(error.Overflow, power(a, try Decimal.parse("10"), try Decimal.parse("34.001")));
     try std.testing.expectError(error.Overflow, power(a, try Decimal.parse("2"), try Decimal.parse("999999999999999999999999999999999.5")));
+}
+
+test "division exact paths retain quantum and fallbacks free every refused allocation" {
+    // Terminating division and integer div/mod take the exact path, at the
+    // quantum the general path selects. Zero results are unsigned.
+    const exact = .{
+        .{ Operator.divide, "7.50", "3", "2.50" },
+        .{ Operator.divide, "1", "8", "0.125" },
+        .{ Operator.divide, "10", "4", "2.5" },
+        .{ Operator.divide, "1", "0.01", "100" },
+        .{ Operator.divide, "1", "-40", "-0.025" },
+        .{ Operator.divide, "0.00", "0.1", "0.0" },
+        .{ Operator.divide, "-0.00", "8", "0.00" },
+        .{ Operator.div, "-7.50", "2.0", "-3" },
+        .{ Operator.div, "7.5", "-2", "-3" },
+        .{ Operator.div, "-1", "2", "0" },
+        .{ Operator.mod, "-7.50", "2.0", "-1.50" },
+        .{ Operator.mod, "29", "16", "13" },
+        .{ Operator.mod, "-4", "2", "0" },
+    };
+    inline for (exact) |example| {
+        const x = try Decimal.parse(example[1]);
+        const y = try Decimal.parse(example[2]);
+        const result = calculateExact(example[0], x, y, true) orelse return error.TestUnexpectedResult;
+        try std.testing.expectEqualStrings(example[3], tryString(result));
+        for ([_]bool{ false, true }) |bounded| try expectGeneralAgreement(example[0], x, y, bounded);
+    }
+    // Repeating fractions are rejected before any digit expansion.
+    inline for (.{ .{ "1", "3" }, .{ "2", "7" }, .{ "1", "0.06" } }) |example| {
+        try std.testing.expect(calculateExact(.divide, try Decimal.parse(example[0]), try Decimal.parse(example[1]), true) == null);
+    }
+    const pairs = [_][2]Decimal{
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 3 } },
+        .{ .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 2 } },
+        .{ .{ .coefficient = 3, .exponent = -6176 }, .{ .coefficient = 2 } },
+        .{ .{ .coefficient = coefficient_limit - 1 }, .{ .coefficient = 2, .exponent = -1 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 1, .exponent = -40 } },
+    };
+    for (pairs) |pair| for ([_]Operator{ .divide, .div, .mod }) |op| {
+        for ([_]bool{ false, true }) |bounded| try expectGeneralAgreement(op, pair[0], pair[1], bounded);
+        if (calculateExact(op, pair[0], pair[1], true) == null) {
+            // Overflow is tested by the oracle above; refusal cleanup needs a
+            // successful general result to visit every allocation boundary.
+            if (calculateGeneral(std.testing.allocator, op, pair[0], pair[1], true)) |_| {
+                try divisionAllocationFailures(op, pair[0], pair[1]);
+            } else |_| {}
+        }
+    };
+    for ([_]Operator{ .divide, .div, .mod }) |op| try expectGeneralAgreement(op, .{}, .{}, true);
+}
+
+fn divisionAllocationFailures(op: Operator, x: Decimal, y: Decimal) !void {
+    var counting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    const expected = try calculate(counting.allocator(), op, x, y);
+    try std.testing.expectEqual(counting.allocated_bytes, counting.freed_bytes);
+    for (0..counting.alloc_index) |index| {
+        var refusing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = index });
+        if (calculate(refusing.allocator(), op, x, y)) |result| {
+            // Managed integers may recover from a refused optional resize.
+            try std.testing.expectEqual(expected, result);
+        } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+        try std.testing.expectEqual(refusing.allocated_bytes, refusing.freed_bytes);
+    }
 }

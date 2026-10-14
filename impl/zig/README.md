@@ -66,10 +66,13 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
 - `src/generated/`: tables written from the Data Files and the pinned Unicode
   data. Never edit them by hand.
 - `src/decimal/`: chapter 3 decimals and exact rational arithmetic. Addition,
-  subtraction and multiplication use checked `u128` intermediates when the
-  exact result already fits at its ideal exponent. Rounding, exponent
-  adjustment and wider intermediates use managed big integers. Quantity
-  arithmetic shares these paths; immutable result Values still allocate.
+  subtraction, multiplication, terminating division and integer `div`/`mod`
+  use checked `u128` intermediates when the exact result fits. Terminating
+  division selects the representable exponent nearest its ideal without
+  rounding. Rounding and wider intermediates use managed big integers.
+  Quantity arithmetic shares these paths and uses compile-time catalogue
+  factors, preserving separate conversion steps and their rounding; immutable
+  result Values still allocate.
 - `src/value.zig`, `src/units.zig`, `src/dates.zig`: immutable values,
   copy-on-write containers, catalogue Units and Gregorian dates.
 - `src/display.zig`, `src/encoding.zig`, `src/pattern.zig`: the display reader
