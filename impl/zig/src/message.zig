@@ -733,6 +733,9 @@ fn releaseOp(a: Allocator, op: caps.Operation) void {
         a.free(e.fields);
     }
     a.free(op.errors);
+    a.free(op.description);
+    for (op.examples) |e| a.free(e);
+    a.free(op.examples);
 }
 
 /// One Operation from its declaration JSON, its Host function the
@@ -813,6 +816,27 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
             }
         }
     }
+    // Documentation for the Host Manifest only (ADR 0076): carried
+    // unparsed, and refused when it isn't text / a list of text.
+    var description: []const u8 = "";
+    errdefer a.free(description);
+    if (j.object.get("description")) |given| {
+        description = try a.dupe(u8, asText(given) orelse return error.InvalidValue);
+    }
+    var examples: [][]const u8 = &.{};
+    var examples_made: usize = 0;
+    errdefer {
+        for (examples[0..examples_made]) |e| a.free(e);
+        a.free(examples);
+    }
+    if (j.object.get("examples")) |given| {
+        if (given != .array) return error.InvalidValue;
+        examples = try a.alloc([]const u8, given.array.items.len);
+        for (given.array.items, examples) |item, *slot| {
+            slot.* = try a.dupe(u8, asText(item) orelse return error.InvalidValue);
+            examples_made += 1;
+        }
+    }
     const oc = try s.gpa.create(OpContext);
     oc.* = .{
         .session = s,
@@ -835,6 +859,8 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
         .max_pending_ms = if (j.object.get("maxPending")) |x| asU64(x) orelse return error.InvalidValue else 0,
         .errors = errors,
         .closed_errors = closed,
+        .description = description,
+        .examples = examples,
         .host = .{ .call = opCall, .context = oc },
     };
 }
@@ -2040,4 +2066,33 @@ test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     try std.testing.expectEqualStrings("limit fault", spun.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("fuel", spun.object.get("limit").?.string);
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{10}));
+}
+
+test "define-capability carries Operation documentation and refuses other kinds" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // Documentation of the wrong kind is refused (chapter 9, ADR 0076).
+    const invalid = [_][]const u8{
+        "\"description\":null", "\"description\":42",      "\"description\":[]",
+        "\"examples\":null",    "\"examples\":\"source\"", "\"examples\":[null]",
+        "\"examples\":[1]",
+    };
+    for (invalid, 0..) |fields, i| {
+        const reply = try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"bad{d}\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"cost\":{{\"fuel\":0}},{s}}}]}}", .{ @as(i64, @intCast(i + 1)), i, fields });
+        try std.testing.expect(reply.object.get("ok") == null);
+    }
+    // Empty is none; the text is carried unparsed for the Host Manifest.
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"empty\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"cost\":{{\"fuel\":0}},\"description\":\"\",\"examples\":[]}}]}}", .{90}));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"cost\":{{\"fuel\":0}},\"description\":\"plain *text*\",\"examples\":[\"not parsed as NorthTalk\",\"\"]}}]}}", .{91}));
+    const op = s.capabilityNamed("api").?.operations[0];
+    try std.testing.expectEqualStrings("plain *text*", op.description);
+    try std.testing.expectEqual(@as(usize, 2), op.examples.len);
+    try std.testing.expectEqualStrings("not parsed as NorthTalk", op.examples[0]);
+    try std.testing.expectEqualStrings("", op.examples[1]);
+    const undocumented = s.capabilityNamed("empty").?.operations[0];
+    try std.testing.expectEqualStrings("", undocumented.description);
+    try std.testing.expectEqual(@as(usize, 0), undocumented.examples.len);
 }
