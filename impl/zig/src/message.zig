@@ -981,7 +981,13 @@ fn needReply(s: *Session, ref: i64) []u8 {
 fn writeReports(o: *Out, entry: *GroupEntry) Allocator.Error!void {
     var held = entry.group.group.reports.take();
     defer held.deinit();
-    try o.raw(",\"reports\":[");
+    try o.raw(",");
+    try writeHeld(o, &held);
+}
+
+/// The `reports` field, from reports already taken from the Group.
+fn writeHeld(o: *Out, held: *const machine.report.Reports) Allocator.Error!void {
+    try o.raw("\"reports\":[");
     for (held.list.items, 0..) |r, i| {
         if (i > 0) try o.raw(",");
         try writeReport(o, r);
@@ -1859,6 +1865,44 @@ fn objectInputReply(s: *Session, msg: Json, ref: i64, is_dispose: bool) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// `reload` (`source`, `carry`, optional `keepMailbox`) and `extend`
+/// (`source`). A refused source is a load error with its diagnostics.
+fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const script = scriptOf(entry, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
+    var carry: talk.CarryOver = .reset_variables;
+    var options: talk.ReloadOptions = .{ .keep_mailbox = false };
+    if (!is_extend) {
+        const given = asText(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
+        carry = if (std.mem.eql(u8, given, "carry variables")) .carry_variables else if (std.mem.eql(u8, given, "reset variables")) .reset_variables else return hostError(s.gpa, ref, .invalid_value);
+        if (field(msg, "keepMailbox")) |k| options.keep_mailbox = asBool(k) orelse return hostError(s.gpa, ref, .invalid_value);
+    }
+    // Trace lines from earlier work are not this change's.
+    entry.group.flush();
+    freeTrace(s.gpa, takeTrace(entry));
+    var reports: ?*talk.Reports = null;
+    defer Direct.reportsRelease(reports);
+    const code = if (is_extend) Direct.scriptExtend(script, source.ptr, source.len) else Direct.scriptReload(script, source.ptr, source.len, carry, &options, &reports);
+    entry.group.flush();
+    if (code == .load_refused) {
+        const lines = takeTrace(entry);
+        defer freeTrace(s.gpa, lines);
+        return loadError(s.gpa, ref, lines);
+    }
+    if (code != .ok) {
+        freeTrace(s.gpa, takeTrace(entry));
+        return hostError(s.gpa, ref, code);
+    }
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    if (!is_extend) {
+        if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
+    }
+    return finishOk(s, &o, entry);
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -2007,6 +2051,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return objectInputReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "dispose")) {
         return objectInputReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "reload")) {
+        return changeCodeReply(s, msg, ref, false);
+    } else if (std.mem.eql(u8, m, "extend")) {
+        return changeCodeReply(s, msg, ref, true);
     } else if (std.mem.eql(u8, m, "counters")) {
         return countersReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "stop")) {
@@ -2415,4 +2463,34 @@ test "a Broadcast, Decisions to a Script, an object and every Script, and a Pump
     try std.testing.expectEqualStrings("2026-10-10T12:00:02Z", pumped.object.get("nextDeadline").?.string);
     const woke = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{12}));
     try std.testing.expect(woke.object.get("nextDeadline").? == .null);
+}
+
+test "reload carries or resets variables, extend adds a handler, and a refused source is a load error" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable n = 5\\non bump\\n  put n + 1 into n\\n  return n\\nend bump\\n\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"bump\"}}}}", .{3}));
+    try std.testing.expectEqual(@as(i64, 6), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}))).object.get("result").?.integer);
+    // Carried, n stays 6 under the new code; reset, it starts again at 5.
+    const reloaded = try okOf(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"carry variables\",\"source\":\"script variable n = 5\\non bump\\n  put n + 10 into n\\n  return n\\nend bump\\n\"}}", .{5}));
+    try std.testing.expect(reloaded.object.get("reports").? == .array);
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"bump\"}}}}", .{6}));
+    try std.testing.expectEqual(@as(i64, 16), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{7}))).object.get("result").?.integer);
+    _ = try okOf(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"keepMailbox\":true,\"source\":\"script variable n = 5\\non bump\\n  put n + 10 into n\\n  return n\\nend bump\\n\"}}", .{8}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"bump\"}}}}", .{9}));
+    try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{10}))).object.get("result").?.integer);
+    // An unknown carry and a source that doesn't compile are refused.
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"keep\",\"source\":\"\"}}", .{11})));
+    const broken = try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"reset variables\",\"source\":\"on bump\\n\"}}", .{12});
+    try std.testing.expectEqualStrings("load error", try errKind(broken));
+    try std.testing.expect(broken.object.get("err").?.object.get("diagnostics").?.array.items.len > 0);
+    // Extend adds a handler beside the code it has.
+    const extended = try okOf(try c.send("{{\"m\":\"extend\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"source\":\"on peek\\n  return n\\nend peek\\n\"}}", .{13}));
+    try std.testing.expect(extended.object.get("reports") == null);
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"peek\"}}}}", .{14}));
+    try std.testing.expectEqual(@as(i64, 15), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:03Z\"}}", .{15}))).object.get("result").?.integer);
 }
