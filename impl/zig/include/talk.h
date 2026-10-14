@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,7 +72,10 @@ typedef enum talk_host_error_code {
      * allocator refused partway: that Group then takes no more work, and
      * answers every call but talk_group_memory, talk_inspect and
      * talk_group_release with this code. */
-    TALK_OUT_OF_MEMORY
+    TALK_OUT_OF_MEMORY,
+    /* C only: talk_add's `+` raised a Script error, which talk.go returns as
+     * a *ScriptError. It is in the call's talk_script_error. */
+    TALK_SCRIPT_FAILED
 } talk_host_error_code;
 
 typedef enum talk_kind {
@@ -121,9 +125,15 @@ talk_host_error_code talk_quantity(const talk_decimal *n, const char *unit, size
 talk_host_error_code talk_civil_date(talk_date_fields f, talk_value **out);
 talk_host_error_code talk_parse_civil_date(const char *s, size_t len, talk_value **out);
 talk_host_error_code talk_instant(int64_t seconds, int32_t nanos, talk_value **out);
+/* An Instant from a struct timespec, such as a CLOCK_REALTIME reading. A C
+ * time has no monotonic reading or zone to drop. tv_nsec outside
+ * 0..999999999 is TALK_INVALID_VALUE. */
+talk_host_error_code talk_instant_from_time(const struct timespec *t, talk_value **out);
 talk_host_error_code talk_bytes(const unsigned char *s, size_t len, talk_value **out);
 talk_host_error_code talk_list(talk_value *const *values, size_t len, talk_value **out);
 talk_host_error_code talk_map(const talk_pair *pairs, size_t len, talk_value **out);
+/* A map entry for talk_map, borrowing the key and the value as talk_map does. */
+talk_pair talk_kv(const char *key, size_t len, talk_value *value);
 talk_host_error_code talk_range(talk_value *from, talk_value *to, talk_value **out);
 
 talk_kind talk_value_kind(const talk_value *v);
@@ -170,6 +180,16 @@ typedef talk_value *(*talk_resolve_object)(void *context, const char *kind, size
  * Nesting beyond 128 levels is refused, and an $object is refused unless
  * resolve returns the object it names. */
 talk_host_error_code talk_decode_value(const unsigned char *s, size_t len, talk_resolve_object resolve, void *context, talk_value **out);
+/* Chapter 7's plain JSON mapping, which the `json` Library follows too.
+ * Numbers are read exactly, never through a float, and text is normalised
+ * to NFC. Invalid JSON, a lone surrogate, two names equal after NFC, a
+ * number past the limits, or nesting beyond 128 levels is
+ * TALK_INVALID_VALUE. */
+talk_host_error_code talk_decode_json(const unsigned char *s, size_t len, talk_value **out);
+/* Compact plain JSON, in an owned buffer. A Quantity, range, date, Instant,
+ * Bytes, Text Pattern, Host Object or Function at any depth is
+ * TALK_INVALID_VALUE. */
+talk_host_error_code talk_encode_json(const talk_value *v, talk_owned_bytes *out);
 /* C only: reads the chapter 11 display form, including NFC normalization.
  * Host objects and functions require a Group reader. Patterns are reparsed. */
 talk_host_error_code talk_parse_display(const char *s, size_t len, talk_value **out);
@@ -271,6 +291,13 @@ typedef struct talk_script_error {
 /* The error's text, in an owned buffer: its code, then its message if it
  * has one. The wording is not covered by parity. */
 talk_host_error_code talk_script_error_error(const talk_script_error *e, talk_owned_bytes *out);
+/* `a + b` outside any Run, uncharged, by `+`'s rules, dates included.
+ * Where `+` would raise, it is TALK_SCRIPT_FAILED with the error in *error:
+ * its catalogue code and message, and its other fields as a map, which the
+ * caller ends with talk_script_error_release. */
+talk_host_error_code talk_add(const talk_value *a, const talk_value *b, talk_value **out, talk_script_error *error);
+/* C only: ends a talk_script_error talk_add gave: its message and data. */
+void talk_script_error_release(talk_script_error *e);
 
 /* C only: how a Host function ended, which talk.go gives as its result and
  * error. */
@@ -695,6 +722,8 @@ typedef struct talk_object_kind_def {
 } talk_object_kind_def;
 /* Defines an Object Kind, once per process. It lives as long as the Core. */
 talk_host_error_code talk_define_object_kind(talk_core *c, const talk_object_kind_def *k, talk_object_kind **out);
+/* The Shape of an object of kind k. */
+talk_host_error_code talk_object_shape(const talk_object_kind *k, talk_shape **out);
 
 /* C only: a Grant bound by the name the Script uses. */
 typedef struct talk_load_grant {
