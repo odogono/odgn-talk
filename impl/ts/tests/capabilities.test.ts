@@ -204,7 +204,7 @@ describe('sending', () => {
       {},
     );
     expect(lines.at(-1)).toBe(
-      'vars s e={code: "object gone", object: "nowhere", at: {unit: "s", handler: "go", line: 4, column: 18}}',
+      'vars s e={code: "object gone", object: "nowhere", at: {unit: "s", handler: "go", line: 4, column: 5}}',
     );
   });
 

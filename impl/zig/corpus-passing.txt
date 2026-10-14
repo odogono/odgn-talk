@@ -361,6 +361,7 @@ suspension/joins
 suspension/late-failure
 suspension/nested-waits
 suspension/script-joins
+suspension/script-sends
 suspension/send-and-wait
 suspension/send-preemption
 suspension/send-reply-preemption

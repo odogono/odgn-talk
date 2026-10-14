@@ -4558,12 +4558,8 @@ export class Run {
           frame.stack.push(object);
           return next();
         }
-        // A receiver that names no Script of the Group (chapter 5, Sending).
-        // A computed name is checked first, so its send raises this.
-        const named = namedSends.has(unit.code[frame.pc + 1]?.opcode ?? -1);
-        if (!named && !this.host?.isScript(name)) {
-          throw new ScriptError('object gone', [['object', text(name)]]);
-        }
+        // A Script is named, and its send checks the Group holds it
+        // (chapter 5, Naming a Script).
         this.pay(rate);
         frame.stack.push({ k: 'receiver', name });
         return next();
@@ -4747,7 +4743,7 @@ export class Run {
         const to = up ? null : frame.stack.at(-1)!;
         let target: ObjectState | string | null = null;
         if (to && !isValue(to) && to.k === 'receiver') {
-          if (named && !this.host?.isScript(to.name)) {
+          if (!this.host?.isScript(to.name)) {
             throw new ScriptError('object gone', [['object', text(to.name)]]);
           }
           target = to.name;

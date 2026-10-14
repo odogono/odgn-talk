@@ -191,7 +191,7 @@ var Machine = MachineTable{
 			Pushes:   1,
 			Suspends: false,
 			Cost:     "slot",
-			Does:     "Pushes the well-known Host Object or Script bound to a name at load",
+			Does:     "Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds",
 		},
 		MachineTableInstructionEntry{
 			Name:     "me",

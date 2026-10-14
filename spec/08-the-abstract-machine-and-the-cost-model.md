@@ -127,7 +127,7 @@ The operand kinds:
 | `store-var` | `variable` | 1 | 0 | Pops a value into a Script Variable |  |
 | `load-definition` | `definition` | 0 | 1 | Pushes a Constant, the code unit's own or an imported one |  |
 | `store-definition` | `definition` | 1 | 0 | Pops a Constant's value, in the code unit's initialiser only |  |
-| `load-object` | `object` | 0 | 1 | Pushes the well-known Host Object or Script bound to a name at load |  |
+| `load-object` | `object` | 0 | 1 | Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds |  |
 | `me` |  | 0 | 1 | Pushes `me` |  |
 | `target` |  | 0 | 1 | Pushes `the target` |  |
 

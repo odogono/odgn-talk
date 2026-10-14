@@ -18,10 +18,10 @@ seg a/r1 start delivery=d1 handler=fire clause=1 fuel=152 alloc=289 state=185 en
 run a/r1 outcome=completed delivery=d1 handler=fire fuel=152 alloc=289
 seg b/r1 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=88 end=return
 run b/r1 outcome=completed handler=note fuel=16 alloc=24
-raise a/r2 code="object gone" at=a:53 pos=17:16
+raise a/r2 code="object gone" at=a:54 pos=17:3
 send a/r2 to=b message=note args=[7]
-seg a/r2 start delivery=d2 handler=missing clause=1 fuel=55 alloc=78 state=183 end=return
-run a/r2 outcome=completed delivery=d2 handler=missing fuel=55 alloc=78
+seg a/r2 start delivery=d2 handler=missing clause=1 fuel=75 alloc=78 state=183 end=return
+run a/r2 outcome=completed delivery=d2 handler=missing fuel=75 alloc=78
 seg b/r2 start from=a/r1 handler=note clause=1 fuel=16 alloc=24 state=112 end=return
 run b/r2 outcome=completed handler=note fuel=16 alloc=24
 raise a/r3 code="wrong kind" at=a:84 pos=25:3
@@ -45,7 +45,7 @@ seg a/r6 start from=a/r4 handler=error clause=1 fuel=38 alloc=48 state=177 end=r
 run a/r6 outcome=completed handler=error fuel=38 alloc=48
 seg b/r6 start from=a/r6 handler=note clause=1 fuel=16 alloc=24 state=160 end=return
 run b/r6 outcome=completed handler=note fuel=16 alloc=24
-pumped state=idle fuel=485
+pumped state=idle fuel=505
 > vars
 vars a seen=["b", "absent", ["object", 42], "self"]
 vars b got=[1, 2, 7, 8, 9, 0]
