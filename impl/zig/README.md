@@ -320,9 +320,13 @@ Trace go.
   `property-begin`/`property-end` pairs, making the Host actions recorded
   between them. Each Function Value leaf a report or a setter exposes binds
   the next `function` handle, and a Restore's resolver answers from the
-  `resolve` envelope. Carrying Values back across a crossing marks, encodes
-  and resolves Function handles with heap work stacks, including inside
-  lists and maps nested 100,000 deep on a 256 KiB native stack. `:inspect`
+  `resolve` envelope. Crossing Values go directly from parsed JSON to the
+  Core's iterative Value decoder, which resolves `$sessionFunction` handles
+  as owned Function references, including inside lists and maps nested
+  100,000 deep on a 256 KiB native stack. Unknown or malformed handles are
+  refused, with partial Values released even after allocation failure;
+  ordinary text stays text. This Transcript-only resolver is internal to
+  Zig and does not change `talk.h` or durable Value Encoding. `:inspect`
   of an object adds its `object` and `property` rows. It then reads each
   property in a second Run, the normative
   reader, extended under the first free `entry<n>`.

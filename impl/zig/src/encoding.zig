@@ -386,6 +386,10 @@ fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.
         const parts = payload.array.items;
         return resolve(r.context, try string(parts[0]), try string(parts[1]), try string(parts[2]));
     }
+    if (std.mem.eql(u8, name, "$sessionFunction")) {
+        const resolve = r.session_function orelse return error.InvalidValue;
+        return resolve(r.context, try string(payload));
+    }
     if (std.mem.eql(u8, name, "$pattern")) {
         return canonical(a, try @import("pattern.zig").parse(a, try string(payload)), name, payload);
     }
@@ -660,6 +664,9 @@ test "pattern and object encoding round trips; functions including nested are re
 }
 
 test "decoding refuses every form the encoder would not write" {
+    // Session references are Transcript-only, never durable Value Encoding
+    // or Message Layer Function tokens.
+    try std.testing.expectError(error.InvalidValue, decode(std.testing.allocator, "{\"$sessionFunction\":\"f1\"}", .{}));
     const noncanonical = [_][]const u8{
         "{\"$dec\":\"0x0A\"}",                         "{\"$dec\":\"01\"}",
         "{\"$dec\":\"3\"}",                            "{\"$dec\":\"-9007199254740991\"}",
