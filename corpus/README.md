@@ -58,14 +58,14 @@ support and limitations belong in the [TS](../impl/ts/README.md),
   [talk.h replay](../impl/zig/src/corpus/talk_replay.zig) for Trace Cases.
   Encoding and Disassembly cases compare their own outputs.
 
-Bless with [`tools/corpus/bless.ts`](../tools/corpus/bless.ts), which needs named cases and writes Disassembly, Trace or Transcript expectations, not encoding cases. The TS runner writes the expectations, then the TS and Go runners must each pass them, including both replay modes for Trace Cases. If either Core diverges, the case directory is restored and the divergence reported, as [chapter 11](../spec/11-the-trace-and-conformance.md#bless) requires. The TS runner's own `--bless` is the TS-only step it uses; the Go runner never writes expectations. Agreement is not first-blessing approval: follow the [seed review notes](#seed-blessing).
+Bless with [`tools/corpus/bless.ts`](../tools/corpus/bless.ts), which needs named cases and writes Disassembly, Trace or Transcript expectations, not encoding cases. The TS runner writes the expectations, then the TS, Go and Zig runners must each pass them, including both replay modes for Trace Cases. If any Core diverges, the case directory is restored and the divergence reported, as [chapter 11](../spec/11-the-trace-and-conformance.md#bless) requires. The TS runner's own `--bless` is the TS-only step it uses; the Go and Zig runners never write expectations. Agreement is not first-blessing approval: follow the [seed review notes](#seed-blessing).
 
 ```sh
 bun run corpus:check          # what CI runs: every case reads as chapter 11 says
 bun run grammar:check         # every .talk file here parses
 bun run machine:check         # and lowers
 bun run corpus:run            # the TS Core runs every case
-bun run corpus:bless text-model/chunk-write-padding # bless when TS and Go agree
+bun run corpus:bless text-model/chunk-write-padding # bless when TS, Go and Zig agree
 bun run corpus:run text-model/chunk-write-padding   # replays a named case, blessed or not
 ```
 
