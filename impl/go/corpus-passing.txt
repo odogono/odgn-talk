@@ -389,6 +389,7 @@ text-model/chunk-write-out-of-range
 text-model/chunk-write-padding
 text-model/combining-mark-search
 text-model/fenced-text
+text-model/folded-comparisons
 text-model/host-text-joins-in-nfc
 text-model/host-text-normalised-to-nfc
 text-model/items-property

@@ -96,6 +96,13 @@ Before pushing, run `bun run corpus:check`,
 
 ## Case navigation
 
+The `text-model/folded-comparisons` Trace Case (#903) covers folded equality,
+all four ordering instructions, nested values and Function captures, simple
+Unicode folding, membership, literal tests and folded Character visit charges,
+including shared values. Its first blessing awaits human review. Current
+support is described in the [Zig value guide](../impl/zig/README.md#values-and-ownership).
+Case-sensitive map-key identity has separate Go reconciliation work in #909.
+
 The seven `stdlib/mappings*` Traces and `builtins/collection-comparison-fuel`
 cover checked Mappings, callback restrictions, restoration, resource faults and
 comparison Fuel (#697, #869, #870). The maintainer approved their first blessings,

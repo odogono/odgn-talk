@@ -64,10 +64,15 @@ const value = (body: string, after = '') =>
 
 describe('the text-model seed cases', () => {
   const root = resolve(import.meta.dir, '../../../corpus/text-model');
-  const cases = readdirSync(root).filter(name =>
-    readFileSync(join(root, name, 'case.toml'), 'utf8').includes(
-      'kind = "trace"',
-    ),
+  // Seed cases make one delivery; the corpus runner covers the rest.
+  const cases = readdirSync(root).filter(
+    name =>
+      readFileSync(join(root, name, 'case.toml'), 'utf8').includes(
+        'kind = "trace"',
+      ) &&
+      readFileSync(join(root, name, 'case.trace'), 'utf8').match(
+        /^> (deliver|request) /gm,
+      )?.length === 1,
   );
   test.each(cases)("%s reproduces the seed Trace's values and raises", name => {
     const dir = join(root, name);

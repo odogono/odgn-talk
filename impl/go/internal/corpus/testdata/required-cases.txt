@@ -164,6 +164,7 @@ trace text-model/chunk-write-out-of-range
 trace text-model/chunk-write-padding
 trace text-model/combining-mark-search
 trace text-model/fenced-text
+trace text-model/folded-comparisons
 trace text-model/host-text-joins-in-nfc
 encoding text-model/host-text-normalised-to-nfc
 trace text-model/items-property

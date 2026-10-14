@@ -1016,6 +1016,13 @@ Values nest without a Core cap, as in the Go and TS Cores: only the Allocation
 Budget, the Persistent State cap and the Group's physical cap bound them, each
 with its specified fault (#871). Every container and Function Value keeps its
 contents' logical size as it is built, so measuring one never walks it.
+Equality and ordering honor `ignoring case` at every text value, including
+texts inside lists, map values and Function captures. Map keys and Text Pattern
+sources remain exact. Comparison Fuel counts Characters of the simple foldings,
+and each comparison folds a shared text node once while charging every logical
+occurrence. Membership and Destructuring literal tests use the same comparison
+mode.
+
 Equality, ordering, display, both JSON encodings, decoding, snapshots, Shape
 scans and teardown keep their pending work on heap stacks, so a value nested
 100,000 deep runs on a 256 KiB native stack. The `json` Library's source
