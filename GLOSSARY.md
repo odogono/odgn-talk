@@ -306,11 +306,15 @@ _Avoid_: layer, level, mode
 
 ## Browser authoring
 
-Terms for the planned [browser creative tool](https://github.com/odogono/odgn-talk/issues/154).
+Terms for [Folio](https://github.com/odogono/odgn-talk/issues/154).
+
+**Folio**:
+The browser application for authoring and playing Projects.
+_Avoid_: creative tool, Studio, editor (for the application)
 
 **Project**:
 An authored collection of Pages, assets and Scripts that forms one interactive creation.
-_Avoid_: Stack, Book, application (for the authored creation)
+_Avoid_: Stack, Book, application, folio (for the authored creation or its file)
 
 **Page**:
 A scrolling visual surface within a Project, containing freely positioned Elements and optionally its own Owning Script.

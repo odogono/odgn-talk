@@ -95,6 +95,7 @@ export const runBrowserTests = async () => {
     channel: undefined,
   });
   let exported: Uint8Array | undefined;
+  let exportedName = '';
   const blobs = new Map<string, Blob>();
   const nativeUrl = URL.createObjectURL;
   URL.createObjectURL = object => {
@@ -106,6 +107,7 @@ export const runBrowserTests = async () => {
   };
   const nativeClick = HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click = function () {
+    exportedName = this.download;
     void blobs
       .get(this.href)!
       .arrayBuffer()
@@ -215,6 +217,7 @@ export const runBrowserTests = async () => {
       document.querySelector<HTMLElement>('[data-export-now]')!.click();
       await until(() => !!exported);
       const read = await readProjectFile(exported!);
+      assert(exportedName.endsWith('.folio'), `exported as ${exportedName}`);
       assert(
         read.project.assets.length === 1 && read.assets.size === 1,
         'unused assets exported',
@@ -259,7 +262,7 @@ export const runBrowserTests = async () => {
       shell.redraw();
       drop(
         node('projects-window'),
-        new File([exported! as Uint8Array<ArrayBuffer>], 'saved.zip'),
+        new File([exported! as Uint8Array<ArrayBuffer>], 'saved.folio'),
       );
       await until(() => project.name === expected.name);
       assert(
@@ -275,6 +278,14 @@ export const runBrowserTests = async () => {
         records.some(r => r.title === expected.name && r.id !== record.id),
         'import reused ID',
       );
+    });
+    await test('a Project file exported as .zip before the app was named still imports', async () => {
+      const before = (await storage.listProjects()).length;
+      drop(
+        node('projects-window'),
+        new File([exported! as Uint8Array<ArrayBuffer>], 'earlier.zip'),
+      );
+      await until(async () => (await storage.listProjects()).length > before);
     });
     await test('damaged and newer imports leave the current Project unchanged', async () => {
       const before = JSON.stringify(project);

@@ -36,5 +36,5 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
 
 if (import.meta.main) {
   await build();
-  console.log(`Built the creative tool in ${dist}`);
+  console.log(`Built Folio in ${dist}`);
 }
