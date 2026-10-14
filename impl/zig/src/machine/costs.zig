@@ -5,6 +5,8 @@ const std = @import("std");
 const model = @import("../value.zig");
 const unicode = @import("../unicode/unicode.zig");
 const rates = @import("../generated/rates.zig");
+const machine = @import("../generated/machine.zig").machine;
+const Opcode = @import("../generated/opcodes.zig").Opcode;
 const matcher = @import("matcher.zig");
 const Value = model.Value;
 
@@ -61,7 +63,30 @@ fn find(key: []const u8) ?*const rates.CostRate {
 pub fn charge(key: []const u8, m: *const Measures) Charge {
     var buf: [64]u8 = undefined;
     const full = if (m.builtin.len > 0) std.fmt.bufPrint(&buf, "builtin.{s}", .{m.builtin}) catch key else key;
-    const rate = find(full) orelse return .{ .fuel = 0, .alloc = 0 };
+    return chargeRate(find(full), m);
+}
+
+// Resolve the generated opcode-to-rate mapping once, without adding metadata
+// to code units, frames or snapshots. Null preserves charge's missing-rate
+// behavior for instructions whose rate is supplied dynamically.
+const instruction_rates = blk: {
+    @setEvalBranchQuota(100_000);
+    var out: [machine.instruction.len]?*const rates.CostRate = undefined;
+    for (machine.instruction, 0..) |ins, i| out[i] = find(ins.cost);
+    break :blk out;
+};
+
+/// The same charge at an instruction boundary, with its static rate already
+/// resolved. Built-ins still use their measured name; restricted refusals use
+/// their own rate. Formula evaluation and extra Host charges stay shared.
+pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
+    if (m.builtin.len > 0) return charge(if (m.restricted_refusal) "restricted-refusal" else m.builtin, m);
+    const rate = if (m.restricted_refusal) comptime find("restricted-refusal") else instruction_rates[@backingInt(op)];
+    return chargeRate(rate, m);
+}
+
+fn chargeRate(found: ?*const rates.CostRate, m: *const Measures) Charge {
+    const rate = found orelse return .{ .fuel = 0, .alloc = 0 };
     return .{ .fuel = evaluate(rate.fuel, m) + m.fuel_extra, .alloc = evaluate(rate.alloc, m) + m.alloc_extra };
 }
 
@@ -149,4 +174,42 @@ pub fn contents(v: *const Value) u64 {
 /// its children.
 pub fn size(v: *const Value) u64 {
     return model.logicalSize(v);
+}
+
+test "resolved instruction rates agree with keyed charging and dynamic overrides" {
+    const gpa = std.testing.allocator;
+    const number = try model.scalar(gpa, .{ .number = try model.Decimal.parse("123456789.25") });
+    defer number.release();
+    const text = try model.text(gpa, "café👋abcdefghijklmnopqrstuvwxyz");
+    defer text.release();
+    const list = try model.list(gpa, &.{ number, text });
+    defer list.release();
+    const args = [_]*Value{ number, text, list };
+    // Exercise every opcode against the original keyed path, with populated
+    // measures, absent subjects, restricted refusals, and Built-in overrides.
+    // Nonzero extras also cover the pre-Host and partial-result charge paths.
+    for ([_]?*Value{ null, number, text, list }) |value| {
+        for ([_]bool{ false, true }) |restricted| {
+            for ([_][]const u8{ "", "abs", "rangeStart", "not-a-builtin", "a-builtin-name-longer-than-the-charge-buffer-which-must-use-the-fallback-key" }) |builtin| {
+                const m: Measures = .{
+                    .input = value,
+                    .result = value,
+                    .args = &args,
+                    .scanned = 17,
+                    .count = 19,
+                    .steps = 23,
+                    .declared = 29,
+                    .fuel_extra = 31,
+                    .alloc_extra = 37,
+                    .restricted_refusal = restricted,
+                    .builtin = builtin,
+                };
+                for (machine.instruction, 0..) |ins, i| {
+                    const op: Opcode = @fromBackingInt(@intCast(i));
+                    const key = if (restricted) "restricted-refusal" else if (builtin.len > 0) builtin else ins.cost;
+                    try std.testing.expectEqualDeep(charge(key, &m), chargeInstruction(op, &m));
+                }
+            }
+        }
+    }
 }
