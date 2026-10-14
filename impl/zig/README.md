@@ -300,8 +300,11 @@ Trace go.
   `property-begin`/`property-end` pairs, making the Host actions recorded
   between them. Each Function Value leaf a report or a setter exposes binds
   the next `function` handle, and a Restore's resolver answers from the
-  `resolve` envelope. `:inspect` of an object adds its `object` and
-  `property` rows. It then reads each property in a second Run, the normative
+  `resolve` envelope. Carrying Values back across a crossing marks, encodes
+  and resolves Function handles with heap work stacks, including inside
+  lists and maps nested 100,000 deep on a 256 KiB native stack. `:inspect`
+  of an object adds its `object` and `property` rows. It then reads each
+  property in a second Run, the normative
   reader, extended under the first free `entry<n>`.
 
 ### The REPL and Transcript replay
