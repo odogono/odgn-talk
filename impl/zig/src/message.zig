@@ -2624,6 +2624,90 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// `export-manifest`: `kind`, `version`, `grants` (`{name: handle}`),
+/// `libraries` (identities), `messages` (`[{name, args, receivers}]`),
+/// `objectKinds` (names) and `objects` (`{name: kind}`), replying the
+/// Host Manifest's bytes.
+fn exportManifestReply(s: *Session, msg: Json, ref: i64) []u8 {
+    var scratch: std.heap.ArenaAllocator = .init(s.gpa);
+    defer scratch.deinit();
+    const a = scratch.allocator();
+    var shapes: std.ArrayList(*caps.Shape) = .empty;
+    defer for (shapes.items) |x| x.release();
+    const spec = manifestSpecOf(s, a, msg, &shapes) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    var buf: talk.Buffer = .{};
+    const code = Direct.exportManifest(&spec, &buf);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    defer Direct.ownedBytesRelease(&buf);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"manifest\":") catch {};
+    o.bytesTag(s.gpa, if (buf.data) |d| d[0..buf.len] else "") catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
+fn manifestSpecOf(s: *Session, a: Allocator, msg: Json, shapes: *std.ArrayList(*caps.Shape)) (Allocator.Error || Invalid)!talk.ManifestSpec {
+    const kind = asText(field(msg, "kind")) orelse return error.InvalidValue;
+    const version = asText(field(msg, "version")) orelse return error.InvalidValue;
+    var grants: []talk.LoadGrant = &.{};
+    if (field(msg, "grants")) |g| {
+        if (g != .object) return error.InvalidValue;
+        grants = try a.alloc(talk.LoadGrant, g.object.count());
+        for (g.object.keys(), g.object.values(), grants) |k, v, *slot| {
+            const h = asInt(v) orelse return error.InvalidValue;
+            if (h < 1 or h > @as(i64, @intCast(s.grants.items.len))) return error.InvalidValue;
+            slot.* = .{ .name = k.ptr, .name_len = k.len, .grant = s.grants.items[@intCast(h - 1)] };
+        }
+    }
+    var libraries: []*const machine.Library = &.{};
+    if (field(msg, "libraries")) |given| {
+        if (given != .array) return error.InvalidValue;
+        libraries = try a.alloc(*const machine.Library, given.array.items.len);
+        for (given.array.items, libraries) |item, *slot| slot.* = libraryOf(s, item) orelse return error.InvalidValue;
+    }
+    var messages: []talk.MessageDecl = &.{};
+    if (field(msg, "messages")) |given| {
+        if (given != .array) return error.InvalidValue;
+        messages = try a.alloc(talk.MessageDecl, given.array.items.len);
+        for (given.array.items, messages) |item, *slot| {
+            const name = asText(field(item, "name")) orelse return error.InvalidValue;
+            const args_json = field(item, "args") orelse Json{ .array = .init(a) };
+            if (args_json != .array) return error.InvalidValue;
+            const args = try a.alloc(*const caps.Shape, args_json.array.items.len);
+            for (args_json.array.items, args) |arg, *x| {
+                const shape = try shapeOf(s.gpa, arg, 0);
+                shapes.append(a, shape) catch |e| {
+                    shape.release();
+                    return e;
+                };
+                x.* = shape;
+            }
+            const receivers_json = field(item, "receivers") orelse Json{ .array = .init(a) };
+            if (receivers_json != .array) return error.InvalidValue;
+            const receivers = try a.alloc(*const objects.Kind, receivers_json.array.items.len);
+            for (receivers_json.array.items, receivers) |r, *x| x.* = kindNamed(s, asText(r) orelse return error.InvalidValue) orelse return error.InvalidValue;
+            slot.* = .{ .name = name.ptr, .name_len = name.len, .args = args.ptr, .args_len = args.len, .receivers = receivers.ptr, .receivers_len = receivers.len };
+        }
+    }
+    var kinds: []*const objects.Kind = &.{};
+    if (field(msg, "objectKinds")) |given| {
+        if (given != .array) return error.InvalidValue;
+        kinds = try a.alloc(*const objects.Kind, given.array.items.len);
+        for (given.array.items, kinds) |k, *x| x.* = kindNamed(s, asText(k) orelse return error.InvalidValue) orelse return error.InvalidValue;
+    }
+    var well_known: []talk.ManifestObject = &.{};
+    if (field(msg, "objects")) |given| {
+        if (given != .object) return error.InvalidValue;
+        well_known = try a.alloc(talk.ManifestObject, given.object.count());
+        for (given.object.keys(), given.object.values(), well_known) |k, v, *slot| {
+            const kind_of = kindNamed(s, asText(v) orelse return error.InvalidValue) orelse return error.InvalidValue;
+            slot.* = .{ .name = k.ptr, .name_len = k.len, .kind = kind_of };
+        }
+    }
+    return .{ .kind = kind.ptr, .kind_len = kind.len, .version = version.ptr, .version_len = version.len, .grants = grants.ptr, .grants_len = grants.len, .libraries = libraries.ptr, .libraries_len = libraries.len, .messages = messages.ptr, .messages_len = messages.len, .object_kinds = kinds.ptr, .object_kinds_len = kinds.len, .objects = well_known.ptr, .objects_len = well_known.len };
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -2788,6 +2872,8 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return changeCodeReply(s, msg, ref, false);
     } else if (std.mem.eql(u8, m, "extend")) {
         return changeCodeReply(s, msg, ref, true);
+    } else if (std.mem.eql(u8, m, "export-manifest")) {
+        return exportManifestReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "call")) {
         return callReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "restore")) {
@@ -3448,4 +3534,37 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "export-manifest writes the Host Manifest's bytes, the same each time" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"double\",\"mode\":\"immediate\",\"args\":[\"number\"],\"result\":\"number\",\"description\":\"Doubles.\"}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{3}));
+    const lib = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"util\",\"version\":\"1\",\"source\":\"function one\\n  return 1\\nend one\\n\"}}", .{4}))).object.get("identity").?.object.get("$bytes").?.string;
+    const frame = "{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"grants\":{{\"api\":{d}}},\"libraries\":[{{\"$bytes\":\"{s}\"}}],\"messages\":[{{\"name\":\"open\",\"args\":[\"text\"],\"receivers\":[\"room\"]}}],\"objectKinds\":[\"room\"],\"objects\":{{\"here\":\"room\"}}}}";
+    const first = (try okOf(try c.send(frame, .{ 5, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
+    const second = (try okOf(try c.send(frame, .{ 6, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
+    try std.testing.expectEqualStrings(first, second);
+    const codec = std.base64.standard.Decoder;
+    const raw = try gpa.alloc(u8, try codec.calcSizeForSlice(first));
+    defer gpa.free(raw);
+    try codec.decode(raw, first);
+    const manifest = try std.json.parseFromSlice(Json, gpa, raw, .{});
+    defer manifest.deinit();
+    const m = manifest.value.object;
+    try std.testing.expectEqualStrings("door", m.get("kind").?.string);
+    try std.testing.expectEqualStrings("2", m.get("version").?.string);
+    try std.testing.expectEqualStrings("api", m.get("grants").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("util", m.get("libraries").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("open", m.get("messages").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("room", m.get("objectKinds").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("here", m.get("objects").?.array.items[0].object.get("name").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, raw, "Doubles.") != null);
+    const unknown = try c.send("{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"objectKinds\":[\"nowhere\"]}}", .{7});
+    try std.testing.expectEqualStrings("host error", try errKind(unknown));
 }
