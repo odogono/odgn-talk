@@ -1,0 +1,284 @@
+{
+  "wasmtime": "49.0.2",
+  "compile_ms": 199.7482916340232,
+  "instantiate_initialize_hello_ms": [
+    0.042750034481287,
+    0.0410415232181549,
+    0.04375004209578037,
+    0.044916640035808086,
+    0.04241662099957466,
+    0.0531667610630393,
+    0.0409999629482627,
+    0.05066662561148405
+  ],
+  "instances": 8,
+  "rss_before_bytes": 206815232,
+  "rss_with_instances_bytes": 210927616,
+  "rss_delta_per_instance_bytes": 514048,
+  "linear_memory_per_instance_bytes": 1835008,
+  "core_versions": {
+    "language": "1.0-rc.3",
+    "costModel": "0",
+    "unicode": "18.0.0",
+    "core": "zig/0.0.0",
+    "saveFormat": "zig/6"
+  },
+  "idle_pump_us": [
+    2.3300416069105268,
+    2.2583333775401115,
+    2.2585000842809677,
+    2.245625015348196,
+    2.262166701257229,
+    2.241208334453404,
+    2.2540834033861756
+  ],
+  "empty_handler_pump_us": [
+    4.808583646081388,
+    4.921163665130734,
+    4.7367888037115335,
+    4.761124961078167,
+    4.74833429325372,
+    4.875581129454076,
+    4.682123428210616
+  ],
+  "calls_per_pump": 1000,
+  "number": [
+    4.47912502568215,
+    4.4834999134764075,
+    4.471333231776953,
+    4.51212504412979,
+    4.337624995969236,
+    4.3409583158791065,
+    4.332958371378481
+  ],
+  "nested_value": [
+    11.71595836058259,
+    11.768958298489451,
+    11.77537499461323,
+    11.87962491530925,
+    12.112124939449131,
+    11.978249996900558,
+    12.07254163455218
+  ],
+  "thresholds": {
+    "sizes": {
+      "runs": 3,
+      "samples": 5000,
+      "warmup": 500,
+      "instances": 5000,
+      "memory": 20
+    },
+    "call": {
+      "n": 5000,
+      "p50": 8.00006091594696,
+      "p99": 9.91660635918379,
+      "mean": 8.06517503224313,
+      "min": 7.666531018912792,
+      "max": 24.4583934545517,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 8.041737601161003,
+          "p99": 10.041752830147743,
+          "mean": 8.14824996050447,
+          "min": 7.666763849556446,
+          "max": 35.45836079865694
+        },
+        {
+          "n": 5000,
+          "p50": 7.9999445006251335,
+          "p99": 8.41671135276556,
+          "mean": 8.028275100514293,
+          "min": 7.666531018912792,
+          "max": 47.37498238682747
+        },
+        {
+          "n": 5000,
+          "p50": 8.00006091594696,
+          "p99": 9.91660635918379,
+          "mean": 8.06517503224313,
+          "min": 7.666531018912792,
+          "max": 24.4583934545517
+        }
+      ]
+    },
+    "pump": {
+      "n": 5000,
+      "p50": 6.958376616239548,
+      "p99": 8.666771464049816,
+      "mean": 7.053173799067736,
+      "min": 6.666523404419422,
+      "max": 47.83330950886011,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 6.958376616239548,
+          "p99": 8.666771464049816,
+          "mean": 7.053173799067736,
+          "min": 6.666523404419422,
+          "max": 47.83330950886011
+        },
+        {
+          "n": 5000,
+          "p50": 7.00005330145359,
+          "p99": 8.666771464049816,
+          "mean": 7.071258430369198,
+          "min": 6.624963134527206,
+          "max": 47.66660276800394
+        },
+        {
+          "n": 5000,
+          "p50": 6.95826020091772,
+          "p99": 7.24999699741602,
+          "mean": 6.994067528285086,
+          "min": 6.66663981974125,
+          "max": 47.33342211693525
+        }
+      ]
+    },
+    "instantiation": {
+      "n": 5000,
+      "p50": 30.9584429487586,
+      "p99": 39.208331145346165,
+      "mean": 31.968008261173964,
+      "min": 28.999987989664078,
+      "max": 70.208334363997,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 32.00001083314419,
+          "p99": 41.0834327340126,
+          "mean": 33.08300822973251,
+          "min": 30.58323636651039,
+          "max": 62.708393670618534
+        },
+        {
+          "n": 5000,
+          "p50": 30.9584429487586,
+          "p99": 39.208331145346165,
+          "mean": 31.968008261173964,
+          "min": 28.999987989664078,
+          "max": 70.208334363997
+        },
+        {
+          "n": 5000,
+          "p50": 30.75005952268839,
+          "p99": 37.958379834890366,
+          "mean": 31.52262531220913,
+          "min": 28.70825119316578,
+          "max": 56.583317928016186
+        }
+      ]
+    },
+    "memory": {
+      "instances": 20,
+      "medianBytes": 2097152,
+      "maxBytes": 2097152
+    }
+  },
+  "fault_checks": {
+    "spin": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r1",
+      "delivery": "d8017",
+      "handler": "spin",
+      "outcome": "limit fault",
+      "limit": "fuel",
+      "at": {
+        "unit": "faults",
+        "line": 5,
+        "col": 3,
+        "handler": "spin",
+        "pc": 11
+      },
+      "fuel": 5000,
+      "alloc": 0
+    },
+    "boom": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r11",
+      "delivery": "d8037",
+      "handler": "boom",
+      "outcome": "errored",
+      "error": {
+        "code": "deliberate",
+        "at": {
+          "unit": "faults",
+          "handler": "boom",
+          "line": 9,
+          "column": 3
+        }
+      },
+      "at": {
+        "unit": "faults",
+        "line": 9,
+        "col": 3,
+        "handler": "boom",
+        "pc": 16
+      },
+      "fuel": 19,
+      "alloc": 48
+    },
+    "dive": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r21",
+      "delivery": "d8057",
+      "handler": "dive",
+      "outcome": "limit fault",
+      "limit": "depth",
+      "at": {
+        "unit": "faults",
+        "line": 2,
+        "col": 10,
+        "handler": "dive",
+        "pc": 5
+      },
+      "fuel": 2791,
+      "alloc": 3184
+    },
+    "script_faults_checked": 30,
+    "hostile_frames_checked": 5,
+    "same_instance_healthy_after_each": true
+  },
+  "linear_memory_after_workloads_bytes": 5373952,
+  "payload": {
+    "sha256": "bf98df48ee760795c8c5e5ea82fc776a00420ce7bf30c168a9065b85fde4de01",
+    "raw_bytes": 2819160,
+    "gzip_9_bytes": 945213,
+    "brotli_11_bytes": 653511,
+    "brotli_lgwin": 22
+  },
+  "provenance": {
+    "date_utc": "2026-10-14T08:29:36.671137+00:00",
+    "checkout_commit": "fd2f13be1a8964e180ef14b4e79c2b31ed1b7906",
+    "checkout_status": "M ../message-layer/elixir/lib/talk_host/artifacts.ex\n?? results/2026-10-14-fd2f13be-darwin-arm64-apple-m5-go.json\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-go.json\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-go.md\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-zig.json\n?? ../results/2026-10-14-fd2f13be-message-layer-elixir-darwin-arm64-apple-m5-zig.md",
+    "go_source_status": "",
+    "reactor_revision": "external build; revision unspecified",
+    "host_sha256": "e5f899c59767318847cc4b54c0139c3de9285186ee53aac3a5d773d151397042",
+    "runner_sha256": "bb10df0a1311dd2bc0158a657e7a69ea0d1f364fd308071a132bd10083e84bab",
+    "metadata_sha256": "30890debdbc979898528ae9fb907bdec5af7d04eed2fd7ddcd989a3ec9bb8140",
+    "executable_sha256": "fee0e6c9795897678406d8f7290198b5bd1587962da201aad04ff43e7dcfe65b",
+    "cjson_c_sha256": "298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d",
+    "cjson_h_sha256": "25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "go": "go version go1.27.2 darwin/arm64",
+    "python": "3.15.0",
+    "zlib": "1.2.12",
+    "brotli": "brotli 1.2.0",
+    "cjson": "1.7.19",
+    "samples": 7,
+    "iterations": 1000,
+    "memory_backstop_bytes": 268435456,
+    "reactor_build_flags": "external build; flags unspecified",
+    "cflags": "",
+    "ldflags": "",
+    "wasmtime_prefix": "/opt/homebrew/opt/wasmtime",
+    "threshold_decision": "The thresholds block is judged against #532 in docs/research/message-layer-measurements.md (#554); the rest is descriptive."
+  }
+}
