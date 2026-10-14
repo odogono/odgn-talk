@@ -64,6 +64,22 @@ test('bless restores the case and reports the first divergence when a Core disag
   }
 });
 
+test('bless runs a step in its cwd, under the repository root', () => {
+  const { root } = fixture();
+  try {
+    const here: Step = {
+      command: ['sh', '-c', 'pwd; exit 1'],
+      cwd: 'tools',
+      name: 'here',
+    };
+    const outcome = blessCase(root, 'case', write(root), [here]);
+    expect(outcome.blessed).toBe(false);
+    expect(outcome.blessed || outcome.output.trimEnd()).toEndWith('/tools');
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test('bless refuses a name that is not a case', () => {
   const { root } = fixture();
   try {
