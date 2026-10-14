@@ -84,7 +84,7 @@ test('talk.h declarations are found, with their C only marks', () => {
   });
 });
 
-test('a name talk.go lacks fails, and a missing one is only reported', () => {
+test('a name talk.go lacks and a talk.go name talk.h lacks are each reported', () => {
   const { failures, missing } = compareAPI(go, header);
   expect(failures).toEqual([
     'talk_today matches no talk.go declaration; mark it C only or rename it',
