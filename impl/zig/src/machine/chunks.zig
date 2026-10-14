@@ -362,6 +362,9 @@ pub fn set(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value:
                         // Segment rollback bindings must keep their old value.
                         // listSet copies the spine once, directly into the
                         // Group allocator, including for Host-owned Lists.
+                        // The retain is load-bearing: it makes every write
+                        // here take listSet's copying branch, so dropping it
+                        // to reuse unique storage would mutate those holders.
                         var root = whole.retain();
                         errdefer root.release();
                         model.listSet(gpa, &root, p - 1, part) catch return error.OutOfMemory;

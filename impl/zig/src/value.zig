@@ -869,7 +869,10 @@ pub fn listSet(gpa: std.mem.Allocator, root: **Value, index: usize, item: *Value
     if (old.data != .list or index >= old.data.list.len) return error.InvalidValue;
     // Only lower-ranked children may enter existing storage: a higher rank
     // can reach it through another version's hidden tail, even when a walk
-    // of that version's visible children would find no cycle.
+    // of that version's visible children would find no cycle. This copies
+    // more than a reachability walk would, but only the first write that
+    // raises the rank pays it. Machine chunk writes retain their root and
+    // always copy, so only direct callers of this branch see the difference.
     const same_allocator = gpa.ptr == old.allocator.ptr and gpa.vtable == old.allocator.vtable;
     const unique_storage = if (old.list_storage) |storage| storage.references == 1 else true;
     const rank = std.math.add(u64, item.ownership_rank, 1) catch return error.OutOfMemory;
@@ -1295,11 +1298,18 @@ test "List point writes reuse unique storage and copy for ranks, aliases and for
     try listSet(gpa, &root, 0, child);
     try std.testing.expect(root != address);
     try std.testing.expect(root.ownership_rank > child.ownership_rank);
+    // Only the first rank-raising write copies: later equal-shaped children
+    // now rank below the root and reuse its storage.
+    const raised = root;
+    const sibling = try list(gpa, &.{two});
+    defer sibling.release();
+    try listSet(gpa, &root, 0, sibling);
+    try std.testing.expectEqual(raised, root);
     const snapshot = root.retain();
     defer snapshot.release();
     try listSet(gpa, &root, 0, root);
     try std.testing.expectEqual(snapshot, root.data.list[0]);
-    try std.testing.expectEqual(child, snapshot.data.list[0]);
+    try std.testing.expectEqual(sibling, snapshot.data.list[0]);
 
     var arena: std.heap.ArenaAllocator = .init(gpa);
     defer arena.deinit();
