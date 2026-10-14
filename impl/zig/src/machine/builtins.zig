@@ -149,7 +149,61 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
     if (dateField(name)) |field| return dateValue(gpa, name, field, args[0], raised);
     if (std.mem.eql(u8, name, "toCivil") or std.mem.eql(u8, name, "toInstant")) return civilOrInstant(a, gpa, name, args, raised);
     if (std.mem.startsWith(u8, name, "fromFloat") or std.mem.startsWith(u8, name, "toFloat")) return float(gpa, name, args, raised);
+    if (std.mem.eql(u8, name, "conforms") or std.mem.eql(u8, name, "check") or std.mem.eql(u8, name, "explain")) return shapeCall(a, gpa, name, args, raised, m);
     return raise(raised, gpa, "not implemented", &.{});
+}
+
+// ------------------------------------------------------------ Shape checks
+
+const shape_check = @import("shape_check.zig");
+
+/// `conforms`, `check` and `explain` (chapter 7): the definition is
+/// validated first, and failed work is charged through `m.scanned`.
+fn shapeCall(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, raised: *Raised, m: *costs.Measures) Error!*Value {
+    const explain = std.mem.eql(u8, name, "explain");
+    const outcome = shape_check.run(a, gpa, args[0], args[1], !explain) catch return error.OutOfMemory;
+    defer outcome.release();
+    m.scanned = outcome.scanned;
+    if (outcome.definition_error) |e| {
+        raised.code = "invalid shape";
+        raised.fields[0] = .{ .key = "reason", .value = model.text(gpa, e.reason) catch return error.OutOfMemory };
+        raised.fields[1] = .{ .key = "path", .value = shape_check.pathList(gpa, e.path) catch return error.OutOfMemory };
+        raised.fields[2] = .{ .key = "value", .value = e.value.retain() };
+        raised.len = 3;
+        return error.Raised;
+    }
+    if (std.mem.eql(u8, name, "conforms")) {
+        return model.scalar(gpa, .{ .bool = outcome.diagnostics.len == 0 }) catch return error.OutOfMemory;
+    }
+    if (explain) {
+        var records: std.ArrayList(*Value) = .empty;
+        defer records.deinit(a);
+        for (outcome.diagnostics) |d| {
+            records.append(a, shape_check.record(gpa, d) catch return error.OutOfMemory) catch return error.OutOfMemory;
+        }
+        const list = model.list(gpa, records.items) catch return error.OutOfMemory;
+        for (records.items) |r| r.release();
+        return list;
+    }
+    if (outcome.diagnostics.len == 0) return args[0].retain();
+    const d = outcome.diagnostics[0];
+    if (d.unencodable) {
+        raised.code = "not encodable";
+        raised.fields[0] = .{ .key = "kind", .value = model.text(gpa, d.got) catch return error.OutOfMemory };
+        raised.fields[1] = .{ .key = "path", .value = shape_check.pathList(gpa, d.path) catch return error.OutOfMemory };
+        raised.len = 2;
+        return error.Raised;
+    }
+    raised.code = "wrong kind";
+    raised.fields[0] = .{ .key = "expected", .value = model.text(gpa, d.expected) catch return error.OutOfMemory };
+    raised.fields[1] = .{ .key = "got", .value = model.text(gpa, d.got) catch return error.OutOfMemory };
+    raised.fields[2] = .{ .key = "value", .value = d.value.retain() };
+    raised.len = 3;
+    if (d.path.len > 0) {
+        raised.fields[3] = .{ .key = "path", .value = shape_check.pathList(gpa, d.path) catch return error.OutOfMemory };
+        raised.len = 4;
+    }
+    return error.Raised;
 }
 
 // ---------------------------------------------------------------- numbers

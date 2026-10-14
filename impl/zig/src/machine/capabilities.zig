@@ -29,6 +29,11 @@ pub const Kind = enum {
     /// Any Quantity, as `store`'s `increment` takes; only the Core's own
     /// declarations use it.
     quantity,
+    /// Any list, map or Host Object, from a Script Shape's kind name
+    /// (chapter 7); Host declarations spell those with wrappers instead.
+    list,
+    map,
+    object,
 
     pub fn name(k: Kind) []const u8 {
         return switch (k) {
@@ -39,7 +44,7 @@ pub const Kind = enum {
 
     pub fn named(s: []const u8) ?Kind {
         if (std.mem.eql(u8, s, "civil date")) return .civil_date;
-        if (std.mem.eql(u8, s, "civil_date") or std.mem.eql(u8, s, "quantity")) return null;
+        if (std.mem.eql(u8, s, "civil_date") or std.mem.eql(u8, s, "quantity") or std.mem.eql(u8, s, "list") or std.mem.eql(u8, s, "map") or std.mem.eql(u8, s, "object")) return null;
         return std.meta.stringToEnum(Kind, s);
     }
 };
@@ -269,6 +274,9 @@ const Checker = struct {
                     .civil_date => v.data == .civil_date,
                     .pattern => v.data == .pattern,
                     .quantity => v.data == .quantity,
+                    .list => v.data == .list,
+                    .map => v.data == .map,
+                    .object => v.data == .object,
                     .any, .value, .function => unreachable,
                 };
                 return if (ok) null else try c.wrong(s, v);
@@ -353,7 +361,7 @@ fn field(fields: []const Field, key: []const u8) ?Field {
     return null;
 }
 
-fn ofKind(unit: units.Unit, name: []const u8) bool {
+pub fn ofKind(unit: units.Unit, name: []const u8) bool {
     var found = false;
     for (unit.slots, units.table.kind) |s, k| {
         if (s.exponent == 0) continue;

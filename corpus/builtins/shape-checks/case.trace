@@ -1,0 +1,13 @@
+# Unblessed: the shape-checks Trace Case (#695); first blessing awaits human review.
+
+> load checks identity=f84a36d87789cde4ff692227d101b067a24cd6b1445d4108c4071ea0e7adfb33
+> deliver d1 to=checks message=go
+> pump clock=2026-10-02T09:00:00Z
+raise checks/r1 code="wrong kind" at=checks:193 pos=16:9
+raise checks/r1 code="invalid shape" at=checks:214 pos=21:9
+raise checks/r1 code="invalid shape" at=checks:239 pos=26:9
+seg checks/r1 start delivery=d1 handler=go clause=1 fuel=946 alloc=13798 state=4539 end=return
+run checks/r1 outcome=completed delivery=d1 handler=go fuel=946 alloc=13798
+pumped state=idle fuel=946
+> vars
+vars checks log=[[true, false, true, false, true, false], [true, false, true, false, true, true], [false, true, true, false, true, false], [1, 2], [{code: "wrong kind", expected: "number", got: "text", value: "x", path: [2]}, {code: "wrong kind", expected: "number", got: "boolean", value: true, path: [3]}], [{code: "wrong kind", expected: "text or list", got: "boolean", value: true, alternatives: [[{code: "wrong kind", expected: "text", got: "boolean", value: true}], [{code: "wrong kind", expected: "list", got: "boolean", value: true}]]}], [{code: "wrong kind", expected: "number", got: "nothing", value: nothing, path: ["a"]}, {code: "wrong kind", expected: "nothing", got: "number", value: 2, path: ["b"]}], [{code: "not encodable", kind: "function", path: [1]}], ["numbers", "other"], {code: "wrong kind", expected: "text or nothing", got: "number", value: 3, at: {unit: "checks", handler: "go", line: 16, column: 9}}, {code: "invalid shape", reason: "unknown kind", path: ["oneOf", 2], value: "bogus", at: {unit: "checks", handler: "go", line: 21, column: 9}}, {code: "invalid shape", reason: "duplicate field", path: ["map", 2, "key"], value: "a", at: {unit: "checks", handler: "go", line: 26, column: 9}}]

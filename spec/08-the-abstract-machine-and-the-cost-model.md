@@ -1037,6 +1037,9 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `rangeStart` | `2` | 0 |  |
 | `rangeEnd` | `2` | 0 |  |
 | `kindOf` | `2` | `size(result)` |  |
+| `conforms` | `4 + scanned` | 0 | `scanned` is the Shape definition work and matching work of chapter 7's Shape checks: each Shape node and map entry examined in validation, the scalar values of each kind, Unit and Unit Kind text read, and each value/Shape pair attempted, through the first mismatch or the end |
+| `check` | `4 + scanned` | 0 | `scanned` is as for `conforms`; a successful `check` returns its first argument itself, so it allocates nothing |
+| `explain` | `4 + scanned` | `size(result)` | `scanned` is as for `conforms`, but matching continues through every independently checkable failure, so every attempted pair counts, including each failed union alternative's |
 | `functionArity` | `2` | `size(result)` |  |
 | `functionName` | `2` | `size(result)` |  |
 | `abs` | `3` | `size(result)` |  |
@@ -1097,6 +1100,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#719](https://github.com/odogono/odgn-talk/issues/719) | Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional. |
 | [#722](https://github.com/odogono/odgn-talk/issues/722) | Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration. |
 | [#788](https://github.com/odogono/odgn-talk/issues/788) | The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails |
+| [#695](https://github.com/odogono/odgn-talk/issues/695) | The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional |
 
 <!-- end -->
 

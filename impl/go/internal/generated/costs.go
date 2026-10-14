@@ -442,6 +442,22 @@ var Costs = CostsTable{
 			Alloc: "size(result)",
 		},
 		CostsTableRateEntry{
+			Key:   "builtin.conforms",
+			Fuel:  "4 + scanned",
+			Input: "`scanned` is the Shape definition work and matching work of chapter 7's Shape checks: each Shape node and map entry examined in validation, the scalar values of each kind, Unit and Unit Kind text read, and each value/Shape pair attempted, through the first mismatch or the end",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.check",
+			Fuel:  "4 + scanned",
+			Input: "`scanned` is as for `conforms`; a successful `check` returns its first argument itself, so it allocates nothing",
+		},
+		CostsTableRateEntry{
+			Key:   "builtin.explain",
+			Fuel:  "4 + scanned",
+			Alloc: "size(result)",
+			Input: "`scanned` is as for `conforms`, but matching continues through every independently checkable failure, so every attempted pair counts, including each failed union alternative's",
+		},
+		CostsTableRateEntry{
 			Key:   "builtin.functionArity",
 			Fuel:  "2",
 			Alloc: "size(result)",
@@ -667,6 +683,10 @@ var Costs = CostsTable{
 		CostsTableChangeEntry{
 			Issue:  "#788",
 			Change: "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#695",
+			Change: "The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional",
 		},
 	},
 }

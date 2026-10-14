@@ -3,6 +3,7 @@ builtins/function-values
 builtins/kind-of
 builtins/min-max-scanned
 builtins/object-kind
+builtins/shape-checks
 bytes/build-and-match
 bytes/build-errors
 bytes/value-encoding

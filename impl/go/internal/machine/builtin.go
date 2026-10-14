@@ -4,6 +4,7 @@ import (
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 	"unicode/utf8"
 
+	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -73,6 +74,43 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		return integer(int64(match.Start + 1)), nil
 	case "kindOf":
 		return text(value.KindNames[v.Kind]), nil
+	case "conforms", "check", "explain":
+		s, derr, scanned := shape.Decode(args[1])
+		m.Scanned = scanned
+		if derr != nil {
+			e := failure("invalid shape", value.Pair{Key: "reason", Val: text(derr.Reason)}, value.Pair{Key: "path", Val: value.NewList(derr.Path)}, value.Pair{Key: "value", Val: derr.Value})
+			return value.Value{}, &e
+		}
+		diags, scanned := shape.Diagnostics(v, s, name != "explain", scanned)
+		m.Scanned = scanned
+		switch name {
+		case "conforms":
+			return boolean(len(diags) == 0), nil
+		case "explain":
+			records := make([]value.Value, len(diags))
+			for i, d := range diags {
+				records[i] = shape.Record(d)
+			}
+			return value.NewList(records), nil
+		}
+		if len(diags) == 0 {
+			return v, nil
+		}
+		d := diags[0]
+		if d.Unencodable {
+			e := failure("not encodable", value.Pair{Key: "kind", Val: text(d.Got)}, value.Pair{Key: "path", Val: value.NewList(d.Path)})
+			return value.Value{}, &e
+		}
+		fields := []value.Pair{
+			{Key: "expected", Val: text(d.Expected)},
+			{Key: "got", Val: text(d.Got)},
+			{Key: "value", Val: d.Value},
+		}
+		if len(d.Path) > 0 {
+			fields = append(fields, value.Pair{Key: "path", Val: value.NewList(d.Path)})
+		}
+		e := failure("wrong kind", fields...)
+		return value.Value{}, &e
 	case "objectKind", "isDisposed":
 		if v.Kind != value.Object {
 			return bad("object", v)
