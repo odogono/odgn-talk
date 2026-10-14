@@ -27,7 +27,12 @@ export const mountPlay = (shell: StackShell): void => {
     'aria-label': 'Play Session',
   });
   const pageNode = h('div', { class: 'page' });
-  reader.append(pageNode);
+  // The Page is laid out at design size and scaled with a transform,
+  // which does not shrink its layout box. The scaler carries the scaled
+  // size, so at narrow widths the reader scrolls only vertically and
+  // the scaled Page fits its width (as the editor's stage does).
+  const scaler = h('div', { class: 'play-scale' }, pageNode);
+  reader.append(scaler);
   const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
   toolbar.id = 'play-text-toolbar';
   toolbar.hidden = true;
@@ -108,8 +113,12 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const scale = Math.min(
       1,
-      (reader.clientWidth - 32) / play.project.designWidth,
+      Math.max(0.1, (reader.clientWidth - 32) / play.project.designWidth),
     );
+    Object.assign(scaler.style, {
+      width: `${play.project.designWidth * scale}px`,
+      height: `${play.page.height * scale}px`,
+    });
     Object.assign(pageNode.style, {
       width: `${play.project.designWidth}px`,
       height: `${play.page.height}px`,

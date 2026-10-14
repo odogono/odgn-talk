@@ -22,6 +22,7 @@ import {
   type ProjectFileHandle,
 } from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
+import { createSampleProject, SAMPLE_PROJECT_NAME } from './sample';
 import { importSound, isSoundAsset } from './sounds';
 import {
   PROJECT_MIMETYPE,
@@ -848,6 +849,61 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     await showLoaded({ project, migrated: false, record: created }, created.id);
   };
 
+  /**
+   * Opens a fresh copy of the sample Project (#824), like an import: it
+   * never overwrites the Project on the desk, and its assets are decoded
+   * before anything is saved, so a copy that cannot play is refused.
+   */
+  const openSample = async (): Promise<void> => {
+    try {
+      const sample = await createSampleProject();
+      const accepted = [];
+      for (const asset of sample.project.assets) {
+        const data = sample.assets.get(asset.hash)!;
+        const file = new File(
+          [data as Uint8Array<ArrayBuffer>],
+          asset.fileName,
+        );
+        accepted.push(
+          isSoundAsset(asset)
+            ? await importSound(file)
+            : await importImage(file),
+        );
+      }
+      editor.finishPendingEdit();
+      await autosave.flush();
+      if (hasUnsafeChanges()) {
+        notice(
+          "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
+        );
+        return;
+      }
+      const assets = new Map(
+        accepted.map(imported => [
+          imported.asset.hash,
+          storageAsset(imported.bytes, imported.asset.mediaType),
+        ]),
+      );
+      const created = storage
+        ? await storage.saveProject(undefined, sample.project, { assets })
+        : undefined;
+      const id = created?.id ?? `unsaved-${crypto.randomUUID()}`;
+      for (const imported of accepted) {
+        shell.images.add(imported);
+      }
+      channel?.post({ type: 'list-changed' });
+      await showLoaded(
+        { project: sample.project, migrated: false, record: created },
+        id,
+      );
+      notice(
+        `Opened a fresh copy of “${SAMPLE_PROJECT_NAME}”. Press Play to try it, then make it your own.`,
+      );
+    } catch (error) {
+      notice(`Couldn't open the sample Project: ${String(error)}`);
+    }
+  };
+
   const renameProject = async (id: string, title: string): Promise<void> => {
     const name = title.trim();
     if (!name) {
@@ -1244,6 +1300,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     byId('versions-window').hidden = true;
   });
   byId('new-project').addEventListener('click', () => void newProject());
+  byId('open-sample').addEventListener('click', () => void openSample());
 
   void storage?.setLastProjectId(currentId).catch(() => {});
   void loadDiskFile(currentId);

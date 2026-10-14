@@ -500,3 +500,40 @@ Reader text unit tests cover formatting, `textChanged`, isolation, undo/redo,
 Script replacements and disabled input. The browser suite also checks real
 selections, colour focus, clipboard sanitization, paragraphs, IME, navigation,
 Stop while editing and the exact authored rich-text restore.
+
+At narrower widths the reader scales the Page to fit and scrolls only
+vertically: a scaler element carries the scaled size, as the editor's
+stage does, and the Play header drops its Edit-only controls so Back to
+Edit and Stop stay reachable on a phone.
+
+## The sample Project
+
+**Projects → Open sample: The Lighthouse Mystery** adds a fresh copy of
+[#154](https://github.com/odogono/odgn-talk/issues/154)'s acceptance
+example ([#824](https://github.com/odogono/odgn-talk/issues/824)): a
+three-Page illustrated mystery with a reader-editable journal, built as
+a non-programmer would. Its navigation, show/hide, text and sound
+actions are the exact source Script Recipes insert; only what Recipes
+do not offer — clue messages to the Project Script (which remembers
+both clues across Pages), a `wait`, and creating the trapdoor button
+whose click the Page Script answers through the Message Path — is
+written by hand, as an author would after inserting a Recipe. The
+illustrations are SVG and the bell and waves are generated WAV, all
+from [`src/sample.ts`](src/sample.ts), so the sample exports, reopens
+offline and plays the same anywhere. Opening it never overwrites the
+Project on the desk; its assets are decoded first, like an import.
+
+Unit tests play the mystery end to end against the Play Host —
+including that the ending stays locked without both clues, that
+leaving the lamp room early cancels its `wait`, and that the exported
+file reopens and plays — and browser checks play it by touch taps at a
+phone width:
+
+```sh
+bun build tooling/creative/tests/sample.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/sample-test.html
+```
+
+Open `/sample-test.html` and run
+`await import('/sample.browser.js').then(m => m.runBrowserTests())`.
+The result must have `passed: true`; reload before repeating.
