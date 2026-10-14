@@ -23,6 +23,7 @@ import {
   textOf,
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
+import { importSound, isSoundAsset, SOUND_ACCEPT } from './sounds';
 import { ScriptWindows, bringWindowForward } from './scripts';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
@@ -312,6 +313,7 @@ export const mountStack = (
   const images = new ImageAssets();
   const scripts = new ScriptWindows(editor, () => draw());
   window.addEventListener('pagehide', event => {
+    stopPreview();
     if (!event.persisted) {
       images.dispose();
     }
@@ -325,6 +327,12 @@ export const mountStack = (
   const info = byId('info') as HTMLFormElement;
   const thumbnails = byId('thumbnails');
   let pointerElement: string | undefined;
+  // The Edit-time sound preview: one voice, never a Script (those run in Play).
+  let preview: { audio: HTMLAudioElement; name: string } | undefined;
+  const stopPreview = () => {
+    preview?.audio.pause();
+    preview = undefined;
+  };
   let activeText: InPlaceTextEditor | undefined;
   let textControls: ElementTextControls | undefined;
   const historyOf = (element: TextElement) => editor.textHistory(element);
@@ -643,6 +651,31 @@ export const mountStack = (
       'Design width',
       input('designWidth', project.designWidth, 'number', { min: 1 }),
     ),
+    h('h2', {}, 'Sounds'),
+    ...(project.assets.filter(isSoundAsset).length
+      ? project.assets.filter(isSoundAsset).map(asset =>
+          h(
+            'div',
+            { class: 'row' },
+            h('span', {}, `${asset.name} (${asset.fileName})`),
+            h(
+              'button',
+              {
+                type: 'button',
+                'data-preview-sound': asset.name,
+                'data-view-only': '',
+              },
+              preview?.name === asset.name ? 'Stop' : 'Preview',
+            ),
+          ),
+        )
+      : [h('p', { class: 'muted' }, 'No sounds yet.')]),
+    h('button', { type: 'button', 'data-add-sound': '' }, 'Add sound…'),
+    h(
+      'p',
+      { class: 'muted' },
+      'Scripts play a sound by its name, like tell sound to play "waves". Add action… can write that for you.',
+    ),
     h(
       'p',
       { class: 'muted' },
@@ -827,6 +860,10 @@ export const mountStack = (
       }
     } else if (button?.dataset.replaceImage) {
       chooseImage(button.dataset.replaceImage);
+    } else if (button?.hasAttribute('data-add-sound')) {
+      chooseSound();
+    } else if (button?.dataset.previewSound) {
+      togglePreview(button.dataset.previewSound);
     } else if (button?.dataset.editText) {
       openText(button.dataset.editText);
     } else if (button?.dataset.rename) {
@@ -1023,6 +1060,74 @@ export const mountStack = (
     );
     picker.click();
   };
+  const addSounds = async (files: File[]) => {
+    if (editor.readOnly) {
+      return;
+    }
+    const generation = editor.generation;
+    const messages: string[] = [];
+    for (const file of files) {
+      try {
+        const imported = await importSound(file);
+        if (editor.readOnly || editor.generation !== generation) {
+          return;
+        }
+        images.add(imported);
+        edit(() => editor.addSound(imported.asset));
+        messages.push(...imported.warnings);
+      } catch (error) {
+        messages.push(String(error));
+      }
+    }
+    if (messages.length) {
+      imageNotice(messages.join(' '));
+    }
+  };
+  const chooseSound = () => {
+    if (editor.readOnly) {
+      return;
+    }
+    const picker = h('input', {
+      type: 'file',
+      accept: SOUND_ACCEPT,
+      multiple: true,
+    }) as HTMLInputElement;
+    picker.addEventListener(
+      'change',
+      () => void addSounds([...(picker.files ?? [])]),
+    );
+    picker.click();
+  };
+  const togglePreview = (name: string) => {
+    if (preview?.name === name) {
+      stopPreview();
+      draw();
+      return;
+    }
+    stopPreview();
+    const asset = project.assets.find(a => a.name === name);
+    const url = images.url(asset);
+    if (!url) {
+      imageNotice(`The sound “${name}” is missing from this Project.`);
+      return;
+    }
+    const audio = new Audio(url);
+    preview = { audio, name };
+    audio.addEventListener('ended', () => {
+      if (preview?.audio === audio) {
+        preview = undefined;
+        draw();
+      }
+    });
+    void audio.play().catch((error: unknown) => {
+      stopPreview();
+      imageNotice(
+        `The sound “${name}” could not play: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      draw();
+    });
+    draw();
+  };
   pageNode.addEventListener('click', event => {
     const name = (event.target as HTMLElement).closest<HTMLElement>(
       '[data-replace-image]',
@@ -1209,6 +1314,7 @@ export const mountStack = (
     openScript: (owner, line) => scripts.open(owner, line),
     setPlaying(value) {
       finishFieldEdit();
+      stopPreview();
       closeText();
       playing = value;
       editor.readOnly = readOnly || playing;

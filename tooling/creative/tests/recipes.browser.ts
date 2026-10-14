@@ -135,12 +135,18 @@ export const runBrowserTests = async () => {
       'No duplicate handler',
     );
   });
-  test('Project picker offers navigation only; read-only closes and disables picker', () => {
+  test('Project picker offers navigation and sounds; read-only closes and disables picker', () => {
     shell.openScript(project);
     add();
     assert(
-      picker().querySelectorAll('[aria-label="Action"] option').length === 1,
-      'Only navigation for Project',
+      [
+        ...picker().querySelectorAll<HTMLOptionElement>(
+          '[aria-label="Action"] option',
+        ),
+      ]
+        .map(option => option.value)
+        .join(',') === 'navigate,playSound,loopSound,stopSound',
+      'Navigation and sounds for Project',
     );
     assert(
       picker().textContent!.includes('passed up'),

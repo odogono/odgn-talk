@@ -491,6 +491,27 @@ export class StackEditor {
     });
   }
 
+  /**
+   * Adds a sound to the asset table as one undoable edit, returning the name
+   * Scripts use for it. Identical bytes keep their existing name.
+   */
+  addSound(imported: Asset): string {
+    if (this.readOnly) {
+      return imported.name;
+    }
+    return this.edit(() => {
+      let asset = this.project.assets.find(a => a.hash === imported.hash);
+      if (!asset) {
+        asset = {
+          ...imported,
+          name: freshName(imported.name, namesExcept(this.project.assets)),
+        };
+        this.project.assets.push(asset);
+      }
+      return asset.name;
+    });
+  }
+
   /** Starts moving the selected Elements; offsets are in design pixels. */
   startMove(): Gesture {
     const origins = this.selected.map(e => ({ e, left: e.left, top: e.top }));
