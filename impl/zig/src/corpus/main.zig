@@ -306,7 +306,7 @@ pub fn run(init: std.process.Init, replay: ?trace.Replay) !u8 {
     const e = &stderr.interface;
     defer e.flush() catch {};
     for (args[1..]) |arg| {
-        if (std.mem.eql(u8, arg, "--list")) list_only = true else if (std.mem.startsWith(u8, arg, "--")) {
+        if (std.mem.eql(u8, arg, "--list")) list_only = true else if (std.mem.eql(u8, arg, "--defer-crossings")) talk_replay.defer_crossings = true else if (std.mem.startsWith(u8, arg, "--")) {
             try e.print("unknown flag: {s}\n", .{arg});
             return 2;
         } else try paths.append(gpa, arg);

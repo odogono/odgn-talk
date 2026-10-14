@@ -228,7 +228,12 @@ with its interim `resolve` need, `settle`, `$function` values and `call`, `expor
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. It does not yet conform: `standard-capability` for `store`, `effect`/`release` needs and
 `request-charge` are protocol errors, and a
-Pump's `abandoned` is empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
+Pump's `abandoned` is empty (all tracked on #635). A crossing pause, where a
+Host function answers `deferred`, is the transport's: it ends no Stretch and
+writes no record. Segment `begin`, `commit` and `rollback` hooks and automatic
+abandonment at a Segment's end may defer too (#900);
+`zig build corpus -- --defer-crossings` defers each such crossing once and
+holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
 Values are walked from heap work lists, never by native recursion.
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its

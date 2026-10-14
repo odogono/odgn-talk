@@ -295,6 +295,15 @@ pub const Run = struct {
     verdict: bool = false,
     /// Its Segment's participant, once a Segment-bound call enrolls one.
     participant: ?Participant = null,
+    /// Its record flags before a crossing pause, which the pause leaves
+    /// unchanged.
+    crossed: ?struct { started: bool, continuing: bool } = null,
+    /// An answered `begin` whose follow-up crossing deferred, so the
+    /// re-made call doesn't ask for it again.
+    begun: ?capabilities.EffectStatus = null,
+    /// Its Segment's end, paused at a lifecycle crossing: the outcome it
+    /// ended with and how far its cleanup has got.
+    ending: ?Ending = null,
     /// Its Script's Variables when its Segment began, which a failed commit
     /// restores; only for a Script with Segment-bound Operations.
     segment_base: ?[]*Value = null,
@@ -305,6 +314,19 @@ pub const Run = struct {
 
 /// A Segment's participant: its Segment Coordinator and the Grants enrolled
 /// in it, in enrollment order.
+/// A Segment end paused at a lifecycle crossing (embedding/scoped-effects.md).
+pub const Ending = struct {
+    outcome: Group.Outcome,
+    stage: enum { abandon, finalize, commit_rollback, rollback } = .abandon,
+    /// The first failed abandonment on a participating Grant.
+    prevented: ?EffectFailure = null,
+    /// A failed commit, which its rollback follows.
+    failure: ?EffectFailure = null,
+    /// Whether the effects' state is unknown, which stops the Group once
+    /// the lifecycle completes, not while a crossing is paused.
+    fatal: bool = false,
+};
+
 pub const Participant = struct {
     coordinator: capabilities.Coordinator,
     grants: std.ArrayList(*ScriptGrant) = .empty,
@@ -1310,6 +1332,11 @@ pub const Group = struct {
     /// A Host function deferred, so this Pump pauses mid-turn for its
     /// answer; `resumePump` takes the turns up again (the Message Layer).
     crossing_pause: bool = false,
+    /// A testing aid: each lifecycle crossing that may defer does so once,
+    /// then calls the Host when it is made again, as the Message Layer's
+    /// Hosts do. A Trace must not change with it.
+    defer_crossings: bool = false,
+    deferred_once: bool = false,
     /// The next Script to take a turn, kept across a crossing pause.
     turn_at: usize = 0,
     landing: std.ArrayList(Landing) = .empty,
@@ -2911,6 +2938,10 @@ pub const Group = struct {
             g.destroyPending(p);
         }
         if (run.resume_with) |r| g.releaseResume(r);
+        if (run.ending) |e| switch (e.outcome) {
+            .returned, .errored, .vetoed => |v| v.release(),
+            else => {},
+        };
         g.abandonUnwinding(run);
         g.dropJoin(run);
         run.scopes.deinit(g.gpa);
@@ -3756,13 +3787,20 @@ pub const Group = struct {
     /// Ends a preempted Run's Stretch with its `preempt` record. It stays at
     /// the head of its Script's work, in the middle of its Segment.
     fn preempt(g: *Group, s: *Script, run: *Run, by: Preemption) !void {
+        // A crossing pause is the transport's, not the Run's: it ends no
+        // Stretch and writes no record, and the Pump stops here instead of
+        // taking another turn. The Run goes on as if it hadn't paused.
+        if (by == .crossing) {
+            g.crossing_pause = true;
+            run.crossed = .{ .started = run.started, .continuing = run.continuing };
+            run.continuing = true;
+            return g.park(s, run);
+        }
         const fuel = run.fuel - run.segment_fuel;
         const alloc = run.alloc - run.segment_alloc;
         g.pump_fuel += fuel;
         s.spent += fuel;
-        // A crossing pause is the transport's, not the Run's: no record,
-        // and the Pump stops here instead of taking another turn.
-        if (by == .crossing) g.crossing_pause = true else {
+        {
             if (g.trace) |out| {
                 out.print("preempt {s} {s}", .{ run.id, if (run.continuing) "continue" else if (run.started) "resume" else "start" }) catch {};
                 if (!run.started) g.writeStart(out, s, run, run.clause_body != null);
@@ -3774,6 +3812,11 @@ pub const Group = struct {
         run.continuing = true;
         run.segment_fuel = run.fuel;
         run.segment_alloc = run.alloc;
+        return g.park(s, run);
+    }
+
+    /// Puts a Run at the head of its Script's work, live.
+    fn park(g: *Group, s: *Script, run: *Run) !void {
         s.live.append(g.gpa, run) catch |e| {
             g.destroyRun(run);
             return e;
@@ -3812,6 +3855,21 @@ pub const Group = struct {
             _ = s.live.orderedRemove(i);
             break;
         };
+        // A Segment end paused at a lifecycle crossing goes on from there.
+        if (run.ending) |e| return g.endSegment(s, run, e.outcome);
+        // A Run paused at a crossing makes the same instruction again, in
+        // the same Stretch, its records as if it hadn't paused.
+        if (run.crossed) |was| {
+            run.crossed = null;
+            run.started = was.started;
+            run.continuing = was.continuing;
+            const outcome = g.continueRun(s, run) catch |e| {
+                g.destroyRun(run);
+                return e;
+            };
+            if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
+            return g.endSegment(s, run, outcome);
+        }
         run.segment_fuel = run.fuel;
         run.segment_alloc = run.alloc;
         // A preempted Run goes on in the same Segment.
@@ -4664,6 +4722,12 @@ pub const Group = struct {
     /// Calls a participant hook, with an `effect` record. `begin` sees only
     /// the first enrolled Grant.
     fn hook(g: *Group, run: *Run, phase: capabilities.Phase) capabilities.EffectStatus {
+        return g.hookWith(run, phase, false);
+    }
+
+    /// `hook`, which may answer `deferred` when `deferrable`: nothing is
+    /// written, and the caller pauses to make the same call again.
+    fn hookWith(g: *Group, run: *Run, phase: capabilities.Phase, deferrable: bool) capabilities.EffectStatus {
         const p = &run.participant.?;
         const a = g.scratch.allocator();
         const enrolled = if (phase == .begin) p.grants.items[0..1] else p.grants.items;
@@ -4671,8 +4735,15 @@ pub const Group = struct {
         for (enrolled, grants) |sg, *x| x.* = .{ .name = sg.name.ptr, .name_len = sg.name.len, .binding = sg.grant.binding };
         const first = p.grants.items[0];
         const segment = g.segmentId(run);
-        const context: capabilities.SegmentContext = .{ .group = g, .script = run.script.name, .run = run.id, .segment = segment, .grant = first.name, .binding = first.grant.binding, .now = g.clock, .grants = grants };
-        const status = p.coordinator.hook(p.coordinator.context, phase, &context);
+        const context: capabilities.SegmentContext = .{ .group = g, .script = run.script.name, .run = run.id, .segment = segment, .grant = first.name, .binding = first.grant.binding, .now = g.clock, .grants = grants, .deferrable = deferrable };
+        if (deferrable and g.deferOnce()) return .deferred;
+        var status = p.coordinator.hook(p.coordinator.context, phase, &context);
+        if (status == .deferred) {
+            if (deferrable) return .deferred;
+            // A Host that defers where it may not has broken its contract,
+            // which leaves the effects' state unknown.
+            status = .unknown;
+        }
         g.write("effect {s} grant={s} phase={s} status={s}\n", .{ segment, first.name, @tagName(phase), @tagName(status) });
         if (status != .ok) {
             g.write("effect-failure {s} grant={s} segment={s} phase={s} status={s}\n", .{ run.id, first.name, segment, @tagName(phase), @tagName(status) });
@@ -4719,12 +4790,25 @@ pub const Group = struct {
         }
         run.participant = .{ .coordinator = granted.grant.coordinator.? };
         try run.participant.?.grants.append(g.gpa, granted);
-        const status = g.hook(run, .begin);
+        // A deferred crossing leaves no participant; the re-made call
+        // enrolls again, taking an answered `begin` from `run.begun`.
+        const status = run.begun orelse g.hookWith(run, .begin, true);
+        if (status == .deferred) {
+            run.participant.?.grants.deinit(g.gpa);
+            run.participant = null;
+            return error.Deferred;
+        }
+        run.begun = null;
         if (status == .ok) return;
         // An uncertain begin may have acquired something: after a rollback
         // attempt, it stops the Group.
         if (status == .unknown) {
-            _ = g.hook(run, .rollback);
+            if (g.hookWith(run, .rollback, true) == .deferred) {
+                run.begun = status;
+                run.participant.?.grants.deinit(g.gpa);
+                run.participant = null;
+                return error.Deferred;
+            }
             run.participant.?.grants.deinit(g.gpa);
             run.participant = null;
             g.fatal = true;
@@ -4756,16 +4840,29 @@ pub const Group = struct {
     /// Returns the first failure on a Grant in the Segment's participant,
     /// which prevents its commit.
     fn abandonScopes(g: *Group, run: *Run) ?EffectFailure {
-        const a = g.scratch.allocator();
         var prevented: ?EffectFailure = null;
-        while (run.scopes.pop()) |slot| {
+        g.abandonScopesWith(run, false, &prevented) catch unreachable;
+        return prevented;
+    }
+
+    /// `abandonScopes`, where each abandonment call may answer `deferred`
+    /// when `deferrable`: its slot stays, and the same call is made again.
+    fn abandonScopesWith(g: *Group, run: *Run, deferrable: bool, prevented: *?EffectFailure) error{Deferred}!void {
+        const a = g.scratch.allocator();
+        while (run.scopes.items.len > 0) {
+            const slot = run.scopes.items[run.scopes.items.len - 1];
             const capability = slot.grant.grant.capability;
             const op = &capability.operations[slot.abandon];
             run.calls += 1;
             const id = std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls }) catch "";
             const segment = g.segmentId(run);
-            var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true };
-            const outcome = op.host.call(op.host.context, &call, &.{});
+            var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true, .deferrable = deferrable };
+            const outcome: capabilities.Outcome = if (deferrable and g.deferOnce()) .deferred else op.host.call(op.host.context, &call, &.{});
+            if (outcome == .deferred and deferrable) {
+                run.calls -= 1;
+                return error.Deferred;
+            }
+            _ = run.scopes.pop();
             const result: ?*Value = if (outcome == .value) outcome.value else null;
             defer if (result) |v| v.release();
             switch (outcome) {
@@ -4792,10 +4889,9 @@ pub const Group = struct {
                 slot.grant.disabled = true;
                 g.releaseGrant(run.script, slot.grant, .disable);
                 const participating = if (run.participant) |pt| std.mem.indexOfScalar(*ScriptGrant, pt.grants.items, slot.grant) != null else false;
-                if (participating and prevented == null) prevented = .{ .grant = slot.grant.name, .phase = "abandon", .status = "unknown", .scope = slot.name };
+                if (participating and prevented.* == null) prevented.* = .{ .grant = slot.grant.name, .phase = "abandon", .status = "unknown", .scope = slot.name };
             }
         }
-        return prevented;
     }
 
     /// `scope open` at a boundary that would suspend while a scope is open,
@@ -4853,15 +4949,70 @@ pub const Group = struct {
         try r.add(.{ .run_end = end });
     }
 
+    /// A Segment end's lifecycle: abandon leftover scopes, then commit the
+    /// participant if they permit it, or roll it back. Each crossing may
+    /// defer; `run.ending` keeps how far it got, so none is made twice.
+    /// Returns the failure that ends the Run `effect failed`, if one does.
+    fn lifecycle(g: *Group, run: *Run) error{Deferred}!?EffectFailure {
+        const e = &run.ending.?;
+        if (e.stage == .abandon) {
+            if (e.outcome != .suspended) try g.abandonScopesWith(run, true, &e.prevented);
+            e.stage = .finalize;
+        }
+        if (run.participant == null) return e.prevented;
+        const first = run.participant.?.grants.items[0].name;
+        if (e.stage == .finalize) {
+            // A cancelled Run's cleanup Segment commits, unless a limit
+            // ended it.
+            const outcome = e.outcome;
+            const commits = e.prevented == null and outcome != .faulted and outcome != .stopped and outcome != .rewound and !(outcome == .cancelled and run.cleanup_limited);
+            if (commits) {
+                const status = g.hookWith(run, .commit, true);
+                if (status == .deferred) return error.Deferred;
+                if (status == .ok) return g.endParticipant(run, null);
+                // An uncertain commit, or a rollback that doesn't succeed,
+                // leaves the effects' state unknown, which stops the Group.
+                if (status == .unknown) e.fatal = true;
+                e.failure = .{ .grant = first, .phase = "commit", .status = @tagName(status) };
+                e.stage = .commit_rollback;
+            } else e.stage = .rollback;
+        }
+        const status = g.hookWith(run, .rollback, true);
+        if (status == .deferred) return error.Deferred;
+        if (status != .ok) e.fatal = true;
+        if (e.stage == .commit_rollback) return g.endParticipant(run, e.failure);
+        return g.endParticipant(run, e.prevented);
+    }
+
+    /// Whether `defer_crossings` defers this crossing: every other call.
+    fn deferOnce(g: *Group) bool {
+        if (!g.defer_crossings) return false;
+        g.deferred_once = !g.deferred_once;
+        return g.deferred_once;
+    }
+
+    fn endParticipant(g: *Group, run: *Run, failure: ?EffectFailure) ?EffectFailure {
+        run.participant.?.grants.deinit(g.gpa);
+        run.participant = null;
+        if (run.ending.?.fatal) g.fatal = true;
+        return failure;
+    }
+
+    /// Parks a Run whose Segment end deferred at a lifecycle crossing at
+    /// the head of its Script's work, as a crossing pause, with its Fuel
+    /// and allocation still its Segment's.
+    fn pauseEnding(g: *Group, s: *Script, run: *Run) !void {
+        g.crossing_pause = true;
+        return g.park(s, run);
+    }
+
     fn endSegment(g: *Group, s: *Script, run: *Run, ended: Outcome) !void {
-        var outcome = ended;
+        if (run.ending == null) run.ending = .{ .outcome = ended };
+        const lifecycle_failure = g.lifecycle(run) catch return g.pauseEnding(s, run);
+        var outcome = run.ending.?.outcome;
+        run.ending = null;
         const segment = g.segmentId(run);
-        // Abandon leftover scopes, then commit the participant if they
-        // permit it, or roll it back.
-        var failure: ?EffectFailure = if (outcome != .suspended) g.abandonScopes(run) else null;
-        // A cancelled Run's cleanup Segment commits, unless a limit ended it.
-        const commits = failure == null and outcome != .faulted and outcome != .stopped and outcome != .rewound and !(outcome == .cancelled and run.cleanup_limited);
-        if (g.finalize(run, commits)) |f| failure = f;
+        var failure: ?EffectFailure = lifecycle_failure;
         // An effect whose state is unknown stops the Group with this Run.
         if (g.fatal and outcome != .stopped and outcome != .rewound) {
             failure = null;
@@ -8359,7 +8510,12 @@ pub const Group = struct {
             // A failed begin leaves the call's declared cost spent.
             m.declared = decl.cost.fuel;
             m.alloc_extra = decl.cost.alloc;
-            try g.enroll(run, granted, &where);
+            g.enroll(run, granted, &where) catch |err| {
+                if (err != error.Deferred) return err;
+                // The instruction is made again once the Host answers.
+                for (args) |v| try g.push(frame, v.retain());
+                return .crossing;
+            };
         }
 
         // A Run that can't cover the declared cost faults before the Host

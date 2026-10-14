@@ -509,7 +509,10 @@ pub const Problem = union(enum) {
 /// A Segment Coordinator's hooks (embedding/scoped-effects.md).
 pub const Phase = enum { begin, commit, rollback };
 
-pub const EffectStatus = enum { ok, failed, unknown };
+/// `deferred` is only for a crossing that may defer (`deferrable`): the
+/// Host can't answer inside the call (the Message Layer), so the Core
+/// pauses there and makes the same call again once the answer is at hand.
+pub const EffectStatus = enum { ok, failed, unknown, deferred };
 
 /// A Grant enrolled in a Segment's participant, laid out as talk.h's
 /// `talk_segment_grant`.
@@ -526,6 +529,8 @@ pub const SegmentContext = struct {
     binding: ?*anyopaque,
     now: model.dates.Instant,
     grants: []const SegmentGrant,
+    /// Whether the hook may answer `deferred`.
+    deferrable: bool = false,
 };
 
 /// A Segment Coordinator: Grants with the same `identity` share a
@@ -671,6 +676,9 @@ pub const Call = struct {
     automatic: bool = false,
     /// Whether an automatic call tried to charge.
     charge_refused: bool = false,
+    /// Whether an automatic call may answer `deferred`; an Operation's own
+    /// call always may.
+    deferrable: bool = true,
     /// A suspending call's arguments, kept when its Operation checks the
     /// answer against them; the Group releases them.
     args: []*Value = &.{},

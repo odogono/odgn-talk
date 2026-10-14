@@ -82,6 +82,10 @@ jobs:
           version: 0.17.0
       - run: zig build install corpus
         working-directory: impl/zig
+      # Every lifecycle crossing that may defer does so once and resumes,
+      # as under the Message Layer; no Trace may change (#900).
+      - run: zig build corpus -- --defer-crossings
+        working-directory: impl/zig
 
   # The fuzzer's witnesses and mutations give the TS Core's complete Traces
   # through the Zig fuzz worker. The nightly campaign fuzzes it further.
