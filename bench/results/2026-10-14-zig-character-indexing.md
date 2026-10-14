@@ -1,8 +1,10 @@
 # Zig Character indexing measurements, 2026-10-14
 
 Evidence for [#927](https://github.com/odogono/odgn-talk/issues/927), comparing baseline
-`8f98a485ba36daaded132329a530c6c492bbd6b7` with this working tree. Both binaries
-include the exact numeric paths from #923; no numeric code changes in this task.
+`8f98a485ba36daaded132329a530c6c492bbd6b7` with the Character read change at
+`e052848a9df52f869a221c72b64c09d1ad1e004e`, before integration of #924. Both
+binaries include the exact numeric paths from #923; no numeric code changes in
+this task.
 The [paired raw measurements](2026-10-14-zig-character-indexing.json) retain
 five samples per process, three pairs, accounting, allocation probes, and binary,
 source and generated-probe hashes. The [pre-edit intake](2026-10-14-zig-character-indexing-intake.json)

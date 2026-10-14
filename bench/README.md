@@ -79,6 +79,11 @@ inputs read near the start, at the end and with a negative index. Timing and
 allocation probes run separately and require identical output, Fuel and logical
 allocation. Each process also repeats Runs against the same loaded Script.
 
+The [Zig List measurements](results/2026-10-14-zig-list-paths.md) record
+collecting and item-write size sweeps, paired collection and transform timings,
+allocation probes and residual AppleScript gaps for
+[#924](https://github.com/odogono/odgn-talk/issues/924).
+
 The [Zig Value allocation measurements](results/2026-10-14-zig-value-allocations.md)
 record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node
@@ -131,6 +136,19 @@ most requests, so a fixed-size node stands apart from variable-size scratch
 and collection buffers. `groupPeak` is the Group's physical high-water mark,
 including Load. These figures describe this allocator's requests, not resident
 memory or allocation by the default Zig allocator.
+
+For collecting and single-item writes over growing Lists, use:
+
+```sh
+python3 bench/zig/list-scaling.py <before-host> --out <before.json>
+python3 bench/zig/list-scaling.py <after-host> --compare <before.json> --out <after.json>
+```
+
+This sweeps 100, 300, 1,000 and 3,000 items for scalar collecting, collecting
+List literals containing a spread, and 128 writes to the last item with the
+original retained as a Constant built during Load. Each run checks output; `--compare` also checks Fuel and
+logical allocation against the saved baseline. Counting-allocator probes run
+separately from default-allocator timings, with the same boundaries above.
 
 For paired before/after timings and probes across every supported workload,
 build two Hosts the same way and run:

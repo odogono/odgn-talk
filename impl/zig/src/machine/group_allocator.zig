@@ -310,6 +310,11 @@ test "a refusal at any allocation leaves nothing behind" {
         \\on go n
         \\  try
         \\    put [n, {a: n & "x", b: [1, 2, 3]}] after log
+        \\    repeat for each i in 1..12 collecting [i, ...[n]] into collected
+        \\    end repeat
+        \\    put collected into snapshot
+        \\    put collected into item -1 of collected
+        \\    put collected into item 1 of log
         \\    send note with n to callee and wait
         \\    put it after log
         \\    throw {code: "boom", n: n}

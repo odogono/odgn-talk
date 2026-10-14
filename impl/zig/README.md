@@ -550,10 +550,23 @@ ownership edges, including hidden items, so cycle prevention needs no graph
 walk. Growing an older slice or writing inside a shared slice copies its
 spine; inserting a value with an equal or higher rank also copies into new,
 higher-ranked storage. Growing a Host List copies its spine into the Group
-allocator. Snapshots, captures and rollback bindings keep their previous
-contents. Spare capacity and retained
-items outside an older slice count against the Group's physical cap; Cost
-Model 0 still charges only the specified logical allocation.
+allocator. `collecting` and List literal spreads use the same growth path,
+without a temporary copy of the preceding List. Scalar collecting therefore
+has amortised linear spine work; nested values with equal or higher ownership
+ranks can still force copies.
+
+In-range single-item writes use the copy-on-write point setter directly,
+without first building a temporary spine. A unique same-allocator List can
+reuse its storage for a lower-ranked child. Chunk writes retain the borrowed
+input, including lowering temporaries and Segment rollback bindings, so they
+still copy the visible spine once per replacement; repeated writes on a long
+List remain linear in its length per write. Padded writes and range replacement
+rebuild the result. Host-owned input spines copy into the Group allocator.
+Snapshots, captures and rollback bindings keep their previous contents. Spare
+capacity and retained items outside an older slice count against the Group's
+physical cap; Cost Model 0 still charges only the specified logical allocation.
+The [List measurements](../../bench/results/2026-10-14-zig-list-paths.md)
+record size scaling, allocations and the remaining point-write cost.
 
 Forward Character reads walk only through the requested end and keep byte
 offsets instead of segmentation arrays. Missing and reversed reads still
