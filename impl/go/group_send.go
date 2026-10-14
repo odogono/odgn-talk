@@ -59,6 +59,7 @@ func (g *Group) send(x *execution, to machine.Receiver, message string, args []c
 		d.reply = CallID(fmt.Sprintf("%s.c%d", x.id, x.calls))
 		if x.run.Join != nil {
 			x.run.AddJoinMember(string(d.reply))
+			x.run.Join.Members[len(x.run.Join.Members)-1].Deadline = g.deadlineAfter(int64(x.maxWait() / time.Millisecond))
 		} else {
 			x.waitCall = d.reply
 		}

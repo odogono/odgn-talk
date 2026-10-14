@@ -108,6 +108,20 @@ pub const Unit = struct {
     events: []const Event,
 };
 
+/// Only for a unit the Core itself loaded from generated normative stdlib source.
+pub fn lowerStdlibIntrinsics(unit: *Unit) void {
+    if (!unit.library or !std.mem.eql(u8, unit.name, "map")) return;
+    for (unit.bodies) |body| {
+        if (!std.mem.eql(u8, body.name, "restrictedCall")) continue;
+        for (@constCast(unit.code[body.first..body.last])) |*ins| {
+            if (ins.op == .call_value) {
+                ins.op = .call_restricted;
+                ins.operands = &.{};
+            }
+        }
+    }
+}
+
 pub const Mode = check.Mode;
 
 /// What a constant is to the machine: a value, or one of the constants that

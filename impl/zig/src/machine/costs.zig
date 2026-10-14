@@ -10,6 +10,7 @@ const Value = model.Value;
 
 /// What one instruction's formulas measure. The values are owned references.
 pub const Measures = struct {
+    restricted_refusal: bool = false,
     input: ?*Value = null,
     result: ?*Value = null,
     scanned: u64 = 0,

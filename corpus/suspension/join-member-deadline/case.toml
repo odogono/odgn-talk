@@ -1,0 +1,17 @@
+# A Join Member's maxPending counts from the Pump that started its call, even
+# when the Join is preempted and suspends at its end in a later Pump.
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[operations]]
+capability = "api"
+name = "fetch"
+mode = "suspending"
+result = "number"
+cost = { fuel = 1 }
+maxPending = 1000
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { api = { ops = "all" } }

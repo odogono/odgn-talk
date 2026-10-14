@@ -34,6 +34,9 @@ func QueuePolicy(b *lower.Body) string {
 // Run state. It is not a Script error, and consumes no instruction charge.
 // Supported identifies the standalone execution instructions implemented here.
 func Supported(i lower.Instruction) bool {
+	if i.Op == generated.OpCallRestricted {
+		return true
+	}
 
 	switch i.Op {
 	case generated.OpCallImport, generated.OpMakeImportedFunction, generated.OpAskWait, generated.OpJoinAsk, generated.OpAsk, generated.OpTell, generated.OpConst, generated.OpPop, generated.OpLoad, generated.OpStore, generated.OpMove, generated.OpLoadVar, generated.OpStoreVar, generated.OpLoadDefinition, generated.OpStoreDefinition, generated.OpLoadObject:

@@ -157,9 +157,20 @@ func (g *Group) installJoinTimers(x *execution) {
 		if ms == 0 {
 			ms = int64(x.maxWait() / time.Millisecond)
 		}
+		// A member's wait began with its call, which a preempted Join made
+		// in an earlier Pump.
+		deadline := m.Deadline
+		if deadline == nil {
+			deadline = g.deadlineAfter(ms)
+		}
 		g.nextTimer++
-		x.memberTimers = append(x.memberTimers, memberTimer{id: m.ID, ms: ms, deadline: new(big.Int).Add(clockNanos(g.clock), big.NewInt(ms*int64(time.Millisecond))), order: g.nextTimer})
+		x.memberTimers = append(x.memberTimers, memberTimer{id: m.ID, ms: ms, deadline: deadline, order: g.nextTimer})
 	}
+}
+
+// deadlineAfter is this Pump's Clock plus ms, in nanoseconds.
+func (g *Group) deadlineAfter(ms int64) *big.Int {
+	return new(big.Int).Add(clockNanos(g.clock), big.NewInt(ms*int64(time.Millisecond)))
 }
 
 func (g *Group) cancelPendingAbandons(x *execution) {

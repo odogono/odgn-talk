@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 5;
+pub const format_version: u32 = 6;
 
 pub const Error = error{
     InvalidSave,
@@ -507,6 +507,7 @@ const Saving = struct {
             try s.values(f.locals);
             try s.slots(f.stack.items);
             try s.o.flag(f.called);
+            try s.o.flag(f.restricted);
         }
     }
 
@@ -1439,6 +1440,7 @@ const Restoring = struct {
             }
             try r.slots(&placed.stack);
             placed.called = try r.i.flag();
+            placed.restricted = try r.i.flag();
             f = placed.*;
         }
     }
@@ -1681,10 +1683,16 @@ const Restoring = struct {
         _ = r;
         const fs = run.frames.items;
         if (x.frame >= fs.len or x.entry > run.script.unitIn(fs[x.frame].library).unwind.len) return error.InvalidSave;
-        for ([_]?machine.Limit{ x.limit, x.skip }) |l| if (l) |b| {
+        if (x.limit) |b| {
             if (b.frame > top or b.frame >= fs.len) return error.InvalidSave;
             if (b.entry > run.script.unitIn(fs[b.frame].library).unwind.len) return error.InvalidSave;
-        };
+        }
+        // A failed recovery policy can leave a skip marker in a frame
+        // retained above the next catch's owner.
+        if (x.skip) |b| {
+            const frame = heldFrame(run, b.frame) orelse return error.InvalidSave;
+            if (b.entry > run.script.unitIn(frame.library).unwind.len) return error.InvalidSave;
+        }
     }
 
     /// Control validation (chapter 10, Restoring): each frame's stack is
@@ -1703,7 +1711,7 @@ const Restoring = struct {
             if (!top) {
                 if (f.pc == 0) return error.InvalidSave;
                 switch (code.code[f.pc - 1].op) {
-                    .call, .call_import, .call_handler, .call_handler_wait, .call_value, .call_value_wait => less = 1,
+                    .call, .call_import, .call_handler, .call_handler_wait, .call_value, .call_restricted, .call_value_wait => less = 1,
                     else => if (!controlled) return error.InvalidSave,
                 }
             } else if (!run.continuing and f.pc > 0) {
@@ -1722,7 +1730,10 @@ const Restoring = struct {
                 const owner_code = run.script.unitIn(fs[d.owner].library);
                 if (d.search.frame != d.owner or d.search.entry == 0 or d.search.entry > owner_code.unwind.len) return error.InvalidSave;
                 if (owner_code.unwind[d.search.entry - 1].kind != .@"catch") return error.InvalidSave;
-                if (d.place >= owner_code.code.len or d.search.raised >= owner_code.code.len) return error.InvalidSave;
+                // `raised` belongs to the original failing frame, which may
+                // be retained Library code rather than the catching Script.
+                const failed_code = if (d.held.len > 0) run.script.unitIn(d.held[d.held.len - 1].library) else owner_code;
+                if (d.place >= owner_code.code.len or d.search.raised >= failed_code.code.len) return error.InvalidSave;
                 if (d.search.position > d.owner + 1 + d.held.len) return error.InvalidSave;
                 try r.checkSearch(run, d.search, d.owner);
                 for (d.held) |*f| {

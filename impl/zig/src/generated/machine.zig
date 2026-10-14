@@ -41,8 +41,8 @@ pub const MachineTableInstructionEntry = struct {
     suspends: bool,
     cost: []const u8,
     does: []const u8,
-    jumps: ?i64 = null,
     errors: ?[]const []const u8 = null,
+    jumps: ?i64 = null,
 };
 
 /// A field whose Data File value is an integer in some entries and text in others.
@@ -150,6 +150,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "slot",
             .does = "Pushes a Script Variable",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "store-var",
@@ -162,6 +165,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "store-var",
             .does = "Pops a value into a Script Variable",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "load-definition",
@@ -186,6 +192,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "slot",
             .does = "Pops a Constant's value, in the code unit's initialiser only",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "load-object",
@@ -198,6 +207,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "slot",
             .does = "Pushes the well-known Host Object bound to a name at load, or a Script's name, which its `send` checks the Group holds",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "me",
@@ -208,6 +220,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "slot",
             .does = "Pushes `me`",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "target",
@@ -218,6 +233,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "slot",
             .does = "Pushes `the target`",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "jump",
@@ -670,6 +688,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "object gone",
+                "restricted operation",
             },
         },
         .{
@@ -684,6 +703,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "object gone",
+                "restricted operation",
             },
         },
         .{
@@ -1026,6 +1046,7 @@ pub const machine: MachineTable = .{
                 "wrong kind",
                 "read only",
                 "object gone",
+                "restricted operation",
             },
         },
         .{
@@ -1041,6 +1062,7 @@ pub const machine: MachineTable = .{
                 "wrong kind",
                 "read only",
                 "object gone",
+                "restricted operation",
             },
         },
         .{
@@ -1311,6 +1333,7 @@ pub const machine: MachineTable = .{
             .does = "`name args and wait`: calls a Handler that may suspend, as `call-handler` does, and suspends when its body does",
             .errors = &.{
                 "no match",
+                "restricted operation",
             },
         },
         .{
@@ -1325,6 +1348,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "builtin",
             .does = "Calls a Built-in function, charged by its own Cost Model key",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "call-value",
@@ -1337,6 +1363,22 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "call",
             .does = "Calls the Function Value below the `count` arguments, which must run here without suspending",
+            .errors = &.{
+                "wrong kind",
+                "function gone",
+                "wrong arity",
+                "would suspend",
+            },
+        },
+        .{
+            .name = "call-restricted",
+            .group = "calls",
+            .operands = &.{},
+            .pops = .{ .int = 2 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "call",
+            .does = "Calls the Function Value below one argument under an inherited restriction on effects and live state observations; emitted only by the trusted stdlib intrinsic",
             .errors = &.{
                 "wrong kind",
                 "function gone",
@@ -1363,6 +1405,7 @@ pub const machine: MachineTable = .{
                 "send failed",
                 "timeout",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1690,6 +1733,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "offer unavailable",
                 "wrong arity",
+                "restricted operation",
             },
         },
         .{
@@ -1736,6 +1780,7 @@ pub const machine: MachineTable = .{
                 "scope not open",
                 "scope in join",
                 "segment participant conflict",
+                "restricted operation",
             },
         },
         .{
@@ -1758,6 +1803,7 @@ pub const machine: MachineTable = .{
                 "timeout",
                 "capability disabled",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1778,6 +1824,7 @@ pub const machine: MachineTable = .{
                 "capability revoked",
                 "host error",
                 "capability disabled",
+                "restricted operation",
             },
         },
         .{
@@ -1796,6 +1843,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -1817,6 +1865,7 @@ pub const machine: MachineTable = .{
                 "send failed",
                 "timeout",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1835,6 +1884,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -1856,6 +1906,7 @@ pub const machine: MachineTable = .{
                 "send failed",
                 "timeout",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1872,6 +1923,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -1891,6 +1943,7 @@ pub const machine: MachineTable = .{
                 "send failed",
                 "timeout",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1907,6 +1960,7 @@ pub const machine: MachineTable = .{
             .does = "A Command Call with no Handler: sends the message up the Message Path",
             .errors = &.{
                 "mailbox full",
+                "restricted operation",
             },
         },
         .{
@@ -1926,6 +1980,7 @@ pub const machine: MachineTable = .{
                 "send failed",
                 "timeout",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1940,6 +1995,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1956,6 +2012,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1972,6 +2029,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "wrong kind",
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -1985,6 +2043,7 @@ pub const machine: MachineTable = .{
             .does = "Starts a Join",
             .errors = &.{
                 "scope open",
+                "restricted operation",
             },
         },
         .{
@@ -2004,6 +2063,7 @@ pub const machine: MachineTable = .{
                 "wrong kind",
                 "capability revoked",
                 "capability disabled",
+                "restricted operation",
             },
         },
         .{
@@ -2022,6 +2082,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -2040,6 +2101,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -2056,6 +2118,7 @@ pub const machine: MachineTable = .{
                 "mailbox full",
                 "object gone",
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -2070,6 +2133,7 @@ pub const machine: MachineTable = .{
             .errors = &.{
                 "send failed",
                 "timeout",
+                "restricted operation",
             },
         },
         .{
@@ -2083,6 +2147,7 @@ pub const machine: MachineTable = .{
             .does = "`with timeout of d`: pops an exact duration, and pushes a deadline at the Pump's Clock reading plus it, or a copy of the enclosing block's deadline when that is no later",
             .errors = &.{
                 "wrong kind",
+                "restricted operation",
             },
         },
         .{
@@ -2094,6 +2159,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "stack",
             .does = "Pops a Timeout Block's deadline as control leaves the block",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "veto",
@@ -2104,6 +2172,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "return",
             .does = "Pops the reason, vetoes the Decision and ends the Run",
+            .errors = &.{
+                "restricted operation",
+            },
         },
         .{
             .name = "pass",
@@ -2116,6 +2187,9 @@ pub const machine: MachineTable = .{
             .suspends = false,
             .cost = "send",
             .does = "Ends the Run and sends its message on up the Message Path; a Fallback Handler's operand is `any message`",
+            .errors = &.{
+                "restricted operation",
+            },
         },
     },
 };

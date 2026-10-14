@@ -348,8 +348,11 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		}
 		required, total := functionArity(body)
 		push(value.Fields{Kind: value.Function, Function: &value.FunctionData{Home: r.State.Unit.Name, Code: functionCode(callee, body.Index, body.Checked.Name), CodeState: callee, Captures: captures, Body: body.Index, Owner: r.State, Group: r.State.Group, Name: functionName, Required: required, Total: total}}.Value())
-	case generated.OpCallValue, generated.OpCallValueWait:
-		n := idx(0)
+	case generated.OpCallValue, generated.OpCallRestricted, generated.OpCallValueWait:
+		n := 1
+		if i.Op != generated.OpCallRestricted {
+			n = idx(0)
+		}
 		vs := take(n)
 		fn := pop()
 		m.Count = int64(n)
@@ -364,7 +367,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		if data.Owner != r.State {
-			if i.Op == generated.OpCallValue {
+			if i.Op != generated.OpCallValueWait {
 				bad(failure("would suspend"))
 				break
 			}
@@ -390,7 +393,7 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 				break
 			}
 		}
-		if maySuspend && i.Op == generated.OpCallValue {
+		if maySuspend && i.Op != generated.OpCallValueWait {
 			bad(failure("would suspend"))
 			break
 		}
@@ -400,7 +403,12 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 			break
 		}
 		f.Waiting = true
-		effect = func() { r.pushFunction(callee, fn, vs) }
+		effect = func() {
+			r.pushFunction(callee, fn, vs)
+			if i.Op == generated.OpCallRestricted {
+				r.Frames[len(r.Frames)-1].Restricted = true
+			}
+		}
 
 	case generated.OpWait:
 		ns, err := waitNanos(pop())

@@ -28,6 +28,18 @@ var Errors = ErrorsTable{
 	},
 	Error: []ErrorsTableErrorEntry{
 		ErrorsTableErrorEntry{
+			Code: "restricted operation",
+			Fields: []string{
+				"instruction",
+			},
+			RaisedWhen: "A restricted callback attempts an instruction or Built-in that observes live state, performs an effect or accesses recovery offers",
+			Sources: []string{
+				"ADR 0081",
+				"#696",
+			},
+			Message: "The instruction {instruction} is not allowed in a restricted callback",
+		},
+		ErrorsTableErrorEntry{
 			Code:       "bad throw",
 			Fields:     []string{},
 			RaisedWhen: "`throw` is given something that isn't a map with a text `code`, or text",

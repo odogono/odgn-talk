@@ -1,12 +1,15 @@
 package machine
 
 import (
+	"math/big"
+
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
 // Join retains calls in start order, including replies received while its body
-// was preempted. Waiting starts only at the closing instruction.
+// was preempted. The Run suspends only at the closing instruction, but each
+// member's deadline counts from the Pump that started it (chapter 6, MaxWait).
 type Join struct {
 	Frame, Start   int
 	Members        []JoinMember
@@ -17,8 +20,11 @@ type Join struct {
 }
 type JoinMember struct {
 	WaitMS int64
-	ID     string
-	Reply  *SendResume
+	// Deadline is the Clock of the Pump that started it, in nanoseconds,
+	// plus WaitMS.
+	Deadline *big.Int
+	ID       string
+	Reply    *SendResume
 }
 type JoinReply struct {
 	ID    string

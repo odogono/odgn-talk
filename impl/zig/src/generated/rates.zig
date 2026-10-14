@@ -132,6 +132,7 @@ pub const cost_rates = [_]CostRate{
     .{ .key = "operator", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 2, .divisor = 1 }}, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }} },
     .{ .key = "power", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 8, .divisor = 1 }, .{ .measure = 9, .subject = 2, .factor = 2, .divisor = 1 } }, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }} },
     .{ .key = "property", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 3, .divisor = 1 }, .{ .measure = 4, .subject = 1, .factor = 1, .divisor = 8 }, .{ .measure = 7, .subject = 2, .factor = 1, .divisor = 1 } }, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }} },
+    .{ .key = "restricted-refusal", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 1, .divisor = 1 }}, .alloc = &.{} },
     .{ .key = "return", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 2, .divisor = 1 }}, .alloc = &.{} },
     .{ .key = "search", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 4, .divisor = 1 }, .{ .measure = 11, .subject = 0, .factor = 1, .divisor = 1 } }, .alloc = &.{} },
     .{ .key = "send", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 20, .divisor = 1 }, .{ .measure = 1, .subject = 1, .factor = 1, .divisor = 32 } }, .alloc = &.{.{ .measure = 1, .subject = 1, .factor = 1, .divisor = 1 }} },

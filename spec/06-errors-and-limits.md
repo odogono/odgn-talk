@@ -149,6 +149,7 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 
 | Code | Fields | Raised when | Sources |
 | --- | --- | --- | --- |
+| `restricted operation` | `instruction` | A restricted callback attempts an instruction or Built-in that observes live state, performs an effect or accesses recovery offers | [ADR 0081](../docs/adr/0081-mappings-compose-shapes-with-restricted-transformations.md), [#696](https://github.com/odogono/odgn-talk/issues/696) |
 | `bad throw` | none | `throw` is given something that isn't a map with a text `code`, or text | [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [#61](https://github.com/odogono/odgn-talk/issues/61) |
 | `no match` | none | A Destructuring test fails in `let` or in a Lambda's parameters, or a binary text decode fails | [ADR 0010](../docs/adr/0010-normative-lowering-onto-a-stack-abstract-machine.md), [ADR 0013](../docs/adr/0013-binary-patterns-are-sequential-destructuring.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md) |
 | `send failed` | `reason`; optional: `error` | The receiver of a `send … and wait`, a Function Value call or a Host `Request` doesn't answer; `reason` is `errored`, `limit fault`, `effect failed`, `cancelled`, `unhandled`, `dropped`, `stopped` or `function gone`, and `error` is present only for `errored` | [ADR 0015](../docs/adr/0015-the-host-drives-the-core-through-a-pump.md), [ADR 0017](../docs/adr/0017-errors-are-plain-maps-raised-with-throw-and-caught-by-destructuring.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0033](../docs/adr/0033-the-error-catalogue-settles-its-fields-and-codes.md) |
@@ -208,6 +209,7 @@ Every Core-raised error carries a `message`, written from its template below. `{
 
 | Code | Message |
 | --- | --- |
+| `restricted operation` | The instruction {instruction} is not allowed in a restricted callback |
 | `bad throw` | Only a map with a text `code`, or a text, can be thrown |
 | `no match` | The value doesn't match the pattern |
 | `send failed` | No answer came: the receiver's Run ended {reason} |

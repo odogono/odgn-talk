@@ -67,6 +67,7 @@ test {
     _ = @import("machine/builtins.zig");
     _ = @import("machine/group_allocator.zig");
     _ = @import("machine/nothing_defaults_test.zig");
+    _ = @import("machine/restricted_test.zig");
     _ = @import("machine/verify.zig");
     _ = @import("machine/reports.zig");
     _ = @import("machine/clause_charge_test.zig");

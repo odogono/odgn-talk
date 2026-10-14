@@ -53,6 +53,7 @@ A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-m
   - its dispatch-context stack, retained continuations, activation PCs and operand stacks, owning-frame identities and shared locals, the try being dispatched and selection boundaries
   - its pending acceptance or offer target and evaluated arguments, cleanup queue and progress, inherited/entered scope identities, and per-Run offer-attempt counter
   - its cleanup stack
+  - each active, retained and cleanup frame's inherited restricted-callback flag
 - **Each pending call:** its call id, its Run, its Grant name and Operation, its arguments and its `maxPending` or `MaxWait` deadline. Its declared cost has always been charged by then. In TS it also records whether the original call used `start` or `run`, which decides Adopt eligibility independently of the rebound Host implementation.
 - **Each Host Object:** its kind, its id, its parent, and whether it is disposed. Native objects are never saved.
 - **Function Values:** their Home Script, body and captured values, as plain data ([ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md)).

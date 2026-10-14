@@ -71,7 +71,7 @@ func (r *Run) ValidateSnapshot(code map[*State]bool) error {
 			return invalid()
 		}
 		canonical := frames[f.ID]
-		if canonical.Code != f.Code || canonical.Body != f.Body || canonical.OwnerID != f.OwnerID || canonical.ControlID != f.ControlID || canonical.Recovery != f.Recovery {
+		if canonical.Code != f.Code || canonical.Body != f.Body || canonical.OwnerID != f.OwnerID || canonical.ControlID != f.ControlID || canonical.Recovery != f.Recovery || canonical.Restricted != f.Restricted {
 			return invalid()
 		}
 		if f.Recovery && (f.OwnerID == 0 || f.ControlID == 0) {
@@ -82,7 +82,7 @@ func (r *Run) ValidateSnapshot(code map[*State]bool) error {
 				continue
 			}
 			owner, ok := frames[id]
-			if !ok || id == f.ID || owner.Code != f.Code || owner.Body != f.Body {
+			if !ok || id == f.ID || owner.Code != f.Code || owner.Body != f.Body || owner.Restricted != f.Restricted {
 				return invalid()
 			}
 			seen := map[int]bool{f.ID: true}

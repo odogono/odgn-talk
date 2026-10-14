@@ -3,11 +3,16 @@ package generated
 
 type CostsTable struct {
 	Version int64
+	Change  []CostsTableChangeEntry
 	Measure CostsTableMeasure
 	Subject CostsTableSubject
 	Size    []CostsTableSizeEntry
 	Rate    []CostsTableRateEntry
-	Change  []CostsTableChangeEntry
+}
+
+type CostsTableChangeEntry struct {
+	Issue  string
+	Change string
 }
 
 type CostsTableMeasure struct {
@@ -48,13 +53,50 @@ type CostsTableRateEntry struct {
 	Input string
 }
 
-type CostsTableChangeEntry struct {
-	Issue  string
-	Change string
-}
-
 var Costs = CostsTable{
 	Version: 0,
+	Change: []CostsTableChangeEntry{
+		CostsTableChangeEntry{
+			Issue:  "#696",
+			Change: "call-restricted uses the call rate; refused restricted operations pay restricted-refusal only, with no operation allocation, Host charge or dynamic work; the frame restriction flag fits the existing frame header",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#115",
+			Change: "`next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#115",
+			Change: "Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#115",
+			Change: "An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#126",
+			Change: "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#388",
+			Change: "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#719",
+			Change: "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#722",
+			Change: "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#788",
+			Change: "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
+		},
+		CostsTableChangeEntry{
+			Issue:  "#695",
+			Change: "The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional",
+		},
+	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
 		Contents:   "the sum of the logical sizes of the values the value holds: a list's items, a map's keys and values, a range's ends, a Function Value's captures",
@@ -329,6 +371,10 @@ var Costs = CostsTable{
 		CostsTableRateEntry{
 			Key:  "call",
 			Fuel: "8",
+		},
+		CostsTableRateEntry{
+			Key:  "restricted-refusal",
+			Fuel: "1",
 		},
 		CostsTableRateEntry{
 			Key:   "clause",
@@ -649,44 +695,6 @@ var Costs = CostsTable{
 		CostsTableRateEntry{
 			Key:  "offer-lookup",
 			Fuel: "4 * frames",
-		},
-	},
-	Change: []CostsTableChangeEntry{
-		CostsTableChangeEntry{
-			Issue:  "#115",
-			Change: "`next` and `replace-next` move from the `iterate` key to a new `next` key, at 2 Fuel and no allocation, since neither builds a value; `iterate` charged 24 allocation on every pass",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#115",
-			Change: "Dispatch charges the `clause` rate at the first instruction of each clause body it tries, together with that instruction's own charge, so a fault there has an instruction and a position",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#115",
-			Change: "An instruction checks its own limit (call depth, Text Pattern size or `MaxJoin`) before its Fuel and allocation, so an instruction that passes one faults on it and is never charged",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#126",
-			Change: "The `compare`, `member` and `chunk-get` rates say exactly what `scanned` counts, `test-chunk` measures as the read it tests, and a zero's coefficient has 1 digit",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#388",
-			Change: "Two-phase catch search charges frames left before cleanup, adds catch-accept/catch-next and replaces rethrow; Recovery Offer lookup and transfer add their declared Fuel and retained dispatch sizes",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#719",
-			Change: "Stage Nothing defaults with branch-not-nothing and pop, and optional map-key reads at the existing branch, stack and get-key rates; Cost Model 0 remains provisional.",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#722",
-			Change: "Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration.",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#788",
-			Change: "The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails",
-		},
-		CostsTableChangeEntry{
-			Issue:  "#695",
-			Change: "The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional",
 		},
 	},
 }

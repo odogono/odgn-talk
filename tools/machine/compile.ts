@@ -293,6 +293,8 @@ export type Options = {
   // Names a Library imports resolve against these sources, so the compiler
   // knows which are functions, Handlers or Constants.
   libraries?: Map<string, Node[]>;
+  /** Set only by tools loading the normative spec/stdlib source. */
+  trustedStdlib?: boolean;
 };
 
 export class UnitCompiler {
@@ -3131,6 +3133,16 @@ export const compileSource = (
   }
   const u = new UnitCompiler(name, kind, ast!, opts);
   const unit = u.compile();
+  if (opts.trustedStdlib && name === 'map' && kind === 'library') {
+    const body = unit.bodies.find(b => b.name === 'restrictedCall')!;
+    for (const ins of unit.code.slice(body.start, body.end)) {
+      if (ins.op === 'call-value') {
+        ins.op = 'call-restricted';
+        ins.args = [];
+        ins.notes = [];
+      }
+    }
+  }
   // Guard entries target the label they fail to.
   for (const b of unit.bodies) {
     void b;

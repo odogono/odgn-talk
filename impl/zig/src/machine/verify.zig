@@ -106,7 +106,7 @@ fn count(unit: *const lower.Unit, ins: lower.Instruction, n: @FieldType(@TypeOf(
 /// Whether an instruction never goes on to the next one.
 fn ends(op: Opcode) bool {
     return switch (op) {
-        .jump, .@"return", .throw, .clause_fail, .raise, .veto, .pass, .catch_accept, .catch_next, .end_cleanup, .choose_offer => true,
+        .jump, .@"return", .throw, .clause_fail, .raise, .veto, .pass, .catch_next, .end_cleanup, .choose_offer => true,
         else => false,
     };
 }

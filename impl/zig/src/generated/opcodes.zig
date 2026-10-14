@@ -93,6 +93,7 @@ pub const Opcode = enum(u8) {
     call_handler_wait,
     call_builtin,
     call_value,
+    call_restricted,
     call_value_wait,
     @"return",
     clause_fail,

@@ -96,6 +96,7 @@ const (
 	OpCallHandlerWait
 	OpCallBuiltin
 	OpCallValue
+	OpCallRestricted
 	OpCallValueWait
 	OpReturn
 	OpClauseFail
