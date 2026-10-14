@@ -307,8 +307,7 @@ const scannedPairs = (a: Value, b: Value, fold: boolean): number => {
         break;
       }
       i++;
-      const other = b.entries().find(([key]) => key === k);
-      if (!other || !equals(v, other[1], fold).equal) {
+      if (!b.hasKey(k) || !equals(v, b.get(k), fold).equal) {
         break;
       }
     }
