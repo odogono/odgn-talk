@@ -142,3 +142,13 @@ test("the report lists each Benchmark's Cores before its peers", () => {
     '| core/a | cpython |  | 0.00100 | 0.00100 |  |  |  |  |  |',
   );
 });
+
+test('Zig participates in three-Core Fuel parity', () => {
+  expect(
+    fuelParity([
+      measured('core/a', 'go', 10),
+      measured('core/a', 'ts', 10),
+      measured('core/a', 'zig', 11),
+    ]),
+  ).toEqual([{ benchmark: 'core/a', fuel: { go: 10, ts: 10, zig: 11 } }]);
+});

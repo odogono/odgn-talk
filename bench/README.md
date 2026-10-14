@@ -7,22 +7,27 @@ fault isolation. Its measurements are separate from the Core/Peer suite below.
 Measures how fast each Core runs the same Scripts, to find slow paths and to compare NorthTalk with its Peer Languages. Nothing here is normative. [ADR 0054](../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md) records why the suite lives outside the Cores and only advises the Cost Model.
 
 ```sh
-bun run bench [--filter <text>] [--only go|ts|peers] [--count <n>] [--smoke] [--no-save] [--outlier-factor <k>]
+bun run bench [--filter <text>] [--only go|ts|zig|peers] [--count <n>] [--smoke] [--no-save] [--outlier-factor <k>]
 ```
 
 - **`--filter`** keeps the Benchmarks whose names contain the text, such as `core` or `core/fib`.
-- **`--only`** runs one Core, or only the [Peer Languages](#peer-languages). With both Cores, a Benchmark whose Fuel differs between them fails the run.
-- **`--count`** is the Go `-count` and the number of CPython repeats, 10 by default. mitata picks the sample count on Bun.
+- **`--only`** runs one Core, or only the [Peer Languages](#peer-languages). With multiple Cores, a Benchmark whose Fuel differs between them fails the run.
+- **`--count`** is the Go `-count` and the number of Zig and CPython repeats, 10 by default. mitata picks the sample count on Bun.
 - **`--smoke`** runs each Benchmark once at its smoke size and checks output and Fuel parity, without saving anything. Its timings mean nothing.
 - **`--no-save`** prints the report without writing it to `results/`.
 - **`--outlier-factor`** sets the Cost Model outlier threshold, 3 by default.
 - **Exit codes:** 0 when every Benchmark and every port produced its expected output and Fuel agreed, 1 otherwise.
 
-The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pinned CPython on first use. AppleScript runs only on macOS, and is left out of runs elsewhere. A full wave 1 run takes about 20–30 minutes with the default ten Go samples. It prints a Markdown report and writes it, with the JSON it came from, to `results/<date>-<os>-<arch>-<cpu>.{md,json}`. Each file records the commit, machine, and Bun, Go, language, Cost Model and Peer Language versions.
+The Peer Languages need [uv](https://docs.astral.sh/uv/), which downloads the pinned CPython on first use. AppleScript runs only on macOS, and is left out of runs elsewhere. A full wave 1 run takes about 20–30 minutes with the default ten Go samples. It prints a Markdown report and writes it, with the JSON it came from, to `results/<date>-<os>-<arch>-<cpu>.{md,json}`. Each file records the commit, machine, and Bun, Go, Zig, language, Cost Model and Peer Language versions.
 
 The [first full wave 1 results](results/2026-10-06-darwin-arm64-apple-m1-pro.md) cover all 26 workloads on an Apple M1 Pro, with matching Fuel on both Cores. The [JSON](results/2026-10-06-darwin-arm64-apple-m1-pro.json) records all 192 measurements. The [first full results with wave 2](results/2026-10-08-darwin-arm64-apple-m5.md) cover all 38 workloads, including the four Fuel Slice sweep runs, on an Apple M5. Their [JSON](results/2026-10-08-darwin-arm64-apple-m5.json) records 216 measurements.
 
 The [first results with AppleScript](results/2026-10-09-darwin-arm64-apple-m5.md) cover all 39 workloads on an Apple M5, with AppleScript on the 21 that the Peer Languages run. Their [JSON](results/2026-10-09-darwin-arm64-apple-m5.json) records 246 measurements.
+
+The [first native Zig comparison](results/2026-10-14-darwin-arm64-apple-m5.md)
+covers 39 workloads on an Apple M5, with Zig on 30 of them, including all 21
+Peer Language workloads. Its [JSON](results/2026-10-14-darwin-arm64-apple-m5.json)
+records 276 measurements with matching Fuel across the overlapping Cores.
 
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
@@ -33,13 +38,31 @@ record before/after timings and allocations for [#504](https://github.com/odogon
 The [TS packed Unicode tables measurements](results/2026-10-12-ts-unicode-tables.md)
 record three paired before/after runs for [#399](https://github.com/odogono/odgn-talk/issues/399).
 
+## Native Zig comparison
+
+The default run includes the native Zig Core through `talk.h`, built with the
+pinned Zig 0.17.0 compiler in its default `safe` mode (bounds and overflow checks
+kept). A C compiler builds the Host with `-O2`; both builds finish before timing.
+`bun run bench --only zig` selects it alone. Zig runs all 21 Peer Language
+workloads, the Fuel Slice sweep, graphemes, empty Pump, suspension and Load
+workloads. The nine workloads requiring additional Host bindings are explicitly
+skipped in the manifest: these are benchmark Host limitations, not missing Core
+features.
+
+Each Zig sample averages calls over at least 50 ms, with `--count` samples and
+one untimed validation Run first. Every timed Run checks its output and accounting;
+Fuel must agree with the TS and Go Cores. Load uses a fresh Script name each time,
+with Group destruction outside the Load timer. Run includes Delivery, pumping,
+report collection and result display on an already loaded Script. Native memory
+allocation is not measured. Smoke timings are not performance measurements.
+
 ## Workloads
 
 The categories are `core`, `numbers`, `text`, `collections`, `messaging`, `host`, `lifecycle` and `macro`.
 Use a category name as the filter, for example `bun run bench --filter numbers`.
 
 - **Numbers:** exact fractional addition, multiplication and division, plus millimetre-to-metre Quantity conversion. Fractional checksums are scaled and rounded to integers. Peers use their native numbers; the chosen binary-exact fractions avoid comparing decimal rounding policies. Quantity peers apply the conversion factor numerically.
-- **Text:** repeated concatenation, Character iteration and indexing, and finding maximal digit runs. The comparison inputs are ASCII, where the peers' character APIs agree. `text/graphemes` separately exercises NFC, a ZWJ family, a combining mark and a flag on both Cores; peers skip it because the pinned languages have no shared grapheme API. Starlark and AppleScript have no regular-expression library, so their digit-run ports scan characters.
+- **Text:** repeated concatenation, Character iteration and indexing, and finding maximal digit runs. The comparison inputs are ASCII, where the peers' character APIs agree. `text/graphemes` separately exercises NFC, a ZWJ family, a combining mark and a flag on all three Cores; peers skip it because the pinned languages have no shared grapheme API. Starlark and AppleScript have no regular-expression library, so their digit-run ports scan characters.
 - **Collections:** List and Map construction, updates with a retained original, and iteration. `list-build` uses `collecting`; `list-append` grows a Script Variable with `put … after` while retaining its initial List. Peers copy the original once before mutating their working collection. This preserves the same value semantics while using each language's idioms. AppleScript's records can't take keys chosen at run time, so its map ports use Foundation's `NSMutableDictionary`. Its ports that grow long lists keep them in a script object's properties, the usual way to avoid reads that slow down as a local list grows.
 - **Messaging and scheduling:** sends to another Script, sends that climb a Host Object's parents to their Owning Script, Joins of eight sends, and a zero `wait` in every iteration. Each send waits for its reply, so it also suspends and resumes the sender. The `partner` Host loads [`messaging/partner.talk`](scripts/messaging/partner.talk), which only echoes, beside the Benchmark. The `parents` Host makes a leaf, branch and root Host Object, with the Benchmark as the root's Owning Script. Only the Cores run these workloads.
 - **Host boundary:** immediate identity Operations, suspending identity Operations, Host Object property reads, nested Map/List conversion through JSON, and an empty-Handler Delivery/Pump round trip. Only the Cores run these workloads. The manifest's `host` field selects the bindings installed by each Host. Operations and the property read declare one Fuel, with the same Shapes on both Hosts. Suspended calls queue their answer during Start; each answer is consumed by a subsequent Pump, with no external I/O or timer. Host setup is included in Load and excluded from Run. The empty Handler uses N = 1 and is deliberately below the 10–100 ms size target so it measures one Pump.
@@ -53,6 +76,7 @@ Use a category name as the filter, for example `bun run bench --filter numbers`.
 | --- | --- |
 | [`scripts/`](scripts/) | The Benchmark Scripts, one `.talk` file each, and [`benchmarks.json`](scripts/benchmarks.json), their manifest. |
 | [`go/`](go/) | The Go runner: a separate module, so benchmark dependencies never enter the Go Core's `go.mod`. |
+| [`zig/`](zig/) | The native C Host over the Zig Core, driven by `ts/src/measure-zig.ts`. |
 | [`ts/`](ts/) | The TS runner with [mitata](https://github.com/evanwashere/mitata), and `bun run bench` itself. |
 | [`peers/`](peers/) | Each Benchmark's port in each Peer Language, as `<language>/<category>/<name>.<ext>`, and the CPython runner. |
 | [`message-layer/elixir/`](message-layer/elixir/) | An Elixir Host that measures the Go Core's Message Layer over Wasmex and the sidecar, for [#532](https://github.com/odogono/odgn-talk/issues/532). It runs on its own, outside `bun run bench`. |
