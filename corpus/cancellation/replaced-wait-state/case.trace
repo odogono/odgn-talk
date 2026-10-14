@@ -1,0 +1,24 @@
+# Unblessed: a replaced Run's Persistent State while its cancellation waits to run, with and without frames its cleanup keeps (#636); first blessing awaits human review.
+> load s identity=d108d4e8f751f9979b49ef0e3c5bf78bdb60cef91db7f42738bc0f216bc00145
+> deliver d1 to=s message=plain args=[1]
+> deliver d2 to=s message=plain args=[2]
+> deliver d3 to=s message=guarded args=[3]
+> deliver d4 to=s message=guarded args=[4]
+> pump clock=2026-10-02T00:00:00Z
+seg s/r1 start delivery=d1 handler=plain clause=1 fuel=15 alloc=0 state=360 end=wait until=2026-10-02T00:00:00Z
+seg s/r2 start delivery=d2 handler=plain clause=1 fuel=15 alloc=0 state=408 end=wait until=2026-10-02T00:00:00Z
+seg s/r3 start delivery=d3 handler=guarded clause=1 fuel=28 alloc=80 state=648 end=wait until=2026-10-02T00:00:00Z
+seg s/r4 start delivery=d4 handler=guarded clause=1 fuel=28 alloc=80 state=888 end=wait until=2026-10-02T00:00:00Z
+seg s/r1 resume fuel=0 alloc=0 state=792 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=plain fuel=15 alloc=0
+seg s/r3 resume fuel=11 alloc=72 state=576 end=cancel
+run s/r3 outcome=cancelled delivery=d3 handler=guarded fuel=39 alloc=152
+pumped state=idle fuel=97 next=2026-10-02T00:00:00Z
+> pump clock=2026-10-02T00:00:01Z
+seg s/r2 resume fuel=3 alloc=0 state=376 end=return
+run s/r2 outcome=completed delivery=d2 handler=plain fuel=18 alloc=0
+seg s/r4 resume fuel=13 alloc=72 state=160 end=return
+run s/r4 outcome=completed delivery=d4 handler=guarded fuel=41 alloc=152
+pumped state=idle fuel=16
+> vars
+vars s log=[[3, 6], [4, 8]]

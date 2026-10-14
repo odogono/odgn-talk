@@ -5417,7 +5417,19 @@ pub const Group = struct {
             cancelling = i;
             break;
         };
-        if (cancelling) |k| total += cancelSize(run, k) else for (run.frames.items) |*f| {
+        // A cancellation not yet started keeps the same: every cleanup is
+        // still ahead of it, and the cleanups it was preempted in end.
+        const pending_cancel = cancelling == null and run.resume_with != null and run.resume_with.? == .cancelled;
+        if (pending_cancel) {
+            var k = run.controls.items.len;
+            while (k > 0 and run.controls.items[k - 1] == .cleanup) k -= 1;
+            cancelling = k;
+            total += cancelSize(run, run.frames.items.len, run.controls.items[0..k]);
+        } else if (cancelling) |k| {
+            const u = &run.controls.items[k].cleanup;
+            const running: usize = if (u.next > 0 and !u.cleanups.items[u.next - 1].leave) u.cleanups.items[u.next - 1].frame else run.frames.items.len;
+            total += cancelSize(run, running, run.controls.items[0..k]);
+        } else for (run.frames.items) |*f| {
             total += frameSize(f);
         }
         if (run.waiting) |p| if (p.call != null or p.id.len > 0) {
@@ -5452,6 +5464,9 @@ pub const Group = struct {
         // its Error's context, an acceptance's activation, a transfer's
         // arguments and the failed continuation's operands (chapter 8,
         // Pending cleanup state).
+        // Its interrupted dispatch contexts are gone, and the cleanups it
+        // was preempted in end when it starts.
+        if (pending_cancel) return total;
         for (run.controls.items, 0..) |c, i| switch (c) {
             .dispatch => |d| {
                 if (cancelling) |k| if (i < k) continue;
@@ -5476,15 +5491,13 @@ pub const Group = struct {
     }
 
     /// The frames and dispatch activations a cancellation's remaining
-    /// cleanup needs, the cleanup being control `k` (chapter 8, Pending
-    /// cleanup state). The running cleanup copy, and what it calls, keep
+    /// cleanup needs, with frame `running` running its cleanup and
+    /// `dispatches` the controls it interrupted (chapter 8, Pending cleanup
+    /// state). The running cleanup copy, and what it calls, keep
     /// their whole stacks; each interrupted stack keeps only the prefix
     /// its `finally` entries need, and an owner or activation none of them
     /// needs is gone. The interrupted dispatch contexts count nothing.
-    fn cancelSize(run: *const Run, k: usize) u64 {
-        const u = &run.controls.items[k].cleanup;
-        const running: usize = if (u.next > 0 and !u.cleanups.items[u.next - 1].leave) u.cleanups.items[u.next - 1].frame else run.frames.items.len;
-        const dispatches = run.controls.items[0..k];
+    fn cancelSize(run: *const Run, running: usize, dispatches: []const Control) u64 {
         var total: u64 = 0;
         for (run.frames.items, 0..) |*f, i| {
             if (i > running) {

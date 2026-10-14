@@ -1,0 +1,12 @@
+script variable log = []
+on plain n, replacing
+  wait 0 ms
+end plain
+on guarded n, replacing
+  try
+    put [n, n * 2] into kept
+    wait 0 ms
+  finally
+    put kept after log
+  end try
+end guarded
