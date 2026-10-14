@@ -457,6 +457,10 @@ pub const Operation = struct {
     /// Whether its effects join the Segment's participant, deferred to the
     /// Segment's outcome.
     segment_bound: bool = false,
+    /// For the Host Manifest only: plain text, and source texts that each
+    /// call the Operation. Empty is none.
+    description: []const u8 = "",
+    examples: []const []const u8 = &.{},
     host: HostFn,
     /// The Core's own checks after the Shapes, before the call is charged:
     /// a Standard Capability's option words and Locale tags.
