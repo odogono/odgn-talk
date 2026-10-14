@@ -217,12 +217,12 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `deliver`/`request`, `pump` with interim `op` and `prop` needs, `answer`/`fail`,
 `save` and `fingerprint`, Object Kinds with `object`, `set-parent` and
 `dispose`, `{object}` Delivery targets and load `owner`/`objects`,
+`broadcast` and `decide`,
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. It does not yet conform: `restore`, `resolve`,
 `settle`, `standard-capability`, `inspect`, `effect`/`release` needs and
-`$function` values are protocol errors, and a Pump's
-`nextDeadline` is null and
-`abandoned` empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
+`$function` values, `call` and `request-charge` are protocol errors, and a
+Pump's `abandoned` is empty (all tracked on #635). It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory and nothing recurses past the depth guards.
 [`tools/wasi/zig.py`](../../tools/wasi/zig.py) runs it in wasmtime and holds its
 memory per instance and payload to #532's thresholds, in CI; the [first

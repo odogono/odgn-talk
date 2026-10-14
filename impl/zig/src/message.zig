@@ -1254,7 +1254,12 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     beginOk(&o, ref) catch return oomReply();
     o.raw("\"state\":") catch {};
     o.text(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle") catch {};
-    o.raw(",\"nextDeadline\":null,\"fuelUsed\":") catch {};
+    o.raw(",\"nextDeadline\":") catch {};
+    if (mg.next()) |deadline| {
+        const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
+        o.instant(s.gpa, at) catch return oomReply();
+    } else o.raw("null") catch {};
+    o.raw(",\"fuelUsed\":") catch {};
     o.int(mg.pump_fuel) catch {};
     writeReports(&o, entry) catch return oomReply();
     o.raw(",\"abandoned\":[]") catch {};
@@ -1580,18 +1585,27 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, entry);
 }
 
-fn deliverReply(s: *Session, msg: Json, ref: i64, request: bool) []u8 {
+/// How a queued message asks: `deliver`, `request`, `decide` or `broadcast`.
+const Asking = enum { deliver, request, decide, broadcast };
+
+fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
-    const to = field(msg, "to") orelse return hostError(s.gpa, ref, .invalid_value);
-    // `to` names a Script or a Host Object, never both.
+    // A Broadcast, or a Broadcast Decision, has no `to`; otherwise `to`
+    // names a Script or a Host Object, never both.
+    const to_all = how == .broadcast or (how == .decide and (asBool(field(msg, "broadcast")) orelse false));
     var script: ?*talk.Script = null;
     var target: ?*objects.Object = null;
-    if (field(to, "script")) |j| {
-        if (field(to, "object") != null) return hostError(s.gpa, ref, .invalid_value);
-        const script_name = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
-        script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (to_all) {
+        if (field(msg, "to") != null) return hostError(s.gpa, ref, .invalid_value);
     } else {
-        target = objectOf(entry, field(to, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+        const to = field(msg, "to") orelse return hostError(s.gpa, ref, .invalid_value);
+        if (field(to, "script")) |j| {
+            if (field(to, "object") != null) return hostError(s.gpa, ref, .invalid_value);
+            const script_name = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
+            script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value);
+        } else {
+            target = objectOf(entry, field(to, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+        }
     }
     const message = field(msg, "message") orelse return hostError(s.gpa, ref, .invalid_value);
     const mname = asText(field(message, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -1618,19 +1632,22 @@ fn deliverReply(s: *Session, msg: Json, ref: i64, request: bool) []u8 {
     const override = overrideOf(field(message, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
     const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
     var id: talk.Buffer = .{};
-    const code = if (script) |sc| (if (request) blk: {
-        var pending: ?*talk.Pending = null;
-        break :blk Direct.scriptRequest(sc, &m, &id, &pending);
-    } else Direct.scriptDeliver(sc, &m, &id)) else (if (request) blk: {
-        var pending: ?*talk.Pending = null;
-        break :blk Direct.request(entry.group, target.?, &m, &id, &pending);
-    } else Direct.deliver(entry.group, target.?, &m, &id));
+    // Pending Requests and Decisions belong to the Group, which reports
+    // how they end; the handles aren't needed here.
+    var pending: ?*talk.Pending = null;
+    var deciding: ?*talk.Deciding = null;
+    const code = switch (how) {
+        .deliver => if (script) |sc| Direct.scriptDeliver(sc, &m, &id) else Direct.deliver(entry.group, target.?, &m, &id),
+        .request => if (script) |sc| Direct.scriptRequest(sc, &m, &id, &pending) else Direct.request(entry.group, target.?, &m, &id, &pending),
+        .decide => if (to_all) Direct.decideBroadcast(entry.group, &m, &id, &deciding) else if (script) |sc| Direct.scriptDecide(sc, &m, &id, &deciding) else Direct.decide(entry.group, target.?, &m, &id, &deciding),
+        .broadcast => Direct.broadcast(entry.group, &m, &id),
+    };
     if (code != .ok) return hostError(s.gpa, ref, code);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
-    o.raw(if (request) "\"delivery\":" else "\"delivery\":") catch {};
+    o.raw(if (to_all) "\"broadcast\":" else "\"delivery\":") catch {};
     o.text(if (id.data) |d| d[0..id.len] else "") catch {};
     return finishOk(s, &o, entry);
 }
@@ -1965,9 +1982,13 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     } else if (std.mem.eql(u8, m, "load")) {
         return loadReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "deliver")) {
-        return deliverReply(s, msg, ref, false);
+        return queuedReply(s, msg, ref, .deliver);
     } else if (std.mem.eql(u8, m, "request")) {
-        return deliverReply(s, msg, ref, true);
+        return queuedReply(s, msg, ref, .request);
+    } else if (std.mem.eql(u8, m, "decide")) {
+        return queuedReply(s, msg, ref, .decide);
+    } else if (std.mem.eql(u8, m, "broadcast")) {
+        return queuedReply(s, msg, ref, .broadcast);
     } else if (std.mem.eql(u8, m, "pump")) {
         return pumpReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "answer")) {
@@ -2355,4 +2376,43 @@ test "Host Objects route Deliveries to their owner, take parents, and stop it wh
         if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stopped = true;
     }
     try std.testing.expect(stopped);
+}
+
+test "a Broadcast, Decisions to a Script, an object and every Script, and a Pump's next deadline" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"room\",\"id\":\"hall\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"owner\":{{\"$object\":[\"room\",\"hall\"]}},\"source\":\"script variable heard = 0\\non hello\\n  put heard + 1 into heard\\nend hello\\non enter, deciding\\n  veto \\\"locked\\\"\\nend enter\\non nap\\n  wait 2 s\\nend nap\\n\"}}", .{4}));
+    const sent = try okOf(try c.send("{{\"m\":\"broadcast\",\"ref\":{d},\"group\":\"g\",\"message\":{{\"name\":\"hello\"}}}}", .{5}));
+    try std.testing.expectEqualStrings("b", sent.object.get("broadcast").?.string[0..1]);
+    // A Broadcast has no `to`.
+    const aimed = try c.send("{{\"m\":\"broadcast\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"hello\"}}}}", .{6});
+    try std.testing.expectEqualStrings("host error", try errKind(aimed));
+    const to_script = try okOf(try c.send("{{\"m\":\"decide\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"enter\"}}}}", .{7}));
+    const to_object = try okOf(try c.send("{{\"m\":\"decide\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"object\":{{\"$object\":[\"room\",\"hall\"]}}}},\"message\":{{\"name\":\"enter\"}}}}", .{8}));
+    const to_all = try okOf(try c.send("{{\"m\":\"decide\",\"ref\":{d},\"group\":\"g\",\"broadcast\":true,\"message\":{{\"name\":\"enter\"}}}}", .{9}));
+    try std.testing.expectEqualStrings("b", to_all.object.get("broadcast").?.string[0..1]);
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"nap\"}}}}", .{10}));
+    const pumped = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{11}));
+    var vetoed: usize = 0;
+    var ids: [3][]const u8 = undefined;
+    for (pumped.object.get("reports").?.array.items) |r| {
+        if (!std.mem.eql(u8, "decided", r.object.get("kind").?.string)) continue;
+        try std.testing.expectEqualStrings("vetoed", r.object.get("verdict").?.string);
+        ids[vetoed] = if (r.object.get("broadcast")) |b| b.string else r.object.get("delivery").?.string;
+        vetoed += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 3), vetoed);
+    try std.testing.expectEqualStrings(to_script.object.get("delivery").?.string, ids[0]);
+    try std.testing.expectEqualStrings(to_object.object.get("delivery").?.string, ids[1]);
+    try std.testing.expectEqualStrings(to_all.object.get("broadcast").?.string, ids[2]);
+    // The napping Run's wait is the next deadline; with none left it is null.
+    try std.testing.expectEqualStrings("2026-10-10T12:00:02Z", pumped.object.get("nextDeadline").?.string);
+    const woke = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:02Z\"}}", .{12}));
+    try std.testing.expect(woke.object.get("nextDeadline").? == .null);
 }
