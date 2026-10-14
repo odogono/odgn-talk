@@ -1,0 +1,284 @@
+{
+  "wasmtime": "49.0.2",
+  "compile_ms": 323.35262501146644,
+  "instantiate_initialize_hello_ms": [
+    0.051041715778410435,
+    0.06925000343471766,
+    0.050749978981912136,
+    0.0556666636839509,
+    0.04850002005696297,
+    0.0475000124424696,
+    0.04758336581289768,
+    0.04575005732476711
+  ],
+  "instances": 8,
+  "rss_before_bytes": 224821248,
+  "rss_with_instances_bytes": 228884480,
+  "rss_delta_per_instance_bytes": 507904,
+  "linear_memory_per_instance_bytes": 1835008,
+  "core_versions": {
+    "language": "1.0-rc.3",
+    "costModel": "0",
+    "unicode": "18.0.0",
+    "core": "zig/0.0.0",
+    "saveFormat": "zig/6"
+  },
+  "idle_pump_us": [
+    2.97358341049403,
+    2.9785415390506387,
+    2.9764166101813316,
+    2.971833338961005,
+    2.98120838124305,
+    2.991166664287448,
+    2.976041752845049
+  ],
+  "empty_handler_pump_us": [
+    6.66562549304217,
+    6.610665586777031,
+    6.6077922238037,
+    6.922956905327737,
+    13.870169292204082,
+    15.641085687093437,
+    14.55170486588031
+  ],
+  "calls_per_pump": 1000,
+  "number": [
+    6.730666616931558,
+    6.754583213478327,
+    10.187874897383153,
+    11.866916669532657,
+    9.051083237864077,
+    4.608916700817645,
+    4.764291807077825
+  ],
+  "nested_value": [
+    10.975874960422516,
+    16.1280834581703,
+    10.880416841246188,
+    16.11412491183728,
+    11.1155416816473,
+    13.96687503438443,
+    13.37054162286222
+  ],
+  "thresholds": {
+    "sizes": {
+      "runs": 3,
+      "samples": 5000,
+      "warmup": 500,
+      "instances": 5000,
+      "memory": 20
+    },
+    "call": {
+      "n": 5000,
+      "p50": 7.4999406933784485,
+      "p99": 17.749960534274578,
+      "mean": 9.573025116696954,
+      "min": 7.166643626987934,
+      "max": 89.95842654258013,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 7.4999406933784485,
+          "p99": 17.749960534274578,
+          "mean": 9.573025116696954,
+          "min": 7.166643626987934,
+          "max": 89.95842654258013
+        },
+        {
+          "n": 5000,
+          "p50": 7.4999406933784485,
+          "p99": 15.500001609325409,
+          "mean": 9.433949925005436,
+          "min": 7.20820389688015,
+          "max": 47.2917454317212
+        },
+        {
+          "n": 5000,
+          "p50": 7.500057108700275,
+          "p99": 16.916776075959206,
+          "mean": 9.451958583667874,
+          "min": 7.24999699741602,
+          "max": 42.83338785171509
+        }
+      ]
+    },
+    "pump": {
+      "n": 5000,
+      "p50": 8.70833173394203,
+      "p99": 18.291757442057133,
+      "mean": 9.62315022479743,
+      "min": 8.166534826159477,
+      "max": 53.458381444215775,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 8.750008419156075,
+          "p99": 20.875013433396816,
+          "mean": 10.742342541925609,
+          "min": 8.33324156701565,
+          "max": 51.6250729560852
+        },
+        {
+          "n": 5000,
+          "p50": 8.70833173394203,
+          "p99": 18.291757442057133,
+          "mean": 9.62315022479743,
+          "min": 8.166534826159477,
+          "max": 53.458381444215775
+        },
+        {
+          "n": 5000,
+          "p50": 8.458388037979603,
+          "p99": 18.249964341521263,
+          "mean": 9.77108364459127,
+          "min": 8.166651241481304,
+          "max": 42.8749481216073
+        }
+      ]
+    },
+    "instantiation": {
+      "n": 5000,
+      "p50": 36.041601561009884,
+      "p99": 76.95844396948814,
+      "mean": 42.2768495976925,
+      "min": 32.95822534710169,
+      "max": 127.0415959879756,
+      "runs": [
+        {
+          "n": 5000,
+          "p50": 35.958364605903625,
+          "p99": 79.37499321997166,
+          "mean": 44.05404815915972,
+          "min": 32.83331170678139,
+          "max": 1488.0832750350237
+        },
+        {
+          "n": 5000,
+          "p50": 36.041601561009884,
+          "p99": 76.95844396948814,
+          "mean": 42.2768495976925,
+          "min": 32.95822534710169,
+          "max": 127.0415959879756
+        },
+        {
+          "n": 5000,
+          "p50": 36.041601561009884,
+          "p99": 70.874928496778,
+          "mean": 41.34771639946848,
+          "min": 33.20840187370777,
+          "max": 130.49994595348835
+        }
+      ]
+    },
+    "memory": {
+      "instances": 20,
+      "medianBytes": 2162688,
+      "maxBytes": 2162688
+    }
+  },
+  "fault_checks": {
+    "spin": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r1",
+      "delivery": "d8017",
+      "handler": "spin",
+      "outcome": "limit fault",
+      "limit": "fuel",
+      "at": {
+        "unit": "faults",
+        "line": 5,
+        "col": 3,
+        "handler": "spin",
+        "pc": 11
+      },
+      "fuel": 5000,
+      "alloc": 0
+    },
+    "boom": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r11",
+      "delivery": "d8037",
+      "handler": "boom",
+      "outcome": "errored",
+      "error": {
+        "code": "deliberate",
+        "at": {
+          "unit": "faults",
+          "handler": "boom",
+          "line": 9,
+          "column": 3
+        }
+      },
+      "at": {
+        "unit": "faults",
+        "line": 9,
+        "col": 3,
+        "handler": "boom",
+        "pc": 16
+      },
+      "fuel": 19,
+      "alloc": 48
+    },
+    "dive": {
+      "kind": "run end",
+      "script": "faults",
+      "run": "faults/r21",
+      "delivery": "d8057",
+      "handler": "dive",
+      "outcome": "limit fault",
+      "limit": "depth",
+      "at": {
+        "unit": "faults",
+        "line": 2,
+        "col": 10,
+        "handler": "dive",
+        "pc": 5
+      },
+      "fuel": 2791,
+      "alloc": 3184
+    },
+    "script_faults_checked": 30,
+    "hostile_frames_checked": 5,
+    "same_instance_healthy_after_each": true
+  },
+  "linear_memory_after_workloads_bytes": 3276800,
+  "payload": {
+    "sha256": "f10aec0b36da7bf6321f44d64ef14c569a7fa039b099c50c9e1955cb198dc74d",
+    "raw_bytes": 2941763,
+    "gzip_9_bytes": 984091,
+    "brotli_11_bytes": 681761,
+    "brotli_lgwin": 22
+  },
+  "provenance": {
+    "date_utc": "2026-10-14T16:21:33.743921+00:00",
+    "checkout_commit": "71d8bfdae6f66d41a1f266d24424613d74c26344",
+    "checkout_status": "?? ../results/2026-10-14-71d8bfda-message-layer-elixir-darwin-arm64-apple-m5-go.json\n?? ../results/2026-10-14-71d8bfda-message-layer-elixir-darwin-arm64-apple-m5-go.md\n?? ../results/2026-10-14-71d8bfda-message-layer-elixir-darwin-arm64-apple-m5-zig.json\n?? ../results/2026-10-14-71d8bfda-message-layer-elixir-darwin-arm64-apple-m5-zig.md",
+    "go_source_status": "",
+    "reactor_revision": "external build; revision unspecified",
+    "host_sha256": "e5f899c59767318847cc4b54c0139c3de9285186ee53aac3a5d773d151397042",
+    "runner_sha256": "bb10df0a1311dd2bc0158a657e7a69ea0d1f364fd308071a132bd10083e84bab",
+    "metadata_sha256": "30890debdbc979898528ae9fb907bdec5af7d04eed2fd7ddcd989a3ec9bb8140",
+    "executable_sha256": "fee0e6c9795897678406d8f7290198b5bd1587962da201aad04ff43e7dcfe65b",
+    "cjson_c_sha256": "298581a04a36c0165da4b0aade235c23088cb2faa58651d720ea2f3706ed0b0d",
+    "cjson_h_sha256": "25b0145150d500498e4d209cec69c18c42cf818bffcc54690be3b895a2a16dee",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "go": "go version go1.27.2 darwin/arm64",
+    "python": "3.15.0",
+    "zlib": "1.2.12",
+    "brotli": "brotli 1.2.0",
+    "cjson": "1.7.19",
+    "samples": 7,
+    "iterations": 1000,
+    "memory_backstop_bytes": 268435456,
+    "reactor_build_flags": "external build; flags unspecified",
+    "cflags": "",
+    "ldflags": "",
+    "wasmtime_prefix": "/opt/homebrew/opt/wasmtime",
+    "threshold_decision": "The thresholds block is judged against #532 in docs/research/message-layer-measurements.md (#554); the rest is descriptive."
+  }
+}
