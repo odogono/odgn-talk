@@ -730,7 +730,7 @@ test "List growth preserves snapshots, branches, interior writes and self-insert
     const prepended = try listGrow(gpa, latest, &.{ two, one }, false);
     defer prepended.release();
     try std.testing.expectEqualSlices(*Value, &.{ two, one, one, two }, prepended.data.list);
-    try listSet(&latest, 0, two);
+    try listSet(gpa, &latest, 0, two);
     try std.testing.expectEqual(one, first.data.list[0]);
     try std.testing.expectEqual(one, prepended.data.list[2]);
     const older_self = try listGrow(gpa, prepended, &.{first}, true);
@@ -805,7 +805,7 @@ fn listGrowthAllocations(gpa: std.mem.Allocator) !void {
     }
     const snapshot = root.retain();
     defer snapshot.release();
-    try listSet(&root, 0, item);
+    try listSet(gpa, &root, 0, item);
     const self = try listGrow(gpa, root, &.{root}, true);
     defer self.release();
     const wrapped = try map(gpa, &.{.{ .key = "snapshot", .value = root }});
@@ -863,53 +863,46 @@ pub fn quantity(gpa: std.mem.Allocator, n: Decimal, unit: []const u8) Error!*Val
 }
 /// Consumes one reference to the old root only on success. A changed root
 /// cannot form a cycle, even when a caller inserts the old root into itself.
-pub fn listSet(root: **Value, index: usize, item: *Value) Error!void {
+/// New storage belongs to `gpa`; foreign or shared spines are copied once.
+pub fn listSet(gpa: std.mem.Allocator, root: **Value, index: usize, item: *Value) Error!void {
     const old = root.*;
     if (old.data != .list or index >= old.data.list.len) return error.InvalidValue;
-    // A unique container can be changed in place unless the new child could
-    // contain it. Shared containers copy their spine, retaining every child.
+    // Only lower-ranked children may enter existing storage: a higher rank
+    // can reach it through another version's hidden tail, even when a walk
+    // of that version's visible children would find no cycle. This copies
+    // more than a reachability walk would, but only the first write that
+    // raises the rank pays it. Machine chunk writes retain their root and
+    // always copy, so only direct callers of this branch see the difference.
+    const same_allocator = gpa.ptr == old.allocator.ptr and gpa.vtable == old.allocator.vtable;
     const unique_storage = if (old.list_storage) |storage| storage.references == 1 else true;
     const rank = std.math.add(u64, item.ownership_rank, 1) catch return error.OutOfMemory;
-    if (old.references == 1 and unique_storage and !contains(item, old)) {
+    // Subtraction is exact unless the old sum saturated; in that case the
+    // changed contents must be measured again after replacing the item.
+    const measure: ?u64 = if (old.measure == std.math.maxInt(u64)) null else old.measure - logicalSize(old.data.list[index]) +| logicalSize(item);
+    if (same_allocator and old.references == 1 and unique_storage and item.ownership_rank < old.ownership_rank) {
         _ = item.retain();
         old.data.list[index].release();
         old.data.list[index] = item;
-        old.ownership_rank = @max(old.ownership_rank, rank);
-        old.measure = itemsSize(old.data.list);
+        old.measure = measure orelse itemsSize(old.data.list);
     } else {
-        const v = try list(old.allocator, old.data.list);
-        _ = item.retain();
-        v.data.list[index].release();
-        v.data.list[index] = item;
-        v.ownership_rank = @max(v.ownership_rank, rank);
-        v.measure = itemsSize(v.data.list);
+        const copy = try gpa.dupe(*Value, old.data.list);
+        errdefer gpa.free(copy);
+        const v = try gpa.create(Value);
+        copy[index] = item;
+        // The prior rank already exceeds every retained child's rank.
+        // A replacement can only raise it. No child scan is needed.
+        v.* = .{
+            .allocator = gpa,
+            .data = .{ .list = copy },
+            .ownership_rank = @max(old.ownership_rank, rank),
+            .measure = measure orelse itemsSize(copy),
+        };
+        for (copy) |child| _ = child.retain();
         root.* = v;
         old.release();
     }
 }
-/// Whether `target` is reachable from `v`. Ranks fall along every
-/// ownership edge, so only higher-ranked nodes are searched. A work list
-/// that can't grow answers yes, which only costs the caller a copy.
-fn contains(v: *Value, target: *Value) bool {
-    if (v == target) return true;
-    if (v.ownership_rank <= target.ownership_rank) return false;
-    const gpa = target.allocator;
-    var stack: std.ArrayList(*Value) = .empty;
-    defer stack.deinit(gpa);
-    stack.append(gpa, v) catch return true;
-    while (stack.pop()) |x| {
-        if (x == target) return true;
-        if (x.ownership_rank <= target.ownership_rank) continue;
-        switch (x.data) {
-            .list => |xs| stack.appendSlice(gpa, xs) catch return true,
-            .map => |xs| for (xs) |p| stack.append(gpa, p.value) catch return true,
-            .range => |r| stack.appendSlice(gpa, &.{ r.from, r.to }) catch return true,
-            .function => |f| stack.append(gpa, f.captures) catch return true,
-            else => {},
-        }
-    }
-    return false;
-}
+
 test "copy-on-write never changes an alias and every reference is freed" {
     const gpa = std.testing.allocator;
     const one = try scalar(gpa, .{ .number = try Decimal.parse("1") });
@@ -920,10 +913,10 @@ test "copy-on-write never changes an alias and every reference is freed" {
     defer original.release();
     var copy = original.retain();
     defer copy.release();
-    try listSet(&copy, 0, two);
+    try listSet(gpa, &copy, 0, two);
     try std.testing.expect(try original.data.list[0].equal(one));
     try std.testing.expect(try copy.data.list[0].equal(two));
-    try listSet(&copy, 0, copy); // An immutable previous version, never a cycle.
+    try listSet(gpa, &copy, 0, copy); // An immutable previous version, never a cycle.
     try std.testing.expect(copy.data.list[0] != copy);
 }
 test "NFC duplicate keys and map equality independent of order" {
@@ -1285,4 +1278,70 @@ pub fn function(gpa: std.mem.Allocator, home: []const u8, source: []const u8, id
     _ = captures.retain();
     v.measure = capturedSize(captures);
     return v;
+}
+
+test "List point writes reuse unique storage and copy for ranks, aliases and foreign allocators" {
+    const gpa = std.testing.allocator;
+    const one = try scalar(gpa, .{ .number = Decimal.fromInt(1) });
+    defer one.release();
+    const two = try scalar(gpa, .{ .number = Decimal.fromInt(2) });
+    defer two.release();
+    var root = try list(gpa, &.{one});
+    defer root.release();
+    const address = root;
+    try listSet(gpa, &root, 0, two);
+    try std.testing.expectEqual(address, root);
+    try std.testing.expectEqual(@as(u64, 16), root.measure);
+    // An equal-ranked child forces a new ownership rank, even if acyclic.
+    const child = try list(gpa, &.{one});
+    defer child.release();
+    try listSet(gpa, &root, 0, child);
+    try std.testing.expect(root != address);
+    try std.testing.expect(root.ownership_rank > child.ownership_rank);
+    // Only the first rank-raising write copies: later equal-shaped children
+    // now rank below the root and reuse its storage.
+    const raised = root;
+    const sibling = try list(gpa, &.{two});
+    defer sibling.release();
+    try listSet(gpa, &root, 0, sibling);
+    try std.testing.expectEqual(raised, root);
+    const snapshot = root.retain();
+    defer snapshot.release();
+    try listSet(gpa, &root, 0, root);
+    try std.testing.expectEqual(snapshot, root.data.list[0]);
+    try std.testing.expectEqual(sibling, snapshot.data.list[0]);
+
+    var arena: std.heap.ArenaAllocator = .init(gpa);
+    defer arena.deinit();
+    var foreign = try list(arena.allocator(), &.{one});
+    defer foreign.release();
+    const host = foreign.retain();
+    defer host.release();
+    try listSet(gpa, &foreign, 0, two);
+    try std.testing.expectEqual(gpa.ptr, foreign.allocator.ptr);
+    try std.testing.expectEqual(one, host.data.list[0]);
+    try std.testing.expectEqual(two, foreign.data.list[0]);
+}
+
+test "List point writes recover exact measures after a saturated sum" {
+    const gpa = std.testing.allocator;
+    const item = try scalar(gpa, .nothing);
+    defer item.release();
+    var large = item.retain();
+    defer large.release();
+    for (0..64) |_| {
+        const next = try list(gpa, &.{ large, large });
+        large.release();
+        large = next;
+    }
+    var root = try list(gpa, &.{ large, large });
+    defer root.release();
+    const snapshot = root.retain();
+    defer snapshot.release();
+    try listSet(gpa, &root, 0, item);
+    try std.testing.expectEqual(std.math.maxInt(u64), root.measure);
+    try listSet(gpa, &root, 1, item);
+    try std.testing.expectEqual(@as(u64, 16), root.measure);
+    try std.testing.expectEqual(std.math.maxInt(u64), snapshot.measure);
+    try std.testing.expectEqualSlices(*Value, &.{ large, large }, snapshot.data.list);
 }

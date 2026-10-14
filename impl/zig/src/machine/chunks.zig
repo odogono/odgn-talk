@@ -357,6 +357,19 @@ pub fn set(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value:
             switch (index) {
                 .one => |i| {
                     const p: usize = @intCast(absolute(i, items.len));
+                    if (p <= items.len) {
+                        // `whole` is borrowed: lowering temps, aliases and
+                        // Segment rollback bindings must keep their old value.
+                        // listSet copies the spine once, directly into the
+                        // Group allocator, including for Host-owned Lists.
+                        // The retain is load-bearing: it makes every write
+                        // here take listSet's copying branch, so dropping it
+                        // to reuse unique storage would mutate those holders.
+                        var root = whole.retain();
+                        errdefer root.release();
+                        model.listSet(gpa, &root, p - 1, part) catch return error.OutOfMemory;
+                        return root;
+                    }
                     try out.appendSlice(a, items);
                     if (p > items.len) {
                         nothing = try nothingValue(gpa);
@@ -601,4 +614,42 @@ test "reading chunks of text" {
     try expectRead("a,b,c,d,e", .item, .{ .range = .{ .from = 2, .to = 4 } }, ",", "b,c,d");
     try expectRead("x\r\ny\nz\n", .line, .{ .one = -1 }, ",", "z");
     try expectRead("a;;c", .item, .{ .one = 2 }, ";", "");
+}
+
+fn listWriteAllocations(gpa: Allocator) !void {
+    const one = try numberValue(gpa, 1);
+    defer one.release();
+    const negative = try numberValue(gpa, -1);
+    defer negative.release();
+    const original = try model.list(gpa, &.{ one, one });
+    defer original.release();
+    var effect: Effect = .{};
+    const changed = try set(gpa, gpa, original, .item, negative, original, ",", &effect);
+    defer changed.release();
+    try testing.expectEqualSlices(*Value, &.{ one, one }, original.data.list);
+    try testing.expectEqualSlices(*Value, &.{ one, original }, changed.data.list);
+    try testing.expectEqual(@as(u64, 0), effect.scanned);
+    try testing.expectEqual(@as(u64, 80), model.contentsSize(changed));
+    // Branches and nested insertion keep both earlier versions immutable.
+    const branch = try set(gpa, gpa, original, .item, one, changed, ",", &effect);
+    defer branch.release();
+    try testing.expectEqual(changed, branch.data.list[0]);
+    try testing.expectEqual(one, changed.data.list[0]);
+    const padded_index = try numberValue(gpa, 4);
+    defer padded_index.release();
+    const padded = try set(gpa, gpa, original, .item, padded_index, changed, ",", &effect);
+    defer padded.release();
+    try testing.expectEqual(@as(usize, 4), padded.data.list.len);
+    try testing.expectEqual(model.Kind.nothing, padded.data.list[2].kind());
+    try testing.expectEqual(changed, padded.data.list[3]);
+    const indexes = try model.range(gpa, one, negative);
+    defer indexes.release();
+    const replaced = try set(gpa, gpa, original, .item, indexes, changed, ",", &effect);
+    defer replaced.release();
+    try testing.expectEqualSlices(*Value, changed.data.list, replaced.data.list);
+}
+
+test "List chunk writes preserve borrowed inputs and free every refused allocation" {
+    try listWriteAllocations(testing.allocator);
+    try testing.checkAllAllocationFailures(testing.allocator, listWriteAllocations, .{});
 }

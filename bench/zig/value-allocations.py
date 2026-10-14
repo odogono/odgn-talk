@@ -62,7 +62,7 @@ result = {
     "samplesPerProcess": args.count,
     "pairs": args.pairs,
     "binarySha256": {name: sha(host) for name, host in (("before", args.before), ("after", args.after))},
-    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/group_allocator.zig", "impl/zig/src/value.zig", "bench/zig/host.c")},
+    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/group_allocator.zig", "impl/zig/src/machine/machine.zig", "impl/zig/src/machine/chunks.zig", "impl/zig/src/value.zig", "bench/zig/host.c")},
     "manifestSha256": sha(root / "bench/scripts/benchmarks.json"),
     "measurements": [],
 }
@@ -75,8 +75,11 @@ for pair in range(args.pairs):
         for slice_size in [b.get("slice", 0), *b.get("slices", [])]:
             benchmark = {**b, "slice": slice_size}
             name = b["name"] + (f"@slice={slice_size}" if slice_size else "")
-            before = run(args.before, benchmark)
-            after = run(args.after, benchmark)
+            hosts = [("before", args.before), ("after", args.after)]
+            if pair % 2:
+                hosts.reverse()
+            timings = {label: run(host, benchmark) for label, host in hosts}
+            before, after = timings["before"], timings["after"]
             before_probe = run(args.before, benchmark, True)
             after_probe = run(args.after, benchmark, True)
             for key in ("fuel", "logicalAlloc"):

@@ -1660,6 +1660,51 @@ static int host_list_memory_test(void) {
     return bad;
 }
 
+/* Collecting retains each version supplied by the body. Item writes and
+ * self-insertion must preserve those versions and the Host's original. */
+static int collecting_versions_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {.name = "g", .name_len = 1};
+    int bad = talk_new_group(core, &options, &group) != TALK_OK;
+    const char *source = "on probe values\n  put values into original\n  repeat for each i in 1..3 collecting values into snapshots\n    put i into item 1 of values\n  end repeat\n  put snapshots into earlier\n  put snapshots into item 1 of snapshots\n  return [original, earlier, values, item 1 of snapshots]\nend probe\n";
+    talk_load_options load = {.name = "probe", .name_len = 5, .source = source, .source_len = strlen(source)};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_value *one = NULL, *two = NULL, *list = NULL, *result = NULL;
+    bad |= talk_int(1, &one) != TALK_OK;
+    bad |= talk_int(2, &two) != TALK_OK;
+    talk_value *items[] = {one, two};
+    bad |= talk_list(items, 2, &list) != TALK_OK;
+    talk_message message = {.name = "probe", .name_len = 5, .args = &list, .args_len = 1};
+    talk_pending *pending = NULL;
+    if (!bad) {
+        bad |= talk_script_request(script, &message, NULL, &pending) != TALK_OK;
+        bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+        bad |= talk_pending_result(pending, &result) != TALK_OK;
+        if (result != NULL) {
+            talk_owned_bytes shown = {0};
+            bad |= talk_value_string(result, &shown) != TALK_OK;
+            const char *expected = "[[1, 2], [[1, 2], [2, 2], [3, 2]], [3, 2], [[1, 2], [2, 2], [3, 2]]]";
+            bad |= shown.len != strlen(expected) || memcmp(shown.data, expected, shown.len) != 0;
+            talk_owned_bytes_release(&shown);
+        }
+        talk_owned_bytes original = {0};
+        bad |= talk_value_string(list, &original) != TALK_OK;
+        bad |= original.len != 6 || memcmp(original.data, "[1, 2]", original.len) != 0;
+        talk_owned_bytes_release(&original);
+    }
+    talk_value_release(result);
+    talk_pending_release(pending);
+    talk_value_release(list);
+    talk_value_release(one);
+    talk_value_release(two);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Every root visibly stays [nothing]. Older slices must not make appending
  * these constant-size snapshots walk an ever-growing hidden ownership graph. */
 static int snapshot_growth_test(void) {
@@ -1960,6 +2005,7 @@ int main(void) {
     expect(user_test() == 0, "timer forwards schedule's arguments, and user's choose hears resolved options and fails an answer that isn't an item");
     expect(memory_test() == 0, "a Group past its physical cap refuses, takes no more work and gives back every byte");
     expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
+    expect(collecting_versions_test() == 0, "collecting and item writes preserve versions and Host inputs");
     expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");
