@@ -1,0 +1,32 @@
+use transform from map
+script variable log = []
+on go
+  put transform(3, {rules: []}) after log
+  put transform({a: 1, b: 2}, {rules: [{from: ["a"], to: ["x"]}]}) after log
+  put transform([1, 2], {rules: [{from: [], to: ["whole"]}, {from: [-1], to: ["nested", "last"]}]}) after log
+  put transform({a: nothing}, {rules: [{from: ["a"], to: ["x"], input: "nothing"}]}) after log
+  put transform({}, {rules: [{from: ["a"], to: ["x"], missing: "skip"}]}) after log
+  put transform({}, {rules: [{from: ["a", "b"], to: ["x"], missing: "default", default: nothing}]}) after log
+  put transform({"*": 3}, {rules: [{from: ["*"], to: ["x"]}]}) after log
+  put transform({b: [2, 3], a: [4]}, {rules: [{from: [{each: true}, {each: true}], to: ["x"]}]}) after log
+  put transform([], {rules: [{from: [{each: true}], to: ["x"]}]}) after log
+  put transform({}, {rules: [{from: [{each: true}], to: ["x"]}]}) after log
+  put transform([{}, {n: "4"}, {}], {rules: [{from: [{each: true}, "n"], to: ["x"], missing: "default", default: "2", input: "text", transform: given n: n as number, output: "number"}]}) after log
+  put transform([{}, {n: 4}, {}], {rules: [{from: [{each: true}, "n"], to: ["x"], missing: "skip"}]}) after log
+  put transform([{}, {}], {rules: [{from: [{each: true}, "n"], to: ["x"], missing: "skip"}]}) after log
+  put transform({}, {rules: [{from: ["absent", {each: true}], to: ["x"], missing: "default", default: 8}]}) after log
+  put transform({a: 1, b: 2}, {rules: [{from: ["a"], to: ["b"]}, {from: ["b"], to: ["a"]}]}) after log
+  put transform({a: 1, b: 2}, {rules: [{from: ["a"], to: ["x", "a"]}, {from: ["b"], to: ["x", "b"]}]}) after log
+  put transform([], {rules: [{from: [-2], to: ["x"]}]}) after log
+  put transform(nothing, {rules: [{from: ["a"], to: ["x"], missing: "default", default: 3}]}) after log
+  put transform([{}, {n: "bad"}, {}], {rules: [{from: [{each: true}, "n"], to: ["x"], missing: "skip", input: "number"}]}) after log
+  put transform([1, "bad", false], {rules: [{from: [], to: ["x"], input: {list: "number"}, transform: given n: n / 0}]}) after log
+  put transform(2, {rules: [{from: [], to: ["x"], transform: given n: n + 1, output: "text"}]}) after log
+  put {rules: [{from: ["customer", "contact", "email"], to: ["email"], input: "text"}, {from: ["orders", {each: true}, "total"], to: ["totals"], input: "text", transform: given n: n as number, output: "number"}]} into mapping
+  put transform({customer: {contact: {email: "ann@example.com"}}, orders: [{total: "12"}, {total: "7"}]}, mapping) after log
+  put transform({customer: {contact: {email: "ann@example.com"}}, orders: [{total: "12"}, {total: 7}]}, mapping) after log
+  put transform({customer: {contact: {email: "ann@example.com"}}, orders: []}, mapping) after log
+  put transform([nothing, true, 5 cm, << 1, 2 >>, 1..3, "2026-10-14T00:00:00Z" as instant, given n: n + 1], {rules: [{from: [], to: ["whole"], input: "value"}]}) after log
+  put transform({"": 8}, {rules: [{from: [""], to: [""]}]}) after log
+  put transform([nothing, {}, {v: nothing}], {rules: [{from: [{each: true}, "v"], to: ["v"], missing: "default", default: 9, input: {optional: "number"}}]}) after log
+end go

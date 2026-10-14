@@ -27,7 +27,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 	if g.effectUnknown {
 		return nil, g.refuse(EffectStateUnknown, "Group has unresolved external effects")
 	}
-	if standardLibraries()[l.Name()] != nil {
+	if isStandardLibrary(l.Name()) {
 		return nil, g.refuse(ReservedName, l.Name())
 	}
 	if g.libraries[l.Name()] == nil {
@@ -36,6 +36,7 @@ func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
 	if carry != ResetVariables && carry != CarryVariables {
 		return nil, g.refuse(InvalidValue, "invalid carry policy")
 	}
+	addStandardLibraries(g.libraries, importNames(l)...)
 	for _, dep := range l.imports {
 		held := g.libraries[dep.Name()]
 		if held == nil || held.id != dep.id {

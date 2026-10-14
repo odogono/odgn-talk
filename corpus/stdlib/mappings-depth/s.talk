@@ -1,0 +1,16 @@
+use transform from map
+script variable out
+on go
+  put 7 into value
+  put [] into path
+  repeat 96 times
+    put {x: value} into value
+    put "x" after path
+  end repeat
+  put transform(value, {rules: [{from: path, to: path, input: "number", transform: given n: n + 1, output: "number"}]}) into report
+  put the value of report into value
+  repeat 96 times
+    put the x of value into value
+  end repeat
+  put [the ok of report, value] into out
+end go

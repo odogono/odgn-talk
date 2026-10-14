@@ -1,0 +1,9 @@
+# Iterative Mapping selection and construction beyond call-depth limits (#697).
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[scripts]]
+name = "s"
+source = "s.talk"
+limits = { callDepth = 12 }

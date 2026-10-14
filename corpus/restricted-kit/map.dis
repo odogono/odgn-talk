@@ -16,6 +16,55 @@ constants
   13 "number"
   14 "integer"
   15 "function"
+  16 0
+  17 false
+  18 "error"
+  19 "source"
+  20 "missing"
+  21 "skip"
+  22 "missing selection"
+  23 ["code", "step"]
+  24 "input"
+  25 "transform"
+  26 "output"
+  27 true
+  28 ["ok", "errors"]
+  29 ["ok", "value"]
+  30 "not a mapping"
+  31 "rules"
+  32 "missing rules"
+  33 "invalid rules"
+  34 "invalid rule"
+  35 "from"
+  36 "to"
+  37 "default"
+  38 "missing from"
+  39 "invalid source path"
+  40 "invalid selection step"
+  41 "missing to"
+  42 "invalid destination path"
+  43 "empty destination"
+  44 "invalid destination step"
+  45 "invalid mapping"
+  46 "invalid shape"
+  47 ["code", "reason", "path", "value", "error"]
+  48 "invalid transform"
+  49 "invalid transform arity"
+  50 "invalid missing policy"
+  51 "missing default"
+  52 "unexpected default"
+  53 "overlapping destination"
+  54 ["code", "reason", "path", "value", "otherRule"]
+  55 "unknown key"
+  56 ["code", "reason", "path", "value"]
+  57 ["each"]
+  58 ["value", "path", "offset"]
+  59 ["present", "value", "path"]
+  60 "map or list"
+  61 ["present", "path", "failedStep", "error"]
+  62 ["present", "path", "failedStep"]
+  63 ["rule", "sourcePath", "destinationPath"]
+  64 "failedStep"
 definitions
   0 lookup.default
 bodies
@@ -38,6 +87,17 @@ bodies
   16 function needMap (v) locals 2 0398..0407
   17 function needFunction (v) locals 2 0408..0417
   18 function restrictedCall (f, value) locals 3 0418..0423
+  19 function transform (value, mapping) locals 20 0424..0664
+  20 function validateMapping (mapping) locals 19 0665..1037
+  21 function mappingKeys (definition, allowed, path) locals 5 1038..1062
+  22 function invalidMapping (reason, path, value) locals 4 1063..1070
+  23 function selectionStep (step) locals 2 1071..1094
+  24 function hasWildcard (path) locals 3 1095..1109
+  25 function overlappingPaths (a, b) locals 5 1110..1145
+  26 function selectMapping (value, path) locals 16 1146..1410
+  27 function mappingLocation (number, rule, selected, position) locals 8 1411..1447
+  28 function mappingFailure (location, stage, failure) locals 6 1448..1467
+  29 function mappingWrite (built, path, value) locals 11 1468..1556
 code
   0000 75:36 const 0 ; nothing
   0001 75:26 store-definition lookup.default
@@ -463,3 +523,1141 @@ code
   0421 153:3 return
   0422 154:1 const 0 ; nothing
   0423 154:1 return
+  0424 158:19 load 2 ; mapping
+  0425 158:3 call 20 1 ; validateMapping
+  0426 158:3 store 0 ; it
+  0427 159:7 map 1 0 ; []
+  0428 159:3 store 3 ; built
+  0429 160:7 list 0
+  0430 160:3 store 4 ; errors
+  0431 161:7 const 16 ; 0
+  0432 161:3 store 5 ; ruleNumber
+  0433 162:40 load 2 ; mapping
+  0434 162:27 get-key "rules"
+  0435 162:3 iterate
+  0436 162:3 next 0650
+  0437 162:3 store 6 ; rule
+  0438 163:9 const 4 ; 1
+  0439 163:5 store 17 ; (17)
+  0440 163:5 load 5 ; ruleNumber
+  0441 163:5 load 17 ; (17)
+  0442 163:5 add
+  0443 163:5 store 5 ; ruleNumber
+  0444 164:23 load 1 ; value
+  0445 164:42 load 6 ; rule
+  0446 164:30 get-key "from"
+  0447 164:9 call 26 2 ; selectMapping
+  0448 164:5 store 7 ; selections
+  0449 165:9 list 0
+  0450 165:5 store 8 ; results
+  0451 166:9 const 16 ; 0
+  0452 166:5 store 9 ; position
+  0453 167:9 const 17 ; false
+  0454 167:5 store 10 ; wrote
+  0455 168:33 load 7 ; selections
+  0456 168:5 iterate
+  0457 168:5 next 0627
+  0458 168:5 store 11 ; selected
+  0459 169:11 const 4 ; 1
+  0460 169:7 store 17 ; (17)
+  0461 169:7 load 9 ; position
+  0462 169:7 load 17 ; (17)
+  0463 169:7 add
+  0464 169:7 store 9 ; position
+  0465 170:27 load 5 ; ruleNumber
+  0466 170:39 load 6 ; rule
+  0467 170:45 load 11 ; selected
+  0468 170:55 load 9 ; position
+  0469 170:11 call 27 4 ; mappingLocation
+  0470 170:7 store 12 ; location
+  0471 171:10 const 18 ; "error"
+  0472 171:36 load 11 ; selected
+  0473 171:24 property keys
+  0474 171:18 member
+  0475 171:7 branch-false 0487
+  0476 172:28 load 12 ; location
+  0477 172:38 const 19 ; "source"
+  0478 172:61 load 11 ; selected
+  0479 172:48 get-key "error"
+  0480 172:13 call 28 3 ; mappingFailure
+  0481 172:9 store 17 ; (17)
+  0482 172:9 load 4 ; errors
+  0483 172:9 load 17 ; (17)
+  0484 172:9 append
+  0485 172:9 store 4 ; errors
+  0486 173:9 jump 0457
+  0487 175:29 load 11 ; selected
+  0488 175:14 get-key "present"
+  0489 175:10 not
+  0490 175:7 branch-false 0527
+  0491 176:13 const 18 ; "error"
+  0492 176:9 store 13 ; policy
+  0493 177:12 const 20 ; "missing"
+  0494 177:40 load 6 ; rule
+  0495 177:28 property keys
+  0496 177:22 member
+  0497 177:9 branch-false 0501
+  0498 177:69 load 6 ; rule
+  0499 177:54 get-key "missing"
+  0500 177:50 store 13 ; policy
+  0501 178:12 load 13 ; policy
+  0502 178:21 const 21 ; "skip"
+  0503 178:19 equal
+  0504 178:9 branch-false 0506
+  0505 178:33 jump 0457
+  0506 179:12 load 13 ; policy
+  0507 179:21 const 18 ; "error"
+  0508 179:19 equal
+  0509 179:9 branch-false 0523
+  0510 180:30 load 12 ; location
+  0511 180:40 const 19 ; "source"
+  0512 180:57 const 22 ; "missing selection"
+  0513 180:102 load 11 ; selected
+  0514 180:84 get-key "failedStep"
+  0515 180:50 map 23 2 ; ["code", "step"]
+  0516 180:15 call 28 3 ; mappingFailure
+  0517 180:11 store 17 ; (17)
+  0518 180:11 load 4 ; errors
+  0519 180:11 load 17 ; (17)
+  0520 180:11 append
+  0521 180:11 store 4 ; errors
+  0522 181:11 jump 0457
+  0523 183:28 load 6 ; rule
+  0524 183:13 get-key "default"
+  0525 183:9 store 14 ; itemValue
+  0526 175:7 jump 0530
+  0527 185:26 load 11 ; selected
+  0528 185:13 get-key "value"
+  0529 185:9 store 14 ; itemValue
+  0530 187:10 const 24 ; "input"
+  0531 187:36 load 6 ; rule
+  0532 187:24 property keys
+  0533 187:18 member
+  0534 187:7 branch-false 0560
+  0535 188:21 load 14 ; itemValue
+  0536 188:45 load 6 ; rule
+  0537 188:32 get-key "input"
+  0538 188:13 call-builtin explain 2
+  0539 188:9 store 15 ; failures
+  0540 189:12 load 15 ; failures
+  0541 189:21 is-empty
+  0542 189:21 not
+  0543 189:9 branch-false 0560
+  0544 190:38 load 15 ; failures
+  0545 190:11 iterate
+  0546 190:11 next 0558
+  0547 190:11 store 16 ; failure
+  0548 191:32 load 12 ; location
+  0549 191:42 const 24 ; "input"
+  0550 191:51 load 16 ; failure
+  0551 191:17 call 28 3 ; mappingFailure
+  0552 191:13 store 17 ; (17)
+  0553 191:13 load 4 ; errors
+  0554 191:13 load 17 ; (17)
+  0555 191:13 append
+  0556 191:13 store 4 ; errors
+  0557 190:11 jump 0546
+  0558 190:11 pop
+  0559 193:11 jump 0457
+  0560 196:10 const 25 ; "transform"
+  0561 196:40 load 6 ; rule
+  0562 196:28 property keys
+  0563 196:22 member
+  0564 196:7 branch-false 0588
+  0565 198:47 load 6 ; rule
+  0566 198:30 get-key "transform"
+  0567 198:53 load 14 ; itemValue
+  0568 198:15 call 18 2 ; restrictedCall
+  0569 198:11 store 14 ; itemValue
+  0570 197:9 jump 0588
+  0571 199:9 store 18 ; (18)
+  0572 199:15 load 18 ; (18)
+  0573 199:15 store 19 ; (19)
+  0574 199:9 catch-accept
+  0575 199:9 move 19 16 ; (19), failure
+  0576 200:30 load 12 ; location
+  0577 200:40 const 25 ; "transform"
+  0578 200:53 load 16 ; failure
+  0579 200:15 call 28 3 ; mappingFailure
+  0580 200:11 store 19 ; (19)
+  0581 200:11 load 4 ; errors
+  0582 200:11 load 19 ; (19)
+  0583 200:11 append
+  0584 200:11 store 4 ; errors
+  0585 201:11 jump 0457
+  0586 199:9 jump 0588
+  0587 199:9 catch-next
+  0588 204:10 const 26 ; "output"
+  0589 204:37 load 6 ; rule
+  0590 204:25 property keys
+  0591 204:19 member
+  0592 204:7 branch-false 0618
+  0593 205:21 load 14 ; itemValue
+  0594 205:46 load 6 ; rule
+  0595 205:32 get-key "output"
+  0596 205:13 call-builtin explain 2
+  0597 205:9 store 15 ; failures
+  0598 206:12 load 15 ; failures
+  0599 206:21 is-empty
+  0600 206:21 not
+  0601 206:9 branch-false 0618
+  0602 207:38 load 15 ; failures
+  0603 207:11 iterate
+  0604 207:11 next 0616
+  0605 207:11 store 16 ; failure
+  0606 208:32 load 12 ; location
+  0607 208:42 const 26 ; "output"
+  0608 208:52 load 16 ; failure
+  0609 208:17 call 28 3 ; mappingFailure
+  0610 208:13 store 17 ; (17)
+  0611 208:13 load 4 ; errors
+  0612 208:13 load 17 ; (17)
+  0613 208:13 append
+  0614 208:13 store 4 ; errors
+  0615 207:11 jump 0604
+  0616 207:11 pop
+  0617 210:11 jump 0457
+  0618 213:11 load 14 ; itemValue
+  0619 213:7 store 17 ; (17)
+  0620 213:7 load 8 ; results
+  0621 213:7 load 17 ; (17)
+  0622 213:7 append
+  0623 213:7 store 8 ; results
+  0624 214:11 const 27 ; true
+  0625 214:7 store 10 ; wrote
+  0626 168:5 jump 0457
+  0627 168:5 pop
+  0628 216:32 load 6 ; rule
+  0629 216:20 get-key "from"
+  0630 216:8 call 24 1 ; hasWildcard
+  0631 216:5 branch-false 0639
+  0632 217:24 load 3 ; built
+  0633 217:41 load 6 ; rule
+  0634 217:31 get-key "to"
+  0635 217:47 load 8 ; results
+  0636 217:11 call 29 3 ; mappingWrite
+  0637 217:7 store 3 ; built
+  0638 216:5 jump 0649
+  0639 219:10 load 10 ; wrote
+  0640 219:7 branch-false 0649
+  0641 219:38 load 3 ; built
+  0642 219:55 load 6 ; rule
+  0643 219:45 get-key "to"
+  0644 219:66 const 4 ; 1
+  0645 219:71 load 8 ; results
+  0646 219:61 chunk-get item
+  0647 219:25 call 29 3 ; mappingWrite
+  0648 219:21 store 3 ; built
+  0649 162:3 jump 0436
+  0650 162:3 pop
+  0651 222:6 load 4 ; errors
+  0652 222:13 is-empty
+  0653 222:13 not
+  0654 222:3 branch-false 0659
+  0655 222:43 const 17 ; false
+  0656 222:58 load 4 ; errors
+  0657 222:38 map 28 2 ; ["ok", "errors"]
+  0658 222:31 return
+  0659 223:15 const 27 ; true
+  0660 223:28 load 3 ; built
+  0661 223:10 map 29 2 ; ["ok", "value"]
+  0662 223:3 return
+  0663 224:1 const 0 ; nothing
+  0664 224:1 return
+  0665 228:6 load 1 ; mapping
+  0666 228:14 is-kind map
+  0667 228:14 not
+  0668 228:3 branch-false 0674
+  0669 228:47 const 30 ; "not a mapping"
+  0670 228:64 list 0
+  0671 228:68 load 1 ; mapping
+  0672 228:32 call 22 3 ; invalidMapping
+  0673 228:32 store 0 ; it
+  0674 229:15 load 1 ; mapping
+  0675 229:25 const 31 ; "rules"
+  0676 229:24 list 1
+  0677 229:35 list 0
+  0678 229:3 call 21 3 ; mappingKeys
+  0679 229:3 store 0 ; it
+  0680 230:6 const 31 ; "rules"
+  0681 230:36 load 1 ; mapping
+  0682 230:24 property keys
+  0683 230:14 member
+  0684 230:14 not
+  0685 230:3 branch-false 0691
+  0686 230:64 const 32 ; "missing rules"
+  0687 230:81 list 0
+  0688 230:85 load 1 ; mapping
+  0689 230:49 call 22 3 ; invalidMapping
+  0690 230:49 store 0 ; it
+  0691 231:19 load 1 ; mapping
+  0692 231:6 get-key "rules"
+  0693 231:27 is-kind list
+  0694 231:27 not
+  0695 231:3 branch-false 0703
+  0696 231:61 const 33 ; "invalid rules"
+  0697 231:79 const 31 ; "rules"
+  0698 231:78 list 1
+  0699 231:102 load 1 ; mapping
+  0700 231:89 get-key "rules"
+  0701 231:46 call 22 3 ; invalidMapping
+  0702 231:46 store 0 ; it
+  0703 232:7 list 0
+  0704 232:3 store 2 ; destinations
+  0705 233:7 const 16 ; 0
+  0706 233:3 store 3 ; number
+  0707 234:40 load 1 ; mapping
+  0708 234:27 get-key "rules"
+  0709 234:3 iterate
+  0710 234:3 next 1035
+  0711 234:3 store 4 ; rule
+  0712 235:9 const 4 ; 1
+  0713 235:5 store 16 ; (16)
+  0714 235:5 load 3 ; number
+  0715 235:5 load 16 ; (16)
+  0716 235:5 add
+  0717 235:5 store 3 ; number
+  0718 236:10 const 31 ; "rules"
+  0719 236:19 load 3 ; number
+  0720 236:9 list 2
+  0721 236:5 store 5 ; path
+  0722 237:8 load 4 ; rule
+  0723 237:13 is-kind map
+  0724 237:13 not
+  0725 237:5 branch-false 0731
+  0726 237:46 const 34 ; "invalid rule"
+  0727 237:62 load 5 ; path
+  0728 237:68 load 4 ; rule
+  0729 237:31 call 22 3 ; invalidMapping
+  0730 237:31 store 0 ; it
+  0731 238:17 load 4 ; rule
+  0732 238:24 const 35 ; "from"
+  0733 238:32 const 36 ; "to"
+  0734 238:38 const 24 ; "input"
+  0735 238:47 const 26 ; "output"
+  0736 238:57 const 25 ; "transform"
+  0737 238:70 const 20 ; "missing"
+  0738 238:81 const 37 ; "default"
+  0739 238:23 list 7
+  0740 238:93 load 5 ; path
+  0741 238:5 call 21 3 ; mappingKeys
+  0742 238:5 store 0 ; it
+  0743 239:8 const 35 ; "from"
+  0744 239:37 load 4 ; rule
+  0745 239:25 property keys
+  0746 239:15 member
+  0747 239:15 not
+  0748 239:5 branch-false 0754
+  0749 239:62 const 38 ; "missing from"
+  0750 239:78 load 5 ; path
+  0751 239:84 load 4 ; rule
+  0752 239:47 call 22 3 ; invalidMapping
+  0753 239:47 store 0 ; it
+  0754 240:9 list 0
+  0755 240:13 load 5 ; path
+  0756 240:9 list-extend
+  0757 240:19 const 35 ; "from"
+  0758 240:9 list-append
+  0759 240:5 store 6 ; fromPath
+  0760 241:20 load 4 ; rule
+  0761 241:8 get-key "from"
+  0762 241:25 is-kind list
+  0763 241:25 not
+  0764 241:5 branch-false 0771
+  0765 241:59 const 39 ; "invalid source path"
+  0766 241:82 load 6 ; fromPath
+  0767 241:104 load 4 ; rule
+  0768 241:92 get-key "from"
+  0769 241:44 call 22 3 ; invalidMapping
+  0770 241:44 store 0 ; it
+  0771 242:9 const 16 ; 0
+  0772 242:5 store 7 ; index
+  0773 243:41 load 4 ; rule
+  0774 243:29 get-key "from"
+  0775 243:5 iterate
+  0776 243:5 next 0798
+  0777 243:5 store 8 ; step
+  0778 244:11 const 4 ; 1
+  0779 244:7 store 16 ; (16)
+  0780 244:7 load 7 ; index
+  0781 244:7 load 16 ; (16)
+  0782 244:7 add
+  0783 244:7 store 7 ; index
+  0784 245:28 load 8 ; step
+  0785 245:14 call 23 1 ; selectionStep
+  0786 245:10 not
+  0787 245:7 branch-false 0797
+  0788 245:54 const 40 ; "invalid selection step"
+  0789 245:80 list 0
+  0790 245:84 load 6 ; fromPath
+  0791 245:80 list-extend
+  0792 245:94 load 7 ; index
+  0793 245:80 list-append
+  0794 245:102 load 8 ; step
+  0795 245:39 call 22 3 ; invalidMapping
+  0796 245:39 store 0 ; it
+  0797 243:5 jump 0776
+  0798 243:5 pop
+  0799 247:8 const 36 ; "to"
+  0800 247:35 load 4 ; rule
+  0801 247:23 property keys
+  0802 247:13 member
+  0803 247:13 not
+  0804 247:5 branch-false 0810
+  0805 247:60 const 41 ; "missing to"
+  0806 247:74 load 5 ; path
+  0807 247:80 load 4 ; rule
+  0808 247:45 call 22 3 ; invalidMapping
+  0809 247:45 store 0 ; it
+  0810 248:9 list 0
+  0811 248:13 load 5 ; path
+  0812 248:9 list-extend
+  0813 248:19 const 36 ; "to"
+  0814 248:9 list-append
+  0815 248:5 store 9 ; toPath
+  0816 249:18 load 4 ; rule
+  0817 249:8 get-key "to"
+  0818 249:23 is-kind list
+  0819 249:23 not
+  0820 249:5 branch-false 0827
+  0821 249:57 const 42 ; "invalid destination path"
+  0822 249:85 load 9 ; toPath
+  0823 249:103 load 4 ; rule
+  0824 249:93 get-key "to"
+  0825 249:42 call 22 3 ; invalidMapping
+  0826 249:42 store 0 ; it
+  0827 250:18 load 4 ; rule
+  0828 250:8 get-key "to"
+  0829 250:23 is-empty
+  0830 250:5 branch-false 0837
+  0831 250:52 const 43 ; "empty destination"
+  0832 250:73 load 9 ; toPath
+  0833 250:91 load 4 ; rule
+  0834 250:81 get-key "to"
+  0835 250:37 call 22 3 ; invalidMapping
+  0836 250:37 store 0 ; it
+  0837 251:9 const 16 ; 0
+  0838 251:5 store 7 ; index
+  0839 252:39 load 4 ; rule
+  0840 252:29 get-key "to"
+  0841 252:5 iterate
+  0842 252:5 next 0864
+  0843 252:5 store 8 ; step
+  0844 253:11 const 4 ; 1
+  0845 253:7 store 16 ; (16)
+  0846 253:7 load 7 ; index
+  0847 253:7 load 16 ; (16)
+  0848 253:7 add
+  0849 253:7 store 7 ; index
+  0850 254:10 load 8 ; step
+  0851 254:15 is-kind text
+  0852 254:15 not
+  0853 254:7 branch-false 0863
+  0854 254:49 const 44 ; "invalid destination step"
+  0855 254:77 list 0
+  0856 254:81 load 9 ; toPath
+  0857 254:77 list-extend
+  0858 254:89 load 7 ; index
+  0859 254:77 list-append
+  0860 254:97 load 8 ; step
+  0861 254:34 call 22 3 ; invalidMapping
+  0862 254:34 store 0 ; it
+  0863 252:5 jump 0842
+  0864 252:5 pop
+  0865 256:31 const 24 ; "input"
+  0866 256:40 const 26 ; "output"
+  0867 256:30 list 2
+  0868 256:5 iterate
+  0869 256:5 next 0904
+  0870 256:5 store 10 ; stage
+  0871 257:10 load 10 ; stage
+  0872 257:34 load 4 ; rule
+  0873 257:22 property keys
+  0874 257:16 member
+  0875 257:7 branch-false 0903
+  0876 259:24 const 0 ; nothing
+  0877 259:38 load 10 ; stage
+  0878 259:48 load 4 ; rule
+  0879 259:33 get-key-computed
+  0880 259:15 call-builtin conforms 2
+  0881 259:11 store 11 ; ignored
+  0882 258:9 jump 0903
+  0883 260:9 store 17 ; (17)
+  0884 260:15 load 17 ; (17)
+  0885 260:15 store 18 ; (18)
+  0886 260:9 catch-accept
+  0887 260:9 move 18 12 ; (18), failure
+  0888 261:24 const 45 ; "invalid mapping"
+  0889 261:51 const 46 ; "invalid shape"
+  0890 261:74 list 0
+  0891 261:78 load 5 ; path
+  0892 261:74 list-extend
+  0893 261:84 load 10 ; stage
+  0894 261:74 list-append
+  0895 261:104 load 10 ; stage
+  0896 261:114 load 4 ; rule
+  0897 261:99 get-key-computed
+  0898 261:127 load 12 ; failure
+  0899 261:17 map 47 5 ; ["code", "reason", "path", "value", "error"]
+  0900 261:11 throw
+  0901 260:9 jump 0903
+  0902 260:9 catch-next
+  0903 256:5 jump 0869
+  0904 256:5 pop
+  0905 265:8 const 25 ; "transform"
+  0906 265:38 load 4 ; rule
+  0907 265:26 property keys
+  0908 265:20 member
+  0909 265:5 branch-false 0942
+  0910 266:27 load 4 ; rule
+  0911 266:10 get-key "transform"
+  0912 266:32 is-kind function
+  0913 266:32 not
+  0914 266:7 branch-false 0925
+  0915 266:70 const 48 ; "invalid transform"
+  0916 266:91 list 0
+  0917 266:95 load 5 ; path
+  0918 266:91 list-extend
+  0919 266:101 const 25 ; "transform"
+  0920 266:91 list-append
+  0921 266:132 load 4 ; rule
+  0922 266:115 get-key "transform"
+  0923 266:55 call 22 3 ; invalidMapping
+  0924 266:55 store 0 ; it
+  0925 267:10 const 4 ; 1
+  0926 267:53 load 4 ; rule
+  0927 267:36 get-key "transform"
+  0928 267:22 call-builtin functionArity 1
+  0929 267:12 member
+  0930 267:12 not
+  0931 267:7 branch-false 0942
+  0932 267:79 const 49 ; "invalid transform arity"
+  0933 267:106 list 0
+  0934 267:110 load 5 ; path
+  0935 267:106 list-extend
+  0936 267:116 const 25 ; "transform"
+  0937 267:106 list-append
+  0938 267:147 load 4 ; rule
+  0939 267:130 get-key "transform"
+  0940 267:64 call 22 3 ; invalidMapping
+  0941 267:64 store 0 ; it
+  0942 269:9 const 18 ; "error"
+  0943 269:5 store 13 ; policy
+  0944 270:8 const 20 ; "missing"
+  0945 270:36 load 4 ; rule
+  0946 270:24 property keys
+  0947 270:18 member
+  0948 270:5 branch-false 0969
+  0949 271:26 load 4 ; rule
+  0950 271:11 get-key "missing"
+  0951 271:7 store 13 ; policy
+  0952 272:10 load 13 ; policy
+  0953 272:28 const 18 ; "error"
+  0954 272:37 const 21 ; "skip"
+  0955 272:45 const 37 ; "default"
+  0956 272:27 list 3
+  0957 272:17 member
+  0958 272:17 not
+  0959 272:7 branch-false 0969
+  0960 272:76 const 50 ; "invalid missing policy"
+  0961 272:102 list 0
+  0962 272:106 load 5 ; path
+  0963 272:102 list-extend
+  0964 272:112 const 20 ; "missing"
+  0965 272:102 list-append
+  0966 272:124 load 13 ; policy
+  0967 272:61 call 22 3 ; invalidMapping
+  0968 272:61 store 0 ; it
+  0969 274:8 load 13 ; policy
+  0970 274:17 const 37 ; "default"
+  0971 274:15 equal
+  0972 274:5 branch-false 0985
+  0973 275:10 const 37 ; "default"
+  0974 275:42 load 4 ; rule
+  0975 275:30 property keys
+  0976 275:20 member
+  0977 275:20 not
+  0978 275:7 branch-false 0984
+  0979 275:67 const 51 ; "missing default"
+  0980 275:86 load 5 ; path
+  0981 275:92 load 4 ; rule
+  0982 275:52 call 22 3 ; invalidMapping
+  0983 275:52 store 0 ; it
+  0984 274:5 jump 1000
+  0985 277:10 const 37 ; "default"
+  0986 277:38 load 4 ; rule
+  0987 277:26 property keys
+  0988 277:20 member
+  0989 277:7 branch-false 1000
+  0990 277:63 const 52 ; "unexpected default"
+  0991 277:85 list 0
+  0992 277:89 load 5 ; path
+  0993 277:85 list-extend
+  0994 277:95 const 37 ; "default"
+  0995 277:85 list-append
+  0996 277:122 load 4 ; rule
+  0997 277:107 get-key "default"
+  0998 277:48 call 22 3 ; invalidMapping
+  0999 277:48 store 0 ; it
+  1000 279:9 const 16 ; 0
+  1001 279:5 store 14 ; previous
+  1002 280:36 load 2 ; destinations
+  1003 280:5 iterate
+  1004 280:5 next 1026
+  1005 280:5 store 15 ; destination
+  1006 281:11 const 4 ; 1
+  1007 281:7 store 16 ; (16)
+  1008 281:7 load 14 ; previous
+  1009 281:7 load 16 ; (16)
+  1010 281:7 add
+  1011 281:7 store 14 ; previous
+  1012 282:27 load 15 ; destination
+  1013 282:50 load 4 ; rule
+  1014 282:40 get-key "to"
+  1015 282:10 call 25 2 ; overlappingPaths
+  1016 282:7 branch-false 1025
+  1017 283:22 const 45 ; "invalid mapping"
+  1018 283:49 const 53 ; "overlapping destination"
+  1019 283:82 load 9 ; toPath
+  1020 283:107 load 4 ; rule
+  1021 283:97 get-key "to"
+  1022 283:124 load 14 ; previous
+  1023 283:15 map 54 5 ; ["code", "reason", "path", "value", "otherRule"]
+  1024 283:9 throw
+  1025 280:5 jump 1004
+  1026 280:5 pop
+  1027 286:19 load 4 ; rule
+  1028 286:9 get-key "to"
+  1029 286:5 store 16 ; (16)
+  1030 286:5 load 2 ; destinations
+  1031 286:5 load 16 ; (16)
+  1032 286:5 append
+  1033 286:5 store 2 ; destinations
+  1034 234:3 jump 0710
+  1035 234:3 pop
+  1036 288:1 const 0 ; nothing
+  1037 288:1 return
+  1038 291:38 load 1 ; definition
+  1039 291:26 property keys
+  1040 291:3 iterate
+  1041 291:3 next 1060
+  1042 291:3 store 4 ; key
+  1043 292:8 load 4 ; key
+  1044 292:22 load 2 ; allowed
+  1045 292:12 member
+  1046 292:12 not
+  1047 292:5 branch-false 1059
+  1048 292:50 const 55 ; "unknown key"
+  1049 292:65 list 0
+  1050 292:69 load 3 ; path
+  1051 292:65 list-extend
+  1052 292:75 load 4 ; key
+  1053 292:65 list-append
+  1054 292:86 load 4 ; key
+  1055 292:94 load 1 ; definition
+  1056 292:81 get-key-computed
+  1057 292:35 call 22 3 ; invalidMapping
+  1058 292:35 store 0 ; it
+  1059 291:3 jump 1041
+  1060 291:3 pop
+  1061 294:1 const 0 ; nothing
+  1062 294:1 return
+  1063 297:16 const 45 ; "invalid mapping"
+  1064 297:43 load 1 ; reason
+  1065 297:57 load 2 ; path
+  1066 297:70 load 3 ; value
+  1067 297:9 map 56 4 ; ["code", "reason", "path", "value"]
+  1068 297:3 throw
+  1069 298:1 const 0 ; nothing
+  1070 298:1 return
+  1071 301:6 load 1 ; step
+  1072 301:11 is-kind text
+  1073 301:3 branch-false 1076
+  1074 301:33 const 27 ; true
+  1075 301:26 return
+  1076 302:6 load 1 ; step
+  1077 302:11 is-kind integer
+  1078 302:3 branch-false 1083
+  1079 302:37 load 1 ; step
+  1080 302:45 const 16 ; 0
+  1081 302:42 not-equal
+  1082 302:30 return
+  1083 303:6 load 1 ; step
+  1084 303:11 is-kind map
+  1085 303:3 branch-false 1091
+  1086 303:32 load 1 ; step
+  1087 303:46 const 27 ; true
+  1088 303:39 map 57 1 ; ["each"]
+  1089 303:37 equal
+  1090 303:25 return
+  1091 304:10 const 17 ; false
+  1092 304:3 return
+  1093 305:1 const 0 ; nothing
+  1094 305:1 return
+  1095 308:27 load 1 ; path
+  1096 308:3 iterate
+  1097 308:3 next 1105
+  1098 308:3 store 2 ; step
+  1099 309:8 load 2 ; step
+  1100 309:13 is-kind map
+  1101 309:5 branch-false 1104
+  1102 309:34 const 27 ; true
+  1103 309:27 return
+  1104 308:3 jump 1097
+  1105 308:3 pop
+  1106 311:10 const 17 ; false
+  1107 311:3 return
+  1108 312:1 const 0 ; nothing
+  1109 312:1 return
+  1110 315:7 const 4 ; 1
+  1111 315:3 store 3 ; index
+  1112 316:16 load 3 ; index
+  1113 316:39 load 1 ; a
+  1114 316:25 property length
+  1115 316:22 less-or-equal
+  1116 316:41 branch-false 1123
+  1117 316:45 load 3 ; index
+  1118 316:68 load 2 ; b
+  1119 316:54 property length
+  1120 316:51 less-or-equal
+  1121 316:41 check-boolean
+  1122 316:41 jump 1124
+  1123 316:41 const 17 ; false
+  1124 316:3 branch-false 1142
+  1125 317:13 load 3 ; index
+  1126 317:22 load 1 ; a
+  1127 317:8 chunk-get item
+  1128 317:32 load 3 ; index
+  1129 317:41 load 2 ; b
+  1130 317:27 chunk-get item
+  1131 317:24 not-equal
+  1132 317:5 branch-false 1135
+  1133 317:55 const 17 ; false
+  1134 317:48 return
+  1135 318:9 const 4 ; 1
+  1136 318:5 store 4 ; (4)
+  1137 318:5 load 3 ; index
+  1138 318:5 load 4 ; (4)
+  1139 318:5 add
+  1140 318:5 store 3 ; index
+  1141 316:3 jump 1112
+  1142 320:10 const 27 ; true
+  1143 320:3 return
+  1144 321:1 const 0 ; nothing
+  1145 321:1 return
+  1146 326:16 load 1 ; value
+  1147 326:29 list 0
+  1148 326:41 const 4 ; 1
+  1149 326:8 map 58 3 ; ["value", "path", "offset"]
+  1150 326:7 list 1
+  1151 326:3 store 3 ; pending
+  1152 327:7 list 0
+  1153 327:3 store 4 ; selected
+  1154 328:16 load 3 ; pending
+  1155 328:24 is-empty
+  1156 328:24 not
+  1157 328:3 branch-false 1407
+  1158 329:15 const 4 ; 1
+  1159 329:14 negate
+  1160 329:20 load 3 ; pending
+  1161 329:9 chunk-get item
+  1162 329:5 store 5 ; node
+  1163 330:18 const 4 ; 1
+  1164 330:17 negate
+  1165 330:12 store 15 ; (15)
+  1166 330:12 load 15 ; (15)
+  1167 330:5 load 3 ; pending
+  1168 330:12 chunk-delete item
+  1169 330:5 store 3 ; pending
+  1170 331:22 load 5 ; node
+  1171 331:9 get-key "value"
+  1172 331:5 store 6 ; current
+  1173 332:21 load 5 ; node
+  1174 332:9 get-key "path"
+  1175 332:5 store 7 ; taken
+  1176 333:23 load 5 ; node
+  1177 333:9 get-key "offset"
+  1178 333:5 store 8 ; offset
+  1179 334:8 load 8 ; offset
+  1180 334:31 load 2 ; path
+  1181 334:17 property length
+  1182 334:15 greater
+  1183 334:5 branch-false 1194
+  1184 335:21 const 27 ; true
+  1185 335:34 load 6 ; current
+  1186 335:49 load 7 ; taken
+  1187 335:11 map 59 3 ; ["present", "value", "path"]
+  1188 335:7 store 15 ; (15)
+  1189 335:7 load 4 ; selected
+  1190 335:7 load 15 ; (15)
+  1191 335:7 append
+  1192 335:7 store 4 ; selected
+  1193 336:7 jump 1154
+  1194 338:14 load 8 ; offset
+  1195 338:24 load 2 ; path
+  1196 338:9 chunk-get item
+  1197 338:5 store 9 ; step
+  1198 339:8 load 9 ; step
+  1199 339:13 is-kind map
+  1200 339:5 branch-false 1286
+  1201 340:10 load 6 ; current
+  1202 340:18 is-kind map
+  1203 340:7 branch-false 1208
+  1204 341:25 load 6 ; current
+  1205 341:13 property keys
+  1206 341:9 store 10 ; keys
+  1207 340:7 jump 1240
+  1208 343:12 load 6 ; current
+  1209 343:20 is-kind list
+  1210 343:9 branch-false 1224
+  1211 344:14 load 6 ; current
+  1212 344:22 is-empty
+  1213 344:11 branch-false 1217
+  1214 345:17 list 0
+  1215 345:13 store 10 ; keys
+  1216 344:11 jump 1223
+  1217 347:31 const 4 ; 1
+  1218 347:49 load 6 ; current
+  1219 347:35 property length
+  1220 347:32 range
+  1221 347:17 property items
+  1222 347:13 store 10 ; keys
+  1223 343:9 jump 1240
+  1224 350:25 const 17 ; false
+  1225 350:38 load 7 ; taken
+  1226 350:57 load 9 ; step
+  1227 350:77 const 7 ; "wrong kind"
+  1228 350:101 const 60 ; "map or list"
+  1229 350:128 load 6 ; current
+  1230 350:121 call-builtin kindOf 1
+  1231 350:145 load 6 ; current
+  1232 350:70 map 9 4 ; ["code", "expected", "got", "value"]
+  1233 350:15 map 61 4 ; ["present", "path", "failedStep", "error"]
+  1234 350:11 store 15 ; (15)
+  1235 350:11 load 4 ; selected
+  1236 350:11 load 15 ; (15)
+  1237 350:11 append
+  1238 350:11 store 4 ; selected
+  1239 351:11 jump 1154
+  1240 354:25 load 10 ; keys
+  1241 354:11 property length
+  1242 354:7 store 11 ; index
+  1243 355:20 load 11 ; index
+  1244 355:28 const 16 ; 0
+  1245 355:26 greater
+  1246 355:7 branch-false 1285
+  1247 356:18 load 11 ; index
+  1248 356:27 load 10 ; keys
+  1249 356:13 chunk-get item
+  1250 356:9 store 12 ; key
+  1251 357:12 load 6 ; current
+  1252 357:20 is-kind map
+  1253 357:9 branch-false 1259
+  1254 358:20 load 12 ; key
+  1255 358:28 load 6 ; current
+  1256 358:15 get-key-computed
+  1257 358:11 store 13 ; child
+  1258 357:9 jump 1263
+  1259 360:20 load 12 ; key
+  1260 360:27 load 6 ; current
+  1261 360:15 chunk-get item
+  1262 360:11 store 13 ; child
+  1263 362:21 load 13 ; child
+  1264 362:34 list 0
+  1265 362:38 load 7 ; taken
+  1266 362:34 list-extend
+  1267 362:45 load 12 ; key
+  1268 362:34 list-append
+  1269 362:59 load 8 ; offset
+  1270 362:68 const 4 ; 1
+  1271 362:66 add
+  1272 362:13 map 58 3 ; ["value", "path", "offset"]
+  1273 362:9 store 15 ; (15)
+  1274 362:9 load 3 ; pending
+  1275 362:9 load 15 ; (15)
+  1276 362:9 append
+  1277 362:9 store 3 ; pending
+  1278 363:18 const 4 ; 1
+  1279 363:9 store 15 ; (15)
+  1280 363:9 load 11 ; index
+  1281 363:9 load 15 ; (15)
+  1282 363:9 subtract
+  1283 363:9 store 11 ; index
+  1284 355:7 jump 1243
+  1285 365:7 jump 1154
+  1286 367:8 load 9 ; step
+  1287 367:13 is-kind text
+  1288 367:5 branch-false 1332
+  1289 368:10 load 6 ; current
+  1290 368:18 is-kind map
+  1291 368:18 not
+  1292 368:7 branch-false 1309
+  1293 369:23 const 17 ; false
+  1294 369:36 load 7 ; taken
+  1295 369:55 load 9 ; step
+  1296 369:75 const 7 ; "wrong kind"
+  1297 369:99 const 5 ; "map"
+  1298 369:118 load 6 ; current
+  1299 369:111 call-builtin kindOf 1
+  1300 369:135 load 6 ; current
+  1301 369:68 map 9 4 ; ["code", "expected", "got", "value"]
+  1302 369:13 map 61 4 ; ["present", "path", "failedStep", "error"]
+  1303 369:9 store 15 ; (15)
+  1304 369:9 load 4 ; selected
+  1305 369:9 load 15 ; (15)
+  1306 369:9 append
+  1307 369:9 store 4 ; selected
+  1308 370:9 jump 1154
+  1309 372:10 load 9 ; step
+  1310 372:37 load 6 ; current
+  1311 372:25 property keys
+  1312 372:15 member
+  1313 372:15 not
+  1314 372:7 branch-false 1325
+  1315 373:23 const 17 ; false
+  1316 373:36 load 7 ; taken
+  1317 373:55 load 9 ; step
+  1318 373:13 map 62 3 ; ["present", "path", "failedStep"]
+  1319 373:9 store 15 ; (15)
+  1320 373:9 load 4 ; selected
+  1321 373:9 load 15 ; (15)
+  1322 373:9 append
+  1323 373:9 store 4 ; selected
+  1324 374:9 jump 1154
+  1325 376:16 load 9 ; step
+  1326 376:25 load 6 ; current
+  1327 376:11 get-key-computed
+  1328 376:7 store 13 ; child
+  1329 377:11 load 9 ; step
+  1330 377:7 store 14 ; resolved
+  1331 367:5 jump 1391
+  1332 379:10 load 6 ; current
+  1333 379:18 is-kind list
+  1334 379:18 not
+  1335 379:7 branch-false 1352
+  1336 380:23 const 17 ; false
+  1337 380:36 load 7 ; taken
+  1338 380:55 load 9 ; step
+  1339 380:75 const 7 ; "wrong kind"
+  1340 380:99 const 6 ; "list"
+  1341 380:119 load 6 ; current
+  1342 380:112 call-builtin kindOf 1
+  1343 380:136 load 6 ; current
+  1344 380:68 map 9 4 ; ["code", "expected", "got", "value"]
+  1345 380:13 map 61 4 ; ["present", "path", "failedStep", "error"]
+  1346 380:9 store 15 ; (15)
+  1347 380:9 load 4 ; selected
+  1348 380:9 load 15 ; (15)
+  1349 380:9 append
+  1350 380:9 store 4 ; selected
+  1351 381:9 jump 1154
+  1352 383:11 load 9 ; step
+  1353 383:7 store 14 ; resolved
+  1354 384:10 load 9 ; step
+  1355 384:17 const 16 ; 0
+  1356 384:15 less
+  1357 384:7 branch-false 1365
+  1358 384:42 load 6 ; current
+  1359 384:28 property length
+  1360 384:52 load 9 ; step
+  1361 384:50 add
+  1362 384:59 const 4 ; 1
+  1363 384:57 add
+  1364 384:24 store 14 ; resolved
+  1365 385:10 load 14 ; resolved
+  1366 385:21 const 4 ; 1
+  1367 385:19 less
+  1368 385:23 branch-true 1375
+  1369 385:26 load 14 ; resolved
+  1370 385:51 load 6 ; current
+  1371 385:37 property length
+  1372 385:35 greater
+  1373 385:23 check-boolean
+  1374 385:23 jump 1376
+  1375 385:23 const 27 ; true
+  1376 385:7 branch-false 1387
+  1377 386:23 const 17 ; false
+  1378 386:36 load 7 ; taken
+  1379 386:55 load 9 ; step
+  1380 386:13 map 62 3 ; ["present", "path", "failedStep"]
+  1381 386:9 store 15 ; (15)
+  1382 386:9 load 4 ; selected
+  1383 386:9 load 15 ; (15)
+  1384 386:9 append
+  1385 386:9 store 4 ; selected
+  1386 387:9 jump 1154
+  1387 389:16 load 14 ; resolved
+  1388 389:28 load 6 ; current
+  1389 389:11 chunk-get item
+  1390 389:7 store 13 ; child
+  1391 391:17 load 13 ; child
+  1392 391:30 list 0
+  1393 391:34 load 7 ; taken
+  1394 391:30 list-extend
+  1395 391:41 load 14 ; resolved
+  1396 391:30 list-append
+  1397 391:60 load 8 ; offset
+  1398 391:69 const 4 ; 1
+  1399 391:67 add
+  1400 391:9 map 58 3 ; ["value", "path", "offset"]
+  1401 391:5 store 15 ; (15)
+  1402 391:5 load 3 ; pending
+  1403 391:5 load 15 ; (15)
+  1404 391:5 append
+  1405 391:5 store 3 ; pending
+  1406 328:3 jump 1154
+  1407 393:10 load 4 ; selected
+  1408 393:3 return
+  1409 394:1 const 0 ; nothing
+  1410 394:1 return
+  1411 397:14 load 1 ; number
+  1412 397:46 load 3 ; selected
+  1413 397:34 get-key "path"
+  1414 397:83 load 2 ; rule
+  1415 397:73 get-key "to"
+  1416 397:7 map 63 3 ; ["rule", "sourcePath", "destinationPath"]
+  1417 397:3 store 5 ; location
+  1418 398:30 load 2 ; rule
+  1419 398:18 get-key "from"
+  1420 398:6 call 24 1 ; hasWildcard
+  1421 398:3 branch-false 1430
+  1422 398:45 load 4 ; position
+  1423 398:41 store 6 ; (6)
+  1424 398:41 load 5 ; location
+  1425 398:41 store 7 ; (7)
+  1426 398:59 load 7 ; (7)
+  1427 398:41 load 6 ; (6)
+  1428 398:59 set-key "position"
+  1429 398:41 store 5 ; location
+  1430 399:6 const 64 ; "failedStep"
+  1431 399:37 load 3 ; selected
+  1432 399:25 property keys
+  1433 399:19 member
+  1434 399:3 branch-false 1444
+  1435 399:73 load 3 ; selected
+  1436 399:55 get-key "failedStep"
+  1437 399:51 store 6 ; (6)
+  1438 399:51 load 5 ; location
+  1439 399:51 store 7 ; (7)
+  1440 399:87 load 7 ; (7)
+  1441 399:51 load 6 ; (6)
+  1442 399:87 set-key "failedStep"
+  1443 399:51 store 5 ; location
+  1444 400:10 load 5 ; location
+  1445 400:3 return
+  1446 401:1 const 0 ; nothing
+  1447 401:1 return
+  1448 404:7 load 2 ; stage
+  1449 404:3 store 4 ; (4)
+  1450 404:3 load 1 ; location
+  1451 404:3 store 5 ; (5)
+  1452 404:18 load 5 ; (5)
+  1453 404:3 load 4 ; (4)
+  1454 404:18 set-key "stage"
+  1455 404:3 store 1 ; location
+  1456 405:7 load 3 ; failure
+  1457 405:3 store 4 ; (4)
+  1458 405:3 load 1 ; location
+  1459 405:3 store 5 ; (5)
+  1460 405:20 load 5 ; (5)
+  1461 405:3 load 4 ; (4)
+  1462 405:20 set-key "error"
+  1463 405:3 store 1 ; location
+  1464 406:10 load 1 ; location
+  1465 406:3 return
+  1466 407:1 const 0 ; nothing
+  1467 407:1 return
+  1468 411:7 list 0
+  1469 411:3 store 4 ; parents
+  1470 412:7 load 1 ; built
+  1471 412:3 store 5 ; current
+  1472 413:7 const 4 ; 1
+  1473 413:3 store 6 ; index
+  1474 414:16 load 6 ; index
+  1475 414:38 load 2 ; path
+  1476 414:24 property length
+  1477 414:22 less
+  1478 414:3 branch-false 1504
+  1479 415:9 load 5 ; current
+  1480 415:5 store 8 ; (8)
+  1481 415:5 load 4 ; parents
+  1482 415:5 load 8 ; (8)
+  1483 415:5 append
+  1484 415:5 store 4 ; parents
+  1485 416:19 load 6 ; index
+  1486 416:28 load 2 ; path
+  1487 416:14 chunk-get item
+  1488 416:37 load 5 ; current
+  1489 416:9 get-key-computed
+  1490 416:5 store 5 ; current
+  1491 417:8 load 5 ; current
+  1492 417:19 const 0 ; nothing
+  1493 417:16 equal
+  1494 417:5 branch-false 1497
+  1495 417:36 map 1 0 ; []
+  1496 417:32 store 5 ; current
+  1497 418:9 const 4 ; 1
+  1498 418:5 store 8 ; (8)
+  1499 418:5 load 6 ; index
+  1500 418:5 load 8 ; (8)
+  1501 418:5 add
+  1502 418:5 store 6 ; index
+  1503 414:3 jump 1474
+  1504 420:7 load 3 ; value
+  1505 420:3 store 8 ; (8)
+  1506 420:28 load 6 ; index
+  1507 420:37 load 2 ; path
+  1508 420:23 chunk-get item
+  1509 420:18 store 9 ; (9)
+  1510 420:3 load 5 ; current
+  1511 420:3 store 10 ; (10)
+  1512 420:18 load 9 ; (9)
+  1513 420:18 load 10 ; (10)
+  1514 420:3 load 8 ; (8)
+  1515 420:18 set-key-computed
+  1516 420:3 store 5 ; current
+  1517 421:12 const 4 ; 1
+  1518 421:3 store 8 ; (8)
+  1519 421:3 load 6 ; index
+  1520 421:3 load 8 ; (8)
+  1521 421:3 subtract
+  1522 421:3 store 6 ; index
+  1523 422:16 load 6 ; index
+  1524 422:24 const 16 ; 0
+  1525 422:22 greater
+  1526 422:3 branch-false 1553
+  1527 423:14 load 6 ; index
+  1528 423:23 load 4 ; parents
+  1529 423:9 chunk-get item
+  1530 423:5 store 7 ; parent
+  1531 424:9 load 5 ; current
+  1532 424:5 store 8 ; (8)
+  1533 424:32 load 6 ; index
+  1534 424:41 load 2 ; path
+  1535 424:27 chunk-get item
+  1536 424:22 store 9 ; (9)
+  1537 424:5 load 7 ; parent
+  1538 424:5 store 10 ; (10)
+  1539 424:22 load 9 ; (9)
+  1540 424:22 load 10 ; (10)
+  1541 424:5 load 8 ; (8)
+  1542 424:22 set-key-computed
+  1543 424:5 store 7 ; parent
+  1544 425:9 load 7 ; parent
+  1545 425:5 store 5 ; current
+  1546 426:14 const 4 ; 1
+  1547 426:5 store 8 ; (8)
+  1548 426:5 load 6 ; index
+  1549 426:5 load 8 ; (8)
+  1550 426:5 subtract
+  1551 426:5 store 6 ; index
+  1552 422:3 jump 1523
+  1553 428:10 load 5 ; current
+  1554 428:3 return
+  1555 429:1 const 0 ; nothing
+  1556 429:1 return
+unwind
+  0565..0569 catch -> 0571 depth 2
+  0572..0573 guard -> 0587 depth 2
+  0876..0881 catch -> 0883 depth 2
+  0884..0885 guard -> 0902 depth 2

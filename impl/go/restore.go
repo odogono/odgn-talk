@@ -81,6 +81,10 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 		}
 		g.libraries[l.Name()] = l
 	}
+	for _, l := range o.Libraries {
+		addStandardLibraries(g.libraries, importNames(l)...)
+	}
+	addStandardLibraries(g.libraries, sortedKeys(header.Libraries)...)
 	withheld := []string{}
 	for _, name := range sortedKeys(header.Libraries) {
 		id := header.Libraries[name]

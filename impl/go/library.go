@@ -2,7 +2,6 @@ package northtalk
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
@@ -61,7 +60,8 @@ func libraryOptions(libraries map[string]*Library) (map[string]map[string]check.
 // CompileLibrary checks immutable code; imports may also name the ambient stdlib.
 // Calls are rechecked against the importing Script's own Grants at load.
 func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error) {
-	available := maps.Clone(standardLibraries())
+	available := map[string]*Library{}
+	addStandardLibraries(available, usedNamesIn(src.Source)...)
 	for _, l := range imports {
 		if l == nil {
 			return nil, &HostError{InvalidValue, "nil Library"}
@@ -202,12 +202,13 @@ func (g *Group) AddLibrary(l *Library) error {
 	}
 	defer g.endWorker()
 	g.record("add-library", true, []string{l.Name()}, fields)
-	if standardLibraries()[l.Name()] != nil {
+	if isStandardLibrary(l.Name()) {
 		return g.refuse(ReservedName, l.Name())
 	}
 	if g.libraries[l.Name()] != nil {
 		return g.refuse(NameReused, l.Name())
 	}
+	addStandardLibraries(g.libraries, importNames(l)...)
 	for _, imported := range l.imports {
 		held := g.libraries[imported.Name()]
 		if held == nil || held.id != imported.id {

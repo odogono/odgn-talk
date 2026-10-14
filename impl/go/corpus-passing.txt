@@ -422,3 +422,11 @@ capabilities/standard-store-watch-errors
 capabilities/standard-store-watch-grants
 capabilities/standard-store-watch-segments
 capabilities/standard-store-watch-validation
+builtins/collection-comparison-fuel
+stdlib/mappings
+stdlib/mappings-errors
+stdlib/mappings-definitions
+stdlib/mappings-restricted
+stdlib/mappings-restore
+stdlib/mappings-limits
+stdlib/mappings-depth

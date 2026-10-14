@@ -1436,6 +1436,8 @@ export const errorMessages = {
   "capability disabled": "The Grant for {capability} is disabled, so {operation} cannot be called",
   "offer unavailable": "The recovery offer {name} is unavailable",
   "invalid shape": "The Shape is invalid: {reason}",
+  "invalid mapping": "The Mapping is invalid: {reason}",
+  "missing selection": "The selection step {step} is missing",
   "invalid key": "A Store key can't be empty text",
   "invalid watch": "A watch's {field} isn't valid",
   "watch limit": "The Store's {limit} limit for watches would be exceeded",

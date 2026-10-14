@@ -185,6 +185,8 @@ Every catch is tested before failed frames unwind. An ordinary accepting catch t
 | `capability disabled` | `capability`, `operation` | A Script call goes through a Grant disabled by failed automatic abandonment; this takes precedence over revocation | [#219](https://github.com/odogono/odgn-talk/issues/219), [ADR 0047](../docs/adr/0047-capability-scopes-guarantee-abandonment-not-atomicity.md), [ADR 0048](../docs/adr/0048-segment-bound-effects-use-one-host-participant.md) |
 | `offer unavailable` | `name` | A choice names no eligible Recovery Offer in the retained failure chain | [ADR 0060](../docs/adr/0060-errors-may-transfer-to-named-recovery-offers-chosen-before-unwinding.md) |
 | `invalid shape` | `reason`, `path`, `value` | A Shape check Built-in is given data that isn't a Shape; `reason` is the chapter 7 reason for the first definition error, `path` locates it inside the Shape data, and `value` is the offending part | [ADR 0080](../docs/adr/0080-scripts-check-shapes-through-built-ins.md), [#695](https://github.com/odogono/odgn-talk/issues/695) |
+| `invalid mapping` | `reason`, `path`, `value`; optional: `error`, `otherRule` | map.transform receives an invalid Mapping definition; reason and precedence are fixed in chapter 7, path is definition-relative, an embedded Shape failure is preserved in error, and an overlap names the earliest otherRule | [ADR 0081](../docs/adr/0081-mappings-compose-shapes-with-restricted-transformations.md), [#697](https://github.com/odogono/odgn-talk/issues/697) |
+| `missing selection` | `step` | A Mapping source selection is absent under the error policy; this plain diagnostic is nested in a source-stage report, with the resolved prefix and failed step on its wrapper | [ADR 0081](../docs/adr/0081-mappings-compose-shapes-with-restricted-transformations.md), [#697](https://github.com/odogono/odgn-talk/issues/697) |
 | `invalid key` | none | A `store` Operation is given empty text as its key; the Core raises it before the Host function runs | [ADR 0050](../docs/adr/0050-the-store-is-a-standard-capability-with-segment-bound-writes.md), [#226](https://github.com/odogono/odgn-talk/issues/226) |
 | `invalid watch` | `field` | A `store` `watch` or `unwatch` is given empty text as its name, or `watch` an effective message that isn't a plain Name; `field` is `name` or `message`, and the Core raises it before the Host function runs | [ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227) |
 | `watch limit` | `limit` | A `watch` would take its Store's watches past a limit, after removing the watch it replaces; `limit` is `watches`, `size` or `pending`, and the Host raises it before anything changes | [ADR 0061](../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md), [#227](https://github.com/odogono/odgn-talk/issues/227) |
@@ -245,6 +247,8 @@ Every Core-raised error carries a `message`, written from its template below. `{
 | `capability disabled` | The Grant for {capability} is disabled, so {operation} cannot be called |
 | `offer unavailable` | The recovery offer {name} is unavailable |
 | `invalid shape` | The Shape is invalid: {reason} |
+| `invalid mapping` | The Mapping is invalid: {reason} |
+| `missing selection` | The selection step {step} is missing |
 | `invalid key` | A Store key can't be empty text |
 | `invalid watch` | A watch's {field} isn't valid |
 | `watch limit` | The Store's {limit} limit for watches would be exceeded |

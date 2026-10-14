@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -37,7 +38,7 @@ func restrictedSetup(t *testing.T, c restrictedCase, lines *[]string) *Group {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := standardLibraries()["map"].state
+	lib := standardLibrary("map").state
 	body := -1
 	for i, b := range lib.Unit.Bodies {
 		if b.Checked.Name == "restrictedCall" {
@@ -106,7 +107,10 @@ func TestRestrictedCallbackKit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := "# Unblessed: restricted callback " + c.Name + " (#696); first blessing awaits human review.\n" + strings.Join(lines, "\n") + "\n"
+			got := strings.Join(lines, "\n") + "\n"
+			if strings.HasPrefix(string(want), "# ") {
+				_, want, _ = bytes.Cut(want, []byte("\n"))
+			}
 			if got != string(want) {
 				t.Fatalf("Trace mismatch\nwant:\n%s\ngot:\n%s", want, got)
 			}
@@ -167,7 +171,7 @@ func TestRestrictedIntrinsicAccess(t *testing.T) {
 	if _, err := New().NewGroup(GroupOptions{}).Load(LoadOptions{Name: "private", Source: "use restrictedCall from map\n"}); err == nil {
 		t.Fatal("private intrinsic imported")
 	}
-	trusted := standardLibraries()["map"]
+	trusted := standardLibrary("map")
 	host, err := New().CompileLibrary(trusted.source, nil, nil)
 	if err != nil {
 		t.Fatal(err)

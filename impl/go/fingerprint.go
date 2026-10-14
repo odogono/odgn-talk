@@ -181,7 +181,7 @@ func (g *Group) fingerprint() [32]byte {
 	}
 	names := []string{}
 	for n := range g.libraries {
-		if standardLibraries()[n] == nil {
+		if !isStandardLibrary(n) {
 			names = append(names, n)
 		}
 	}

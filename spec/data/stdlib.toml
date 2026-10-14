@@ -652,6 +652,13 @@ name = "lookup"
 call = "lookup(m, path, default = nothing)"
 gives = "The value the Value Path `path` locates inside `m`, or `default` if a key or position along it is missing or holds Nothing"
 
+[[export]]
+library = "map"
+name = "transform"
+call = "transform(value, mapping)"
+gives = "A complete fresh mapped value, or ordered diagnostics without partial output"
+errors = ["invalid mapping"]
+
 # ---------------------------------------------------------------------------
 # bytes
 # ---------------------------------------------------------------------------

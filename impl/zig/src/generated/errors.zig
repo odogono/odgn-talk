@@ -535,6 +535,36 @@ pub const errors: ErrorsTable = .{
             .message = "The Shape is invalid: {reason}",
         },
         .{
+            .code = "invalid mapping",
+            .fields = &.{
+                "reason",
+                "path",
+                "value",
+            },
+            .raised_when = "map.transform receives an invalid Mapping definition; reason and precedence are fixed in chapter 7, path is definition-relative, an embedded Shape failure is preserved in error, and an overlap names the earliest otherRule",
+            .sources = &.{
+                "ADR 0081",
+                "#697",
+            },
+            .message = "The Mapping is invalid: {reason}",
+            .optional = &.{
+                "error",
+                "otherRule",
+            },
+        },
+        .{
+            .code = "missing selection",
+            .fields = &.{
+                "step",
+            },
+            .raised_when = "A Mapping source selection is absent under the error policy; this plain diagnostic is nested in a source-stage report, with the resolved prefix and failed step on its wrapper",
+            .sources = &.{
+                "ADR 0081",
+                "#697",
+            },
+            .message = "The selection step {step} is missing",
+        },
+        .{
             .code = "invalid key",
             .fields = &.{},
             .raised_when = "A `store` Operation is given empty text as its key; the Core raises it before the Host function runs",

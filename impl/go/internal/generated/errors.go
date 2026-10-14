@@ -536,6 +536,36 @@ var Errors = ErrorsTable{
 			Message: "The Shape is invalid: {reason}",
 		},
 		ErrorsTableErrorEntry{
+			Code: "invalid mapping",
+			Fields: []string{
+				"reason",
+				"path",
+				"value",
+			},
+			RaisedWhen: "map.transform receives an invalid Mapping definition; reason and precedence are fixed in chapter 7, path is definition-relative, an embedded Shape failure is preserved in error, and an overlap names the earliest otherRule",
+			Sources: []string{
+				"ADR 0081",
+				"#697",
+			},
+			Message: "The Mapping is invalid: {reason}",
+			Optional: []string{
+				"error",
+				"otherRule",
+			},
+		},
+		ErrorsTableErrorEntry{
+			Code: "missing selection",
+			Fields: []string{
+				"step",
+			},
+			RaisedWhen: "A Mapping source selection is absent under the error policy; this plain diagnostic is nested in a source-stage report, with the resolved prefix and failed step on its wrapper",
+			Sources: []string{
+				"ADR 0081",
+				"#697",
+			},
+			Message: "The selection step {step} is missing",
+		},
+		ErrorsTableErrorEntry{
 			Code:       "invalid key",
 			Fields:     []string{},
 			RaisedWhen: "A `store` Operation is given empty text as its key; the Core raises it before the Host function runs",

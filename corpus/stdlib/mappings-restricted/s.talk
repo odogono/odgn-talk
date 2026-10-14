@@ -1,0 +1,38 @@
+use transform from map
+script variable log = []
+script variable state = 7
+on go
+  put state into captured
+  put transform(3, {rules: [{from: [], to: ["v"], transform: given n: n + captured}]}) after log
+  put transform(3, {rules: [{from: [], to: ["v"], transform: readState}, {from: [], to: ["fallback"], transform: fallback}, {from: [], to: ["nested"], transform: nested}]}) after log
+  put transform(bulb, {rules: [{from: ["state"], to: ["v"], missing: "default", default: "safe"}]}) after log
+  put transform(bulb, {rules: [{from: [], to: ["v"], transform: given object: the state of object}]}) after log
+  put transform(3, {rules: [{from: [], to: ["v"], transform: cleanup}]}) after log
+  put given n
+    wait 1 s
+    return n
+  end given into suspending
+  put transform(3, {rules: [{from: [], to: ["v"], transform: suspending}]}) after log
+  put transform(3, {rules: [{from: [], to: ["v"], transform: given n: n + 1}]}) after log
+  put state after log
+end go
+function readState n
+  return state
+end readState
+function fallback n
+  try
+    return state
+  catch e
+    return n + 1
+  end try
+end fallback
+function nested n
+  return transform(n, {rules: [{from: [], to: ["nested"], transform: readState}]})
+end nested
+function cleanup n
+  try
+    throw {code: "example failure", detail: n}
+  finally
+    put 99 into state
+  end try
+end cleanup

@@ -38,6 +38,7 @@ func (*Stop) isReport() {}
 // rolling back their participants.
 func (s *Script) Reload(source string, carry CarryOver, o ...ReloadOptions) ([]Report, error) {
 	g := s.group
+	addStandardLibraries(g.libraries, usedNamesIn(source)...)
 	_, importIDs, _, _ := libraryOptions(g.libraries)
 	fields := map[string]string{"source": corevalue.DisplayText(source), "carry": "no", "identity": fmt.Sprintf("%x", codeIdentity("script", s.name, source, importIDs))}
 	if carry == CarryVariables {
