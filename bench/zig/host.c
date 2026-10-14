@@ -24,7 +24,8 @@ static double now(void) {
  * and hostTopSizes lists the exact request sizes with the most requests in
  * the span, so a fixed-size node (a Value) stands apart from variable-size
  * scratch and collection buffers. groupPeak is the Group's own physical
- * high-water mark, including Load. None of these is resident memory. */
+ * high-water mark, including Load; groupUsed is held memory after the checked
+ * Run, including retained cache capacity. None of these is resident memory. */
 #define MAX_SIZES 8192
 #define TOP_SIZES 8
 typedef struct { size_t size, count, bytes; } size_stat;
@@ -76,9 +77,9 @@ static int by_count(const void *a, const void *b) {
 static void print_allocations(const alloc_snapshot *snap, talk_group *group) {
     talk_memory memory;
     talk_group_memory(group, &memory);
-    printf(",\"hostBytes\":%zu,\"hostAllocs\":%zu,\"hostFrees\":%zu,\"hostLivePeakDelta\":%zu,\"groupPeak\":%zu,\"hostTopSizes\":[",
+    printf(",\"hostBytes\":%zu,\"hostAllocs\":%zu,\"hostFrees\":%zu,\"hostLivePeakDelta\":%zu,\"groupUsed\":%zu,\"groupPeak\":%zu,\"hostTopSizes\":[",
            host_bytes - snap->bytes, host_allocs - snap->allocs, host_frees - snap->frees,
-           host_live_peak - snap->live, memory.peak);
+           host_live_peak - snap->live, memory.used, memory.peak);
     static size_stat deltas[MAX_SIZES];
     size_t delta_count = 0;
     for (size_t i = 0; i < size_stat_count; ++i) {

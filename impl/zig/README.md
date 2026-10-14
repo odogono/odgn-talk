@@ -486,7 +486,15 @@ Each Group allocates everything it holds through its own allocator
 counts physical bytes against `memory_cap` (256 MiB by default). Freed Value
 nodes are kept for reuse in a cache of at most 128 nodes, counted against the
 cap like everything else, flushed under cap pressure and returned when the
-Group is released. Cost Model 0
+Group is released. Released frame locals and operand buffers have a separate
+cache of at most 32 buffers, each at most 1 KiB (at most 32 KiB retained).
+Only empty buffers with room for an intrusive header are kept; Values and
+internal stack objects are released first. Reuse requires the same byte size
+and alignment, including for frames rebuilt by Restore, and every local is
+initialised again. Unbound locals share one immutable Nothing per call, with
+one owned reference per slot. Both caches count in physical memory, are
+flushed before a cap refusal, and return all storage on Group release.
+Cost Model 0
 still charges logical allocation; the cap is for defects. A refused
 allocation becomes `TALK_OUT_OF_MEMORY`: the Run in flight is dropped whole,
 messages and waits that couldn't be queued are released, and the Group takes
@@ -942,6 +950,7 @@ leaves the Group able to load and run Scripts. A Delivery's `talk_limit_override
 tightens its Run's Fuel, allocation, MaxWait and MaxJoin; one that loosens is
 refused `invalid value`, with the override on its `>` line. A Limit Fault
 comes before the faulting instruction's charge, so none of it is made:
+
 - **Its own limit first:** a call past the call depth, a `make-pattern` past
   the Text Pattern size and a Join Member past MaxJoin fault before anything
   else, through `error.LimitFault`.

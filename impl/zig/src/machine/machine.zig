@@ -6238,12 +6238,19 @@ pub const Group = struct {
         const b = (if (library) |l| &l.unit else &run.script.unit).bodies[body];
         const locals = try g.gpa.alloc(*Value, b.locals);
         var made: usize = 0;
+        // Unbound locals share this call's immutable Nothing. Each slot
+        // still owns a reference; replacing one cannot change another.
+        var empty: ?*Value = null;
         errdefer {
             for (locals[0..made]) |v| v.release();
             g.gpa.free(locals);
         }
         for (locals, 0..) |*l, i| {
-            l.* = if (i >= 1 and i <= args.len) args[i - 1].retain() else try nothing(g.gpa);
+            l.* = if (i >= 1 and i <= args.len) args[i - 1].retain() else if (empty) |v| v.retain() else blk: {
+                const v = try nothing(g.gpa);
+                empty = v;
+                break :blk v;
+            };
             made += 1;
         }
         const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
@@ -6253,9 +6260,9 @@ pub const Group = struct {
     fn popFrame(g: *Group, run: *Run) void {
         var f = run.frames.pop().?;
         for (f.locals) |v| v.release();
-        g.gpa.free(f.locals);
+        @import("group_allocator.zig").freeFrameBuffer(g.gpa, *Value, f.locals);
         for (f.stack.items) |slot| slot.release(g.gpa);
-        f.stack.deinit(g.gpa);
+        @import("group_allocator.zig").freeFrameBuffer(g.gpa, Slot, f.stack.allocatedSlice());
     }
 
     // ------------------------------------------------------------ running
