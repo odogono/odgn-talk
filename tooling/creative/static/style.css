@@ -440,7 +440,7 @@ button:disabled {
 }
 
 /* In-place rich text; its formatting controls head the Info window while editing. */
-#text-toolbar:not([hidden]) {
+:is(#text-toolbar, #play-text-toolbar):not([hidden]) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -453,20 +453,20 @@ button:disabled {
   :is([data-text-command='paragraph'], [data-text-command='done']) {
   display: none;
 }
-#text-toolbar label {
+:is(#text-toolbar, #play-text-toolbar) label {
   display: flex;
   align-items: center;
   gap: 0.3rem;
 }
-#text-toolbar input {
+:is(#text-toolbar, #play-text-toolbar) input {
   width: 2rem;
   height: 1.7rem;
 }
-#text-toolbar [aria-pressed='true'] {
+:is(#text-toolbar, #play-text-toolbar) [aria-pressed='true'] {
   background: var(--accent);
   color: white;
 }
-.page.edit .el.text-editing {
+.page .el.text-editing {
   cursor: text;
   user-select: text;
   overflow: auto;

@@ -2,9 +2,11 @@
 import { scriptNameProblems } from './script-names';
 import { text } from '@odgn/northtalk';
 import { byId, h } from './dom';
-import { replacePlainText, textOf } from './model';
+import { type TextElement } from './model';
 import { PlaySession } from './play';
+import { ReaderTextHistory } from './play-text';
 import { renderElement, type StackShell } from './stack';
+import { InPlaceTextEditor } from './text-editor';
 
 const now = () =>
   BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1_000_000n;
@@ -25,7 +27,12 @@ export const mountPlay = (shell: StackShell): void => {
   });
   const pageNode = h('div', { class: 'page' });
   reader.append(pageNode);
-  document.body.append(reader);
+  const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
+  toolbar.id = 'play-text-toolbar';
+  toolbar.hidden = true;
+  delete toolbar.dataset.scope;
+  toolbar.setAttribute('aria-label', 'Reader text formatting');
+  document.body.append(toolbar, reader);
   const problems = h('div', { class: 'banner', hidden: true, role: 'status' });
   byId('banners').append(problems);
   let session: PlaySession | undefined;
@@ -33,6 +40,58 @@ export const mountPlay = (shell: StackShell): void => {
   let generation = 0;
   let problemCount = 0;
   let drawnPage: PlaySession['page'] | undefined;
+  let activeText: InPlaceTextEditor | undefined;
+  const histories = new Map<TextElement, ReaderTextHistory>();
+  const closeText = () => {
+    const editor = activeText;
+    activeText = undefined;
+    editor?.destroy();
+    if (editor) {
+      editor.node.contentEditable =
+        session &&
+        !session.stopped &&
+        !session.navigating &&
+        editor.history.element.editable &&
+        editor.history.element.visible
+          ? 'true'
+          : 'false';
+    }
+    toolbar.hidden = true;
+  };
+  const openText = (node: HTMLElement, element: TextElement) => {
+    if (
+      !session ||
+      session.stopped ||
+      session.navigating ||
+      !element.editable
+    ) {
+      return;
+    }
+    if (activeText?.node === node) {
+      return;
+    }
+    closeText();
+    let history = histories.get(element);
+    if (!history) {
+      history = new ReaderTextHistory(session, element);
+      histories.set(element, history);
+    }
+    activeText = new InPlaceTextEditor(
+      node,
+      toolbar,
+      history,
+      () => {
+        node.dataset.renderedRichText = JSON.stringify(element.richText);
+        schedule();
+      },
+      () => {
+        closeText();
+        node.blur();
+        schedule();
+      },
+      { escape: () => stopPlay(), selectAll: false },
+    );
+  };
 
   const draw = () => {
     if (!session) {
@@ -40,6 +99,7 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const play = session;
     if (drawnPage !== play.page) {
+      closeText();
       pageNode.replaceChildren();
       drawnPage = play.page;
       reader.scrollTop = 0;
@@ -56,9 +116,16 @@ export const mountPlay = (shell: StackShell): void => {
       transformOrigin: 'top left',
     });
     for (const element of play.page.elements) {
-      const send = (
-        name: 'click' | 'pointerEnter' | 'pointerLeave' | 'textChanged',
-      ) => {
+      if (
+        activeText?.history.element === element &&
+        (play.stopped ||
+          play.navigating ||
+          !element.visible ||
+          !element.editable)
+      ) {
+        closeText();
+      }
+      const send = (name: 'click' | 'pointerEnter' | 'pointerLeave') => {
         play.send(element, name);
         schedule();
       };
@@ -78,14 +145,20 @@ export const mountPlay = (shell: StackShell): void => {
       // Keep the reader's focus, selection and IME intact across other writes.
       if (existing) {
         existing.className = fresh.className;
+        if (activeText?.node === existing) {
+          existing.classList.add('text-editing');
+        }
         existing.style.cssText = fresh.style.cssText;
         existing.hidden = fresh.hidden;
         if (
           element.kind !== 'text' ||
-          existing !== document.activeElement ||
-          existing.dataset.renderedText !== textOf(element)
+          existing.dataset.renderedRichText !== JSON.stringify(element.richText)
         ) {
-          existing.replaceChildren(...fresh.childNodes);
+          if (activeText?.node === existing) {
+            activeText.refresh();
+          } else {
+            existing.replaceChildren(...fresh.childNodes);
+          }
         }
       } else {
         pageNode.append(fresh);
@@ -109,23 +182,27 @@ export const mountPlay = (shell: StackShell): void => {
             send('pointerLeave');
           }
         });
-        fresh.addEventListener('blur', () => {
-          if (
-            element.kind === 'text' &&
-            element.editable &&
-            !play.stopped &&
-            fresh.innerText !== textOf(element)
-          ) {
-            replacePlainText(element, fresh.innerText);
-            send('textChanged');
+        fresh.addEventListener('focus', () => {
+          if (element.kind === 'text') {
+            openText(fresh, element);
+          }
+        });
+        fresh.addEventListener('blur', event => {
+          if (!toolbar.contains(event.relatedTarget as Node | null)) {
+            closeText();
+            schedule();
           }
         });
       }
       const node = existing ?? fresh;
       if (element.kind === 'text') {
         node.contentEditable =
-          element.editable && !play.stopped ? 'plaintext-only' : 'false';
-        node.dataset.renderedText = textOf(element);
+          element.editable && !play.stopped && !play.navigating
+            ? 'true'
+            : 'false';
+        if (activeText?.node !== node) {
+          node.dataset.renderedRichText = JSON.stringify(element.richText);
+        }
       }
       if (element.kind === 'button') {
         node.tabIndex = 0;
@@ -175,7 +252,7 @@ export const mountPlay = (shell: StackShell): void => {
       }
       const clock = now();
       const result = session.pump(clock);
-      if (session.changed) {
+      if (session.changed || session.navigating) {
         draw();
       }
       showProblems();
@@ -195,6 +272,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session) {
       return;
     }
+    closeText();
     clearTimeout(timer);
     timer = undefined;
     session.stop(now());
@@ -206,6 +284,7 @@ export const mountPlay = (shell: StackShell): void => {
   const leave = () => {
     stopPlay();
     session = undefined;
+    histories.clear();
     reader.hidden = true;
     pageNode.replaceChildren();
     problems.hidden = true;
@@ -229,6 +308,7 @@ export const mountPlay = (shell: StackShell): void => {
     shell.setPlaying(true);
     generation = shell.editor.generation;
     session = new PlaySession(shell.editor.project, shell.editor.pageIndex);
+    histories.clear();
     problemCount = 0;
     document.body.classList.add('playing');
     reader.hidden = false;
@@ -243,6 +323,15 @@ export const mountPlay = (shell: StackShell): void => {
     reader.focus();
   });
   stop.addEventListener('click', stopPlay);
+  toolbar.addEventListener('focusout', event => {
+    if (
+      !toolbar.contains(event.relatedTarget as Node | null) &&
+      event.relatedTarget !== activeText?.node
+    ) {
+      closeText();
+      schedule();
+    }
+  });
   document.addEventListener('keydown', event => {
     if (!session) {
       return;

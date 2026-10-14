@@ -213,7 +213,7 @@ removes it; **Clear** removes
 all selection marks so the Element's colour applies again. **Paragraph** inserts
 a paragraph break at the selection, as Enter does. Formatting requires a text
 selection. Font, size, whole-Element colour and **Reader can edit** remain in Info;
-the reader flag allows plain-text input during Play Sessions.
+the reader flag allows rich-text input during Play Sessions (see [Play](#play)).
 
 **Done**, Escape, selecting another Element or changing Page finishes editing.
 The toolbar's Undo and Redo, or ⌘/Ctrl-Z and ⌘/Ctrl-Shift-Z (also Ctrl-Y), are
@@ -262,8 +262,20 @@ Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
 then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
-or to the Page, without preventing normal typing. Finishing reader text editing
-sends `textChanged`. Script property writes update the reader view; setting
+or to the Page, without preventing normal typing. Reader-editable text opens
+the formatting toolbar on focus: select text for bold, italic, underline or
+colour, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
+the text again reopens it. Typing, formatting, paste and reader undo/redo send
+`textChanged` to the Element after updating its text, so handlers read the new
+plain text through `the text of me`. IME composition commits at its end.
+Clipboard HTML uses the same supported marks and paragraphs as authored text;
+unsupported content is discarded.
+
+Reader text and its undo history belong only to the Play Session. Navigation
+retains the text and formatting; Back to Edit restores the authored content and
+formatting exactly, and another Play starts fresh. Script replacements reset
+that Element's reader undo history. Stop or Escape also freezes reader typing
+and hides the toolbar. Script property writes update the reader view; setting
 `text` clears mixed formatting.
 
 **Stop** or Escape stops every Script and stays in Play. Execution uses the
@@ -328,3 +340,8 @@ sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/di
 Open `/play-test.html` and run
 `await import('/play.browser.js').then(m => m.runBrowserTests())`.
 Reload before repeating; the result must have `passed: true`.
+
+Reader text unit tests cover formatting, `textChanged`, isolation, undo/redo,
+Script replacements and disabled input. The browser suite also checks real
+selections, colour focus, clipboard sanitization, paragraphs, IME, navigation,
+Stop while editing and the exact authored rich-text restore.
