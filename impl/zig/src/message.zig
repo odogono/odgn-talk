@@ -110,7 +110,7 @@ const Answer = struct {
 
 /// The crossing a Pump paused at, until its result comes back.
 const Need = struct {
-    kind: enum { op, prop },
+    kind: enum { op, prop, effect },
     /// The paused Pump's Group.
     entry: *GroupEntry,
     // An op's fields.
@@ -135,9 +135,17 @@ const Need = struct {
     prop: []u8,
     /// The value a set brings; null reads the property.
     value: ?*Value = null,
+    // An effect's fields, with `script`, `run`, `segment`, `grant` and
+    // `now`: every enrolled Grant, the named Coordinator, and the phase.
+    grants: [][]u8 = &.{},
+    coordinator: ?[]u8 = null,
+    phase: caps.Phase = .begin,
 
     fn release(n: *Need, gpa: Allocator) void {
         for ([_][]u8{ n.call, n.script, n.run, n.segment, n.grant, n.capability, n.operation, n.scope, n.object_kind, n.object_id, n.prop }) |s| gpa.free(s);
+        for (n.grants) |g| gpa.free(g);
+        gpa.free(n.grants);
+        if (n.coordinator) |c| gpa.free(c);
         for (n.args) |v| v.release();
         gpa.free(n.args);
         if (n.value) |v| v.release();
@@ -168,6 +176,16 @@ pub const Session = struct {
     pumping_entry: ?*GroupEntry = null,
     /// A `restore` waiting for its `resolve-result`.
     restoring: ?Restoring = null,
+    /// What an `effect-result` brought back, for the re-made hook.
+    effect_answer: ?caps.EffectStatus = null,
+    /// Grant releases the Core made, sent as `release` needs before the
+    /// reply they came before; `held` is that reply.
+    releases: std.ArrayList(Release) = .empty,
+    held: ?[]u8 = null,
+    held_ref: i64 = 0,
+    /// Lifecycle contexts, owned here: one per Segment Capability, and one
+    /// per named Segment Coordinator.
+    effect_contexts: std.ArrayList(*EffectContext) = .empty,
 
     pub fn init(gpa: Allocator) ?*Session {
         const s = gpa.create(Session) catch return null;
@@ -183,6 +201,14 @@ pub const Session = struct {
         const gpa = s.gpa;
         if (s.need) |*n| n.release(gpa);
         if (s.restoring) |*r| r.deinit();
+        for (s.releases.items) |*r| r.deinit(gpa);
+        s.releases.deinit(gpa);
+        if (s.held) |h| gpa.free(h);
+        for (s.effect_contexts.items) |c| {
+            if (c.coordinator) |n| gpa.free(n);
+            gpa.destroy(c);
+        }
+        s.effect_contexts.deinit(gpa);
         if (s.answer) |*a| a.release(gpa);
         for (s.groups.items) |e| {
             Direct.groupRelease(e.group);
@@ -233,6 +259,27 @@ const PropContext = struct {
     session: *Session,
     kind: []u8,
     prop: []u8,
+};
+
+/// A Segment Coordinator's context: a Segment Capability's own, which
+/// gives each Grant its own Coordinator, or a named one, which every Grant
+/// given that name shares and which its `effect` needs carry.
+const EffectContext = struct {
+    session: *Session,
+    coordinator: ?[]u8 = null,
+};
+
+/// A Grant release the Core made, waiting to be sent as a `release` need.
+const Release = struct {
+    script: []u8,
+    grant: []u8,
+    reason: caps.ReleaseReason,
+    now: model.dates.Instant,
+
+    fn deinit(r: *Release, gpa: Allocator) void {
+        gpa.free(r.script);
+        gpa.free(r.grant);
+    }
 };
 
 /// A reply under construction.
@@ -645,6 +692,13 @@ fn overrideOf(j: ?Json, out: *talk.LimitOverride) Invalid!?*talk.LimitOverride {
 /// The Operation Host function of every Capability the layer defines:
 /// with an answer at hand it gives it; without one it records the need
 /// and defers, pausing the Pump at the crossing.
+/// An answer's `charged`. An automatic call's is zero, and draws nothing:
+/// any charge it tries is a Host contract failure.
+fn chargeAnswer(call: *caps.Call, charged: u64) bool {
+    if (call.automatic and charged == 0) return true;
+    return call.charge(charged);
+}
+
 fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Outcome {
     const oc: *OpContext = @ptrCast(@alignCast(context.?));
     const s = oc.session;
@@ -660,14 +714,14 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
             .fail, .limit, .host_error => true,
         };
         if (!fits) {
-            _ = call.charge(answer.charged);
+            _ = chargeAnswer(call, answer.charged);
             var copy = answer;
             copy.release(s.gpa);
             return .broken;
         }
         switch (answer.kind) {
             .result => {
-                if (!call.charge(answer.charged)) {
+                if (!chargeAnswer(call, answer.charged)) {
                     var copy = answer;
                     copy.release(s.gpa);
                     return .limited;
@@ -675,16 +729,16 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
                 return .{ .value = answer.value.? };
             },
             .started => {
-                if (!call.charge(answer.charged)) return .limited;
+                if (!chargeAnswer(call, answer.charged)) return .limited;
                 return .started;
             },
             .done => {
-                if (!call.charge(answer.charged)) return .limited;
+                if (!chargeAnswer(call, answer.charged)) return .limited;
                 const nothing = model.scalar(call.gpa, .nothing) catch return .broken;
                 return .{ .value = nothing };
             },
             .fail => {
-                if (!call.charge(answer.charged)) {
+                if (!chargeAnswer(call, answer.charged)) {
                     var copy = answer;
                     copy.release(s.gpa);
                     return .limited;
@@ -709,16 +763,17 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
                 return .{ .failed = .{ .code = code, .message = message, .data = data } };
             },
             .limit => {
-                _ = call.charge(answer.charged);
+                _ = chargeAnswer(call, answer.charged);
                 return .limited;
             },
             .host_error => {
-                _ = call.charge(answer.charged);
+                _ = chargeAnswer(call, answer.charged);
                 return .broken;
             },
         }
     }
-    if (!s.in_pump) return .broken;
+    // An automatic call where its crossing can't pause has no answer.
+    if (!s.in_pump or !call.deferrable) return .broken;
     s.need = need: {
         const gpa = s.gpa;
         var n: Need = .{
@@ -754,6 +809,93 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         break :need n;
     };
     return .deferred;
+}
+
+/// The named Segment Coordinator's context, made the first time.
+fn namedCoordinator(s: *Session, name: []const u8) Allocator.Error!*EffectContext {
+    for (s.effect_contexts.items) |c| if (c.coordinator) |n| if (std.mem.eql(u8, n, name)) return c;
+    const owned = try s.gpa.dupe(u8, name);
+    errdefer s.gpa.free(owned);
+    const c = try s.gpa.create(EffectContext);
+    errdefer s.gpa.destroy(c);
+    c.* = .{ .session = s, .coordinator = owned };
+    try s.effect_contexts.append(s.gpa, c);
+    return c;
+}
+
+/// Each Grant's Segment Coordinator: its named one, or its own.
+fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
+    if (g.binding) |b| return .{ .identity = @intFromPtr(b), .hook = effectHook, .context = b };
+    return .{ .identity = @intFromPtr(g), .hook = effectHook, .context = context };
+}
+
+/// A Segment lifecycle hook: the `effect-result` an `effect` need brought
+/// back, or else that need, and a pause at the crossing. One that can't
+/// pause has no answer, which leaves its state unknown.
+fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentContext) caps.EffectStatus {
+    const ec: *EffectContext = @ptrCast(@alignCast(context.?));
+    const s = ec.session;
+    if (s.effect_answer) |status| {
+        s.effect_answer = null;
+        return status;
+    }
+    if (!s.in_pump or !sc.deferrable) return .unknown;
+    const gpa = s.gpa;
+    var n: Need = .{
+        .kind = .effect,
+        .entry = s.pumping_entry.?,
+        .call = &.{},
+        .script = &.{},
+        .run = &.{},
+        .segment = &.{},
+        .grant = &.{},
+        .capability = &.{},
+        .operation = &.{},
+        .scope = &.{},
+        .now = sc.now,
+        .args = &.{},
+        .object_kind = &.{},
+        .object_id = &.{},
+        .prop = &.{},
+        .phase = phase,
+    };
+    fill: {
+        n.script = gpa.dupe(u8, sc.script) catch break :fill;
+        n.run = gpa.dupe(u8, sc.run) catch break :fill;
+        n.segment = gpa.dupe(u8, sc.segment) catch break :fill;
+        n.grant = gpa.dupe(u8, sc.grant) catch break :fill;
+        if (ec.coordinator) |c| n.coordinator = gpa.dupe(u8, c) catch break :fill;
+        const names = gpa.alloc([]u8, sc.grants.len) catch break :fill;
+        var made: usize = 0;
+        for (sc.grants, names) |g, *x| {
+            x.* = gpa.dupe(u8, g.name[0..g.name_len]) catch {
+                for (names[0..made]) |y| gpa.free(y);
+                gpa.free(names);
+                break :fill;
+            };
+            made += 1;
+        }
+        n.grants = names;
+        s.need = n;
+        return .deferred;
+    }
+    n.release(gpa);
+    return .unknown;
+}
+
+/// The Grant release hook: queued, and sent as a `release` need before
+/// the reply it comes before. It has no result and can't refuse.
+fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
+    const s: *Session = @ptrCast(@alignCast(context.?));
+    const script = s.gpa.dupe(u8, gc.script) catch return;
+    const grant = s.gpa.dupe(u8, gc.grant) catch {
+        s.gpa.free(script);
+        return;
+    };
+    s.releases.append(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
+        s.gpa.free(script);
+        s.gpa.free(grant);
+    };
 }
 
 fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
@@ -829,6 +971,14 @@ fn propSet(context: ?*anyopaque, gpa: Allocator, o: *objects.Object, v: *const V
 /// allocator its parts were made with (the Core's).
 fn releaseOp(a: Allocator, op: caps.Operation) void {
     a.free(op.name);
+    switch (op.scope) {
+        .none => {},
+        .opens => |x| {
+            a.free(x.name);
+            a.free(x.abandon);
+        },
+        .closes => |x| a.free(x),
+    }
     for (op.args) |x| x.release();
     a.free(op.args);
     if (op.result) |r| r.release();
@@ -855,9 +1005,30 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
     const name = asText(j.object.get("name")) orelse return error.InvalidValue;
     if (name.len == 0) return error.InvalidValue;
     for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
-    if (j.object.get("scope") != null) return error.InvalidValue;
-    if (asBool(j.object.get("segmentBound")) orelse false) return error.InvalidValue;
+    const segment_bound = if (j.object.get("segmentBound")) |b| asBool(b) orelse return error.InvalidValue else false;
     const mode = try modeOf(j.object.get("mode"));
+    var scope: caps.Scope = .none;
+    errdefer switch (scope) {
+        .none => {},
+        .opens => |x| {
+            a.free(x.name);
+            a.free(x.abandon);
+        },
+        .closes => |x| a.free(x),
+    };
+    if (j.object.get("scope")) |given| {
+        if (asText(field(given, "closes"))) |closes| {
+            scope = .{ .closes = try a.dupe(u8, closes) };
+        } else {
+            const opens = asText(field(given, "opens")) orelse return error.InvalidValue;
+            const abandon = asText(field(given, "abandon")) orelse return error.InvalidValue;
+            const owned = try a.dupe(u8, opens);
+            scope = .{ .opens = .{ .name = owned, .abandon = a.dupe(u8, abandon) catch {
+                a.free(owned);
+                return error.OutOfMemory;
+            } } };
+        }
+    }
     var args: []*caps.Shape = &.{};
     var args_made: usize = 0;
     errdefer {
@@ -969,6 +1140,8 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
         .closed_errors = closed,
         .description = description,
         .examples = examples,
+        .scope = scope,
+        .segment_bound = segment_bound,
         .host = .{ .call = opCall, .context = oc },
     };
 }
@@ -1067,6 +1240,30 @@ fn needReply(s: *Session, ref: i64) []u8 {
                 o.raw(",\"fuelLeft\":") catch {};
                 o.int(left) catch {};
             }
+        },
+        .effect => {
+            o.raw("\"m\":\"effect\",\"script\":") catch {};
+            o.text(n.script) catch {};
+            o.raw(",\"run\":") catch {};
+            o.text(n.run) catch {};
+            o.raw(",\"segment\":") catch {};
+            o.text(n.segment) catch {};
+            o.raw(",\"grant\":") catch {};
+            o.text(n.grant) catch {};
+            o.raw(",\"grants\":[") catch {};
+            for (n.grants, 0..) |g, i| {
+                if (i > 0) o.raw(",") catch {};
+                o.text(g) catch {};
+            }
+            o.raw("]") catch {};
+            if (n.coordinator) |c| {
+                o.raw(",\"coordinator\":") catch {};
+                o.text(c) catch {};
+            }
+            o.raw(",\"phase\":") catch {};
+            o.text(@tagName(n.phase)) catch {};
+            o.raw(",\"now\":") catch {};
+            o.instant(s.gpa, n.now) catch {};
         },
         .prop => {
             o.raw("\"m\":\"prop\",\"object\":{\"$object\":[") catch {};
@@ -1398,9 +1595,60 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     entry.group.flush();
     if (mg.pumpPaused()) {
         s.paused_ref = ref;
-        return needReply(s, ref);
+        return holdForReleases(s, ref, needReply(s, ref));
     }
-    return pumpOk(s, ref, entry);
+    return holdForReleases(s, ref, pumpOk(s, ref, entry));
+}
+
+/// Sends the Core's queued Grant releases before `reply`: the first as a
+/// `release` need, holding `reply` until the last `release-result`.
+fn holdForReleases(s: *Session, ref: i64, reply: []u8) []u8 {
+    if (s.releases.items.len == 0) return reply;
+    s.held = reply;
+    s.held_ref = ref;
+    return releaseNeed(s, ref);
+}
+
+fn releaseNeed(s: *Session, ref: i64) []u8 {
+    const r = s.releases.items[0];
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    o.raw("{\"ref\":") catch {};
+    o.int(ref) catch {};
+    o.raw(",\"need\":{\"m\":\"release\",\"script\":") catch {};
+    o.text(r.script) catch {};
+    o.raw(",\"grant\":") catch {};
+    o.text(r.grant) catch {};
+    o.raw(",\"reason\":") catch {};
+    o.text(@tagName(r.reason)) catch {};
+    o.raw(",\"now\":") catch {};
+    o.instant(s.gpa, r.now) catch {};
+    o.raw("}}") catch {};
+    return o.finish() catch oomReply();
+}
+
+/// `release-result`: the next release, or the held reply.
+fn releaseResultReply(s: *Session, ref: i64) []u8 {
+    var done = s.releases.orderedRemove(0);
+    done.deinit(s.gpa);
+    if (s.releases.items.len > 0) return releaseNeed(s, ref);
+    const reply = s.held.?;
+    s.held = null;
+    return reply;
+}
+
+/// `effect-result`: `status` of `ok`, `failed` or `unknown`; anything
+/// else is `unknown`, as is a malformed reply. The re-made hook takes it.
+fn answerEffect(s: *Session, msg: Json, ref: i64) []u8 {
+    const given = asText(field(msg, "status")) orelse "unknown";
+    const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
+    var spent = s.need.?;
+    const entry = spent.entry;
+    s.need = null;
+    s.paused_ref = null;
+    spent.release(s.gpa);
+    s.effect_answer = status;
+    return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
 }
 
 /// An error Data map's value, from a result's `fail`/`error` object.
@@ -1544,8 +1792,8 @@ fn addReply(s: *Session, msg: Json, ref: i64) []u8 {
 
 fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
-    if (asBool(field(msg, "segmentLifecycle")) orelse false) return hostError(s.gpa, ref, .invalid_value);
-    if (asBool(field(msg, "release")) orelse false) return hostError(s.gpa, ref, .invalid_value);
+    const lifecycle = asBool(field(msg, "segmentLifecycle")) orelse false;
+    const releasing = asBool(field(msg, "release")) orelse false;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
     if (ops_j != .array) return hostError(s.gpa, ref, .invalid_value);
     const a = s.core.gpa;
@@ -1559,8 +1807,22 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
         };
         made += 1;
     }
+    // A Segment Capability gives each Grant its own Coordinator, unless
+    // the Grant names a shared one; its hooks reach the Host as `effect`
+    // needs, and its release hook as `release` needs.
+    var coordinator_of: ?caps.CoordinatorOf = null;
+    if (lifecycle) {
+        const own = s.gpa.create(EffectContext) catch return hostError(s.gpa, ref, .out_of_memory);
+        own.* = .{ .session = s };
+        s.effect_contexts.append(s.gpa, own) catch {
+            s.gpa.destroy(own);
+            return hostError(s.gpa, ref, .out_of_memory);
+        };
+        coordinator_of = .{ .call = coordinatorOf, .context = own };
+    }
+    const release: ?caps.ReleaseHook = if (releasing) .{ .call = releaseHook, .context = s } else null;
     var def: ?*caps.Capability = null;
-    const code = talk.defineCapabilityZig(s.core, name, ops, &def);
+    const code = talk.defineCapabilityZigWith(s.core, name, ops, coordinator_of, release, &def);
     if (code != .ok) {
         for (ops) |op| releaseOp(a, op);
         a.free(ops);
@@ -1574,14 +1836,21 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
 
 fn grantReply(s: *Session, msg: Json, ref: i64) []u8 {
     const capability = asText(field(msg, "capability")) orelse return hostError(s.gpa, ref, .invalid_value);
-    if (field(msg, "coordinator") != null) return hostError(s.gpa, ref, .invalid_value);
     const def = s.capabilityNamed(capability) orelse return hostError(s.gpa, ref, .invalid_value);
+    // A named Segment Coordinator, shared by every Grant given the name,
+    // rides on the Grant's binding.
+    var binding: ?*anyopaque = null;
+    if (field(msg, "coordinator")) |j| {
+        const named = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
+        if (def.coordinator_of == null) return hostError(s.gpa, ref, .invalid_value);
+        binding = namedCoordinator(s, named) catch return hostError(s.gpa, ref, .out_of_memory);
+    }
     var grant: ?*caps.Grant = null;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
     const code = blk: {
         if (asText(ops_j)) |word| {
             if (!std.mem.eql(u8, word, "all")) return hostError(s.gpa, ref, .invalid_value);
-            break :blk Direct.grantAll(def, null, &grant);
+            break :blk Direct.grantAll(def, binding, &grant);
         }
         if (ops_j != .array) return hostError(s.gpa, ref, .invalid_value);
         const names = s.gpa.alloc(?[*]const u8, ops_j.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
@@ -1593,7 +1862,7 @@ fn grantReply(s: *Session, msg: Json, ref: i64) []u8 {
             n.* = t.ptr;
             l.* = t.len;
         }
-        break :blk Direct.grant(def, if (names.len == 0) null else names.ptr, if (lens.len == 0) null else lens.ptr, names.len, null, &grant);
+        break :blk Direct.grant(def, if (names.len == 0) null else names.ptr, if (lens.len == 0) null else lens.ptr, names.len, binding, &grant);
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
     s.grants.append(s.gpa, grant.?) catch return hostError(s.gpa, ref, .out_of_memory);
@@ -2010,7 +2279,7 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     if (!is_extend) {
         if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
     }
-    return finishOk(s, &o, entry);
+    return holdForReleases(s, ref, finishOk(s, &o, entry));
 }
 
 /// The compiled Library a `{"$bytes": …}` identity names, Core-wide.
@@ -2106,7 +2375,7 @@ fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
         var o = Out.init(s.gpa);
         defer o.deinit();
         beginOk(&o, ref) catch return oomReply();
-        return finishOk(s, &o, entry);
+        return holdForReleases(s, ref, finishOk(s, &o, entry));
     }
     const carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
     entry.group.flush();
@@ -2128,7 +2397,7 @@ fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
     if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
-    return finishOk(s, &o, entry);
+    return holdForReleases(s, ref, finishOk(s, &o, entry));
 }
 
 /// `talk.ts`'s CarryOver text.
@@ -2870,12 +3139,25 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
     }
+    // Releases go first: each `release` need waits for its
+    // `release-result`, then the reply they came before.
+    if (s.held != null) {
+        if (ref != s.held_ref or !std.mem.eql(u8, m, "release-result")) return protocolError(s.gpa, ref, "a release is waiting for its release-result");
+        return releaseResultReply(s, ref);
+    }
     if (s.paused_ref) |paused| {
-        const is_op = std.mem.eql(u8, m, "op-result");
-        const is_prop = std.mem.eql(u8, m, "prop-result");
-        if (ref != paused or !is_op and !is_prop) return protocolError(s.gpa, ref, "a Pump is waiting for its result");
-        if (is_op != (s.need.?.kind == .op)) return protocolError(s.gpa, ref, "the result does not match the need");
-        return answerNeed(s, msg, ref, is_prop);
+        const want: []const u8 = switch (s.need.?.kind) {
+            .op => "op-result",
+            .prop => "prop-result",
+            .effect => "effect-result",
+        };
+        if (ref != paused) return protocolError(s.gpa, ref, "a Pump is waiting for its result");
+        if (!std.mem.eql(u8, m, want)) {
+            if (std.mem.eql(u8, m, "op-result") or std.mem.eql(u8, m, "prop-result") or std.mem.eql(u8, m, "effect-result")) return protocolError(s.gpa, ref, "the result does not match the need");
+            return protocolError(s.gpa, ref, "a Pump is waiting for its result");
+        }
+        if (s.need.?.kind == .effect) return answerEffect(s, msg, ref);
+        return answerNeed(s, msg, ref, s.need.?.kind == .prop);
     }
     if (std.mem.eql(u8, m, "hello")) {
         if ((asInt(field(msg, "protocol")) orelse -1) != protocol_version) return protocolError(s.gpa, ref, "unknown protocol");
@@ -3652,4 +3934,72 @@ test "standard-capability: the Core answers clock, and console reaches the Host 
     const end = try runEnd(done);
     try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("2026-10-10T12:00:00Z", end.object.get("result").?.object.get("$instant").?.string);
+}
+
+test "Segment lifecycle and scope abandonment reach the Host as effect and op needs, and a Stop's releases go first" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // `capabilities/effect-completion`'s resource, with its release hook.
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"resource\",\"segmentLifecycle\":true,\"release\":true,\"ops\":[" ++
+        "{{\"name\":\"open\",\"mode\":\"immediate\",\"result\":\"nothing\",\"cost\":{{\"fuel\":1}},\"scope\":{{\"opens\":\"file\",\"abandon\":\"close\"}},\"segmentBound\":true}}," ++
+        "{{\"name\":\"close\",\"mode\":\"immediate\",\"result\":\"nothing\",\"cost\":{{\"fuel\":1}},\"scope\":{{\"closes\":\"file\"}},\"segmentBound\":true}}," ++
+        "{{\"name\":\"write\",\"mode\":\"immediate\",\"result\":\"nothing\",\"cost\":{{\"fuel\":1}},\"segmentBound\":true}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"resource\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"r\":{d}}},\"source\":\"script variable count = 0\\non go\\nask r to open\\nask r to write\\nput 2 into count\\nend go\\n\"}}", .{ 4, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+    // begin, open, write, the automatic close, then commit.
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\"}}", .{6});
+    var need = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("effect", need.object.get("m").?.string);
+    try std.testing.expectEqualStrings("begin", need.object.get("phase").?.string);
+    try std.testing.expectEqualStrings("r", need.object.get("grants").?.array.items[0].string);
+    // An effect need takes only an effect-result.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6})));
+    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
+    for ([_][]const u8{ "open", "write", "close" }) |op| {
+        need = reply.object.get("need") orelse return unexpected(reply);
+        try std.testing.expectEqualStrings("op", need.object.get("m").?.string);
+        try std.testing.expectEqualStrings(op, need.object.get("operation").?.string);
+        try std.testing.expectEqual(std.mem.eql(u8, op, "close"), need.object.get("automatic").?.bool);
+        reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6});
+    }
+    need = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("commit", need.object.get("phase").?.string);
+    const done = try okOf(try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6}));
+    // The Trace is the corpus case's, byte for byte.
+    const expected = [_][]const u8{
+        "effect s/r1.s1 grant=r phase=begin status=ok",
+        "call s/r1.c1 op=r.open args=[] result=nothing",
+        "scope s/r1.c1 grant=r name=file action=opened",
+        "call s/r1.c2 op=r.write args=[] result=nothing",
+        "call s/r1.c3 op=r.close args=[] result=nothing automatic=yes",
+        "scope s/r1.c3 grant=r name=file action=abandoned",
+        "effect s/r1.s1 grant=r phase=commit status=ok",
+        "seg s/r1 start delivery=d1 handler=go clause=1 fuel=36 alloc=16 state=16 end=return",
+        "run s/r1 outcome=completed delivery=d1 handler=go fuel=36 alloc=16",
+        "pumped state=idle fuel=36",
+    };
+    var seen: std.ArrayList([]const u8) = .empty;
+    defer seen.deinit(gpa);
+    for (done.object.get("trace").?.array.items) |line| if (!std.mem.startsWith(u8, line.string, ">")) try seen.append(gpa, line.string);
+    try std.testing.expectEqual(expected.len, seen.items.len);
+    for (expected, seen.items) |want, got| try std.testing.expectEqualStrings(want, got);
+    // A Stop releases the Grant before the Pump's reply.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{7}));
+    reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:01Z\"}}", .{8});
+    need = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("release", need.object.get("m").?.string);
+    try std.testing.expectEqualStrings("r", need.object.get("grant").?.string);
+    try std.testing.expectEqualStrings("stop", need.object.get("reason").?.string);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{9})));
+    const stopped = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+    var stop_seen = false;
+    for (stopped.object.get("reports").?.array.items) |r| {
+        if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stop_seen = true;
+    }
+    try std.testing.expect(stop_seen);
 }
