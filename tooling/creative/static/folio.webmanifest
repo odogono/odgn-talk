@@ -1,0 +1,41 @@
+{
+  "name": "Folio, made with NorthTalk",
+  "short_name": "Folio",
+  "description": "Make illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk.",
+  "id": ".",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#d8d4cb",
+  "theme_color": "#2f5d8a",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    {
+      "action": ".",
+      "accept": {
+        "application/vnd.odgn.northtalk-project+zip": [".folio"]
+      },
+      "launch_type": "single-client"
+    }
+  ]
+}

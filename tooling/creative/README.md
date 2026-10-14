@@ -163,6 +163,71 @@ in the browser console on the creative tool page. Every result must have
 `passed: true`. As with the rich-text bundle below, rebuild it after the
 watch server rebuilds the app.
 
+## Offline, installing and files on disk
+
+Once Folio has loaded, a service worker keeps the whole app — the page,
+its styles, the editor and Play — so authoring and Play work with the
+network off and no backend ([#823](https://github.com/odogono/odgn-talk/issues/823);
+sections 7–8 of [the storage research](../../docs/research/creative-tool-project-storage.md)).
+Projects themselves stay in IndexedDB as above, never in the cache. The
+build stamps the worker with its shell list and a version hashed from
+the shell's contents, so an unchanged rebuild keeps the installed
+worker. A changed shell installs beside the running one and waits: a
+banner offers **Reload to update**, which flushes autosave before the
+page reloads, so an update never lands mid-edit. While the network is
+off a banner says so; work keeps saving in the browser.
+
+The web app manifest ([`static/folio.webmanifest`](static/folio.webmanifest))
+carries the names from [ADR 0087](../../docs/adr/0087-the-creative-tool-is-folio-and-projects-save-as-folio-files.md)
+and icons the build draws from [`tools/icons.ts`](tools/icons.ts), so
+browsers offer to install Folio. The Projects window explains
+installing in the browser at hand — an **Install Folio** button where
+the browser allows one, Share then Add to Home Screen on iPhone and
+iPad — and says when Folio is already installed. Installing matters
+beyond the icon: Safari keeps an installed web app's data, where an
+uninstalled site's can be deleted after a week away (see
+[Saving](#saving)).
+
+The manifest also registers `.folio` files, with the media type
+`application/vnd.odgn.northtalk-project+zip`, so an installed Folio
+opens a Project file from the operating system (desktop Chrome and
+Edge; the file handlers API is theirs today). Such a file imports like
+any other, as a fresh Project that never overwrites the one on the
+desk, and keeps its handle: where the browser has the File System
+Access pickers, the header offers **Save** and **Save As…**. Save
+writes back to the opened file — or to the file Save As chose — asking
+for permission again when the browser kept only a prompt, and
+refusing, with Save As suggested, when the file changed on disk since
+it was opened. A file this app cannot open, such as a newer format,
+never gains a handle, so it can never be overwritten. Handles are kept
+in IndexedDB beside their Projects, with the stamp of what was on
+disk. Files opened through **Import Project…** or dropped on the
+Projects window keep their handles too, where the browser gives one.
+
+Where none of that exists — Firefox and Safari today — nothing
+pretends otherwise: there is no Save, **Export** downloads the `.folio`
+copy and **Import** opens it, and the Projects window says exactly
+that.
+
+[`src/sw.ts`](src/sw.ts) is the worker, [`src/offline.ts`](src/offline.ts)
+registers it and owns the update, offline and install UI, and
+[`src/file-access.ts`](src/file-access.ts) owns the pickers, permission
+and save checks. Their logic takes the browser objects it uses as
+arguments, so unit tests drive it with fakes: precaching, updates
+waiting, offline serving, permission prompts and refusals. The build
+test checks the manifest, icons and stamped worker. Browser checks use
+the real worker, cache and manifest, on the normal page:
+
+```sh
+bun build tooling/creative/tests/offline.browser.ts --outdir tooling/creative/dist --target browser
+```
+
+Then run `await import('/offline.browser.js').then(m => m.runBrowserTests())`
+in the browser console on the creative tool page. Every result must have
+`passed: true`. Accepting an actual update, tapping Install, opening a
+`.folio` file from the OS and granting save permission still need a
+person at a real browser — the checks above cannot press those for you.
+
 ## Images and portable Projects
 
 Choose **Image** in Tools or drop files onto the Page. PNG, JPEG, WebP, GIF

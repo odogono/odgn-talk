@@ -2,10 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2f5d8a" />
+    <meta
+      name="description"
+      content="Make illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk."
+    />
     <title>Folio</title>
     <link rel="stylesheet" href="./style.css" />
+    <link rel="manifest" href="./folio.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
   </head>
   <body>
     <header id="menu">
@@ -31,6 +40,8 @@
       </details>
       <span id="project-title"></span>
       <span id="save-status" class="muted" role="status"></span>
+      <button id="save-file" type="button" hidden>Save</button>
+      <button id="save-file-as" type="button" hidden>Save As…</button>
       <button id="show-projects" type="button">Projects</button>
       <button id="show-versions" type="button">Earlier versions</button>
       <span id="core" class="muted"></span>
@@ -72,6 +83,16 @@
       <div id="notice-banner" class="banner" role="alert" hidden>
         <span id="notice-text"></span>
         <button id="notice-close" type="button">Dismiss</button>
+      </div>
+      <div id="update-banner" class="banner" role="status" hidden>
+        <span>A new version of Folio is ready.</span>
+        <button id="update-now" type="button">Reload to update</button>
+      </div>
+      <div id="offline-banner" class="banner" role="status" hidden>
+        <span
+          >You&rsquo;re offline. Folio keeps working here, and your work
+          is saved in this browser.</span
+        >
       </div>
     </div>
     <main id="desk">
@@ -183,6 +204,13 @@
         <div id="storage-status">
           <p id="persist-status"></p>
           <p id="storage-use" class="muted"></p>
+          <p id="install-status"></p>
+          <p>
+            <button id="install-app" type="button" hidden>
+              Install Folio
+            </button>
+          </p>
+          <p id="file-access-status" class="muted"></p>
           <p id="export-reminder" hidden>
             This Project has changed since its last export, and the browser may
             clear what it keeps here.

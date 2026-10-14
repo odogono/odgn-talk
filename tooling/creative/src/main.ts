@@ -9,6 +9,7 @@ import {
   type InitialProject,
   type LockDelegate,
 } from './projects';
+import { mountOffline } from './offline';
 import { mountStack } from './stack';
 import { mountPlay } from './play-view';
 import { openProjectStorage, type ProjectStorage } from './storage';
@@ -61,5 +62,8 @@ const boot = async (): Promise<void> => {
     storage,
     storageError,
   });
+  // Offline use and updates (#823): an update reload flushes autosave
+  // first, through the same delegate the edit lock uses.
+  mountOffline({ flush: () => lockDelegate.flush() });
 };
 void boot();
