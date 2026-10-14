@@ -406,7 +406,10 @@ replies or Join Members it waits for.
 Each Group allocates everything it holds through its own allocator
 ([Group allocator](src/machine/group_allocator.zig)), which wraps the
 `talk_allocator` the Host gives in `talk_group_options`, or the Core's, and
-counts physical bytes against `memory_cap` (256 MiB by default). Cost Model 0
+counts physical bytes against `memory_cap` (256 MiB by default). Freed Value
+nodes are kept for reuse in a cache of at most 128 nodes, counted against the
+cap like everything else, flushed under cap pressure and returned when the
+Group is released. Cost Model 0
 still charges logical allocation; the cap is for defects. A refused
 allocation becomes `TALK_OUT_OF_MEMORY`: the Run in flight is dropped whole,
 messages and waits that couldn't be queued are released, and the Group takes
