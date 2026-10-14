@@ -46,6 +46,19 @@ export type LoadedProject = {
 /** Asset bytes to write with a save, by SHA-256 hash. */
 export type NewAsset = { blob: Blob; mediaType: string };
 
+/**
+ * A Project's file on disk, for Save-in-place (#823). The handle stays
+ * opaque here: `file-access.ts` owns what it can do. The stamp says
+ * what was on disk at open or last save, so a changed file is never
+ * overwritten silently.
+ */
+export type ProjectFileHandleRecord = {
+  handle: unknown;
+  lastModified?: number;
+  name: string;
+  size?: number;
+};
+
 /** A storage failure. `errorName` keeps the browser's name for bug reports. */
 export class StorageError extends Error {
   readonly errorName: string;
@@ -89,6 +102,7 @@ type StoredSummary = VersionInfo & {
 };
 type StoredAsset = { blob: Blob; hash: string; mediaType: string };
 type StoredMeta = { key: string; value: string };
+type StoredFileHandle = ProjectFileHandleRecord & { projectId: string };
 
 const LAST_PROJECT_KEY = 'lastProjectId';
 
@@ -188,7 +202,7 @@ const summaryOf = (version: StoredVersion): StoredSummary => ({
 
 const openDatabase = (factory: IDBFactory): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {
-    const pending = factory.open(DATABASE_NAME, 2);
+    const pending = factory.open(DATABASE_NAME, 3);
     pending.onupgradeneeded = (event?: IDBVersionChangeEvent) => {
       const db = pending.result;
       const oldVersion = event?.oldVersion ?? 0;
@@ -211,6 +225,9 @@ const openDatabase = (factory: IDBFactory): Promise<IDBDatabase> =>
             }
           };
         }
+      }
+      if (oldVersion < 3) {
+        db.createObjectStore('fileHandles', { keyPath: 'projectId' });
       }
     };
     pending.onsuccess = () => {
@@ -496,16 +513,51 @@ export class ProjectStorage {
     return this.saveProject(id, project, { now });
   }
 
+  /** The file on disk a Project saves back to, if it has one. */
+  async fileHandle(id: string): Promise<ProjectFileHandleRecord | undefined> {
+    const stored = await transact(this.#db, ['fileHandles'], 'readonly', tx =>
+      request(store(tx, 'fileHandles').get(id)),
+    );
+    if (!stored) {
+      return undefined;
+    }
+    const { handle, lastModified, name, size } = stored as StoredFileHandle;
+    return {
+      handle,
+      name,
+      ...(lastModified === undefined ? {} : { lastModified }),
+      ...(size === undefined ? {} : { size }),
+    };
+  }
+
+  /** Remembers the file on disk a Project saves back to. */
+  async setFileHandle(
+    id: string,
+    record: ProjectFileHandleRecord,
+  ): Promise<void> {
+    await transact(this.#db, ['fileHandles'], 'readwrite', async tx => {
+      await request(store(tx, 'fileHandles').put({ projectId: id, ...record }));
+    });
+  }
+
+  /** Forgets a Project's file on disk. */
+  async clearFileHandle(id: string): Promise<void> {
+    await transact(this.#db, ['fileHandles'], 'readwrite', async tx => {
+      await request(store(tx, 'fileHandles').delete(id));
+    });
+  }
+
   /** Deletes a Project, its versions and any assets only they used. */
   async deleteProject(id: string): Promise<void> {
     await transact(
       this.#db,
-      ['projects', 'versions', 'summaries', 'assets'],
+      ['projects', 'versions', 'summaries', 'assets', 'fileHandles'],
       'readwrite',
       async tx => {
         await request(store(tx, 'projects').delete(id));
         await request(store(tx, 'versions').delete(versionRange(id)));
         await request(store(tx, 'summaries').delete(versionRange(id)));
+        await request(store(tx, 'fileHandles').delete(id));
         await collectGarbage(tx);
       },
     );

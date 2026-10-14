@@ -1,11 +1,38 @@
 #!/usr/bin/env bun
 // Build the creative tool into a static `dist/`: the page script, the LSP
-// worker, the page and its styles. Any static host can serve the result.
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
+// worker, the service worker, the page, its styles, the install manifest
+// and its icons. Any static host can serve the result. The service
+// worker is stamped with the list of shell files to precache and a
+// version hashed from their contents, so a rebuild with no shell change
+// keeps the installed worker, and a changed shell offers an update.
+import { createHash } from 'node:crypto';
+import {
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
+import { iconPng, iconSvg } from './icons';
 
 const root = resolve(import.meta.dir, '..');
 export const dist = resolve(root, 'dist');
+
+/** The app shell the service worker precaches for offline use (#823). */
+export const precacheFiles = [
+  './index.html',
+  './style.css',
+  './main.js',
+  './lsp.worker.js',
+  './folio.webmanifest',
+  './icon.svg',
+  './icon-192.png',
+  './icon-512.png',
+  './maskable-512.png',
+  './apple-touch-icon.png',
+  './UNICODE-LICENSE.txt',
+];
 
 export const build = async ({ minify = true } = {}): Promise<void> => {
   rmSync(dist, { recursive: true, force: true });
@@ -25,13 +52,44 @@ export const build = async ({ minify = true } = {}): Promise<void> => {
   if (!result.success) {
     throw new AggregateError(result.logs, 'Creative tool build failed');
   }
-  for (const file of ['index.html', 'style.css']) {
+  for (const file of ['index.html', 'style.css', 'folio.webmanifest']) {
     copyFileSync(resolve(root, 'static', file), resolve(dist, file));
   }
   copyFileSync(
     resolve(root, '../../impl/ts/src/generated/UNICODE-LICENSE.txt'),
     resolve(dist, 'UNICODE-LICENSE.txt'),
   );
+  writeFileSync(resolve(dist, 'icon.svg'), iconSvg);
+  writeFileSync(resolve(dist, 'icon-192.png'), iconPng(192));
+  writeFileSync(resolve(dist, 'icon-512.png'), iconPng(512));
+  writeFileSync(
+    resolve(dist, 'maskable-512.png'),
+    iconPng(512, { maskable: true }),
+  );
+  writeFileSync(resolve(dist, 'apple-touch-icon.png'), iconPng(180));
+
+  const hash = createHash('sha256');
+  for (const entry of precacheFiles) {
+    hash.update(entry);
+    hash.update(readFileSync(resolve(dist, entry)));
+  }
+  const version = hash.digest('hex').slice(0, 16);
+  const worker = await Bun.build({
+    entrypoints: [resolve(root, 'src/sw.ts')],
+    outdir: dist,
+    target: 'browser',
+    format: 'iife',
+    naming: '[name].[ext]',
+    minify,
+    sourcemap: 'linked',
+    define: {
+      __FOLIO_PRECACHE__: JSON.stringify(precacheFiles),
+      __FOLIO_VERSION__: JSON.stringify(version),
+    },
+  });
+  if (!worker.success) {
+    throw new AggregateError(worker.logs, 'Service worker build failed');
+  }
 };
 
 if (import.meta.main) {

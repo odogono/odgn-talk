@@ -9,6 +9,18 @@ import {
   type ProjectMessage,
 } from './edit-lock';
 import { createProject, type Project } from './model';
+import {
+  dropHandle,
+  FileAccessError,
+  fileAccessSupport,
+  onLaunchFiles,
+  pickOpenHandles,
+  pickSaveHandle,
+  saveToHandle,
+  stampOfFile,
+  type FileStamp,
+  type ProjectFileHandle,
+} from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
 import {
   PROJECT_MIMETYPE,
@@ -20,6 +32,7 @@ import {
   errorNameOf,
   StorageError,
   type LoadedProject,
+  type ProjectFileHandleRecord,
   type ProjectRecord,
   type ProjectStorage,
 } from './storage';
@@ -33,6 +46,14 @@ const byteSize = (bytes: number): string =>
     : bytes < 1024 * 1024
       ? `${Math.round(bytes / 1024)} KB`
       : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+const missingNote = (missingNames: string[]): string =>
+  missingNames.length
+    ? ` Missing images kept as placeholders: ${missingNames.join(', ')}.`
+    : '';
+
+const fileErrorName = (error: unknown): string =>
+  error instanceof FileAccessError ? error.errorName : errorNameOf(error);
 
 /** The Project to open on start, from storage (see `openInitialProject`). */
 export type InitialProject = {
@@ -122,6 +143,13 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   let firstSave = true;
   let renamingId: string | undefined;
   let confirmingDeleteId: string | undefined;
+  // The current Project's file on disk, where Save writes back to it
+  // (#823). `pendingDisk` carries a just-opened file's handle to the
+  // Project it becomes, before that Project is the current one.
+  const disk = fileAccessSupport(window);
+  let diskFile: { handle: ProjectFileHandle; stamp: FileStamp } | undefined;
+  let pendingDisk:
+    { handle: ProjectFileHandle; id: string; stamp: FileStamp } | undefined;
   // Autosave is disabled without storage; still protect in-memory edits when
   // importing or switching Projects. An export makes that exact revision safe.
   let safeProject = JSON.stringify(editor.project);
@@ -142,6 +170,79 @@ export const mountProjects = (deps: ProjectsDeps): void => {
 
   const drawReadonly = (): void => {
     byId('readonly-banner').hidden = lock.editing || orphaned;
+  };
+
+  /** Draws Save, Save As and what saving to disk means in this browser. */
+  const drawFileAccess = (): void => {
+    const save = byId('save-file') as HTMLButtonElement;
+    const saveAs = byId('save-file-as') as HTMLButtonElement;
+    save.hidden = !disk.save;
+    saveAs.hidden = !disk.save;
+    // Only the editing tab writes a Project's file; a read-only copy
+    // could be older than the one being edited. Export still downloads.
+    save.disabled = !lock.editing || !!preview;
+    saveAs.disabled = save.disabled;
+    save.title = diskFile
+      ? `Save back to ${diskFile.stamp.name}`
+      : 'Save to a file on disk';
+    byId('file-access-status').textContent = !disk.save
+      ? "This browser can't save back to an opened file, so Export " +
+        'downloads a copy and Import opens one.'
+      : diskFile
+        ? `Save writes this Project back to “${diskFile.stamp.name}”.`
+        : 'This browser can save back to a file on disk: use ' +
+          'Save As… once, then Save.';
+  };
+
+  const asProjectHandle = (
+    found: ProjectFileHandleRecord,
+  ): { handle: ProjectFileHandle; stamp: FileStamp } | undefined => {
+    const handle = found.handle as ProjectFileHandle | undefined;
+    if (
+      !handle ||
+      handle.kind !== 'file' ||
+      typeof handle.getFile !== 'function' ||
+      typeof handle.createWritable !== 'function'
+    ) {
+      return undefined;
+    }
+    return {
+      handle,
+      stamp: {
+        name: found.name,
+        ...(found.lastModified === undefined
+          ? {}
+          : { lastModified: found.lastModified }),
+        ...(found.size === undefined ? {} : { size: found.size }),
+      },
+    };
+  };
+
+  /** Keeps a Project's file handle, in storage and for the desk. */
+  const rememberDiskFile = async (
+    id: string,
+    handle: ProjectFileHandle,
+    stamp: FileStamp,
+  ): Promise<void> => {
+    pendingDisk = { handle, id, stamp };
+    if (id === currentId) {
+      diskFile = { handle, stamp };
+      drawFileAccess();
+    }
+    await storage?.setFileHandle(id, { handle, ...stamp }).catch(() => {});
+  };
+
+  /** Loads the file handle of the Project going on the desk, if any. */
+  const loadDiskFile = async (id: string): Promise<void> => {
+    const stored = storage
+      ? await storage.fileHandle(id).catch(() => undefined)
+      : undefined;
+    diskFile =
+      (stored ? asProjectHandle(stored) : undefined) ??
+      (pendingDisk?.id === id
+        ? { handle: pendingDisk.handle, stamp: pendingDisk.stamp }
+        : undefined);
+    drawFileAccess();
   };
 
   const drawSaveStatus = (state: AutosaveState): void => {
@@ -240,6 +341,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     autosave.setEnabled(editingNow && !!storage && !preview && !orphaned);
     drawReadonly();
+    drawFileAccess();
     drawSaveStatus(autosave.state);
     void drawVersions();
   };
@@ -270,58 +372,91 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   drawReadonly();
   drawSaveStatus(autosave.state);
 
+  /**
+   * Builds the bytes of a portable Project file from the in-memory
+   * Project and its image bytes, for Export's download and for saving
+   * back to a file on disk.
+   */
+  const buildProjectFile = async (): Promise<{
+    file: Uint8Array;
+    id: string;
+    missingNames: string[];
+    project: Project;
+    source: string;
+  }> => {
+    editor.finishPendingEdit();
+    const source = JSON.stringify(editor.project);
+    const project = projectForExport(editor.project);
+    const id = currentId;
+    // Session bytes cover most assets; read only the rest from storage.
+    const missing = [...new Set(project.assets.map(a => a.hash))].filter(
+      hash => !shell.images.bytes.has(hash),
+    );
+    const bytes =
+      storage && missing.length
+        ? await storage.assetBytes(missing)
+        : new Map<string, Uint8Array>();
+    for (const [hash, data] of shell.images.bytes) {
+      bytes.set(hash, data);
+    }
+    const file = await writeProjectFile(project, bytes, {
+      allowMissing: true,
+    });
+    return {
+      file,
+      id,
+      missingNames: project.assets
+        .filter(a => !bytes.has(a.hash))
+        .map(a => a.name),
+      project,
+      source,
+    };
+  };
+
+  /** Records that this exact revision now exists as a file outside storage. */
+  const markFileSaved = async (
+    built: Awaited<ReturnType<typeof buildProjectFile>>,
+  ): Promise<void> => {
+    if (
+      currentId === built.id &&
+      JSON.stringify(editor.project) === built.source
+    ) {
+      safeProject = built.source;
+    }
+    if (
+      storage &&
+      record &&
+      !orphaned &&
+      currentId === built.id &&
+      JSON.stringify(projectForExport(editor.project)) ===
+        JSON.stringify(built.project)
+    ) {
+      const now = Date.now();
+      await storage.markExported(currentId, now).catch(() => {});
+      record = { ...record, exportedAt: now };
+      await drawStorageStatus();
+    }
+  };
+
   /** Downloads a stable copy of the in-memory Project and its image bytes. */
   const exportNow = async (): Promise<void> => {
     try {
-      editor.finishPendingEdit();
-      const source = JSON.stringify(editor.project);
-      const project = projectForExport(editor.project);
-      const id = currentId;
-      // Session bytes cover most assets; read only the rest from storage.
-      const missing = [...new Set(project.assets.map(a => a.hash))].filter(
-        hash => !shell.images.bytes.has(hash),
-      );
-      const bytes =
-        storage && missing.length
-          ? await storage.assetBytes(missing)
-          : new Map<string, Uint8Array>();
-      for (const [hash, data] of shell.images.bytes) {
-        bytes.set(hash, data);
-      }
-      const file = await writeProjectFile(project, bytes, {
-        allowMissing: true,
-      });
+      const built = await buildProjectFile();
       const url = URL.createObjectURL(
-        new Blob([file as Uint8Array<ArrayBuffer>], { type: PROJECT_MIMETYPE }),
+        new Blob([built.file as Uint8Array<ArrayBuffer>], {
+          type: PROJECT_MIMETYPE,
+        }),
       );
       const link = h('a', {
         href: url,
-        download: `${project.name || 'Project'}.folio`,
+        download: `${built.project.name || 'Project'}.folio`,
       });
       link.click();
-      if (currentId === id && JSON.stringify(editor.project) === source) {
-        safeProject = source;
-      }
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      const missingNames = project.assets
-        .filter(a => !bytes.has(a.hash))
-        .map(a => a.name);
       notice(
-        `Exported ${project.name} (${byteSize(file.length)}).${missingNames.length ? ` Missing images kept as placeholders: ${missingNames.join(', ')}.` : ''}`,
+        `Exported ${built.project.name} (${byteSize(built.file.length)}).${missingNote(built.missingNames)}`,
       );
-      if (
-        storage &&
-        record &&
-        !orphaned &&
-        currentId === id &&
-        JSON.stringify(projectForExport(editor.project)) ===
-          JSON.stringify(project)
-      ) {
-        const now = Date.now();
-        await storage.markExported(currentId, now).catch(() => {});
-        record = { ...record, exportedAt: now };
-        await drawStorageStatus();
-      }
+      await markFileSaved(built);
     } catch (error) {
       notice(
         `Couldn't export: ${error instanceof Error ? error.message : ''} (${errorNameOf(error)})`,
@@ -331,6 +466,53 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   for (const button of document.querySelectorAll('[data-export-now]')) {
     button.addEventListener('click', () => void exportNow());
   }
+
+  /** Writes the current Project to a file handle and keeps the handle. */
+  const saveToDisk = async (
+    handle: ProjectFileHandle,
+    expected?: FileStamp,
+  ): Promise<void> => {
+    try {
+      await autosave.flush();
+      const built = await buildProjectFile();
+      const stamp = await saveToHandle(handle, built.file, expected);
+      await rememberDiskFile(built.id, handle, stamp);
+      notice(
+        `Saved ${built.project.name} to ${stamp.name} (${byteSize(built.file.length)}).${missingNote(built.missingNames)}`,
+      );
+      await markFileSaved(built);
+    } catch (error) {
+      notice(
+        `Couldn't save to the file: ${error instanceof Error ? error.message : ''} (${fileErrorName(error)})`,
+      );
+    }
+  };
+
+  /** Save As: choose the file, then save to it. Cancelling is silent. */
+  const saveAsToDisk = async (): Promise<void> => {
+    let handle: ProjectFileHandle | undefined;
+    try {
+      handle = await pickSaveHandle(
+        window,
+        `${editor.project.name || 'Project'}.folio`,
+      );
+    } catch (error) {
+      notice(
+        `Couldn't save to a file: ${error instanceof Error ? error.message : ''} (${fileErrorName(error)})`,
+      );
+      return;
+    }
+    if (handle) {
+      await saveToDisk(handle);
+    }
+  };
+
+  byId('save-file').addEventListener('click', () => {
+    void (diskFile
+      ? saveToDisk(diskFile.handle, diskFile.stamp)
+      : saveAsToDisk());
+  });
+  byId('save-file-as').addEventListener('click', () => void saveAsToDisk());
   byId('free-space').addEventListener('click', () => {
     void (async () => {
       await storage?.freeSpace().catch(error => notice(String(error)));
@@ -370,8 +552,17 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     .then(() => shell.redraw())
     .catch(error => notice(String(error)));
 
-  /** Fully validate before saving under a fresh ID; never overwrite a Project. */
-  const importProject = async (file: File): Promise<void> => {
+  /**
+   * Fully validate before saving under a fresh ID; never overwrite a
+   * Project. A file opened with a handle (from the operating system, a
+   * picker or a drop) keeps it, so Save can write back to it — and a
+   * file this app refuses, such as a newer format, never gets a handle
+   * kept, so it can never be overwritten.
+   */
+  const importProject = async (
+    file: File,
+    handle?: ProjectFileHandle,
+  ): Promise<void> => {
     try {
       const loaded = await readProjectFile(
         new Uint8Array(await file.arrayBuffer()),
@@ -421,6 +612,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       const created = storage
         ? await storage.saveProject(undefined, loaded.project, { assets })
         : undefined;
+      const importedId = created?.id ?? `unsaved-${crypto.randomUUID()}`;
+      if (handle) {
+        await rememberDiskFile(importedId, handle, stampOfFile(file));
+      }
       if (
         currentId !== previousId ||
         JSON.stringify(editor.project) !== previousModel
@@ -437,7 +632,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       await showLoaded(
         { project: loaded.project, migrated: false, record: created },
-        created?.id ?? `unsaved-${crypto.randomUUID()}`,
+        importedId,
       );
       channel?.post({ type: 'list-changed' });
       if (messages.length) {
@@ -448,29 +643,57 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
   };
   let importing = false;
-  const importFiles = async (files: File[]) => {
+  const importFiles = async (
+    entries: { file: File; handle?: ProjectFileHandle }[],
+  ) => {
     if (importing) {
       return;
     }
     importing = true;
     try {
-      for (const file of files) {
-        await importProject(file);
+      for (const { file, handle } of entries) {
+        await importProject(file, handle);
       }
     } finally {
       importing = false;
     }
   };
-  const importButton = h('button', { type: 'button' }, 'Import Project…');
-  byId('new-project').after(importButton);
-  importButton.addEventListener('click', () => {
+  const openInputPicker = (): void => {
     // No accept filter: custom Project extensions must remain pickable on iOS.
     const picker = h('input', { type: 'file' }) as HTMLInputElement;
     picker.addEventListener(
       'change',
-      () => void importFiles([...(picker.files ?? [])]),
+      () => void importFiles([...(picker.files ?? [])].map(file => ({ file }))),
     );
     picker.click();
+  };
+  const importButton = h('button', { type: 'button' }, 'Import Project…');
+  byId('new-project').after(importButton);
+  importButton.addEventListener('click', () => {
+    if (!disk.open) {
+      openInputPicker();
+      return;
+    }
+    // Where the browser has the file picker that returns handles, an
+    // opened Project can later be saved back to the same file. Any
+    // failure but a cancellation falls back to the plain picker.
+    void (async () => {
+      let handles: ProjectFileHandle[] | undefined;
+      try {
+        handles = await pickOpenHandles(window);
+      } catch {
+        openInputPicker();
+        return;
+      }
+      if (!handles) {
+        return;
+      }
+      const entries = [];
+      for (const handle of handles) {
+        entries.push({ file: await handle.getFile(), handle });
+      }
+      await importFiles(entries);
+    })().catch(error => notice(`Couldn't import: ${String(error)}`));
   });
   byId('projects-window').addEventListener('dragover', event => {
     if (event.dataTransfer?.types.includes('Files')) {
@@ -482,7 +705,36 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     event.preventDefault();
-    void importFiles([...event.dataTransfer.files]);
+    const transfer = event.dataTransfer;
+    void (async () => {
+      const entries: { file: File; handle?: ProjectFileHandle }[] = [];
+      const items = [...transfer.items].filter(item => item.kind === 'file');
+      if (items.length === transfer.files.length) {
+        for (const [index, item] of items.entries()) {
+          const handle = await dropHandle(item);
+          entries.push({
+            file: transfer.files[index]!,
+            ...(handle ? { handle } : {}),
+          });
+        }
+      } else {
+        entries.push(...[...transfer.files].map(file => ({ file })));
+      }
+      await importFiles(entries);
+    })();
+  });
+
+  // Project files opened from the operating system, in the installed
+  // app (#823): the manifest's file handler launches or focuses this
+  // page, and the files arrive here with handles for Save.
+  onLaunchFiles(window, handles => {
+    void (async () => {
+      const entries = [];
+      for (const handle of handles) {
+        entries.push({ file: await handle.getFile(), handle });
+      }
+      await importFiles(entries);
+    })().catch(error => notice(`Couldn't import: ${String(error)}`));
   });
 
   let switching = false;
@@ -518,6 +770,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       autosave.setEnabled(editingNow && !!storage);
       shell.redraw();
       drawReadonly();
+      await loadDiskFile(id);
       drawSaveStatus(autosave.state);
       await storage?.setLastProjectId(id).catch(() => {});
       if (loaded.migrated && editingNow) {
@@ -743,6 +996,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     shell.setReadOnly(!lock.editing);
     autosave.setEnabled(lock.editing && !!storage && !orphaned);
     shell.redraw();
+    drawFileAccess();
     void drawVersions();
   };
 
@@ -831,6 +1085,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       'nothing you see here is being saved.';
     byId('preview-note').hidden = false;
     (byId('restore-version') as HTMLButtonElement).disabled = !lock.editing;
+    drawFileAccess();
     await drawVersions();
   };
 
@@ -884,6 +1139,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (!storage) {
         return;
       }
+      const carried = diskFile;
       const created = await storage.saveProject(undefined, editor.project, {
         assets: shell.images.forStorage(editor.project),
       });
@@ -892,6 +1148,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         { project: editor.project, migrated: false, record: created },
         created.id,
       );
+      if (carried) {
+        await rememberDiskFile(created.id, carried.handle, carried.stamp);
+      }
     })().catch(error => notice(String(error)));
   });
 
@@ -973,6 +1232,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   byId('new-project').addEventListener('click', () => void newProject());
 
   void storage?.setLastProjectId(currentId).catch(() => {});
+  void loadDiskFile(currentId);
   void drawList();
   void drawVersions();
   void drawStorageStatus();

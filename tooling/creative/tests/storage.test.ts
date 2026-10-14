@@ -304,3 +304,31 @@ test('a listed Project whose version has gone says so', async () => {
     errorName: 'MissingVersionError',
   });
 });
+
+test('a Project file handle is kept, replaced and deleted with its Project', async () => {
+  const { storage } = await openStorage();
+  const record = await storage.saveProject(undefined, createProject('Kept'));
+  expect(await storage.fileHandle(record.id)).toBeUndefined();
+  const handle = { kind: 'file', name: 'Kept.folio' };
+  await storage.setFileHandle(record.id, {
+    handle,
+    lastModified: 42,
+    name: 'Kept.folio',
+    size: 10,
+  });
+  expect(await storage.fileHandle(record.id)).toEqual({
+    handle,
+    lastModified: 42,
+    name: 'Kept.folio',
+    size: 10,
+  });
+  await storage.setFileHandle(record.id, {
+    handle,
+    lastModified: 43,
+    name: 'Kept.folio',
+    size: 11,
+  });
+  expect((await storage.fileHandle(record.id))?.lastModified).toBe(43);
+  await storage.deleteProject(record.id);
+  expect(await storage.fileHandle(record.id)).toBeUndefined();
+});

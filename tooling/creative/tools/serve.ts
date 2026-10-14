@@ -42,6 +42,9 @@ const types: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
   '.map': 'application/json',
   '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
 };
 
 const server = Bun.serve({
