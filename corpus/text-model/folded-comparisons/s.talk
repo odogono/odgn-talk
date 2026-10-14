@@ -1,0 +1,43 @@
+script variable log = []
+on go
+  put ["A" = "a" ignoring case, ["A"] = ["a"] ignoring case, "B" < "a" ignoring case] into log
+  put ["A" <> "a" ignoring case, "B" > "a" ignoring case, "A" <= "a" ignoring case, "A" >= "a" ignoring case] after log
+  put ["A" = "a", ["A"] = ["a"], "B" < "a"] after log
+  put ["Σ" = "ς" ignoring case, "ẞ" = "ß" ignoring case, "ß" = "ss" ignoring case, "İ" = "i" ignoring case] after log
+  put [{key: ["A", {inner: "Σ"}]} = {key: ["a", {inner: "ς"}]} ignoring case] after log
+  put [[{key: "A"}, "B"] < [{key: "a"}, "c"] ignoring case, ["A"] < ["a", "b"] ignoring case] after log
+  put [["A"] is in [["b"], ["a"]] ignoring case, ["A"] is not in [["a"]] ignoring case] after log
+  put [<"A"> = <"a"> ignoring case, [1, "A"] = [1.0, "a"] ignoring case, "1" = 1 ignoring case] after log
+  put [capture("A") = capture("a") ignoring case, capture("A") = capture("a")] after log
+end go
+
+function capture value
+  return given x: value
+end capture
+
+on costs
+  -- A folded first pair must not stop scanning the rest of this text.
+  put "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" into upper
+  put "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" into lower
+  put [upper = lower ignoring case, upper < lower ignoring case, upper <> lower ignoring case] after log
+  put [upper = "aaaaaaaaaaaaaaaaZaaaaaaaaaaaaaaa" ignoring case, upper > "aaaaaaaaaaaaaaaaZaaaaaaaaaaaaaaa" ignoring case] after log
+  put [[upper, upper] = [lower, lower] ignoring case, [upper, "B"] < [lower, "c"] ignoring case] after log
+  put [upper is in ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", lower] ignoring case] after log
+  -- U+0345 folds from a combining mark to iota: count folded Characters.
+  put "aͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅaͅ" into combining
+  put [combining = combining ignoring case, combining is in [combining] ignoring case] after log
+  match lower ignoring case
+    when "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" then put true after log
+    else put false after log
+  end match
+end costs
+
+on shared
+  put "ABCDEFGHIJKLMNOP" into left
+  put "abcdefghijklmnop" into right
+  repeat 8 times
+    put [left, left] into left
+    put [right, right] into right
+  end repeat
+  put [left = right ignoring case, left <= right ignoring case, left is in [right] ignoring case] after log
+end shared

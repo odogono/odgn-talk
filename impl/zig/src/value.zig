@@ -184,15 +184,36 @@ pub const Value = struct {
 /// and no pair is its own descendant.
 pub const Comparer = struct {
     gpa: std.mem.Allocator,
+    fold: bool,
+    folded_texts: std.AutoHashMap(usize, []u8),
     proven: std.AutoHashMap(u128, void),
     self_scans: std.AutoHashMap(usize, u64),
 
     pub fn init(gpa: std.mem.Allocator) Comparer {
-        return .{ .gpa = gpa, .proven = .init(gpa), .self_scans = .init(gpa) };
+        return initFolded(gpa, false);
+    }
+    /// Fold text at every depth, including captures; map keys and Pattern
+    /// sources remain exact. Caches belong to this one comparison mode.
+    pub fn initFolded(gpa: std.mem.Allocator, fold: bool) Comparer {
+        return .{ .gpa = gpa, .fold = fold, .folded_texts = .init(gpa), .proven = .init(gpa), .self_scans = .init(gpa) };
     }
     pub fn deinit(self: *Comparer) void {
+        var texts = self.folded_texts.valueIterator();
+        while (texts.next()) |t| self.gpa.free(t.*);
+        self.folded_texts.deinit();
         self.proven.deinit();
         self.self_scans.deinit();
+    }
+    /// Simple foldings are compared as they are, without a second NFC pass.
+    /// A shared text node is folded once, even when many paths reach it.
+    fn text(self: *Comparer, v: *const Value) Error![]const u8 {
+        if (!self.fold) return v.data.text;
+        const id = @intFromPtr(v);
+        if (self.folded_texts.get(id)) |t| return t;
+        const t = try unicode.foldText(self.gpa, v.data.text);
+        errdefer self.gpa.free(t);
+        try self.folded_texts.put(id, t);
+        return t;
     }
     fn pairKey(x: *const Value, y: *const Value) u128 {
         return (@as(u128, @intFromPtr(x)) << 64) | @as(u128, @intFromPtr(y));
@@ -213,6 +234,10 @@ pub const Comparer = struct {
                 continue;
             }
             if (x == y or self.proven.contains(pairKey(x, y))) continue;
+            if (self.fold and x.data == .text and y.data == .text) {
+                if (!std.mem.eql(u8, try self.text(x), try self.text(y))) return false;
+                continue;
+            }
             if (try x.shallowEqual(y)) |same| {
                 if (!same) return false;
                 continue;
@@ -261,7 +286,7 @@ pub const Comparer = struct {
                     if (!q.unit.compatible(r.unit)) return error.CantCompare;
                     break :blk Decimal.order(try q.unit.comparisonBase(a.allocator, q.number), try r.unit.comparisonBase(a.allocator, r.number));
                 },
-                .text => |s| std.mem.order(u8, s, y.data.text), // UTF-8 preserves scalar order.
+                .text => std.mem.order(u8, try self.text(x), try self.text(y)), // UTF-8 preserves scalar order.
                 .bytes => |s| std.mem.order(u8, s, y.data.bytes),
                 .list => |xs| {
                     const ys = y.data.list;
@@ -315,7 +340,8 @@ pub const Comparer = struct {
             const value = order_list.items[i];
             var total: u64 = 0;
             switch (value.data) {
-                .text => |t| {
+                .text => {
+                    const t = try self.text(value);
                     var at: usize = 0;
                     while (at < t.len) {
                         total += 1;
@@ -350,8 +376,9 @@ pub const Comparer = struct {
         while (true) {
             if (x.kind() != y.kind()) return total;
             switch (x.data) {
-                .text => |s| {
-                    const t = y.data.text;
+                .text => {
+                    const s = try self.text(x);
+                    const t = try self.text(y);
                     var i: usize = 0;
                     var j: usize = 0;
                     var n: u64 = 0;
@@ -1111,6 +1138,71 @@ test "shared values compare in distinct pairs and scan in logical pairs" {
     try std.testing.expectEqual(@as(u64, (1 << 31) - 2), try comparer.selfScan(a));
     // A differing leaf is found down the first path: 30 item pairs.
     try std.testing.expectEqual(@as(u64, 30), try comparer.scanned(a, c));
+}
+test "folded comparisons scan folded Characters and keep keys and Patterns exact" {
+    const gpa = std.testing.allocator;
+    const display = @import("display.zig");
+    const examples = .{
+        .{ "\"A\"", "\"a\"", true, 1 },
+        .{ "\"AB\"", "\"ac\"", false, 2 },
+        .{ "\"a\u{0345}\"", "\"aι\"", true, 2 },
+        .{ "\"ẞ\"", "\"ß\"", true, 1 },
+        .{ "\"ß\"", "\"ss\"", false, 1 },
+        .{ "\"İ\"", "\"i\"", false, 1 },
+        .{ "[\"A\", [\"Σ\"]]", "[\"a\", [\"ς\"]]", true, 5 },
+        .{ "{key: [\"A\"]}", "{key: [\"a\"]}", true, 3 },
+        .{ "{A: \"X\"}", "{a: \"x\"}", false, 1 },
+        .{ "<\"A\">", "<\"a\">", false, 0 },
+    };
+    inline for (examples) |example| {
+        const x = try display.parse(gpa, example[0], .{});
+        defer x.release();
+        const y = try display.parse(gpa, example[1], .{});
+        defer y.release();
+        var comparer = Comparer.initFolded(gpa, true);
+        defer comparer.deinit();
+        try std.testing.expectEqual(example[2], try comparer.equal(x, y));
+        try std.testing.expectEqual(@as(u64, example[3]), try comparer.scanned(x, y));
+    }
+    const x = try display.parse(gpa, "[{key: \"A\"}, \"B\"]", .{});
+    defer x.release();
+    const y = try display.parse(gpa, "[{key: \"a\"}, \"c\"]", .{});
+    defer y.release();
+    var comparer = Comparer.initFolded(gpa, true);
+    defer comparer.deinit();
+    try std.testing.expectEqual(std.math.Order.lt, try comparer.order(x, y));
+    try std.testing.expectEqual(std.math.Order.gt, try comparer.order(y, x));
+    try std.testing.expectEqual(@as(u64, 5), try comparer.scanned(x, y));
+    try std.testing.expectError(error.CantCompare, x.order(y));
+}
+test "folded shared comparisons charge every occurrence without expanding sharing" {
+    const gpa = std.testing.allocator;
+    const build = struct {
+        fn shared(alloc: std.mem.Allocator, leaf: []const u8) !*Value {
+            var v = try text(alloc, leaf);
+            for (0..30) |_| {
+                const next = try list(alloc, &.{ v, v });
+                v.release();
+                v = next;
+            }
+            return v;
+        }
+    }.shared;
+    const x = try build(gpa, "A\u{0345}");
+    defer x.release();
+    const y = try build(gpa, "aι");
+    defer y.release();
+    const z = try build(gpa, "bι");
+    defer z.release();
+    var comparer = Comparer.initFolded(gpa, true);
+    defer comparer.deinit();
+    try std.testing.expect(try comparer.equal(x, y));
+    try std.testing.expectEqual(std.math.Order.eq, try comparer.order(x, y));
+    // 2^31 - 2 list pairs plus two folded Characters at each of 2^30 leaves.
+    try std.testing.expectEqual(@as(u64, (1 << 32) - 2), try comparer.scanned(x, y));
+    try std.testing.expectEqual(@as(u64, (1 << 32) - 2), try comparer.selfScan(x));
+    try std.testing.expectEqual(@as(u64, 31), try comparer.scanned(x, z));
+    try std.testing.expectEqual(std.math.Order.lt, try comparer.order(x, z));
 }
 test "map copy-on-write and preserved insertion order" {
     const gpa = std.testing.allocator;

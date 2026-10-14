@@ -1,0 +1,19 @@
+# Unblessed: folded comparisons (#903); first blessing awaits human review.
+> load s identity=545d39436ca10c95240c42ad79a4f6214be876f1664896b2d91c71ed4530e437
+> deliver d1 to=s message=go
+> pump clock=2026-10-14T00:00:00Z
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=431 alloc=3043 state=592 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=431 alloc=3043
+pumped state=idle fuel=431
+> deliver d2 to=s message=costs
+> pump clock=2026-10-14T00:00:00Z
+seg s/r2 start delivery=d2 handler=costs clause=1 fuel=254 alloc=1202 state=888 end=return
+run s/r2 outcome=completed delivery=d2 handler=costs fuel=254 alloc=1202
+pumped state=idle fuel=254
+> deliver d3 to=s message=shared
+> pump clock=2026-10-14T00:00:00Z
+seg s/r3 start delivery=d3 handler=shared clause=1 fuel=5390 alloc=81304 state=960 end=return
+run s/r3 outcome=completed delivery=d3 handler=shared fuel=5390 alloc=81304
+pumped state=idle fuel=5390
+> vars
+vars s log=[true, true, false, [false, true, true, true], [false, false, true], [true, true, false, false], [true], [true, true], [true, false], [false, true, false], [true, false], [true, false, false], [false, false], [true, true], [true], [true, true], true, [true, true, true]]

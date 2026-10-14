@@ -8,7 +8,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const display = @import("../display.zig");
-const unicode = @import("../unicode/unicode.zig");
 const lower = @import("../lower/lower.zig");
 const check = @import("../check/check.zig");
 const parser = @import("../syntax/parser.zig");
@@ -7326,8 +7325,10 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                m.scanned = compared(a, x, y);
-                const same = x.equal(y) catch false;
+                var comparer = model.Comparer.initFolded(a, ops.len == 1);
+                defer comparer.deinit();
+                m.scanned = comparer.scanned(x, y) catch 0;
+                const same = comparer.equal(x, y) catch false;
                 try g.push(frame, try boolean(gpa, if (ins.op == .equal) same else !same));
             },
             .less, .greater, .less_or_equal, .greater_or_equal => {
@@ -7335,8 +7336,10 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                m.scanned = compared(a, x, y);
-                const order = x.order(y) catch {
+                var comparer = model.Comparer.initFolded(a, ops.len == 1);
+                defer comparer.deinit();
+                m.scanned = comparer.scanned(x, y) catch 0;
+                const order = comparer.order(x, y) catch {
                     return g.raise("can't compare", &.{ .{ .key = "left", .value = x }, .{ .key = "right", .value = y } });
                 };
                 const r = switch (ins.op) {
@@ -7357,12 +7360,12 @@ pub const Group = struct {
                 m.input = xs.retain();
                 const found = switch (xs.data) {
                     .list => |items| blk: {
-                        var comparer = model.Comparer.init(a);
+                        var comparer = model.Comparer.initFolded(a, ops.len == 1);
                         defer comparer.deinit();
                         var scanned: u64 = 0;
                         for (items) |item| {
                             scanned +|= 1;
-                            if (try equalFolded(a, x, item, ops.len == 1)) {
+                            if (try comparer.equal(x, item)) {
                                 m.scanned = scanned +| (comparer.selfScan(x) catch 0);
                                 break :blk true;
                             }
@@ -8153,16 +8156,20 @@ pub const Group = struct {
                 const c = try g.constant(unit, @intCast(ops[0].int));
                 defer c.release();
                 const fold = ops.len == 3;
-                m.scanned = compared(a, v, c);
-                if (!(try equalFolded(a, v, c, fold))) frame.pc = @intCast(ops[ops.len - 1].int);
+                var comparer = model.Comparer.initFolded(a, fold);
+                defer comparer.deinit();
+                m.scanned = comparer.scanned(v, c) catch 0;
+                if (!(try comparer.equal(v, c))) frame.pc = @intCast(ops[ops.len - 1].int);
             },
             .test_equal => {
                 const y = pop(frame);
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                m.scanned = compared(a, x, y);
-                if (!(x.equal(y) catch false)) frame.pc = @intCast(ops[0].int);
+                var comparer = model.Comparer.init(a);
+                defer comparer.deinit();
+                m.scanned = comparer.scanned(x, y) catch 0;
+                if (!(comparer.equal(x, y) catch false)) frame.pc = @intCast(ops[0].int);
             },
             .test_list, .test_list_at_least => {
                 const v = pop(frame);
@@ -9192,14 +9199,6 @@ fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     };
 }
 
-/// The logical pairs `compare` scans, through the first difference, at
-/// every depth, shared parts counted at each occurrence (#890).
-fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
-    var comparer = model.Comparer.init(a);
-    defer comparer.deinit();
-    return comparer.scanned(x, y) catch 0;
-}
-
 const errors_table = @import("../generated/errors.zig");
 
 fn errorEntry(code: []const u8) ?errors_table.ErrorsTableErrorEntry {
@@ -9287,17 +9286,6 @@ fn withKey(gpa: Allocator, map: *Value, key: []const u8, value: *Value) !*Value 
     const out = try model.map(gpa, pairs.items);
     out.core_message = map.core_message;
     return out;
-}
-
-/// `=` between two values, comparing texts by simple case folding under
-/// `ignoring case`.
-fn equalFolded(a: Allocator, x: *const Value, y: *const Value, fold: bool) !bool {
-    if (fold and x.data == .text and y.data == .text) {
-        const fx = try unicode.foldText(a, x.data.text);
-        const fy = try unicode.foldText(a, y.data.text);
-        return std.mem.eql(u8, fx, fy);
-    }
-    return x.equal(y) catch false;
 }
 
 fn definitionIndex(unit: *const lower.Unit, name: []const u8) usize {
