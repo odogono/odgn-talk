@@ -288,7 +288,7 @@ fn calculateExact(op: Operator, x: Decimal, y: Decimal, bounded: bool) ?Decimal 
 }
 
 fn scaleExact(coefficient: u128, places: i32) ?u128 {
-    if (coefficient == 0 or places == 0) return coefficient;
+    if (coefficient == 0) return 0;
     // 10^38 fits u128; even 1 * 10^39 does not. Bound the work before
     // indexing, including the full exponent gap of a subnormal operand.
     const powers = comptime blk: {
@@ -801,22 +801,22 @@ test "fixed-width operators agree with general arithmetic at precision and expon
     }
 }
 
+fn randomDecimal(random: std.Random, wide: bool) Decimal {
+    const exponents = [_]i32{ -6176, -6175, -40, -38, -34, -33, -12, -3, -1, 0, 1, 34 };
+    return .{
+        .coefficient = if (wide) random.int(u128) % coefficient_limit else random.int(u32),
+        .exponent = if (wide) exponents[random.uintLessThan(usize, exponents.len)] else -@as(i32, @intCast(random.uintLessThan(u32, 5))),
+        .negative = random.boolean(),
+    };
+}
+
 test "generated fixed-width operators retain signs and ideal exponents" {
     var generator = std.Random.DefaultPrng.init(877);
     const random = generator.random();
-    const exponents = [_]i32{ -6176, -6175, -40, -38, -34, -33, -12, -3, -1, 0, 1, 34 };
     for (0..1024) |i| {
         const wide = i >= 768;
-        const x = Decimal{
-            .coefficient = if (wide) random.int(u128) % coefficient_limit else random.int(u32),
-            .exponent = if (wide) exponents[random.uintLessThan(usize, exponents.len)] else -@as(i32, @intCast(random.uintLessThan(u32, 5))),
-            .negative = random.boolean(),
-        };
-        const y = Decimal{
-            .coefficient = if (wide) random.int(u128) % coefficient_limit else random.int(u32),
-            .exponent = if (wide) exponents[random.uintLessThan(usize, exponents.len)] else -@as(i32, @intCast(random.uintLessThan(u32, 5))),
-            .negative = random.boolean(),
-        };
+        const x = randomDecimal(random, wide);
+        const y = randomDecimal(random, wide);
         for ([_]bool{ false, true }) |bounded| {
             for ([_]Operator{ .add, .subtract, .multiply }) |op| try expectGeneralAgreement(op, x, y, bounded);
         }

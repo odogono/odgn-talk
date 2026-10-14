@@ -66,6 +66,7 @@ result = {
     "manifestSha256": sha(root / "bench/scripts/benchmarks.json"),
     "measurements": [],
 }
+args.out.parent.mkdir(parents=True, exist_ok=True)
 for pair in range(args.pairs):
     for b in benchmarks:
         if b.get("skip", {}).get("zig"):
@@ -86,6 +87,5 @@ for pair in range(args.pairs):
                 "before": before, "after": after,
                 "beforeProbe": before_probe, "afterProbe": after_probe,
             })
-            args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(json.dumps(result, indent=2) + "\n")
             print(f"pair {pair + 1} {name}: {statistics.median(before['run']) / 1e6:.3f} -> {statistics.median(after['run']) / 1e6:.3f} ms", flush=True)
