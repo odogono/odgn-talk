@@ -1,0 +1,734 @@
+{
+  "coreRevision": "f51ad856",
+  "evidenceRevision": "4cff1568fd1897af1d52e5b6d70ab3bf5ccb7c59",
+  "bun": "1.4.3",
+  "method": "Bun CPU profiler at default 1 ms interval; 20 warm-up Runs, then three seconds of repeated validated full-size Runs. Attribution will use only samples under Loaded.run, excluding Load. Profiling separate from timing; categories overlap and JIT inlining limits attribution. Profile begins at process startup; Pump attribution includes validation/warm-up as well as steady repeats. Inlined Loaded.run appears as suite.ts pump. Counts are sampled CPU shares, not wall-time shares or complete GC attribution.",
+  "profiles": [
+    {
+      "name": "numbers/quantity",
+      "runs": 716,
+      "fuel": 14579,
+      "logicalAlloc": 40088,
+      "report": "2026-10-14-ts-performance-profiles/numbers-quantity.cpuprofile.gz",
+      "reportSha256": "78edc0c83fed00e4e0433145ff271c740d25515ba73050b1bfbde5dd1b26f34e",
+      "pumpSamples": 2076,
+      "categories": {
+        "decimal": 652,
+        "units": 869,
+        "graphemes": 42,
+        "numericConstruction": 254,
+        "costs": 192,
+        "logicalSize": 113,
+        "formulas": 173,
+        "iteratorItem": 46,
+        "listStorage": 1
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "toString",
+          "url": "",
+          "samples": 288
+        },
+        {
+          "function": "result",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 191
+        },
+        {
+          "function": "factorsOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/units.ts",
+          "samples": 170
+        },
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 132
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 96
+        },
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 88
+        },
+        {
+          "function": "dimension",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/units.ts",
+          "samples": 78
+        },
+        {
+          "function": "roundAt",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 58
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 49
+        },
+        {
+          "function": "filter",
+          "url": "",
+          "samples": 45
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 45
+        },
+        {
+          "function": "combine",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/units.ts",
+          "samples": 34
+        },
+        {
+          "function": "performIteration",
+          "url": "",
+          "samples": 34
+        },
+        {
+          "function": "map",
+          "url": "",
+          "samples": 33
+        },
+        {
+          "function": "evaluate",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 32
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 32
+        },
+        {
+          "function": "formatDec",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 31
+        },
+        {
+          "function": "turn",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 30
+        },
+        {
+          "function": "literalDigits",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 28
+        },
+        {
+          "function": "slice",
+          "url": "",
+          "samples": 26
+        }
+      ]
+    },
+    {
+      "name": "text/index",
+      "runs": 537,
+      "fuel": 26640,
+      "logicalAlloc": 51072,
+      "report": "2026-10-14-ts-performance-profiles/text-index.cpuprofile.gz",
+      "reportSha256": "cee7387f633364d47530bccb43b8f0ac3d2b69eb466709772e6366a1def6418b",
+      "pumpSamples": 2090,
+      "categories": {
+        "decimal": 325,
+        "numericConstruction": 180,
+        "iteratorItem": 47,
+        "graphemes": 724,
+        "text": 793,
+        "costs": 200,
+        "logicalSize": 120,
+        "formulas": 146
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "characterBoundaries",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 708
+        },
+        {
+          "function": "toString",
+          "url": "",
+          "samples": 151
+        },
+        {
+          "function": "span",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/operations.ts",
+          "samples": 109
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 93
+        },
+        {
+          "function": "result",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 86
+        },
+        {
+          "function": "map",
+          "url": "",
+          "samples": 75
+        },
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 73
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 64
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 63
+        },
+        {
+          "function": "characters",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/text.ts",
+          "samples": 57
+        },
+        {
+          "function": "charge",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 52
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 42
+        },
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 37
+        },
+        {
+          "function": "literalDigits",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 31
+        },
+        {
+          "function": "pay",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 29
+        },
+        {
+          "function": "roundAt",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 24
+        },
+        {
+          "function": "delete",
+          "url": "",
+          "samples": 20
+        },
+        {
+          "function": "iteratorItem",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 20
+        },
+        {
+          "function": "BigInt",
+          "url": "",
+          "samples": 20
+        },
+        {
+          "function": "aligned",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 16
+        }
+      ]
+    },
+    {
+      "name": "collections/list-append",
+      "runs": 378,
+      "fuel": 52056,
+      "logicalAlloc": 80200,
+      "report": "2026-10-14-ts-performance-profiles/collections-list-append.cpuprofile.gz",
+      "reportSha256": "0158319acde9b8c2ddca52eac9adac6609eaa413310670d32aaaae3663023ac7",
+      "pumpSamples": 2125,
+      "categories": {
+        "listStorage": 153,
+        "numericConstruction": 257,
+        "graphemes": 89,
+        "iteratorItem": 96,
+        "costs": 445,
+        "logicalSize": 197,
+        "decimal": 108,
+        "formulas": 188
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 309
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 226
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 179
+        },
+        {
+          "function": "charge",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 115
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 101
+        },
+        {
+          "function": "turn",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 86
+        },
+        {
+          "function": "evaluate",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 76
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 63
+        },
+        {
+          "function": "characterBoundaries",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 60
+        },
+        {
+          "function": "iteratorItem",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 57
+        },
+        {
+          "function": "literalDigits",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 56
+        },
+        {
+          "function": "extend",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/list-storage.ts",
+          "samples": 53
+        },
+        {
+          "function": "pay",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 47
+        },
+        {
+          "function": "preempt",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 40
+        },
+        {
+          "function": "aligned",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/decimal.ts",
+          "samples": 39
+        },
+        {
+          "function": "cacheListExtension",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 37
+        },
+        {
+          "function": "payAmount",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 33
+        },
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 31
+        },
+        {
+          "function": "node",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/persistent-tree.ts",
+          "samples": 29
+        },
+        {
+          "function": "from",
+          "url": "",
+          "samples": 29
+        }
+      ]
+    },
+    {
+      "name": "collections/list-update",
+      "runs": 951,
+      "fuel": 28553,
+      "logicalAlloc": 24328,
+      "report": "2026-10-14-ts-performance-profiles/collections-list-update.cpuprofile.gz",
+      "reportSha256": "a79e26d0180cff7170d9e64b41082b08feddb1d960d9e03304eea02a5c80c346",
+      "pumpSamples": 2052,
+      "categories": {
+        "listStorage": 78,
+        "costs": 362,
+        "formulas": 31,
+        "numericConstruction": 367,
+        "graphemes": 147,
+        "iteratorItem": 126,
+        "logicalSize": 138,
+        "decimal": 10
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 253
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 194
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 162
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 150
+        },
+        {
+          "function": "charge",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 133
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 113
+        },
+        {
+          "function": "characterBoundaries",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 98
+        },
+        {
+          "function": "dec",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 76
+        },
+        {
+          "function": "iteratorItem",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 66
+        },
+        {
+          "function": "literalDigits",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 54
+        },
+        {
+          "function": "BigInt",
+          "url": "",
+          "samples": 53
+        },
+        {
+          "function": "cacheListEdit",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 52
+        },
+        {
+          "function": "turn",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 49
+        },
+        {
+          "function": "set",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/list-storage.ts",
+          "samples": 49
+        },
+        {
+          "function": "assertScalarText",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 49
+        },
+        {
+          "function": "pay",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 48
+        },
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 45
+        },
+        {
+          "function": "delete",
+          "url": "",
+          "samples": 39
+        },
+        {
+          "function": "asRange",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 38
+        },
+        {
+          "function": "selected",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 34
+        }
+      ]
+    },
+    {
+      "name": "macro/transform",
+      "runs": 1268,
+      "fuel": 20664,
+      "logicalAlloc": 6418202,
+      "report": "2026-10-14-ts-performance-profiles/macro-transform.cpuprofile.gz",
+      "reportSha256": "078d2d9e0fc0b4eccfb2d4497d620ca1073ccb25a656ee7e1dbe955e214d3d8f",
+      "pumpSamples": 2024,
+      "categories": {
+        "iteratorItem": 45,
+        "costs": 583,
+        "logicalSize": 411,
+        "formulas": 477,
+        "listStorage": 103,
+        "numericConstruction": 146,
+        "graphemes": 42,
+        "decimal": 66
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 261
+        },
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 167
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 154
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 148
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 135
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 85
+        },
+        {
+          "function": "evaluate",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 59
+        },
+        {
+          "function": "charge",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 52
+        },
+        {
+          "function": "map",
+          "url": "",
+          "samples": 47
+        },
+        {
+          "function": "replace",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 43
+        },
+        {
+          "function": "extend",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/list-storage.ts",
+          "samples": 41
+        },
+        {
+          "function": "cacheListExtension",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 38
+        },
+        {
+          "function": "node",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/persistent-tree.ts",
+          "samples": 37
+        },
+        {
+          "function": "map",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 34
+        },
+        {
+          "function": "characterBoundaries",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 34
+        },
+        {
+          "function": "toString",
+          "url": "",
+          "samples": 32
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 29
+        },
+        {
+          "function": "set",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/map-storage.ts",
+          "samples": 27
+        },
+        {
+          "function": "turn",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 26
+        },
+        {
+          "function": "contentsOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 26
+        }
+      ]
+    },
+    {
+      "name": "core/calls",
+      "runs": 825,
+      "fuel": 46018,
+      "logicalAlloc": 32072,
+      "report": "2026-10-14-ts-performance-profiles/core-calls.cpuprofile.gz",
+      "reportSha256": "1f30e533ac1f77b658ff9dbbc4aff9d9183dea78b5567134019c8c1aaf4cfc15",
+      "pumpSamples": 2080,
+      "categories": {
+        "graphemes": 186,
+        "numericConstruction": 475,
+        "decimal": 99,
+        "iteratorItem": 132,
+        "costs": 317,
+        "formulas": 246,
+        "logicalSize": 135
+      },
+      "topExclusiveSamples": [
+        {
+          "function": "execute",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 218
+        },
+        {
+          "function": "step",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 171
+        },
+        {
+          "function": "",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 145
+        },
+        {
+          "function": "finishInstruction",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 141
+        },
+        {
+          "function": "characterBoundaries",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 127
+        },
+        {
+          "function": "sizeOf",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 115
+        },
+        {
+          "function": "evaluate",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 85
+        },
+        {
+          "function": "charge",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/costs.ts",
+          "samples": 71
+        },
+        {
+          "function": "freeze",
+          "url": "",
+          "samples": 68
+        },
+        {
+          "function": "iteratorItem",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 63
+        },
+        {
+          "function": "literalDigits",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 63
+        },
+        {
+          "function": "assertScalarText",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/unicode.ts",
+          "samples": 58
+        },
+        {
+          "function": "turn",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 54
+        },
+        {
+          "function": "toString",
+          "url": "",
+          "samples": 52
+        },
+        {
+          "function": "asRange",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 46
+        },
+        {
+          "function": "BigInt",
+          "url": "",
+          "samples": 44
+        },
+        {
+          "function": "selected",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/group.ts",
+          "samples": 43
+        },
+        {
+          "function": "pay",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 42
+        },
+        {
+          "function": "dec",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/values.ts",
+          "samples": 41
+        },
+        {
+          "function": "push",
+          "url": "file:///Users/alex/.t3/worktrees/odgn-talk/t3-19fcacab/impl/ts/src/machine.ts",
+          "samples": 35
+        }
+      ]
+    }
+  ]
+}
