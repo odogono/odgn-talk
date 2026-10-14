@@ -239,6 +239,7 @@ load-diagnostics/leaves-finally
 load-diagnostics/missing-handler-wait
 load-diagnostics/name-clash
 load-diagnostics/needless-and-wait
+load-diagnostics/needless-handler-wait
 load-diagnostics/no-conversion
 load-diagnostics/no-item-chunk
 load-diagnostics/not-a-property

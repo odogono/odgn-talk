@@ -1,0 +1,19 @@
+script variable foo = 1
+on foo
+  return foo
+end foo
+on bar
+  return bar
+end bar
+constant bar = 2
+on helper
+  return 3
+end helper
+on slow
+  wait 1 s
+end slow
+on valid
+  slow and wait
+  send foo to me and wait
+  fromParent and wait
+end valid

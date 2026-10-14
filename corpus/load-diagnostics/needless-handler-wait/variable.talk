@@ -1,0 +1,7 @@
+script variable foo = 1
+on foo
+  return foo
+end foo
+on invalid
+  foo and wait
+end invalid

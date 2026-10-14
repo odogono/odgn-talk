@@ -1249,7 +1249,11 @@ Pump Fuel Caps, Script Fuel Slices and unwind charges still apply when the calle
 
 A plain local Handler call to a may-suspend Handler is rejected with
 `missing and wait`; function-style calls to a may-suspend Handler are rejected
-with `can't suspend here`. A call cannot hide a nested Join.
+with `can't suspend here`. A Command Call with `and wait` to a statically
+resolved Handler that cannot suspend is rejected with `needless and wait`,
+including inherited Handlers and names shared with Script Variables or Constants.
+Unresolved calls up the Message Path and `send … and wait` remain valid.
+A call cannot hide a nested Join.
 Join failures and timeouts use the closing `end` token's source position,
 for bare `end` and `end wait`, including Joins in local Handlers and block
 Lambdas. The `join-end` PC and 1-based member `index` stay unchanged; a failed

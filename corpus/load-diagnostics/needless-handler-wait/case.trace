@@ -1,0 +1,19 @@
+# Unblessed: needless and wait on local and inherited Handlers (#833); first blessing awaits human review.
+# Ordinary names and shared Script Variable/Constant names, at load and Extend.
+# Suspending local calls, sends and unresolved Message Path calls remain valid.
+> load plain identity=451fc28fad87bc04824428ec57f1dcc20bac44176807e32b02937ecee03a18a3
+diag plain code="needless and wait" pos=5:3
+> load variable identity=a29e609c2e9fb2b7259541c79e392614de745ad359987e3a2e65341be248ac6f
+diag variable code="needless and wait" pos=6:3
+> load constant identity=fbeb5fd91c059edaa9b09ff2db5236880ef4ad04c64607aa39ffb991111a6ad0
+diag constant code="needless and wait" pos=6:3
+> load base identity=488acce1eb97bfa41ccb148b175989cf0edd850a12bce87f238f37265d0ed50d
+> extend base source="on invalid" & newline & "  helper and wait" & newline & "end invalid" identity=15eb253d827cbe9ea8fed8392e61015edd3c8e5a0c0c5756ffdb71d01b973b4a
+diag base+1 code="needless and wait" pos=2:3
+> extend base source="on invalid" & newline & "  foo and wait" & newline & "end invalid" identity=472f012e8012c1744c3e258798dfc60d6afab373753ea52f3db9d075f2d3d749
+diag base+1 code="needless and wait" pos=2:3
+> extend base source="on invalid" & newline & "  bar and wait" & newline & "end invalid" identity=fbc9130eac7b1368f1ebfefe1f16bf9124149f927699e151fcbdc594ed6a5231
+diag base+1 code="needless and wait" pos=2:3
+> extend base source="on later" & newline & "  slow and wait" & newline & "  send foo to me and wait" & newline & "  fromParent and wait" & newline & "end later" identity=8c2722ac8279b8f186d19c77bf821506670b1d0ba17bc49571e250128e25899f
+> vars
+vars base foo=1

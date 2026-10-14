@@ -358,29 +358,29 @@ func (u *Unit) checkHandlerWaits() {
 			if restricted[n.Pos()] {
 				return true
 			}
-			if n.Kind != "command" && n.Kind != "call" || n.Kind == "command" && syntax.HasFlag(n, "and") {
+			if n.Kind != "command" && n.Kind != "call" {
 				return true
 			}
 			symbol, ok := u.Callee(body, n)
 			if !ok || symbol.Kind != "handler" {
 				return true
 			}
-			if symbol.MaySuspend {
+			maySuspend := symbol.MaySuspend
+			for _, clause := range u.Bodies {
+				if clause.Kind == "handler" && clause.Name == symbol.Name && clause.MaySuspend {
+					maySuspend = true
+					break
+				}
+			}
+			if n.Kind == "command" && syntax.HasFlag(n, "and") {
+				if !maySuspend {
+					u.add("needless and wait", n.Pos())
+				}
+			} else if maySuspend {
 				if n.Kind == "call" {
 					u.add("can't suspend here", n.Pos())
 				} else {
 					u.add("missing and wait", n.Pos())
-				}
-				return true
-			}
-			for _, clause := range u.Bodies {
-				if clause.Kind == "handler" && clause.Name == symbol.Name && clause.MaySuspend {
-					if n.Kind == "call" {
-						u.add("can't suspend here", n.Pos())
-					} else {
-						u.add("missing and wait", n.Pos())
-					}
-					break
 				}
 			}
 			return true

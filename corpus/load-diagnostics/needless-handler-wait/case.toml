@@ -1,0 +1,22 @@
+# Pins chapter 2's needless and wait on resolved Handler calls (#833).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "plain"
+source = "plain.talk"
+
+[[scripts]]
+name = "variable"
+source = "variable.talk"
+
+[[scripts]]
+name = "constant"
+source = "constant.talk"
+
+[[scripts]]
+name = "base"
+source = "base.talk"
