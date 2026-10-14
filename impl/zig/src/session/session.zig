@@ -496,7 +496,7 @@ pub const Session = struct {
                     .segment_bound = false,
                 });
             };
-            try check_(c.talk_define_capability(s.core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, &def));
+            try check_(c.talk_define_capability(s.core, capability.ptr, capability.len, ops.items.ptr, ops.items.len, null, 0, &def));
         }
         try s.defs.put(s.alloc(), s.dupe(capability), def.?);
         return def.?;

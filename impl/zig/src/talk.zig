@@ -2360,18 +2360,18 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
     };
 }
 
-export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, out: *?*caps.Capability) HostErrorCode {
-    return defineCapability(c, name, len, ops, ops_len, null, out);
+export fn talk_define_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
+    return defineCapability(c, name, len, ops, ops_len, options, options_len, null, out);
 }
 
-export fn talk_define_segment_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, lifecycle: ?*const SegmentLifecycle, out: *?*caps.Capability) HostErrorCode {
+export fn talk_define_segment_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, lifecycle: ?*const SegmentLifecycle, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const l = lifecycle orelse return .invalid_value;
     if (l.begin == null or l.commit == null or l.rollback == null) return .invalid_value;
-    return defineCapability(c, name, len, ops, ops_len, .{ .call = ownCoordinator, .context = @constCast(l) }, out);
+    return defineCapability(c, name, len, ops, ops_len, options, options_len, .{ .call = ownCoordinator, .context = @constCast(l) }, out);
 }
 
-export fn talk_define_coordinated_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, coordinator: ?CoordinatorFn, context: ?*anyopaque, out: *?*caps.Capability) HostErrorCode {
+export fn talk_define_coordinated_capability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, coordinator: ?CoordinatorFn, context: ?*anyopaque, options: ?[*]const CapabilityOption, options_len: usize, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const f = coordinator orelse return .invalid_value;
     const m = c.gpa.create(Mapping) catch return .out_of_memory;
@@ -2380,7 +2380,7 @@ export fn talk_define_coordinated_capability(c: *Core, name: ?[*]const u8, len: 
         c.gpa.destroy(m);
         return .out_of_memory;
     };
-    return defineCapability(c, name, len, ops, ops_len, .{ .call = mappedCoordinator, .context = m }, out);
+    return defineCapability(c, name, len, ops, ops_len, options, options_len, .{ .call = mappedCoordinator, .context = m }, out);
 }
 
 pub const ReleaseReason = enum(c_int) { stop, reload, revoke, disable };
@@ -2431,8 +2431,10 @@ fn setRelease(c: *Core, def: *caps.Capability, hook: ReleaseHook, context: ?*any
     return .ok;
 }
 
-export fn talk_with_release_hook(c: *Core, def: *caps.Capability, hook: ?ReleaseHook, context: ?*anyopaque) HostErrorCode {
-    return setRelease(c, def, hook orelse return .invalid_value, context);
+pub const CapabilityOption = extern struct { release_hook: ?ReleaseHook, release_context: ?*anyopaque };
+
+export fn talk_with_release_hook(hook: ?ReleaseHook, context: ?*anyopaque) CapabilityOption {
+    return .{ .release_hook = hook, .release_context = context };
 }
 
 /// Non-exhaustive: a malformed status from the Host is `unknown`.
@@ -2505,11 +2507,18 @@ fn segmentHook(context: ?*anyopaque, phase: caps.Phase, s: *const caps.SegmentCo
     };
 }
 
-fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
+fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Operation, ops_len: usize, options: ?[*]const CapabilityOption, options_len: usize, coordinator_of: ?caps.CoordinatorOf, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const gpa = c.gpa;
     const n = bytes(name, len) catch return .invalid_value;
     if (n.len == 0) return .invalid_value;
+    // At most one release hook.
+    const chosen: []const CapabilityOption = if (options_len == 0) &.{} else (options orelse return .invalid_value)[0..options_len];
+    var hook: ?CapabilityOption = null;
+    for (chosen) |o| {
+        if (o.release_hook == null or hook != null) return .invalid_value;
+        hook = o;
+    }
     for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, n)) return .name_reused;
     const given: []const Operation = if (ops_len == 0) &.{} else (ops orelse return .invalid_value)[0..ops_len];
     const operations = gpa.alloc(caps.Operation, given.len) catch return .out_of_memory;
@@ -2542,6 +2551,10 @@ fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Ope
     const d = gpa.create(caps.Capability) catch return .out_of_memory;
     d.* = .{ .name = gpa.dupe(u8, n) catch return .out_of_memory, .operations = operations, .coordinator_of = coordinator_of };
     c.definitions.append(gpa, d) catch return .out_of_memory;
+    if (hook) |h| {
+        const code = setRelease(c, d, h.release_hook.?, h.release_context);
+        if (code != .ok) return code;
+    }
     out.* = d;
     return .ok;
 }
@@ -2549,6 +2562,17 @@ fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Ope
 export fn talk_capability_def_name(d: *const caps.Capability, s: *[*]const u8, len: *usize) void {
     s.* = d.name.ptr;
     len.* = d.name.len;
+}
+
+export fn talk_capability_def_checks(d: *const caps.Capability, out: ?[*]OperationCheck, cap: usize) usize {
+    if (out) |checks| for (d.operations[0..@min(cap, d.operations.len)], checks) |op, *x| {
+        x.* = .{ .name = op.name.ptr, .name_len = op.name.len, .mode = switch (op.mode) {
+            .immediate => .immediate,
+            .suspending => .suspending,
+            .fire_and_forget => .fire_and_forget,
+        }, .args = @ptrCast(op.args.ptr), .args_len = op.args.len };
+    };
+    return d.operations.len;
 }
 
 /// A Grant, which its definition owns.
@@ -3273,7 +3297,30 @@ pub const LibrarySource = extern struct {
 /// Compiles a Library once per process. imports must hold every Library
 /// its `use` lines name, besides the stdlib's; anything that fails to parse
 /// or check is TALK_LOAD_REFUSED. The Library lives as long as the Core.
-export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*]const *machine.Library, imports_len: usize, declarations: ?[*]const LoadGrant, declarations_len: usize, out: *?*machine.Library, load_error: ?*?*LoadError) HostErrorCode {
+pub const OperationCheck = extern struct { name: ?[*]const u8, name_len: usize, mode: Mode, args: ?[*]const *const Shape, args_len: usize };
+pub const GrantDecls = extern struct { name: ?[*]const u8, name_len: usize, operations: ?[*]const OperationCheck, operations_len: usize };
+
+/// The declarations as the Core reads them, borrowing the caller's bytes and
+/// Shapes, in a.
+fn grantDecls(a: std.mem.Allocator, given: []const GrantDecls) ![]caps.GrantDecls {
+    const out = try a.alloc(caps.GrantDecls, given.len);
+    for (given, out) |g, *x| {
+        const checks: []const OperationCheck = if (g.operations_len == 0) &.{} else (g.operations orelse return error.InvalidValue)[0..g.operations_len];
+        const ops = try a.alloc(caps.OperationCheck, checks.len);
+        for (checks, ops) |o, *y| {
+            const args: []const *const Shape = if (o.args_len == 0) &.{} else (o.args orelse return error.InvalidValue)[0..o.args_len];
+            y.* = .{ .name = try bytes(o.name, o.name_len), .mode = switch (o.mode) {
+                .immediate => .immediate,
+                .suspending => .suspending,
+                .fire_and_forget => .fire_and_forget,
+            }, .args = @ptrCast(args) };
+        }
+        x.* = .{ .name = try bytes(g.name, g.name_len), .operations = ops };
+    }
+    return out;
+}
+
+export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*]const *machine.Library, imports_len: usize, declarations: ?[*]const GrantDecls, declarations_len: usize, out: *?*machine.Library, load_error: ?*?*LoadError) HostErrorCode {
     out.* = null;
     if (load_error) |e| e.* = null;
     const name = bytes(src.name, src.name_len) catch return .invalid_value;
@@ -3281,10 +3328,10 @@ export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*
     const source = bytes(src.source, src.source_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(source) or name.len == 0) return .invalid_value;
     const given: []const *machine.Library = if (imports_len == 0) &.{} else (imports orelse return .invalid_value)[0..imports_len];
-    const declared: []const LoadGrant = if (declarations_len == 0) &.{} else (declarations orelse return .invalid_value)[0..declarations_len];
-    const named = c.gpa.alloc(machine.NamedGrant, declared.len) catch return .out_of_memory;
-    defer c.gpa.free(named);
-    for (declared, named) |x, *n| n.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .grant = x.grant };
+    const declared: []const GrantDecls = if (declarations_len == 0) &.{} else (declarations orelse return .invalid_value)[0..declarations_len];
+    var scratch: std.heap.ArenaAllocator = .init(c.gpa);
+    defer scratch.deinit();
+    const named = grantDecls(scratch.allocator(), declared) catch |err| return status(err);
     const compiled = machine.compileLibrary(c.gpa, name, label, source, given, if (declarations == null) null else named) catch |err| return status(err);
     switch (compiled) {
         .refused => |diags| {

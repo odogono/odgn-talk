@@ -825,6 +825,29 @@ pub fn checkOperations(a: Allocator, g: *const Grant) ![]check.Operation {
     return out.items;
 }
 
+/// An Operation's compile-time mode and argument Shapes, which a Library's
+/// Capability calls are checked and lowered against.
+pub const OperationCheck = struct { name: []const u8, mode: Mode, args: []const *Shape };
+/// A Grant's declarations, by the name the source uses.
+pub const GrantDecls = struct { name: []const u8, operations: []const OperationCheck };
+
+/// The declarations as the checker reads them; each borrows its check.
+pub fn declaredOperations(a: Allocator, checks: []const OperationCheck) ![]check.Operation {
+    const out = try a.alloc(check.Operation, checks.len);
+    for (checks, out) |*c, *x| {
+        var required = c.args.len;
+        while (required > 0 and c.args[required - 1].omittable()) required -= 1;
+        x.* = .{ .name = c.name, .mode = c.mode, .required = required, .total = c.args.len, .accepts = .{ .context = c, .call = acceptsDeclared } };
+    }
+    return out;
+}
+
+fn acceptsDeclared(context: *const anyopaque, index: usize, literal: check.Literal) bool {
+    const c: *const OperationCheck = @ptrCast(@alignCast(context));
+    if (index >= c.args.len) return true;
+    return shapeTakes(c.args[index], literal);
+}
+
 const testing = std.testing;
 
 test "Shapes name what they expect and find the first node that breaks them" {
