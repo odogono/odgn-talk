@@ -483,8 +483,14 @@ pub const Group = struct {
     scripts: std.ArrayList(*Script) = .empty,
     pending: std.ArrayList(*Pending) = .empty,
     deciding: std.ArrayList(*Deciding) = .empty,
+    /// The name it was made with.
+    name: []const u8 = "",
     /// The last ScriptNames, which the Host borrows.
     names: std.ArrayList(Id) = .empty,
+    /// The last Script.Grants, which the Host borrows, and the Operation
+    /// names they point into.
+    grants: std.ArrayList(ScriptGrant) = .empty,
+    grant_operations: std.ArrayList(Id) = .empty,
 
     fn owns(g: *Group, o: *const objects.Object) bool {
         for (g.group.objects.items) |x| if (x == o) return true;
@@ -590,9 +596,47 @@ pub const Unhandled = extern struct {
     args_len: usize,
     target: ?*objects.Object,
 };
-pub const OperationRef = extern struct { capability: [*]const u8, capability_len: usize, operation: [*]const u8, operation_len: usize };
+pub const OperationRef = machine.OperationRef;
 pub const CallFailed = extern struct { script: [*]const u8, script_len: usize, call: [*]const u8, call_len: usize, operation: OperationRef, detail: [*]const u8, detail_len: usize };
 pub const HostError = extern struct { code: HostErrorCode, detail: [*]const u8, detail_len: usize };
+
+/// A Host error's chapter 9 code, for a talk.h status.
+pub fn hostCodeName(code: HostErrorCode) []const u8 {
+    return switch (code) {
+        .ok => "",
+        .clock_backwards => "clock backwards",
+        .parent_cycle => "parent cycle",
+        .duplicate_object_id => "duplicate object id",
+        .name_reused => "name reused",
+        .reentrant_call => "reentrant call",
+        .wrong_group => "wrong group",
+        .library_mismatch => "library mismatch",
+        .reserved_name => "reserved name",
+        .not_adoptable => "not adoptable",
+        .invalid_value => "invalid value",
+        .invalid_save => "invalid save",
+        .save_mismatch => "save mismatch",
+        .unknown_call => "unknown call",
+        .state_too_large => "state too large",
+        .effects_pending => "effects pending",
+        .effect_state_unknown => "effect state unknown",
+        .invalid_checkpoint => "invalid checkpoint",
+        .err_limit => "limit",
+        .err_mailbox_full => "mailbox full",
+        .load_refused => "load error",
+        .out_of_memory => "out of memory",
+    };
+}
+
+/// An error's text: `head`, then `: ` and `tail` when there is one.
+fn errorText(out: *Buffer, head: []const u8, tail: []const u8) HostErrorCode {
+    const text = if (tail.len == 0) allocator.dupe(u8, head) else std.mem.concat(allocator, u8, &.{ head, ": ", tail });
+    return buffer(out, text);
+}
+
+export fn talk_host_error_error(e: *const HostError, out: *Buffer) HostErrorCode {
+    return errorText(out, hostCodeName(e.code), e.detail[0..e.detail_len]);
+}
 pub const RunAncestry = extern struct { root_delivery: [*]const u8, root_delivery_len: usize, parent_run: [*]const u8, parent_run_len: usize, parent_call: [*]const u8, parent_call_len: usize };
 pub const RunStarted = extern struct {
     ancestry: RunAncestry,
@@ -855,6 +899,21 @@ pub const Deciding = struct {
     undecided: []UndecidedBy = &.{},
 };
 
+/// The versions this Core implements, which `hello` reports too.
+pub const versions = struct {
+    pub const language = @import("generated/version.zig").version.language;
+    pub const cost_model = std.fmt.comptimePrint("{d}", .{@import("generated/costs.zig").costs.version});
+    pub const unicode = @import("generated/unicode.zig").unicode_version;
+    pub const core = "zig/0.0.0";
+    pub const save_format = std.fmt.comptimePrint("zig/{d}", .{snapshot.format_version});
+};
+pub const Versions = extern struct { language: [*]const u8, language_len: usize, cost_model: [*]const u8, cost_model_len: usize, unicode: [*]const u8, unicode_len: usize, core: [*]const u8, core_len: usize, save_format: [*]const u8, save_format_len: usize };
+
+export fn talk_core_versions(out: *Versions) void {
+    const v = versions;
+    out.* = .{ .language = v.language.ptr, .language_len = v.language.len, .cost_model = v.cost_model.ptr, .cost_model_len = v.cost_model.len, .unicode = v.unicode.ptr, .unicode_len = v.unicode.len, .core = v.core.ptr, .core_len = v.core.len, .save_format = v.save_format.ptr, .save_format_len = v.save_format.len };
+}
+
 export fn talk_new() ?*Core {
     const c = allocator.create(Core) catch return null;
     c.* = .{ .gpa = allocator };
@@ -912,7 +971,14 @@ export fn talk_core_release(c: ?*Core) void {
 export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostErrorCode {
     out.* = null;
     const g = c.gpa.create(Group) catch return .out_of_memory;
-    g.* = .{ .core = c, .memory = undefined, .host = if (o.allocator) |h| h.* else null, .group = undefined, .out = undefined, .sink = o.trace, .context = o.trace_context };
+    const name = c.gpa.dupe(u8, bytes(o.name, o.name_len) catch {
+        c.gpa.destroy(g);
+        return .invalid_value;
+    }) catch {
+        c.gpa.destroy(g);
+        return .out_of_memory;
+    };
+    g.* = .{ .core = c, .memory = undefined, .host = if (o.allocator) |h| h.* else null, .group = undefined, .out = undefined, .sink = o.trace, .context = o.trace_context, .name = name };
     g.memory = .init(if (g.host) |*h| h.allocator() else c.gpa, o.memory_cap);
     const gpa = g.memory.allocator();
     g.out = .init(gpa);
@@ -925,6 +991,11 @@ export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostEr
 /// whether it has refused an allocation.
 export fn talk_group_memory(g: *const Group, out: *Memory) void {
     out.* = .{ .used = g.memory.used, .peak = g.memory.peak, .cap = g.memory.cap, .refused = g.memory.refused };
+}
+
+export fn talk_name(g: *const Group, s: *[*]const u8, len: *usize) void {
+    s.* = g.name.ptr;
+    len.* = g.name.len;
 }
 
 export fn talk_group_release(g: ?*Group) void {
@@ -947,6 +1018,9 @@ export fn talk_group_release(g: ?*Group) void {
     }
     group.deciding.deinit(gpa);
     group.names.deinit(gpa);
+    group.grants.deinit(gpa);
+    group.grant_operations.deinit(gpa);
+    gpa.free(group.name);
     gpa.destroy(group);
 }
 
@@ -1151,6 +1225,10 @@ export fn talk_deciding_decided(d: *Deciding) ?*const Decided {
 export fn talk_pending_release(p: ?*Pending) void {
     _ = p;
     // A Request's handle lives with its Group, which frees it.
+}
+
+export fn talk_pending_done(p: *const Pending) bool {
+    return p.group.group.results.contains(p.id);
 }
 
 export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
@@ -1524,6 +1602,44 @@ pub export fn talk_group_script(g: *Group, name: ?[*]const u8, len: usize) ?*Scr
     const n = bytes(name, len) catch return null;
     for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, n)) return s;
     return null;
+}
+
+export fn talk_script_name(s: *const Script, name: *[*]const u8, len: *usize) void {
+    name.* = s.name.ptr;
+    len.* = s.name.len;
+}
+
+pub const ScriptGrant = extern struct { name: [*]const u8, name_len: usize, operations: [*]const Id, operations_len: usize };
+
+fn idLess(_: void, x: Id, y: Id) bool {
+    return std.mem.lessThan(u8, x.data[0..x.len], y.data[0..y.len]);
+}
+
+/// Script.Grants: each kept name with its kept Operations, sorted, borrowed
+/// from the Group until the next call. Empty if it can't allocate.
+export fn talk_script_grants(s: *Script, out: *[*]const ScriptGrant) usize {
+    const g = s.group;
+    const gpa = g.core.gpa;
+    g.grants.clearRetainingCapacity();
+    g.grant_operations.clearRetainingCapacity();
+    out.* = g.grants.items.ptr;
+    const script = g.group.script(s.name) orelse return 0;
+    for (script.grants) |sg| {
+        const start = g.grant_operations.items.len;
+        for (sg.grant.capability.operations, sg.kept) |op, kept| if (kept) {
+            g.grant_operations.append(gpa, .{ .data = op.name.ptr, .len = op.name.len }) catch return 0;
+        };
+        std.mem.sort(Id, g.grant_operations.items[start..], {}, idLess);
+        g.grants.append(gpa, .{ .name = sg.name.ptr, .name_len = sg.name.len, .operations = undefined, .operations_len = g.grant_operations.items.len - start }) catch return 0;
+    }
+    // The Operation names are all in place, so the views can point at them.
+    var start: usize = 0;
+    for (g.grants.items) |*v| {
+        v.operations = g.grant_operations.items[start..].ptr;
+        start += v.operations_len;
+    }
+    out.* = g.grants.items.ptr;
+    return g.grants.items.len;
 }
 
 /// The Group Fingerprint (chapter 9), 32 bytes, a worker call.
@@ -2004,6 +2120,10 @@ pub const ScopeDecl = extern struct { opens: ?[*]const u8, opens_len: usize, aba
 pub const Call = caps.Call;
 
 pub const ScriptError = extern struct { code: ?[*]const u8, code_len: usize, message: ?[*]const u8, message_len: usize, data: ?*Value };
+
+export fn talk_script_error_error(e: *const ScriptError, out: *Buffer) HostErrorCode {
+    return errorText(out, bytes(e.code, e.code_len) catch return .invalid_value, if (e.message) |m| m[0..e.message_len] else "");
+}
 
 pub const CallEnd = enum(c_int) { answered, failed, limited, broken, started };
 
@@ -3093,6 +3213,19 @@ export fn talk_load_error_release(e: ?*LoadError) void {
     allocator.destroy(held);
 }
 
+export fn talk_load_error_error(e: *const LoadError, out: *Buffer) HostErrorCode {
+    var text: std.Io.Writer.Allocating = .init(allocator);
+    defer text.deinit();
+    const w = &text.writer;
+    for (e.diagnostics[0..e.diagnostics_len], 0..) |d, i| {
+        if (i > 0) w.writeByte('\n') catch return .out_of_memory;
+        w.print("{s}:{d}:{d}: {s}", .{ d.unit[0..d.unit_len], d.line, d.col, d.code[0..d.code_len] }) catch return .out_of_memory;
+        if (d.message_len > 0) w.print(": {s}", .{d.message[0..d.message_len]}) catch return .out_of_memory;
+    }
+    if (e.diagnostics_len == 0) w.writeAll("load error") catch return .out_of_memory;
+    return buffer(out, text.toOwnedSlice());
+}
+
 export fn talk_library_name(l: *const machine.Library, s: *[*]const u8, len: *usize) void {
     s.* = l.name.ptr;
     len.* = l.name.len;
@@ -3106,6 +3239,16 @@ export fn talk_library_version(l: *const machine.Library, s: *[*]const u8, len: 
 /// The Library's code identity, 32 bytes.
 export fn talk_library_identity(l: *const machine.Library, out: *[32]u8) void {
     out.* = l.identity;
+}
+
+export fn talk_library_imports(l: *const machine.Library, out: *[*]const *machine.Library) usize {
+    out.* = l.imports.ptr;
+    return l.imports.len;
+}
+
+export fn talk_library_needs(l: *const machine.Library, out: *[*]const OperationRef) usize {
+    out.* = l.operations.ptr;
+    return l.operations.len;
 }
 
 /// Adds a compiled Library to the Group, a Host Input with its `add-library`

@@ -14,13 +14,9 @@ const model = @import("value.zig");
 const display = @import("display.zig");
 const encoding = @import("encoding.zig");
 const machine = @import("machine/machine.zig");
-const snapshot = @import("machine/snapshot.zig");
 const caps = machine.capabilities;
 const objects = machine.objects;
 const talk = @import("talk.zig");
-const generated_version = @import("generated/version.zig");
-const generated_costs = @import("generated/costs.zig");
-const generated_unicode = @import("generated/unicode.zig");
 const generated_diagnostics = @import("generated/diagnostics.zig");
 
 const Allocator = std.mem.Allocator;
@@ -282,34 +278,6 @@ const Out = struct {
     }
 };
 
-/// A Host error's chapter 9 code, for a talk.h status.
-fn hostCodeName(code: talk.HostErrorCode) []const u8 {
-    return switch (code) {
-        .ok => "",
-        .clock_backwards => "clock backwards",
-        .parent_cycle => "parent cycle",
-        .duplicate_object_id => "duplicate object id",
-        .name_reused => "name reused",
-        .reentrant_call => "reentrant call",
-        .wrong_group => "wrong group",
-        .library_mismatch => "library mismatch",
-        .reserved_name => "reserved name",
-        .not_adoptable => "not adoptable",
-        .invalid_value => "invalid value",
-        .invalid_save => "invalid save",
-        .save_mismatch => "save mismatch",
-        .unknown_call => "unknown call",
-        .state_too_large => "state too large",
-        .effects_pending => "effects pending",
-        .effect_state_unknown => "effect state unknown",
-        .invalid_checkpoint => "invalid checkpoint",
-        .err_limit => "limit",
-        .err_mailbox_full => "mailbox full",
-        .load_refused => "load error",
-        .out_of_memory => "out of memory",
-    };
-}
-
 fn protocolError(gpa: Allocator, ref: i64, detail: []const u8) []u8 {
     var o = Out.init(gpa);
     defer o.deinit();
@@ -332,7 +300,7 @@ fn hostError(gpa: Allocator, ref: i64, code: talk.HostErrorCode) []u8 {
     }
     var o = Out.init(gpa);
     defer o.deinit();
-    const name = hostCodeName(code);
+    const name = talk.hostCodeName(code);
     o.raw("{\"ref\":") catch {};
     o.int(ref) catch {};
     o.raw(",\"err\":{\"kind\":\"host error\",\"code\":") catch {};
@@ -1352,14 +1320,17 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
+    const v = talk.versions;
     o.raw("\"language\":") catch {};
-    o.text(generated_version.version.language) catch {};
+    o.text(v.language) catch {};
     o.raw(",\"costModel\":") catch {};
-    o.w().print("\"{d}\"", .{generated_costs.costs.version}) catch return oomReply();
+    o.text(v.cost_model) catch {};
     o.raw(",\"unicode\":") catch {};
-    o.text(generated_unicode.unicode_version) catch {};
-    o.raw(",\"core\":\"zig/0.0.0\",\"saveFormat\":") catch {};
-    o.w().print("\"zig/{d}\"", .{snapshot.format_version}) catch return oomReply();
+    o.text(v.unicode) catch {};
+    o.raw(",\"core\":") catch {};
+    o.text(v.core) catch {};
+    o.raw(",\"saveFormat\":") catch {};
+    o.text(v.save_format) catch return oomReply();
     return finishOk(s, &o, null);
 }
 
