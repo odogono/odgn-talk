@@ -1,4 +1,3 @@
-# Unblessed: an unknown name in a Constant initialiser is also not constant (#765); first blessing awaits human review.
 > load name identity=1370507ef458c2fb20f9991b7591490c3c0df0aa642fc5634b78022866a9b4cf
 diag name code="unknown name" pos=1:14
 diag name code="not constant" pos=1:14
