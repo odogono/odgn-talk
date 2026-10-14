@@ -166,6 +166,12 @@ pub const Session = struct {
     prop_contexts: std.ArrayList(*PropContext) = .empty,
     /// Whether a Pump is running, so a load's initialiser cannot defer.
     in_pump: bool = false,
+    /// Whether a Reload or library replacement is ending the old code's
+    /// Runs, where a lifecycle crossing may send a need too.
+    in_work: bool = false,
+    /// A Reload or library replacement paused for a need, which the
+    /// answer goes on with instead of a Pump.
+    work_paused: bool = false,
     /// The Pump paused at a crossing: its `ref` and its need.
     paused_ref: ?i64 = null,
     need: ?Need = null,
@@ -773,7 +779,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         }
     }
     // An automatic call where its crossing can't pause has no answer.
-    if (!s.in_pump or !call.deferrable) return .broken;
+    if (!(s.in_pump or s.in_work) or !call.deferrable) return .broken;
     s.need = need: {
         const gpa = s.gpa;
         var n: Need = .{
@@ -839,7 +845,7 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
         s.effect_answer = null;
         return status;
     }
-    if (!s.in_pump or !sc.deferrable) return .unknown;
+    if (!(s.in_pump or s.in_work) or !sc.deferrable) return .unknown;
     const gpa = s.gpa;
     var n: Need = .{
         .kind = .effect,
@@ -1648,7 +1654,7 @@ fn answerEffect(s: *Session, msg: Json, ref: i64) []u8 {
     s.paused_ref = null;
     spent.release(s.gpa);
     s.effect_answer = status;
-    return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+    return resumeAnswered(s, ref, entry);
 }
 
 /// An error Data map's value, from a result's `fail`/`error` object.
@@ -1709,7 +1715,7 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
     s.need = null;
     s.paused_ref = null;
     spent.release(s.gpa);
-    return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+    return resumeAnswered(s, ref, entry);
 }
 
 fn helloReply(s: *Session, ref: i64) []u8 {
@@ -2260,9 +2266,12 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     // Trace lines from earlier work are not this change's.
     entry.group.flush();
     freeTrace(s.gpa, takeTrace(entry));
-    var reports: ?*talk.Reports = null;
-    defer Direct.reportsRelease(reports);
-    const code = if (is_extend) Direct.scriptExtend(script, source.ptr, source.len) else Direct.scriptReload(script, source.ptr, source.len, carry, &options, &reports);
+    if (!is_extend) {
+        if (!std.unicode.utf8ValidateSlice(source)) return hostError(s.gpa, ref, .invalid_value);
+        const target = entry.group.group.script(script.name) orelse return hostError(s.gpa, ref, .invalid_value);
+        return runWork(s, ref, entry, .{ .reload = .{ .script = target, .source = source, .carry = carry == .carry_variables, .keep_mailbox = options.keep_mailbox } });
+    }
+    const code = Direct.scriptExtend(script, source.ptr, source.len);
     entry.group.flush();
     if (code == .load_refused) {
         const lines = takeTrace(entry);
@@ -2276,9 +2285,6 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
-    if (!is_extend) {
-        if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
-    }
     return holdForReleases(s, ref, finishOk(s, &o, entry));
 }
 
@@ -2380,24 +2386,98 @@ fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
     const carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
     entry.group.flush();
     freeTrace(s.gpa, takeTrace(entry));
-    var reports: ?*talk.Reports = null;
-    defer Direct.reportsRelease(reports);
-    const code = Direct.replaceLibrary(entry.group, library, carry, &reports);
-    entry.group.flush();
-    if (code == .load_refused) {
-        const lines = takeTrace(entry);
-        defer freeTrace(s.gpa, lines);
-        return loadError(s.gpa, ref, lines);
+    return runWork(s, ref, entry, .{ .replace = .{ .library = library, .carry = carry == .carry_variables } });
+}
+
+/// A Reload or library replacement to start, or one paused to go on with.
+const Work = union(enum) {
+    reload: struct { script: *machine.Script, source: []const u8, carry: bool, keep_mailbox: bool },
+    replace: struct { library: *machine.Library, carry: bool },
+    resumed,
+};
+
+/// Runs a Reload or library replacement, or goes on with a paused one,
+/// where a lifecycle crossing as it ends the old code's Runs may pause
+/// for a need; its reply is that need, or the outcome.
+fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
+    if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
+    const mg = &entry.group.group;
+    const c = s.core;
+    s.in_work = true;
+    s.pumping_entry = entry;
+    defer {
+        s.in_work = false;
+        s.pumping_entry = null;
     }
-    if (code != .ok) {
-        freeTrace(s.gpa, takeTrace(entry));
-        return hostError(s.gpa, ref, code);
+    const outcome: machine.Group.Resumed = switch (work) {
+        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| return hostError(s.gpa, ref, talk.status(e)) },
+        .replace => |x| blk: {
+            // Room for every Library it could recompile, which the Core
+            // owns once the Group uses them.
+            c.libraries.ensureUnusedCapacity(c.gpa, mg.libraries.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
+            break :blk .{ .replace = mg.replaceLibrary(x.library, x.carry, c.gpa) catch |e| return hostError(s.gpa, ref, talk.status(e)) };
+        },
+        .resumed => mg.resumeWork() catch |e| return hostError(s.gpa, ref, talk.status(e)),
+    };
+    entry.group.flush();
+    const paused = switch (outcome) {
+        .reload => |r| r == .paused,
+        .replace => |r| r == .paused,
+    };
+    if (paused) {
+        s.paused_ref = ref;
+        s.work_paused = true;
+        return holdForReleases(s, ref, needReply(s, ref));
+    }
+    switch (outcome) {
+        .reload => |r| switch (r) {
+            .reloaded => {},
+            .refused => return workRefused(s, ref, entry),
+            .state_too_large => return workError(s, ref, entry, .state_too_large),
+            .stopped => return workError(s, ref, entry, .effect_state_unknown),
+            .paused => unreachable,
+        },
+        .replace => |r| switch (r) {
+            .replaced => |made| {
+                defer mg.gpa.free(made);
+                c.libraries.ensureUnusedCapacity(c.gpa, made.len) catch return hostError(s.gpa, ref, .out_of_memory);
+                c.libraries.appendSliceAssumeCapacity(made);
+            },
+            .refused => return workRefused(s, ref, entry),
+            .unknown_library => return workError(s, ref, entry, .invalid_value),
+            .state_too_large => return workError(s, ref, entry, .state_too_large),
+            .paused => unreachable,
+        },
     }
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
-    if (reports) |r| writeHeld(&o, &r.held) catch return oomReply() else o.raw("\"reports\":[]") catch return oomReply();
+    mg.accountingTail();
+    var held = mg.reports.take();
+    defer held.deinit();
+    writeHeld(&o, &held) catch return oomReply();
     return holdForReleases(s, ref, finishOk(s, &o, entry));
+}
+
+fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
+    const lines = takeTrace(entry);
+    defer freeTrace(s.gpa, lines);
+    return loadError(s.gpa, ref, lines);
+}
+
+fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
+    freeTrace(s.gpa, takeTrace(entry));
+    return holdForReleases(s, ref, hostError(s.gpa, ref, code));
+}
+
+/// After an answer, the paused Reload or library replacement goes on, or
+/// else the paused Pump.
+fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
+    if (s.work_paused) {
+        s.work_paused = false;
+        return runWork(s, ref, entry, .resumed);
+    }
+    return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
 }
 
 /// `talk.ts`'s CarryOver text.
@@ -4002,4 +4082,52 @@ test "Segment lifecycle and scope abandonment reach the Host as effect and op ne
         if (std.mem.eql(u8, "stop", r.object.get("kind").?.string)) stop_seen = true;
     }
     try std.testing.expect(stop_seen);
+}
+
+test "a reload's lifecycle crossings reach the Host as needs before its reply" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // `capabilities/effect-reload-carry`'s resource and Script.
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"resource\",\"segmentLifecycle\":true,\"ops\":[" ++
+        "{{\"name\":\"open\",\"mode\":\"immediate\",\"result\":\"nothing\",\"cost\":{{\"fuel\":1}},\"scope\":{{\"opens\":\"file\",\"abandon\":\"close\"}},\"segmentBound\":true}}," ++
+        "{{\"name\":\"close\",\"mode\":\"immediate\",\"result\":\"nothing\",\"cost\":{{\"fuel\":1}},\"scope\":{{\"closes\":\"file\"}},\"segmentBound\":true}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"resource\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"r\":{d}}},\"source\":\"script variable count = 0\\non go\\nask r to open\\nput 2 into count\\nrepeat forever\\nend repeat\\nend go\\n\"}}", .{ 4, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+    // The Run opens its scope and is preempted mid-Segment.
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\",\"fuelSlice\":40}}", .{6});
+    reply = try c.sendRef(6, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{6});
+    const sliced = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{6}));
+    try std.testing.expectEqualStrings("sliced", sliced.object.get("state").?.string);
+    // Reloading it abandons the scope and rolls the Segment back first.
+    reply = try c.send("{{\"m\":\"reload\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"carry\":\"carry variables\",\"source\":\"script variable count = 0\\non go\\nreturn count\\nend go\"}}", .{7});
+    var need = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("close", need.object.get("operation").?.string);
+    try std.testing.expect(need.object.get("automatic").?.bool);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{8})));
+    reply = try c.sendRef(7, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{7});
+    need = reply.object.get("need") orelse return unexpected(reply);
+    try std.testing.expectEqualStrings("effect", need.object.get("m").?.string);
+    try std.testing.expectEqualStrings("rollback", need.object.get("phase").?.string);
+    const reloaded = try okOf(try c.sendRef(7, "{{\"m\":\"effect-result\",\"ref\":{d},\"status\":\"ok\"}}", .{7}));
+    try std.testing.expect(reloaded.object.get("reports").? == .array);
+    // The Trace is the corpus case's from the abandonment to the stop.
+    const expected = [_][]const u8{
+        "call s/r1.c2 op=r.close args=[] result=nothing automatic=yes",
+        "scope s/r1.c2 grant=r name=file action=abandoned",
+        "effect s/r1.s1 grant=r phase=rollback status=ok",
+        "stopped s reason=\"reload\" discarded=[s/r1]",
+    };
+    var seen: std.ArrayList([]const u8) = .empty;
+    defer seen.deinit(gpa);
+    for (reloaded.object.get("trace").?.array.items) |line| if (!std.mem.startsWith(u8, line.string, ">")) try seen.append(gpa, line.string);
+    try std.testing.expectEqual(expected.len, seen.items.len);
+    for (expected, seen.items) |want, got| try std.testing.expectEqualStrings(want, got);
+    // The new code runs, its Variable carried.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
+    try std.testing.expectEqual(@as(i64, 0), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\"}}", .{10}))).object.get("result").?.integer);
 }

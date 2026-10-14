@@ -27,7 +27,7 @@ pub const Pair = extern struct { key: ?[*]const u8, key_len: usize, value: *Valu
 fn bytes(s: ?[*]const u8, len: usize) error{InvalidValue}![]const u8 {
     return if (len == 0) "" else (s orelse return error.InvalidValue)[0..len];
 }
-fn status(err: anyerror) HostErrorCode {
+pub fn status(err: anyerror) HostErrorCode {
     return switch (err) {
         error.OutOfMemory => .out_of_memory,
         error.DuplicateObjectId => .duplicate_object_id,
