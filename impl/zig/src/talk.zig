@@ -1946,6 +1946,13 @@ pub const direct = struct {
 /// Core's own Zig functions, for the Message Layer. Takes `operations`
 /// (allocated with the Core's allocator) on success only.
 pub fn defineCapabilityZig(c: *Core, name: []const u8, operations: []caps.Operation, out: *?*caps.Capability) HostErrorCode {
+    return defineCapabilityZigWith(c, name, operations, null, null, out);
+}
+
+/// `defineCapabilityZig` with a Segment Coordinator mapping, which a
+/// Capability with Segment-bound Operations needs, and a Grant release
+/// hook, both the Core's own Zig functions.
+pub fn defineCapabilityZigWith(c: *Core, name: []const u8, operations: []caps.Operation, coordinator_of: ?caps.CoordinatorOf, release: ?caps.ReleaseHook, out: *?*caps.Capability) HostErrorCode {
     out.* = null;
     const gpa = c.gpa;
     if (name.len == 0) return .invalid_value;
@@ -1957,12 +1964,12 @@ pub fn defineCapabilityZig(c: *Core, name: []const u8, operations: []caps.Operat
     }.less);
     for (operations[1..@max(operations.len, 1)], 0..) |op, i| if (std.mem.eql(u8, op.name, operations[i].name)) return .invalid_value;
     const shape: caps.Capability = .{ .name = name, .operations = operations };
-    if (!shape.validScopes() or shape.segmentBound()) return .invalid_value;
+    if (!shape.validScopes() or shape.segmentBound() != (coordinator_of != null)) return .invalid_value;
     const d = gpa.create(caps.Capability) catch return .out_of_memory;
     d.* = .{ .name = gpa.dupe(u8, name) catch {
         gpa.destroy(d);
         return .out_of_memory;
-    }, .operations = operations };
+    }, .operations = operations, .coordinator_of = coordinator_of, .release = release };
     c.definitions.append(gpa, d) catch {
         gpa.free(d.name);
         gpa.destroy(d);
