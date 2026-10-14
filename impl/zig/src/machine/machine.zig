@@ -1344,6 +1344,11 @@ pub const Group = struct {
     /// crossing may defer: the input stays at the queue's head, and
     /// `resumePump` drains on from it.
     draining: bool = false,
+    /// Whether a Reload or library replacement is ending the old code's
+    /// Runs, where a lifecycle crossing may defer too: the call returns
+    /// `paused`, and `resumeWork` goes on from `paused_work`.
+    reworking: bool = false,
+    paused_work: ?PausedWork = null,
     /// The next Script to take a turn, kept across a crossing pause.
     turn_at: usize = 0,
     landing: std.ArrayList(Landing) = .empty,
@@ -1379,6 +1384,15 @@ pub const Group = struct {
     }
 
     pub fn deinit(g: *Group) void {
+        // A Reload or library replacement left paused holds its built code.
+        if (g.paused_work) |work| switch (work) {
+            .reload => |x| g.dropFresh(x.fresh),
+            .replace => |x| {
+                g.dropRebuilt(x.rebuilt);
+                for (x.made) |l| l.destroy();
+                g.gpa.free(x.made);
+            },
+        };
         g.releaseInputs(g.inputs.items);
         for (g.landing.items) |x| g.releaseInputs(&.{x.input});
         g.landing.deinit(g.gpa);
@@ -2001,7 +2015,37 @@ pub const Group = struct {
         return .extended;
     }
 
-    pub const ReloadResult = enum { reloaded, refused, state_too_large, stopped };
+    pub const ReloadResult = enum { reloaded, refused, state_too_large, stopped, paused };
+
+    /// A Reload or library replacement paused at a lifecycle crossing as it
+    /// ended the old code's Runs, after its checks: the code it built, and
+    /// for a replacement, the Scripts still to replace from `next`.
+    pub const PausedWork = union(enum) {
+        reload: struct { script: *Script, fresh: *Script, keep_mailbox: bool },
+        replace: struct { rebuilt: []Rebuilt, next: usize, made: []*Library },
+    };
+    pub const Rebuilt = struct { script: *Script, fresh: *Script };
+
+    /// What a paused Reload or library replacement finished with.
+    pub const Resumed = union(enum) { reload: ReloadResult, replace: ReplaceResult };
+
+    /// Goes on with a paused Reload or library replacement, from the
+    /// crossing it paused at; it may pause again.
+    pub fn resumeWork(g: *Group) !Resumed {
+        const work = g.paused_work.?;
+        g.paused_work = null;
+        switch (work) {
+            .reload => |x| {
+                const result = g.finishReload(x.script, x.fresh, x.keep_mailbox) catch |e| {
+                    g.dropFresh(x.fresh);
+                    return e;
+                };
+                if (result != .paused) g.dropFresh(x.fresh);
+                return .{ .reload = result };
+            },
+            .replace => |x| return .{ .replace = try g.finishReplace(x.rebuilt, x.next, x.made) },
+        }
+    }
 
     /// Stop-and-reload (chapter 10, Reload): checks the new source and runs
     /// its initialiser, carries Script Variables over if asked, then stops
@@ -2009,7 +2053,9 @@ pub const Group = struct {
     /// extension at once. A refusal leaves the Script unchanged.
     pub fn reload(g: *Group, s: *Script, source: []const u8, carry: bool, keep_mailbox: bool) !ReloadResult {
         const fresh = try g.newCode(s);
-        defer g.dropFresh(fresh);
+        // A paused Reload keeps its built code until it resumes.
+        var owned = true;
+        defer if (owned) g.dropFresh(fresh);
         const ca = fresh.code.allocator();
         fresh.source = try ca.dupe(u8, source);
         var parsed = try g.parseCode(ca, fresh.source);
@@ -2029,8 +2075,24 @@ pub const Group = struct {
             g.write("refused code=\"state too large\"\n", .{});
             return .state_too_large;
         }
-        if (!try g.replaceCode(s, fresh, keep_mailbox, "reload")) return .stopped;
-        return .reloaded;
+        // Checked, its termination may pause: the built code waits with it.
+        const result = try g.finishReload(s, fresh, keep_mailbox);
+        if (result == .paused) owned = false;
+        return result;
+    }
+
+    /// A checked Reload's termination and replacement. Paused at a
+    /// lifecycle crossing, it keeps `fresh` in `paused_work`; otherwise
+    /// `fresh` is the caller's to drop.
+    fn finishReload(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) !ReloadResult {
+        g.reworking = true;
+        defer g.reworking = false;
+        const replaced = g.replaceCode(s, fresh, keep_mailbox, "reload") catch |e| {
+            if (e != error.Deferred) return e;
+            g.paused_work = .{ .reload = .{ .script = s, .fresh = fresh, .keep_mailbox = keep_mailbox } };
+            return .paused;
+        };
+        return if (replaced) .reloaded else .stopped;
     }
 
     /// A detached Script for building new code for `s`: its name, Grants,
@@ -2148,8 +2210,12 @@ pub const Group = struct {
         // it takes new messages after.
         if (s.stopped == null) try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload, .discard = discard });
         // A stop that left an effect's state unknown stopped the Group, and
-        // prevents replacing it.
-        if (g.fatal) return false;
+        // prevents replacing it. Made again after a pause, this finishes
+        // stopping any Script whose stop paused.
+        if (g.fatal) {
+            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", null, .{});
+            return false;
+        }
         if (s.stopped) |reason| {
             g.gpa.free(reason);
             s.stopped = null;
@@ -2189,6 +2255,8 @@ pub const Group = struct {
         refused,
         unknown_library,
         state_too_large,
+        /// Paused at a lifecycle crossing: `resumeWork` goes on.
+        paused,
     };
 
     /// Replaces a Library the Group holds (chapter 7): recompiles every
@@ -2242,7 +2310,7 @@ pub const Group = struct {
             return .refused;
         }
         // Each importing Script is rebuilt against them, its extensions too.
-        var rebuilt: std.ArrayList(struct { script: *Script, fresh: *Script }) = .empty;
+        var rebuilt: std.ArrayList(Rebuilt) = .empty;
         defer {
             for (rebuilt.items) |x| g.dropFresh(x.fresh);
             rebuilt.deinit(g.gpa);
@@ -2284,9 +2352,47 @@ pub const Group = struct {
             return o;
         }
         @memcpy(g.libraries.items, given);
-        // A stop that stops the Group leaves the rest stopped with it.
-        for (rebuilt.items) |x| if (!try g.replaceCode(x.script, x.fresh, false, "library replacement")) break;
-        return .{ .replaced = try made.toOwnedSlice(g.gpa) };
+        // Checked, the replacements' terminations may pause: the built code
+        // and the recompiled Libraries wait with them.
+        const owned_made = try made.toOwnedSlice(g.gpa);
+        const pending = rebuilt.toOwnedSlice(g.gpa) catch |e| {
+            for (owned_made) |x| x.destroy();
+            g.gpa.free(owned_made);
+            return e;
+        };
+        return g.finishReplace(pending, 0, owned_made);
+    }
+
+    /// A checked library replacement's terminations and replacements, from
+    /// the Script at `from`. Paused at a lifecycle crossing, it keeps its
+    /// state in `paused_work`; otherwise it frees `rebuilt` and gives
+    /// `made` to the caller.
+    fn finishReplace(g: *Group, rebuilt: []Rebuilt, from: usize, made: []*Library) !ReplaceResult {
+        g.reworking = true;
+        defer g.reworking = false;
+        var i = from;
+        while (i < rebuilt.len) : (i += 1) {
+            const x = rebuilt[i];
+            // A stop that stops the Group leaves the rest stopped with it.
+            const replaced = g.replaceCode(x.script, x.fresh, false, "library replacement") catch |e| {
+                if (e == error.Deferred) {
+                    g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i, .made = made } };
+                    return .paused;
+                }
+                g.dropRebuilt(rebuilt);
+                for (made) |l| l.destroy();
+                g.gpa.free(made);
+                return e;
+            };
+            if (!replaced) break;
+        }
+        g.dropRebuilt(rebuilt);
+        return .{ .replaced = made };
+    }
+
+    fn dropRebuilt(g: *Group, rebuilt: []Rebuilt) void {
+        for (rebuilt) |x| g.dropFresh(x.fresh);
+        g.gpa.free(rebuilt);
     }
 
     /// `n` Script values: Nothing, or for a definition named
@@ -5017,7 +5123,7 @@ pub const Group = struct {
     /// draining, each crossing may defer, with progress in `run.cleanup`.
     fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
-        _ = try g.lifecycle(run, &run.cleanup.?, g.draining);
+        _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking);
         run.cleanup = null;
     }
 
