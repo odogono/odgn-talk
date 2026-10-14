@@ -568,6 +568,11 @@ physical cap; Cost Model 0 still charges only the specified logical allocation.
 The [List measurements](../../bench/results/2026-10-14-zig-list-paths.md)
 record size scaling, allocations and the remaining point-write cost.
 
+Forward Character reads walk only through the requested end and keep byte
+offsets instead of segmentation arrays. Missing and reversed reads still
+charge every Character as scanned input. Negative indexes retain full
+segmentation; there is no retained Text index or cache.
+
 So far the machine runs straight-line code, branches, loops, functions, chunks
 and properties, keys, lists and maps, `match` with its destructuring tests,
 Bytes builds and Binary Patterns, `as` conversions, number, Quantity and date

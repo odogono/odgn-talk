@@ -1,0 +1,296 @@
+{
+  "commit": "8f98a485-dirty",
+  "date": "2026-10-14",
+  "machine": {
+    "arch": "arm64",
+    "cores": 10,
+    "cpu": "Apple M5",
+    "memory": "24 GiB",
+    "os": "darwin"
+  },
+  "measurements": [
+    {
+      "benchmark": "text/build",
+      "runner": "zig",
+      "fuel": 28928,
+      "logicalAlloc": 383838,
+      "load": {
+        "medianNs": 5904.239,
+        "minNs": 5898.785,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 477333.333,
+        "minNs": 476207.547,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/iterate",
+      "runner": "zig",
+      "fuel": 30318,
+      "logicalAlloc": 95272,
+      "load": {
+        "medianNs": 7159.937,
+        "minNs": 7148.392,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 750895.522,
+        "minNs": 750029.851,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/index",
+      "runner": "zig",
+      "fuel": 26640,
+      "logicalAlloc": 51072,
+      "load": {
+        "medianNs": 7919.227,
+        "minNs": 7912.025,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 826557.377,
+        "minNs": 820803.279,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/patterns",
+      "runner": "zig",
+      "fuel": 13818,
+      "logicalAlloc": 231372,
+      "load": {
+        "medianNs": 7556.294,
+        "minNs": 7506.38,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 646012.821,
+        "minNs": 640734.177,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/graphemes",
+      "runner": "zig",
+      "fuel": 43518,
+      "logicalAlloc": 147572,
+      "load": {
+        "medianNs": 7629.387,
+        "minNs": 7618.467,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 1399555.556,
+        "minNs": 1396555.556,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "text/build",
+      "fuel": 28928,
+      "hostBytes": 105612.83018867925,
+      "load": {
+        "medianNs": 86541,
+        "minNs": 68000,
+        "samples": 6626
+      },
+      "logicalAlloc": 383838,
+      "run": {
+        "medianNs": 832875,
+        "minNs": 777792,
+        "samples": 753
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/iterate",
+      "fuel": 30318,
+      "hostBytes": 377522.69731800765,
+      "load": {
+        "medianNs": 85708,
+        "minNs": 72500,
+        "samples": 7242
+      },
+      "logicalAlloc": 95272,
+      "run": {
+        "medianNs": 2355208,
+        "minNs": 2063459,
+        "samples": 266
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/index",
+      "fuel": 26640,
+      "hostBytes": 858270.358974359,
+      "load": {
+        "medianNs": 121500,
+        "minNs": 99291,
+        "samples": 4285
+      },
+      "logicalAlloc": 51072,
+      "run": {
+        "medianNs": 5396292,
+        "minNs": 5049292,
+        "samples": 121
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/patterns",
+      "fuel": 13818,
+      "hostBytes": 1331614.2385321101,
+      "load": {
+        "medianNs": 109187.5,
+        "minNs": 91791,
+        "samples": 5738
+      },
+      "logicalAlloc": 231372,
+      "run": {
+        "medianNs": 5525833,
+        "minNs": 5139250,
+        "samples": 116
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/graphemes",
+      "fuel": 43518,
+      "hostBytes": 650718.0666666667,
+      "load": {
+        "medianNs": 96167,
+        "minNs": 82833,
+        "samples": 6599
+      },
+      "logicalAlloc": 147572,
+      "run": {
+        "medianNs": 5129938,
+        "minNs": 4510708,
+        "samples": 126
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "text/build",
+      "run": {
+        "minNs": 360373.0469876609,
+        "samples": 3,
+        "medianNs": 363251.30213299417
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/iterate",
+      "run": {
+        "minNs": 3338257.8112650663,
+        "samples": 3,
+        "medianNs": 3363054.6895437874
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/index",
+      "run": {
+        "minNs": 880580.0771369832,
+        "samples": 3,
+        "medianNs": 894710.2851379896
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/patterns",
+      "run": {
+        "minNs": 15732281.230157241,
+        "samples": 3,
+        "medianNs": 15770197.904203087
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "text/build",
+      "hostAllocs": 1024,
+      "hostBytes": 410419,
+      "run": {
+        "medianNs": 69001,
+        "minNs": 66703,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/iterate",
+      "hostAllocs": 9847,
+      "hostBytes": 191793,
+      "run": {
+        "medianNs": 176414,
+        "minNs": 176107,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/index",
+      "hostAllocs": 1055,
+      "hostBytes": 29984,
+      "run": {
+        "medianNs": 118547,
+        "minNs": 117735,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/patterns",
+      "hostAllocs": 17736,
+      "hostBytes": 400170,
+      "run": {
+        "medianNs": 260627,
+        "minNs": 260329,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    }
+  ],
+  "outlierFactor": 3,
+  "outliers": [
+    {
+      "benchmark": "text/patterns",
+      "factor": 3.39241815606382,
+      "nsPerFuel": 399.90107106672457,
+      "runner": "ts"
+    }
+  ],
+  "parity": [],
+  "settings": {
+    "count": 3,
+    "filter": "text",
+    "runners": "zig,ts,gopher-lua,applescript",
+    "smoke": false
+  },
+  "skipped": [
+    {
+      "benchmark": "text/graphemes",
+      "reason": "Unicode grapheme segmentation has no shared API across the pinned peers; text/iterate and text/index compare ASCII.",
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "text/graphemes",
+      "reason": "Unicode grapheme segmentation has no shared API across the pinned peers; text/iterate and text/index compare ASCII.",
+      "runner": "applescript"
+    }
+  ],
+  "versions": {
+    "bun": "1.4.3",
+    "zig": "0.17.0",
+    "zig build": "native safe; C Host -O2",
+    "cost model": "0",
+    "go": "go1.27.2",
+    "language": "1.0-rc.3",
+    "applescript": "2.8 (macOS 27.0.1)",
+    "gopher-lua": "v1.1.2"
+  }
+}

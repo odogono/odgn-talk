@@ -62,6 +62,23 @@ record paired exact division, `div`/`mod` and Quantity timings, allocation
 probes, native/WASI equivalence and the residual AppleScript gaps for
 [#923](https://github.com/odogono/odgn-talk/issues/923).
 
+The [Zig Character indexing measurements](results/2026-10-14-zig-character-indexing.md)
+record paired forward-index improvements, scaling, negative-index limits and
+the fresh four-runner text comparison for
+[#927](https://github.com/odogono/odgn-talk/issues/927).
+
+For paired Character indexing measurements, including fixed-index probes that
+exclude modulo and equality, build two native Hosts as above and run:
+
+```sh
+python3 bench/zig/character-indexing.py <before-host> <after-host> --before-revision <sha> --out <results.json>
+```
+
+This includes the full-size text workloads and 16-, 256- and 4,096-Character
+inputs read near the start, at the end and with a negative index. Timing and
+allocation probes run separately and require identical output, Fuel and logical
+allocation. Each process also repeats Runs against the same loaded Script.
+
 The [Zig List measurements](results/2026-10-14-zig-list-paths.md) record
 collecting and item-write size sweeps, paired collection and transform timings,
 allocation probes and residual AppleScript gaps for
