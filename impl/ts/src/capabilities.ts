@@ -583,6 +583,50 @@ export const shapeDiagnostics = (
   const discarded = new Set<number>();
   let trials = 0;
   let halted = false;
+  // A deep scan re-walks a shared part at each occurrence only until it
+  // is known to hold no Function Value; then its logical node count is
+  // charged without walking it again (#890).
+  const deepInfo = new Map<Value, { clean: boolean; nodes: number }>();
+  const infoOf = (rootValue: Value): { clean: boolean; nodes: number } => {
+    const pending: Value[] = [rootValue];
+    const order: Value[] = [];
+    const seen = new Set<Value>();
+    while (pending.length) {
+      const next = pending.pop()!;
+      if (deepInfo.has(next) || seen.has(next)) {
+        continue;
+      }
+      seen.add(next);
+      order.push(next);
+      if (next.kind === 'list') {
+        for (let i = 1; i <= next.length; i++) {
+          pending.push(next.index(i));
+        }
+      } else if (next.kind === 'map') {
+        for (const [, value] of next.entries()) {
+          pending.push(value);
+        }
+      }
+    }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const value = order[i]!;
+      let clean = value.kind !== 'function';
+      let nodes = 1;
+      const children =
+        value.kind === 'list'
+          ? Array.from({ length: value.length }, (_, j) => value.index(j + 1))
+          : value.kind === 'map'
+            ? value.entries().map(([, item]) => item)
+            : [];
+      for (const child of children) {
+        const info = deepInfo.get(child)!;
+        clean = clean && info.clean;
+        nodes += info.nodes;
+      }
+      deepInfo.set(value, { clean, nodes });
+    }
+    return deepInfo.get(rootValue)!;
+  };
   const stack: CheckFrame[] = [
     { path: [], s, sink: root, t: 'node', trial: 0, v },
   ];
@@ -652,6 +696,11 @@ export const shapeDiagnostics = (
         });
         break;
       case 'deep': {
+        const info = infoOf(frame.v);
+        if (info.clean) {
+          scanned += info.nodes;
+          break;
+        }
         scanned++;
         const { path, sink, trial, v: value } = frame;
         if (value.kind === 'function') {

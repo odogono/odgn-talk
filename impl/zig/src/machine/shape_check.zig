@@ -309,6 +309,9 @@ const Matcher = struct {
     first: bool,
     stack: std.ArrayList(CheckFrame) = .empty,
     discarded: std.AutoHashMapUnmanaged(usize, void) = .empty,
+    // A deep scan charges a shared part's logical nodes without
+    // re-walking it once it is known to hold no Function Value (#890).
+    deep_scans: std.AutoHashMapUnmanaged(usize, model.DeepScan) = .empty,
     trials: usize = 0,
     halted: bool = false,
 
@@ -386,6 +389,11 @@ fn diagnostics(c: *Ctx, v: *Value, s: *const Shape, first: bool) ![]Diagnostic {
                 });
             },
             .deep => |f| {
+                const scan = try model.deepScanOf(c.a, f.v, &m.deep_scans);
+                if (scan.clean) {
+                    c.scanned +|= scan.nodes;
+                    continue;
+                }
                 c.scanned += 1;
                 switch (f.v.data) {
                     .function => try m.emit(f.out, f.trial, .{

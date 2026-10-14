@@ -23,8 +23,8 @@ pumped state=idle fuel=17
 > extend session source="on entry4" & newline & "return format(" & quote & quote & quote & "${name} $${literal}" & quote & quote & quote & ", {name: " & quote & "Ann" & quote & "})" & newline & "end entry4" & newline identity=1ae9e1c62ab9dfa4090f8a0cdeffcc093a931bc80080f4a06b3ace3e7eb34a69
 > request d4 to=session message=entry4
 > pump clock=2026-10-04T09:00:00Z
-seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=1975 alloc=5417 state=30 end=return
-run session/r4 outcome=completed delivery=d4 handler=entry4 value="Ann ${literal}" fuel=1975 alloc=5417
-pumped state=idle fuel=1975
+seg session/r4 start delivery=d4 handler=entry4 clause=1 fuel=1979 alloc=5417 state=30 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4 value="Ann ${literal}" fuel=1979 alloc=5417
+pumped state=idle fuel=1979
 > vars
 vars session message="first" & newline & newline & "value 3"

@@ -881,5 +881,6 @@ fn deepRoundTripAllocations(a: std.mem.Allocator) !void {
 }
 
 test "deep reading and building free everything after any allocation failure" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, deepRoundTripAllocations, .{});
+    var fixed: NoInPlaceResize = .{ .child = std.testing.allocator };
+    try std.testing.checkAllAllocationFailures(fixed.allocator(), deepRoundTripAllocations, .{});
 }

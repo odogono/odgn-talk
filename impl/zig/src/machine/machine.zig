@@ -7357,11 +7357,18 @@ pub const Group = struct {
                 m.input = xs.retain();
                 const found = switch (xs.data) {
                     .list => |items| blk: {
-                        for (items, 1..) |item, i| if (try equalFolded(a, x, item, ops.len == 1)) {
-                            m.scanned = i;
-                            break :blk true;
-                        };
-                        m.scanned = items.len;
+                        var comparer = model.Comparer.init(a);
+                        defer comparer.deinit();
+                        var scanned: u64 = 0;
+                        for (items) |item| {
+                            scanned +|= 1;
+                            if (try equalFolded(a, x, item, ops.len == 1)) {
+                                m.scanned = scanned +| (comparer.selfScan(x) catch 0);
+                                break :blk true;
+                            }
+                            scanned +|= comparer.scanned(x, item) catch 0;
+                        }
+                        m.scanned = scanned;
                         break :blk false;
                     },
                     .range => |r| blk: {
@@ -9185,49 +9192,12 @@ fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     };
 }
 
-/// The pairs `compare` scans, through the first difference. Collection
-/// elements count once each; comparing their nested values adds no visits.
+/// The logical pairs `compare` scans, through the first difference, at
+/// every depth, shared parts counted at each occurrence (#890).
 fn compared(a: Allocator, x: *const Value, y: *const Value) u64 {
-    if (x.data == .text and y.data == .text) {
-        var i: usize = 0;
-        var j: usize = 0;
-        var n: u64 = 0;
-        const s = x.data.text;
-        const t = y.data.text;
-        while (i < s.len and j < t.len) {
-            const ei = unicode.grapheme.end(s, i);
-            const ej = unicode.grapheme.end(t, j);
-            n += 1;
-            if (!std.mem.eql(u8, s[i..ei], t[j..ej])) return n;
-            i = ei;
-            j = ej;
-        }
-        return n;
-    }
-    _ = a;
-    if (x.data == .bytes and y.data == .bytes) {
-        const b = x.data.bytes;
-        const c = y.data.bytes;
-        for (0..@min(b.len, c.len)) |i| if (b[i] != c[i]) return i + 1;
-        return @min(b.len, c.len);
-    }
-    if (x.data == .list and y.data == .list) {
-        const xs = x.data.list;
-        const ys = y.data.list;
-        for (0..@min(xs.len, ys.len)) |i| {
-            if (!(xs[i].equal(ys[i]) catch false)) return i + 1;
-        }
-        return @min(xs.len, ys.len);
-    }
-    if (x.data == .map and y.data == .map) {
-        const count = @min(x.data.map.len, y.data.map.len);
-        for (x.data.map[0..count], 0..) |entry, i| {
-            const other = y.get(entry.key) orelse return i + 1;
-            if (!(entry.value.equal(other) catch false)) return i + 1;
-        }
-        return count;
-    }
-    return 0;
+    var comparer = model.Comparer.init(a);
+    defer comparer.deinit();
+    return comparer.scanned(x, y) catch 0;
 }
 
 const errors_table = @import("../generated/errors.zig");

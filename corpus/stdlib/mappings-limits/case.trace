@@ -2,15 +2,15 @@
 > load s identity=748d875913010f1963629a2168caee5ca303d06d9a3c36eb14b02e521fbfb8c8
 > deliver d1 to=s message=go limits={fuelPerRun: 2000}
 > pump clock=2026-10-14T00:00:00Z
-fault s/r1 limit=fuel at=s:39 pos=13:5
-seg s/r1 start delivery=d1 handler=go clause=1 fuel=2000 alloc=9428 state=33 end=fault
-run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=2000 alloc=9428
+fault s/r1 limit=fuel at=s:44 pos=12:3
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=2000 alloc=9332 state=33 end=fault
+run s/r1 outcome=limit-fault delivery=d1 handler=go limit=fuel fuel=2000 alloc=9332
 pumped state=idle fuel=2000
 > deliver d2 to=s message=reports limits={allocPerRun: 12000}
 > pump clock=2026-10-14T00:00:00Z
 fault s/r2 limit=alloc at=map:1161 pos=329:9
-seg s/r2 start delivery=d2 handler=reports clause=1 fuel=724 alloc=10894 state=33 end=fault
-run s/r2 outcome=limit-fault delivery=d2 handler=reports limit=alloc fuel=724 alloc=10894
-pumped state=idle fuel=724
+seg s/r2 start delivery=d2 handler=reports clause=1 fuel=775 alloc=10894 state=33 end=fault
+run s/r2 outcome=limit-fault delivery=d2 handler=reports limit=alloc fuel=775 alloc=10894
+pumped state=idle fuel=775
 > vars
 vars s out="unchanged" caught=false

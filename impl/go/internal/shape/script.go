@@ -245,6 +245,9 @@ func Diagnostics(v value.Value, s Shape, first bool, scanned int64) ([]Diagnosti
 	discarded := map[int]bool{}
 	trials := 0
 	halted := false
+	// A deep scan charges a shared part's logical nodes without
+	// re-walking it once it is known to hold no Function Value (#890).
+	deepScans := map[any]value.DeepScan{}
 	stack := []checkFrame{{kind: "node", v: v, s: s, out: root}}
 	emit := func(out *sink, trial int, d Diagnostic) {
 		out.diags = append(out.diags, d)
@@ -309,6 +312,10 @@ func Diagnostics(v value.Value, s Shape, first bool, scanned int64) ([]Diagnosti
 			scanned++
 			emit(frame.out, frame.trial, Diagnostic{Mismatch: Mismatch{Expected: frame.expected, Got: "nothing", Path: frame.path}})
 		case "deep":
+			if scan := value.DeepScanOf(frame.v, deepScans); scan.Clean {
+				scanned += scan.Nodes
+				continue
+			}
 			scanned++
 			val := frame.v
 			if val.Kind == value.Function {

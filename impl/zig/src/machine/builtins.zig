@@ -311,9 +311,11 @@ fn extreme(gpa: Allocator, name: []const u8, xs: *Value, raised: *Raised, m: *co
     const want: std.math.Order = if (std.mem.eql(u8, name, "min")) .lt else .gt;
     var best = items[0];
     m.scanned = 1;
+    var comparer = model.Comparer.init(gpa);
+    defer comparer.deinit();
     for (items[1..]) |x| {
-        m.scanned += 1;
-        const o = x.order(best) catch {
+        m.scanned +|= 1 +| (comparer.scanned(x, best) catch 0);
+        const o = comparer.order(x, best) catch {
             raised.code = "can't compare";
             raised.fields[0] = .{ .key = "left", .value = x.retain() };
             raised.fields[1] = .{ .key = "right", .value = best.retain() };

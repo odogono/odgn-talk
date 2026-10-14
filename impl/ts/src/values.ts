@@ -305,9 +305,26 @@ export class Value {
   }
   equals(other: Value): boolean {
     requireValue(other);
-    const pending: [Value, Value][] = [[this, other]];
+    // Pairs already proven equal are not walked again: a shared part
+    // counts once per distinct pair of nodes, not once per path to it
+    // (#890). Values are acyclic, so a pair is proven when its children
+    // finish, and no pair is its own descendant.
+    const proven = new Map<Value, Set<Value>>();
+    const pending: [Value, Value, boolean][] = [[this, other, false]];
     while (pending.length) {
-      const [left, right] = pending.pop()!;
+      const [left, right, finish] = pending.pop()!;
+      if (finish) {
+        let set = proven.get(left);
+        if (!set) {
+          set = new Set();
+          proven.set(left, set);
+        }
+        set.add(right);
+        continue;
+      }
+      if (left === right || proven.get(left)?.has(right)) {
+        continue;
+      }
       if (left.kind !== right.kind) {
         return false;
       }
@@ -333,8 +350,9 @@ export class Value {
           if (left.length !== right.length) {
             return false;
           }
+          pending.push([left, right, true]);
           for (let i = 1; i <= left.length; i++) {
-            pending.push([left.index(i), right.index(i)]);
+            pending.push([left.index(i), right.index(i), false]);
           }
           break;
         }
@@ -371,7 +389,11 @@ export class Value {
         case 'range': {
           const a = left.asRange()!;
           const b = right.asRange()!;
-          pending.push([a.from, b.from], [a.to, b.to]);
+          pending.push(
+            [left, right, true],
+            [a.from, b.from, false],
+            [a.to, b.to, false],
+          );
           break;
         }
         case 'object':
@@ -389,8 +411,9 @@ export class Value {
           ) {
             return false;
           }
+          pending.push([left, right, true]);
           a.captures.forEach(([, v], i) =>
-            pending.push([v, b.captures[i]![1]]),
+            pending.push([v, b.captures[i]![1], false]),
           );
           break;
         }
@@ -400,12 +423,13 @@ export class Value {
           if (entries.length !== rhs.size) {
             return false;
           }
+          pending.push([left, right, true]);
           for (const [k, v] of entries) {
             const match = rhs.get(k);
             if (!match) {
               return false;
             }
-            pending.push([v, match]);
+            pending.push([v, match, false]);
           }
           break;
         }

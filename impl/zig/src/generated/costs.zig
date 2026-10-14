@@ -95,6 +95,10 @@ pub const costs: CostsTable = .{
             .issue = "#695",
             .change = "The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional",
         },
+        .{
+            .issue = "#890",
+            .change = "The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
@@ -266,12 +270,12 @@ pub const costs: CostsTable = .{
         .{
             .key = "compare",
             .fuel = "2 + scanned / 16",
-            .input = "the two operands; `scanned` is the pairs compared in order, through the first that differs or to the end of the shorter: Characters of text (their simple case foldings under `ignoring case`), bytes of Bytes, items of a list, or entries of a map in the left operand's order; 0 for any other kind, and between two kinds",
+            .input = "the two operands; `scanned` is the pairs compared in order, through the first that differs or to the end of the shorter, at every depth: a text pair counts Characters (their simple case foldings under `ignoring case`), a Bytes pair its bytes, a list pair counts each item pair plus what comparing it counts, a map pair counts each entry of the left operand, in its order, plus what comparing its value with the value under its key counts, a range pair counts what its ends count, and a Function pair from one Lambda or named function counts each captured pair plus what comparing it counts; 0 for any other kind, and between two kinds. A part a value shares counts at each occurrence, as logical size does; a Core may compare a shared pair once, but charges for each occurrence it would have compared",
         },
         .{
             .key = "member",
             .fuel = "2 + scanned",
-            .input = "the list or range; `scanned` is the items compared, through the first equal one, or 2 for a range",
+            .input = "the list or range; `scanned` is, for each item compared through the first equal one, 1 plus what comparing it with the sought value counts under `compare`; or 2 for a range",
         },
         .{
             .key = "convert",
@@ -434,12 +438,12 @@ pub const costs: CostsTable = .{
         .{
             .key = "builtin.min",
             .fuel = "4 + scanned",
-            .input = "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
+            .input = "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
         },
         .{
             .key = "builtin.max",
             .fuel = "4 + scanned",
-            .input = "`scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far",
+            .input = "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
         },
         .{
             .key = "builtin.codePoint",

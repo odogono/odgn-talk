@@ -954,7 +954,7 @@ A formula is a sum of terms: a whole number, or a measure, optionally multiplied
 
 ### Logical sizes
 
-The Allocation Budget and Persistent State count values by their logical size, as if nothing were shared ([ADR 0001](../docs/adr/0001-value-semantics.md)), so a value held twice counts twice, and a Core's sharing is never visible.
+The Allocation Budget and Persistent State count values by their logical size, as if nothing were shared ([ADR 0001](../docs/adr/0001-value-semantics.md)), so a value held twice counts twice, and a Core's sharing is never visible. Comparison charges count the same way: the `compare` rate counts a shared part at each occurrence, whether or not a Core compares it once (#890).
 
 <!-- generated: costs.sizes -->
 
@@ -1052,8 +1052,8 @@ Cost Model **0**.
 | `arithmetic` | `3 + digits(result) / 8` | `size(result)` |  |
 | `power` | `8 + 2 * digits(result)` | `size(result)` |  |
 | `concat` | `3 + scalars(result) / 16` | `size(result)` |  |
-| `compare` | `2 + scanned / 16` | 0 | the two operands; `scanned` is the pairs compared in order, through the first that differs or to the end of the shorter: Characters of text (their simple case foldings under `ignoring case`), bytes of Bytes, items of a list, or entries of a map in the left operand's order; 0 for any other kind, and between two kinds |
-| `member` | `2 + scanned` | 0 | the list or range; `scanned` is the items compared, through the first equal one, or 2 for a range |
+| `compare` | `2 + scanned / 16` | 0 | the two operands; `scanned` is the pairs compared in order, through the first that differs or to the end of the shorter, at every depth: a text pair counts Characters (their simple case foldings under `ignoring case`), a Bytes pair its bytes, a list pair counts each item pair plus what comparing it counts, a map pair counts each entry of the left operand, in its order, plus what comparing its value with the value under its key counts, a range pair counts what its ends count, and a Function pair from one Lambda or named function counts each captured pair plus what comparing it counts; 0 for any other kind, and between two kinds. A part a value shares counts at each occurrence, as logical size does; a Core may compare a shared pair once, but charges for each occurrence it would have compared |
+| `member` | `2 + scanned` | 0 | the list or range; `scanned` is, for each item compared through the first equal one, 1 plus what comparing it with the sought value counts under `compare`; or 2 for a range |
 | `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
 | `search` | `4 + steps` | 0 | the text searched |
 | `get-key` | `3` | 0 | the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
@@ -1099,8 +1099,8 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 
 | Built-in | Fuel | Allocation | Input |
 | --- | --- | --- | --- |
-| `min` | `4 + scanned` | 0 | `scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far |
-| `max` | `4 + scanned` | 0 | `scanned` is the items examined: all of the list's, or those through the first that can't be compared with the best so far |
+| `min` | `4 + scanned` | 0 | `scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
+| `max` | `4 + scanned` | 0 | `scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
 | `codePoint` | `3` | 0 |  |
 | `fromCodePoint` | `4` | `size(result)` |  |
 | `upper` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
@@ -1176,6 +1176,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#722](https://github.com/odogono/odgn-talk/issues/722) | Language 1.0-rc.3 activates the Nothing-default and optional map-key read lowering under the prerelease exception, with no new rate; Cost Model 0 remains provisional and Cost Model 1 stays reserved for calibration. |
 | [#788](https://github.com/odogono/odgn-talk/issues/788) | The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails |
 | [#695](https://github.com/odogono/odgn-talk/issues/695) | The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional |
+| [#890](https://github.com/odogono/odgn-talk/issues/890) | The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional |
 
 <!-- end -->
 

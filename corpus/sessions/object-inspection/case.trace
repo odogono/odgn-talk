@@ -37,9 +37,9 @@ raise session/r4 code="host error" at=session+6:9 pos=4:37
 call session/r4.c4 op=console.write args=["read {name: " & quote & "shape" & quote & ", error: {code: " & quote & "host error" & quote & ", capability: " & quote & "InspectRoot" & quote & ", operation: " & quote & "shape" & quote & "}}"]
 prop session/r4 object=<object InspectRoot "root"> name=z op=get value={z: 2, a: 1, "$sessionFunction": "ordinary"}
 call session/r4.c5 op=console.write args=["read {name: " & quote & "z" & quote & ", value: {z: 2, a: 1, " & quote & "$sessionFunction" & quote & ": " & quote & "ordinary" & quote & "}}"]
-seg session/r4 start delivery=d4 handler=entry4:to: clause=1 fuel=612 alloc=3669 state=0 end=return
-run session/r4 outcome=completed delivery=d4 handler=entry4:to: fuel=612 alloc=3669
-pumped state=idle fuel=612
+seg session/r4 start delivery=d4 handler=entry4:to: clause=1 fuel=646 alloc=3669 state=0 end=return
+run session/r4 outcome=completed delivery=d4 handler=entry4:to: fuel=646 alloc=3669
+pumped state=idle fuel=646
 > deliver d5 to=session message=notice
 > pump clock=1970-01-01T00:00:00Z
 call session/r5.c1 op=console.write args=["%notice"]
@@ -101,9 +101,9 @@ raise session/r8 code="host error" at=session+8:9 pos=4:37
 call session/r8.c4 op=console.write args=["read {name: " & quote & "shape" & quote & ", error: {code: " & quote & "host error" & quote & ", capability: " & quote & "InspectRoot" & quote & ", operation: " & quote & "shape" & quote & "}}"]
 prop session/r8 object=<object InspectRoot "root"> name=z op=get value={z: 2, a: 1, "$sessionFunction": "ordinary"}
 call session/r8.c5 op=console.write args=["read {name: " & quote & "z" & quote & ", value: {z: 2, a: 1, " & quote & "$sessionFunction" & quote & ": " & quote & "ordinary" & quote & "}}"]
-seg session/r8 start delivery=d8 handler=entry6:to: clause=1 fuel=784 alloc=4329 state=0 end=return
-run session/r8 outcome=completed delivery=d8 handler=entry6:to: fuel=784 alloc=4329
-pumped state=idle fuel=784
+seg session/r8 start delivery=d8 handler=entry6:to: clause=1 fuel=834 alloc=4329 state=0 end=return
+run session/r8 outcome=completed delivery=d8 handler=entry6:to: fuel=834 alloc=4329
+pumped state=idle fuel=834
 > deliver d9 to=session message=notice
 > pump clock=1970-01-01T00:00:00Z
 call session/r9.c1 op=console.write args=["%notice"]
@@ -122,9 +122,9 @@ pumped state=idle fuel=11
 > pump clock=1970-01-01T00:00:00Z
 raise session/r11 code="object gone" at=session+10:9 pos=4:37
 call session/r11.c1 op=console.write args=["read {name: " & quote & "value" & quote & ", error: {code: " & quote & "object gone" & quote & ", object: <object InspectChild " & quote & "dynamic" & quote & ">}}"]
-seg session/r11 start delivery=d11 handler=entry8:to: clause=1 fuel=188 alloc=896 state=0 end=return
-run session/r11 outcome=completed delivery=d11 handler=entry8:to: fuel=188 alloc=896
-pumped state=idle fuel=188
+seg session/r11 start delivery=d11 handler=entry8:to: clause=1 fuel=202 alloc=896 state=0 end=return
+run session/r11 outcome=completed delivery=d11 handler=entry8:to: fuel=202 alloc=896
+pumped state=idle fuel=202
 > dispose object=<object InspectChild "dynamic">
 > pump clock=1970-01-01T00:00:00Z
 pumped state=idle fuel=0

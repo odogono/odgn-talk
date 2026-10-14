@@ -156,9 +156,10 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		}
 		out := v.Items()[0]
 		m.Scanned = 1
+		comparer := value.NewComparer(false)
 		for _, x := range v.Items()[1:] {
-			m.Scanned++
-			c, e := x.Compare(out)
+			m.Scanned = saturatingAdd(m.Scanned, saturatingAdd(1, comparer.Scanned(x, out)))
+			c, e := comparer.Compare(x, out)
 			if e != nil {
 				err := failure("can't compare", value.Pair{Key: "left", Val: x}, value.Pair{Key: "right", Val: out})
 				return value.Value{}, &err

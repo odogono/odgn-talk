@@ -136,46 +136,9 @@ pub const Value = struct {
     /// regardless of order, Objects and Functions by identity. Containers
     /// are compared from a heap work list, never by native recursion.
     pub fn equal(self: *const Value, other: *const Value) Error!bool {
-        if (try self.shallowEqual(other)) |same| return same;
-        const gpa = self.allocator;
-        var stack: std.ArrayList([2]*const Value) = .empty;
-        defer stack.deinit(gpa);
-        try stack.append(gpa, .{ self, other });
-        while (stack.pop()) |pair| {
-            const x = pair[0];
-            const y = pair[1];
-            if (try x.shallowEqual(y)) |same| {
-                if (!same) return false;
-                continue;
-            }
-            // Children are pushed last first, so they compare in order.
-            switch (x.data) {
-                .list => |xs| {
-                    try stack.ensureUnusedCapacity(gpa, xs.len);
-                    var i = xs.len;
-                    while (i > 0) {
-                        i -= 1;
-                        stack.appendAssumeCapacity(.{ xs[i], y.data.list[i] });
-                    }
-                },
-                .map => |xs| {
-                    try stack.ensureUnusedCapacity(gpa, xs.len);
-                    var i = xs.len;
-                    while (i > 0) {
-                        i -= 1;
-                        stack.appendAssumeCapacity(.{ xs[i].value, y.get(xs[i].key) orelse return false });
-                    }
-                },
-                .range => |r| {
-                    try stack.ensureUnusedCapacity(gpa, 2);
-                    stack.appendAssumeCapacity(.{ r.to, y.data.range.to });
-                    stack.appendAssumeCapacity(.{ r.from, y.data.range.from });
-                },
-                .function => |f| try stack.append(gpa, .{ f.captures, y.data.function.captures }),
-                else => unreachable,
-            }
-        }
-        return true;
+        var comparer = Comparer.init(self.allocator);
+        defer comparer.deinit();
+        return comparer.equal(self, other);
     }
     /// Equality decided at this node, or null when a container's children
     /// decide it: lists and maps of equal length, ranges, and Functions of
@@ -208,8 +171,87 @@ pub const Value = struct {
     /// incompatible Units. A list orders by its first unequal item, so the
     /// descent is a loop.
     pub fn order(self: *const Value, other: *const Value) Error!std.math.Order {
-        var x = self;
-        var y = other;
+        var comparer = Comparer.init(self.allocator);
+        defer comparer.deinit();
+        return comparer.order(self, other);
+    }
+};
+/// One comparison's shared work (#890): equality walks each distinct
+/// pair of nodes once, however many paths reach it, while `scanned`
+/// still counts every logical pair examined, shared parts at each
+/// occurrence. The Fuel charge is logical; the native work is not.
+/// Values are acyclic, so a pair is proven when its children finish,
+/// and no pair is its own descendant.
+pub const Comparer = struct {
+    gpa: std.mem.Allocator,
+    proven: std.AutoHashMap(u128, void),
+    self_scans: std.AutoHashMap(usize, u64),
+
+    pub fn init(gpa: std.mem.Allocator) Comparer {
+        return .{ .gpa = gpa, .proven = .init(gpa), .self_scans = .init(gpa) };
+    }
+    pub fn deinit(self: *Comparer) void {
+        self.proven.deinit();
+        self.self_scans.deinit();
+    }
+    fn pairKey(x: *const Value, y: *const Value) u128 {
+        return (@as(u128, @intFromPtr(x)) << 64) | @as(u128, @intFromPtr(y));
+    }
+    /// Script equality over a heap work list, skipping pairs already
+    /// proven equal within this comparison.
+    pub fn equal(self: *Comparer, a: *const Value, b: *const Value) Error!bool {
+        const Entry = struct { x: *const Value, y: *const Value, finish: bool = false };
+        const gpa = self.gpa;
+        var stack: std.ArrayList(Entry) = .empty;
+        defer stack.deinit(gpa);
+        try stack.append(gpa, .{ .x = a, .y = b });
+        while (stack.pop()) |entry| {
+            const x = entry.x;
+            const y = entry.y;
+            if (entry.finish) {
+                try self.proven.put(pairKey(x, y), {});
+                continue;
+            }
+            if (x == y or self.proven.contains(pairKey(x, y))) continue;
+            if (try x.shallowEqual(y)) |same| {
+                if (!same) return false;
+                continue;
+            }
+            try stack.append(gpa, .{ .x = x, .y = y, .finish = true });
+            // Children are pushed last first, so they compare in order.
+            switch (x.data) {
+                .list => |xs| {
+                    try stack.ensureUnusedCapacity(gpa, xs.len);
+                    var i = xs.len;
+                    while (i > 0) {
+                        i -= 1;
+                        stack.appendAssumeCapacity(.{ .x = xs[i], .y = y.data.list[i] });
+                    }
+                },
+                .map => |xs| {
+                    try stack.ensureUnusedCapacity(gpa, xs.len);
+                    var i = xs.len;
+                    while (i > 0) {
+                        i -= 1;
+                        stack.appendAssumeCapacity(.{ .x = xs[i].value, .y = y.get(xs[i].key) orelse return false });
+                    }
+                },
+                .range => |r| {
+                    try stack.ensureUnusedCapacity(gpa, 2);
+                    stack.appendAssumeCapacity(.{ .x = r.to, .y = y.data.range.to });
+                    stack.appendAssumeCapacity(.{ .x = r.from, .y = y.data.range.from });
+                },
+                .function => |f| try stack.append(gpa, .{ .x = f.captures, .y = y.data.function.captures }),
+                else => unreachable,
+            }
+        }
+        return true;
+    }
+    /// Script ordering. A list orders by its first unequal item, so the
+    /// descent is a loop over this Comparer's equality.
+    pub fn order(self: *Comparer, a: *const Value, b: *const Value) Error!std.math.Order {
+        var x = a;
+        var y = b;
         while (true) {
             if (x.kind() != y.kind()) return error.CantCompare;
             return switch (x.data) {
@@ -217,17 +259,17 @@ pub const Value = struct {
                 .quantity => |q| blk: {
                     const r = y.data.quantity;
                     if (!q.unit.compatible(r.unit)) return error.CantCompare;
-                    break :blk Decimal.order(try q.unit.comparisonBase(self.allocator, q.number), try r.unit.comparisonBase(self.allocator, r.number));
+                    break :blk Decimal.order(try q.unit.comparisonBase(a.allocator, q.number), try r.unit.comparisonBase(a.allocator, r.number));
                 },
                 .text => |s| std.mem.order(u8, s, y.data.text), // UTF-8 preserves scalar order.
                 .bytes => |s| std.mem.order(u8, s, y.data.bytes),
                 .list => |xs| {
                     const ys = y.data.list;
                     const n = @min(xs.len, ys.len);
-                    for (xs[0..n], ys[0..n]) |a, b| {
-                        if (try a.equal(b)) continue;
-                        x = a;
-                        y = b;
+                    for (xs[0..n], ys[0..n]) |p, q| {
+                        if (try self.equal(p, q)) continue;
+                        x = p;
+                        y = q;
                         break;
                     } else return std.math.order(xs.len, ys.len);
                     continue;
@@ -247,7 +289,203 @@ pub const Value = struct {
             };
         }
     }
+    /// What comparing a value with itself scans: every logical pair in
+    /// it. An equal pair scans this much, from either side. Shared
+    /// parts are measured once and counted at each occurrence.
+    pub fn selfScan(self: *Comparer, v: *const Value) Error!u64 {
+        if (self.self_scans.get(@intFromPtr(v))) |n| return n;
+        const gpa = self.gpa;
+        var pending: std.ArrayList(*const Value) = .empty;
+        defer pending.deinit(gpa);
+        var order_list: std.ArrayList(*const Value) = .empty;
+        defer order_list.deinit(gpa);
+        var seen: std.AutoHashMap(usize, void) = .init(gpa);
+        defer seen.deinit();
+        try pending.append(gpa, v);
+        while (pending.pop()) |next| {
+            const id = @intFromPtr(next);
+            if (self.self_scans.contains(id) or seen.contains(id)) continue;
+            try seen.put(id, {});
+            try order_list.append(gpa, next);
+            try appendScanChildren(gpa, next, &pending);
+        }
+        var i = order_list.items.len;
+        while (i > 0) {
+            i -= 1;
+            const value = order_list.items[i];
+            var total: u64 = 0;
+            switch (value.data) {
+                .text => |t| {
+                    var at: usize = 0;
+                    while (at < t.len) {
+                        total += 1;
+                        at = unicode.grapheme.end(t, at);
+                    }
+                },
+                .bytes => |b| total = b.len,
+                .list => |items| for (items) |child| {
+                    total +|= 1 +| self.self_scans.get(@intFromPtr(child)).?;
+                },
+                .map => |pairs| for (pairs) |p| {
+                    total +|= 1 +| self.self_scans.get(@intFromPtr(p.value)).?;
+                },
+                .range => |r| {
+                    total = self.self_scans.get(@intFromPtr(r.from)).? +| self.self_scans.get(@intFromPtr(r.to)).?;
+                },
+                .function => |f| total = self.self_scans.get(@intFromPtr(f.captures)).?,
+                else => {},
+            }
+            try self.self_scans.put(@intFromPtr(value), total);
+        }
+        return self.self_scans.get(@intFromPtr(v)).?;
+    }
+    /// The logical pairs a comparison of `a` with `b` examines, through
+    /// the first that differs, at every depth (chapter 8, the `compare`
+    /// rate). Only the first differing path is descended; equal parts
+    /// contribute their self-scan.
+    pub fn scanned(self: *Comparer, a: *const Value, b: *const Value) Error!u64 {
+        var total: u64 = 0;
+        var x = a;
+        var y = b;
+        while (true) {
+            if (x.kind() != y.kind()) return total;
+            switch (x.data) {
+                .text => |s| {
+                    const t = y.data.text;
+                    var i: usize = 0;
+                    var j: usize = 0;
+                    var n: u64 = 0;
+                    while (i < s.len and j < t.len) {
+                        const ei = unicode.grapheme.end(s, i);
+                        const ej = unicode.grapheme.end(t, j);
+                        n += 1;
+                        if (!std.mem.eql(u8, s[i..ei], t[j..ej])) break;
+                        i = ei;
+                        j = ej;
+                    }
+                    return total +| n;
+                },
+                .bytes => |s| {
+                    const t = y.data.bytes;
+                    for (0..@min(s.len, t.len)) |k| if (s[k] != t[k]) return total +| (k + 1);
+                    return total +| @min(s.len, t.len);
+                },
+                .list => |xs| {
+                    const ys = y.data.list;
+                    const n = @min(xs.len, ys.len);
+                    var descended = false;
+                    for (xs[0..n], ys[0..n]) |p, q| {
+                        total +|= 1;
+                        if (try self.equal(p, q)) {
+                            total +|= try self.selfScan(p);
+                        } else {
+                            x = p;
+                            y = q;
+                            descended = true;
+                            break;
+                        }
+                    }
+                    if (!descended) return total;
+                },
+                .map => |xs| {
+                    const count = @min(xs.len, y.data.map.len);
+                    var descended = false;
+                    for (xs[0..count]) |entry| {
+                        total +|= 1;
+                        const other = y.get(entry.key) orelse return total;
+                        if (try self.equal(entry.value, other)) {
+                            total +|= try self.selfScan(entry.value);
+                        } else {
+                            x = entry.value;
+                            y = other;
+                            descended = true;
+                            break;
+                        }
+                    }
+                    if (!descended) return total;
+                },
+                .range => |r| {
+                    if (try self.equal(r.from, y.data.range.from)) {
+                        total +|= try self.selfScan(r.from);
+                        x = r.to;
+                        y = y.data.range.to;
+                    } else {
+                        x = r.from;
+                        y = y.data.range.from;
+                    }
+                },
+                .function => |f| {
+                    const g = y.data.function;
+                    if (f.identity != g.identity or !std.mem.eql(u8, f.home, g.home)) return total;
+                    x = f.captures;
+                    y = g.captures;
+                },
+                else => return total,
+            }
+        }
+    }
 };
+fn appendScanChildren(gpa: std.mem.Allocator, v: *const Value, out: *std.ArrayList(*const Value)) Error!void {
+    switch (v.data) {
+        .list => |items| try out.appendSlice(gpa, items),
+        .map => |pairs| for (pairs) |p| try out.append(gpa, p.value),
+        .range => |r| {
+            try out.append(gpa, r.from);
+            try out.append(gpa, r.to);
+        },
+        .function => |f| try out.append(gpa, f.captures),
+        else => {},
+    }
+}
+/// A deep scan's summary (chapter 7's `any` scan): whether a value
+/// holds no Function Value, and how many logical nodes the scan
+/// examines, shared parts at each occurrence.
+pub const DeepScan = struct { clean: bool, nodes: u64 };
+/// Measures `v` for a deep scan, walking each distinct node once
+/// however often it is shared (#890). The caller keeps the cache
+/// across the scans of one check.
+pub fn deepScanOf(gpa: std.mem.Allocator, v: *const Value, cache: *std.AutoHashMapUnmanaged(usize, DeepScan)) Error!DeepScan {
+    if (cache.get(@intFromPtr(v))) |scan| return scan;
+    var pending: std.ArrayList(*const Value) = .empty;
+    defer pending.deinit(gpa);
+    var order_list: std.ArrayList(*const Value) = .empty;
+    defer order_list.deinit(gpa);
+    var seen: std.AutoHashMapUnmanaged(usize, void) = .empty;
+    defer seen.deinit(gpa);
+    try pending.append(gpa, v);
+    while (pending.pop()) |next| {
+        const id = @intFromPtr(next);
+        if (cache.contains(id) or seen.contains(id)) continue;
+        try seen.put(gpa, id, {});
+        try order_list.append(gpa, next);
+        switch (next.data) {
+            .list => |items| try pending.appendSlice(gpa, items),
+            .map => |pairs| for (pairs) |p| try pending.append(gpa, p.value),
+            else => {},
+        }
+    }
+    var i = order_list.items.len;
+    while (i > 0) {
+        i -= 1;
+        const value = order_list.items[i];
+        var scan: DeepScan = .{ .clean = value.data != .function, .nodes = 1 };
+        switch (value.data) {
+            .list => |items| for (items) |child| {
+                const info = cache.get(@intFromPtr(child)).?;
+                scan.clean = scan.clean and info.clean;
+                scan.nodes +|= info.nodes;
+            },
+            .map => |pairs| for (pairs) |p| {
+                const info = cache.get(@intFromPtr(p.value)).?;
+                scan.clean = scan.clean and info.clean;
+                scan.nodes +|= info.nodes;
+            },
+            else => {},
+        }
+        try cache.put(gpa, @intFromPtr(value), scan);
+    }
+    return cache.get(@intFromPtr(v)).?;
+}
 /// The logical size of `v` (chapter 8, Logical sizes). Containers and
 /// Functions carry their contents' size, so this never walks children.
 pub fn logicalSize(v: *const Value) u64 {
@@ -842,6 +1080,37 @@ test "equality never errors and ordering follows Value Semantics" {
         defer y.release();
         try std.testing.expectError(error.CantCompare, x.order(y));
     }
+}
+test "shared values compare in distinct pairs and scan in logical pairs" {
+    const gpa = std.testing.allocator;
+    // [v, v] shared 30 deep: 2^30 logical paths, 31 distinct nodes (#890).
+    const build = struct {
+        fn shared(alloc: std.mem.Allocator, leaf: []const u8) !*Value {
+            var v = try scalar(alloc, .{ .number = try Decimal.parse(leaf) });
+            for (0..30) |_| {
+                const next = try list(alloc, &.{ v, v });
+                v.release();
+                v = next;
+            }
+            return v;
+        }
+    }.shared;
+    const a = try build(gpa, "1");
+    defer a.release();
+    const b = try build(gpa, "1");
+    defer b.release();
+    const c = try build(gpa, "2");
+    defer c.release();
+    try std.testing.expect(try a.equal(b));
+    try std.testing.expect(!(try a.equal(c)));
+    try std.testing.expectEqual(std.math.Order.lt, try a.order(c));
+    var comparer = Comparer.init(gpa);
+    defer comparer.deinit();
+    // Each list pair counts 1 plus its items' counts: 2^31 - 2 in all.
+    try std.testing.expectEqual(@as(u64, (1 << 31) - 2), try comparer.scanned(a, b));
+    try std.testing.expectEqual(@as(u64, (1 << 31) - 2), try comparer.selfScan(a));
+    // A differing leaf is found down the first path: 30 item pairs.
+    try std.testing.expectEqual(@as(u64, 30), try comparer.scanned(a, c));
 }
 test "map copy-on-write and preserved insertion order" {
     const gpa = std.testing.allocator;

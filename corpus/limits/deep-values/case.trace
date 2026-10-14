@@ -9,19 +9,19 @@
 > load deep identity=46f64ef818cc3827987320d15443bccab5eb406bff8df6068b657266178c6b2e
 > deliver d1 to=deep message=build args=[1000]
 > pump clock=2026-09-30T09:00:00Z
-seg deep/r1 start delivery=d1 handler=build clause=1 fuel=30063 alloc=77182209 state=65120 end=return
-run deep/r1 outcome=completed delivery=d1 handler=build fuel=30063 alloc=77182209
-pumped state=idle fuel=30063
+seg deep/r1 start delivery=d1 handler=build clause=1 fuel=30311 alloc=77182209 state=65120 end=return
+run deep/r1 outcome=completed delivery=d1 handler=build fuel=30311 alloc=77182209
+pumped state=idle fuel=30311
 > deliver d2 to=deep message=check
 > pump clock=2026-09-30T09:00:01Z
-seg deep/r2 start delivery=d2 handler=check clause=1 fuel=60 alloc=130241 state=65104 end=return
-run deep/r2 outcome=completed delivery=d2 handler=check fuel=60 alloc=130241
-pumped state=idle fuel=60
+seg deep/r2 start delivery=d2 handler=check clause=1 fuel=246 alloc=130241 state=65104 end=return
+run deep/r2 outcome=completed delivery=d2 handler=check fuel=246 alloc=130241
+pumped state=idle fuel=246
 > deliver d3 to=deep message=roundTrip args=[150]
 > pump clock=2026-09-30T09:00:02Z
-seg deep/r3 start delivery=d3 handler=roundTrip clause=1 fuel=451954 alloc=8266419 state=65152 end=return
-run deep/r3 outcome=completed delivery=d3 handler=roundTrip fuel=451954 alloc=8266419
-pumped state=idle fuel=451954
+seg deep/r3 start delivery=d3 handler=roundTrip clause=1 fuel=451972 alloc=8266419 state=65152 end=return
+run deep/r3 outcome=completed delivery=d3 handler=roundTrip fuel=451972 alloc=8266419
+pumped state=idle fuel=451972
 > deliver d4 to=deep message=build args=[1000] limits={allocPerRun: 100000}
 > pump clock=2026-09-30T09:00:03Z
 fault deep/r4 limit=alloc at=deep:17 pos=16:9

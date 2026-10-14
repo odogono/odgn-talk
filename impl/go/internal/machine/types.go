@@ -120,29 +120,36 @@ func empty(v value.Value) bool {
 	return false
 }
 func membership(a, b value.Value, folded bool) (bool, int64, *value.Value) {
+	comparer := value.NewComparer(folded)
 	switch b.Kind {
 	case value.List:
-		for j, x := range b.Items() {
-			if equal(a, x, folded) {
-				return true, int64(j + 1), nil
+		var scanned int64
+		for _, x := range b.Items() {
+			scanned++
+			if comparer.Equal(a, x) {
+				return true, saturatingAdd(scanned, comparer.SelfScan(a)), nil
 			}
+			scanned = saturatingAdd(scanned, comparer.Scanned(a, x))
 		}
-		return false, int64(len(b.Items())), nil
+		return false, scanned, nil
 	case value.Map:
 		if a.Kind != value.Text {
 			e := wrong("text", a)
 			return false, 0, &e
 		}
-		for j, p := range b.Entries() {
+		var scanned int64
+		for _, p := range b.Entries() {
 			key := p.Key
 			if folded {
 				key = fold(text(key)).Text()
 			}
-			if equal(a, text(key), folded) {
-				return true, int64(j + 1), nil
+			scanned++
+			if comparer.Equal(a, text(key)) {
+				return true, saturatingAdd(scanned, comparer.SelfScan(a)), nil
 			}
+			scanned = saturatingAdd(scanned, comparer.Scanned(a, text(key)))
 		}
-		return false, int64(len(b.Entries())), nil
+		return false, scanned, nil
 	case value.Range:
 		lo, e := a.Compare(b.Items()[0])
 		if e != nil {

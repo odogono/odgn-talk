@@ -486,15 +486,13 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 	case generated.OpEqual, generated.OpNotEqual, generated.OpLess, generated.OpGreater, generated.OpLessOrEqual, generated.OpGreaterOrEqual:
 		b, a := pop(), pop()
 		folded := len(args) > 0
-		m.Scanned = compared(a, b, folded)
+		comparer := value.NewComparer(folded)
+		m.Scanned = comparer.Scanned(a, b)
 		if i.Op == generated.OpEqual || i.Op == generated.OpNotEqual {
-			eq := equal(a, b, folded)
+			eq := comparer.Equal(a, b)
 			push(boolean(eq == (i.Op == generated.OpEqual)))
 		} else {
-			c, e := fold(a).Compare(fold(b))
-			if !folded {
-				c, e = a.Compare(b)
-			}
+			c, e := comparer.Compare(a, b)
 			if e != nil {
 				bad(comparisonError(a, b))
 			} else {
@@ -1054,41 +1052,7 @@ func fold(v value.Value) value.Value {
 	return v
 }
 func compared(a, b value.Value, folded bool) int64 {
-	if folded && a.Kind == value.Text && b.Kind == value.Text {
-		a, b = fold(a), fold(b)
-	}
-	if a.Kind != b.Kind {
-		return 0
-	}
-	switch a.Kind {
-	case value.Text:
-		as, _ := coreunicode.Boundaries(a.Text())
-		bs, _ := coreunicode.Boundaries(b.Text())
-		for j := 0; j < min(len(as), len(bs))-1; j++ {
-			if a.Text()[as[j]:as[j+1]] != b.Text()[bs[j]:bs[j+1]] {
-				return int64(j + 1)
-			}
-		}
-		return int64(min(len(as), len(bs)) - 1)
-	case value.Bytes:
-		for j := 0; j < min(len(a.Bytes()), len(b.Bytes())); j++ {
-			if a.Bytes()[j] != b.Bytes()[j] {
-				return int64(j + 1)
-			}
-		}
-		return int64(min(len(a.Bytes()), len(b.Bytes())))
-	case value.List:
-		for j := 0; j < min(len(a.Items()), len(b.Items())); j++ {
-			if !equal(a.Items()[j], b.Items()[j], folded) {
-				return int64(j + 1)
-			}
-		}
-		return int64(min(len(a.Items()), len(b.Items())))
-	case value.Map:
-		_, scanned := compareMap(a, b, folded)
-		return scanned
-	}
-	return 0
+	return value.NewComparer(folded).Scanned(a, b)
 }
 
 // waitNanos accepts exact durations and rounds to whole nanoseconds, half even.

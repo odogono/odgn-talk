@@ -1,0 +1,21 @@
+# shared-values: `build` shares [v, v] eighteen deep and checks equality,
+# ordering, membership and min/max between two independently built
+# copies and a third differing at its leaves. `compareCheap` under a
+# small Fuel per Run faults at the comparison: its logical pairs are
+# charged however cheaply the value was built (spec chapter 8, the
+# `compare` rate; #890).
+
+> load shared identity=be0e06b5365f555c69a1db41957b9b9dc42aff4253f77cee850a565053821979
+> deliver d1 to=shared message=build args=[18]
+> pump clock=2026-10-14T09:00:00Z
+seg shared/r1 start delivery=d1 handler=build clause=1 fuel=655996 alloc=138410168 state=128 end=return
+run shared/r1 outcome=completed delivery=d1 handler=build fuel=655996 alloc=138410168
+pumped state=idle fuel=655996
+> deliver d2 to=shared message=compareCheap args=[18] limits={fuelPerRun: 20000}
+> pump clock=2026-10-14T09:00:01Z
+fault shared/r2 limit=fuel at=shared:84 pos=24:10
+seg shared/r2 start delivery=d2 handler=compareCheap clause=1 fuel=379 alloc=50330376 state=128 end=fault
+run shared/r2 outcome=limit-fault delivery=d2 handler=compareCheap limit=fuel fuel=379 alloc=50330376
+pumped state=idle fuel=379
+> vars
+vars shared checks=[true, true, true, true, true, true, true]

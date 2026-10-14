@@ -1,0 +1,18 @@
+# shared-values: A Value built by repeated self-sharing, `put [v, v] into
+# v`, has exponentially many logical paths through linearly many nodes.
+# Equality, ordering, membership and min/max charge for every logical
+# pair they examine, shared parts at each occurrence, so comparing one
+# is Fuel work in its logical size however cheaply it was built; a Core
+# may compare each shared pair once, but charges for each occurrence
+# (spec chapter 8, the `compare` rate; #890).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "shared"
+source = "shared.talk"
+limits = { allocPerRun = 268435456 }

@@ -15,32 +15,32 @@
 # Pump. It ends without a veto, which allows the move.
 > decide d1 to=<object piece "knight"> message=beforeMove args=[{from: "c3", to: "d5"}]
 > pump clock=2026-09-30T10:00:00Z
-seg knight/r1 start delivery=d1 handler=beforeMove clause=1 fuel=34 alloc=0 state=68 end=pass
-run knight/r1 outcome=completed delivery=d1 handler=beforeMove fuel=34 alloc=0
-seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=26 alloc=16 state=58 end=return
+seg knight/r1 start delivery=d1 handler=beforeMove clause=1 fuel=37 alloc=0 state=68 end=pass
+run knight/r1 outcome=completed delivery=d1 handler=beforeMove fuel=37 alloc=0
+seg board/r1 start delivery=d1 handler=beforeMove clause=1 fuel=27 alloc=16 state=58 end=return
 decided d1 verdict=allowed
-run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=26 alloc=16
-pumped state=idle fuel=60
+run board/r1 outcome=completed delivery=d1 handler=beforeMove fuel=27 alloc=16
+pumped state=idle fuel=64
 
 # f6 is blocked. The knight passes, and the board vetoes: the veto names the
 # board's Run, not the knight's.
 > decide d2 to=<object piece "knight"> message=beforeMove args=[{from: "d5", to: "f6"}]
 > pump clock=2026-09-30T10:00:01Z
-seg knight/r2 start delivery=d2 handler=beforeMove clause=1 fuel=34 alloc=0 state=68 end=pass
-run knight/r2 outcome=completed delivery=d2 handler=beforeMove fuel=34 alloc=0
-seg board/r2 start delivery=d2 handler=beforeMove clause=1 fuel=16 alloc=0 state=58 end=veto value="That square is blocked."
+seg knight/r2 start delivery=d2 handler=beforeMove clause=1 fuel=36 alloc=0 state=68 end=pass
+run knight/r2 outcome=completed delivery=d2 handler=beforeMove fuel=36 alloc=0
+seg board/r2 start delivery=d2 handler=beforeMove clause=1 fuel=18 alloc=0 state=58 end=veto value="That square is blocked."
 decided d2 verdict=vetoed vetoes=[{script: "board", run: "board/r2", reason: "That square is blocked."}]
-run board/r2 outcome=completed delivery=d2 handler=beforeMove fuel=16 alloc=0
-pumped state=idle fuel=50
+run board/r2 outcome=completed delivery=d2 handler=beforeMove fuel=18 alloc=0
+pumped state=idle fuel=54
 
 # The pawn has no Owning Script, so its Decision goes to the board's mailbox
 # and the board holds its Verdict from the start.
 > decide d3 to=<object piece "pawn"> message=beforeMove args=[{from: "a2", to: "a3"}]
 > pump clock=2026-09-30T10:00:02Z
-seg board/r3 start delivery=d3 handler=beforeMove clause=1 fuel=26 alloc=16 state=58 end=return
+seg board/r3 start delivery=d3 handler=beforeMove clause=1 fuel=27 alloc=16 state=58 end=return
 decided d3 verdict=allowed
-run board/r3 outcome=completed delivery=d3 handler=beforeMove fuel=26 alloc=16
-pumped state=idle fuel=26
+run board/r3 outcome=completed delivery=d3 handler=beforeMove fuel=27 alloc=16
+pumped state=idle fuel=27
 
 > vars
 vars board blocked=["f6"] allowed=2
