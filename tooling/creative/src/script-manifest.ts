@@ -1,6 +1,11 @@
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
-import { coreVersions } from '@odgn/northtalk';
+import {
+  coreVersions,
+  parseSourceRecovering,
+  syntaxSelector,
+  type SyntaxNode,
+} from '@odgn/northtalk';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = Project | Page | Element;
@@ -102,6 +107,44 @@ const messages = [
   'textChanged',
 ].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
 
+// Folio also delivers messages authored Scripts send to each other. Declare
+// an owner's named Handlers alongside the built-in events; the Host event
+// list alone would incorrectly flag custom Handlers as unknown messages.
+const scriptMessages = (source: string) => {
+  const declared = new Map(messages.map(message => [message.name, message]));
+  const nodes: SyntaxNode[] = [parseSourceRecovering(source).tree];
+  while (nodes.length) {
+    const node = nodes.pop()!;
+    if (node.rule === 'Handler') {
+      const message = node.children.find(
+        child => child.kind === 'node' && child.rule === 'MessageName',
+      );
+      if (message?.kind === 'node') {
+        const name = syntaxSelector(
+          node,
+          source.slice(message.start, message.end).trim(),
+        );
+        const arity = node.children.filter(
+          child => child.kind === 'node' && child.rule === 'Pattern',
+        ).length;
+        if (!declared.has(name)) {
+          declared.set(name, {
+            name,
+            args: Array<string>(arity).fill('value'),
+          });
+        }
+      }
+    } else if (node.rule !== 'Error') {
+      nodes.push(
+        ...node.children.filter(
+          (child): child is SyntaxNode => child.kind === 'node',
+        ),
+      );
+    }
+  }
+  return [...declared.values()];
+};
+
 /** Every Script binds all Pages and only its own Page's Elements. */
 export const scriptManifest = (project: Project, owner: ScriptOwner) => {
   const page = scriptPage(project, owner);
@@ -128,6 +171,6 @@ export const scriptManifest = (project: Project, owner: ScriptOwner) => {
     ],
     objectKinds,
     grants,
-    messages,
+    messages: scriptMessages(owner.script ?? ''),
   };
 };

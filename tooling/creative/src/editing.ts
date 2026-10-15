@@ -122,6 +122,11 @@ export const HANDLES: readonly Handle[] = [
   'w',
 ];
 
+export type PageHandle = 'w' | 'e' | 'sw' | 's' | 'se';
+export const PAGE_HANDLES: readonly PageHandle[] = ['w', 'e', 'sw', 's', 'se'];
+export const MIN_PAGE_WIDTH = 240;
+export const MIN_PAGE_HEIGHT = 160;
+
 type Box = Pick<Element, 'height' | 'left' | 'top' | 'width'>;
 
 /** The smallest size a resize leaves; a line may be flat in either direction. */
@@ -545,6 +550,37 @@ export class StackEditor {
             element,
             resizeBox(origin, handle, dx, dy, minimumSize(element)),
           );
+        });
+      },
+    };
+  }
+
+  /**
+   * Resize the Page around its horizontal centre, keeping its top fixed.
+   * Width is Project-wide; only the showing Page's height changes.
+   */
+  startPageResize(handle: PageHandle): Gesture | undefined {
+    if (this.readOnly) {
+      return undefined;
+    }
+    const page = this.page;
+    const width = this.project.designWidth;
+    const height = page.height;
+    const edit = this.startEdit();
+    return {
+      finish: edit.finish,
+      to: (dx, dy) => {
+        edit.change(() => {
+          if (handle.includes('e') || handle.includes('w')) {
+            const change = handle.includes('w') ? -dx : dx;
+            this.project.designWidth = Math.max(
+              MIN_PAGE_WIDTH,
+              Math.round(width + change * 2),
+            );
+          }
+          if (handle.includes('s')) {
+            page.height = Math.max(MIN_PAGE_HEIGHT, Math.round(height + dy));
+          }
         });
       },
     };

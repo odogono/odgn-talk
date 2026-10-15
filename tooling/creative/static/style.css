@@ -215,6 +215,22 @@ button:disabled {
   top: 50%;
   cursor: ew-resize;
 }
+.page-handles {
+  --scale: 1;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.page-handles .handle {
+  --size: 12px;
+  padding: 0;
+  touch-action: none;
+  z-index: 1;
+}
+.page-handles .handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* The Pages strip. */
 #strip {
@@ -378,13 +394,31 @@ button:disabled {
   font-family: ui-monospace, monospace;
 }
 .script-window {
+  display: flex;
+  flex-direction: column;
   width: min(28rem, 100vw);
+  height: 26rem;
+  min-width: min(20rem, 100vw);
+  min-height: min(16rem, calc(100dvh - var(--window-top, 140px) - 8px));
+  max-width: calc(100vw - var(--window-left, 0px));
   max-height: calc(100dvh - var(--window-top, 140px) - 8px);
   overflow: auto;
+  resize: both;
+}
+.script-window > * {
+  flex-shrink: 0;
+}
+.script-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .script-editor .cm-editor {
-  height: 18rem;
+  height: 100%;
   font-size: 13px;
+}
+.script-editor .cm-scroller {
+  overflow: auto;
 }
 .cm-scroller {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

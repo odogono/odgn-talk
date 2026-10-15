@@ -13,6 +13,7 @@ import {
   ELEMENT_KINDS,
 } from '../src/model';
 import { scriptManifest } from '../src/script-manifest';
+import { createSampleProject } from '../src/sample';
 
 const fixture = () => {
   const project = createProject('Story');
@@ -81,6 +82,57 @@ const language = (manifest: unknown, text: string) => {
     ).diagnostics;
   return { server, diagnostics, sent, uri };
 };
+
+test('sample Project custom messages have no unknown-message hints', async () => {
+  const { project } = await createSampleProject();
+  for (const owner of [
+    project,
+    ...project.pages.flatMap(p => [p, ...p.elements]),
+  ]) {
+    const { diagnostics } = language(
+      scriptManifest(project, owner),
+      owner.script ?? '',
+    );
+    expect(diagnostics().filter(d => d.code === 'unknown-message')).toEqual([]);
+  }
+});
+
+test('custom messages retain selectors and arity without declaring strings or fallback handlers', () => {
+  const { project, page } = fixture();
+  for (const owner of [project, page, page.elements[0]!]) {
+    owner.script = `on found clue
+end found
+on move piece to square
+end move
+on found clue where clue is nothing
+end found
+on any message m
+end any message
+on keyDown key
+end keyDown
+constant example = "on fake"
+`;
+    const data = scriptManifest(project, owner);
+    const manifest = readManifest(data);
+    expect(data.messages.filter(m => m.name === 'found')).toEqual([
+      { name: 'found', args: ['value'] },
+    ]);
+    expect(data.messages.find(m => m.name === 'move:to:')!.args).toEqual([
+      'value',
+      'value',
+    ]);
+    expect(data.messages.find(m => m.name === 'keyDown')!.args).toEqual([
+      'text',
+    ]);
+    expect(manifest.messages).not.toContain('fake');
+    expect(manifest.messages).not.toContain('any');
+    expect(
+      language(data, owner.script)
+        .diagnostics()
+        .filter(d => d.code === 'unknown-message'),
+    ).toEqual([]);
+  }
+});
 
 test('LSP diagnoses misspelt names and refreshes after renames on each Page', () => {
   const { project, page, other } = fixture();

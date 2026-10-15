@@ -11,6 +11,31 @@ The authored Project model and its zip file format — pure TypeScript with no U
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
 
+## Page size
+
+Click empty space on the Page or desk, or press Escape, to select the Page.
+Drag either side handle to change the Project's shared design width, the
+bottom handle to change only this Page's height, or a bottom corner for both.
+The Page stays horizontally centred with its top fixed; there are no top
+resize handles. Existing Elements keep their positions and sizes.
+The minimum is 240 pixels wide and 160 pixels high, in both handles and Info.
+Each drag is one undoable edit and autosaves with the Project. Handles are
+hidden while an Element is selected, in read-only Projects and during Play.
+Focused handles also accept arrow keys, with Shift for ten pixels.
+
+Browser regression checks cover handles, pointer and keyboard resizing,
+centering, minimums, history and read-only states. With the server running:
+
+```sh
+bun build tooling/creative/tests/page-resize.browser.ts --outdir tooling/creative/dist --target browser
+sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/page-resize-test.html
+```
+
+Open `/page-resize-test.html` and run
+`await import('/page-resize.browser.js').then(m => m.runBrowserTests())`.
+Every result must have `passed: true`; repeat at a narrow viewport to check
+scaled Pages. Reload before repeating and rebuild after an app rebuild.
+
 ## Scripts
 
 Double-click an Element to open its Script. For text, Shift-double-click opens
@@ -19,6 +44,8 @@ Script, including text being edited. Info also offers **Edit Script**, or
 **Edit Page Script** and **Edit Project Script** when nothing is selected.
 Opening a Script already on the desk brings its window forward. Each window's
 Message Path links to its Page and Project Scripts.
+Drag the bottom-right corner to resize a Script window; the editor grows and
+shrinks with it and scrolls long Scripts within the window.
 
 Edits change the authored Project immediately and share its undo/redo,
 autosave and portable export/import. The Script editor's ⌘/Ctrl-Z and redo
@@ -37,6 +64,9 @@ show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
 properties. Scripts execute only in Play.
+The Manifests include built-in events and each Script's authored message
+handlers, so custom messages between Scripts do not produce unknown-message
+hints. Editing handlers refreshes the Manifest alongside the source.
 
 ### Script Recipes
 
