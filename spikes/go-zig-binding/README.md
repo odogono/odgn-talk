@@ -120,12 +120,12 @@ A passing sidecar matrix does not prove embedded-wazero execution.
 ## Public Capability artifact refresh, 2026-10-15
 
 [Raw output](measurements-public-callbacks.txt) records three repetitions with
-artifact source `81b588628ba861db2cbef571d154be56fd8b3c79`, SHA-256
-`7500ad56edaac1bbc5aa4bac5ef8353f1ba9e66ec93d52886cee083b2a58cd16`, and
-public-adapter/native-Go revision `ba7a5679`. On Darwin/arm64 Apple M5, Go 1.27.2,
+artifact source `bba90b5036893b3b4b042483908812d07c565fba`, SHA-256
+`067857e5b1404ee31566a6440823963c1652c3120cde2f3235bebe05af2ec157`, and
+public-adapter/native-Go revision `bba90b50`. On Darwin/arm64 Apple M5, Go 1.27.2,
 wazero 1.12.0 and `CGO_ENABLED=0`, median immediate-call run averages are
-**3.698 µs native Go vs 31.310 µs probe (8.5×)**, cold compile/runtime/close
-**612.9 ms**, and cached instantiation/close **126.5 µs**. This remains the
+**3.808 µs native Go vs 32.975 µs probe (8.7×)**, cold compile/runtime/close
+**628.3 ms**, and cached instantiation/close **123.0 µs**. This remains the
 independent probe's workload, with no `crossing-trace-v1` opt-in; it does not
 measure the public adapter, tail latency or an accepted performance limit.
 Earlier measurement files retain their own artifact provenance.
