@@ -1,5 +1,7 @@
 # The Message Layer measured for an Elixir Host and a C Host
 
+Historical measurement record. The current Message Layer reactor is the Zig `wasm32-wasi` build; the Go WASI entry point is retired ([ADR 0089](../adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native Go sidecar remains. Commands and support claims below describe the measured revisions.
+
 Answers [#554](https://github.com/odogono/odgn-talk/issues/554), part of [#532](https://github.com/odogono/odgn-talk/issues/532). It judges the Message Layer measurements from [#552](https://github.com/odogono/odgn-talk/issues/552) and [#553](https://github.com/odogono/odgn-talk/issues/553) against [the thresholds set in #532](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407), and records what they mean for a third Core ([#122](https://github.com/odogono/odgn-talk/issues/122), [ADR 0071](../adr/0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md)).
 
 ## Outcome

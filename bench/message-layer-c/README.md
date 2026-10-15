@@ -1,6 +1,6 @@
 # Message Layer from a C Host
 
-This standalone C Host measures the Go Core's WASI Preview 1 reactor through
+This standalone C Host measures the Zig Core's `wasm32-wasi` reactor through
 the Wasmtime C API for [#552](https://github.com/odogono/odgn-talk/issues/552),
 part of [#532](https://github.com/odogono/odgn-talk/issues/532). It uses the
 ordinary Message Layer, including interim `op` / `op-result` exchanges.
@@ -14,34 +14,32 @@ record the first, descriptive run, with raw samples and provenance.
 
 ## Run
 
-Install Go 1.27, a C11 compiler, Python 3, Brotli's CLI, and Wasmtime's **C API**
+Install Zig 0.17.0, a C11 compiler, Python 3, Brotli's CLI, and Wasmtime's **C API**
 headers and library. On macOS, `brew install wasmtime brotli` provides the latter
 two. On Linux, set `WASMTIME_PREFIX` to the unpacked Wasmtime C API release
 directory. The CLI alone is insufficient. RSS measurement supports macOS and
 Linux with `/proc`.
 
-From the repository root, after the reactor in #551 is available:
+From the repository root:
 
 ```sh
 bench/message-layer-c/run.sh
 ```
 
-The runner builds with `GOOS=wasip1 GOARCH=wasm`, `-buildmode=c-shared`,
-`-trimpath -buildvcs=false -ldflags='-s -w'` (the Go guide's stripped release build),
-then compiles and runs the C Host. It downloads cJSON 1.7.19 from upstream into
+The runner builds with `zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi`
+in `impl/zig`, then compiles and runs the C Host against
+`.cache/zig-wasi/bin/talk.wasm`. It downloads cJSON 1.7.19 from upstream into
 ignored `out/cjson/` and verifies both source files' SHA-256 hashes. The MIT
 licence is included in the upstream source headers.
 
-The same path argument measures the Zig Core's `wasm32-wasi` reactor
-([#635](https://github.com/odogono/odgn-talk/issues/635)), built with
-`zig build -Dtarget=wasm32-wasi` in `impl/zig`, beside the Go one.
+The Go WASI entry point is retired ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)); the native Go sidecar is unchanged. Go-reactor saves cannot be restored on Zig. Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until those Groups can be drained or rebuilt.
 
 To measure an existing reactor without changing this checkout:
 
 ```sh
 REACTOR_REVISION='<commit or explicit uncommitted-source description>' \
-REACTOR_SOURCE='/absolute/path/to/main_wasip1.go' \
-  bench/message-layer-c/run.sh /absolute/path/to/messagelayer.wasm
+REACTOR_SOURCE='/absolute/path/to/message.zig' \
+  bench/message-layer-c/run.sh /absolute/path/to/talk.wasm
 ```
 
 `REACTOR_SOURCE` optionally records that source file's hash; the WASM hash is
@@ -79,7 +77,7 @@ change the sizes.
 ## Bridge for the fault and containment suites
 
 ```sh
-TALK_MEMORY=/tmp/memory out/host --serve out/messagelayer.wasm 1073741824
+TALK_MEMORY=/tmp/memory out/host --serve ../../.cache/zig-wasi/bin/talk.wasm 1073741824
 ```
 
 serves one instance on stdin and stdout in the sidecar's framing (a 4-byte
@@ -136,9 +134,9 @@ instance. Representative Run Reports are recorded. Any Wasmtime error/trap,
 wrong error/outcome, or failed reuse check causes a nonzero exit.
 
 These inputs provide evidence, not a proof about all hostile Scripts. The Store
-has a 256 MiB linear-memory backstop, separate from Script budgets. Go runtime
-OOM at that backstop can trap and is not tested as a Script fault. Capability
+has a 256 MiB linear-memory backstop, separate from Script budgets. Exhausting
+it can trap and is not tested as a Script fault. Capability
 timing covers immediate Operations, not external I/O, suspending Operations,
-restore, or unsupported messages. See the [Go guide](../../impl/go/README.md#message-layer)
+restore, or unsupported messages. See the [Zig guide](../../impl/zig/README.md#building-and-testing)
 for the supported message set. Wasmtime setup follows its
 [WASIp1 C example](https://docs.wasmtime.dev/examples-wasip1.html).

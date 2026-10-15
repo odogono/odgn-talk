@@ -1,14 +1,14 @@
 defmodule TalkHost.Artifacts do
   @moduledoc """
-  The Go Core builds this Host loads, kept in the repository's `.cache/`.
-  `build!/0` makes them with the commands in impl/go/README.md.
+  The Zig reactor and Go sidecar this Host loads, kept in the repository's `.cache/`.
+  `build!/0` makes them with the commands in the Core guides.
   """
 
   def root, do: Path.expand("../../..", File.cwd!())
 
-  @doc "The reactor module, the Go build by default; TALK_WASM selects another (issue #635)."
-  def wasm, do: System.get_env("TALK_WASM") || go_wasm()
-  defp go_wasm, do: Path.join(root(), ".cache/messagelayer.wasm")
+  @doc "The Zig reactor module by default; TALK_WASM selects another build."
+  def wasm, do: System.get_env("TALK_WASM") || zig_wasm()
+  defp zig_wasm, do: Path.join(root(), ".cache/zig-wasi/bin/talk.wasm")
   def sidecar, do: Path.join(root(), ".cache/messagelayer")
   @doc "The minimal C Host, built by bench/message-layer-c/run.sh."
   def c_host, do: Path.join(root(), "bench/message-layer-c/out/host")
@@ -18,13 +18,9 @@ defmodule TalkHost.Artifacts do
     File.mkdir_p!(Path.join(root(), ".cache"))
     out = fn path -> Path.relative_to(path, Path.join(root(), "impl/go"), force: true) end
 
-    go!(%{"GOOS" => "wasip1", "GOARCH" => "wasm"}, [
-      "-buildmode=c-shared",
-      "-ldflags=-s -w",
-      "-o",
-      out.(go_wasm()),
-      "./cmd/messagelayer-wasi"
-    ])
+    {_, 0} =
+      System.cmd("zig", ["build", "-Dtarget=wasm32-wasi", "--prefix", "../../.cache/zig-wasi"],
+        cd: Path.join(root(), "impl/zig"), into: IO.stream())
 
     go!(%{}, ["-o", out.(sidecar()), "./cmd/messagelayer"])
 

@@ -4,8 +4,10 @@
 # ///
 """Check the Message Layer reactor in wasmtime and measure its payload.
 
-Build as documented in impl/go/README.md, then run:
-    uv run tools/wasi/check.py .cache/messagelayer.wasm
+Build the Zig reactor as documented in impl/zig/README.md, then run:
+    uv run tools/wasi/check.py
+
+An optional path selects another reactor build.
 
 The Python bindings use the wasmtime C API:
 https://bytecodealliance.github.io/wasmtime-py/
@@ -22,6 +24,9 @@ from pathlib import Path
 
 import brotli
 import wasmtime
+
+
+DEFAULT_WASM = Path(__file__).resolve().parents[2] / ".cache/zig-wasi/bin/talk.wasm"
 
 
 class Host:
@@ -53,7 +58,7 @@ class Host:
         assert pointer > 0 and size > 0, (pointer, size)
         assert pointer + size <= self.memory.data_len(self.store)
         # Copy the reply before another export can replace it. Memory.read/write
-        # fetch the current memory base, including after a Go memory.grow.
+        # fetch the current memory base, including after memory.grow.
         return bytes(self.memory.read(self.store, pointer, pointer + size))
 
     def frame(self, data):
@@ -90,8 +95,8 @@ def check_instance_memory(engine, module):
     # #585: compiling the stdlib on the first Group used to permanently grow
     # each fresh instance past 16 MiB, even for an empty Handler.
     measurements = []
-    # Exercise independent Go map seeds: randomized stdlib compilation order
-    # could push some otherwise identical instances over the limit.
+    # Exercise fresh independent instances, including any variation in
+    # compilation order and allocation.
     for _ in range(12):
         h = Host(engine, module)
         h.ok("hello", protocol=1)
@@ -139,7 +144,7 @@ def check(engine, module):
             assert h.frame(frame[:-1])["err"]["kind"] == "protocol error"
             assert h.ok("add", a=20, b=22)["value"] == 42
 
-    # Force memory growth while keeping a reply reachable through Go's GC.
+    # Force memory growth while keeping a reply available to the Host.
     # JSON whitespace pads a valid frame without growing Script state.
     # Use a fresh instance: the deep-input checks may already have grown h's
     # memory beyond the size this allocation is meant to cross.
@@ -397,9 +402,9 @@ def check_hostile_loads(engine, module):
 
 
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: uv run tools/wasi/check.py path/to/messagelayer.wasm")
-    path = Path(sys.argv[1])
+    if len(sys.argv) > 2:
+        sys.exit("usage: uv run tools/wasi/check.py [path/to/talk.wasm]")
+    path = Path(sys.argv[1]) if len(sys.argv) == 2 else DEFAULT_WASM
     payload = path.read_bytes()
     engine = wasmtime.Engine()
     module = wasmtime.Module(engine, payload)

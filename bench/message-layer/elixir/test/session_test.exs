@@ -9,7 +9,10 @@ defmodule TalkHost.SessionTest do
     assert memory["maxBytes"] <= 16 * 1024 * 1024, inspect(memory)
   end
 
-  for mod <- [TalkHost.Transport.Sidecar, TalkHost.Transport.Wasi] do
+  transports = [Transport.Sidecar, Transport.Wasi] ++
+    if(File.exists?(TalkHost.Artifacts.c_host()), do: [Transport.Bridge], else: [])
+
+  for mod <- transports do
     test "#{inspect(mod)} answers an Operation inside a Pump" do
       {:ok, t} = unquote(mod).start([])
 
@@ -19,7 +22,12 @@ defmodule TalkHost.SessionTest do
         )
 
       {s, hello} = Session.ok!(s, "hello", %{"protocol" => 1})
-      assert hello["core"] =~ ~r{^(go|zig)/}
+      if unquote(mod) == TalkHost.Transport.Sidecar do
+        assert hello["core"] =~ ~r{^go/}
+      else
+        expected = if System.get_env("TALK_WASM"), do: ~r{^(go|zig)/}, else: ~r{^zig/}
+        assert hello["core"] =~ expected
+      end
 
       {s, _} =
         Session.ok!(s, "define-capability", %{

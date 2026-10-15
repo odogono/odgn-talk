@@ -1,5 +1,7 @@
 # Message layer and suspension under `wasip1`, for an Elixir Host
 
+Historical measurement record. The current Message Layer reactor is the Zig `wasm32-wasi` build; the Go WASI entry point is retired ([ADR 0089](../adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native Go sidecar remains. Commands and support claims below describe the measured revisions.
+
 Answers [#73](https://github.com/odogono/odgn-talk/issues/73), part of [#1](https://github.com/odogono/odgn-talk/issues/1). It proposes a message set that maps one-to-one onto the embedding interface settled in [#72](https://github.com/odogono/odgn-talk/issues/72) ([`talk.go`](../../spec/embedding/talk.go), [`talk.ts`](../../spec/embedding/talk.ts)). It also checks how the Go Core suspends a Run under `wasip1`, and compares WASI and a sidecar for an Elixir Host. The throwaway checks live in [`spikes/message-layer/`](../../spikes/message-layer/), and their raw output is in [`results.txt`](../../spikes/message-layer/results.txt).
 
 ## Summary

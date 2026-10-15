@@ -8,7 +8,7 @@ on:
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
-      - 'tools/wasi/zig.py'
+      - 'tools/wasi/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
   push:
@@ -19,7 +19,7 @@ on:
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
-      - 'tools/wasi/zig.py'
+      - 'tools/wasi/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
 
@@ -119,4 +119,32 @@ jobs:
           zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
           python -m pip install wasmtime==49.0.0 brotli==1.2.0
           python ../../tools/wasi/zig.py ../../.cache/zig-wasi/bin/talk.wasm
+          python ../../tools/wasi/check.py ../../.cache/zig-wasi/bin/talk.wasm
         working-directory: impl/zig
+
+  # One job per workload; exercise Limit Fault rollback and post-fault reuse
+  # through the Message Layer at the conformance-minimum limits.
+  wasi-memory:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workload: [local, persistent]
+        item: [text, nothing]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build the WASI Message Layer reactor
+        timeout-minutes: 10
+        run: |
+          zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+          python -m pip install wasmtime==49.0.0 brotli==1.2.0
+        working-directory: impl/zig
+      - name: Check WASI List memory at conformance minimums
+        timeout-minutes: 6
+        run: python tools/wasi/list_memory.py --profile minimum --workload ${{ matrix.workload }} --item ${{ matrix.item }}
