@@ -6,7 +6,7 @@
 
 uv run tools/wasi/list_memory.py
 uv run tools/wasi/list_memory.py --wasm path/to/talk.wasm
-uv run tools/wasi/list_memory.py --sidecar .cache/messagelayer
+uv run tools/wasi/list_memory.py --sidecar impl/zig/zig-out/bin/messagelayer
 
 Each profile/workload gets a fresh process or WASI instance, without Trace.
 WASI linear memory is monotonic, so its final size includes the growth peak.

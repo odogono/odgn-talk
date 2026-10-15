@@ -42,6 +42,20 @@ pub fn build(b: *std.Build) void {
         });
         library.installHeader(b.path("include/talk.h"), "talk.h");
         b.installArtifact(library);
+
+        // Native Message Layer transport, sharing the reactor's Session and
+        // dispatcher. This step needs neither Go nor a WASI runtime.
+        const sidecar_module = b.createModule(.{
+            .root_source_file = b.path("src/sidecar.zig"),
+            .target = target,
+            .optimize = optimize,
+            .strip = true,
+        });
+        sidecar_module.addImport("northtalk", core);
+        const sidecar = b.addExecutable(.{ .name = "messagelayer", .root_module = sidecar_module });
+        const install_sidecar = b.addInstallArtifact(sidecar, .{});
+        b.getInstallStep().dependOn(&install_sidecar.step);
+        b.step("sidecar", "Build the native framed Message Layer sidecar").dependOn(&install_sidecar.step);
     }
 
     const corpus_module = b.createModule(.{

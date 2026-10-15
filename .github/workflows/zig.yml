@@ -9,6 +9,8 @@ on:
       - 'tools/zig/**'
       - 'tools/unicode/**'
       - 'tools/wasi/**'
+      - 'tools/sidecar/**'
+      - 'bench/message-layer/elixir/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
   push:
@@ -20,10 +22,71 @@ on:
       - 'tools/zig/**'
       - 'tools/unicode/**'
       - 'tools/wasi/**'
+      - 'tools/sidecar/**'
+      - 'bench/message-layer/elixir/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
 
 jobs:
+  # Build all four supported native targets, then execute on matching runners.
+  # Cross-build evidence alone never establishes runtime compatibility.
+  sidecar-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-linux-musl, aarch64-linux-musl, x86_64-macos, aarch64-macos]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - run: zig build sidecar -Dtarget=${{ matrix.target }}
+        working-directory: impl/zig
+
+  sidecar:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: zig build sidecar
+        working-directory: impl/zig
+      - run: python tools/sidecar/check.py impl/zig/zig-out/bin/messagelayer
+      - name: Check native process List memory and post-fault reuse
+        run: |
+          python -m pip install wasmtime==49.0.0 brotli==1.2.0
+          python tools/wasi/list_memory.py --sidecar impl/zig/zig-out/bin/messagelayer
+
+  sidecar-elixir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28'
+          elixir-version: '1.19'
+      - run: mix deps.get
+        working-directory: bench/message-layer/elixir
+      - run: mix run -e 'TalkHost.Artifacts.build!()'
+        working-directory: bench/message-layer/elixir
+      - run: mix test
+        working-directory: bench/message-layer/elixir
+      - name: Check Linux cgroup containment and post-fault reuse
+        run: |
+          mix run -e 'profiles = TalkHost.Containment.sidecar(3); results = %{"containment" => %{"sidecar" => profiles}}; verdicts = TalkHost.Report.verdicts(results, %{}); IO.inspect(profiles, limit: :infinity); if Enum.any?(verdicts, &(not &1["pass"])), do: System.halt(1)'
+        working-directory: bench/message-layer/elixir
+
   # The generated tables, formatting and talk.h's names. Only this job needs
   # Go and Bun.
   generated:

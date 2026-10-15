@@ -32,7 +32,7 @@ in `impl/zig`, then compiles and runs the C Host against
 ignored `out/cjson/` and verifies both source files' SHA-256 hashes. The MIT
 licence is included in the upstream source headers.
 
-The Go WASI entry point is retired ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)); the native Go sidecar is unchanged. Go-reactor saves cannot be restored on Zig. Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until those Groups can be drained or rebuilt.
+The Go WASI entry point is retired ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)); the native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-reactor saves cannot be restored on Zig. Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until those Groups can be drained or rebuilt.
 
 To measure an existing reactor without changing this checkout:
 

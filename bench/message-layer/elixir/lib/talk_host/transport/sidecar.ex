@@ -1,6 +1,6 @@
 defmodule TalkHost.Transport.Sidecar do
   @moduledoc """
-  The Go Core's sidecar on an Erlang Port. `{:packet, 4}` is exactly the
+  The Zig Core's sidecar on an Erlang Port. `{:packet, 4}` is exactly the
   sidecar's framing: a 4-byte big-endian length, then the JSON.
 
   Options:

@@ -1,6 +1,7 @@
 //! The Message Layer (spec chapter 9): the language-neutral form of the
-//! embedding interface, as JSON frames over `talk_buffer`/`talk_send` in
-//! the `wasm32-wasi` build. The layer is a Zig Host of talk.zig's API; a
+//! embedding interface, as JSON frames over native stdio or
+//! `talk_buffer`/`talk_send` in the `wasm32-wasi` build.
+//! The layer is a Zig Host of talk.zig's API; a
 //! Pump that reaches a Host Operation or property pauses at the crossing
 //! (machine.Group.resumePump) and its `need` is the Pump's reply, which
 //! the Host answers with the matching result under the same `ref`.

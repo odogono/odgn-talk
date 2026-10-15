@@ -1,0 +1,15 @@
+test_deep_json_values_and_pending_exchange_recovery (__main__.Checks.test_deep_json_values_and_pending_exchange_recovery) ... ok
+test_effect_cleanup_release_and_paused_input (__main__.Checks.test_effect_cleanup_release_and_paused_input) ... ok
+test_frame_limit_and_bounded_oversize_drain (__main__.Checks.test_frame_limit_and_bounded_oversize_drain) ... ok
+test_frames_refs_and_clean_eof (__main__.Checks.test_frames_refs_and_clean_eof) ... ok
+test_immediate_value_encoding_round_trip (__main__.Checks.test_immediate_value_encoding_round_trip) ... ok
+test_paused_stop_cancel_and_rewind_roll_back (__main__.Checks.test_paused_stop_cancel_and_rewind_roll_back) ... ok
+test_property_stop_lands_before_conversion (__main__.Checks.test_property_stop_lands_before_conversion) ... ok
+test_save_restore_pending_call_on_fresh_process (__main__.Checks.test_save_restore_pending_call_on_fresh_process) ... ok
+test_suspending_start_accepts_answer_and_charge_then_next_pump (__main__.Checks.test_suspending_start_accepts_answer_and_charge_then_next_pump) ... ok
+test_truncation_has_failure_status_and_stderr (__main__.Checks.test_truncation_has_failure_status_and_stderr) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.270s
+
+OK

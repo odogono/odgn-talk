@@ -1,0 +1,7 @@
+# The native Message Layer sidecar uses Zig
+
+The native stdio sidecar uses the Zig Core, sharing the WASI reactor's Session and dispatcher ([#965](https://github.com/odogono/odgn-talk/issues/965)). This supersedes only [ADR 0089](0089-the-zig-build-serves-the-message-layer-reactor.md)'s native-Go-sidecar retention clause: maintaining a second language implementation behind the same Message Layer adds work without preserving a transport feature. The executable retains four-byte big-endian JSON framing, bounded oversized-frame draining and one flushed reply per request; it requires neither Go nor a WASI runtime.
+
+The Go sidecar command and its private adapter are retired. The public Go Core, its facilities and comparison baseline remain; [#884](https://github.com/odogono/odgn-talk/issues/884)'s wider callback compatibility, platform and explicitly approved performance gates still govern any full Core retirement. This decision adds no performance limits and does not approve that retirement. Historical Go measurements remain evidence for their named artifacts.
+
+Saves stay per Core ([ADR 0008](0008-same-core-save-restore.md)). Start fresh Zig Groups from source and Host-owned data; no Go-to-Zig save converter is supplied. Hosts that need to drain old Go Groups must retain their previous Go executable. Use `hello` to identify the Core before selecting saves. The replacement continues to support Zig save/restore.

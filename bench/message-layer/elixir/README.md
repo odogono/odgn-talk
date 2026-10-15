@@ -5,7 +5,7 @@ An Elixir Host for the [Message Layer](../../../spec/09-embedding.md#the-message
 It drives the Cores through two transports:
 
 - **Wasmex:** the Zig [`wasm32-wasi` reactor](../../../impl/zig/README.md#building-and-testing), in Wasmex 0.15.1 (wasmtime 47), compiled with Cranelift `opt_level: :speed`.
-- **Sidecar:** the native Go [`cmd/messagelayer`](../../../impl/go/cmd/messagelayer/) on an Erlang Port, whose `{:packet, 4}` framing matches the sidecar's exactly.
+- **Sidecar:** the native Zig [`messagelayer`](../../../impl/zig/README.md#native-message-layer-sidecar) on an Erlang Port, whose `{:packet, 4}` framing matches the sidecar's exactly.
 
 It also runs its containment and fault suites against the [minimal C Host](../../message-layer-c/) on wasmtime, through that Host's `--serve` bridge on a Port, so the C Host faces the same cases (#554). That transport, `c, wasmtime`, runs when `bench/message-layer-c/out/host` exists; build it with `bench/message-layer-c/run.sh`. Its latency and memory are measured inside the C Host, since the Port would add to them.
 
@@ -21,13 +21,14 @@ mix test                                # round trips; includes C when out/host 
 ```
 
 `--build` builds the Zig reactor at `.cache/zig-wasi/bin/talk.wasm` and the
-native and Linux Go sidecars. Wasmex and the C bridge use this Zig module by
+native and Linux Zig sidecars at `.cache/zig-native/bin/messagelayer` and
+`.cache/zig-linux-{arm64,amd64}/bin/messagelayer`. Wasmex and the C bridge use this Zig module by
 default. Set `TALK_WASM` to an explicit artifact path for another build; it
 selects the module to measure without changing what `--build` builds.
 
-The Go WASI entry point is retired ([ADR 0089](../../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). Go-reactor saves cannot be restored by Zig; start fresh Groups from source and Host-owned data, or retain the previous Go runtime/artifact until those Groups are drained or rebuilt. The native Go sidecar stays available.
+The Go WASI entry point is retired ([ADR 0089](../../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). Go-reactor saves cannot be restored by Zig; start fresh Groups from source and Host-owned data, or retain the previous Go runtime/artifact until those Groups are drained or rebuilt. The native Go sidecar is also retired ([ADR 0090](../../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)); Go-sidecar saves require the same fresh-save cutover. The replacement supports Zig save/restore through the framed transport.
 
-It needs Elixir 1.18 or later, Zig 0.17.0 and Go 1.27. The sidecar's memory containment runs the Linux build in a container, so it needs Docker. Without Docker, that row is reported as skipped. A full run takes about half an hour on an Apple M5. Latency figures are sensitive to other load, so the report records the load average at the start; run it on a quiet machine.
+It needs Elixir 1.18 or later, Zig 0.17.0. The sidecar's memory containment runs the Linux build in a container, so it needs Docker. Without Docker, that row is reported as skipped. A full run takes about half an hour on an Apple M5. Latency figures are sensitive to other load, so the report records the load average at the start; run it on a quiet machine.
 
 ## What it measures
 

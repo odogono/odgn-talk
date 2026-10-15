@@ -336,7 +336,7 @@ Use a category name as the filter, for example `bun run bench --filter numbers`.
 | [`zig/`](zig/) | The native C Host over the Zig Core, driven by `ts/src/measure-zig.ts`. |
 | [`ts/`](ts/) | The TS runner with [mitata](https://github.com/evanwashere/mitata), and `bun run bench` itself. |
 | [`peers/`](peers/) | Each Benchmark's port in each Peer Language, as `<language>/<category>/<name>.<ext>`, and the CPython runner. |
-| [`message-layer/elixir/`](message-layer/elixir/) | An Elixir Host that measures the Go Core's Message Layer over Wasmex and the sidecar, for [#532](https://github.com/odogono/odgn-talk/issues/532). It runs on its own, outside `bun run bench`. |
+| [`message-layer/elixir/`](message-layer/elixir/) | An Elixir Host that measures the Zig Core's Message Layer over Wasmex and the native sidecar, for [#532](https://github.com/odogono/odgn-talk/issues/532). It runs on its own, outside `bun run bench`. |
 | `results/` | Committed results, one pair of files per run. |
 
 ## Adding a Benchmark

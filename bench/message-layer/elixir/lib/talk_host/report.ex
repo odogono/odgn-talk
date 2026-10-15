@@ -141,11 +141,10 @@ defmodule TalkHost.Report do
     | Commit | `#{env["commit"]}` |
     | Machine | #{env["cpu"]}, #{env["os"]}#{if l = env["loadAverage"], do: ", load average #{l} at the start", else: ""} |
     | Elixir | #{env["elixir"]}, OTP #{env["otp"]} |
-    | Wasmex | #{env["wasmex"]} (wasmtime #{env["wasmtime"]}), Cranelift `opt_level: :speed` |
-    | Go toolchain | #{env["go"]} |
+    | Wasmex | #{env["wasmex"]} (wasmtime #{env["wasmtime"]}), Cranelift `opt_level: :speed` |#{if env["go"], do: "\n| Go toolchain | #{env["go"]} |", else: ""}
     | Zig toolchain | #{env["zig"] || "not recorded"} |
     | Docker | #{env["docker"] || "not available"} |
-    | Reactor | `#{r["payload"]["sha256"]}` |
+    | Reactor | `#{r["payload"]["sha256"]}` |#{if env["sidecarSha256"], do: "\n| Native sidecar | `#{env["sidecarSha256"]}` |", else: ""}
     | Samples | #{sizes(r["sizes"])} |
 
     ## Verdict
