@@ -89,6 +89,25 @@ record paired forward-index improvements, scaling, negative-index limits and
 the fresh four-runner text comparison for
 [#927](https://github.com/odogono/odgn-talk/issues/927).
 
+The [Zig Text construction measurements](results/2026-10-15-zig-text-growth.md)
+record trusted concatenation, exact ASCII metadata, growth sweeps and the
+four-runner comparison for [#957](https://github.com/odogono/odgn-talk/issues/957).
+For paired Text construction and length/growth sweeps, build two native Hosts
+as above and run:
+
+```sh
+python3 bench/zig/text-growth.py <before-host> <after-host> --before-revision <sha> --profiles <directory> --out <results.json>
+```
+
+This includes every supported manifest workload and ASCII/Unicode probes that
+vary the append count and operand length. All timing pairs finish before
+counting-allocator probes and optional macOS CPU captures. Outputs, Fuel and
+logical allocation must agree. Explicit Text byte-write volumes are calculated
+from the generated growth inputs and reported separately from measured Group
+allocation requests; they are not memory-bus counters.
+Use `--profiles-only` with an existing `--out` file and the same binaries and
+runtime sources to capture profiles separately without repeating timings.
+
 For paired Character indexing measurements, including fixed-index probes that
 exclude modulo and equality, build two native Hosts as above and run:
 

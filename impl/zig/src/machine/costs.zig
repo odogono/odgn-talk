@@ -133,8 +133,8 @@ inline fn measure(which: u8, v: *const Value) u64 {
     return switch (which) {
         rates.measure_size => size(v),
         rates.measure_contents => contents(v),
-        rates.measure_characters => if (v.data == .text) unicode.grapheme.count(v.data.text) else 0,
-        rates.measure_scalars => if (v.data == .text) scalars(v.data.text) else 0,
+        rates.measure_characters => if (v.data == .text) model.textCharacters(v) else 0,
+        rates.measure_scalars => if (v.data == .text) (if (v.text_ascii) v.data.text.len else scalars(v.data.text)) else 0,
         rates.measure_utf8 => if (v.data == .text) v.data.text.len else 0,
         rates.measure_bytes => if (v.data == .bytes) v.data.bytes.len else 0,
         rates.measure_items => items(v),
@@ -222,6 +222,31 @@ test "resolved instruction rates agree with keyed charging and dynamic overrides
                     try std.testing.expectEqualDeep(charge(key, &m), chargeInstruction(op, &m));
                 }
             }
+        }
+    }
+}
+
+test "Text metadata preserves exact scalar and Character measures and concat charges" {
+    const gpa = std.testing.allocator;
+    const samples = [_][]const u8{ "", "\r", "\n", "\r\n", "abcdefghijklmnop\r\n", "e\u{301}", "\u{1100}\u{1161}", "👨‍👩‍👧🇬🇧", "q́" };
+    for (samples) |left| {
+        for (samples) |right| {
+            const l = try model.text(gpa, left);
+            defer l.release();
+            const r = try model.text(gpa, right);
+            defer r.release();
+            const joined = try model.concatTextValues(gpa, l, r);
+            defer joined.release();
+            // Independent decoding and segmentation, with no metadata use.
+            var it: unicode.utf8.Iterator = .{ .bytes = joined.data.text };
+            var count: u64 = 0;
+            while (it.next() != null) count += 1;
+            try std.testing.expectEqual(count, measure(rates.measure_scalars, joined));
+            try std.testing.expectEqual(@as(u64, unicode.grapheme.count(joined.data.text)), measure(rates.measure_characters, joined));
+            const m: Measures = .{ .result = joined };
+            const expected: Charge = .{ .fuel = 3 + (count + 15) / 16, .alloc = 16 + joined.data.text.len };
+            try std.testing.expectEqualDeep(expected, charge("concat", &m));
+            try std.testing.expectEqualDeep(expected, chargeInstruction(.concat, &m));
         }
     }
 }
