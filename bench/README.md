@@ -279,7 +279,13 @@ two-second CPU samples of both binaries after timings finish. The JSON records
 overlapping inclusive sample categories; compressed raw reports retain the
 call trees and offsets for attribution. The
 [instruction bookkeeping report](results/2026-10-14-zig-instruction-bookkeeping.md)
-records the compile-time rate-lookup experiment and its limits.
+records the compile-time rate-lookup experiment and its limits. The
+[Cost Model formula measurements](results/2026-10-14-zig-cost-evaluation.md)
+compare generated static evaluators with the term interpreter, including the
+full native regression check and the remaining AppleScript gaps. For separate
+captures of charging in arithmetic and Quantity workloads, pass
+`--profiles-only --profile-filter numbers/add --profile-filter numbers/quantity`
+alongside `--profiles`; repeated profile filters select alternatives.
 
 The Go runner is an ordinary `testing.B` benchmark, so the Go tools work on it directly:
 

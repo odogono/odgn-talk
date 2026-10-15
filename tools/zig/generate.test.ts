@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
-import { emitCatalogue, emitOpcodes } from './generate';
+import costs from '../../spec/data/costs.toml';
+import { compileCostModel } from '../costs/compile';
+import { emitCatalogue, emitCostTerms, emitOpcodes } from './generate';
 import { zigField, zigString } from './output';
 import { emitZigUnicode } from '../unicode/generate-zig';
 
@@ -66,4 +68,42 @@ test('Zig Unicode tables sort mappings and enumerate property values', () => {
   expect(result).toContain('pub const Grapheme = enum {\n    CR,\n};');
   expect(result).toContain('pub const combining = [_]Range(u8){');
   expect(result).toContain('pub const pictographic = [_]Span{');
+});
+
+test('Zig charge specialization follows source formulas and keeps dynamic fallback', () => {
+  const source = {
+    ...costs,
+    rate: [
+      { key: 'one', fuel: '3 + scanned / 8', alloc: 'size(result)' },
+      { key: 'same', fuel: '3 + scanned / 8', alloc: 'size(result)' },
+      { key: 'factor', fuel: '2 * count / 3 + count / 3' },
+      {
+        key: 'builtin.example',
+        fuel: '3 + scanned / 8',
+        alloc: 'size(result)',
+      },
+      { key: 'unknown', fuel: 'frames' },
+      { key: 'argument', fuel: 'size(x1)' },
+    ],
+  };
+  const generated = emitCostTerms(compileCostModel(source));
+  const rows = generated.split('pub const Charge')[0]!;
+  expect(rows.match(/\.formula = \.f1/g)).toHaveLength(2);
+  for (const key of ['builtin.example', 'unknown', 'argument']) {
+    expect(
+      rows.split('\n').find(line => line.includes(`.key = "${key}"`)),
+    ).toContain('.formula = null');
+  }
+  expect(generated).toContain(
+    '(((@as(u64, 2) * m.count) + 3 - 1) / 3) + ((m.count + 3 - 1) / 3)',
+  );
+  expect(generated).toContain('measureValue(measure_size, v)');
+  const changed = emitCostTerms(
+    compileCostModel({
+      ...source,
+      rate: [{ key: 'one', fuel: '7 + scanned / 16' }],
+    }),
+  );
+  expect(changed).toContain('@as(u64, 7)');
+  expect(changed).toContain('(m.scanned + 16 - 1) / 16');
 });

@@ -546,6 +546,15 @@ the run loop never recurses on Script depth. Every instruction is charged by
 its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 0 terms, with `scanned` reported by the operation itself, and Persistent State
 is measured over the Script Variables and the mailbox at a Segment's end.
+
+Opcode rates are resolved at compile time. The Cost Model generator also emits
+shared evaluators for static Fuel/allocation formula pairs, selecting measures
+and folding constants ahead of execution while retaining each term's own
+rounding and checked arithmetic. Dynamic Built-ins, keyed charges and formulas
+with unsupported measures or subjects use the term interpreter, which remains
+the differential-test oracle. Extra Host Fuel and allocation are still added
+at each charge; the machine owns refusal ordering and instruction boundaries.
+
 `talk_script_counters` reads a Script's lifetime Fuel, allocation, Runs and
 Limit Faults, live Runs included, with its current Persistent State and
 mailbox, and writes the `counters` record without draining Host Inputs.

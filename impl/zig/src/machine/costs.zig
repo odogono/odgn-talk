@@ -43,7 +43,7 @@ pub const Measures = struct {
     }
 };
 
-pub const Charge = struct { fuel: u64, alloc: u64 };
+pub const Charge = rates.Charge;
 
 fn find(key: []const u8) ?*const rates.CostRate {
     var lo: usize = 0;
@@ -63,7 +63,7 @@ fn find(key: []const u8) ?*const rates.CostRate {
 pub fn charge(key: []const u8, m: *const Measures) Charge {
     var buf: [64]u8 = undefined;
     const full = if (m.builtin.len > 0) std.fmt.bufPrint(&buf, "builtin.{s}", .{m.builtin}) catch key else key;
-    return chargeRate(find(full), m);
+    return chargeRateGeneric(find(full), m);
 }
 
 // Resolve the generated opcode-to-rate mapping once, without adding metadata
@@ -78,7 +78,8 @@ const instruction_rates = blk: {
 
 /// The same charge at an instruction boundary, with its static rate already
 /// resolved. Built-ins still use their measured name; restricted refusals use
-/// their own rate. Formula evaluation and extra Host charges stay shared.
+/// their own rate. Generated evaluators specialize static formulas; dynamic
+/// Built-ins and unsupported formulas keep the generic evaluator.
 pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
     if (m.builtin.len > 0) return charge(if (m.restricted_refusal) "restricted-refusal" else m.builtin, m);
     const rate = if (m.restricted_refusal) comptime find("restricted-refusal") else instruction_rates[@backingInt(op)];
@@ -86,6 +87,17 @@ pub fn chargeInstruction(op: Opcode, m: *const Measures) Charge {
 }
 
 fn chargeRate(found: ?*const rates.CostRate, m: *const Measures) Charge {
+    const rate = found orelse return .{ .fuel = 0, .alloc = 0 };
+    if (rate.formula) |formula| {
+        const base = rates.evaluateSpecialized(formula, m, measure);
+        return .{ .fuel = base.fuel + m.fuel_extra, .alloc = base.alloc + m.alloc_extra };
+    }
+    return chargeRateGeneric(rate, m);
+}
+
+// The term interpreter remains independent of generated evaluators: it is the
+// oracle for differential tests and the fallback for keyed/dynamic charging.
+fn chargeRateGeneric(found: ?*const rates.CostRate, m: *const Measures) Charge {
     const rate = found orelse return .{ .fuel = 0, .alloc = 0 };
     return .{ .fuel = evaluate(rate.fuel, m) + m.fuel_extra, .alloc = evaluate(rate.alloc, m) + m.alloc_extra };
 }
@@ -117,7 +129,7 @@ fn evaluate(terms: []const rates.CostTerm, m: *const Measures) u64 {
     return total;
 }
 
-fn measure(which: u8, v: *const Value) u64 {
+inline fn measure(which: u8, v: *const Value) u64 {
     return switch (which) {
         rates.measure_size => size(v),
         rates.measure_contents => contents(v),
@@ -212,4 +224,102 @@ test "resolved instruction rates agree with keyed charging and dynamic overrides
             }
         }
     }
+}
+
+// Compare complete rate pairs, including rates not used by any opcode. The
+// keyed path must remain an interpreter oracle, rather than comparing two
+// calls through the same generated evaluator.
+fn expectRateAgreement(m: *const Measures) !void {
+    for (&rates.cost_rates) |*rate| {
+        try std.testing.expectEqualDeep(chargeRateGeneric(rate, m), chargeRate(rate, m));
+    }
+    try std.testing.expectEqualDeep(chargeRateGeneric(null, m), chargeRate(null, m));
+}
+
+test "every generated rate agrees with the interpreter for independently missing and populated subjects" {
+    const a = std.testing.allocator;
+    var values: std.ArrayList(*Value) = .empty;
+    defer {
+        for (values.items) |v| v.release();
+        values.deinit(a);
+    }
+    try values.append(a, try model.scalar(a, .nothing));
+    try values.append(a, try model.scalar(a, .{ .bool = true }));
+    for ([_][]const u8{ "0", "9999999", "10000000", "99999999", "100000000", "9999999999999999", "10000000000000000", "9999999999999999999999999999999999" }) |decimal| {
+        try values.append(a, try model.scalar(a, .{ .number = try model.Decimal.parse(decimal) }));
+        try values.append(a, try model.quantity(a, try model.Decimal.parse(decimal), "m"));
+    }
+    for ([_]usize{ 0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33 }) |n| {
+        const data = try a.alloc(u8, n);
+        defer a.free(data);
+        @memset(data, 'a');
+        try values.append(a, try model.text(a, data));
+        try values.append(a, try model.bytes(a, data));
+        const children = try a.alloc(*Value, n);
+        defer a.free(children);
+        @memset(children, values.items[0]);
+        try values.append(a, try model.list(a, children));
+    }
+    try values.append(a, try model.text(a, "café👨‍👩‍👧‍👦🇫🇷"));
+    try values.append(a, try model.map(a, &.{ .{ .key = "é", .value = values.items[2] }, .{ .key = "x", .value = values.items[3] } }));
+    const from = try model.scalar(a, .{ .number = try model.Decimal.parse("1") });
+    defer from.release();
+    const to = try model.scalar(a, .{ .number = try model.Decimal.parse("17") });
+    defer to.release();
+    try values.append(a, try model.range(a, from, to));
+    try values.append(a, try model.range(a, to, from));
+    try values.append(a, try model.scalar(a, .{ .pattern = try a.dupe(u8, "[digit]+") }));
+    // All argument prefixes test missing x1/x2/x3 independently of input and
+    // result, and every kind reaches every measure in the generic Built-ins.
+    const args = [_]*Value{ values.items[2], values.items[3], values.items[0] };
+    for (0..values.items.len + 1) |i| {
+        for (0..values.items.len + 1) |j| {
+            var m: Measures = .{
+                .input = if (i == 0) null else values.items[i - 1],
+                .result = if (j == 0) null else values.items[j - 1],
+                .scanned = 17,
+                .count = 33,
+                .steps = 9,
+                .declared = 31,
+                .fuel_extra = 37,
+                .alloc_extra = 41,
+            };
+            try expectRateAgreement(&m);
+            // reached_host and uncharged belong to the caller's boundary
+            // decisions; the evaluator must not silently change their charge.
+            m.reached_host = true;
+            m.uncharged = true;
+            for (0..args.len + 1) |n| {
+                m.args = args[0..n];
+                try expectRateAgreement(&m);
+            }
+        }
+    }
+    for (values.items) |v| {
+        const all_args = [_]*Value{ v, v, v };
+        const m: Measures = .{ .args = &all_args };
+        try expectRateAgreement(&m);
+    }
+}
+
+test "generated rounding, factors, large measures and Host extras preserve checked arithmetic" {
+    for ([_]u64{ 0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, (1 << 56) - 1, (1 << 62) - 1 }) |n| {
+        const m: Measures = .{ .scanned = n, .count = n, .steps = n, .declared = n, .fuel_extra = 43, .alloc_extra = 47 };
+        try expectRateAgreement(&m);
+    }
+    for (&rates.cost_rates) |*rate| {
+        const empty: Measures = .{};
+        const base = chargeRateGeneric(rate, &empty);
+        const m: Measures = .{ .fuel_extra = std.math.maxInt(u64) - base.fuel - 1, .alloc_extra = std.math.maxInt(u64) - base.alloc - 1 };
+        try std.testing.expectEqualDeep(Charge{ .fuel = std.math.maxInt(u64) - 1, .alloc = std.math.maxInt(u64) - 1 }, chargeRate(rate, &m));
+        try std.testing.expectEqualDeep(chargeRateGeneric(rate, &m), chargeRate(rate, &m));
+    }
+    // A failed Host conversion evaluates the pre-result charge again, keeping
+    // declared and drawn Fuel; the machine still owns refusal ordering.
+    const result = try model.text(std.testing.allocator, "result conversion");
+    defer result.release();
+    var m: Measures = .{ .result = result, .declared = 101, .fuel_extra = 103, .alloc_extra = 107, .reached_host = true };
+    try expectRateAgreement(&m);
+    m.result = null;
+    try expectRateAgreement(&m);
 }

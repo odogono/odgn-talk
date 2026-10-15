@@ -33,9 +33,11 @@ copies its union; Quantity remains inline and gets no second allocation.
 ## Reproduction and measurement boundary
 
 Apple M5 (10 cores, 24 GiB), macOS 27.0.1 arm64, Zig 0.17.0 `safe`, Apple clang
-21 with C Host `-O2`, language 1.0-rc.3 and Cost Model 0. The baseline is current
-`main` at `f51ad856`. The measured after is this working tree; source hashes
-and binary hashes identify it in each JSON. No #935/#936 change is included.
+21 with C Host `-O2`, language 1.0-rc.3 and Cost Model 0. The baseline was
+`main` at `f51ad856`. The measured after is the scalar-constructor working tree
+committed as `797d1c63`; source and binary hashes identify it in each JSON.
+No #935/#936 change is included in these timings. Later integration with #935
+does not change the recorded measurement baseline or imply a new speedup claim.
 
 Before editing, the [baseline self-comparison](2026-10-14-zig-scalar-baseline.json)
 recorded three samples per process for loops, calls, addition, Quantities and
