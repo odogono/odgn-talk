@@ -7,7 +7,7 @@ defmodule NorthTalk.MixProject do
       version: "0.1.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-      deps: [{:wasmex, "~> 0.15.1"}]
+      deps: [{:wasmex, "~> 0.15.1"}, {:jason, "~> 1.4"}, {:decimal, "~> 3.2"}]
     ]
   end
 
