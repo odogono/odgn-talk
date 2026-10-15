@@ -1128,7 +1128,10 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
         b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
     }
     if (o.owner) |owner| if (!g.owns(owner)) return .wrong_group;
-    const limits = limitsOf(o.limits) catch return .invalid_value;
+    const limits = limitsOf(o.limits) catch {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
+        return .invalid_value;
+    };
     const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,

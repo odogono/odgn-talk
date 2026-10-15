@@ -898,11 +898,18 @@ static int limits_test(void) {
     talk_load_options refused = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &negative};
     talk_script *script = NULL;
     bad |= talk_load(group, &refused, &script) != TALK_INVALID_VALUE;
+    bad |= strstr(trace, "> load s identity=") == NULL;
+    bad |= strstr(trace, "\nrefused code=\"invalid value\"\n") == NULL;
     talk_limits limits = {0};
     limits.fuel_per_run = 100;
     limits.mailbox_depth = 1;
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, &limits};
     bad |= talk_load(group, &load, &script) != TALK_OK;
+    size_t before_duplicate = trace_len;
+    talk_script *duplicate = NULL;
+    bad |= talk_load(group, &load, &duplicate) != TALK_NAME_REUSED || duplicate != NULL;
+    bad |= strstr(trace + before_duplicate, "> load s identity=") == NULL;
+    bad |= strstr(trace + before_duplicate, "\nrefused code=\"name reused\"\n") == NULL;
     talk_limit_override looser = {TALK_OVERRIDE_FUEL_PER_RUN, 200, 0, 0, 0};
     talk_message loose = {"spin", 4, NULL, 0, &looser};
     bad |= talk_script_deliver(script, &loose, NULL) != TALK_INVALID_VALUE;
