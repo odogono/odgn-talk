@@ -4699,3 +4699,164 @@ test "op-result limit overrides a supplied result and retains its charged prefix
         try std.testing.expect(refused_seen);
     }
 }
+
+const crossing_test = @import("machine/crossing_test.zig");
+
+/// Compare native callback controls with wire inputs admitted while actual
+/// Message Layer Operation and property needs are outstanding.
+const CrossingScenario = enum { ordinary, cleanup, other_run };
+
+fn crossingParity(crossing: crossing_test.Crossing, control: crossing_test.Control, result: crossing_test.Return, transported: bool, scenario: CrossingScenario) ![]u8 {
+    const cleanup = scenario == .cleanup;
+    const other_run = scenario == .other_run;
+    const t = std.testing;
+    const a = t.allocator;
+    const s = Session.init(a).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"{s}\",\"result\":\"number\",\"cost\":{{\"fuel\":7}}}}]}}", .{ 1, if (crossing == .suspending) @as([]const u8, "suspending") else "immediate" }));
+    const granted = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"thing\",\"props\":[{{\"name\":\"size\",\"shape\":\"number\",\"getCost\":{{\"fuel\":7}},\"setCost\":{{\"fuel\":7}}}}]}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"thing\",\"id\":\"o\"}}", .{5}));
+    const src = try std.json.Stringify.valueAlloc(a, if (cleanup) crossing_test.cleanupSource(crossing) else crossing_test.source(crossing), .{});
+    defer a.free(src);
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":{s}}}", .{ 6, granted.object.get("grant").?.integer, src }));
+    const entry = s.groups.items[0];
+    const g = &entry.group.group;
+    if (other_run) {
+        _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"work\",\"segmentLifecycle\":true,\"ops\":[{{\"name\":\"touch\",\"mode\":\"immediate\",\"result\":\"number\",\"segmentBound\":true}}]}}", .{12}));
+        const work = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"work\",\"ops\":\"all\"}}", .{13}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"a\",\"grants\":{{\"work\":{d}}},\"source\":\"script variable n = 0\\non hold\\nput 9 into n\\nask work to touch\\nrepeat forever\\nend repeat\\nend hold\\n\"}}", .{ 14, work.object.get("grant").?.integer }));
+        _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"a\"}},\"message\":{{\"name\":\"hold\"}}}}", .{15}));
+        if (!transported) {
+            const NativeWork = struct {
+                fn call(_: ?*anyopaque, call_: *caps.Call, _: []const *Value) caps.Outcome {
+                    return .{ .value = model.scalar(call_.gpa, .{ .number = .fromInt(7) }) catch return .broken };
+                }
+                fn hook(_: ?*anyopaque, _: caps.Phase, _: *const caps.SegmentContext) caps.EffectStatus {
+                    return .ok;
+                }
+            };
+            s.capabilityNamed("work").?.operations[0].host = .{ .call = NativeWork.call };
+            s.grants.items[1].coordinator.?.hook = NativeWork.hook;
+        }
+        var warm = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"1970-01-01T00:00:00Z\",\"fuelSlice\":45}}", .{16});
+        var needs: usize = 0;
+        while (warm.object.get("need")) |need| {
+            needs += 1;
+            try t.expect(needs <= 2);
+            warm = if (std.mem.eql(u8, need.object.get("m").?.string, "effect"))
+                try c.sendRef(16, "{{\"m\":\"effect-result\",\"ref\":16,\"status\":\"ok\"}}", .{})
+            else
+                try c.sendRef(16, "{{\"m\":\"op-result\",\"ref\":16,\"result\":7}}", .{});
+        }
+        _ = try okOf(warm);
+    }
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[{{\"$object\":[\"thing\",\"o\"]}}]}}}}", .{7}));
+    var host: crossing_test.Host = .{ .g = g, .control = control, .result = result, .target = if (other_run) (if (control == .stop) "a" else "a/r1") else null };
+    const Native = struct {
+        host: *crossing_test.Host,
+        entry: *GroupEntry,
+        fn call(context: ?*anyopaque, call_: *caps.Call, args: []const *Value) caps.Outcome {
+            const n: *@This() = @ptrCast(@alignCast(context.?));
+            const outcome = crossing_test.Host.call(n.host, call_, args);
+            if (outcome == .started) n.entry.track(call_.id);
+            return outcome;
+        }
+    };
+    var native: Native = .{ .host = &host, .entry = entry };
+    if (!transported) {
+        s.capabilityNamed("api").?.operations[0].host = .{ .call = Native.call, .context = &native };
+        const prop = &g.objects.items[0].kind.props[0];
+        prop.get = .{ .call = crossing_test.Host.get, .context = &host };
+        prop.set = .{ .call = crossing_test.Host.set, .context = &host };
+    }
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"1970-01-01T00:00:00Z\"}}", .{8});
+    if (cleanup) {
+        _ = try okOf(reply);
+        _ = try okOf(try c.send("{{\"m\":\"cancel-run\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"s/r1\"}}", .{11}));
+        reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"1970-01-01T00:00:00Z\"}}", .{8});
+    }
+    if (transported) {
+        const need = reply.object.get("need").?;
+        if (control != .none) {
+            const name: []const u8 = switch (control) {
+                .stop => "stop",
+                .cancel => "cancel-run",
+                .rewind => "rewind-run",
+                .none => unreachable,
+            };
+            _ = try okOf(try c.sendRef(17, "{{\"m\":\"{s}\",\"ref\":17,\"group\":\"g\",\"script\":\"{s}\",\"run\":\"{s}/r1\",\"reason\":\"crossing\"}}", .{ name, if (other_run) @as([]const u8, "a") else "s", if (other_run) @as([]const u8, "a") else "s" }));
+        }
+        const is_prop = crossing == .get or crossing == .set;
+        const outcome: []const u8 = switch (result) {
+            .value => if (crossing == .set) "\"ok\":true" else if (is_prop) "\"value\":7" else "\"result\":7",
+            .wrong_shape => if (is_prop) "\"value\":true" else "\"result\":true",
+            .started => "\"started\":true",
+            .failure => "\"fail\":{\"code\":\"oops\"}",
+            .invalid_failure => "\"fail\":{\"code\":\"timeout\"}",
+            .duplicate_failure => "\"fail\":{\"code\":\"oops\",\"data\":{\"code\":\"duplicate\"}}",
+            .broken => "\"hostError\":true",
+            .refused => unreachable,
+        };
+        try t.expectEqualStrings(if (is_prop) "prop" else "op", need.object.get("m").?.string);
+        reply = try c.sendRef(8, "{{\"m\":\"{s}-result\",\"ref\":8,{s}}}", .{ if (is_prop) @as([]const u8, "prop") else "op", outcome });
+    }
+    var releases: usize = 0;
+    while (reply.object.get("need")) |need| {
+        releases += 1;
+        try t.expect(releases <= 2);
+        if (std.mem.eql(u8, need.object.get("m").?.string, "effect")) {
+            try t.expect(other_run);
+            reply = try c.sendRef(8, "{{\"m\":\"effect-result\",\"ref\":8,\"status\":\"ok\"}}", .{});
+        } else {
+            try t.expectEqualStrings("release", need.object.get("m").?.string);
+            reply = try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{});
+        }
+    }
+    _ = try okOf(reply);
+    // Include state, complete Reports/accounting/abandonment, exact Trace,
+    // and cumulative Fuel/allocation counters in the comparison.
+    const view = try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{9});
+    const counters = try c.send("{{\"m\":\"counters\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{10});
+    return std.json.Stringify.valueAlloc(a, .{ reply, view, counters }, .{});
+}
+
+test "callback return landing has native and Message Layer parity" {
+    const t = std.testing;
+    for (std.enums.values(crossing_test.Crossing)) |crossing| for (std.enums.values(crossing_test.Control)) |control| for ([_]crossing_test.Return{ .value, .wrong_shape, .failure, .invalid_failure, .duplicate_failure, .broken, .started }) |result| {
+        if (crossing == .suspending and (result == .value or result == .wrong_shape)) continue;
+        if (crossing != .suspending and result == .started) continue;
+        const native = try crossingParity(crossing, control, result, false, .ordinary);
+        defer t.allocator.free(native);
+        const transported = try crossingParity(crossing, control, result, true, .ordinary);
+        defer t.allocator.free(transported);
+        try t.expectEqualStrings(native, transported);
+    };
+}
+
+test "cancellation cleanup failures have native and Message Layer parity" {
+    const t = std.testing;
+    for ([_]crossing_test.Crossing{ .immediate, .get, .set }) |crossing| for ([_]crossing_test.Return{ .value, .wrong_shape, .failure, .invalid_failure, .duplicate_failure, .broken }) |result| {
+        const native = try crossingParity(crossing, .none, result, false, .cleanup);
+        defer t.allocator.free(native);
+        const transported = try crossingParity(crossing, .none, result, true, .cleanup);
+        defer t.allocator.free(transported);
+        try t.expectEqualStrings(native, transported);
+    };
+}
+
+test "callback return through another Run's rollback has native and Message Layer parity" {
+    const t = std.testing;
+    for (std.enums.values(crossing_test.Crossing)) |crossing| for ([_]crossing_test.Control{ .stop, .cancel, .rewind }) |control| for ([_]crossing_test.Return{ .value, .wrong_shape, .failure, .duplicate_failure, .broken, .started }) |result| {
+        if (crossing == .suspending and (result == .value or result == .wrong_shape)) continue;
+        if (crossing != .suspending and result == .started) continue;
+        const native = try crossingParity(crossing, control, result, false, .other_run);
+        defer t.allocator.free(native);
+        const transported = try crossingParity(crossing, control, result, true, .other_run);
+        defer t.allocator.free(transported);
+        try t.expectEqualStrings(native, transported);
+    };
+}

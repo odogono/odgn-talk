@@ -2800,6 +2800,22 @@ pub const Group = struct {
         _ = g.lifecycle(run, &run.cleanup.?, true) catch return .{ .preempted = .crossing };
         run.cleanup = null;
         run.crossing_cancel = false;
+        // A successful Start is pending before controls land. Cancel it
+        // before finally runs, retaining its abandonment record exactly once.
+        if (run.waiting) |p| {
+            for (g.pending.items, 0..) |item, i| if (item == p) {
+                _ = g.pending.orderedRemove(i);
+                break;
+            };
+            abandonCall(p);
+            if (p.call) |c| try run.abandoned.append(g.gpa, c.id);
+            g.destroyPending(p);
+            run.waiting = null;
+        }
+        if (run.join) |join| for (join.members.items) |x| if (x.pending != null) {
+            try run.abandoned.append(g.gpa, x.waited.id);
+        };
+        g.dropJoin(run);
         g.restoreBase(run);
         return g.startCancel(run);
     }
@@ -3754,7 +3770,11 @@ pub const Group = struct {
                     g.turn_at -= 1;
                     return;
                 }
-                if (g.rewound) break :turns;
+                // A Rewind of another Run ends this Pump after the active
+                // callback and its Segment finalization finish, including
+                // continuations paused at lifecycle crossings.
+                const resuming_crossing = s.work.items.len > 0 and s.work.items[0] == .run and (s.work.items[0].run.crossed != null or s.work.items[0].run.ending != null);
+                if (g.rewound and !resuming_crossing) break :turns;
                 if (s.work.items.len == 0) continue;
                 if (g.fatal) break :turns;
                 if (g.cap > 0 and g.pump_fuel >= g.cap) {
