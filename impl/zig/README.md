@@ -911,7 +911,12 @@ the Kind's Get, with a `prop` record, charged `get-key`, the property's
 `getCost` and the value's conversion; `id` is the Core's, and a Guard reads
 nothing else. A well-formed Get or Set failure raises its code, as an
 Operation's does, with `capability` the Kind and `operation` the property,
-and its Data's conversion is charged. Any other failure is `host error`. `set` checks the Shape, uncharged when it fails, then runs the
+and its Data's conversion is charged. Any other failure is `host error`, with
+a `call failed` Report identifying the Kind/property and an empty Call id.
+Properties emit no `call-failed` Trace record. A failed setter's `prop` record
+retains both its assigned `value` and `error`; Stop/cancel landing still happens
+before failure classification and suppresses interrupted Host-failure Reports.
+`set` checks the Shape, uncharged when it fails, then runs the
 Set. A Delivery or `send` to an object goes to its nearest Owning Script,
 whose path is walked again when the message reaches the head of its mailbox,
 so a message follows its object if it moves. A Run that ends `unhandled` or

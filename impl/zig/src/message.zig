@@ -3612,6 +3612,41 @@ fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
     return out.toOwnedSlice();
 }
 
+test "property Host failure reports retain setter input without a call-failed Trace record" {
+    for ([_]bool{ false, true }) |set| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"box\",\"props\":[{{\"name\":\"value\",\"shape\":\"number\"}}]}}", .{1}));
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{2}));
+        _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"box\",\"id\":\"one\"}}", .{3}));
+        const source = if (set) "on go o\n set the value of o to 7\nend go" else "on go o\n return the value of o\nend go";
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":{f}}}", .{ 4, std.json.fmt(source, .{}) }));
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[{{\"$object\":[\"box\",\"one\"]}}]}}}}", .{5}));
+        _ = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-14T12:00:00Z\"}}", .{6});
+        const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"ref\":6,\"hostError\":\"broken\"}}", .{}));
+        var failures: usize = 0;
+        for (done.object.get("reports").?.array.items) |r| {
+            if (!std.mem.eql(u8, r.object.get("kind").?.string, "call failed")) continue;
+            failures += 1;
+            try std.testing.expectEqualStrings("s", r.object.get("script").?.string);
+            try std.testing.expectEqualStrings("", r.object.get("call").?.string);
+            try std.testing.expectEqualStrings("box", r.object.get("operation").?.object.get("capability").?.string);
+        }
+        try std.testing.expectEqual(@as(usize, 1), failures);
+        var recorded = false;
+        for (done.object.get("trace").?.array.items) |line| {
+            try std.testing.expect(!std.mem.startsWith(u8, line.string, "call-failed"));
+            if (std.mem.startsWith(u8, line.string, "prop ")) {
+                recorded = true;
+                if (set) try std.testing.expect(std.mem.indexOf(u8, line.string, "op=set value=7 error={}") != null);
+            }
+        }
+        try std.testing.expect(recorded);
+    }
+}
+
 test "incoming frames have no nesting cap and preserve the Session" {
     const gpa = std.testing.allocator;
     const s = Session.init(gpa).?;

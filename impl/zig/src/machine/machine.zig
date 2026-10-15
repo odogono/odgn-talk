@@ -9337,7 +9337,7 @@ pub const Group = struct {
             return .crossing;
         };
         if (interrupted) return error.Landed;
-        if (!valid) return g.propError(o, key);
+        if (!valid) return g.propError(run, o, key);
         switch (outcome) {
             .value => |v| {
                 const size = costs.size(v);
@@ -9351,20 +9351,20 @@ pub const Group = struct {
                 owned = false;
                 return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
-            else => return g.propError(o, key),
+            else => return g.propError(run, o, key),
         }
     }
 
     fn recordPropertyReturn(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, result: objects.Result, valid: bool, input: ?*Value) !void {
         switch (result) {
-            .value, .done => g.propRecord(run, o, key, op, if (valid and (input != null or result == .value)) "value" else "error", if (!valid) null else input orelse if (result == .value) result.value else null),
+            .value, .done => g.propRecord(run, o, key, op, if (valid and (input != null or result == .value)) "value" else "error", if (!valid) null else input orelse if (result == .value) result.value else null, null),
             .failed => |f| {
                 const malformed_data = if (f.data) |d| d.data != .map and d.data != .nothing else false;
                 const shown = if (malformed_data) null else failureMap(g.gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
                 defer if (shown) |v| v.release();
-                g.propRecord(run, o, key, op, "error", shown);
+                g.propRecord(run, o, key, op, "error", shown, input);
             },
-            else => g.propRecord(run, o, key, op, "error", null),
+            else => g.propRecord(run, o, key, op, "error", null, input),
         }
     }
 
@@ -9377,10 +9377,9 @@ pub const Group = struct {
         defer gpa.free(f.code);
         defer if (f.message) |t| gpa.free(t);
         defer if (f.data) |d| d.release();
-        _ = run;
-        const shown = failureMap(gpa, f) catch return g.propError(o, key);
+        const shown = failureMap(gpa, f) catch return g.propError(run, o, key);
         defer shown.release();
-        if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(o, key);
+        if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(run, o, key);
         // Its Data is converted as a value read is, an empty map when it
         // has none.
         const empty = try model.map(gpa, &.{});
@@ -9463,7 +9462,7 @@ pub const Group = struct {
                 owned = false;
                 return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
-            else => return g.propError(o, key),
+            else => return g.propError(run, o, key),
         }
     }
 
@@ -9480,18 +9479,33 @@ pub const Group = struct {
     }
 
     /// `prop <run> object= name= op= value=|error=`.
-    fn propRecord(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, what: []const u8, v: ?*const Value) void {
+    fn propRecord(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, what: []const u8, v: ?*const Value, input: ?*const Value) void {
         const out = g.trace orelse return;
         out.print("prop {s} object=", .{run.id}) catch {};
         display.writeTrace(out, o.value) catch {};
-        out.print(" name={s} op={s} {s}=", .{ key, op, what }) catch {};
+        out.print(" name={s} op={s}", .{ key, op }) catch {};
+        if (input) |x| {
+            out.writeAll(" value=") catch {};
+            display.writeTrace(out, x) catch {};
+        }
+        out.print(" {s}=", .{what}) catch {};
         if (v) |x| display.writeTrace(out, x) catch {} else out.writeAll("{}") catch {};
         out.writeAll("\n") catch {};
     }
 
     /// A property's failure raises as an Operation's does, with
     /// `capability` the Object Kind and `operation` the property.
-    fn propError(g: *Group, o: *objects.Object, key: []const u8) error{ Raised, OutOfMemory } {
+    fn propError(g: *Group, run: *Run, o: *objects.Object, key: []const u8) error{ Raised, OutOfMemory } {
+        // Properties have no Call id and no call-failed Trace record, but
+        // their Host failures still reach the embedding Host as Reports.
+        const r = &g.reports;
+        g.addReport(.{ .call_failed = .{
+            .script = r.text(run.script.name) catch "",
+            .call = "",
+            .capability = r.text(o.kind.name) catch "",
+            .operation = r.text(key) catch "",
+            .detail = "invalid property result or Host failure",
+        } });
         const capability = model.text(g.gpa, o.kind.name) catch return error.OutOfMemory;
         defer capability.release();
         const operation_name = model.text(g.gpa, key) catch return error.OutOfMemory;
