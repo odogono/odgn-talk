@@ -402,7 +402,7 @@ func (c *Call) finish() {
 }
 func (s *Script) Grants() map[string][]string {
 	if s.group.backend != nil {
-		panic(backendUnsupported("Grants inspection"))
+		return s.group.backend.grantNames(s)
 	}
 	if e := s.group.beginWorker(); e != nil {
 		panic(e)
@@ -470,6 +470,10 @@ func (c *Call) refuseAutomaticSettlement() {
 }
 func (c *Call) queueSettlement(kind string, v Value, e *ScriptError, fuel int64) {
 	g := c.group
+	if g.backend != nil {
+		g.backend.settleCall(c, kind, v, e, fuel)
+		return
+	}
 	fields := map[string]string{}
 	if kind == "answer" {
 		fields["value"] = coretrace.Display(v.inner)

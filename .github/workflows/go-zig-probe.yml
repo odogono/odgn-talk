@@ -55,6 +55,10 @@ jobs:
         with:
           go-version: '1.27'
           cache: false
+      # The shared public Hosts also execute on the default native Core.
+      - run: go -C impl/go test -run '^TestCapabilityBridge' -count=1 .
+        env:
+          CGO_ENABLED: '0'
       - run: go -C impl/go vet -tags talk_zig_experimental .
         env:
           CGO_ENABLED: '0'

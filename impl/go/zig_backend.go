@@ -72,13 +72,19 @@ func zigEngine() *zigwasm.Engine {
 type zigGroup struct {
 	group   *Group
 	reactor *zigwasm.Reactor
-	// Serializes one export/receipt and allocates monotonically increasing refs.
-	// Full concurrent-input/worker admission is a later experimental-backend gate.
-	frameMu   sync.Mutex
-	ref       int64
-	pendingMu sync.Mutex
-	pending   map[DeliveryID]*Pending
-	runs      map[RunID]DeliveryID
+	// Serializes exports, receipt bookkeeping and refs. The Group worker guard
+	// owns the entire conversation, including pauses while Host code runs.
+	// Admission during a non-yielding export remains a separate gate.
+	frameMu        sync.Mutex
+	ref            int64
+	pendingMu      sync.Mutex
+	pending        map[DeliveryID]*Pending
+	runs           map[RunID]DeliveryID
+	definitions    map[*CapabilityDef]string
+	callsMu        sync.Mutex
+	calls          map[CallID]context.CancelFunc
+	failureDetails map[CallID]string
+	paused         bool
 }
 
 func newZigGroup(g *Group) groupBackend {
@@ -86,21 +92,26 @@ func newZigGroup(g *Group) groupBackend {
 	if err != nil {
 		panic(err)
 	}
-	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, runs: map[RunID]DeliveryID{}}
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"abandoned-before-needs-v1"}})
-	supported := false
-	features := hello.Get("features")
-	for i := 1; i <= features.Len(); i++ {
-		if zigText(features.Index(i)) == "abandoned-before-needs-v1" {
-			supported = true
+	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1"}})
+	if err == nil {
+		features := hello.Get("features")
+		for _, required := range []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1"} {
+			found := false
+			for i := 1; i <= features.Len(); i++ {
+				if zigText(features.Index(i)) == required {
+					found = true
+				}
+			}
+			if !found {
+				err = fmt.Errorf("embedded Zig artifact omits %s", required)
+				break
+			}
 		}
 	}
-	if err != nil || !supported {
+	if err != nil {
 		reactor.Close(context.Background())
-		if err != nil {
-			panic(err)
-		}
-		panic("embedded Zig artifact omits abandoned-before-needs-v1")
+		panic(err)
 	}
 	if _, err = b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
 		reactor.Close(context.Background())
@@ -112,84 +123,158 @@ func newZigGroup(g *Group) groupBackend {
 	return b
 }
 
+// exchange reserves the worker ref across every need/result. Inputs use their
+// own refs; no Host callback or Trace sink runs under an export/registry lock.
 func (b *zigGroup) send(m string, fields map[string]any) (Value, error) {
+	return b.exchange(m, fields, nil)
+}
+func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value) error) (Value, error) {
 	defer runtime.KeepAlive(b)
-	b.frameMu.Lock()
-	b.ref++
-	fields["m"] = m
-	fields["ref"] = b.ref
-	fields["group"] = "g"
-	data, err := zigJSON(nil, fields)
-	var packet Value
-	if err == nil {
-		data, err = b.reactor.Frame(context.Background(), data)
-	}
-	if err == nil {
-		packet, err = DecodeJSON(data)
-	}
-	if err == nil {
-		n, ok := packet.Get("ref").AsDec()
-		if !ok {
-			err = fmt.Errorf("Zig reply omitted ref")
-		} else if got, e := n.Int64(); e != nil || got != b.ref {
-			err = fmt.Errorf("Zig reply ref mismatch")
+	var ref int64
+	for {
+		b.frameMu.Lock()
+		if ref == 0 {
+			b.ref++
+			ref = b.ref
+		}
+		fields["m"], fields["ref"], fields["group"] = m, ref, "g"
+		packet, err := b.frame(fields)
+		if err == nil && packet.Get("need").Kind() == KindNothing && packet.Get("err").Kind() == KindNothing && receipt != nil {
+			err = receipt(packet.Get("ok"))
+		}
+		b.frameMu.Unlock()
+		b.abandoned(packet.Get("abandoned"))
+		b.abandoned(packet.Get("ok").Get("abandoned"))
+		b.settled(packet.Get("settled"))
+		b.settled(packet.Get("ok").Get("settled"))
+		sources := []Value{packet}
+		// Grants is a name-to-Operations map; "trace" is a legal Grant name,
+		// and Grant inspection itself produces no Trace records.
+		if m != "grants" {
+			sources = append(sources, packet.Get("ok"))
+		}
+		for _, source := range sources {
+			trace := source.Get("trace")
+			for i := 1; i <= trace.Len(); i++ {
+				b.group.emit(zigText(trace.Index(i)))
+			}
+		}
+		if err != nil {
+			return Nothing, err
+		}
+		if failure := packet.Get("err"); failure.Kind() != KindNothing {
+			return Nothing, zigFailure(failure)
+		}
+		need := packet.Get("need")
+		if need.Kind() == KindNothing {
+			return packet.Get("ok"), nil
+		}
+		fields, err = b.callback(need)
+		if err != nil {
+			return Nothing, err
+		}
+		m = "op-result"
+		if zigText(need.Get("m")) == "trace" {
+			m = "trace-result"
 		}
 	}
-	b.frameMu.Unlock()
+}
+
+// frame is called with frameMu held; replies and all Values own Go memory.
+func (b *zigGroup) frame(fields map[string]any) (Value, error) {
+	data, err := zigJSON(nil, fields)
 	if err != nil {
 		return Nothing, err
 	}
-	ok := packet.Get("ok")
-	// Trace sinks run outside the export lock. This first slice accepts
-	// observational sinks; callback-generated inputs need broader acceptance.
-	if trace := ok.Get("trace"); trace.Kind() == KindList {
-		for i := 1; i <= trace.Len(); i++ {
-			b.group.emit(zigText(trace.Index(i)))
-		}
+	data, err = b.reactor.Frame(context.Background(), data)
+	if err != nil {
+		return Nothing, err
 	}
-	if failure := packet.Get("err"); failure.Kind() != KindNothing {
-		switch zigText(failure.Get("kind")) {
-		case "host error":
-			return Nothing, &HostError{Code: HostErrorCode(zigText(failure.Get("code"))), Detail: zigText(failure.Get("detail"))}
-		case "mailbox full":
-			return Nothing, ErrMailboxFull
-		case "load error":
-			rejected := new(LoadError)
-			if err := zigDecode(failure, reflect.ValueOf(rejected).Elem()); err != nil {
-				return Nothing, err
-			}
-			return Nothing, rejected
-		default:
-			return Nothing, fmt.Errorf("Zig Message Layer: %s", zigText(failure.Get("detail")))
-		}
+	packet, err := DecodeJSON(data)
+	if err != nil {
+		return Nothing, err
+	}
+	n, ok := packet.Get("ref").AsDec()
+	if !ok {
+		return Nothing, fmt.Errorf("Zig reply omitted ref")
+	}
+	if got, e := n.Int64(); e != nil || got != fields["ref"] {
+		return Nothing, fmt.Errorf("Zig reply ref mismatch")
 	}
 	if packet.Get("need").Kind() != KindNothing {
-		return Nothing, backendUnsupported("Host callbacks")
+		b.paused = true
+	} else if fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" {
+		b.paused = false
 	}
-	return ok, nil
+	return packet, nil
+}
+func zigFailure(failure Value) error {
+	switch zigText(failure.Get("kind")) {
+	case "host error":
+		return &HostError{Code: HostErrorCode(zigText(failure.Get("code"))), Detail: zigText(failure.Get("detail"))}
+	case "mailbox full":
+		return ErrMailboxFull
+	case "load error":
+		rejected := new(LoadError)
+		if err := zigDecode(failure, reflect.ValueOf(rejected).Elem()); err != nil {
+			return err
+		}
+		return rejected
+	default:
+		return fmt.Errorf("Zig Message Layer: %s", zigText(failure.Get("detail")))
+	}
+}
+
+// A rejected worker never starts a second conversation. While paused, ask the
+// transport to record the refusal in the current crossing's Trace order.
+func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
+	err := b.group.beginWorker()
+	if err == nil {
+		return nil
+	}
+	b.frameMu.Lock()
+	if b.paused {
+		b.ref++
+		fields["m"], fields["ref"], fields["group"] = m, b.ref, "g"
+		_, frameErr := b.frame(fields)
+		b.paused = true // the refusal leaves the enclosing need outstanding
+		if frameErr != nil {
+			err = frameErr
+		}
+	}
+	b.frameMu.Unlock()
+	return err
 }
 
 func (b *zigGroup) load(o LoadOptions) (*Script, error) {
-	if len(o.Grants) > 0 || len(o.Objects) > 0 || o.Owner != nil {
-		return nil, backendUnsupported("Capabilities and Objects")
+	if len(o.Objects) > 0 || o.Owner != nil {
+		return nil, backendUnsupported("Objects")
 	}
-	if err := b.group.beginWorker(); err != nil {
+	if err := b.beginWorker("load", map[string]any{"name": o.Name, "source": o.Source}); err != nil {
 		return nil, err
 	}
 	defer b.group.endWorker()
-	fields := map[string]any{"name": o.Name, "source": o.Source}
+	grants, kept, err := b.grants(o.Grants)
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]any{"name": o.Name, "source": o.Source, "grants": grants, "grantsAsUsed": o.GrantsAsUsed}
 	limits, err := zigLimits(o.Limits)
 	if err != nil {
 		return nil, err
 	}
 	fields["limits"] = limits
-	if _, err = b.send("load", fields); err != nil {
+	var s *Script
+	_, err = b.exchange("load", fields, func(Value) error {
+		s = &Script{group: b.group, name: o.Name, source: o.Source, limits: o.Limits, grants: kept}
+		b.group.mu.Lock()
+		b.group.scripts = append(b.group.scripts, s)
+		b.group.mu.Unlock()
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	s := &Script{group: b.group, name: o.Name, source: o.Source, limits: o.Limits}
-	b.group.mu.Lock()
-	b.group.scripts = append(b.group.scripts, s)
-	b.group.mu.Unlock()
 	return s, nil
 }
 
@@ -220,29 +305,31 @@ func (b *zigGroup) admit(s *Script, m Message, ctx context.Context, request bool
 	if request {
 		method = "request"
 	}
-	// Pending registration and Pump result handling share this lock so an input
-	// cannot complete between its receipt and its Go future's registration.
-	b.pendingMu.Lock()
-	reply, err := b.send(method, map[string]any{"to": map[string]any{"script": s.name}, "message": message})
+	// Register the future before releasing the receipt lock. Trace/OnReady
+	// may enqueue or Pump immediately after that lock is released.
+	var id DeliveryID
+	var pending *Pending
+	_, err := b.exchange(method, map[string]any{"to": map[string]any{"script": s.name}, "message": message}, func(reply Value) error {
+		id = DeliveryID(zigText(reply.Get("delivery")))
+		if request {
+			pending = &Pending{done: make(chan struct{})}
+			b.pendingMu.Lock()
+			b.pending[id] = pending
+			b.pendingMu.Unlock()
+			if ctx != nil {
+				pending.stop = context.AfterFunc(ctx, func() {
+					if _, err := b.send("cancel-delivery", map[string]any{"delivery": string(id)}); err != nil {
+						panic(err)
+					}
+					b.ready()
+				})
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		b.pendingMu.Unlock()
 		return "", nil, err
 	}
-	id := DeliveryID(zigText(reply.Get("delivery")))
-	var pending *Pending
-	if request {
-		pending = &Pending{done: make(chan struct{})}
-		b.pending[id] = pending
-		if ctx != nil {
-			pending.stop = context.AfterFunc(ctx, func() {
-				if _, err := b.send("cancel-delivery", map[string]any{"delivery": string(id)}); err != nil {
-					panic(err)
-				}
-				b.ready()
-			})
-		}
-	}
-	b.pendingMu.Unlock()
 	b.ready()
 	return id, pending, nil
 }
@@ -254,16 +341,23 @@ func (b *zigGroup) ready() {
 }
 
 func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) {
-	if err := b.group.beginWorker(); err != nil {
+	fields := map[string]any{"now": now.Round(0).UTC().Format(time.RFC3339Nano), "fuelSlice": options.FuelSlice, "fuelCap": options.FuelCap}
+	if err := b.beginWorker("pump", fields); err != nil {
 		return PumpResult{}, err
 	}
 	defer b.group.endWorker()
-	reply, err := b.send("pump", map[string]any{"now": now.Round(0).UTC().Format(time.RFC3339Nano), "fuelSlice": options.FuelSlice, "fuelCap": options.FuelCap})
-	if err != nil {
-		return PumpResult{}, err
-	}
 	var result PumpResult
-	if err = zigDecode(reply, reflect.ValueOf(&result).Elem()); err != nil {
+	_, err := b.exchange("pump", fields, func(reply Value) error {
+		var err error
+		result, err = b.pumpReceipt(reply)
+		return err
+	})
+
+	return result, err
+}
+func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
+	var result PumpResult
+	if err := zigDecode(reply, reflect.ValueOf(&result).Elem()); err != nil {
 		return result, err
 	}
 	rows := reply.Get("reports")
@@ -287,14 +381,26 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 			report = &Unhandled{}
 		case "host error":
 			report = &HostError{}
+		case "call failed":
+			report = &CallFailed{}
 		default:
 			return result, backendUnsupported("Report " + zigText(row.Get("kind")))
 		}
-		if err = zigDecode(row, reflect.ValueOf(report).Elem()); err != nil {
+		if err := zigDecode(row, reflect.ValueOf(report).Elem()); err != nil {
 			return result, err
+		}
+		if failed, ok := report.(*CallFailed); ok {
+			failed.Detail = b.failureDetails[failed.Call]
+			for def, handle := range b.definitions {
+				if failed.Operation.Capability == handle {
+					failed.Operation.Capability = def.name
+					break
+				}
+			}
 		}
 		result.Reports = append(result.Reports, report)
 	}
+	clear(b.failureDetails)
 	b.pendingMu.Lock()
 	defer b.pendingMu.Unlock()
 	settle := func(id DeliveryID, value Value, failure *ScriptError) {
@@ -343,7 +449,7 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 }
 
 func (b *zigGroup) worker(method string, fields map[string]any) (Value, error) {
-	if err := b.group.beginWorker(); err != nil {
+	if err := b.beginWorker(method, fields); err != nil {
 		return Nothing, err
 	}
 	defer b.group.endWorker()

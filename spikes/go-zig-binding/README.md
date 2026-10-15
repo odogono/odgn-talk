@@ -28,7 +28,9 @@ fatal worker errors and exactly-once notices. Existing Hosts keep final-reply
 timing; request the feature in `hello` and check support before relying on it.
 
 This remains an isolated probe. The [experimental public Go adapter](../../impl/go/README.md#experimental-zig-backend)
-now covers a first data/Request slice behind `talk_zig_experimental`. Full API/corpus
+covers data/Request and ordinary immediate/suspending Capability slices behind
+`talk_zig_experimental`. Its public Host tests independently compare Trace, Fuel
+and typed Reports against a separately built native-Go test binary. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
 later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
 [findings](../../docs/research/go-zig-binding.md) and the

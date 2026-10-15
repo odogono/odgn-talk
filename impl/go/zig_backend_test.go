@@ -298,10 +298,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 		{"object", func() error { _, e := g.Object(nil, "o", nil); return e }},
 		{"parent", func() error { return g.SetParent(nil, nil) }},
 		{"dispose", func() error { return g.Dispose(nil) }},
-		{"grants", func() error {
-			_, e := g.Load(talk.LoadOptions{Name: "other", Source: "", Grants: map[string]*talk.Grant{"api": nil}})
-			return e
-		}},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {

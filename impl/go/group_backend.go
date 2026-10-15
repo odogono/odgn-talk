@@ -19,8 +19,10 @@ type groupBackend interface {
 	counters(*Script) Counters
 	control(*Script, string, map[string]any)
 	fingerprint() [32]byte
+	settleCall(*Call, string, Value, *ScriptError, int64)
+	grantNames(*Script) map[string][]string
 }
 
 func backendUnsupported(feature string) error {
-	return fmt.Errorf("experimental Zig backend: %s is not implemented; see issue #975", feature)
+	return fmt.Errorf("experimental Zig backend: %s is not implemented; see issue #884", feature)
 }

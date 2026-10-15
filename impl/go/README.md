@@ -10,8 +10,8 @@ the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
 Native Go remains the default and supported embedding package. An opt-in
-[experimental Zig backend](#experimental-zig-backend) exercises the first public
-embedding slice through wazero. The separate
+[experimental Zig backend](#experimental-zig-backend) exercises public data/Request and Capability
+embedding slices through wazero. The separate
 [comparison probe](../../spikes/go-zig-binding/README.md) retains its native-Go
 baseline and broader callback experiments; the
 [binding investigation](../../docs/research/go-zig-binding.md) records the gates
@@ -56,23 +56,40 @@ or Go Core retirement claim.
 
 Supported: immutable data Values and Value Encoding; Group/Script names and
 lookup; Load and positioned diagnostics; direct Script Deliver/Request; Pump
-Clock, Fuel slices/cap, typed lifecycle/accounting Reports; observational Trace
-sinks; Inspect/Counters; Request context cancellation and OnReady; queued Stop,
-CancelRun and RewindRun. Local Script functions execute in Zig; Function Values
-and Host callbacks are outside this slice. Successful execution and queued-input
-Trace records are delivered from replies. Refusal records retained by the
-Message Layer can arrive on a later successful reply; complete error/refusal
-Trace timing remains an API compatibility gate.
+Clock, Fuel slices/cap and typed lifecycle/accounting/CallFailed Reports;
+Inspect/Counters and Grant inspection; Request context cancellation and OnReady;
+queued Stop, CancelRun, RewindRun and Revoke. Local Script functions execute in Zig.
+
+Ordinary immediate and suspending Capability Operations attach through the public
+Grant API. Declarations retain argument/result Shapes, allowed Operations,
+declared costs, MaxPending and optional error catalogues. Call identity,
+accessors and Host binding data stay in Go. Start can Answer/Fail synchronously
+or from a later goroutine; AnswerWithCost charges on resumption. Callback panics
+and Host errors become ordinary Host failures. Abandonment cancels Call.Context
+before the next callback, including cancellation cleanup and Calls answered but
+discarded before resumption. Late settlements are harmless. Each worker owns its
+whole need/result exchange; callbacks, Trace sinks and OnReady run outside export
+and registry locks. Callback-generated queued inputs receive distinct refs;
+worker reentry returns the existing reentrant-call HostError.
+
+The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1` and
+`crossing-trace-v1`. The last feature publishes an Operation's call record and
+held refusal records before crossing controls land, so a Trace sink can queue
+Stop at that boundary. Error replies publish their available refusal/diagnostic
+records before returning the error. Other Script-execution Trace records can
+still arrive in batches; arbitrary per-record input-generating sinks remain a
+compatibility gate. Input admission during a non-yielding WASM export also
+remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result: Capability/Host Object attachment and
-handles, Function Values/calls, object-addressed inputs, Broadcast/Decide,
-Libraries, Reload/Extend, Save/Restore/Settle, Fingerprint and Grants inspection.
-They do not fall back to native Go language execution. Pool, Store, sqlite,
-Session/REPL, tenants and the full Corpus are still native-Go facilities pending
-their own adapter acceptance. Concurrent input admission during an executing
-WASM export and Trace sinks that generate inputs need further work; exports
-are serialized, which alone does not satisfy the full input-queue contract.
+existing signature has no error result: Host Object attachment/handles,
+Function Values/calls, object-addressed inputs, Broadcast/Decide, Libraries,
+Reload/Extend, Save/Restore/Settle and Fingerprint. Capability attachments with
+release, scoped or Segment lifecycle hooks, fire-and-forget Operations, Standard
+factory refinements, Object/Function Shapes or Shapes nested beyond 32 levels
+are explicitly refused. They do not fall back to native Go language execution.
+Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go
+facilities pending their own adapter acceptance.
 
 The internal `zigwasm` package verifies the embedded artifact digest. The adapter
 checks language, Cost Model and Unicode versions before use. Compiled code is
@@ -85,7 +102,7 @@ without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
 
-Run the accepted first slice from the repository root:
+Run the focused public slices from the repository root:
 
 ```sh
 CGO_ENABLED=0 impl/go/zig-experimental-check.sh
