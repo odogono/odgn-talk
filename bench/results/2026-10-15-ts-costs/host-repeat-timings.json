@@ -1,0 +1,189 @@
+{
+  "metadata": {
+    "filter": "host/immediate",
+    "order": "Per workload: 3 rounds of 7 paired 20-Run batches, alternating AB/BA",
+    "started": "2026-10-15T04:56:41.450Z",
+    "finishedTiming": "2026-10-15T04:56:43.124Z",
+    "startingLoad": [
+      4.861328125,
+      8.7314453125,
+      7.38037109375
+    ],
+    "endingLoad": [
+      4.7919921875,
+      8.65283203125,
+      7.3603515625
+    ],
+    "baseline": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+    "head": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+    "diff": "diff --git a/impl/ts/src/costs.ts b/impl/ts/src/costs.ts\nindex 9e4600ed..3024b1a2 100644\n--- a/impl/ts/src/costs.ts\n+++ b/impl/ts/src/costs.ts\n@@ -1,6 +1,7 @@\n // Cost Model 0 (chapter 8, The Cost Model): each rate's Fuel and allocation\n // formulas, the logical sizes of values, and the measures they're taken over.\n import { costMeasure, costModel, costSubject } from './generated/machine';\n+import { leafSize, makeCostRates } from './generated/costs';\n import { characters } from './text';\n import { scalarCount } from './unicode';\n import { digitsOf, integerOf, isInteger } from './decimal';\n@@ -262,6 +263,11 @@ export const sizeOf = (v: Value): number => {\n   if (cached !== undefined) {\n     return cached;\n   }\n+  const leaf = leafSize(v, measureOf);\n+  if (leaf !== undefined) {\n+    known.set(v, leaf);\n+    return leaf;\n+  }\n   // Deep values are sized leaves first, so no size recurses far. A\n   // shared part is visited once, not once per path to it (#890); its\n   // logical size still counts at each occurrence, through its parents.\n@@ -273,6 +279,11 @@ export const sizeOf = (v: Value): number => {\n     if (known.has(next) || seen.has(next)) {\n       continue;\n     }\n+    const leaf = leafSize(next, measureOf);\n+    if (leaf !== undefined) {\n+      known.set(next, leaf);\n+      continue;\n+    }\n     seen.add(next);\n     order.push(next);\n     for (const child of childrenOf(next)) {\n@@ -328,18 +339,16 @@ export const partSize = (\n };\n \n export type Charge = { alloc: number; fuel: number };\n+const compiledRates = makeCostRates(measureOf);\n \n /** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */\n export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;\n \n /** A rate's Fuel and allocation, over what the instruction worked on. */\n export const charge = (rate: number, measured: Measured = noCounts): Charge => {\n-  const formulas = rates[rate];\n-  if (!formulas) {\n+  const compiled = compiledRates[rate];\n+  if (!compiled) {\n     throw new Error(`No Cost Model rate ${rate}`);\n   }\n-  return {\n-    fuel: evaluate(formulas.fuel, measured, undefined),\n-    alloc: evaluate(formulas.alloc, measured, undefined),\n-  };\n+  return compiled(measured);\n };\ndiff --git a/tools/syntax/generate.ts b/tools/syntax/generate.ts\nindex a428b161..1d032e29 100644\n--- a/tools/syntax/generate.ts\n+++ b/tools/syntax/generate.ts\n@@ -15,6 +15,7 @@ import { parseSource } from '../../impl/ts/src/parser';\n import { generateGoCatalogues } from '../go/generate';\n import { generateZigCatalogues } from '../zig/generate';\n import { compileCostModel } from '../costs/compile';\n+import { emitTsCosts } from '../costs/emit-ts';\n \n const compiledCosts = compileCostModel(costs);\n const codes = (names: readonly string[]) =>\n@@ -282,6 +283,10 @@ const builtinDocsContent =\n     2,\n   )};\\n`;\n const outputs = [\n+  [\n+    resolve(import.meta.dir, '../../impl/ts/src/generated/costs.ts'),\n+    emitTsCosts(compiledCosts),\n+  ],\n   [\n     resolve(import.meta.dir, '../../impl/ts/src/generated/session.ts'),\n     readerContent,\n",
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "sourceSha256": {
+      "impl/ts/src/costs.ts": "c6893e26d77218a0699bf829aba9481be81f88c124c321e0570dc983ce8efd85",
+      "impl/ts/src/generated/costs.ts": "5a7c52bc60bc8025a379dd5be6640f69e084bc5ba0996037d089fe62b6772ce6",
+      "tools/costs/emit-ts.ts": "e1d06f9b37d9590399449f3fa0a75a5537b50a0f81d10e08ed27ddc9f5b65e8a"
+    },
+    "warmupRuns": 20,
+    "batches": 7,
+    "runsPerBatch": 20,
+    "bundleSha256": {
+      "before": "5b1ae8417200dc30967c17a130158fffe3510c892f2071e779bef9ebae62ef2a",
+      "after": "96dc7383b7fb73c7f9d7ebd578cc99cbeb9e16ff08ba44ca807c4fbc74048f79"
+    }
+  },
+  "records": [
+    {
+      "round": 1,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            2158685.45,
+            2879777.050000001,
+            2172506.250000001,
+            1899843.7499999967,
+            1940635.4500000018,
+            2037510.4000000022,
+            2004058.3000000026
+          ]
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            1872379.149999999,
+            2484474.9999999977,
+            2015385.3999999997,
+            1790825.0000000012,
+            1817052.0500000007,
+            1758583.3499999978,
+            1912318.750000003
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            2090699.9999999981,
+            2072325.0000000007,
+            2183243.750000003,
+            2137350.0000000037,
+            1343585.4500000007,
+            1417960.400000004,
+            1444639.5999999936
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            1905195.7999999956,
+            1874106.25,
+            1942066.6500000036,
+            1596627.0500000063,
+            1276527.0999999985,
+            1352149.9999999946,
+            1264539.549999995
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            1379762.4999999925,
+            1491737.4999999993,
+            1496295.8500000013,
+            1489506.2499999995,
+            1571322.8999999955,
+            1625891.6999999997,
+            1579845.8500000038
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            1391941.6499999897,
+            1304189.5999999952,
+            1371162.5000000026,
+            1460768.7499999998,
+            1549327.0999999936,
+            1427391.650000004,
+            1630783.3500000015
+          ]
+        }
+      ]
+    }
+  ]
+}

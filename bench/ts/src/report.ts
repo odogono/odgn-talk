@@ -2,7 +2,13 @@
 // the Cores, advisory Cost Model outliers, and the Markdown table.
 
 /** Timings of one phase over its samples, in nanoseconds. */
-export type Stats = { medianNs: number; minNs: number; samples: number };
+export type Stats = {
+  /** Absent in older saved reports. */
+  maxNs?: number;
+  medianNs: number;
+  minNs: number;
+  samples: number;
+};
 
 /**
  * One Benchmark measured by one runner. Host figures are per Run. A Peer
@@ -60,6 +66,7 @@ export const median = (xs: readonly number[]): number => {
 };
 
 export const statsOf = (samples: readonly number[]): Stats => ({
+  maxNs: samples.reduce((max, sample) => Math.max(max, sample), -Infinity),
   medianNs: median(samples),
   minNs: samples.reduce((min, sample) => Math.min(min, sample), Infinity),
   samples: samples.length,
