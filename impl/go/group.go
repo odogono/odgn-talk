@@ -662,7 +662,7 @@ func overrideDisplay(o LimitOverride) string {
 		k   string
 		n   int64
 		set LimitOverrideFields
-	}{{"fuelPerRun", o.FuelPerRun, OverrideFuelPerRun}, {"allocPerRun", o.AllocPerRun, OverrideAllocPerRun}, {"maxWait", int64(o.MaxWait / time.Millisecond), OverrideMaxWait}, {"maxJoin", int64(o.MaxJoin), OverrideMaxJoin}} {
+	}{{"fuelPerRun", o.FuelPerRun, OverrideFuelPerRun}, {"allocPerRun", o.AllocPerRun, OverrideAllocPerRun}, {"maxWaitMs", int64(o.MaxWait / time.Millisecond), OverrideMaxWait}, {"maxJoin", int64(o.MaxJoin), OverrideMaxJoin}} {
 		if p.n != 0 || o.Set&p.set != 0 {
 			pairs = append(pairs, corevalue.Pair{Key: p.k, Val: corevalue.Fields{Kind: corevalue.Number, Number: decimal.FromInt(p.n)}.Value()})
 		}
