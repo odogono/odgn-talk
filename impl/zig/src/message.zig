@@ -104,26 +104,21 @@ const GroupEntry = struct {
         };
     }
 
-    /// Writes `,"abandoned":[…]`: the tracked calls the Core has abandoned
-    /// since the last reply, in call id order, each forgotten once listed.
+    fn isAbandoned(e: *GroupEntry, id: []const u8) bool {
+        for (e.group.group.calls.items) |c| {
+            if (std.mem.eql(u8, c.id, id)) return c.abandoned.load(.acquire);
+        }
+        return false;
+    }
+
+    /// Writes actual abandonments in Call order without consuming them:
+    /// a reply allocation failure must leave the notification available.
     fn writeAbandoned(e: *GroupEntry, o: *Out) Allocator.Error!void {
-        var listed: std.ArrayList([]u8) = .empty;
-        defer {
-            for (listed.items) |x| e.gpa.free(x);
-            listed.deinit(e.gpa);
-        }
-        var i: usize = 0;
-        while (i < e.started.items.len) {
-            const id = e.started.items[i];
-            const abandoned = for (e.group.group.calls.items) |c| {
-                if (std.mem.eql(u8, c.id, id)) break c.abandoned.load(.acquire);
-            } else false;
-            if (abandoned) {
-                try listed.append(e.gpa, e.started.orderedRemove(i));
-            } else i += 1;
-        }
-        std.mem.sort([]u8, listed.items, {}, struct {
-            fn less(_: void, x: []u8, y: []u8) bool {
+        var listed: std.ArrayList([]const u8) = .empty;
+        defer listed.deinit(e.gpa);
+        for (e.started.items) |id| if (e.isAbandoned(id)) try listed.append(e.gpa, id);
+        std.mem.sort([]const u8, listed.items, {}, struct {
+            fn less(_: void, x: []const u8, y: []const u8) bool {
                 return machine.callOrder(x, y);
             }
         }.less);
@@ -133,6 +128,16 @@ const GroupEntry = struct {
             try o.text(id);
         }
         try o.raw("]");
+    }
+
+    /// Called only once the complete reply has been serialized successfully.
+    fn forgetAbandoned(e: *GroupEntry) void {
+        var i: usize = 0;
+        while (i < e.started.items.len) {
+            if (e.isAbandoned(e.started.items[i])) {
+                e.gpa.free(e.started.orderedRemove(i));
+            } else i += 1;
+        }
     }
 };
 
@@ -236,9 +241,11 @@ pub const Session = struct {
     /// Grant releases the Core made, sent as `release` needs before the
     /// reply they came before; `held` is that reply.
     releases: std.ArrayList(Release) = .empty,
-    held: ?[]u8 = null,
+    held: ?HeldReply = null,
     held_ref: i64 = 0,
     admitting: bool = false,
+    /// Opted in at hello: notify before the next callback, once across replies.
+    early_abandoned: bool = false,
     release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
@@ -260,7 +267,7 @@ pub const Session = struct {
         if (s.restoring) |*r| r.deinit();
         for (s.releases.items) |*r| r.deinit(gpa);
         s.releases.deinit(gpa);
-        if (s.held) |h| gpa.free(h);
+        if (s.held) |h| gpa.free(h.frame);
         for (s.effect_contexts.items) |c| {
             if (c.coordinator) |n| gpa.free(n);
             gpa.destroy(c);
@@ -1663,7 +1670,6 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     o.raw(",\"fuelUsed\":") catch {};
     o.int(mg.pump_fuel) catch {};
     writeReports(&o, entry) catch return oomReply();
-    entry.writeAbandoned(&o) catch return oomReply();
     return finishOk(s, &o, entry);
 }
 
@@ -1686,26 +1692,47 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
         s.paused_ref = ref;
         return pausedReply(s, ref);
     }
-    return holdForReleases(s, ref, pumpOk(s, ref, entry));
+    return holdForReleases(s, ref, entry, pumpOk(s, ref, entry), .ok);
 }
 
 /// A release may be the only reason execution paused: its acknowledgement
 /// resumes the saved worker rather than returning a precomputed final reply.
 fn pausedReply(s: *Session, ref: i64) []u8 {
-    if (s.need != null) return holdForReleases(s, ref, needReply(s, ref));
+    if (s.need != null) return holdForReleases(s, ref, s.exchange_entry.?, needReply(s, ref), .outer);
     std.debug.assert(s.releases.items.len > 0);
     s.release_continuation = true;
-    return holdForReleases(s, ref, s.gpa.dupe(u8, "") catch return oomReply());
+    return holdForReleases(s, ref, s.exchange_entry.?, s.gpa.dupe(u8, "") catch return oomReply(), .outer);
 }
 
-/// Sends the Core's queued Grant releases before `reply`: the first as a
-/// `release` need, holding `reply` until the last `release-result`.
-fn holdForReleases(s: *Session, ref: i64, reply: []u8) []u8 {
+const ReplyFields = enum { ok, outer, plain };
+const HeldReply = struct { frame: []u8, entry: *GroupEntry, fields: ReplyFields };
+
+/// Attach abandonment only to the reply being emitted, after release ordering
+/// is settled. A held reply must not consume notifications before its release.
+fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFields) []u8 {
+    if (reply.ptr == &oom_buf or fields == .plain or (fields == .outer and !s.early_abandoned)) return reply;
+    defer freeReply(s.gpa, reply);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    // Builders close either the ok object plus its envelope, or just the
+    // envelope after an interim need / error. Preserve all existing fields.
+    const closes: usize = if (fields == .ok) 2 else 1;
+    o.raw(reply[0 .. reply.len - closes]) catch return oomReply();
+    entry.writeAbandoned(&o) catch return oomReply();
+    o.raw(reply[reply.len - closes ..]) catch return oomReply();
+    const emitted = o.finish() catch return oomReply();
+    entry.forgetAbandoned();
+    return emitted;
+}
+
+/// Sends queued Grant releases before `reply`, holding its abandonment
+/// notifications until the first reply actually reaches the Host.
+fn holdForReleases(s: *Session, ref: i64, entry: *GroupEntry, reply: []u8, fields: ReplyFields) []u8 {
     if (s.releases.items.len == 0) {
         if (s.paused_ref == null) s.exchange_entry = null;
-        return reply;
+        return withAbandoned(s, entry, reply, fields);
     }
-    s.held = reply;
+    s.held = .{ .frame = reply, .entry = entry, .fields = fields };
     s.held_ref = ref;
     return releaseNeed(s, ref);
 }
@@ -1725,7 +1752,7 @@ fn releaseNeed(s: *Session, ref: i64) []u8 {
     o.raw(",\"now\":") catch {};
     o.instant(s.gpa, r.now) catch {};
     o.raw("}}") catch {};
-    return o.finish() catch oomReply();
+    return withAbandoned(s, s.held.?.entry, o.finish() catch return oomReply(), .outer);
 }
 
 /// `release-result`: the next release, or the held reply.
@@ -1737,7 +1764,7 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     s.held = null;
     if (s.release_continuation) {
         s.release_continuation = false;
-        s.gpa.free(reply);
+        s.gpa.free(reply.frame);
         s.paused_ref = null;
         const entry = s.exchange_entry.?;
         entry.group.group.release_pause = false;
@@ -1749,7 +1776,7 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     }
     if (s.exchange_entry) |e| e.group.group.release_pause = false;
     if (s.paused_ref == null) s.exchange_entry = null;
-    return reply;
+    return withAbandoned(s, reply.entry, reply.frame, reply.fields);
 }
 
 /// `effect-result`: `status` of `ok`, `failed` or `unknown`; anything
@@ -1854,7 +1881,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\"]") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2428,7 +2455,7 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
-    return holdForReleases(s, ref, finishOk(s, &o, entry));
+    return holdForReleases(s, ref, entry, finishOk(s, &o, entry), .plain);
 }
 
 /// The compiled Library a `{"$bytes": …}` identity names, Core-wide.
@@ -2524,7 +2551,7 @@ fn libraryInputReply(s: *Session, msg: Json, ref: i64, is_replace: bool) []u8 {
         var o = Out.init(s.gpa);
         defer o.deinit();
         beginOk(&o, ref) catch return oomReply();
-        return holdForReleases(s, ref, finishOk(s, &o, entry));
+        return holdForReleases(s, ref, entry, finishOk(s, &o, entry), .plain);
     }
     const carry = carryOf(field(msg, "carry")) orelse return hostError(s.gpa, ref, .invalid_value);
     entry.group.flush();
@@ -2602,8 +2629,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     var held = mg.reports.take();
     defer held.deinit();
     writeHeld(&o, &held) catch return oomReply();
-    entry.writeAbandoned(&o) catch return oomReply();
-    return holdForReleases(s, ref, finishOk(s, &o, entry));
+    return holdForReleases(s, ref, entry, finishOk(s, &o, entry), .ok);
 }
 
 fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
@@ -2614,7 +2640,7 @@ fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 
 fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
     freeTrace(s.gpa, takeTrace(entry));
-    return holdForReleases(s, ref, hostError(s.gpa, ref, code));
+    return holdForReleases(s, ref, entry, hostError(s.gpa, ref, code), .outer);
 }
 
 /// After an answer, the paused Reload or library replacement goes on, or
@@ -3392,6 +3418,17 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
 fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) []u8 {
     if (std.mem.eql(u8, m, "hello")) {
         if ((asInt(field(msg, "protocol")) orelse -1) != protocol_version) return protocolError(s.gpa, ref, "unknown protocol");
+        if (field(msg, "features")) |features| {
+            if (features != .array) return protocolError(s.gpa, ref, "features must be text names");
+            var early = s.early_abandoned;
+            for (features.array.items) |feature| {
+                const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
+                if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
+                    early = true;
+                } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
+            }
+            s.early_abandoned = early;
+        }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
         return addReply(s, msg, ref);
@@ -4716,6 +4753,56 @@ test "store reaches the Host as op and effect needs, its Trace the corpus case's
     try std.testing.expectEqualStrings("release", release.object.get("m").?.string);
     try std.testing.expectEqualStrings("st", release.object.get("grant").?.string);
     _ = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+}
+
+test "hello opt-in publishes abandonment on release before a held final reply" {
+    for ([_]bool{ false, true }) |early| {
+        const session_instance = Session.init(std.testing.allocator).?;
+        defer session_instance.deinit();
+        var c = Client.init(session_instance);
+        defer c.deinit();
+        // A refused feature list must not partially enable its valid prefix.
+        const refused = try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"abandoned-before-needs-v1\",\"unknown\"]}}", .{0});
+        try std.testing.expectEqualStrings("protocol error", try errKind(refused));
+        if (early) {
+            const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"abandoned-before-needs-v1\"]}}", .{0}));
+            var advertised = false;
+            for (hello.object.get("features").?.array.items) |feature| if (std.mem.eql(u8, feature.string, "abandoned-before-needs-v1")) {
+                advertised = true;
+            };
+            try std.testing.expect(advertised);
+            // Version refresh does not revoke an already activated feature.
+            _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{0}));
+        }
+        const defined = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"release\":true,\"ops\":[{{\"name\":\"read\",\"mode\":\"suspending\",\"result\":\"number\"}}]}}", .{1}));
+        _ = defined;
+        const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+        const created = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{3}));
+        _ = created;
+        const loaded = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n ask api to read and wait\\nend go\"}}", .{ 4, grant.object.get("grant").?.integer }));
+        _ = loaded;
+        const requested = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+        _ = requested;
+        const started = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{6});
+        const call = started.object.get("need").?.object.get("call").?.string;
+        _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+        const stopped = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{7}));
+        _ = stopped;
+        const releasing = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{8});
+        try std.testing.expectEqualStrings("release", releasing.object.get("need").?.object.get("m").?.string);
+        if (early) {
+            const ids = releasing.object.get("abandoned").?.array.items;
+            try std.testing.expectEqual(@as(usize, 1), ids.len);
+            try std.testing.expectEqualStrings(call, ids[0].string);
+        } else try std.testing.expect(releasing.object.get("abandoned") == null);
+        const wrong = try c.sendRef(9, "{{\"m\":\"release-result\",\"ref\":9}}", .{});
+        try std.testing.expectEqualStrings("protocol error", try errKind(wrong));
+        try std.testing.expect(wrong.object.get("abandoned") == null);
+        const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":8}}", .{}));
+        const final_ids = done.object.get("abandoned").?.array.items;
+        try std.testing.expectEqual(@as(usize, if (early) 0 else 1), final_ids.len);
+        if (!early) try std.testing.expectEqualStrings(call, final_ids[0].string);
+    }
 }
 
 test "a started call the Core abandons is listed once in abandoned; an answered one never" {

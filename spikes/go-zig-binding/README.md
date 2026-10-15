@@ -5,7 +5,7 @@ not a replacement Go embedding package. The Go Core remains in place.
 
 ## Result
 
-**The focused callback compatibility gate now passes locally.** A Go Operation queues Stop before
+**The focused callback compatibility gate passes on all four targets in #971.** A Go Operation queues Stop before
 returning through the Message Layer, and the same Pump rolls its Segment back.
 `TestStopAtCrossingParity` compares native Go and the embedded Zig artifact for
 immediate returns, wrong Shapes, Script failures, Host errors and suspending
@@ -18,6 +18,14 @@ Calls and worker reentry. It found and corrected Zig discrepancies tracked in
 [#968](https://github.com/odogono/odgn-talk/issues/968),
 [#969](https://github.com/odogono/odgn-talk/issues/969) and
 [#970](https://github.com/odogono/odgn-talk/issues/970).
+
+A subsequent combined cancellation/cleanup test found a timing gap tracked in
+[#972](https://github.com/odogono/odgn-talk/issues/972): final-reply-only
+`abandoned` arrives after a later callback can observe its context. The current
+artifact adds opt-in `abandoned-before-needs-v1` timing. The new tests check
+cancellation before Operation, property, Rollback and Grant release callbacks,
+fatal worker errors and exactly-once notices. Existing Hosts keep final-reply
+timing; request the feature in `hello` and check support before relying on it.
 
 This remains an isolated probe, not a public Go binding. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
@@ -80,7 +88,7 @@ Each complete conversation needs one owner. Closing an Engine requires its
 reactors to have finished. The probe's JSON decoder also retains Go's nesting
 limit; it is not sufficient for the Message Layer's unlimited nesting contract.
 
-The adapters in `compatibility_test.go` execute real Go callbacks outside the
+The adapters in `compatibility_test.go` and `abandonment_test.go` execute real Go callbacks outside the
 export lock, recover panic into `hostError`, and map `abandoned` notifications to
 Host work-context cancellation. These responsibilities are demonstrated in tests;
 `Reactor` itself supplies only bytes and export serialization. Report comparisons
@@ -97,11 +105,27 @@ integration, the full API/Corpus and Session facilities remain binding work.
 
 The [probe CI](../../.github/workflows/go-zig-probe.yml) executes pure-Go tests,
 vet and race checks on Linux/macOS amd64/arm64, separately from cross-compilation.
-Local execution and race evidence is Darwin/arm64; the other runners must pass
-before claiming all-platform execution. A passing sidecar matrix does not prove
-embedded-wazero execution.
+[#971's embedded run](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
+passes all four native execution/race jobs as well as cross-builds for its
+recorded artifact. Current early-abandonment artifact execution is verified
+locally on Darwin/arm64; its own matrix must pass before extending that claim.
+A passing sidecar matrix does not prove embedded-wazero execution.
 
-## Current callback-artifact measurements, 2026-10-15
+## Early-abandonment artifact measurements, 2026-10-15
+
+[Raw output](measurements-abandonment.txt) records three repetitions on the same
+Darwin/arm64 Apple M5, Go 1.27.2, wazero v1.12.0 and Zig 0.17.0 safe setup,
+with `CGO_ENABLED=0`. Artifact source `05f2a66d0216626908a3b32c0b70a945add010d6`,
+SHA-256 `25a91a9369784186e305d2681f4f584cf41edf7701721f83ea1161792abab9fd`, **2,984,484 bytes**.
+Median immediate-call run averages: native Go **3.754 µs**, embedded probe
+**31.650 µs** (**8.4×**); cold runtime/compile/close **614.8 ms**, cached-code
+instantiate/close **123.7 µs**. The immediate-call benchmark uses the existing
+Host conversation without early-abandonment opt-in; it refreshes the same matched
+workload for this binary, rather than measuring cancellation latency. No latency
+percentiles, retained-memory or performance-acceptance claim follows from it.
+Earlier measurement files remain tied to their named artifacts.
+
+## Callback-gate measurements, 2026-10-15
 
 [Raw output](measurements-callbacks.txt) records three repetitions using source
 `5ae0965a6c6a3503aac6c5742e3313d7477c9d94`, SHA-256
