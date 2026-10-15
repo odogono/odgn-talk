@@ -8,6 +8,9 @@ import (
 // Call admits a Function Value into its Home Script's mailbox. Staleness is
 // checked at drain, after earlier Host Inputs; arity belongs to the new Run.
 func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitOverride) (DeliveryID, *Pending, error) {
+	if g.backend != nil {
+		return "", nil, backendUnsupported("Function Calls")
+	}
 	fields := map[string]string{"fn": fn.String()}
 	if len(args) > 0 {
 		fields["args"] = argsDisplay(args)

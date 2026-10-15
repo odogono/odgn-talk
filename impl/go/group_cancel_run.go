@@ -2,6 +2,10 @@ package northtalk
 
 // CancelRun queues cleanup at a Host crossing or the Pump's end.
 func (s *Script) CancelRun(id RunID) {
+	if s.group.backend != nil {
+		s.group.backend.control(s, "cancel-run", map[string]any{"run": id})
+		return
+	}
 	g := s.group
 	g.mu.Lock()
 	g.controlsQueued = true

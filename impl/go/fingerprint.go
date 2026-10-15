@@ -201,6 +201,9 @@ func (g *Group) fingerprint() [32]byte {
 
 // Fingerprint covers declarations, code identities and limits, never state.
 func (g *Group) Fingerprint() [32]byte {
+	if g.backend != nil {
+		return g.backend.fingerprint()
+	}
 	if err := g.beginWorker(); err != nil {
 		panic(err)
 	}

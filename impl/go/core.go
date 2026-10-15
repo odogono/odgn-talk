@@ -48,6 +48,9 @@ type compileKey struct {
 
 func New() *Core { return &Core{units: map[compileKey]*lower.Unit{}} }
 func CoreVersions() Versions {
+	if experimentalVersions != nil {
+		return experimentalVersions()
+	}
 	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/7"}
 }
 func DefaultLimits() Limits {
@@ -118,6 +121,9 @@ func parsedIdentity(kind, name, source string, imports map[string][32]byte, tree
 }
 func (e *LoadError) Error() string { return fmt.Sprintf("source rejected: %v", e.Diagnostics) }
 func (c *Core) compile(name, source string, options check.Options, imports ...map[string][32]byte) (*lower.Unit, *LoadError) {
+	if experimentalGroupFactory != nil {
+		panic(backendUnsupported("native Go compilation"))
+	}
 	var ids map[string][32]byte
 	if len(imports) > 0 {
 		ids = imports[0]

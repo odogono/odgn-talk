@@ -247,7 +247,15 @@ Compare startup/load/restore, warm execution, value conversion, throughput,
 tail latency and retained memory on matched builds before setting retirement
 limits. Cross-compilation alone must never mark execution coverage complete.
 
-No production binding was introduced, so current glossary definitions and
-retirement ADRs are not changed by this probe. When a binding is introduced,
-remove the Go/TS exclusion from the Message Layer definition and description,
-update Core wording when retirement actually occurs, and regenerate Appendix A.
+The first experimental public-interface slice now lives behind
+`talk_zig_experimental`; see the [Go guide](../../impl/go/README.md#experimental-zig-backend)
+for its supported operations and limitations. It uses Go-owned data Values and
+one guest per Group with GC cleanup, while the separate probe continues to
+compare native Go against the Message Layer. The public adapter uncovered the
+ordinary Zig Pump Clock divergence tracked in #976, now checked in the shared
+machine before draining inputs. Full API/Corpus, facilities, concurrent-input
+admission, non-observational Trace sinks and performance remain gates.
+
+The Message Layer definition now includes language-specific embedding adapters,
+with Appendix A regenerated. Native Go remains the default Core; no retirement
+ADR or production cutover is part of this experimental slice.

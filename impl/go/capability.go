@@ -401,6 +401,9 @@ func (c *Call) finish() {
 	c.fuelLeft = nil
 }
 func (s *Script) Grants() map[string][]string {
+	if s.group.backend != nil {
+		panic(backendUnsupported("Grants inspection"))
+	}
 	if e := s.group.beginWorker(); e != nil {
 		panic(e)
 	}
@@ -417,6 +420,10 @@ func (s *Script) Grants() map[string][]string {
 	return out
 }
 func (s *Script) Revoke(grantName string) {
+	if s.group.backend != nil {
+		s.group.backend.control(s, "revoke", map[string]any{"grant": grantName})
+		return
+	}
 	g := s.group
 	g.mu.Lock()
 	g.inputs = append(g.inputs, delivery{kind: "revoke", script: s, fields: map[string]string{"grant": grantName}})

@@ -15,6 +15,9 @@ import (
 
 // Extend adds an Entry atomically, keeping existing frames and Function Values.
 func (s *Script) Extend(source string) error {
+	if s.group.backend != nil {
+		return backendUnsupported("Extend")
+	}
 	g := s.group
 	addStandardLibraries(g.libraries, usedNamesIn(source)...)
 	_, ids, _, _ := libraryOptions(g.libraries)
