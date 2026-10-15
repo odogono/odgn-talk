@@ -36,7 +36,7 @@ Apple M5 (10 cores, 24 GiB), macOS 27.0.1 arm64, Zig 0.17.0 `safe`, Apple clang
 21 with C Host `-O2`, language 1.0-rc.3 and Cost Model 0. The baseline was
 `main` at `f51ad856`. The measured after is the scalar-constructor working tree
 committed as `797d1c63`; source and binary hashes identify it in each JSON.
-No #935/#936 change is included in these timings. Later integration with #935
+No #935/#936 change is included in these timings. Later integration with #935 and #936
 does not change the recorded measurement baseline or imply a new speedup claim.
 
 Before editing, the [baseline self-comparison](2026-10-14-zig-scalar-baseline.json)
@@ -235,3 +235,13 @@ machine, not an instruction-equivalent comparison or a new paired speedup.
 - `bun run check`, `bun run lint`, `bun run format:check`, `bun run zig:check`,
   `bun tools/zig/api.ts`, `zig fmt --check impl/zig` and `git diff --check` pass. Blessed expectations, Spec Data Files, logical costs
   and public C declarations are unchanged.
+
+### Integration after the measurement revision
+
+Merged `main` through `728e42ec` (#935 and #936) on 2026-10-15. The benchmark
+driver retains both scalar source hashes and the generator/rates hashes added
+by #935. On the combined branch, `zig build test corpus --summary all` and
+`zig build corpus -- --defer-crossings` pass, including the native C Host tests
+and all 429 Corpus cases in each mode. Generator/API checks, Zig formatting
+and the benchmark driver’s argument parsing pass. The historical timing files
+remain unchanged.
