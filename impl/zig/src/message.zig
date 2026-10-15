@@ -226,6 +226,8 @@ pub const Session = struct {
     oom: bool = false,
     /// The Group whose Pump is running, which a need belongs to.
     pumping_entry: ?*GroupEntry = null,
+    exchange_entry: ?*GroupEntry = null,
+    exchange_pump: bool = false,
     /// A `restore` waiting for its `resolve-result`.
     restoring: ?Restoring = null,
     /// What an `effect-result` brought back, for the re-made hook.
@@ -235,6 +237,8 @@ pub const Session = struct {
     releases: std.ArrayList(Release) = .empty,
     held: ?[]u8 = null,
     held_ref: i64 = 0,
+    admitting: bool = false,
+    release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
     effect_contexts: std.ArrayList(*EffectContext) = .empty,
@@ -750,7 +754,9 @@ fn chargeAnswer(call: *caps.Call, charged: u64) bool {
 fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Outcome {
     const oc: *OpContext = @ptrCast(@alignCast(context.?));
     const s = oc.session;
+    if (s.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
     if (s.answer) |*a| {
+        s.pumping_entry.?.group.group.answering_crossing = false;
         const answer = a.*;
         s.answer = null;
         // A result answers only an immediate Operation, started only a
@@ -892,7 +898,9 @@ fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
 fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentContext) caps.EffectStatus {
     const ec: *EffectContext = @ptrCast(@alignCast(context.?));
     const s = ec.session;
+    if (s.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
     if (s.effect_answer) |status| {
+        s.pumping_entry.?.group.group.answering_crossing = false;
         s.effect_answer = null;
         return status;
     }
@@ -952,11 +960,14 @@ fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
     s.releases.append(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
         s.gpa.free(script);
         s.gpa.free(grant);
+        return;
     };
+    if (s.in_pump or s.in_work) s.pumping_entry.?.group.group.release_pause = true;
 }
 
 fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
     const a = &(s.answer orelse return null);
+    s.pumping_entry.?.group.group.answering_crossing = false;
     const answer = a.*;
     s.answer = null;
     switch (answer.kind) {
@@ -1219,7 +1230,7 @@ fn beginOk(o: *Out, ref: i64) Allocator.Error!void {
 }
 
 fn finishOk(s: *Session, o: *Out, entry: ?*GroupEntry) []u8 {
-    if (entry) |e| {
+    if (if (s.admitting) null else entry) |e| {
         e.group.flush();
         const lines = takeTrace(e);
         defer freeTrace(s.gpa, lines);
@@ -1660,6 +1671,8 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model.dates.Instant, slice: u64, cap: u64) []u8 {
     if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
     s.in_pump = true;
+    s.exchange_pump = true;
+    s.exchange_entry = entry;
     s.pumping_entry = entry;
     defer {
         s.in_pump = false;
@@ -1670,15 +1683,27 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     entry.group.flush();
     if (mg.pumpPaused()) {
         s.paused_ref = ref;
-        return holdForReleases(s, ref, needReply(s, ref));
+        return pausedReply(s, ref);
     }
     return holdForReleases(s, ref, pumpOk(s, ref, entry));
+}
+
+/// A release may be the only reason execution paused: its acknowledgement
+/// resumes the saved worker rather than returning a precomputed final reply.
+fn pausedReply(s: *Session, ref: i64) []u8 {
+    if (s.need != null) return holdForReleases(s, ref, needReply(s, ref));
+    std.debug.assert(s.releases.items.len > 0);
+    s.release_continuation = true;
+    return holdForReleases(s, ref, s.gpa.dupe(u8, "") catch return oomReply());
 }
 
 /// Sends the Core's queued Grant releases before `reply`: the first as a
 /// `release` need, holding `reply` until the last `release-result`.
 fn holdForReleases(s: *Session, ref: i64, reply: []u8) []u8 {
-    if (s.releases.items.len == 0) return reply;
+    if (s.releases.items.len == 0) {
+        if (s.paused_ref == null) s.exchange_entry = null;
+        return reply;
+    }
     s.held = reply;
     s.held_ref = ref;
     return releaseNeed(s, ref);
@@ -1709,6 +1734,20 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     if (s.releases.items.len > 0) return releaseNeed(s, ref);
     const reply = s.held.?;
     s.held = null;
+    if (s.release_continuation) {
+        s.release_continuation = false;
+        s.gpa.free(reply);
+        s.paused_ref = null;
+        const entry = s.exchange_entry.?;
+        entry.group.group.release_pause = false;
+        if (s.work_paused) {
+            s.work_paused = false;
+            return runWork(s, ref, entry, .resumed);
+        }
+        return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+    }
+    if (s.exchange_entry) |e| e.group.group.release_pause = false;
+    if (s.paused_ref == null) s.exchange_entry = null;
     return reply;
 }
 
@@ -1761,7 +1800,10 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
             answer.kind = .done;
         } else if (field(msg, "fail")) |f| {
             answer.kind = .fail;
-            failureOf(s, entry, f, &answer) catch return hostError(s.gpa, ref, .invalid_value);
+            failureOf(s, entry, f, &answer) catch |e| {
+                if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
+                answer.kind = .host_error;
+            };
         } else if (field(msg, "hostError") != null) {
             answer.kind = .host_error;
         } else return protocolError(s.gpa, ref, "a prop-result with no outcome");
@@ -1778,7 +1820,10 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
             answer.kind = .done;
         } else if (field(msg, "fail")) |f| {
             answer.kind = .fail;
-            failureOf(s, entry, f, &answer) catch return hostError(s.gpa, ref, .invalid_value);
+            failureOf(s, entry, f, &answer) catch |e| {
+                if (e == error.OutOfMemory) return hostError(s.gpa, ref, .out_of_memory);
+                answer.kind = .host_error;
+            };
         } else if (field(msg, "limit") != null) {
             answer.kind = .limit;
         } else if (field(msg, "hostError") != null) {
@@ -1808,6 +1853,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2500,6 +2546,8 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     const mg = &entry.group.group;
     const c = s.core;
     s.in_work = true;
+    s.exchange_pump = false;
+    s.exchange_entry = entry;
     s.pumping_entry = entry;
     defer {
         s.in_work = false;
@@ -2523,7 +2571,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     if (paused) {
         s.paused_ref = ref;
         s.work_paused = true;
-        return holdForReleases(s, ref, needReply(s, ref));
+        return pausedReply(s, ref);
     }
     switch (outcome) {
         .reload => |r| switch (r) {
@@ -2571,6 +2619,7 @@ fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode
 /// After an answer, the paused Reload or library replacement goes on, or
 /// else the paused Pump.
 fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
+    entry.group.group.answering_crossing = true;
     if (s.work_paused) {
         s.work_paused = false;
         return runWork(s, ref, entry, .resumed);
@@ -3319,7 +3368,7 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     // Releases go first: each `release` need waits for its
     // `release-result`, then the reply they came before.
     if (s.held != null) {
-        if (ref != s.held_ref or !std.mem.eql(u8, m, "release-result")) return protocolError(s.gpa, ref, "a release is waiting for its release-result");
+        if (ref != s.held_ref or !std.mem.eql(u8, m, "release-result")) return pausedAdmission(s, msg, ref, m, s.held_ref);
         return releaseResultReply(s, ref);
     }
     if (s.paused_ref) |paused| {
@@ -3328,7 +3377,7 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
             .prop => "prop-result",
             .effect => "effect-result",
         };
-        if (ref != paused) return protocolError(s.gpa, ref, "a Pump is waiting for its result");
+        if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
         if (!std.mem.eql(u8, m, want)) {
             if (std.mem.eql(u8, m, "op-result") or std.mem.eql(u8, m, "prop-result") or std.mem.eql(u8, m, "effect-result")) return protocolError(s.gpa, ref, "the result does not match the need");
             return protocolError(s.gpa, ref, "a Pump is waiting for its result");
@@ -3336,6 +3385,10 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         if (s.need.?.kind == .effect) return answerEffect(s, msg, ref);
         return answerNeed(s, msg, ref, s.need.?.kind == .prop);
     }
+    return dispatch(s, msg, ref, m, frame);
+}
+
+fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) []u8 {
     if (std.mem.eql(u8, m, "hello")) {
         if ((asInt(field(msg, "protocol")) orelse -1) != protocol_version) return protocolError(s.gpa, ref, "unknown protocol");
         return helloReply(s, ref);
@@ -3415,6 +3468,38 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return cancelDeliveryReply(s, msg, ref);
     }
     return protocolError(s.gpa, ref, "unknown or unsupported message");
+}
+
+fn messageIn(m: []const u8, names: []const []const u8) bool {
+    for (names) |name| if (std.mem.eql(u8, m, name)) return true;
+    return false;
+}
+
+fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: i64) []u8 {
+    if (ref == worker_ref) return protocolError(s.gpa, ref, "the worker ref is reserved for its result");
+    const entry = s.exchange_entry orelse return protocolError(s.gpa, ref, "no paused worker");
+    const group = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
+    if (group != entry) return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
+    if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" })) return hostError(s.gpa, ref, .reentrant_call);
+    if (!messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
+    const mg = &entry.group.group;
+    const pumping = mg.pumping;
+    const trace = mg.trace;
+    // A WASM export has returned, but its Host callback has not. Admission
+    // must use the same control queue and Trace hold as native callbacks.
+    mg.pumping = s.exchange_pump;
+    if (mg.pumping and mg.held_trace == null and trace != null) {
+        if (mg.held == null) mg.held = .init(mg.gpa);
+        mg.held_trace = trace;
+    }
+    if (mg.held_trace != null) mg.trace = &mg.held.?.writer;
+    s.admitting = true;
+    defer {
+        s.admitting = false;
+        mg.pumping = pumping;
+        mg.trace = trace;
+    }
+    return dispatch(s, msg, ref, m, &.{});
 }
 
 // ---------------------------------------------------------- wasm exports
@@ -3573,6 +3658,157 @@ test "hello, framing refusals, and a Pump with no Operations" {
     try std.testing.expectEqual(@as(i64, 42), add.object.get("value").?.integer);
     const refused = try okOf(try c.send("{{\"m\":\"add\",\"ref\":{d},\"a\":[],\"b\":1}}", .{8}));
     try std.testing.expectEqualStrings("wrong kind", refused.object.get("fail").?.object.get("code").?.string);
+}
+
+/// A small real transport fixture for paused-input tests; refs 1..6 set up
+/// and start the Pump, and callback inputs use their own refs.
+fn pausedFixture(c: *Client, mode: []const u8, source: []const u8, metered: bool) !Json {
+    const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{0}));
+    try std.testing.expectEqualStrings("paused-inputs-v1", hello.object.get("features").?.array.items[0].string);
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"{s}\",\"result\":\"number\"{s}}}]}}", .{ 1, mode, if (metered) ",\"metering\":\"read-only\"" else "" }));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":{f}}}", .{ 4, grant.object.get("grant").?.integer, std.json.fmt(source, .{}) }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
+    return pumped.object.get("need") orelse unexpected(pumped);
+}
+
+test "paused callback inputs land after the callback record and before conversion" {
+    for ([_][]const u8{ "\"result\":7", "\"result\":\"bad\"", "\"hostError\":\"broken\"", "\"fail\":{\"code\":\"bad\",\"data\":{}}" }) |answer| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        _ = try pausedFixture(&c, "immediate", "script variable n=0\non go\n put 9 into n\n ask api to read\n put 8 into n\n return n\nend go", false);
+        const admitted = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"crossing\"}}", .{7}));
+        try std.testing.expect(admitted.object.get("trace") == null);
+        const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,{s}}}", .{answer}));
+        try std.testing.expectEqualStrings("stopped", done.object.get("state").?.string);
+        var called = false;
+        var stopped = false;
+        for (done.object.get("trace").?.array.items) |line| {
+            if (std.mem.startsWith(u8, line.string, "call s/r1.c1")) called = true;
+            if (std.mem.startsWith(u8, line.string, "> stop s")) {
+                try std.testing.expect(called);
+                stopped = true;
+            }
+            try std.testing.expect(!std.mem.startsWith(u8, line.string, "call-failed"));
+        }
+        try std.testing.expect(stopped);
+        const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8}));
+        const vars = inspected.object.get("scripts").?.array.items[0].object.get("vars").?.array.items;
+        try std.testing.expectEqual(@as(i64, 0), vars[0].array.items[1].integer);
+    }
+}
+
+test "an Answer and metered charge during Start wait for the next Pump" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const need = try pausedFixture(&c, "suspending", "on go\n ask api to read and wait\n return it\nend go", true);
+    const id = need.object.get("call").?.string;
+    const charged = try okOf(try c.send("{{\"m\":\"request-charge\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"fuel\":1}}", .{ 7, id }));
+    try std.testing.expectEqualStrings("q1", charged.object.get("request").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":7}}", .{ 8, id }));
+    const parked = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+    for (parked.object.get("reports").?.array.items) |r| try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "run end"));
+    const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9});
+    const end = try runEnd(done);
+    try std.testing.expectEqual(@as(i64, 7), end.object.get("result").?.integer);
+    const reports = (try okOf(done)).object.get("reports").?.array.items;
+    try std.testing.expectEqualStrings("charge result", reports[0].object.get("kind").?.string);
+    try std.testing.expectEqualStrings("accepted", reports[0].object.get("status").?.string);
+}
+
+test "paused cancellation and Rewind retain rollback and accounting" {
+    for ([_][]const u8{ "cancel-run", "rewind-run", "stop" }) |control| {
+        for ([_][]const u8{ "immediate", "suspending" }) |mode| {
+            const s = Session.init(std.testing.allocator).?;
+            defer s.deinit();
+            var c = Client.init(s);
+            defer c.deinit();
+            const suspending = std.mem.eql(u8, mode, "suspending");
+            const source = if (suspending) "script variable n=0\non go\n put 9 into n\n ask api to read and wait\n put 8 into n\n return n\nend go" else "script variable n=0\non go\n put 9 into n\n ask api to read\n put 8 into n\n return n\nend go";
+            _ = try pausedFixture(&c, mode, source, false);
+            _ = try okOf(try c.sendRef(7, "{{\"m\":\"{s}\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"run\":\"s/r1\",\"reason\":\"crossing\"}}", .{ control, 7 }));
+            const done = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,{s}}}", .{if (suspending) "\"started\":true" else "\"result\":7"}));
+            const rewind = std.mem.eql(u8, control, "rewind-run");
+            try std.testing.expectEqualStrings(if (rewind) "rewound" else if (std.mem.eql(u8, control, "stop")) "stopped" else "idle", done.object.get("state").?.string);
+            const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8}));
+            const script = inspected.object.get("scripts").?.array.items[0];
+            try std.testing.expectEqual(@as(i64, 0), script.object.get("vars").?.array.items[0].array.items[1].integer);
+            if (rewind) try std.testing.expectEqual(@as(usize, 1), script.object.get("mailbox").?.array.items.len);
+        }
+    }
+}
+
+test "a different Run's deferred cleanup retains the original Host return until release" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"resource\",\"segmentLifecycle\":true,\"release\":true,\"ops\":[{{\"name\":\"open\",\"mode\":\"immediate\",\"result\":\"nothing\",\"segmentBound\":true,\"scope\":{{\"opens\":\"file\",\"abandon\":\"close\"}}}},{{\"name\":\"close\",\"mode\":\"immediate\",\"result\":\"nothing\",\"segmentBound\":true,\"scope\":{{\"closes\":\"file\"}}}}]}}", .{1}));
+    const resource = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"resource\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\"}}]}}", .{3}));
+    const api = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{4}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"other\",\"grants\":{{\"r\":{d}}},\"source\":\"on hold\\n ask r to open\\n repeat forever\\n end repeat\\nend hold\"}}", .{ 6, resource }));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"script variable n=0\\non go\\n ask api to read\\n put 8 into n\\n return n\\nend go\"}}", .{ 7, api }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"other\"}},\"message\":{{\"name\":\"hold\"}}}}", .{8}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelSlice\":20}}", .{10});
+    try std.testing.expectEqualStrings("begin", reply.object.get("need").?.object.get("phase").?.string);
+    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":10,\"status\":\"ok\"}}", .{});
+    try std.testing.expectEqualStrings("open", reply.object.get("need").?.object.get("operation").?.string);
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":null}}", .{});
+    try std.testing.expectEqualStrings("read", reply.object.get("need").?.object.get("operation").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"other\",\"reason\":\"cleanup\"}}", .{11}));
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":7}}", .{});
+    try std.testing.expectEqualStrings("close", reply.object.get("need").?.object.get("operation").?.string);
+    reply = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":10,\"result\":null}}", .{});
+    try std.testing.expectEqualStrings("rollback", reply.object.get("need").?.object.get("phase").?.string);
+    reply = try c.sendRef(10, "{{\"m\":\"effect-result\",\"ref\":10,\"status\":\"ok\"}}", .{});
+    try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+    // A callback-generated Stop must be admitted before s executes its next instruction.
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"release\"}}", .{12}));
+    const done = try okOf(try c.sendRef(10, "{{\"m\":\"release-result\",\"ref\":10}}", .{}));
+    var calls: usize = 0;
+    for (done.object.get("trace").?.array.items) |line| if (std.mem.startsWith(u8, line.string, "call s/r1.c1")) {
+        calls += 1;
+    };
+    try std.testing.expectEqual(@as(usize, 1), calls);
+    const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{13}));
+    const script = inspected.object.get("scripts").?.array.items[1];
+    try std.testing.expectEqual(@as(i64, 0), script.object.get("vars").?.array.items[0].array.items[1].integer);
+}
+
+test "property callbacks admit Stop before valid or invalid return conversion" {
+    for ([_]bool{ false, true }) |set| {
+        for ([_][]const u8{ "\"value\":7", "\"value\":\"wrong\"", "\"hostError\":\"broken\"", "\"fail\":{\"code\":\"bad\",\"data\":17}", "\"fail\":{}" }) |outcome| {
+            const s = Session.init(std.testing.allocator).?;
+            defer s.deinit();
+            var c = Client.init(s);
+            defer c.deinit();
+            _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"box\",\"props\":[{{\"name\":\"value\",\"shape\":\"number\"}}]}}", .{1}));
+            _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{2}));
+            _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"box\",\"id\":\"one\"}}", .{3}));
+            const source = if (set) "script variable n=0\non go o\n put 9 into n\n set the value of o to 7\n put 8 into n\nend go" else "script variable n=0\non go o\n put 9 into n\n put the value of o into n\n put 8 into n\nend go";
+            _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":{f}}}", .{ 4, std.json.fmt(source, .{}) }));
+            _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\",\"args\":[{{\"$object\":[\"box\",\"one\"]}}]}}}}", .{5}));
+            const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
+            try std.testing.expectEqualStrings("prop", pumped.object.get("need").?.object.get("m").?.string);
+            _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"box\",\"id\":\"two\"}}", .{7}));
+            const refused = try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8});
+            try std.testing.expectEqualStrings("reentrant call", refused.object.get("err").?.object.get("code").?.string);
+            _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"property\"}}", .{9}));
+            const done = try okOf(try c.sendRef(6, "{{\"m\":\"prop-result\",\"ref\":6,{s}}}", .{outcome}));
+            try std.testing.expectEqualStrings("stopped", done.object.get("state").?.string);
+            const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{10}));
+            try std.testing.expectEqual(@as(i64, 0), inspected.object.get("scripts").?.array.items[0].object.get("vars").?.array.items[0].array.items[1].integer);
+        }
+    }
 }
 
 test "an immediate op pauses the Pump and resumes on its result" {

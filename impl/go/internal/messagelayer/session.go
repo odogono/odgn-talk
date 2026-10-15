@@ -31,7 +31,8 @@ type Session struct {
 	groups    map[string]*group
 	libraries map[[32]byte]*talk.Library
 	// waiting is the worker call parked on the Host, or nil.
-	waiting *exchange
+	waiting   *exchange
+	admitting bool
 }
 
 type group struct {
@@ -49,11 +50,12 @@ type request struct {
 
 // exchange is one worker call that has gone to its own goroutine.
 type exchange struct {
-	ref     int64
-	group   *group
-	out     chan outFrame
-	results chan fields
-	result  string
+	ref      int64
+	group    *group
+	out      chan outFrame
+	results  chan fields
+	result   string
+	starting *talk.Call
 }
 
 type outFrame struct {
@@ -81,14 +83,27 @@ func (s *Session) Send(frame []byte) []byte {
 		return replyFrame(ref, nil, err)
 	}
 	if x := s.waiting; x != nil {
-		if ref != x.ref {
-			return replyFrame(ref, nil, protocolErrorf("ref %d is waiting on the Host's result", x.ref))
+		if ref == x.ref && name == x.result {
+			x.results <- f
+			return s.await(x)
 		}
-		if name != x.result {
+		if ref == x.ref {
+			return replyFrame(ref, nil, protocolErrorf("ref %d is reserved for %s", x.ref, x.result))
+		}
+		g, err := s.group(f)
+		if err != nil || g != x.group {
+			return replyFrame(ref, nil, protocolErrorf("a paused input must address the worker's Group"))
+		}
+		if workerMessage(name) {
+			return replyFrame(ref, nil, &talk.HostError{Code: talk.ReentrantCall, Detail: "worker call during a paused callback"})
+		}
+		if !pausedInput(name) {
 			return replyFrame(ref, nil, protocolErrorf("%s sent while ref %d waits on a result", name, x.ref))
 		}
-		x.results <- f
-		return s.await(x)
+		s.admitting = true
+		ok, err := s.call(name, f)
+		s.admitting = false
+		return replyFrame(ref, ok, err)
 	}
 	if name == "pump" {
 		return s.pump(ref, f)
@@ -98,6 +113,22 @@ func (s *Session) Send(frame []byte) []byte {
 	}
 	ok, err := s.call(name, f)
 	return replyFrame(ref, ok, err)
+}
+
+func pausedInput(name string) bool {
+	switch name {
+	case "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "request-charge", "settle", "object":
+		return true
+	}
+	return false
+}
+
+func workerMessage(name string) bool {
+	switch name {
+	case "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters":
+		return true
+	}
+	return false
 }
 
 func (s *Session) await(x *exchange) []byte {

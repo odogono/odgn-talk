@@ -251,7 +251,7 @@ func TestOpResultFailures(t *testing.T) {
 	}
 }
 
-func TestOnlyTheResultMayFollowANeed(t *testing.T) {
+func TestReservedResultAndWorkerReentryDuringANeed(t *testing.T) {
 	h := newHost(t)
 	h.setup(`[{"name":"read","mode":"immediate","result":"number"}]`, "on go\n  ask api to read\n  return it\nend go", "")
 	h.ok("request", `"group":"g","to":{"script":"s"},"message":{"name":"go"}`)
@@ -260,7 +260,7 @@ func TestOnlyTheResultMayFollowANeed(t *testing.T) {
 		t.Fatal(show(err))
 	}
 	// Another ref is refused too, and its reply echoes that ref.
-	if reply := string(h.s.Send([]byte(`{"m":"counters","ref":99,"group":"g","script":"s"}`))); !strings.Contains(reply, `"ref":99`) || !strings.Contains(reply, "waiting") {
+	if reply := string(h.s.Send([]byte(`{"m":"counters","ref":99,"group":"g","script":"s"}`))); !strings.Contains(reply, `"ref":99`) || !strings.Contains(reply, "reentrant call") {
 		t.Fatal(reply)
 	}
 	if end := onlyReport(t, must(t, h.result("op-result", `"result":5`), "ok")); show(end["result"]) != "5" {

@@ -58,7 +58,7 @@ func traced(h handler) handler {
 	return func(s *Session, f fields) (map[string]any, error) {
 		ok, err := h(s, f)
 		g, _ := s.group(f)
-		if g == nil || g.trace == nil {
+		if g == nil || g.trace == nil || s.admitting {
 			return ok, err
 		}
 		lines := g.trace.take()
@@ -130,7 +130,7 @@ func (s *Session) hello(f fields) (map[string]any, error) {
 		return nil, protocolErrorf("protocol %d isn't supported; this Core speaks %d", protocol, Protocol)
 	}
 	v := talk.CoreVersions()
-	return map[string]any{"language": v.Language, "costModel": v.CostModel, "unicode": v.Unicode, "core": v.Core, "saveFormat": v.SaveFormat}, nil
+	return map[string]any{"language": v.Language, "costModel": v.CostModel, "unicode": v.Unicode, "core": v.Core, "saveFormat": v.SaveFormat, "features": []string{"paused-inputs-v1"}}, nil
 }
 
 func (s *Session) defineCapability(f fields) (map[string]any, error) {
@@ -192,6 +192,10 @@ func (s *Session) bind(capability string, op talk.Operation) talk.Operation {
 			if left, ok := messagehooks.FuelLeft(c); ok {
 				need["fuelLeft"] = integer(left)
 			}
+		}
+		if mode == talk.Suspending && !c.Automatic() {
+			s.waiting.starting = c
+			defer func() { s.waiting.starting = nil }()
 		}
 		r := s.ask(need)
 		charged, err := r.optionalInt("charged")
@@ -709,6 +713,9 @@ func (s *Session) pendingCall(f fields) (*group, *talk.Call, error) {
 		return nil, nil, err
 	}
 	c := g.calls[talk.CallID(id)]
+	if x := s.waiting; c == nil && x != nil && x.group == g && x.starting != nil && string(x.starting.ID()) == id {
+		c = x.starting
+	}
 	if c == nil {
 		return nil, nil, protocolErrorf("no pending call %q", id)
 	}

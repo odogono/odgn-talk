@@ -11,8 +11,8 @@ the authority; the TS Core is not a reference
 
 The [experimental Zig-backed Go probe](../../spikes/go-zig-binding/README.md)
 embeds the Zig WASI reactor through wazero. It is not a public API replacement:
-the current Message Layer cannot preserve Stop from inside a Go callback at
-the same crossing. The Go Core remains the supported Go embedding package;
+its crossing parity tests cover Stop from inside a callback, including rollback
+at the same crossing. The Go Core remains the supported Go embedding package;
 the [binding investigation](../../docs/research/go-zig-binding.md) records the
 evidence and alternatives.
 
@@ -1370,6 +1370,16 @@ Go embedding interface, for a Host that isn't Go or TS
 one JSON frame and returns one reply frame; the framing is the transport's.
 `cmd/messagelayer` is the sidecar: each frame is a 4-byte big-endian length
 and then the JSON, both ways on stdio.
+While an Operation, property, lifecycle or release need is outstanding, the
+sidecar admits the same Group's supported queued messages under separate refs,
+with ordinary synchronous admission errors. The worker ref stays reserved for
+its matching result. Stop, CancelRun and RewindRun land after the callback
+record; ordinary inputs, including disposal and delivery cancellation, wait
+for the next Pump. Answer/Fail during Start are admitted without prematurely
+settling the Call. Worker reentry is refused, and `hello.features` advertises
+`paused-inputs-v1`. Unsupported messages in this adapter remain unsupported;
+this marker does not supply missing Go Metered Operations or other API coverage.
+
 Frames over 64 MiB are drained with bounded buffering and answered with a
 `protocol error` under `ref: -1`, since the rejected JSON isn't parsed. The
 same Session then answers the next frame. A truncated header or body ends the

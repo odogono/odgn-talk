@@ -1,11 +1,12 @@
 # Host Inputs during paused Message Layer crossings
 
-Proposed contract for [#884](https://github.com/odogono/odgn-talk/issues/884),
-prepared against `0aed90d300069ae754ba7dab010f3ef4d92141e7` on 2026-10-15.
-This is a design for review, not an approved extension or a claim of runtime
-support. [Chapter 9](../09-embedding.md#the-message-layer) remains the current
-contract. Commit and accept this design before downstream implementation;
-record that revision in #884's implementation handoff.
+Contract for [#884](https://github.com/odogono/odgn-talk/issues/884), designed in
+[#958](https://github.com/odogono/odgn-talk/pull/958), specification commit
+`463f78dbcd687a24da5219bd24629c0764423fe2`, and accepted for implementation by the
+maintainer on 2026-10-15. This extends
+[chapter 9](../09-embedding.md#the-message-layer); the implementation guides
+state each transport's supported embedding messages. It does not authorize Go
+Core retirement or approve performance limits.
 
 ## Purpose and boundary
 
@@ -21,7 +22,7 @@ No WASM import calls back into Go, and no additional Script execution happens
 while the callback remains outstanding. This design does not authorize a
 production Go binding, alternative ABI, performance limits or Go Core retirement.
 
-## Proposed exchange rules
+## Exchange rules
 
 An interim `op`, `prop`, `effect` or `release` keeps its enclosing worker exchange
 open until its matching result arrives. The Session retains the worker's Group,
@@ -165,8 +166,7 @@ including the already-closed settlement gate once the first Pump has started.
 
 ## Acceptance and delivery
 
-First commit the accepted contract and update chapter 9's “answer before sending
-anything else” and outbox wording to reference the exception. No new grammar,
+Chapter 9 references this exception to its exclusive callback exchange. No new grammar,
 instruction, Host error code or Trace record is proposed. Keep Data Files and
 expectations unchanged until implementation and any required first blessing.
 
@@ -211,20 +211,17 @@ performance acceptance remain separate gates.
 
 ## Implementation handoff
 
-- **Implemented in:** investigation PR #921, merged as `c49f544c`; the reactor
-  switch #918, merged as `667458bc`, is separate. Metered Operations and
-  `request-charge` in Zig landed in #920 (`f6477343`). None supplies this proposal.
-- **Required base:** `0aed90d300069ae754ba7dab010f3ef4d92141e7` contains those
-  changes. This design is proposed on branch `fix/issue-884`: target contract
-  `spec/embedding/paused-crossing-inputs.md`, supporting audit
-  `docs/research/paused-crossing-input-audit.md`, and discovery link/status in
-  `docs/research/go-zig-binding.md`. The proposal's commit is not design
-  acceptance. Record the accepted specification commit here and in #884 before
-  handing implementation to another agent.
-- **Remaining work:** accept/commit the design, reconcile chapter 9, implement
-  applicable transports and native landing corrections, pass the cases above,
-  then replace the embedded probe's blocker test. The crossing gate is still
-  blocked until that evidence passes.
-- **Approval still needed:** protocol design acceptance; no expectation files
-  await first blessing in this change. Go retirement and numerical performance
-  limits remain unapproved.
+- **Implemented in:** investigation #921 (`c49f544c`), design #958 (`463f78db`),
+  and the paused-input implementation on branch `feat/issue-884-crossing-inputs`.
+  [#962](https://github.com/odogono/odgn-talk/issues/962) tracks the native Zig
+  result-landing correction shipped with the transport work. The reactor switch
+  #918 and Zig metering #920 remain separate changes.
+- **Required base:** `463f78dbcd687a24da5219bd24629c0764423fe2` or a descendant;
+  this contract, chapter 9 input queue/Message Layer rules and chapter 6
+  cancellation/Stop. Rebuild the probe from the committed implementation source
+  revision recorded in its manifest.
+- **Remaining work:** #884 owns later binding, callback-compatibility, platform
+  execution and performance gates. The probe and runtime tests provide crossing
+  evidence; they do not establish full Go API or application compatibility.
+- **Approval still needed:** no corpus expectations changed in this work;
+  retirement requires explicitly agreed performance limits and evidence acceptance.

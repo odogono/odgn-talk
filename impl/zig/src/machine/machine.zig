@@ -306,6 +306,13 @@ pub const Run = struct {
     /// A drained Stop, cancellation or Rewind's rollback of its Segment,
     /// paused at a lifecycle crossing.
     cleanup: ?Ending = null,
+    /// Cancellation landed in a callback; its rollback may itself pause.
+    crossing_cancel: bool = false,
+    /// A callback already returned, but landing another Run's control is
+    /// waiting for lifecycle acknowledgement. Replaying the instruction
+    /// classifies this owned return without invoking or recording it twice.
+    returned_op: ?struct { outcome: capabilities.Outcome, charged: u64, valid: bool } = null,
+    returned_prop: ?objects.Result = null,
     /// Its Script's Variables when its Segment began, which a failed commit
     /// restores; only for a Script with Segment-bound Operations.
     segment_base: ?[]*Value = null,
@@ -1399,6 +1406,18 @@ pub const Group = struct {
     /// A Host function deferred, so this Pump pauses mid-turn for its
     /// answer; `resumePump` takes the turns up again (the Message Layer).
     crossing_pause: bool = false,
+    /// The transport is about to re-enter the callback that paused it.
+    /// Its queued controls must follow that callback's record, not land
+    /// at the start of the re-made instruction.
+    answering_crossing: bool = false,
+    /// A suspending Start kept alive across the transport pause.
+    starting_call: ?*capabilities.Call = null,
+    /// A transport release callback must be acknowledged before more Host
+    /// callbacks or Script instructions run. Native hooks leave this false.
+    release_pause: bool = false,
+    landing_paused: bool = false,
+    landing_active: bool = false,
+    landing_run: ?*Run = null,
     /// A testing aid: each lifecycle crossing that may defer does so once,
     /// then calls the Host when it is made again, as the Message Layer's
     /// Hosts do. A Trace must not change with it.
@@ -1425,6 +1444,9 @@ pub const Group = struct {
     /// For a restored Group until its first Pump: its pending calls, and the
     /// Clock reading that Pump must not go back before.
     restored: ?Restored = null,
+    /// Settle admission closes as the first Pump starts, including while
+    /// that Pump is paused in a reissued Start callback.
+    settlements_closed: bool = false,
     /// The open Decisions a variables-only restore discarded or dropped,
     /// which its first Pump settles undecided, in delivery id order.
     deferred: std.ArrayList(Deferred) = .empty,
@@ -1449,7 +1471,7 @@ pub const Group = struct {
 
     /// Worker calls cannot reenter a Pump or code-change lifecycle callback.
     pub fn checkWorker(g: *const Group) error{ReentrantCall}!void {
-        if (g.pumping or g.reworking) return error.ReentrantCall;
+        if (g.pumping or g.reworking or g.crossing_pause or g.paused_work != null) return error.ReentrantCall;
     }
 
     fn checkCodeChange(g: *const Group) error{ ReentrantCall, EffectStateUnknown }!void {
@@ -2302,6 +2324,7 @@ pub const Group = struct {
         // A stopped Script has nothing left to stop; Reload isn't sticky, so
         // it takes new messages after.
         if (s.stopped == null) try g.stopScript(s, "reload", null, .{ .keep_mailbox = keep_mailbox, .release = .reload, .discard = discard });
+        if (g.release_pause) return error.Deferred;
         // A stop that left an effect's state unknown stopped the Group, and
         // prevents replacing it. Made again after a pause, this finishes
         // stopping any Script whose stop paused.
@@ -2661,39 +2684,51 @@ pub const Group = struct {
     /// a Host crossing of `running` or between turns. One for the running
     /// Run ends its Stretch before its next instruction.
     fn land(g: *Group, running: ?*Run) !void {
+        g.landing_active = true;
+        defer g.landing_active = false;
         g.flushHeld();
         while (g.landing.items.len > 0) {
-            const landed = g.landing.orderedRemove(0);
-            const input = landed.input;
-            if (!landed.written) g.writeInput(input);
-            switch (input) {
-                .stop => |x| {
-                    defer g.gpa.free(x.script);
-                    defer g.gpa.free(x.reason);
-                    const target = g.script(x.script) orelse continue;
-                    if (running) |r| if (r.script == target) {
-                        if (target.stopped == null and r.landed == null) r.landed = .{ .stop = try g.gpa.dupe(u8, x.reason) };
-                        continue;
-                    };
-                    try g.stopScript(target, x.reason, null, .{});
-                },
-                .cancel_run => |id| {
-                    defer g.gpa.free(id);
-                    if (running) |r| if (std.mem.eql(u8, r.id, id)) {
-                        if (r.landed == null) r.landed = .cancel;
-                        continue;
-                    };
-                    for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
-                        try g.cancel(x, r);
-                        break;
-                    };
-                },
-                .rewind_run => |id| {
-                    defer g.gpa.free(id);
-                    try g.rewind(id, running);
-                },
-                else => g.releaseInputs(&.{input}),
+            const entry = &g.landing.items[0];
+            if (!entry.written) {
+                g.writeInput(entry.input);
+                entry.written = true;
             }
+            const input = entry.input;
+            g.landing_run = running;
+            g.landOne(input, running) catch |e| {
+                if (e == error.Deferred) g.landing_paused = true;
+                return e;
+            };
+            g.landing_paused = false;
+            _ = g.landing.orderedRemove(0);
+            g.releaseInputs(&.{input});
+            if (g.release_pause) return;
+        }
+        g.landing_run = null;
+    }
+
+    fn landOne(g: *Group, input: Input, running: ?*Run) !void {
+        switch (input) {
+            .stop => |x| {
+                const target = g.script(x.script) orelse return;
+                if (running) |r| if (r.script == target) {
+                    if (target.stopped == null and r.landed == null) r.landed = .{ .stop = try g.gpa.dupe(u8, x.reason) };
+                    return;
+                };
+                try g.stopScript(target, x.reason, null, .{});
+            },
+            .cancel_run => |id| {
+                if (running) |r| if (std.mem.eql(u8, r.id, id)) {
+                    if (r.landed == null and r.cleanup_from == null) r.landed = .cancel;
+                    return;
+                };
+                for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) {
+                    try g.cancel(x, r);
+                    return;
+                };
+            },
+            .rewind_run => |id| try g.rewind(id, running),
+            else => unreachable,
         }
     }
 
@@ -2701,7 +2736,7 @@ pub const Group = struct {
     /// it ends the Run's Stretch.
     fn landedAt(g: *Group, run: *Run) !bool {
         g.flushHeld();
-        if (g.landing.items.len == 0) return false;
+        if (g.landing.items.len == 0) return run.landed != null;
         try g.land(run);
         return run.landed != null;
     }
@@ -2759,8 +2794,11 @@ pub const Group = struct {
     /// A cancellation that landed while the Run ran: its Segment rolls back,
     /// then its `finally` blocks run on its Cleanup Budget.
     fn landedCancel(g: *Group, run: *Run) !Outcome {
-        _ = g.abandonScopes(run);
-        _ = g.finalize(run, false);
+        run.crossing_cancel = true;
+        if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
+        _ = g.lifecycle(run, &run.cleanup.?, true) catch return .{ .preempted = .crossing };
+        run.cleanup = null;
+        run.crossing_cancel = false;
         g.restoreBase(run);
         return g.startCancel(run);
     }
@@ -3166,6 +3204,8 @@ pub const Group = struct {
     }
 
     pub fn destroyRun(g: *Group, run: *Run) void {
+        if (run.returned_op) |r| g.releaseHostOutcome(r.outcome);
+        if (run.returned_prop) |r| g.releasePropResult(r);
         if (run.waiting) |p| {
             for (g.pending.items, 0..) |x, i| if (x == p) {
                 _ = g.pending.orderedRemove(i);
@@ -3307,6 +3347,7 @@ pub const Group = struct {
         g.cap = cap;
         g.sliced = false;
         g.input_lock.lock();
+        g.settlements_closed = true;
         std.mem.swap(std.ArrayList(Input), &g.inputs, &g.batch);
         g.input_lock.unlock();
         // A Broadcast's recipients are those that want it now, as the queue
@@ -3348,6 +3389,7 @@ pub const Group = struct {
     fn registerCall(g: *Group, id: []const u8, eligible: bool) !void {
         g.input_lock.lock();
         defer g.input_lock.unlock();
+        if (g.issued_calls.contains(id)) return;
         const own = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(own);
         try g.issued_calls.put(g.gpa, own, eligible);
@@ -3501,6 +3543,10 @@ pub const Group = struct {
             };
             _ = g.batch.orderedRemove(0);
             if (kept) g.releaseInputs(&.{input});
+            if (g.release_pause) {
+                g.crossing_pause = true;
+                return;
+            }
         }
         g.draining = false;
         try g.afterDrain();
@@ -3665,6 +3711,15 @@ pub const Group = struct {
         g.pumping = true;
         defer g.pumping = false;
         g.crossing_pause = false;
+        if (g.landing_paused) g.land(g.landing_run) catch |e| {
+            if (e != error.Deferred) return e;
+            g.crossing_pause = true;
+            return;
+        };
+        if (g.release_pause) {
+            g.crossing_pause = true;
+            return;
+        }
         if (g.draining) return g.drain();
         try g.turns();
     }
@@ -3687,7 +3742,17 @@ pub const Group = struct {
                 g.turn_at += 1;
                 // What landed during the last turn, and a Rewind, which
                 // ends the Pump.
-                if (g.landing.items.len > 0) try g.land(null);
+                if (!g.answering_crossing and g.landing.items.len > 0) g.land(null) catch |e| {
+                    if (e != error.Deferred) return e;
+                    g.crossing_pause = true;
+                    g.turn_at -= 1;
+                    return;
+                };
+                if (g.release_pause) {
+                    g.crossing_pause = true;
+                    g.turn_at -= 1;
+                    return;
+                }
                 if (g.rewound) break :turns;
                 if (s.work.items.len == 0) continue;
                 if (g.fatal) break :turns;
@@ -3744,10 +3809,22 @@ pub const Group = struct {
                     g.turn_at -= 1;
                     return;
                 }
+                if (g.release_pause) {
+                    g.crossing_pause = true;
+                    return;
+                }
             }
             g.turn_at = 0;
         }
-        try g.land(null);
+        g.land(null) catch |e| {
+            if (e != error.Deferred) return e;
+            g.crossing_pause = true;
+            return;
+        };
+        if (g.release_pause) {
+            g.crossing_pause = true;
+            return;
+        }
         // A slice overrun is carried to the Script's next Pump as debt.
         if (g.slice > 0) for (g.scripts.items) |x| {
             if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
@@ -3873,7 +3950,10 @@ pub const Group = struct {
     /// any once the first Pump has started, is `unknown call` at the call,
     /// and queues nothing. Takes `with`, an answer's or failure's Resume.
     pub fn settleRestored(g: *Group, id: []const u8, how: How, with: ?Resume) SettleError!void {
+        g.input_lock.lock();
+        defer g.input_lock.unlock();
         errdefer if (with) |w| g.releaseResume(w);
+        if (g.settlements_closed) return error.UnknownCall;
         const r = if (g.restored) |*x| x else return error.UnknownCall;
         for (r.pending.items) |p| {
             if (std.mem.eql(u8, p, id)) break;
@@ -3882,7 +3962,7 @@ pub const Group = struct {
         const own = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(own);
         try r.settled.ensureUnusedCapacity(g.gpa, 1);
-        try g.enqueue(.{ .settlement = .{ .id = own, .how = how, .with = with } });
+        try g.inputs.append(g.gpa, .{ .settlement = .{ .id = own, .how = how, .with = with } });
         // The settled list borrows the pending list's id.
         for (r.pending.items) |p| if (std.mem.eql(u8, p, id)) r.settled.appendAssumeCapacity(p);
     }
@@ -4266,7 +4346,7 @@ pub const Group = struct {
             run.crossed = null;
             run.started = was.started;
             run.continuing = was.continuing;
-            const outcome = g.continueRun(s, run) catch |e| {
+            const outcome = (if (run.crossing_cancel) g.landedCancel(run) else g.continueRun(s, run)) catch |e| {
                 g.destroyRun(run);
                 return e;
             };
@@ -5131,6 +5211,7 @@ pub const Group = struct {
     /// `hook`, which may answer `deferred` when `deferrable`: nothing is
     /// written, and the caller pauses to make the same call again.
     fn hookWith(g: *Group, run: *Run, phase: capabilities.Phase, deferrable: bool) capabilities.EffectStatus {
+        if (deferrable and g.release_pause) return .deferred;
         const p = &run.participant.?;
         const a = g.scratch.allocator();
         const enrolled = if (phase == .begin) p.grants.items[0..1] else p.grants.items;
@@ -5253,6 +5334,7 @@ pub const Group = struct {
     fn abandonScopesWith(g: *Group, run: *Run, deferrable: bool, prevented: *?EffectFailure) error{Deferred}!void {
         const a = g.scratch.allocator();
         while (run.scopes.items.len > 0) {
+            if (deferrable and g.release_pause) return error.Deferred;
             const slot = run.scopes.items[run.scopes.items.len - 1];
             const capability = slot.grant.grant.capability;
             const op = &capability.operations[slot.abandon];
@@ -5395,7 +5477,7 @@ pub const Group = struct {
     /// draining, each crossing may defer, with progress in `run.cleanup`.
     fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
-        _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking);
+        _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking or g.landing_active);
         run.cleanup = null;
     }
 
@@ -6359,6 +6441,7 @@ pub const Group = struct {
         // defer releases its owners and clears its metadata on every path.
         var held: Operands = .{};
         while (true) {
+            if (g.release_pause) return .{ .preempted = .crossing };
             _ = g.scratch.reset(.retain_capacity);
             // A clause a Command Call tried pays its rate with the clause
             // body's first instruction, this one.
@@ -6371,10 +6454,16 @@ pub const Group = struct {
                 return .selected;
             };
             // What landed at the last Host crossing, between instructions.
-            g.flushHeld();
-            if (g.landing.items.len > 0 and run.base == 0 and run.id.len > 0) {
-                try g.land(run);
-                if (run.landed) |l| switch (l) {
+            if (!g.answering_crossing) g.flushHeld();
+            if (!g.answering_crossing and g.landing.items.len > 0 and run.base == 0 and run.id.len > 0) {
+                g.land(run) catch |e| {
+                    if (e != error.Deferred) return e;
+                    return .{ .preempted = .crossing };
+                };
+            }
+            if (g.release_pause) return .{ .preempted = .crossing };
+            {
+                if (if (run.returned_op == null and run.returned_prop == null) run.landed else null) |l| switch (l) {
                     .stop => return .stopped,
                     .rewind => return .rewound,
                     .cancel => {
@@ -8931,7 +9020,7 @@ pub const Group = struct {
             m.uncharged = true;
             return g.refuseOpenScope(run);
         }
-        if (decl.scope.name()) |scope_name| {
+        if (if (run.returned_op == null) decl.scope.name() else null) |scope_name| {
             const occupied = g.scopeSlot(run, granted, scope_name) != null;
             const refusal: ?[]const u8 = switch (decl.scope) {
                 .opens => if (run.join != null) "scope in join" else if (occupied) "scope already open" else null,
@@ -8945,7 +9034,7 @@ pub const Group = struct {
                 return g.raise(code, &.{ where[0], where[1], .{ .key = "scope", .value = scope } });
             }
         }
-        if (decl.segment_bound) {
+        if (decl.segment_bound and run.returned_op == null) {
             m.uncharged = true;
             try g.participantConflict(run, granted, &where);
             m.uncharged = false;
@@ -8978,6 +9067,11 @@ pub const Group = struct {
         // later, through the Group.
         const suspending = decl.mode == .suspending;
         const call: *capabilities.Call = if (suspending) blk: {
+            if (g.starting_call) |c| {
+                std.debug.assert(std.mem.eql(u8, c.id, id));
+                g.starting_call = null;
+                break :blk c;
+            }
             const c = try gpa.create(capabilities.Call);
             c.* = local;
             c.id = gpa.dupe(u8, id) catch |err| {
@@ -8998,26 +9092,23 @@ pub const Group = struct {
             break :blk c;
         } else &local;
         try g.registerCall(id, suspending and decl.metering == .read_only);
-        const held = g.holdTrace();
-        const outcome = decl.host.call(decl.host.context, call, args);
-        g.flushChargeRefusals();
-        g.trace = held;
+        const returned = run.returned_op;
+        run.returned_op = null;
+        const outcome = if (returned) |r| blk: {
+            call.charged = r.charged;
+            break :blk r.outcome;
+        } else blk: {
+            const held = g.holdTrace();
+            const result = decl.host.call(decl.host.context, call, args);
+            g.flushChargeRefusals();
+            g.trace = held;
+            break :blk result;
+        };
         if (outcome == .deferred) {
-            g.unissueCall(id);
-            // No call was made: unmake its id and its suspending Call,
-            // put the arguments back, and pause at the crossing. The
-            // re-made call takes the same id.
+            // The same instruction will be made again, but the Host can
+            // already answer or request a charge against its issued id.
             run.calls -= 1;
-            if (suspending) {
-                for (g.calls.items, 0..) |c, at| if (c == call) {
-                    _ = g.calls.orderedRemove(at);
-                    break;
-                };
-                for (call.args) |v| v.release();
-                gpa.free(call.args);
-                gpa.free(call.id);
-                gpa.destroy(call);
-            }
+            if (suspending) g.starting_call = call;
             for (args) |v| try g.push(frame, v.retain());
             return .crossing;
         }
@@ -9065,95 +9156,95 @@ pub const Group = struct {
             run.alloc += spent.alloc;
             return g.faultOn(.fuel);
         }
-        if (suspending) switch (outcome) {
-            .value, .started => {
-                if (outcome == .value) outcome.value.release();
-                record(g, id, grant_name, op_name, args, "", null, call.charged, false);
+        var owned = true;
+        defer if (owned) g.releaseHostOutcome(outcome);
+        var valid = if (returned) |r| r.valid else true;
+        const pending = suspending and (outcome == .value or outcome == .started);
+        if (returned == null) {
+            switch (outcome) {
+                .value => |v| {
+                    if (pending or decl.mode == .fire_and_forget) {
+                        record(g, id, grant_name, op_name, args, "", null, call.charged, false);
+                    } else {
+                        if (decl.result) |shape| {
+                            const checked = try capabilities.checkValue(a, gpa, shape, v);
+                            defer checked.release();
+                            valid = checked.mismatch == null;
+                        }
+                        if (valid) if (decl.after) |after| {
+                            valid = after(&granted.grant.capability.operations[index], args, v);
+                        };
+                        record(g, id, grant_name, op_name, args, if (valid) "result" else "error", if (valid) v else empty, call.charged, false);
+                        try g.acknowledge(run, granted, decl.scope, id);
+                    }
+                },
+                .started => record(g, id, grant_name, op_name, args, if (pending) "" else "error", if (pending) null else empty, call.charged, false),
+                .failed => |f| {
+                    const malformed_data = if (f.data) |d| d.data != .map and d.data != .nothing else false;
+                    const shown = if (malformed_data) null else failureMap(gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
+                    defer if (shown) |v| v.release();
+                    valid = shown != null;
+                    record(g, id, grant_name, op_name, args, "error", shown orelse empty, call.charged, false);
+                },
+                .broken => record(g, id, grant_name, op_name, args, "error", empty, call.charged, false),
+                .deferred, .limited => unreachable,
+            }
+            // Install a started Call before landing so interruption can
+            // abandon it, without committing the Segment first.
+            if (pending) {
                 const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
-                if (ins.op == .join_ask) {
-                    try g.startMember(run, .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms });
-                    return .next;
-                }
-                try g.suspendRun(run, "ask-wait", .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms });
-                return .suspended;
-            },
-            else => {},
+                const wait: Pending = .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms };
+                if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
+            }
+        }
+        const interrupted = g.landedAt(run) catch |err| {
+            if (err != error.Deferred) return err;
+            run.returned_op = .{ .outcome = outcome, .charged = call.charged, .valid = valid };
+            owned = false;
+            run.calls -= 1;
+            if (suspending) g.starting_call = call;
+            for (args) |v| try g.push(frame, v.retain());
+            return .crossing;
         };
+        if (interrupted) return error.Landed;
+        if (pending) return if (ins.op == .join_ask) .next else .suspended;
+        if (!valid) return g.hostError(id, grant_name, op_name, &where);
         switch (outcome) {
-            .deferred => unreachable,
-            .started => {
-                record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
-                return g.hostError(id, grant_name, op_name, &where);
-            },
             .value => |v| {
-                if (decl.mode == .fire_and_forget) {
-                    v.release();
-                    record(g, id, grant_name, op_name, args, "", null, call.charged, false);
-                    if (try g.landedAt(run)) return error.Landed;
-                    return .next;
-                }
-                const ok = blk: {
-                    const result_shape = decl.result orelse break :blk true;
-                    const checked = try capabilities.checkValue(a, gpa, result_shape, v);
-                    defer checked.release();
-                    if (checked.mismatch != null) break :blk false;
-                    const after = decl.after orelse break :blk true;
-                    break :blk after(&granted.grant.capability.operations[index], args, v);
-                };
-                if (!ok) {
-                    v.release();
-                    record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
-                    try g.acknowledge(run, granted, decl.scope, id);
-                    return g.hostError(id, grant_name, op_name, &where);
-                }
-                record(g, id, grant_name, op_name, args, "result", v, call.charged, false);
-                try g.acknowledge(run, granted, decl.scope, id);
-                // What the Host made at this crossing lands before the
-                // result is converted.
-                if (try g.landedAt(run)) {
-                    v.release();
-                    return error.Landed;
-                }
+                if (decl.mode == .fire_and_forget) return .next;
                 m.result = v.retain();
                 try g.push(frame, v);
+                owned = false;
             },
             .failed => |f| {
-                defer gpa.free(f.code);
-                defer if (f.message) |t| gpa.free(t);
-                defer if (f.data) |d| d.release();
+                if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
+                const shown = try failureMap(gpa, .{ .code = f.code, .message = f.message, .data = f.data });
+                defer shown.release();
                 var pairs: std.ArrayList(model.Pair) = .empty;
                 defer pairs.deinit(gpa);
-                const code = try model.text(gpa, f.code);
-                defer code.release();
-                try pairs.append(gpa, .{ .key = "code", .value = code });
-                const message: ?*Value = if (f.message) |t| try model.text(gpa, t) else null;
-                defer if (message) |t| t.release();
-                if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
-                if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
-                const shown = model.map(gpa, pairs.items) catch {
-                    record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
-                    return g.hostError(id, grant_name, op_name, &where);
-                };
-                defer shown.release();
-                record(g, id, grant_name, op_name, args, "error", shown, call.charged, false);
-                if (try g.landedAt(run)) return error.Landed;
-                if (!capabilities.validFailure(decl, f.code, f.data)) return g.hostError(id, grant_name, op_name, &where);
-                // Its Data is converted as a result is, an empty map when
-                // it has none.
-                m.result = if (f.data) |d| d.retain() else empty.retain();
+                try pairs.appendSlice(gpa, shown.data.map);
                 try pairs.appendSlice(gpa, &where);
+                m.result = if (f.data) |d| d.retain() else empty.retain();
                 g.pending_error = try model.map(gpa, pairs.items);
                 g.pending_core = false;
                 return error.Raised;
             },
-            .broken => {
-                record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
-                if (try g.landedAt(run)) return error.Landed;
-                return g.hostError(id, grant_name, op_name, &where);
-            },
-            .limited => unreachable,
+            .started, .broken => return g.hostError(id, grant_name, op_name, &where),
+            .deferred, .limited => unreachable,
         }
         return .next;
+    }
+
+    fn releaseHostOutcome(g: *Group, outcome: capabilities.Outcome) void {
+        switch (outcome) {
+            .value => |v| v.release(),
+            .failed => |f| {
+                g.gpa.free(f.code);
+                if (f.message) |m| g.gpa.free(m);
+                if (f.data) |d| d.release();
+            },
+            else => {},
+        }
     }
 
     /// The slot a Run occupies through the named Grant for a scope, by
@@ -9192,40 +9283,62 @@ pub const Group = struct {
             try g.push(frame, try nothing(gpa));
             return .next;
         };
-        const held = g.holdTrace();
-        const outcome = prop.get.call(prop.get.context, gpa, o);
-        g.flushChargeRefusals();
-        g.trace = held;
+        const returned = run.returned_prop;
+        run.returned_prop = null;
+        const outcome = if (returned) |r| r else blk: {
+            const held = g.holdTrace();
+            const result = prop.get.call(prop.get.context, gpa, o);
+            g.flushChargeRefusals();
+            g.trace = held;
+            break :blk result;
+        };
         if (outcome == .deferred) return .crossing;
+        var owned = true;
+        defer if (owned) g.releasePropResult(outcome);
         m.fuel_extra = prop.get_cost.fuel;
         m.alloc_extra = prop.get_cost.alloc;
+        var valid = true;
+        if (outcome == .value) {
+            const checked = try capabilities.checkValue(g.scratch.allocator(), gpa, prop.shape, outcome.value);
+            defer checked.release();
+            valid = checked.mismatch == null;
+        }
+        if (returned == null) try g.recordPropertyReturn(run, o, key, "get", outcome, valid, null);
+        const interrupted = g.landedAt(run) catch |err| {
+            if (err != error.Deferred) return err;
+            run.returned_prop = outcome;
+            owned = false;
+            return .crossing;
+        };
+        if (interrupted) return error.Landed;
+        if (!valid) return g.propError(o, key);
         switch (outcome) {
             .value => |v| {
-                const checked = try capabilities.checkValue(g.scratch.allocator(), gpa, prop.shape, v);
-                defer checked.release();
-                if (checked.mismatch != null) {
-                    v.release();
-                    g.propRecord(run, o, key, "get", "error", null);
-                    return g.propError(o, key);
-                }
-                g.propRecord(run, o, key, "get", "value", v);
-                if (try g.landedAt(run)) {
-                    v.release();
-                    return error.Landed;
-                }
-                // The value's conversion, as a Capability result's.
                 const size = costs.size(v);
                 m.fuel_extra += (size + 31) / 32;
                 m.alloc_extra += size;
                 try g.push(frame, v);
+                owned = false;
                 return .next;
             },
-            .failed => |f| return g.propFailed(run, o, key, "get", .{ .code = f.code, .message = f.message, .data = f.data }, m),
-            else => {
-                g.releasePropResult(outcome);
-                g.propRecord(run, o, key, "get", "error", null);
-                return g.propError(o, key);
+            .failed => |f| {
+                owned = false;
+                return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
+            else => return g.propError(o, key),
+        }
+    }
+
+    fn recordPropertyReturn(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, result: objects.Result, valid: bool, input: ?*Value) !void {
+        switch (result) {
+            .value, .done => g.propRecord(run, o, key, op, if (valid and (input != null or result == .value)) "value" else "error", if (!valid) null else input orelse if (result == .value) result.value else null),
+            .failed => |f| {
+                const malformed_data = if (f.data) |d| d.data != .map and d.data != .nothing else false;
+                const shown = if (malformed_data) null else failureMap(g.gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
+                defer if (shown) |v| v.release();
+                g.propRecord(run, o, key, op, "error", shown);
+            },
+            else => g.propRecord(run, o, key, op, "error", null),
         }
     }
 
@@ -9233,15 +9346,14 @@ pub const Group = struct {
     /// message and Data, and raised as an Operation's is, with `capability`
     /// the Object Kind and `operation` the property. One that isn't well
     /// formed is `host error`.
-    fn propFailed(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, f: Failure, m: *costs.Measures) !Step {
+    fn propFailed(g: *Group, run: *Run, o: *objects.Object, key: []const u8, f: Failure, m: *costs.Measures) !Step {
         const gpa = g.gpa;
         defer gpa.free(f.code);
         defer if (f.message) |t| gpa.free(t);
         defer if (f.data) |d| d.release();
-        const shown = try failureMap(gpa, f);
+        _ = run;
+        const shown = failureMap(gpa, f) catch return g.propError(o, key);
         defer shown.release();
-        g.propRecord(run, o, key, op, "error", shown);
-        if (try g.landedAt(run)) return error.Landed;
         if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(o, key);
         // Its Data is converted as a value read is, an empty map when it
         // has none.
@@ -9292,32 +9404,40 @@ pub const Group = struct {
             return g.raiseMismatchAt(bad);
         }
         m.input = value.retain();
-        const held = g.holdTrace();
-        const outcome = set.call(set.context, gpa, o, value);
-        g.flushChargeRefusals();
-        g.trace = held;
-        if (outcome == .deferred) {
-            // Put the operands back, in their order, and pause.
+        const returned = run.returned_prop;
+        run.returned_prop = null;
+        const outcome = if (returned) |r| r else blk: {
+            const held = g.holdTrace();
+            const result = set.call(set.context, gpa, o, value);
+            g.flushChargeRefusals();
+            g.trace = held;
+            break :blk result;
+        };
+        var owned = true;
+        defer if (owned) g.releasePropResult(outcome);
+        m.fuel_extra = prop.set_cost.fuel;
+        m.alloc_extra = prop.set_cost.alloc;
+        if (outcome != .deferred and returned == null) try g.recordPropertyReturn(run, o, key, "set", outcome, true, value);
+        const interrupted = if (outcome == .deferred) null else g.landedAt(run) catch |err| blk: {
+            if (err != error.Deferred) return err;
+            run.returned_prop = outcome;
+            owned = false;
+            break :blk null;
+        };
+        if (interrupted == null) {
             if (key_value) |k| try g.push(frame, k.retain());
             try g.push(frame, base.retain());
             try g.push(frame, value.retain());
             return .crossing;
         }
-        m.fuel_extra = prop.set_cost.fuel;
-        m.alloc_extra = prop.set_cost.alloc;
+        if (interrupted.?) return error.Landed;
         switch (outcome) {
-            .done, .value => {
-                g.releasePropResult(outcome);
-                g.propRecord(run, o, key, "set", "value", value);
-                if (try g.landedAt(run)) return error.Landed;
-                return .next;
+            .done, .value => return .next,
+            .failed => |f| {
+                owned = false;
+                return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
-            .failed => |f| return g.propFailed(run, o, key, "set", .{ .code = f.code, .message = f.message, .data = f.data }, m),
-            else => {
-                g.releasePropResult(outcome);
-                g.propRecord(run, o, key, "set", "error", null);
-                return g.propError(o, key);
-            },
+            else => return g.propError(o, key),
         }
     }
 
