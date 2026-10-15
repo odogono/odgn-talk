@@ -269,7 +269,14 @@ and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operati
 `op` needs, and a `grant` may name a
 shared `coordinator`; `store`'s hooks are one Coordinator's. A `pump`,
 `reload` or `replace-library` reply's `abandoned` lists the started calls the
-Core has abandoned since the last, once each. `request-charge` acknowledges
+Core has abandoned since the last notification, once each. To observe cancellation
+before subsequent Host callbacks, request `features: ["abandoned-before-needs-v1"]`
+in `hello` and check the advertised feature. Opt-in lasts for the Session:
+interim `op`, `prop`, `effect` and `release` replies then carry outer `abandoned`
+before their callback, including a release which precedes a held need or final
+reply. Final successes retain unreported notices in `ok.abandoned`; final worker
+errors carry them at the outer level. Hosts without opt-in retain final-success
+notification timing. See the [contract](../../spec/embedding/paused-crossing-inputs.md#abandonment-before-a-subsequent-callback). `request-charge` acknowledges
 enqueue with a Group-wide `q<N>` id; its later Pump returns a `charge result`
 report with `accepted`, `limit` or `inactive`. Post-start work needs this
 authorization; the starting need's local `fuelLeft` cannot fund it. A crossing pause, where a

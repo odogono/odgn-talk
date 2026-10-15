@@ -106,10 +106,53 @@ produced by that callback. Hold these records until the callback result is
 recorded; do not flush them into intervening enqueue replies. Inputs normally
 recorded on the next Pump stay there. Admission replies carry only records
 that the ordinary call can publish at that boundary. The enclosing worker
-reply carries its remaining records, reports, accounting and abandoned-call
-notifications once, after all needs are answered. Joining its Trace with any
-intervening replies in receipt order must reproduce native Trace order without
-duplicates or missing records.
+reply carries its remaining records, reports and accounting after all needs are
+answered. Joining its Trace with intervening replies in receipt order must
+reproduce native Trace order without duplicates. Abandoned-call notification
+has the opt-in timing below.
+
+### Abandonment before a subsequent callback
+
+A native Host's Call context is cancelled when the Core abandons the Call,
+before a later Host callback observes it. Final-reply-only notification cannot
+preserve that observation when an intervening Operation, property, cleanup hook
+or Grant release runs first. A callback which waits for abandoned work to stop
+must receive its cancellation signal before it is invoked.
+
+Advertise `abandoned-before-needs-v1` in `hello.features` when supported. A Host
+opts in by sending `hello` with `features: ["abandoned-before-needs-v1"]` and
+checking that the reply advertises it. This enables the timing for the Session's
+remaining lifetime; a later `hello` without the field does not disable it.
+`features` in a request must be an array of supported feature names; malformed
+or unsupported entries are protocol errors and enable none of that request's
+features. `paused-inputs-v1` may also be requested, with its existing behavior.
+All feature validation precedes activation.
+
+After opt-in, an interim worker reply carries `abandoned` at its outer level,
+alongside `ref` and `need`, before the Host services that need:
+
+```json
+{"ref": 8, "need": {"m": "release", "script": "s", "grant": "api", "reason": "stop", "now": "2026-10-15T12:00:00Z"}, "abandoned": ["s/r1.c1"]}
+```
+
+This applies to `op`, `prop`, `effect` and `release` needs from Pump, Reload and
+Library replacement. It lists actual Core abandonments in Call order, once
+across the worker's replies. Final success replies retain `ok.abandoned` for
+notices not already emitted; final worker errors carry them at the outer level.
+The Host processes notices before invoking a callback or completing the worker.
+A refused or malformed result preserves the open need and does not repeat a
+notice already emitted.
+
+Attach notices to the reply actually sent: if Grant releases precede a held
+need or final reply, the first release receives the outstanding notices. Building
+a held reply must not consume them. Do not infer cancellation at input admission,
+resume execution, or publish unfinished Trace or Reports to send a notice.
+
+Hosts which do not opt in keep the existing final-success-reply timing and need
+shapes. Their final `ok.abandoned` still lists every unreported abandonment.
+This preserves protocol 1 Hosts which immediately answer needs and only process
+abandonment from final replies. A public Go adapter requiring native callback
+cancellation ordering must opt in as well as check the version-matched artifact.
 
 ## Result and lifecycle order
 
@@ -211,17 +254,18 @@ performance acceptance remain separate gates.
 
 ## Implementation handoff
 
-- **Implemented in:** investigation #921 (`c49f544c`), design #958 (`463f78db`),
-  and the paused-input implementation on branch `feat/issue-884-crossing-inputs`.
-  [#962](https://github.com/odogono/odgn-talk/issues/962) tracks the native Zig
-  result-landing correction shipped with the transport work. The reactor switch
-  #918 and Zig metering #920 remain separate changes.
-- **Required base:** `463f78dbcd687a24da5219bd24629c0764423fe2` or a descendant;
-  this contract, chapter 9 input queue/Message Layer rules and chapter 6
-  cancellation/Stop. Rebuild the probe from the committed implementation source
-  revision recorded in its manifest.
-- **Remaining work:** #884 owns later binding, callback-compatibility, platform
-  execution and performance gates. The probe and runtime tests provide crossing
-  evidence; they do not establish full Go API or application compatibility.
-- **Approval still needed:** no corpus expectations changed in this work;
-  retirement requires explicitly agreed performance limits and evidence acceptance.
+- **Implemented in:** design #958 and crossing implementation #964/#966 are
+  merged; #971 merged as `e9b8aa570a6587018c7e79ac9875c7e579f1a4e8` and adds
+  the focused callback parity gate plus four-platform embedded-probe execution.
+  #972 carries the opt-in abandonment timing in this contract and its Zig
+  implementation on branch `fix/issue-972`. Its implementation and probe evidence
+  are separate from a public Go adapter.
+- **Required base:** #971 merge or a descendant, chapter 9 input queue/Message
+  Layer rules and chapter 6 cancellation/Stop. Rebuild the probe from the
+  committed implementation source revision recorded in its manifest.
+- **Remaining work:** merge/accept #972's additive timing; #884 owns the public
+  binding/API/Corpus, facilities and performance gates. Focused probe execution
+  passed on Linux/macOS amd64/arm64 in #971; this does not establish full public
+  Go API or application compatibility.
+- **Approval still needed:** no expectation files await first blessing. Full Go
+  retirement requires separately accepted numerical limits and evidence.
