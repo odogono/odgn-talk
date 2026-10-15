@@ -1,0 +1,1168 @@
+{
+  "recordedAt": "2026-10-15T04:56:02.809578+00:00",
+  "runtime": "Bun 1.4.3",
+  "intervalMicroseconds": 1000,
+  "warmupRuns": 20,
+  "profileMs": 3000,
+  "captures": [
+    {
+      "workload": "text/index",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks",
+        "--cpu-prof-name=before-text-index.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/workloads.json",
+        "profile",
+        "text/index"
+      ],
+      "checked": [
+        {
+          "name": "text/index",
+          "runs": 542,
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          }
+        }
+      ],
+      "bundleSha256": "852a9f505cd23da7b9a75ca36e0f0013958363a8fb1f9dad6a63869eb85fa057",
+      "raw": "bench/results/2026-10-15-ts-character-indexing-profiles/before-text-index.cpuprofile.gz",
+      "samples": 2114,
+      "exclusiveTop": [
+        [
+          "characterBoundaries",
+          728
+        ],
+        [
+          "span",
+          134
+        ],
+        [
+          "toString",
+          132
+        ],
+        [
+          "map",
+          98
+        ],
+        [
+          "sizeOf",
+          85
+        ],
+        [
+          "result",
+          78
+        ],
+        [
+          "execute",
+          75
+        ],
+        [
+          "step",
+          61
+        ],
+        [
+          "",
+          60
+        ],
+        [
+          "charge",
+          54
+        ],
+        [
+          "finishInstruction",
+          42
+        ],
+        [
+          "freeze",
+          42
+        ],
+        [
+          "pay",
+          34
+        ],
+        [
+          "characters",
+          33
+        ],
+        [
+          "BigInt",
+          30
+        ],
+        [
+          "turn",
+          29
+        ],
+        [
+          "literalDigits",
+          27
+        ],
+        [
+          "roundAt",
+          25
+        ],
+        [
+          "iteratorItem",
+          24
+        ],
+        [
+          "assertScalarText",
+          21
+        ],
+        [
+          "aligned",
+          20
+        ],
+        [
+          "Value",
+          17
+        ],
+        [
+          "selected",
+          15
+        ],
+        [
+          "asRange",
+          14
+        ],
+        [
+          "Decimal",
+          13
+        ]
+      ],
+      "inclusiveTop": [
+        [
+          "(module)",
+          2114
+        ],
+        [
+          "(root)",
+          2114
+        ],
+        [
+          "generatorResume",
+          2108
+        ],
+        [
+          "pump",
+          2106
+        ],
+        [
+          "advanceDebugPump",
+          2105
+        ],
+        [
+          "pumpAtClock",
+          2105
+        ],
+        [
+          "turn",
+          2101
+        ],
+        [
+          "run",
+          2093
+        ],
+        [
+          "step",
+          1959
+        ],
+        [
+          "execute",
+          1712
+        ],
+        [
+          "chunkGet",
+          931
+        ],
+        [
+          "characters",
+          835
+        ],
+        [
+          "characterBoundaries",
+          758
+        ],
+        [
+          "spans",
+          410
+        ],
+        [
+          "arithmetic2",
+          333
+        ],
+        [
+          "joinSpans",
+          243
+        ],
+        [
+          "map",
+          234
+        ],
+        [
+          "pay",
+          221
+        ],
+        [
+          "result",
+          211
+        ],
+        [
+          "",
+          203
+        ],
+        [
+          "charge",
+          174
+        ],
+        [
+          "replace",
+          151
+        ],
+        [
+          "span",
+          134
+        ],
+        [
+          "toString",
+          132
+        ],
+        [
+          "digitCount",
+          123
+        ],
+        [
+          "evaluate",
+          120
+        ],
+        [
+          "dec",
+          119
+        ],
+        [
+          "comparison2",
+          113
+        ],
+        [
+          "equals",
+          105
+        ],
+        [
+          "sizeOf",
+          103
+        ],
+        [
+          "scanned",
+          85
+        ],
+        [
+          "numberValue",
+          72
+        ],
+        [
+          "canonicalNumber",
+          70
+        ],
+        [
+          "trimWhiteSpace",
+          49
+        ],
+        [
+          "iteratorItem",
+          47
+        ]
+      ],
+      "textFunctionsInclusive": {
+        "chunkGet": 931,
+        "span": 134,
+        "spans": 410,
+        "characters": 835,
+        "characterBoundaries": 758,
+        "joinSpans": 243
+      },
+      "pumpSamples": 2106,
+      "pumpTextInclusive": {
+        "chunkGet": 931,
+        "spans": 410,
+        "span": 134,
+        "joinSpans": 243,
+        "characters": 835,
+        "characterBoundaries": 758
+      }
+    },
+    {
+      "workload": "text/index",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks",
+        "--cpu-prof-name=after-text-index.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/workloads.json",
+        "profile",
+        "text/index"
+      ],
+      "checked": [
+        {
+          "name": "text/index",
+          "runs": 833,
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          }
+        }
+      ],
+      "bundleSha256": "016609f1f3cdbfb073b7c23abe2f2d69cbebf0af3b3d00506309dff8ffc35a79",
+      "raw": "bench/results/2026-10-15-ts-character-indexing-profiles/after-text-index.cpuprofile.gz",
+      "samples": 2017,
+      "exclusiveTop": [
+        [
+          "toString",
+          262
+        ],
+        [
+          "result",
+          144
+        ],
+        [
+          "execute",
+          119
+        ],
+        [
+          "sizeOf",
+          117
+        ],
+        [
+          "step",
+          115
+        ],
+        [
+          "characterBoundaries",
+          111
+        ],
+        [
+          "",
+          93
+        ],
+        [
+          "charge",
+          79
+        ],
+        [
+          "finishInstruction",
+          79
+        ],
+        [
+          "literalDigits",
+          63
+        ],
+        [
+          "freeze",
+          59
+        ],
+        [
+          "assertScalarText",
+          57
+        ],
+        [
+          "roundAt",
+          52
+        ],
+        [
+          "pay",
+          49
+        ],
+        [
+          "BigInt",
+          40
+        ],
+        [
+          "turn",
+          35
+        ],
+        [
+          "selected",
+          34
+        ],
+        [
+          "map",
+          32
+        ],
+        [
+          "asRange",
+          29
+        ],
+        [
+          "delete",
+          29
+        ],
+        [
+          "iteratorItem",
+          28
+        ],
+        [
+          "aligned",
+          25
+        ],
+        [
+          "payAmount",
+          24
+        ],
+        [
+          "characters",
+          20
+        ],
+        [
+          "dec",
+          19
+        ]
+      ],
+      "inclusiveTop": [
+        [
+          "(module)",
+          2017
+        ],
+        [
+          "(root)",
+          2017
+        ],
+        [
+          "pump",
+          2008
+        ],
+        [
+          "generatorResume",
+          2005
+        ],
+        [
+          "advanceDebugPump",
+          2002
+        ],
+        [
+          "pumpAtClock",
+          2002
+        ],
+        [
+          "run",
+          2000
+        ],
+        [
+          "turn",
+          1992
+        ],
+        [
+          "step",
+          1779
+        ],
+        [
+          "execute",
+          1348
+        ],
+        [
+          "arithmetic2",
+          585
+        ],
+        [
+          "result",
+          415
+        ],
+        [
+          "pay",
+          339
+        ],
+        [
+          "charge",
+          265
+        ],
+        [
+          "toString",
+          262
+        ],
+        [
+          "digitCount",
+          250
+        ],
+        [
+          "replace",
+          249
+        ],
+        [
+          "dec",
+          218
+        ],
+        [
+          "evaluate",
+          186
+        ],
+        [
+          "comparison2",
+          183
+        ],
+        [
+          "equals",
+          174
+        ],
+        [
+          "characterBoundaries",
+          169
+        ],
+        [
+          "sizeOf",
+          149
+        ],
+        [
+          "scanned",
+          135
+        ],
+        [
+          "characters",
+          135
+        ],
+        [
+          "",
+          102
+        ],
+        [
+          "numberValue",
+          99
+        ],
+        [
+          "canonicalNumber",
+          96
+        ],
+        [
+          "trimWhiteSpace",
+          91
+        ],
+        [
+          "finishInstruction",
+          79
+        ],
+        [
+          "iteratorItem",
+          69
+        ],
+        [
+          "literalDigits",
+          63
+        ],
+        [
+          "freeze",
+          59
+        ],
+        [
+          "assertScalarText",
+          57
+        ],
+        [
+          "makeDecimal",
+          54
+        ]
+      ],
+      "textFunctionsInclusive": {
+        "characters": 135,
+        "characterBoundaries": 169,
+        "chunkGet": 32
+      },
+      "pumpSamples": 2008,
+      "pumpTextInclusive": {
+        "chunkGet": 32,
+        "spans": 0,
+        "span": 0,
+        "joinSpans": 0,
+        "characters": 135,
+        "characterBoundaries": 169
+      }
+    },
+    {
+      "workload": "probe/unicode-character",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks",
+        "--cpu-prof-name=before-probe-unicode-character.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/workloads.json",
+        "profile",
+        "probe/unicode-character"
+      ],
+      "checked": [
+        {
+          "name": "probe/unicode-character",
+          "runs": 816,
+          "checked": {
+            "alloc": 34024,
+            "fuel": 11017,
+            "outcome": "completed",
+            "result": "\"\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67\""
+          }
+        }
+      ],
+      "bundleSha256": "852a9f505cd23da7b9a75ca36e0f0013958363a8fb1f9dad6a63869eb85fa057",
+      "raw": "bench/results/2026-10-15-ts-character-indexing-profiles/before-probe-unicode-character.cpuprofile.gz",
+      "samples": 2063,
+      "exclusiveTop": [
+        [
+          "characterBoundaries",
+          1033
+        ],
+        [
+          "",
+          137
+        ],
+        [
+          "flush",
+          89
+        ],
+        [
+          "normalizeNFC",
+          81
+        ],
+        [
+          "assertScalarText",
+          66
+        ],
+        [
+          "execute",
+          65
+        ],
+        [
+          "sizeOf",
+          63
+        ],
+        [
+          "span",
+          52
+        ],
+        [
+          "step",
+          45
+        ],
+        [
+          "map",
+          44
+        ],
+        [
+          "characters",
+          36
+        ],
+        [
+          "finishInstruction",
+          34
+        ],
+        [
+          "charge",
+          26
+        ],
+        [
+          "encode",
+          25
+        ],
+        [
+          "pay",
+          25
+        ],
+        [
+          "fromPoints",
+          24
+        ],
+        [
+          "turn",
+          18
+        ],
+        [
+          "delete",
+          16
+        ],
+        [
+          "covered",
+          14
+        ],
+        [
+          "payAmount",
+          14
+        ],
+        [
+          "selected",
+          13
+        ],
+        [
+          "sort",
+          12
+        ],
+        [
+          "joinSpans",
+          11
+        ],
+        [
+          "/[\\uD800-\\uDFFF]/",
+          7
+        ],
+        [
+          "chunkGet",
+          7
+        ]
+      ],
+      "inclusiveTop": [
+        [
+          "(root)",
+          2063
+        ],
+        [
+          "(module)",
+          2062
+        ],
+        [
+          "pump",
+          2048
+        ],
+        [
+          "generatorResume",
+          2045
+        ],
+        [
+          "run",
+          2042
+        ],
+        [
+          "advanceDebugPump",
+          2041
+        ],
+        [
+          "pumpAtClock",
+          2041
+        ],
+        [
+          "turn",
+          2029
+        ],
+        [
+          "step",
+          1917
+        ],
+        [
+          "execute",
+          1712
+        ],
+        [
+          "chunkGet",
+          1585
+        ],
+        [
+          "characters",
+          1212
+        ],
+        [
+          "characterBoundaries",
+          1086
+        ],
+        [
+          "spans",
+          483
+        ],
+        [
+          "joinSpans",
+          424
+        ],
+        [
+          "text",
+          276
+        ],
+        [
+          "normalizeNFC",
+          267
+        ],
+        [
+          "",
+          191
+        ],
+        [
+          "map",
+          182
+        ],
+        [
+          "pay",
+          168
+        ],
+        [
+          "charge",
+          127
+        ],
+        [
+          "replace",
+          121
+        ],
+        [
+          "evaluate",
+          101
+        ],
+        [
+          "flush",
+          101
+        ],
+        [
+          "sizeOf",
+          96
+        ],
+        [
+          "assertScalarText",
+          73
+        ],
+        [
+          "fromPoints",
+          62
+        ],
+        [
+          "span",
+          52
+        ],
+        [
+          "finishInstruction",
+          34
+        ],
+        [
+          "measureOf",
+          29
+        ],
+        [
+          "encode",
+          25
+        ],
+        [
+          "covered",
+          17
+        ],
+        [
+          "delete",
+          16
+        ],
+        [
+          "payAmount",
+          15
+        ],
+        [
+          "selected",
+          14
+        ]
+      ],
+      "textFunctionsInclusive": {
+        "chunk": 1,
+        "chunkRead": 1,
+        "characters": 1212,
+        "characterBoundaries": 1086,
+        "chunkGet": 1585,
+        "joinSpans": 424,
+        "spans": 483,
+        "span": 52
+      },
+      "pumpSamples": 2048,
+      "pumpTextInclusive": {
+        "chunkGet": 1585,
+        "spans": 483,
+        "span": 52,
+        "joinSpans": 424,
+        "characters": 1212,
+        "characterBoundaries": 1086
+      }
+    },
+    {
+      "workload": "probe/unicode-character",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks",
+        "--cpu-prof-name=after-probe-unicode-character.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-ccb56dd4/.cache/ts-chunks/workloads.json",
+        "profile",
+        "probe/unicode-character"
+      ],
+      "checked": [
+        {
+          "name": "probe/unicode-character",
+          "runs": 1492,
+          "checked": {
+            "alloc": 34024,
+            "fuel": 11017,
+            "outcome": "completed",
+            "result": "\"\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67\""
+          }
+        }
+      ],
+      "bundleSha256": "016609f1f3cdbfb073b7c23abe2f2d69cbebf0af3b3d00506309dff8ffc35a79",
+      "raw": "bench/results/2026-10-15-ts-character-indexing-profiles/after-probe-unicode-character.cpuprofile.gz",
+      "samples": 2049,
+      "exclusiveTop": [
+        [
+          "characterBoundaries",
+          689
+        ],
+        [
+          "normalizeNFC",
+          185
+        ],
+        [
+          "",
+          168
+        ],
+        [
+          "flush",
+          130
+        ],
+        [
+          "execute",
+          119
+        ],
+        [
+          "step",
+          93
+        ],
+        [
+          "sizeOf",
+          88
+        ],
+        [
+          "finishInstruction",
+          61
+        ],
+        [
+          "charge",
+          58
+        ],
+        [
+          "assertScalarText",
+          49
+        ],
+        [
+          "fromPoints",
+          39
+        ],
+        [
+          "pay",
+          36
+        ],
+        [
+          "turn",
+          31
+        ],
+        [
+          "sort",
+          31
+        ],
+        [
+          "encode",
+          31
+        ],
+        [
+          "payAmount",
+          25
+        ],
+        [
+          "delete",
+          22
+        ],
+        [
+          "selected",
+          22
+        ],
+        [
+          "chunkGet",
+          17
+        ],
+        [
+          "covered",
+          15
+        ],
+        [
+          "freeze",
+          13
+        ],
+        [
+          "get frame",
+          9
+        ],
+        [
+          "integerOf",
+          8
+        ],
+        [
+          "peek",
+          8
+        ],
+        [
+          "next",
+          8
+        ]
+      ],
+      "inclusiveTop": [
+        [
+          "(root)",
+          2049
+        ],
+        [
+          "(module)",
+          2048
+        ],
+        [
+          "pump",
+          2036
+        ],
+        [
+          "generatorResume",
+          2031
+        ],
+        [
+          "run",
+          2031
+        ],
+        [
+          "advanceDebugPump",
+          2028
+        ],
+        [
+          "pumpAtClock",
+          2028
+        ],
+        [
+          "turn",
+          2017
+        ],
+        [
+          "step",
+          1834
+        ],
+        [
+          "execute",
+          1526
+        ],
+        [
+          "chunkGet",
+          1285
+        ],
+        [
+          "characterBoundaries",
+          721
+        ],
+        [
+          "text",
+          520
+        ],
+        [
+          "normalizeNFC",
+          497
+        ],
+        [
+          "pay",
+          247
+        ],
+        [
+          "charge",
+          186
+        ],
+        [
+          "",
+          171
+        ],
+        [
+          "flush",
+          161
+        ],
+        [
+          "replace",
+          153
+        ],
+        [
+          "evaluate",
+          128
+        ],
+        [
+          "fromPoints",
+          122
+        ],
+        [
+          "sizeOf",
+          121
+        ],
+        [
+          "map",
+          83
+        ],
+        [
+          "finishInstruction",
+          61
+        ],
+        [
+          "assertScalarText",
+          53
+        ],
+        [
+          "measureOf",
+          32
+        ],
+        [
+          "sort",
+          31
+        ],
+        [
+          "encode",
+          31
+        ],
+        [
+          "selected",
+          27
+        ],
+        [
+          "payAmount",
+          25
+        ],
+        [
+          "delete",
+          22
+        ],
+        [
+          "covered",
+          21
+        ],
+        [
+          "makeValue",
+          20
+        ],
+        [
+          "Value",
+          20
+        ],
+        [
+          "freeze",
+          13
+        ]
+      ],
+      "textFunctionsInclusive": {
+        "chunkGet": 1285,
+        "characterBoundaries": 721
+      },
+      "pumpSamples": 2036,
+      "pumpTextInclusive": {
+        "chunkGet": 1285,
+        "spans": 0,
+        "span": 0,
+        "joinSpans": 0,
+        "characters": 0,
+        "characterBoundaries": 721
+      }
+    }
+  ]
+}

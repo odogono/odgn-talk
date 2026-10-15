@@ -76,6 +76,7 @@ import {
 } from './patterns';
 import { characters } from './text';
 import {
+  characterBoundaries,
   isWhiteSpace,
   lower,
   normalizeNFC,
@@ -1203,11 +1204,16 @@ const isLineBreak = (ch: string) => ch === '\n' || ch === '\r' || ch === '\r\n';
  * A text's chunks of one kind, as half-open unit offsets: Characters for most
  * kinds, and code points for `code point`.
  */
-const spans = (s: string, kind: string, delimiter = ','): Span[] => {
+const spans = (
+  s: string,
+  kind: string,
+  delimiter = ',',
+  units?: string[],
+): Span[] => {
   if (kind === 'code point') {
     return Array.from(s, (ch, i) => ({ from: i, to: i + 1, text: ch }));
   }
-  const cs = characters(s);
+  const cs = units ?? characters(s);
   const span = (from: number, to: number) => ({
     from,
     to,
@@ -1305,22 +1311,10 @@ const covered = (index: Index, n: number): [number, number] | null => {
 };
 
 const textKinds = new Set(['character', 'word', 'line', 'item', 'code point']);
-const joinSpans = (
-  s: string,
-  kind: string,
-  chunks: Span[],
-  lo: number,
-  hi: number,
-) => {
-  if (kind === 'code point') {
-    return Array.from(s)
-      .slice(chunks[lo - 1]!.from, chunks[hi - 1]!.to)
-      .join('');
-  }
-  return characters(s)
-    .slice(chunks[lo - 1]!.from, chunks[hi - 1]!.to)
-    .join('');
-};
+// ASCII scalars each form one Character, except CRLF. Validate the whole
+// input: a non-ASCII suffix can extend the last ASCII scalar's Character.
+// eslint-disable-next-line no-control-regex -- ASCII includes the control scalars.
+const needsCharacterBoundaries = /[^\u0000-\u007f]|\r\n/;
 
 /** One chunk level read, with `scanned`: the units from the start to the chunk's end. */
 export const chunkGet = (
@@ -1332,15 +1326,42 @@ export const chunkGet = (
   const index = indexOf(indexValue);
   if (whole.kind === 'text' && textKinds.has(kind)) {
     const s = textOf(whole);
-    const chunks = spans(s, kind, delimiterText(delimiter));
-    const units =
-      kind === 'code point' ? Array.from(s).length : characters(s).length;
+    const d = delimiterText(delimiter);
+    if (kind === 'character') {
+      const boundaries = needsCharacterBoundaries.test(s)
+        ? characterBoundaries(s)
+        : null;
+      const units = boundaries ? boundaries.length - 1 : s.length;
+      const at = covered(index, units);
+      return at
+        ? {
+            result: text(
+              s.slice(
+                boundaries ? boundaries[at[0] - 1]! : at[0] - 1,
+                boundaries ? boundaries[at[1]]! : at[1],
+              ),
+            ),
+            scanned: at[1],
+          }
+        : { result: text(''), scanned: units };
+    }
+    const cs = kind === 'code point' ? Array.from(s) : characters(s);
+    const units = cs.length;
+    if (kind === 'code point') {
+      const at = covered(index, units);
+      return at
+        ? { result: text(cs.slice(at[0] - 1, at[1]).join('')), scanned: at[1] }
+        : { result: text(''), scanned: units };
+    }
+    const chunks = spans(s, kind, d, cs);
     const at = covered(index, chunks.length);
     if (!at) {
       return { result: text(''), scanned: units };
     }
     return {
-      result: text(joinSpans(s, kind, chunks, at[0], at[1])),
+      result: text(
+        cs.slice(chunks[at[0] - 1]!.from, chunks[at[1] - 1]!.to).join(''),
+      ),
       scanned: chunks[at[1] - 1]!.to,
     };
   }

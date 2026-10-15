@@ -28,6 +28,13 @@ shared; Fuel and logical allocation follow the unchanged Cost Model, including
 charging the full result size for `collecting`. Save/Restore uses the same value
 format and reconstructs independent storage.
 
+Text chunk reads segment the input once and reuse those units for counting and
+selection. Character reads slice the original Text at Character boundaries;
+ASCII without CRLF can use UTF-16 offsets directly. All other Character reads
+use the pinned Unicode segmenter. Results still pass through the NFC Text
+constructor, and `scanned`, Fuel, logical allocation and saved Values follow
+the same rules on both paths. No boundary cache is retained in Values or saves.
+
 Whole Host Object properties can be assigned with `set` through `me`, `it`
 or `the target`, including intermediate keys/chunks that locate the Object.
 These implicit bindings cannot be replaced or used as roots for ordinary
