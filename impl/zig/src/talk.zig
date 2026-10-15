@@ -36,6 +36,7 @@ pub fn status(err: anyerror) HostErrorCode {
         error.ReservedName => .reserved_name,
         error.LibraryMismatch => .library_mismatch,
         error.ReentrantCall => .reentrant_call,
+        error.ClockBackwards => .clock_backwards,
         error.EffectStateUnknown => .effect_state_unknown,
         else => .invalid_value,
     };
@@ -1331,11 +1332,6 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     model.dates.validateInstant(clock) catch return .invalid_value;
     const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
-    // A restored Group's first Pump reads a Clock at or after the saved one.
-    if (g.group.restored) |r| if (seconds < r.clock.seconds or (seconds == r.clock.seconds and nanos < r.clock.nanos)) {
-        g.group.refusePump(clock, options.fuel_slice, options.fuel_cap);
-        return .clock_backwards;
-    };
     g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
     // A C Host answers inside its calls, so a crossing pause here is only
     // `defer_crossings`' (a testing aid): take the Pump up again at once.
@@ -2150,6 +2146,19 @@ test "a Group loads, pumps and inspects through the exports" {
     try std.testing.expectEqual(HostErrorCode.ok, talk_pending_result(pending.?, &result_value));
     defer talk_value_release(result_value);
     try std.testing.expectEqualStrings("41!", result_value.?.data.text);
+}
+
+test "ordinary C Pumps reject backwards seconds and nanoseconds" {
+    const core = talk_new().?;
+    defer talk_core_release(core);
+    var group: ?*Group = null;
+    try std.testing.expectEqual(HostErrorCode.ok, talk_new_group(core, &GroupOptions{ .name = null, .name_len = 0, .trace = null, .trace_context = null }, &group));
+    defer talk_group_release(group);
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, -62135596800, 0, null, null));
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, 2, 2, null, null));
+    try std.testing.expectEqual(HostErrorCode.clock_backwards, talk_pump(group.?, 1, 2, null, null));
+    try std.testing.expectEqual(HostErrorCode.clock_backwards, talk_pump(group.?, 2, 1, null, null));
+    try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, 2, 2, null, null));
 }
 
 test "load honours the supported profile and refuses larger limits without taking a name" {

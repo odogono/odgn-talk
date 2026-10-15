@@ -1363,3 +1363,10 @@ reads.
 `bun run check` holds both to their sources and fails on a stale table. The
 emitters write `zig fmt`'s canonical form themselves, so the check needs no Zig
 toolchain; CI's `zig fmt --check` holds them to it.
+
+Every Pump enforces a nondecreasing Clock before draining queued inputs or
+changing accounting. Equal readings are allowed, and a new Group may begin
+before the Unix epoch. A restored Group starts with its saved Clock as the
+lower bound. The C API and Message Layer return `clock backwards` for a
+decrease; the Message Layer retains the refusal Trace for its next successful
+reply, as it does other refused worker records.
