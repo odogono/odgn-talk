@@ -23,10 +23,14 @@ const Stmt = ast.Stmt;
 pub const Operand = union(enum) {
     int: i64,
     text: []const u8,
+    /// The canonical conversion operand with verified, code-owned metadata.
+    unit_target: *const UnitTarget,
     /// A label of the body being lowered, resolved to an index when the
     /// body is laid out.
     label: u32,
 };
+
+pub const UnitTarget = struct { text: []const u8, descriptor: model.units.Descriptor };
 
 pub const Position = struct { line: u32, column: u32 };
 
@@ -730,6 +734,9 @@ const Frame = struct {
         return s;
     }
 
+    /// Releases compiler slot availability only. The canonical runtime local
+    /// keeps its Value until overwritten, including for retained-state sizing
+    /// and Save/Restore; this is not an ownership-transfer instruction.
     fn release(f: *Frame, s: u32) void {
         f.in_use.items[s - f.first_temp] = false;
     }
@@ -752,7 +759,15 @@ const Frame = struct {
     }
 
     fn emitAt(f: *Frame, op: Opcode, operands: []const Operand, at: Position, note: []const u8) Allocator.Error!void {
-        try f.body.code.append(f.l.a, .{ .op = op, .operands = try f.l.a.dupe(Operand, operands), .position = at, .note = note });
+        const owned = try f.l.a.dupe(Operand, operands);
+        if (op == .convert or op == .can_convert) {
+            if (model.units.Unit.parse(operands[0].text)) |unit| {
+                const prepared = try f.l.a.create(UnitTarget);
+                prepared.* = .{ .text = operands[0].text, .descriptor = .init(unit) };
+                owned[0] = .{ .unit_target = prepared };
+            } else |_| {}
+        }
+        try f.body.code.append(f.l.a, .{ .op = op, .operands = owned, .position = at, .note = note });
     }
 
     fn emit(f: *Frame, op: Opcode, operands: []const Operand, at: Tok, note: []const u8) Allocator.Error!void {
@@ -2885,6 +2900,7 @@ pub fn disassemble(unit: *const Unit, w: *std.Io.Writer) std.Io.Writer.Error!voi
             switch (o) {
                 .int => |v| if (i < n and std.mem.eql(u8, kinds[i], "label")) try w.print(" {d:0>4}", .{@as(u64, @intCast(v))}) else try w.print(" {d}", .{v}),
                 .text => |t| try w.print(" {s}", .{t}),
+                .unit_target => |target| try w.print(" {s}", .{target.text}),
                 .label => unreachable,
             }
         }
@@ -3044,4 +3060,30 @@ test "otherwise lowers at its own token, optional reads at `the`, and each branc
         std.debug.print("{s}\n", .{out.written()});
         return error.TestUnexpectedDisassembly;
     }
+}
+
+test "Unit target metadata survives compiler storage and defers value errors" {
+    var executable: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer executable.deinit();
+    var working: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer working.deinit();
+    const a = working.allocator();
+    const parsed = try parser.parse(a, "on go x\n  put x as mm into x\n  put x can be m into x\n  if false then put x as m into x\n  return x as number\nend go\n");
+    const checked = try check.check(a, &parsed.tree, .{});
+    try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+    const original = try lower(a, &parsed.tree, &checked, .{ .name = "s" });
+    const code = try @import("storage.zig").copy(executable.allocator(), original.code);
+    _ = working.reset(.free_all);
+    var verified: usize = 0;
+    var runtime_only: usize = 0;
+    for (code) |ins| if (ins.op == .convert or ins.op == .can_convert) {
+        if (ins.operands[0] == .unit_target) {
+            const descriptor = &ins.operands[0].unit_target.descriptor;
+            verified += 1;
+            const n = try model.Decimal.parse("2.50");
+            try testing.expectEqual(try descriptor.unit.toBase(testing.allocator, n), try descriptor.plan.execute(testing.allocator, n, false, false));
+        } else runtime_only += 1;
+    };
+    try testing.expectEqual(@as(usize, 3), verified);
+    try testing.expectEqual(@as(usize, 1), runtime_only);
 }

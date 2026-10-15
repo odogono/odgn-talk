@@ -339,6 +339,8 @@ pub fn textForm(a: Allocator, v: *const Value) Allocator.Error![]const u8 {
 }
 
 /// Writes one chunk level: the whole with the chunk replaced by `part`.
+/// Borrows all input Values and returns an owned result. Even a unique whole
+/// must keep its prior contents; callers may retain it in canonical locals.
 pub fn set(a: Allocator, gpa: Allocator, whole: *Value, kind: Kind, index_value: *const Value, part: *Value, delimiter: []const u8, effect: *Effect) Error!*Value {
     const index = switch (readIndex(index_value)) {
         .index => |i| i,
@@ -763,4 +765,27 @@ fn listWriteAllocations(gpa: Allocator) !void {
 test "List chunk writes preserve borrowed inputs and free every refused allocation" {
     try listWriteAllocations(testing.allocator);
     try testing.checkAllAllocationFailures(testing.allocator, listWriteAllocations, .{});
+}
+
+fn uniqueBorrowedListWrite(gpa: Allocator) !void {
+    const one = try numberValue(gpa, 1);
+    defer one.release();
+    const two = try numberValue(gpa, 2);
+    defer two.release();
+    const original = try model.list(gpa, &.{one});
+    defer original.release();
+    // No alias or rank-raising child forces a copy on behalf of this test.
+    // The borrowed-input contract alone must preserve the prior version.
+    try testing.expectEqual(@as(usize, 1), original.references);
+    var effect: Effect = .{};
+    const changed = try set(gpa, gpa, original, .item, one, two, ",", &effect);
+    defer changed.release();
+    try testing.expect(changed != original);
+    try testing.expectEqual(one, original.data.list[0]);
+    try testing.expectEqual(two, changed.data.list[0]);
+}
+
+test "even a unique borrowed List copies for a lower-ranked point replacement" {
+    try uniqueBorrowedListWrite(testing.allocator);
+    try testing.checkAllAllocationFailures(testing.allocator, uniqueBorrowedListWrite, .{});
 }

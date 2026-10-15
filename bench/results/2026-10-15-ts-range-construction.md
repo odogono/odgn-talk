@@ -2,7 +2,7 @@
 
 Evidence for [#943](https://github.com/odogono/odgn-talk/issues/943).
 Before: `f51ad856e37d802b8865bb2870c3adebc293e7d1` (the required base).
-After: the same base plus this worktree's scoped `machine.ts` change. The
+After: `cca8450b`, the same base plus the scoped `machine.ts` change. The
 [raw JSON](2026-10-15-ts-range-construction.json) pins both machine source hashes,
 the probe hashes, all samples, accounting and process load averages.
 
@@ -135,16 +135,17 @@ individual measurements are retained in JSON.
 
 The required command completed successfully with 111 measurements: 30 Zig,
 39 TS and 21 each AppleScript and GopherLua. All expected outputs passed and
-all overlapping Core Fuel matched. The [full report](2026-10-15-darwin-arm64-apple-m5-zig-ts-applescript-gopher-lua.md)
-and [JSON](2026-10-15-darwin-arm64-apple-m5-zig-ts-applescript-gopher-lua.json)
+all overlapping Core Fuel matched. The [full report](2026-10-15-ts-range-construction-four-way.md)
+and [JSON](2026-10-15-ts-range-construction-four-way.json)
 record every workload, Load, Run, sample count, accounting and explicit skip.
 
 Versions: Zig 0.17.0, native safe build with C Host `-O2`; Bun 1.4.3;
 AppleScript 2.8 on macOS 27.0.1; Go 1.27.2 hosting GopherLua v1.1.2.
 Zig, AppleScript and Lua have three samples; TS uses mitata's automatic sample
-counts. Cells below are **median / minimum**, not a full range: the standard
-suite retains only those two statistics and sample count, so its upper-tail
-spread cannot be recovered. The paired probe above retains all samples.
+counts. Cells below are **median / minimum**, not a full range: the suite at
+the measured base retained only those two statistics and sample count, so this
+saved comparison's upper-tail spread cannot be recovered. The current suite
+also preserves the maximum. The paired probe above retains all samples.
 
 Run times, **ms**:
 
@@ -177,7 +178,16 @@ later TS measurement is also substantially faster than the paired probe's
 TS medians, reinforcing the shared-load limitation. It is a separate suite
 snapshot, not another before/after pair or evidence of a further code change.
 
+These historical measurements predate the merge of #942's accounting
+optimization. The distinctly named four-runner files preserve #943's original
+evidence alongside the separate accounting results now on `main`; the saved
+measurements do not claim the combined effect of both optimizations.
+
 ## Semantic verification
+
+After merging `main` at `37d296f2` to resolve the result-file name collision,
+all 5,924 TS tests, 168 benchmark tests and 429 Corpus cases passed, along with
+the TS Core and benchmark typechecks. The original measurement validation was:
 
 - All 5,821 TS tests passed; the focused lifecycle/recovery run passed 300 tests.
 - All 429 TS Corpus cases passed against existing expectations. No expectations

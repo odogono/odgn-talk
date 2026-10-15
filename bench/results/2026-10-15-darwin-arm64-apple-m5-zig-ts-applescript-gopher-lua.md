@@ -6,117 +6,117 @@ Settings: count 3, runners zig,ts,applescript,gopher-lua, smoke false.
 
 | Benchmark | Runner | Load median (µs) | Run median (ms) | Run min (ms) | Fuel | ns/Fuel | Logical alloc | Host bytes | Host allocs |
 | - | - | -: | -: | -: | -: | -: | -: | -: | -: |
-| collections/iterate | ts | 238.1 | 14.415 | 8.201 | 89459 | 161.1 | 195.6 KiB | 1.2 MiB |  |
-| collections/iterate | zig | 20.5 | 2.503 | 1.949 | 89459 | 28.0 | 195.6 KiB |  |  |
-| collections/iterate | applescript |  | 6.447 | 6.417 |  |  |  |  |  |
-| collections/iterate | gopher-lua |  | 0.544 | 0.464 |  |  |  | 108.9 KiB | 6741 |
-| collections/list-append | ts | 215.8 | 6.085 | 5.596 | 52056 | 116.9 | 78.3 KiB | 1003.5 KiB |  |
-| collections/list-append | zig | 14.4 | 1.453 | 1.241 | 52056 | 27.9 | 78.3 KiB |  |  |
-| collections/list-append | applescript |  | 1.424 | 1.414 |  |  |  |  |  |
-| collections/list-append | gopher-lua |  | 0.353 | 0.346 |  |  |  | 203.9 KiB | 4315 |
-| collections/list-build | ts | 139.7 | 1.413 | 1.293 | 19091 | 74.0 | 2.9 MiB | 173.5 KiB |  |
-| collections/list-build | zig | 7.9 | 0.332 | 0.260 | 19091 | 17.4 | 2.9 MiB |  |  |
-| collections/list-build | applescript |  | 0.237 | 0.237 |  |  |  |  |  |
-| collections/list-build | gopher-lua |  | 0.0717 | 0.0716 |  |  |  | 35.4 KiB | 1045 |
-| collections/list-update | ts | 221.1 | 2.882 | 2.570 | 28553 | 100.9 | 23.8 KiB | 391.2 KiB |  |
-| collections/list-update | zig | 14.4 | 0.867 | 0.839 | 28553 | 30.4 | 23.8 KiB |  |  |
-| collections/list-update | applescript |  | 0.407 | 0.403 |  |  |  |  |  |
-| collections/list-update | gopher-lua |  | 0.0471 | 0.0461 |  |  |  | 22.4 KiB | 106 |
-| collections/map-build | ts | 194.5 | 1.428 | 1.324 | 14094 | 101.3 | 24.3 KiB | 142.0 KiB |  |
-| collections/map-build | zig | 13.3 | 1.286 | 1.177 | 14094 | 91.3 | 24.3 KiB |  |  |
-| collections/map-build | applescript |  | 6.398 | 6.304 |  |  |  |  |  |
-| collections/map-build | gopher-lua |  | 0.141 | 0.141 |  |  |  | 90.5 KiB | 1291 |
-| collections/map-update | ts | 211.3 | 0.986 | 0.895 | 8056 | 122.4 | 12.1 KiB | 79.3 KiB |  |
-| collections/map-update | zig | 14.0 | 0.313 | 0.300 | 8056 | 38.9 | 12.1 KiB |  |  |
-| collections/map-update | applescript |  | 4.036 | 4.032 |  |  |  |  |  |
-| collections/map-update | gopher-lua |  | 0.0295 | 0.0284 |  |  |  | 10.2 KiB | 76 |
-| core/calls | ts | 149.0 | 2.538 | 2.241 | 46018 | 55.1 | 31.3 KiB | 101.2 KiB |  |
-| core/calls | zig | 10.3 | 0.987 | 0.954 | 46018 | 21.4 | 31.3 KiB |  |  |
-| core/calls | applescript |  | 0.671 | 0.651 |  |  |  |  |  |
-| core/calls | gopher-lua |  | 0.0835 | 0.0813 |  |  |  | 44.8 KiB | 180 |
-| core/fib | ts | 148.8 | 2.904 | 2.262 | 46365 | 62.6 | 46.2 KiB | 139.5 KiB |  |
-| core/fib | zig | 14.5 | 1.005 | 0.971 | 46365 | 21.7 | 46.2 KiB |  |  |
-| core/fib | applescript |  | 0.530 | 0.522 |  |  |  |  |  |
-| core/fib | gopher-lua |  | 0.0798 | 0.0787 |  |  |  | 63 B | 1 |
-| core/fib@slice=10 | ts | 108.3 | 17.290 | 11.177 | 46365 | 372.9 | 46.2 KiB | 931.5 KiB |  |
-| core/fib@slice=10 | zig | 10.3 | 6.840 | 6.472 | 46365 | 147.5 | 46.2 KiB |  |  |
-| core/fib@slice=100 | ts | 94.7 | 3.801 | 3.334 | 46365 | 82.0 | 46.2 KiB | 86.5 KiB |  |
-| core/fib@slice=100 | zig | 10.0 | 1.584 | 1.570 | 46365 | 34.2 | 46.2 KiB |  |  |
-| core/fib@slice=1000 | ts | 91.3 | 2.678 | 2.472 | 46365 | 57.8 | 46.2 KiB | 10.2 KiB |  |
-| core/fib@slice=1000 | zig | 11.5 | 1.109 | 1.039 | 46365 | 23.9 | 46.2 KiB |  |  |
-| core/fib@slice=10000 | ts | 87.3 | 2.626 | 2.375 | 46365 | 56.6 | 46.2 KiB | 0 B |  |
-| core/fib@slice=10000 | zig | 10.8 | 1.354 | 1.080 | 46365 | 29.2 | 46.2 KiB |  |  |
-| core/lambdas | ts | 188.3 | 3.719 | 3.235 | 58027 | 64.1 | 62.6 KiB | 250.9 KiB |  |
-| core/lambdas | zig | 12.1 | 1.299 | 1.068 | 58027 | 22.4 | 62.6 KiB |  |  |
-| core/lambdas | applescript |  | 0.722 | 0.718 |  |  |  |  |  |
-| core/lambdas | gopher-lua |  | 0.120 | 0.114 |  |  |  | 60.3 KiB | 244 |
-| core/loop | ts | 160.2 | 4.102 | 3.127 | 48016 | 85.4 | 62.5 KiB | 307.6 KiB |  |
-| core/loop | zig | 11.0 | 1.467 | 1.370 | 48016 | 30.5 | 62.5 KiB |  |  |
-| core/loop | applescript |  | 0.193 | 0.191 |  |  |  |  |  |
-| core/loop | gopher-lua |  | 0.0307 | 0.0306 |  |  |  | 44.8 KiB | 180 |
-| host/conversion | ts | 218.6 | 10.612 | 9.904 | 25018 | 424.2 | 220.3 KiB | 1.0 MiB |  |
-| host/immediate | ts | 139.1 | 2.340 | 2.129 | 13518 | 173.1 | 15.7 KiB | 307.3 KiB |  |
-| host/properties | ts | 122.0 | 1.823 | 1.337 | 9018 | 202.2 | 15.7 KiB | 193.0 KiB |  |
-| host/pump | ts | 27.6 | 0.0101 | 0.00885 | 7 | 1440.4 | 0 B | 3.9 KiB |  |
-| host/pump | zig | 3.5 | 0.00228 | 0.00222 | 7 | 326.1 | 0 B |  |  |
-| host/suspending | ts | 140.6 | 5.091 | 4.335 | 13518 | 376.6 | 15.7 KiB | 123.5 KiB |  |
-| lifecycle/load-large | ts | 17043.1 | 0.773 | 0.719 | 4609 | 167.7 | 16.3 KiB | 131 B |  |
-| lifecycle/load-large | zig | 1129.0 | 0.234 | 0.230 | 4609 | 50.8 | 16.3 KiB |  |  |
-| lifecycle/load-small | ts | 36.8 | 0.00771 | 0.00729 | 7 | 1101.2 | 0 B | 4.0 KiB |  |
-| lifecycle/load-small | zig | 4.2 | 0.00232 | 0.00225 | 7 | 332.0 | 0 B |  |  |
-| lifecycle/restore | ts | 268.7 | 7.906 | 7.374 | 8015 | 986.4 | 7.8 KiB | 30.7 KiB |  |
-| lifecycle/rollback | ts | 270.1 | 53.255 | 50.270 | 102023 | 522.0 | 39.9 KiB | 5.8 KiB |  |
-| macro/game-tick | ts | 224.7 | 9.281 | 5.572 | 67042 | 138.4 | 78.4 KiB | 9.4 KiB |  |
-| macro/game-tick | zig | 14.3 | 1.965 | 1.652 | 67042 | 29.3 | 78.4 KiB |  |  |
-| macro/game-tick | applescript |  | 1.496 | 1.490 |  |  |  |  |  |
-| macro/game-tick | gopher-lua |  | 0.151 | 0.150 |  |  |  | 28.7 KiB | 128 |
-| macro/report | ts | 123.4 | 2.261 | 2.104 | 86555 | 26.1 | 1.2 MiB | 2.3 MiB |  |
-| macro/report | zig | 12.9 | 1.658 | 1.633 | 86555 | 19.2 | 1.2 MiB |  |  |
-| macro/report | applescript |  | 3.330 | 3.296 |  |  |  |  |  |
-| macro/report | gopher-lua |  | 0.145 | 0.142 |  |  |  | 33.1 KiB | 1291 |
-| macro/transform | ts | 199.2 | 3.566 | 3.248 | 20664 | 172.6 | 6.1 MiB | 3.3 KiB |  |
-| macro/transform | zig | 16.3 | 0.443 | 0.413 | 20664 | 21.4 | 6.1 MiB |  |  |
-| macro/transform | applescript |  | 0.373 | 0.373 |  |  |  |  |  |
-| macro/transform | gopher-lua |  | 0.167 | 0.158 |  |  |  | 268.0 KiB | 4538 |
-| messaging/joins | ts | 258.5 | 27.345 | 21.805 | 127218 | 214.9 | 239.1 KiB | 5.8 KiB |  |
-| messaging/parents | ts | 166.2 | 20.121 | 18.664 | 67518 | 298.0 | 93.8 KiB | 10.0 KiB |  |
-| messaging/sends | ts | 185.7 | 16.821 | 13.247 | 67518 | 249.1 | 93.8 KiB | 163.5 KiB |  |
-| messaging/suspend | ts | 112.5 | 18.579 | 17.402 | 48018 | 386.9 | 31.3 KiB | 899.9 KiB |  |
-| messaging/suspend | zig | 9.2 | 4.265 | 4.238 | 48018 | 88.8 | 31.3 KiB |  |  |
-| numbers/add | ts | 113.3 | 2.022 | 1.808 | 26030 | 77.7 | 31.4 KiB | 255.5 KiB |  |
-| numbers/add | zig | 8.4 | 0.577 | 0.572 | 26030 | 22.2 | 31.4 KiB |  |  |
-| numbers/add | applescript |  | 0.245 | 0.243 |  |  |  |  |  |
-| numbers/add | gopher-lua |  | 0.0450 | 0.0378 |  |  |  | 43.9 KiB | 177 |
-| numbers/divide | ts | 122.8 | 2.178 | 1.978 | 18031 | 120.8 | 31.4 KiB | 503.0 KiB |  |
-| numbers/divide | zig | 9.8 | 0.530 | 0.513 | 18031 | 29.4 | 31.4 KiB |  |  |
-| numbers/divide | applescript |  | 0.207 | 0.205 |  |  |  |  |  |
-| numbers/divide | gopher-lua |  | 0.0245 | 0.0243 |  |  |  | 28.3 KiB | 115 |
-| numbers/multiply | ts | 121.5 | 1.543 | 1.374 | 18031 | 85.5 | 31.4 KiB | 122.3 KiB |  |
-| numbers/multiply | zig | 9.6 | 0.470 | 0.422 | 18031 | 26.1 | 31.4 KiB |  |  |
-| numbers/multiply | applescript |  | 0.187 | 0.186 |  |  |  |  |  |
-| numbers/multiply | gopher-lua |  | 0.0247 | 0.0246 |  |  |  | 29.1 KiB | 118 |
-| numbers/quantity | ts | 208.0 | 4.811 | 4.320 | 14579 | 330.0 | 39.1 KiB | 544.4 KiB |  |
-| numbers/quantity | zig | 15.5 | 0.602 | 0.593 | 14579 | 41.3 | 39.1 KiB |  |  |
-| numbers/quantity | applescript |  | 0.126 | 0.126 |  |  |  |  |  |
-| numbers/quantity | gopher-lua |  | 0.0173 | 0.0146 |  |  |  | 16.5 KiB | 67 |
-| text/build | ts | 115.7 | 1.089 | 1.012 | 28928 | 37.7 | 374.8 KiB | 169.8 KiB |  |
-| text/build | zig | 8.1 | 0.605 | 0.598 | 28928 | 20.9 | 374.8 KiB |  |  |
-| text/build | applescript |  | 0.388 | 0.379 |  |  |  |  |  |
-| text/build | gopher-lua |  | 0.111 | 0.110 |  |  |  | 400.8 KiB | 1024 |
-| text/graphemes | ts | 157.0 | 7.739 | 6.395 | 43518 | 177.8 | 144.1 KiB | 959.3 KiB |  |
-| text/graphemes | zig | 10.6 | 1.629 | 1.615 | 43518 | 37.4 | 144.1 KiB |  |  |
-| text/index | ts | 172.7 | 11.471 | 7.387 | 26640 | 430.6 | 49.9 KiB | 400.6 KiB |  |
-| text/index | zig | 11.9 | 0.951 | 0.917 | 26640 | 35.7 | 49.9 KiB |  |  |
-| text/index | applescript |  | 0.951 | 0.940 |  |  |  |  |  |
-| text/index | gopher-lua |  | 0.146 | 0.146 |  |  |  | 29.3 KiB | 1055 |
-| text/iterate | ts | 143.3 | 4.594 | 4.132 | 30318 | 151.5 | 93.0 KiB | 161.2 KiB |  |
-| text/iterate | zig | 10.1 | 0.828 | 0.794 | 30318 | 27.3 | 93.0 KiB |  |  |
-| text/iterate | applescript |  | 3.529 | 3.525 |  |  |  |  |  |
-| text/iterate | gopher-lua |  | 0.314 | 0.307 |  |  |  | 187.3 KiB | 9847 |
-| text/patterns | ts | 158.2 | 9.096 | 6.613 | 13818 | 658.3 | 225.9 KiB | 1.6 MiB |  |
-| text/patterns | zig | 11.1 | 0.895 | 0.858 | 13818 | 64.8 | 225.9 KiB |  |  |
-| text/patterns | applescript |  | 16.153 | 16.140 |  |  |  |  |  |
-| text/patterns | gopher-lua |  | 0.485 | 0.484 |  |  |  | 390.8 KiB | 17736 |
+| collections/iterate | ts | 244.6 | 7.358 | 6.960 | 89459 | 82.3 | 195.6 KiB | 1.5 MiB |  |
+| collections/iterate | zig | 13.6 | 1.737 | 1.664 | 89459 | 19.4 | 195.6 KiB |  |  |
+| collections/iterate | applescript |  | 6.404 | 6.341 |  |  |  |  |  |
+| collections/iterate | gopher-lua |  | 0.400 | 0.393 |  |  |  | 108.9 KiB | 6741 |
+| collections/list-append | ts | 193.3 | 6.434 | 5.226 | 52056 | 123.6 | 78.3 KiB | 1.1 MiB |  |
+| collections/list-append | zig | 10.8 | 1.119 | 1.081 | 52056 | 21.5 | 78.3 KiB |  |  |
+| collections/list-append | applescript |  | 1.475 | 1.462 |  |  |  |  |  |
+| collections/list-append | gopher-lua |  | 0.178 | 0.176 |  |  |  | 203.9 KiB | 4315 |
+| collections/list-build | ts | 110.0 | 1.283 | 1.145 | 19091 | 67.2 | 2.9 MiB | 316.4 KiB |  |
+| collections/list-build | zig | 7.6 | 0.235 | 0.235 | 19091 | 12.3 | 2.9 MiB |  |  |
+| collections/list-build | applescript |  | 0.247 | 0.242 |  |  |  |  |  |
+| collections/list-build | gopher-lua |  | 0.0375 | 0.0371 |  |  |  | 35.4 KiB | 1045 |
+| collections/list-update | ts | 196.9 | 4.753 | 2.814 | 28553 | 166.5 | 23.8 KiB | 220.6 KiB |  |
+| collections/list-update | zig | 12.0 | 0.619 | 0.597 | 28553 | 21.7 | 23.8 KiB |  |  |
+| collections/list-update | applescript |  | 0.401 | 0.400 |  |  |  |  |  |
+| collections/list-update | gopher-lua |  | 0.0256 | 0.0255 |  |  |  | 22.4 KiB | 106 |
+| collections/map-build | ts | 155.0 | 1.250 | 1.057 | 14094 | 88.7 | 24.3 KiB | 197.2 KiB |  |
+| collections/map-build | zig | 9.4 | 0.981 | 0.974 | 14094 | 69.6 | 24.3 KiB |  |  |
+| collections/map-build | applescript |  | 6.143 | 6.104 |  |  |  |  |  |
+| collections/map-build | gopher-lua |  | 0.0791 | 0.0790 |  |  |  | 90.5 KiB | 1291 |
+| collections/map-update | ts | 193.3 | 1.066 | 0.921 | 8056 | 132.3 | 12.1 KiB | 262.2 KiB |  |
+| collections/map-update | zig | 11.4 | 0.237 | 0.236 | 8056 | 29.4 | 12.1 KiB |  |  |
+| collections/map-update | applescript |  | 3.750 | 3.721 |  |  |  |  |  |
+| collections/map-update | gopher-lua |  | 0.0185 | 0.0184 |  |  |  | 10.2 KiB | 76 |
+| core/calls | ts | 139.9 | 2.693 | 2.422 | 46018 | 58.5 | 31.3 KiB | 135.8 KiB |  |
+| core/calls | zig | 7.8 | 0.716 | 0.704 | 46018 | 15.5 | 31.3 KiB |  |  |
+| core/calls | applescript |  | 0.665 | 0.658 |  |  |  |  |  |
+| core/calls | gopher-lua |  | 0.0799 | 0.0780 |  |  |  | 44.8 KiB | 180 |
+| core/fib | ts | 135.7 | 2.392 | 1.842 | 46365 | 51.6 | 46.2 KiB | 203.8 KiB |  |
+| core/fib | zig | 7.3 | 0.757 | 0.754 | 46365 | 16.3 | 46.2 KiB |  |  |
+| core/fib | applescript |  | 0.528 | 0.524 |  |  |  |  |  |
+| core/fib | gopher-lua |  | 0.0803 | 0.0800 |  |  |  | 63 B | 1 |
+| core/fib@slice=10 | ts | 99.2 | 11.186 | 9.498 | 46365 | 241.3 | 46.2 KiB | 1.1 MiB |  |
+| core/fib@slice=10 | zig | 7.2 | 5.026 | 5.004 | 46365 | 108.4 | 46.2 KiB |  |  |
+| core/fib@slice=100 | ts | 83.3 | 2.959 | 2.625 | 46365 | 63.8 | 46.2 KiB | 50.6 KiB |  |
+| core/fib@slice=100 | zig | 7.4 | 1.273 | 1.270 | 46365 | 27.4 | 46.2 KiB |  |  |
+| core/fib@slice=1000 | ts | 84.0 | 2.209 | 1.995 | 46365 | 47.6 | 46.2 KiB | 2.0 KiB |  |
+| core/fib@slice=1000 | zig | 7.7 | 0.806 | 0.806 | 46365 | 17.4 | 46.2 KiB |  |  |
+| core/fib@slice=10000 | ts | 84.2 | 2.217 | 2.016 | 46365 | 47.8 | 46.2 KiB | 8.9 KiB |  |
+| core/fib@slice=10000 | zig | 7.4 | 0.844 | 0.764 | 46365 | 18.2 | 46.2 KiB |  |  |
+| core/lambdas | ts | 179.7 | 4.033 | 3.377 | 58027 | 69.5 | 62.6 KiB | 399.9 KiB |  |
+| core/lambdas | zig | 10.2 | 0.941 | 0.940 | 58027 | 16.2 | 62.6 KiB |  |  |
+| core/lambdas | applescript |  | 0.716 | 0.709 |  |  |  |  |  |
+| core/lambdas | gopher-lua |  | 0.0930 | 0.0930 |  |  |  | 60.3 KiB | 244 |
+| core/loop | ts | 109.1 | 2.692 | 2.360 | 48016 | 56.1 | 62.5 KiB | 221.3 KiB |  |
+| core/loop | zig | 7.2 | 1.054 | 1.053 | 48016 | 21.9 | 62.5 KiB |  |  |
+| core/loop | applescript |  | 0.200 | 0.193 |  |  |  |  |  |
+| core/loop | gopher-lua |  | 0.0310 | 0.0292 |  |  |  | 44.8 KiB | 180 |
+| host/conversion | ts | 194.5 | 9.811 | 9.192 | 25018 | 392.2 | 220.3 KiB | 3.0 MiB |  |
+| host/immediate | ts | 123.8 | 2.184 | 1.980 | 13518 | 161.5 | 15.7 KiB | 79.7 KiB |  |
+| host/properties | ts | 116.2 | 2.013 | 1.554 | 9018 | 223.2 | 15.7 KiB | 184.1 KiB |  |
+| host/pump | ts | 21.1 | 0.00743 | 0.00699 | 7 | 1061.2 | 0 B | 1.4 KiB |  |
+| host/pump | zig | 2.5 | 0.00175 | 0.00173 | 7 | 250.7 | 0 B |  |  |
+| host/suspending | ts | 128.4 | 5.016 | 4.327 | 13518 | 371.1 | 15.7 KiB | 403.2 KiB |  |
+| lifecycle/load-large | ts | 15827.1 | 0.714 | 0.650 | 4609 | 155.0 | 16.3 KiB | 246 B |  |
+| lifecycle/load-large | zig | 788.9 | 0.159 | 0.158 | 4609 | 34.5 | 16.3 KiB |  |  |
+| lifecycle/load-small | ts | 34.0 | 0.00729 | 0.00676 | 7 | 1041.4 | 0 B | 2.9 KiB |  |
+| lifecycle/load-small | zig | 3.9 | 0.00174 | 0.00173 | 7 | 248.8 | 0 B |  |  |
+| lifecycle/restore | ts | 246.8 | 7.581 | 6.983 | 8015 | 945.8 | 7.8 KiB | 142.2 KiB |  |
+| lifecycle/rollback | ts | 268.8 | 70.864 | 65.788 | 102023 | 694.6 | 39.9 KiB | 13.1 KiB |  |
+| macro/game-tick | ts | 213.3 | 6.049 | 5.697 | 67042 | 90.2 | 78.4 KiB | 5.6 KiB |  |
+| macro/game-tick | zig | 13.0 | 1.598 | 1.504 | 67042 | 23.8 | 78.4 KiB |  |  |
+| macro/game-tick | applescript |  | 1.560 | 1.555 |  |  |  |  |  |
+| macro/game-tick | gopher-lua |  | 0.139 | 0.138 |  |  |  | 28.7 KiB | 128 |
+| macro/report | ts | 125.2 | 2.109 | 1.990 | 86555 | 24.4 | 1.2 MiB | 2.4 MiB |  |
+| macro/report | zig | 7.8 | 1.237 | 1.233 | 86555 | 14.3 | 1.2 MiB |  |  |
+| macro/report | applescript |  | 4.388 | 3.578 |  |  |  |  |  |
+| macro/report | gopher-lua |  | 0.134 | 0.134 |  |  |  | 33.1 KiB | 1291 |
+| macro/transform | ts | 170.4 | 3.244 | 3.086 | 20664 | 157.0 | 6.1 MiB | 1.3 KiB |  |
+| macro/transform | zig | 11.5 | 0.327 | 0.326 | 20664 | 15.8 | 6.1 MiB |  |  |
+| macro/transform | applescript |  | 0.382 | 0.370 |  |  |  |  |  |
+| macro/transform | gopher-lua |  | 0.143 | 0.142 |  |  |  | 268.0 KiB | 4538 |
+| messaging/joins | ts | 239.6 | 21.231 | 20.207 | 127218 | 166.9 | 239.1 KiB | 6.4 KiB |  |
+| messaging/parents | ts | 160.7 | 15.556 | 14.640 | 67518 | 230.4 | 93.8 KiB | 638.4 KiB |  |
+| messaging/sends | ts | 190.2 | 17.305 | 16.113 | 67518 | 256.3 | 93.8 KiB | 265.6 KiB |  |
+| messaging/suspend | ts | 107.5 | 18.447 | 16.499 | 48018 | 384.2 | 31.3 KiB | 16.0 KiB |  |
+| messaging/suspend | zig | 6.5 | 2.970 | 2.950 | 48018 | 61.8 | 31.3 KiB |  |  |
+| numbers/add | ts | 123.3 | 2.430 | 2.204 | 26030 | 93.3 | 31.4 KiB | 271.9 KiB |  |
+| numbers/add | zig | 7.0 | 0.530 | 0.523 | 26030 | 20.4 | 31.4 KiB |  |  |
+| numbers/add | applescript |  | 0.242 | 0.240 |  |  |  |  |  |
+| numbers/add | gopher-lua |  | 0.0291 | 0.0291 |  |  |  | 43.9 KiB | 177 |
+| numbers/divide | ts | 92.1 | 2.166 | 1.992 | 18031 | 120.1 | 31.4 KiB | 507.3 KiB |  |
+| numbers/divide | zig | 7.0 | 0.441 | 0.369 | 18031 | 24.4 | 31.4 KiB |  |  |
+| numbers/divide | applescript |  | 0.203 | 0.201 |  |  |  |  |  |
+| numbers/divide | gopher-lua |  | 0.0218 | 0.0216 |  |  |  | 28.3 KiB | 115 |
+| numbers/multiply | ts | 101.4 | 1.526 | 1.363 | 18031 | 84.6 | 31.4 KiB | 147.3 KiB |  |
+| numbers/multiply | zig | 7.1 | 0.351 | 0.348 | 18031 | 19.5 | 31.4 KiB |  |  |
+| numbers/multiply | applescript |  | 0.184 | 0.183 |  |  |  |  |  |
+| numbers/multiply | gopher-lua |  | 0.0206 | 0.0201 |  |  |  | 29.1 KiB | 118 |
+| numbers/quantity | ts | 165.5 | 4.318 | 3.980 | 14579 | 296.2 | 39.1 KiB | 350.9 KiB |  |
+| numbers/quantity | zig | 8.7 | 0.409 | 0.408 | 14579 | 28.1 | 39.1 KiB |  |  |
+| numbers/quantity | applescript |  | 0.126 | 0.125 |  |  |  |  |  |
+| numbers/quantity | gopher-lua |  | 0.0123 | 0.0123 |  |  |  | 16.5 KiB | 67 |
+| text/build | ts | 103.7 | 1.138 | 1.047 | 28928 | 39.3 | 374.8 KiB | 150.3 KiB |  |
+| text/build | zig | 6.1 | 0.435 | 0.435 | 28928 | 15.1 | 374.8 KiB |  |  |
+| text/build | applescript |  | 0.380 | 0.380 |  |  |  |  |  |
+| text/build | gopher-lua |  | 0.0779 | 0.0698 |  |  |  | 400.8 KiB | 1024 |
+| text/graphemes | ts | 133.3 | 5.762 | 5.244 | 43518 | 132.4 | 144.1 KiB | 1.0 MiB |  |
+| text/graphemes | zig | 8.1 | 1.165 | 1.165 | 43518 | 26.8 | 144.1 KiB |  |  |
+| text/index | ts | 146.5 | 7.416 | 6.687 | 26640 | 278.4 | 49.9 KiB | 732.3 KiB |  |
+| text/index | zig | 8.1 | 0.711 | 0.706 | 26640 | 26.7 | 49.9 KiB |  |  |
+| text/index | applescript |  | 0.934 | 0.930 |  |  |  |  |  |
+| text/index | gopher-lua |  | 0.113 | 0.113 |  |  |  | 29.3 KiB | 1055 |
+| text/iterate | ts | 118.8 | 3.761 | 3.451 | 30318 | 124.1 | 93.0 KiB | 1.1 MiB |  |
+| text/iterate | zig | 7.2 | 0.665 | 0.614 | 30318 | 21.9 | 93.0 KiB |  |  |
+| text/iterate | applescript |  | 3.590 | 3.551 |  |  |  |  |  |
+| text/iterate | gopher-lua |  | 0.182 | 0.179 |  |  |  | 187.3 KiB | 9847 |
+| text/patterns | ts | 144.8 | 6.083 | 5.703 | 13818 | 440.3 | 225.9 KiB | 1.3 MiB |  |
+| text/patterns | zig | 8.5 | 0.599 | 0.599 | 13818 | 43.4 | 225.9 KiB |  |  |
+| text/patterns | applescript |  | 16.083 | 16.000 |  |  |  |  |  |
+| text/patterns | gopher-lua |  | 0.247 | 0.247 |  |  |  | 390.8 KiB | 17736 |
 
 ## Fuel parity
 
@@ -126,15 +126,14 @@ Every Benchmark used the same Fuel on each Core.
 
 Benchmarks whose ns/Fuel is more than 3× their runner's median. These are advisory: any reweighting goes through the Spec.
 
-- core/fib@slice=10 on zig: 147.5 ns/Fuel, 5.0× the median
-- collections/map-build on zig: 91.3 ns/Fuel, 3.1× the median
-- host/pump on zig: 326.1 ns/Fuel, 11.1× the median
-- messaging/suspend on zig: 88.8 ns/Fuel, 3.0× the median
-- lifecycle/load-small on zig: 332.0 ns/Fuel, 11.3× the median
-- text/patterns on ts: 658.3 ns/Fuel, 4.2× the median
-- host/pump on ts: 1440.4 ns/Fuel, 9.2× the median
-- lifecycle/load-small on ts: 1101.2 ns/Fuel, 7.0× the median
-- lifecycle/rollback on ts: 522.0 ns/Fuel, 3.3× the median
+- core/fib@slice=10 on zig: 108.4 ns/Fuel, 4.9× the median
+- collections/map-build on zig: 69.6 ns/Fuel, 3.2× the median
+- host/pump on zig: 250.7 ns/Fuel, 11.4× the median
+- lifecycle/load-small on zig: 248.8 ns/Fuel, 11.3× the median
+- text/patterns on ts: 440.3 ns/Fuel, 3.3× the median
+- host/pump on ts: 1061.2 ns/Fuel, 8.0× the median
+- lifecycle/load-small on ts: 1041.4 ns/Fuel, 7.9× the median
+- lifecycle/rollback on ts: 694.6 ns/Fuel, 5.2× the median
 
 ## Skipped
 

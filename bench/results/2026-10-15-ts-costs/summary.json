@@ -1,0 +1,552 @@
+[
+  {
+    "benchmark": "core/loop",
+    "before": {
+      "medianMs": 4.061985400000003,
+      "minMs": 3.6318291499999984,
+      "maxMs": 5.7551541500000045
+    },
+    "after": {
+      "medianMs": 3.5624937499999985,
+      "minMs": 3.1639625000000025,
+      "maxMs": 6.748347899999999
+    },
+    "pairedSpeedups": [
+      0.9619036357179168,
+      1.1312966987958353,
+      1.1481569535997684
+    ],
+    "speedup": 1.1402084284358407,
+    "expected": {
+      "alloc": 64000,
+      "fuel": 48016,
+      "outcome": "completed",
+      "result": "2001000"
+    }
+  },
+  {
+    "benchmark": "core/calls",
+    "before": {
+      "medianMs": 3.5127854500000018,
+      "minMs": 3.3823917000000163,
+      "maxMs": 4.183104200000026
+    },
+    "after": {
+      "medianMs": 3.2661312499999897,
+      "minMs": 3.1098895499999797,
+      "maxMs": 3.761529150000024
+    },
+    "pairedSpeedups": [
+      1.0928707113411174,
+      1.05935603475825,
+      1.1141483993849755
+    ],
+    "speedup": 1.0755187655119531,
+    "expected": {
+      "alloc": 32072,
+      "fuel": 46018,
+      "outcome": "completed",
+      "result": "2001000"
+    }
+  },
+  {
+    "benchmark": "core/lambdas",
+    "before": {
+      "medianMs": 5.318995850000011,
+      "minMs": 5.070987500000046,
+      "maxMs": 6.2122458499999995
+    },
+    "after": {
+      "medianMs": 4.807141700000011,
+      "minMs": 4.544616700000006,
+      "maxMs": 5.765412500000002
+    },
+    "pairedSpeedups": [
+      1.1148653630959398,
+      1.1245078070610148,
+      1.0719323226240727
+    ],
+    "speedup": 1.1064778577257246,
+    "expected": {
+      "alloc": 64120,
+      "fuel": 58027,
+      "outcome": "completed",
+      "result": "6003000"
+    }
+  },
+  {
+    "benchmark": "core/fib",
+    "before": {
+      "medianMs": 3.7039749999999914,
+      "minMs": 3.3459125000000314,
+      "maxMs": 4.948754199999986
+    },
+    "after": {
+      "medianMs": 3.3331791500000687,
+      "minMs": 3.0934666499999364,
+      "maxMs": 3.7447229500000505
+    },
+    "pairedSpeedups": [
+      1.1026584474901446,
+      1.014286357871172,
+      1.1363769450524743
+    ],
+    "speedup": 1.111243900586596,
+    "expected": {
+      "alloc": 47328,
+      "fuel": 46365,
+      "outcome": "completed",
+      "result": "610"
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=10",
+    "before": {
+      "medianMs": 12.536572950000119,
+      "minMs": 11.172743750000155,
+      "maxMs": 20.27969165000013
+    },
+    "after": {
+      "medianMs": 12.275604200000089,
+      "minMs": 10.747914549999951,
+      "maxMs": 21.088506249999956
+    },
+    "pairedSpeedups": [
+      0.9012993743908794,
+      1.055340354639182,
+      1.0270385724112734
+    ],
+    "speedup": 1.0212591368822423,
+    "expected": {
+      "alloc": 47328,
+      "fuel": 46365,
+      "outcome": "completed",
+      "result": "610"
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=100",
+    "before": {
+      "medianMs": 4.422204149999925,
+      "minMs": 4.191618750000089,
+      "maxMs": 9.421772899999997
+    },
+    "after": {
+      "medianMs": 4.1200687499998825,
+      "minMs": 3.9188271000000894,
+      "maxMs": 6.311747950000062
+    },
+    "pairedSpeedups": [
+      1.0698329195470284,
+      1.0866304670779439,
+      1.1012139232969957
+    ],
+    "speedup": 1.0733326112580164,
+    "expected": {
+      "alloc": 47328,
+      "fuel": 46365,
+      "outcome": "completed",
+      "result": "610"
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=1000",
+    "before": {
+      "medianMs": 3.5101791500001127,
+      "minMs": 3.388566700000047,
+      "maxMs": 4.057583349999914
+    },
+    "after": {
+      "medianMs": 3.2544167000000015,
+      "minMs": 3.054975000000013,
+      "maxMs": 4.016216650000206
+    },
+    "pairedSpeedups": [
+      1.0830704745290214,
+      1.0693323467052482,
+      1.1324308757914008
+    ],
+    "speedup": 1.0785893367619799,
+    "expected": {
+      "alloc": 47328,
+      "fuel": 46365,
+      "outcome": "completed",
+      "result": "610"
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=10000",
+    "before": {
+      "medianMs": 3.51708749999998,
+      "minMs": 3.4073895999998056,
+      "maxMs": 3.623920850000286
+    },
+    "after": {
+      "medianMs": 3.197143750000032,
+      "minMs": 3.06328125,
+      "maxMs": 3.816125000000102
+    },
+    "pairedSpeedups": [
+      1.0932897130527142,
+      1.0994613925893033,
+      1.1091331210000608
+    ],
+    "speedup": 1.1000717437243617,
+    "expected": {
+      "alloc": 47328,
+      "fuel": 46365,
+      "outcome": "completed",
+      "result": "610"
+    }
+  },
+  {
+    "benchmark": "numbers/add",
+    "before": {
+      "medianMs": 3.968162500000108,
+      "minMs": 3.683635399999912,
+      "maxMs": 4.950889599999936
+    },
+    "after": {
+      "medianMs": 3.5463146000001866,
+      "minMs": 3.3084749999998166,
+      "maxMs": 3.9913333500000587
+    },
+    "pairedSpeedups": [
+      1.1016534576223609,
+      1.100152141537388,
+      1.134276043057431
+    ],
+    "speedup": 1.1189538852531298,
+    "expected": {
+      "alloc": 32104,
+      "fuel": 26030,
+      "outcome": "completed",
+      "result": "2000"
+    }
+  },
+  {
+    "benchmark": "numbers/multiply",
+    "before": {
+      "medianMs": 2.632866650000142,
+      "minMs": 2.4611478999999234,
+      "maxMs": 3.204168750000099
+    },
+    "after": {
+      "medianMs": 2.4355562500000816,
+      "minMs": 2.1519479499998853,
+      "maxMs": 2.9092021000000385
+    },
+    "pairedSpeedups": [
+      1.0057372201392185,
+      1.1358974406073847,
+      1.0414645609913906
+    ],
+    "speedup": 1.081012458652948,
+    "expected": {
+      "alloc": 32104,
+      "fuel": 18031,
+      "outcome": "completed",
+      "result": "5005000"
+    }
+  },
+  {
+    "benchmark": "numbers/divide",
+    "before": {
+      "medianMs": 3.418206250000003,
+      "minMs": 3.2337250000000495,
+      "maxMs": 4.53292500000025
+    },
+    "after": {
+      "medianMs": 3.155956249999872,
+      "minMs": 2.9934895999998847,
+      "maxMs": 3.777710450000086
+    },
+    "pairedSpeedups": [
+      1.0508076992571556,
+      1.1011728668333096,
+      1.087526067831168
+    ],
+    "speedup": 1.083096842676492,
+    "expected": {
+      "alloc": 32104,
+      "fuel": 18031,
+      "outcome": "completed",
+      "result": "500500"
+    }
+  },
+  {
+    "benchmark": "numbers/quantity",
+    "before": {
+      "medianMs": 6.086366650000127,
+      "minMs": 5.434062500000072,
+      "maxMs": 6.762689600000158
+    },
+    "after": {
+      "medianMs": 5.7096707999997305,
+      "minMs": 5.304547949999687,
+      "maxMs": 6.927697949999856
+    },
+    "pairedSpeedups": [
+      1.0865961090634686,
+      1.0751666978769423,
+      1.0037879793219364
+    ],
+    "speedup": 1.0659750558649395,
+    "expected": {
+      "alloc": 40088,
+      "fuel": 14579,
+      "outcome": "completed",
+      "result": "125250"
+    }
+  },
+  {
+    "benchmark": "collections/list-build",
+    "before": {
+      "medianMs": 2.4486854000002496,
+      "minMs": 2.276635400000305,
+      "maxMs": 3.039837500000067
+    },
+    "after": {
+      "medianMs": 2.254089599999861,
+      "minMs": 2.075835400000142,
+      "maxMs": 2.7938395999997736
+    },
+    "pairedSpeedups": [
+      1.0960713334404981,
+      1.159934281228332,
+      1.0420748532692363
+    ],
+    "speedup": 1.086330108616978,
+    "expected": {
+      "alloc": 3022112,
+      "fuel": 19091,
+      "outcome": "completed",
+      "result": "125250"
+    }
+  },
+  {
+    "benchmark": "collections/list-append",
+    "before": {
+      "medianMs": 9.231610400000136,
+      "minMs": 8.028983349999907,
+      "maxMs": 13.86729794999992
+    },
+    "after": {
+      "medianMs": 9.418522900000244,
+      "minMs": 7.663606250000156,
+      "maxMs": 12.040199999999823
+    },
+    "pairedSpeedups": [
+      1.0044594783216505,
+      1.0643093924340963,
+      0.9989950246497478
+    ],
+    "speedup": 0.9801547968843285,
+    "expected": {
+      "alloc": 80200,
+      "fuel": 52056,
+      "outcome": "completed",
+      "result": "2001000"
+    }
+  },
+  {
+    "benchmark": "collections/list-update",
+    "before": {
+      "medianMs": 5.342283350000071,
+      "minMs": 4.676185450000049,
+      "maxMs": 6.053795850000096
+    },
+    "after": {
+      "medianMs": 4.991566649999732,
+      "minMs": 4.40567289999999,
+      "maxMs": 6.89284579999985
+    },
+    "pairedSpeedups": [
+      1.0293753112058899,
+      1.1516199132860057,
+      1.056985102038262
+    ],
+    "speedup": 1.0702618485521689,
+    "expected": {
+      "alloc": 24328,
+      "fuel": 28553,
+      "outcome": "completed",
+      "result": "1501"
+    }
+  },
+  {
+    "benchmark": "collections/map-update",
+    "before": {
+      "medianMs": 1.8092916499997955,
+      "minMs": 1.2770916499997838,
+      "maxMs": 2.3037146000002395
+    },
+    "after": {
+      "medianMs": 1.6314354499998445,
+      "minMs": 1.2233021000000008,
+      "maxMs": 2.2652416500000983
+    },
+    "pairedSpeedups": [
+      1.1729577675621135,
+      0.7551988522908013,
+      1.349439304746535
+    ],
+    "speedup": 1.1090182268627105,
+    "expected": {
+      "alloc": 12432,
+      "fuel": 8056,
+      "outcome": "completed",
+      "result": "501"
+    }
+  },
+  {
+    "benchmark": "text/build",
+    "before": {
+      "medianMs": 1.5880771000003733,
+      "minMs": 1.190606249999837,
+      "maxMs": 1.9711229000000459
+    },
+    "after": {
+      "medianMs": 1.4185520999999426,
+      "minMs": 1.109177049999562,
+      "maxMs": 1.8685728999997084
+    },
+    "pairedSpeedups": [
+      1.4142743630216137,
+      0.9927171898617472,
+      1.1195056565073906
+    ],
+    "speedup": 1.1195056565073906,
+    "expected": {
+      "alloc": 383838,
+      "fuel": 28928,
+      "outcome": "completed",
+      "result": "1500"
+    }
+  },
+  {
+    "benchmark": "text/index",
+    "before": {
+      "medianMs": 9.134187499999825,
+      "minMs": 8.483899999999995,
+      "maxMs": 9.79955420000042
+    },
+    "after": {
+      "medianMs": 8.72036670000016,
+      "minMs": 7.917939599999954,
+      "maxMs": 10.497620800000005
+    },
+    "pairedSpeedups": [
+      1.070258932142714,
+      1.0358588188728766,
+      1.062084968107058
+    ],
+    "speedup": 1.047454518168331,
+    "expected": {
+      "alloc": 51072,
+      "fuel": 26640,
+      "outcome": "completed",
+      "result": "125"
+    }
+  },
+  {
+    "benchmark": "text/patterns",
+    "before": {
+      "medianMs": 7.89220415000018,
+      "minMs": 7.220908300000155,
+      "maxMs": 8.852360400000181
+    },
+    "after": {
+      "medianMs": 7.336258349999843,
+      "minMs": 6.581514600000082,
+      "maxMs": 8.505352099999437
+    },
+    "pairedSpeedups": [
+      1.0361964122926668,
+      1.030396733425516,
+      1.0633648590862286
+    ],
+    "speedup": 1.0757805646253378,
+    "expected": {
+      "alloc": 231372,
+      "fuel": 13818,
+      "outcome": "completed",
+      "result": "900"
+    }
+  },
+  {
+    "benchmark": "macro/transform",
+    "before": {
+      "medianMs": 2.623033299999952,
+      "minMs": 2.538787500000035,
+      "maxMs": 3.974272899999778
+    },
+    "after": {
+      "medianMs": 2.5387437500001395,
+      "minMs": 2.449387500000012,
+      "maxMs": 2.9502728999999817
+    },
+    "pairedSpeedups": [
+      1.2853939502701355,
+      1.0245834515460435,
+      1.024541829490176
+    ],
+    "speedup": 1.0332012831148507,
+    "expected": {
+      "alloc": 6418202,
+      "fuel": 20664,
+      "outcome": "completed",
+      "result": "90300"
+    }
+  },
+  {
+    "benchmark": "host/immediate",
+    "before": {
+      "medianMs": 2.659672899999714,
+      "minMs": 2.561239550000028,
+      "maxMs": 3.1325395500003648
+    },
+    "after": {
+      "medianMs": 2.858791650000057,
+      "minMs": 2.4452541999999085,
+      "maxMs": 2.994100000000617
+    },
+    "pairedSpeedups": [
+      1.0500998805185366,
+      0.9102869738690281,
+      0.92702357669048
+    ],
+    "speedup": 0.9303486317373498,
+    "expected": {
+      "alloc": 16072,
+      "fuel": 13518,
+      "outcome": "completed",
+      "result": "125250"
+    }
+  },
+  {
+    "benchmark": "lifecycle/rollback",
+    "before": {
+      "medianMs": 56.52368125000067,
+      "minMs": 53.265947950001284,
+      "maxMs": 65.91727499999979
+    },
+    "after": {
+      "medianMs": 55.60683959999951,
+      "minMs": 52.735722950000486,
+      "maxMs": 67.20897289999995
+    },
+    "pairedSpeedups": [
+      1.018414700495957,
+      1.0135837023191963,
+      1.03952447312272
+    ],
+    "speedup": 1.0164879294812714,
+    "expected": {
+      "alloc": 40888,
+      "fuel": 102023,
+      "outcome": "completed",
+      "result": "300"
+    }
+  }
+]

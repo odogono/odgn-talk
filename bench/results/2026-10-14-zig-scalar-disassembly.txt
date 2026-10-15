@@ -1,0 +1,612 @@
+Native arm64 safe constructor assembly for #937
+Zig 0.17.0; cc -std=c11 -O2 -Wall -Wextra -Werror
+Baseline f51ad856; after source hashes are recorded in the paired JSON.
+
+before: SHA256 f02198a1b57eddfe3a793c59a646419fb63c34a19519df11d864d6ad54cccf68
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _value.scalar .cache/scalar-937/before-host
+.cache/scalar-937/before-host:
+(__TEXT,__text) section
+_value.scalar:
+10004052c:	f6 57 bd a9	stp	x22, x21, [sp, #-0x30]!
+100040530:	f4 4f 01 a9	stp	x20, x19, [sp, #0x10]
+100040534:	fd 7b 02 a9	stp	x29, x30, [sp, #0x20]
+100040538:	fd 83 00 91	add	x29, sp, #0x20
+10004053c:	f4 03 02 aa	mov	x20, x2
+100040540:	f5 03 01 aa	mov	x21, x1
+100040544:	f3 03 00 aa	mov	x19, x0
+100040548:	20 20 40 a9	ldp	x0, x8, [x1]
+10004054c:	49 20 41 b9	ldr	w9, [x2, #0x120]
+100040550:	3f 1d 00 71	cmp	w9, #0x7
+100040554:	0c 02 00 54	b.gt	0x100040594
+100040558:	3f 19 00 71	cmp	w9, #0x6
+10004055c:	60 03 00 54	b.eq	0x1000405c8
+100040560:	3f 1d 00 71	cmp	w9, #0x7
+100040564:	a1 02 00 54	b.ne	0x1000405b8
+100040568:	8a 06 40 f9	ldr	x10, [x20, #0x8]
+10004056c:	ca 09 00 b4	cbz	x10, 0x1000406a4
+100040570:	09 00 80 d2	mov	x9, #0x0
+100040574:	8b 02 40 f9	ldr	x11, [x20]
+100040578:	6b 41 00 91	add	x11, x11, #0x10
+10004057c:	6c 85 41 f8	ldr	x12, [x11], #0x18
+100040580:	8c ad 40 f9	ldr	x12, [x12, #0x158]
+100040584:		.long	0x9acc6529
+100040588:	4a 05 00 f1	subs	x10, x10, #0x1
+10004058c:	81 ff ff 54	b.ne	0x10004057c
+100040590:	17 00 00 14	b	0x1000405ec
+100040594:	3f 21 00 71	cmp	w9, #0x8
+100040598:	80 07 00 54	b.eq	0x100040688
+10004059c:	3f 31 00 71	cmp	w9, #0xc
+1000405a0:	c1 00 00 54	b.ne	0x1000405b8
+1000405a4:	89 16 40 f9	ldr	x9, [x20, #0x28]
+1000405a8:	29 ad 40 f9	ldr	x9, [x9, #0x158]
+1000405ac:	36 05 00 b1	adds	x22, x9, #0x1
+1000405b0:	82 08 00 54	b.hs	0x1000406c0
+1000405b4:	10 00 00 14	b	0x1000405f4
+1000405b8:	3f 39 00 71	cmp	w9, #0xe
+1000405bc:	02 09 00 54	b.hs	0x1000406dc
+1000405c0:	16 00 80 d2	mov	x22, #0x0
+1000405c4:	0c 00 00 14	b	0x1000405f4
+1000405c8:	8a 06 40 f9	ldr	x10, [x20, #0x8]
+1000405cc:	4a 07 00 b4	cbz	x10, 0x1000406b4
+1000405d0:	09 00 80 d2	mov	x9, #0x0
+1000405d4:	8b 02 40 f9	ldr	x11, [x20]
+1000405d8:	6c 85 40 f8	ldr	x12, [x11], #0x8
+1000405dc:	8c ad 40 f9	ldr	x12, [x12, #0x158]
+1000405e0:		.long	0x9acc6529
+1000405e4:	4a 05 00 f1	subs	x10, x10, #0x1
+1000405e8:	81 ff ff 54	b.ne	0x1000405d8
+1000405ec:	36 05 00 b1	adds	x22, x9, #0x1
+1000405f0:	82 06 00 54	b.hs	0x1000406c0
+1000405f4:		.long	0xdac143fe
+1000405f8:	08 01 40 f9	ldr	x8, [x8]
+1000405fc:	01 2e 80 52	mov	w1, #0x170
+100040600:	82 00 80 52	mov	w2, #0x4
+100040604:	e3 03 1e aa	mov	x3, x30
+100040608:	00 01 3f d6	blr	x8
+10004060c:	a0 05 00 b4	cbz	x0, 0x1000406c0
+100040610:	40 e5 05 4f	movi.16b	v0, #0xaa
+100040614:	00 80 0a ad	stp	q0, q0, [x0, #0x150]
+100040618:	00 80 09 ad	stp	q0, q0, [x0, #0x130]
+10004061c:	00 80 08 ad	stp	q0, q0, [x0, #0x110]
+100040620:	00 80 07 ad	stp	q0, q0, [x0, #0xf0]
+100040624:	00 80 06 ad	stp	q0, q0, [x0, #0xd0]
+100040628:	00 80 05 ad	stp	q0, q0, [x0, #0xb0]
+10004062c:	00 80 04 ad	stp	q0, q0, [x0, #0x90]
+100040630:	00 80 03 ad	stp	q0, q0, [x0, #0x70]
+100040634:	00 80 02 ad	stp	q0, q0, [x0, #0x50]
+100040638:	00 80 01 ad	stp	q0, q0, [x0, #0x30]
+10004063c:	00 80 00 ad	stp	q0, q0, [x0, #0x10]
+100040640:	00 00 80 3d	str	q0, [x0]
+100040644:	1f 0c 40 f2	tst	x0, #0xf
+100040648:	81 04 00 54	b.ne	0x1000406d8
+10004064c:	08 e0 04 91	add	x8, x0, #0x138
+100040650:	a0 02 c0 3d	ldr	q0, [x21]
+100040654:	00 01 80 3d	str	q0, [x8]
+100040658:	f5 03 00 aa	mov	x21, x0
+10004065c:	e1 03 14 aa	mov	x1, x20
+100040660:	02 26 80 52	mov	w2, #0x130
+100040664:	28 f7 06 94	bl	0x1001fe304 ; symbol stub for: _memcpy
+100040668:	08 00 80 52	mov	w8, #0x0
+10004066c:	29 00 80 52	mov	w9, #0x1
+100040670:	a9 9a 00 f9	str	x9, [x21, #0x130]
+100040674:	bf d2 02 79	strh	wzr, [x21, #0x168]
+100040678:	b6 fe 15 a9	stp	x22, xzr, [x21, #0x158]
+10004067c:	bf fe 14 a9	stp	xzr, xzr, [x21, #0x148]
+100040680:	75 02 00 f9	str	x21, [x19]
+100040684:	10 00 00 14	b	0x1000406c4
+100040688:	89 2a 40 a9	ldp	x9, x10, [x20]
+10004068c:	29 ad 40 f9	ldr	x9, [x9, #0x158]
+100040690:	4a ad 40 f9	ldr	x10, [x10, #0x158]
+100040694:		.long	0x9aca6529
+100040698:	36 05 00 b1	adds	x22, x9, #0x1
+10004069c:	22 01 00 54	b.hs	0x1000406c0
+1000406a0:	d5 ff ff 17	b	0x1000405f4
+1000406a4:	09 00 80 d2	mov	x9, #0x0
+1000406a8:	36 05 00 b1	adds	x22, x9, #0x1
+1000406ac:	43 fa ff 54	b.lo	0x1000405f4
+1000406b0:	04 00 00 14	b	0x1000406c0
+1000406b4:	09 00 80 d2	mov	x9, #0x0
+1000406b8:	36 05 00 b1	adds	x22, x9, #0x1
+1000406bc:	c3 f9 ff 54	b.lo	0x1000405f4
+1000406c0:	a8 00 80 52	mov	w8, #0x5
+1000406c4:	68 12 00 79	strh	w8, [x19, #0x8]
+1000406c8:	fd 7b 42 a9	ldp	x29, x30, [sp, #0x20]
+1000406cc:	f4 4f 41 a9	ldp	x20, x19, [sp, #0x10]
+1000406d0:	f6 57 c3 a8	ldp	x22, x21, [sp], #0x30
+1000406d4:	c0 03 5f d6	ret
+1000406d8:	22 bc 06 94	bl	"_debug.FullPanic((function 'defaultPanic')).incorrectAlignment"
+1000406dc:	16 bb 06 94	bl	"_debug.FullPanic((function 'defaultPanic')).corruptSwitch"
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_nothing .cache/scalar-937/before-host
+.cache/scalar-937/before-host:
+(__TEXT,__text) section
+_talk_nothing:
+1001ece48:	ff 03 01 d1	sub	sp, sp, #0x40
+1001ece4c:	f4 4f 02 a9	stp	x20, x19, [sp, #0x20]
+1001ece50:	fd 7b 03 a9	stp	x29, x30, [sp, #0x30]
+1001ece54:	fd c3 00 91	add	x29, sp, #0x30
+1001ece58:	f3 03 00 aa	mov	x19, x0
+1001ece5c:	e8 05 00 b0	adrp	x8, 189 ; 0x1002a9000
+1001ece60:	08 09 47 f9	ldr	x8, [x8, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001ece64:	08 01 40 f9	ldr	x8, [x8]
+1001ece68:	e8 0f 00 f9	str	x8, [sp, #0x18]
+1001ece6c:	61 04 00 b0	adrp	x1, 141 ; 0x100279000
+1001ece70:	21 e0 07 91	add	x1, x1, #0x1f8
+1001ece74:	02 01 00 b0	adrp	x2, 33 ; 0x10020d000
+1001ece78:	42 c0 18 91	add	x2, x2, #0x630
+1001ece7c:	e0 23 00 91	add	x0, sp, #0x8
+1001ece80:	ab 4d f9 97	bl	_value.scalar
+1001ece84:	e8 23 40 79	ldrh	w8, [sp, #0x10]
+1001ece88:	88 01 00 34	cbz	w8, 0x1001eceb8
+1001ece8c:	7f 02 00 f9	str	xzr, [x19]
+1001ece90:	1f 11 00 71	cmp	w8, #0x4
+1001ece94:	cc 02 00 54	b.gt	0x1001eceec
+1001ece98:	1f 09 00 71	cmp	w8, #0x2
+1001ece9c:	8c 03 00 54	b.gt	0x1001ecf0c
+1001ecea0:	1f 05 00 71	cmp	w8, #0x1
+1001ecea4:	c0 04 00 54	b.eq	0x1001ecf3c
+1001ecea8:	1f 09 00 71	cmp	w8, #0x2
+1001eceac:	81 05 00 54	b.ne	0x1001ecf5c
+1001eceb0:	00 01 80 52	mov	w0, #0x8
+1001eceb4:	04 00 00 14	b	0x1001ecec4
+1001eceb8:	00 00 80 52	mov	w0, #0x0
+1001ecebc:	e8 07 40 f9	ldr	x8, [sp, #0x8]
+1001ecec0:	68 02 00 f9	str	x8, [x19]
+1001ecec4:	e8 0f 40 f9	ldr	x8, [sp, #0x18]
+1001ecec8:	e9 05 00 b0	adrp	x9, 189 ; 0x1002a9000
+1001ececc:	29 09 47 f9	ldr	x9, [x9, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001eced0:	29 01 40 f9	ldr	x9, [x9]
+1001eced4:	3f 01 08 eb	cmp	x9, x8
+1001eced8:	61 04 00 54	b.ne	0x1001ecf64
+1001ecedc:	fd 7b 43 a9	ldp	x29, x30, [sp, #0x30]
+1001ecee0:	f4 4f 42 a9	ldp	x20, x19, [sp, #0x20]
+1001ecee4:	ff 03 01 91	add	sp, sp, #0x40
+1001ecee8:	c0 03 5f d6	ret
+1001eceec:	1f 49 02 71	cmp	w8, #0x92
+1001ecef0:	ac 01 00 54	b.gt	0x1001ecf24
+1001ecef4:	1f 15 00 71	cmp	w8, #0x5
+1001ecef8:	60 02 00 54	b.eq	0x1001ecf44
+1001ecefc:	1f 49 02 71	cmp	w8, #0x92
+1001ecf00:	e1 02 00 54	b.ne	0x1001ecf5c
+1001ecf04:	60 00 80 52	mov	w0, #0x3
+1001ecf08:	ef ff ff 17	b	0x1001ecec4
+1001ecf0c:	1f 0d 00 71	cmp	w8, #0x3
+1001ecf10:	e0 01 00 54	b.eq	0x1001ecf4c
+1001ecf14:	1f 11 00 71	cmp	w8, #0x4
+1001ecf18:	21 02 00 54	b.ne	0x1001ecf5c
+1001ecf1c:	e0 00 80 52	mov	w0, #0x7
+1001ecf20:	e9 ff ff 17	b	0x1001ecec4
+1001ecf24:	1f 4d 02 71	cmp	w8, #0x93
+1001ecf28:	60 01 00 54	b.eq	0x1001ecf54
+1001ecf2c:	1f 51 02 71	cmp	w8, #0x94
+1001ecf30:	61 01 00 54	b.ne	0x1001ecf5c
+1001ecf34:	00 02 80 52	mov	w0, #0x10
+1001ecf38:	e3 ff ff 17	b	0x1001ecec4
+1001ecf3c:	a0 00 80 52	mov	w0, #0x5
+1001ecf40:	e1 ff ff 17	b	0x1001ecec4
+1001ecf44:	a0 02 80 52	mov	w0, #0x15
+1001ecf48:	df ff ff 17	b	0x1001ecec4
+1001ecf4c:	80 00 80 52	mov	w0, #0x4
+1001ecf50:	dd ff ff 17	b	0x1001ecec4
+1001ecf54:	40 00 80 52	mov	w0, #0x2
+1001ecf58:	db ff ff 17	b	0x1001ecec4
+1001ecf5c:	40 01 80 52	mov	w0, #0xa
+1001ecf60:	d9 ff ff 17	b	0x1001ecec4
+1001ecf64:	43 44 00 94	bl	0x1001fe070 ; symbol stub for: ___stack_chk_fail
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_bool .cache/scalar-937/before-host
+.cache/scalar-937/before-host:
+(__TEXT,__text) section
+_talk_bool:
+1001eea10:	ff c3 05 d1	sub	sp, sp, #0x170
+1001eea14:	f4 4f 15 a9	stp	x20, x19, [sp, #0x150]
+1001eea18:	fd 7b 16 a9	stp	x29, x30, [sp, #0x160]
+1001eea1c:	fd 83 05 91	add	x29, sp, #0x160
+1001eea20:	f3 03 01 aa	mov	x19, x1
+1001eea24:	c8 05 00 f0	adrp	x8, 187 ; 0x1002a9000
+1001eea28:	08 09 47 f9	ldr	x8, [x8, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001eea2c:	08 01 40 f9	ldr	x8, [x8]
+1001eea30:	a8 83 1e f8	stur	x8, [x29, #-0x18]
+1001eea34:	e0 03 00 39	strb	w0, [sp]
+1001eea38:	28 00 80 52	mov	w8, #0x1
+1001eea3c:	e8 23 01 b9	str	w8, [sp, #0x120]
+1001eea40:	41 04 00 f0	adrp	x1, 139 ; 0x100279000
+1001eea44:	21 e0 07 91	add	x1, x1, #0x1f8
+1001eea48:	a0 a3 00 d1	sub	x0, x29, #0x28
+1001eea4c:	e2 03 00 91	mov	x2, sp
+1001eea50:	b7 46 f9 97	bl	_value.scalar
+1001eea54:	a8 03 5e 78	ldurh	w8, [x29, #-0x20]
+1001eea58:	88 01 00 34	cbz	w8, 0x1001eea88
+1001eea5c:	7f 02 00 f9	str	xzr, [x19]
+1001eea60:	1f 11 00 71	cmp	w8, #0x4
+1001eea64:	cc 02 00 54	b.gt	0x1001eeabc
+1001eea68:	1f 09 00 71	cmp	w8, #0x2
+1001eea6c:	8c 03 00 54	b.gt	0x1001eeadc
+1001eea70:	1f 05 00 71	cmp	w8, #0x1
+1001eea74:	c0 04 00 54	b.eq	0x1001eeb0c
+1001eea78:	1f 09 00 71	cmp	w8, #0x2
+1001eea7c:	81 05 00 54	b.ne	0x1001eeb2c
+1001eea80:	00 01 80 52	mov	w0, #0x8
+1001eea84:	04 00 00 14	b	0x1001eea94
+1001eea88:	00 00 80 52	mov	w0, #0x0
+1001eea8c:	a8 83 5d f8	ldur	x8, [x29, #-0x28]
+1001eea90:	68 02 00 f9	str	x8, [x19]
+1001eea94:	a8 83 5e f8	ldur	x8, [x29, #-0x18]
+1001eea98:	c9 05 00 f0	adrp	x9, 187 ; 0x1002a9000
+1001eea9c:	29 09 47 f9	ldr	x9, [x9, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001eeaa0:	29 01 40 f9	ldr	x9, [x9]
+1001eeaa4:	3f 01 08 eb	cmp	x9, x8
+1001eeaa8:	61 04 00 54	b.ne	0x1001eeb34
+1001eeaac:	fd 7b 56 a9	ldp	x29, x30, [sp, #0x160]
+1001eeab0:	f4 4f 55 a9	ldp	x20, x19, [sp, #0x150]
+1001eeab4:	ff c3 05 91	add	sp, sp, #0x170
+1001eeab8:	c0 03 5f d6	ret
+1001eeabc:	1f 49 02 71	cmp	w8, #0x92
+1001eeac0:	ac 01 00 54	b.gt	0x1001eeaf4
+1001eeac4:	1f 15 00 71	cmp	w8, #0x5
+1001eeac8:	60 02 00 54	b.eq	0x1001eeb14
+1001eeacc:	1f 49 02 71	cmp	w8, #0x92
+1001eead0:	e1 02 00 54	b.ne	0x1001eeb2c
+1001eead4:	60 00 80 52	mov	w0, #0x3
+1001eead8:	ef ff ff 17	b	0x1001eea94
+1001eeadc:	1f 0d 00 71	cmp	w8, #0x3
+1001eeae0:	e0 01 00 54	b.eq	0x1001eeb1c
+1001eeae4:	1f 11 00 71	cmp	w8, #0x4
+1001eeae8:	21 02 00 54	b.ne	0x1001eeb2c
+1001eeaec:	e0 00 80 52	mov	w0, #0x7
+1001eeaf0:	e9 ff ff 17	b	0x1001eea94
+1001eeaf4:	1f 4d 02 71	cmp	w8, #0x93
+1001eeaf8:	60 01 00 54	b.eq	0x1001eeb24
+1001eeafc:	1f 51 02 71	cmp	w8, #0x94
+1001eeb00:	61 01 00 54	b.ne	0x1001eeb2c
+1001eeb04:	00 02 80 52	mov	w0, #0x10
+1001eeb08:	e3 ff ff 17	b	0x1001eea94
+1001eeb0c:	a0 00 80 52	mov	w0, #0x5
+1001eeb10:	e1 ff ff 17	b	0x1001eea94
+1001eeb14:	a0 02 80 52	mov	w0, #0x15
+1001eeb18:	df ff ff 17	b	0x1001eea94
+1001eeb1c:	80 00 80 52	mov	w0, #0x4
+1001eeb20:	dd ff ff 17	b	0x1001eea94
+1001eeb24:	40 00 80 52	mov	w0, #0x2
+1001eeb28:	db ff ff 17	b	0x1001eea94
+1001eeb2c:	40 01 80 52	mov	w0, #0xa
+1001eeb30:	d9 ff ff 17	b	0x1001eea94
+1001eeb34:	4f 3d 00 94	bl	0x1001fe070 ; symbol stub for: ___stack_chk_fail
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_int .cache/scalar-937/before-host
+.cache/scalar-937/before-host:
+(__TEXT,__text) section
+_talk_int:
+1001ee704:	ff c3 05 d1	sub	sp, sp, #0x170
+1001ee708:	f4 4f 15 a9	stp	x20, x19, [sp, #0x150]
+1001ee70c:	fd 7b 16 a9	stp	x29, x30, [sp, #0x160]
+1001ee710:	fd 83 05 91	add	x29, sp, #0x160
+1001ee714:	f3 03 01 aa	mov	x19, x1
+1001ee718:	c8 05 00 f0	adrp	x8, 187 ; 0x1002a9000
+1001ee71c:	08 09 47 f9	ldr	x8, [x8, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001ee720:	08 01 40 f9	ldr	x8, [x8]
+1001ee724:	a8 83 1e f8	stur	x8, [x29, #-0x18]
+1001ee728:	08 fc 7f 93	asr	x8, x0, #63
+1001ee72c:	e9 03 00 eb	negs	x9, x0
+1001ee730:	ea 03 08 da	ngc	x10, x8
+1001ee734:	1f 00 00 f1	cmp	x0, #0x0
+1001ee738:	48 41 88 9a	csel	x8, x10, x8, mi
+1001ee73c:	29 41 80 9a	csel	x9, x9, x0, mi
+1001ee740:	0a fc 7f d3	lsr	x10, x0, #63
+1001ee744:	e9 23 00 a9	stp	x9, x8, [sp]
+1001ee748:	ff 13 00 b9	str	wzr, [sp, #0x10]
+1001ee74c:	ea 53 00 39	strb	w10, [sp, #0x14]
+1001ee750:	48 00 80 52	mov	w8, #0x2
+1001ee754:	e8 23 01 b9	str	w8, [sp, #0x120]
+1001ee758:	41 04 00 f0	adrp	x1, 139 ; 0x100279000
+1001ee75c:	21 e0 07 91	add	x1, x1, #0x1f8
+1001ee760:	a0 a3 00 d1	sub	x0, x29, #0x28
+1001ee764:	e2 03 00 91	mov	x2, sp
+1001ee768:	71 47 f9 97	bl	_value.scalar
+1001ee76c:	a8 03 5e 78	ldurh	w8, [x29, #-0x20]
+1001ee770:	88 01 00 34	cbz	w8, 0x1001ee7a0
+1001ee774:	7f 02 00 f9	str	xzr, [x19]
+1001ee778:	1f 11 00 71	cmp	w8, #0x4
+1001ee77c:	cc 02 00 54	b.gt	0x1001ee7d4
+1001ee780:	1f 09 00 71	cmp	w8, #0x2
+1001ee784:	8c 03 00 54	b.gt	0x1001ee7f4
+1001ee788:	1f 05 00 71	cmp	w8, #0x1
+1001ee78c:	c0 04 00 54	b.eq	0x1001ee824
+1001ee790:	1f 09 00 71	cmp	w8, #0x2
+1001ee794:	81 05 00 54	b.ne	0x1001ee844
+1001ee798:	00 01 80 52	mov	w0, #0x8
+1001ee79c:	04 00 00 14	b	0x1001ee7ac
+1001ee7a0:	00 00 80 52	mov	w0, #0x0
+1001ee7a4:	a8 83 5d f8	ldur	x8, [x29, #-0x28]
+1001ee7a8:	68 02 00 f9	str	x8, [x19]
+1001ee7ac:	a8 83 5e f8	ldur	x8, [x29, #-0x18]
+1001ee7b0:	c9 05 00 f0	adrp	x9, 187 ; 0x1002a9000
+1001ee7b4:	29 09 47 f9	ldr	x9, [x9, #0xe10] ; literal pool symbol address: ___stack_chk_guard
+1001ee7b8:	29 01 40 f9	ldr	x9, [x9]
+1001ee7bc:	3f 01 08 eb	cmp	x9, x8
+1001ee7c0:	61 04 00 54	b.ne	0x1001ee84c
+1001ee7c4:	fd 7b 56 a9	ldp	x29, x30, [sp, #0x160]
+1001ee7c8:	f4 4f 55 a9	ldp	x20, x19, [sp, #0x150]
+1001ee7cc:	ff c3 05 91	add	sp, sp, #0x170
+1001ee7d0:	c0 03 5f d6	ret
+1001ee7d4:	1f 49 02 71	cmp	w8, #0x92
+1001ee7d8:	ac 01 00 54	b.gt	0x1001ee80c
+1001ee7dc:	1f 15 00 71	cmp	w8, #0x5
+1001ee7e0:	60 02 00 54	b.eq	0x1001ee82c
+1001ee7e4:	1f 49 02 71	cmp	w8, #0x92
+1001ee7e8:	e1 02 00 54	b.ne	0x1001ee844
+1001ee7ec:	60 00 80 52	mov	w0, #0x3
+1001ee7f0:	ef ff ff 17	b	0x1001ee7ac
+1001ee7f4:	1f 0d 00 71	cmp	w8, #0x3
+1001ee7f8:	e0 01 00 54	b.eq	0x1001ee834
+1001ee7fc:	1f 11 00 71	cmp	w8, #0x4
+1001ee800:	21 02 00 54	b.ne	0x1001ee844
+1001ee804:	e0 00 80 52	mov	w0, #0x7
+1001ee808:	e9 ff ff 17	b	0x1001ee7ac
+1001ee80c:	1f 4d 02 71	cmp	w8, #0x93
+1001ee810:	60 01 00 54	b.eq	0x1001ee83c
+1001ee814:	1f 51 02 71	cmp	w8, #0x94
+1001ee818:	61 01 00 54	b.ne	0x1001ee844
+1001ee81c:	00 02 80 52	mov	w0, #0x10
+1001ee820:	e3 ff ff 17	b	0x1001ee7ac
+1001ee824:	a0 00 80 52	mov	w0, #0x5
+1001ee828:	e1 ff ff 17	b	0x1001ee7ac
+1001ee82c:	a0 02 80 52	mov	w0, #0x15
+1001ee830:	df ff ff 17	b	0x1001ee7ac
+1001ee834:	80 00 80 52	mov	w0, #0x4
+1001ee838:	dd ff ff 17	b	0x1001ee7ac
+1001ee83c:	40 00 80 52	mov	w0, #0x2
+1001ee840:	db ff ff 17	b	0x1001ee7ac
+1001ee844:	40 01 80 52	mov	w0, #0xa
+1001ee848:	d9 ff ff 17	b	0x1001ee7ac
+1001ee84c:	09 3e 00 94	bl	0x1001fe070 ; symbol stub for: ___stack_chk_fail
+
+after: SHA256 208a4d4e2b2289fcbddb42e562de800da6408f949c9d0d6d8c3a2eefb901ad44
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _value.scalarOwned .cache/scalar-937/after-host
+.cache/scalar-937/after-host:
+(__TEXT,__text) section
+_value.scalarOwned:
+1000405d4:	f6 57 bd a9	stp	x22, x21, [sp, #-0x30]!
+1000405d8:	f4 4f 01 a9	stp	x20, x19, [sp, #0x10]
+1000405dc:	fd 7b 02 a9	stp	x29, x30, [sp, #0x20]
+1000405e0:	fd 83 00 91	add	x29, sp, #0x20
+1000405e4:	f4 03 02 aa	mov	x20, x2
+1000405e8:	f5 03 01 aa	mov	x21, x1
+1000405ec:	f3 03 00 aa	mov	x19, x0
+1000405f0:	20 20 40 a9	ldp	x0, x8, [x1]
+1000405f4:	49 20 41 b9	ldr	w9, [x2, #0x120]
+1000405f8:	3f 1d 00 71	cmp	w9, #0x7
+1000405fc:	0c 02 00 54	b.gt	0x10004063c
+100040600:	3f 19 00 71	cmp	w9, #0x6
+100040604:	60 03 00 54	b.eq	0x100040670
+100040608:	3f 1d 00 71	cmp	w9, #0x7
+10004060c:	a1 02 00 54	b.ne	0x100040660
+100040610:	8a 06 40 f9	ldr	x10, [x20, #0x8]
+100040614:	ca 09 00 b4	cbz	x10, 0x10004074c
+100040618:	09 00 80 d2	mov	x9, #0x0
+10004061c:	8b 02 40 f9	ldr	x11, [x20]
+100040620:	6b 41 00 91	add	x11, x11, #0x10
+100040624:	6c 85 41 f8	ldr	x12, [x11], #0x18
+100040628:	8c ad 40 f9	ldr	x12, [x12, #0x158]
+10004062c:		.long	0x9acc6529
+100040630:	4a 05 00 f1	subs	x10, x10, #0x1
+100040634:	81 ff ff 54	b.ne	0x100040624
+100040638:	17 00 00 14	b	0x100040694
+10004063c:	3f 21 00 71	cmp	w9, #0x8
+100040640:	80 07 00 54	b.eq	0x100040730
+100040644:	3f 31 00 71	cmp	w9, #0xc
+100040648:	c1 00 00 54	b.ne	0x100040660
+10004064c:	89 16 40 f9	ldr	x9, [x20, #0x28]
+100040650:	29 ad 40 f9	ldr	x9, [x9, #0x158]
+100040654:	36 05 00 b1	adds	x22, x9, #0x1
+100040658:	82 08 00 54	b.hs	0x100040768
+10004065c:	10 00 00 14	b	0x10004069c
+100040660:	3f 39 00 71	cmp	w9, #0xe
+100040664:	02 09 00 54	b.hs	0x100040784
+100040668:	16 00 80 d2	mov	x22, #0x0
+10004066c:	0c 00 00 14	b	0x10004069c
+100040670:	8a 06 40 f9	ldr	x10, [x20, #0x8]
+100040674:	4a 07 00 b4	cbz	x10, 0x10004075c
+100040678:	09 00 80 d2	mov	x9, #0x0
+10004067c:	8b 02 40 f9	ldr	x11, [x20]
+100040680:	6c 85 40 f8	ldr	x12, [x11], #0x8
+100040684:	8c ad 40 f9	ldr	x12, [x12, #0x158]
+100040688:		.long	0x9acc6529
+10004068c:	4a 05 00 f1	subs	x10, x10, #0x1
+100040690:	81 ff ff 54	b.ne	0x100040680
+100040694:	36 05 00 b1	adds	x22, x9, #0x1
+100040698:	82 06 00 54	b.hs	0x100040768
+10004069c:		.long	0xdac143fe
+1000406a0:	08 01 40 f9	ldr	x8, [x8]
+1000406a4:	01 2e 80 52	mov	w1, #0x170
+1000406a8:	82 00 80 52	mov	w2, #0x4
+1000406ac:	e3 03 1e aa	mov	x3, x30
+1000406b0:	00 01 3f d6	blr	x8
+1000406b4:	a0 05 00 b4	cbz	x0, 0x100040768
+1000406b8:	40 e5 05 4f	movi.16b	v0, #0xaa
+1000406bc:	00 80 0a ad	stp	q0, q0, [x0, #0x150]
+1000406c0:	00 80 09 ad	stp	q0, q0, [x0, #0x130]
+1000406c4:	00 80 08 ad	stp	q0, q0, [x0, #0x110]
+1000406c8:	00 80 07 ad	stp	q0, q0, [x0, #0xf0]
+1000406cc:	00 80 06 ad	stp	q0, q0, [x0, #0xd0]
+1000406d0:	00 80 05 ad	stp	q0, q0, [x0, #0xb0]
+1000406d4:	00 80 04 ad	stp	q0, q0, [x0, #0x90]
+1000406d8:	00 80 03 ad	stp	q0, q0, [x0, #0x70]
+1000406dc:	00 80 02 ad	stp	q0, q0, [x0, #0x50]
+1000406e0:	00 80 01 ad	stp	q0, q0, [x0, #0x30]
+1000406e4:	00 80 00 ad	stp	q0, q0, [x0, #0x10]
+1000406e8:	00 00 80 3d	str	q0, [x0]
+1000406ec:	1f 0c 40 f2	tst	x0, #0xf
+1000406f0:	81 04 00 54	b.ne	0x100040780
+1000406f4:	08 e0 04 91	add	x8, x0, #0x138
+1000406f8:	a0 02 c0 3d	ldr	q0, [x21]
+1000406fc:	00 01 80 3d	str	q0, [x8]
+100040700:	f5 03 00 aa	mov	x21, x0
+100040704:	e1 03 14 aa	mov	x1, x20
+100040708:	02 26 80 52	mov	w2, #0x130
+10004070c:	db f9 06 94	bl	0x1001fee78 ; symbol stub for: _memcpy
+100040710:	08 00 80 52	mov	w8, #0x0
+100040714:	29 00 80 52	mov	w9, #0x1
+100040718:	a9 9a 00 f9	str	x9, [x21, #0x130]
+10004071c:	bf d2 02 79	strh	wzr, [x21, #0x168]
+100040720:	b6 fe 15 a9	stp	x22, xzr, [x21, #0x158]
+100040724:	bf fe 14 a9	stp	xzr, xzr, [x21, #0x148]
+100040728:	75 02 00 f9	str	x21, [x19]
+10004072c:	10 00 00 14	b	0x10004076c
+100040730:	89 2a 40 a9	ldp	x9, x10, [x20]
+100040734:	29 ad 40 f9	ldr	x9, [x9, #0x158]
+100040738:	4a ad 40 f9	ldr	x10, [x10, #0x158]
+10004073c:		.long	0x9aca6529
+100040740:	36 05 00 b1	adds	x22, x9, #0x1
+100040744:	22 01 00 54	b.hs	0x100040768
+100040748:	d5 ff ff 17	b	0x10004069c
+10004074c:	09 00 80 d2	mov	x9, #0x0
+100040750:	36 05 00 b1	adds	x22, x9, #0x1
+100040754:	43 fa ff 54	b.lo	0x10004069c
+100040758:	04 00 00 14	b	0x100040768
+10004075c:	09 00 80 d2	mov	x9, #0x0
+100040760:	36 05 00 b1	adds	x22, x9, #0x1
+100040764:	c3 f9 ff 54	b.lo	0x10004069c
+100040768:	a8 00 80 52	mov	w8, #0x5
+10004076c:	68 12 00 79	strh	w8, [x19, #0x8]
+100040770:	fd 7b 42 a9	ldp	x29, x30, [sp, #0x20]
+100040774:	f4 4f 41 a9	ldp	x20, x19, [sp, #0x10]
+100040778:	f6 57 c3 a8	ldp	x22, x21, [sp], #0x30
+10004077c:	c0 03 5f d6	ret
+100040780:	c3 be 06 94	bl	"_debug.FullPanic((function 'defaultPanic')).incorrectAlignment"
+100040784:	b7 bd 06 94	bl	"_debug.FullPanic((function 'defaultPanic')).corruptSwitch"
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_nothing .cache/scalar-937/after-host
+.cache/scalar-937/after-host:
+(__TEXT,__text) section
+_talk_nothing:
+1001edd7c:	f4 4f be a9	stp	x20, x19, [sp, #-0x20]!
+1001edd80:	fd 7b 01 a9	stp	x29, x30, [sp, #0x10]
+1001edd84:	fd 43 00 91	add	x29, sp, #0x10
+1001edd88:	f3 03 00 aa	mov	x19, x0
+1001edd8c:	01 2e 80 52	mov	w1, #0x170
+1001edd90:	82 00 80 52	mov	w2, #0x4
+1001edd94:	4a 43 f9 97	bl	_heap.SmpAllocator.alloc
+1001edd98:	40 03 00 b4	cbz	x0, 0x1001ede00
+1001edd9c:	1f 0c 40 f2	tst	x0, #0xf
+1001edda0:	c1 03 00 54	b.ne	0x1001ede18
+1001edda4:	08 00 80 52	mov	w8, #0x0
+1001edda8:	69 04 00 90	adrp	x9, 140 ; 0x100279000
+1001eddac:	29 e1 07 91	add	x9, x9, #0x1f8
+1001eddb0:	20 01 c0 3d	ldr	q0, [x9]
+1001eddb4:	09 e0 04 91	add	x9, x0, #0x138
+1001eddb8:	20 01 80 3d	str	q0, [x9]
+1001eddbc:	00 e4 00 6f	movi.2d	v0, #0000000000000000
+1001eddc0:	00 00 00 ad	stp	q0, q0, [x0]
+1001eddc4:	00 00 01 ad	stp	q0, q0, [x0, #0x20]
+1001eddc8:	00 00 02 ad	stp	q0, q0, [x0, #0x40]
+1001eddcc:	00 00 03 ad	stp	q0, q0, [x0, #0x60]
+1001eddd0:	00 00 04 ad	stp	q0, q0, [x0, #0x80]
+1001eddd4:	00 00 05 ad	stp	q0, q0, [x0, #0xa0]
+1001eddd8:	00 00 06 ad	stp	q0, q0, [x0, #0xc0]
+1001edddc:	00 00 07 ad	stp	q0, q0, [x0, #0xe0]
+1001edde0:	00 00 08 ad	stp	q0, q0, [x0, #0x100]
+1001edde4:	00 48 80 3d	str	q0, [x0, #0x120]
+1001edde8:	29 00 80 52	mov	w9, #0x1
+1001eddec:	09 98 00 f9	str	x9, [x0, #0x130]
+1001eddf0:	09 20 05 91	add	x9, x0, #0x148
+1001eddf4:	20 01 00 ad	stp	q0, q0, [x9]
+1001eddf8:	1f d0 02 79	strh	wzr, [x0, #0x168]
+1001eddfc:	02 00 00 14	b	0x1001ede04
+1001ede00:	a8 02 80 52	mov	w8, #0x15
+1001ede04:	60 02 00 f9	str	x0, [x19]
+1001ede08:	e0 03 08 aa	mov	x0, x8
+1001ede0c:	fd 7b 41 a9	ldp	x29, x30, [sp, #0x10]
+1001ede10:	f4 4f c2 a8	ldp	x20, x19, [sp], #0x20
+1001ede14:	c0 03 5f d6	ret
+1001ede18:	1d 09 00 94	bl	"_debug.FullPanic((function 'defaultPanic')).incorrectAlignment"
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_bool .cache/scalar-937/after-host
+.cache/scalar-937/after-host:
+(__TEXT,__text) section
+_talk_bool:
+1001ef5e0:	f4 4f be a9	stp	x20, x19, [sp, #-0x20]!
+1001ef5e4:	fd 7b 01 a9	stp	x29, x30, [sp, #0x10]
+1001ef5e8:	fd 43 00 91	add	x29, sp, #0x10
+1001ef5ec:	f3 03 01 aa	mov	x19, x1
+1001ef5f0:	f4 03 00 aa	mov	x20, x0
+1001ef5f4:	01 2e 80 52	mov	w1, #0x170
+1001ef5f8:	82 00 80 52	mov	w2, #0x4
+1001ef5fc:	30 3d f9 97	bl	_heap.SmpAllocator.alloc
+1001ef600:	40 02 00 b4	cbz	x0, 0x1001ef648
+1001ef604:	1f 0c 40 f2	tst	x0, #0xf
+1001ef608:	c1 02 00 54	b.ne	0x1001ef660
+1001ef60c:	08 00 80 52	mov	w8, #0x0
+1001ef610:	49 04 00 d0	adrp	x9, 138 ; 0x100279000
+1001ef614:	29 e1 07 91	add	x9, x9, #0x1f8
+1001ef618:	20 01 c0 3d	ldr	q0, [x9]
+1001ef61c:	09 e0 04 91	add	x9, x0, #0x138
+1001ef620:	20 01 80 3d	str	q0, [x9]
+1001ef624:	14 00 00 39	strb	w20, [x0]
+1001ef628:	29 00 80 52	mov	w9, #0x1
+1001ef62c:	09 20 01 b9	str	w9, [x0, #0x120]
+1001ef630:	09 98 00 f9	str	x9, [x0, #0x130]
+1001ef634:	09 20 05 91	add	x9, x0, #0x148
+1001ef638:	1f d0 02 79	strh	wzr, [x0, #0x168]
+1001ef63c:	00 e4 00 6f	movi.2d	v0, #0000000000000000
+1001ef640:	20 01 00 ad	stp	q0, q0, [x9]
+1001ef644:	02 00 00 14	b	0x1001ef64c
+1001ef648:	a8 02 80 52	mov	w8, #0x15
+1001ef64c:	60 02 00 f9	str	x0, [x19]
+1001ef650:	e0 03 08 aa	mov	x0, x8
+1001ef654:	fd 7b 41 a9	ldp	x29, x30, [sp, #0x10]
+1001ef658:	f4 4f c2 a8	ldp	x20, x19, [sp], #0x20
+1001ef65c:	c0 03 5f d6	ret
+1001ef660:	0b 03 00 94	bl	"_debug.FullPanic((function 'defaultPanic')).incorrectAlignment"
+
+$ objdump --macho --disassemble --symbolize-operands --dis-symname _talk_int .cache/scalar-937/after-host
+.cache/scalar-937/after-host:
+(__TEXT,__text) section
+_talk_int:
+1001ef36c:	f6 57 bd a9	stp	x22, x21, [sp, #-0x30]!
+1001ef370:	f4 4f 01 a9	stp	x20, x19, [sp, #0x10]
+1001ef374:	fd 7b 02 a9	stp	x29, x30, [sp, #0x20]
+1001ef378:	fd 83 00 91	add	x29, sp, #0x20
+1001ef37c:	f3 03 01 aa	mov	x19, x1
+1001ef380:	f4 03 00 aa	mov	x20, x0
+1001ef384:	08 fc 7f 93	asr	x8, x0, #63
+1001ef388:	e9 03 00 eb	negs	x9, x0
+1001ef38c:	ea 03 08 da	ngc	x10, x8
+1001ef390:	1f 00 00 f1	cmp	x0, #0x0
+1001ef394:	35 41 80 9a	csel	x21, x9, x0, mi
+1001ef398:	56 41 88 9a	csel	x22, x10, x8, mi
+1001ef39c:	01 2e 80 52	mov	w1, #0x170
+1001ef3a0:	82 00 80 52	mov	w2, #0x4
+1001ef3a4:	c6 3d f9 97	bl	_heap.SmpAllocator.alloc
+1001ef3a8:	c0 02 00 b4	cbz	x0, 0x1001ef400
+1001ef3ac:	1f 0c 40 f2	tst	x0, #0xf
+1001ef3b0:	61 03 00 54	b.ne	0x1001ef41c
+1001ef3b4:	08 00 80 52	mov	w8, #0x0
+1001ef3b8:	49 04 00 d0	adrp	x9, 138 ; 0x100279000
+1001ef3bc:	29 e1 07 91	add	x9, x9, #0x1f8
+1001ef3c0:	20 01 c0 3d	ldr	q0, [x9]
+1001ef3c4:	09 e0 04 91	add	x9, x0, #0x138
+1001ef3c8:	20 01 80 3d	str	q0, [x9]
+1001ef3cc:	89 fe 7f d3	lsr	x9, x20, #63
+1001ef3d0:	15 58 00 a9	stp	x21, x22, [x0]
+1001ef3d4:	1f 10 00 b9	str	wzr, [x0, #0x10]
+1001ef3d8:	09 50 00 39	strb	w9, [x0, #0x14]
+1001ef3dc:	49 00 80 52	mov	w9, #0x2
+1001ef3e0:	09 20 01 b9	str	w9, [x0, #0x120]
+1001ef3e4:	29 00 80 52	mov	w9, #0x1
+1001ef3e8:	09 98 00 f9	str	x9, [x0, #0x130]
+1001ef3ec:	09 20 05 91	add	x9, x0, #0x148
+1001ef3f0:	1f d0 02 79	strh	wzr, [x0, #0x168]
+1001ef3f4:	00 e4 00 6f	movi.2d	v0, #0000000000000000
+1001ef3f8:	20 01 00 ad	stp	q0, q0, [x9]
+1001ef3fc:	02 00 00 14	b	0x1001ef404
+1001ef400:	a8 02 80 52	mov	w8, #0x15
+1001ef404:	60 02 00 f9	str	x0, [x19]
+1001ef408:	e0 03 08 aa	mov	x0, x8
+1001ef40c:	fd 7b 42 a9	ldp	x29, x30, [sp, #0x20]
+1001ef410:	f4 4f 41 a9	ldp	x20, x19, [sp, #0x10]
+1001ef414:	f6 57 c3 a8	ldp	x22, x21, [sp], #0x30
+1001ef418:	c0 03 5f d6	ret
+1001ef41c:	9c 03 00 94	bl	"_debug.FullPanic((function 'defaultPanic')).incorrectAlignment"

@@ -1,0 +1,245 @@
+{
+  "commit": "f51ad856-dirty",
+  "date": "2026-10-14",
+  "machine": {
+    "arch": "arm64",
+    "cores": 10,
+    "cpu": "Apple M5",
+    "memory": "24 GiB",
+    "os": "darwin"
+  },
+  "measurements": [
+    {
+      "benchmark": "numbers/add",
+      "runner": "zig",
+      "fuel": 26030,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6458.796,
+        "minNs": 6453.924,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 540268.817,
+        "minNs": 498732.673,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "runner": "zig",
+      "fuel": 18031,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6643.284,
+        "minNs": 6638.476,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 318107.595,
+        "minNs": 317987.342,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/divide",
+      "runner": "zig",
+      "fuel": 18031,
+      "logicalAlloc": 32104,
+      "load": {
+        "medianNs": 6620.548,
+        "minNs": 6606.421,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 354978.723,
+        "minNs": 351020.979,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "runner": "zig",
+      "fuel": 14579,
+      "logicalAlloc": 40088,
+      "load": {
+        "medianNs": 8270.592,
+        "minNs": 8268.563,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 305762.195,
+        "minNs": 305182.927,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "numbers/add",
+      "fuel": 26030,
+      "hostBytes": 184023.36231884058,
+      "load": {
+        "medianNs": 102750,
+        "minNs": 81042,
+        "samples": 5750
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 2255229,
+        "minNs": 2089709,
+        "samples": 280
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "fuel": 18031,
+      "hostBytes": 198733.3962264151,
+      "load": {
+        "medianNs": 87584,
+        "minNs": 73000,
+        "samples": 7264
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 1553271.5,
+        "minNs": 1360667,
+        "samples": 428
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "fuel": 18031,
+      "hostBytes": 365962.07692307694,
+      "load": {
+        "medianNs": 80458,
+        "minNs": 66042,
+        "samples": 7938
+      },
+      "logicalAlloc": 32104,
+      "run": {
+        "medianNs": 2067666.5,
+        "minNs": 1941625,
+        "samples": 320
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "fuel": 14579,
+      "hostBytes": 361135.04191616765,
+      "load": {
+        "medianNs": 137583,
+        "minNs": 98875,
+        "samples": 4833
+      },
+      "logicalAlloc": 40088,
+      "run": {
+        "medianNs": 3895542,
+        "minNs": 3673958,
+        "samples": 171
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "numbers/add",
+      "run": {
+        "minNs": 221818.0338786624,
+        "samples": 3,
+        "medianNs": 222999.67440631008
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "run": {
+        "minNs": 170010.4980955075,
+        "samples": 3,
+        "medianNs": 170207.35663209052
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "run": {
+        "minNs": 186848.95826481807,
+        "samples": 3,
+        "medianNs": 187079.10157900187
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "run": {
+        "minNs": 115376.22071955411,
+        "samples": 3,
+        "medianNs": 115588.86717466521
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "numbers/add",
+      "hostAllocs": 177,
+      "hostBytes": 44992,
+      "run": {
+        "medianNs": 26640,
+        "minNs": 26465,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/multiply",
+      "hostAllocs": 118,
+      "hostBytes": 29792,
+      "run": {
+        "medianNs": 18355,
+        "minNs": 18269,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/divide",
+      "hostAllocs": 115,
+      "hostBytes": 28976,
+      "run": {
+        "medianNs": 19802,
+        "minNs": 19776,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    },
+    {
+      "benchmark": "numbers/quantity",
+      "hostAllocs": 67,
+      "hostBytes": 16864,
+      "run": {
+        "medianNs": 11340,
+        "minNs": 11327,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    }
+  ],
+  "outlierFactor": 3,
+  "outliers": [],
+  "parity": [],
+  "settings": {
+    "count": 3,
+    "filter": "numbers",
+    "runners": "zig,ts,applescript,gopher-lua",
+    "smoke": false
+  },
+  "skipped": [],
+  "versions": {
+    "bun": "1.4.3",
+    "zig": "0.17.0",
+    "zig build": "native safe; C Host -O2",
+    "cost model": "0",
+    "go": "go1.27.2",
+    "language": "1.0-rc.3",
+    "applescript": "2.8 (macOS 27.0.1)",
+    "gopher-lua": "v1.1.2"
+  }
+}

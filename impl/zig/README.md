@@ -169,6 +169,16 @@ records and event table, each instruction with its source position.
 instructions are the Zig Core's own (ADR 0009), and nothing outside `src/`
 depends on them.
 
+Verified static Unit conversion targets carry a dimension signature and an
+ordered factor plan in counted code storage. Invalid Unit targets retain their
+runtime conversion failure; preparing metadata adds no Load diagnostic.
+Plans preserve each Decimal operation and rounding step, storing exponent
+repetitions as counts. Reload and Restore rebuild them with the code unit;
+they are absent from canonical disassembly, fingerprints and snapshots.
+Unit Values keep compact catalogue indices and a derived active-Kind mask,
+so arithmetic and comparison traverse only present Kinds. No runtime Unit
+combination or dimension cache is retained.
+
 Each body is lowered into its own buffer, with labels local to it, and the
 buffers are laid out in body order at the end. A Lambda or an event test is
 numbered and lowered where the lowering reaches it, so its constants and
@@ -546,6 +556,15 @@ the run loop never recurses on Script depth. Every instruction is charged by
 its `machine.toml` cost key, or `builtin.<name>`, from the generated Cost Model
 0 terms, with `scanned` reported by the operation itself, and Persistent State
 is measured over the Script Variables and the mailbox at a Segment's end.
+
+Opcode rates are resolved at compile time. The Cost Model generator also emits
+shared evaluators for static Fuel/allocation formula pairs, selecting measures
+and folding constants ahead of execution while retaining each term's own
+rounding and checked arithmetic. Dynamic Built-ins, keyed charges and formulas
+with unsupported measures or subjects use the term interpreter, which remains
+the differential-test oracle. Extra Host Fuel and allocation are still added
+at each charge; the machine owns refusal ordering and instruction boundaries.
+
 `talk_script_counters` reads a Script's lifetime Fuel, allocation, Runs and
 Limit Faults, live Runs included, with its current Persistent State and
 mailbox, and writes the `counters` record without draining Host Inputs.
@@ -582,6 +601,10 @@ capacity and retained items outside an older slice count against the Group's
 physical cap; Cost Model 0 still charges only the specified logical allocation.
 The [List measurements](../../bench/results/2026-10-14-zig-list-paths.md)
 record size scaling, allocations and the remaining point-write cost.
+Lowering temp release makes a slot available to the compiler; it does not
+clear the runtime local. Such locals still contribute to retained frame size
+and Save/Restore. The [local-write ownership investigation](../../bench/results/2026-10-15-zig-local-list-writes.md)
+explains why last-use loads alone cannot enable unique machine point writes.
 
 Forward Character reads walk only through the requested end and keep byte
 offsets instead of segmentation arrays. Missing and reversed reads still
@@ -1093,6 +1116,15 @@ linear lookup and copy their entries on each write. Every node remembers its
 allocator, so Zig tests use the leak-detecting test allocator. C values use the
 process allocator; a Group's own values use its Group allocator. Handles require
 Host synchronization when shared across threads.
+
+Number, Boolean and Nothing construction specializes the active tag before
+allocating a node. Each node initializes every header and its active payload
+through its owning allocator, without `Allocator.create`'s whole-node poison
+fill. Number and Boolean construction also avoid copying the full Data union;
+Zig still zero-fills Nothing's inactive union storage. The Value layout,
+inline Quantity and Group cache are unchanged. The
+[constructor measurements](../../bench/results/2026-10-14-zig-scalar-constructors.md)
+record safe native assembly, paired timings and allocation probes.
 
 Text and Decimal accessor pointers borrow their value. Byte accessors copy
 out, and display, encoding and canonical Unit strings return an owned

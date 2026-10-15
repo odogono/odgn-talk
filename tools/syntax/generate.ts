@@ -15,6 +15,7 @@ import { parseSource } from '../../impl/ts/src/parser';
 import { generateGoCatalogues } from '../go/generate';
 import { generateZigCatalogues } from '../zig/generate';
 import { compileCostModel } from '../costs/compile';
+import { emitTsCosts } from '../costs/emit-ts';
 
 const compiledCosts = compileCostModel(costs);
 const codes = (names: readonly string[]) =>
@@ -282,6 +283,10 @@ const builtinDocsContent =
     2,
   )};\n`;
 const outputs = [
+  [
+    resolve(import.meta.dir, '../../impl/ts/src/generated/costs.ts'),
+    emitTsCosts(compiledCosts),
+  ],
   [
     resolve(import.meta.dir, '../../impl/ts/src/generated/session.ts'),
     readerContent,

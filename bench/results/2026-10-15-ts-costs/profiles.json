@@ -1,0 +1,608 @@
+[
+  {
+    "variant": "before",
+    "workload": "numbers/add",
+    "profile": "before-numbers-add.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "numbers/add",
+        "expected": {
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000"
+        },
+        "runs": 920
+      }
+    ],
+    "stderr": "",
+    "allSamples": 2083,
+    "pumpSamples": 2067,
+    "accountingInclusiveSamples": 314,
+    "logicalSizeInclusiveSamples": 144,
+    "accountingPercentOfPump": 15.191098209966135,
+    "logicalSizePercentOfPump": 6.966618287373004,
+    "topPumpSelfSamples": [
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 226
+      },
+      {
+        "function": "characterBoundaries",
+        "file": "impl/ts/src/unicode.ts",
+        "samples": 187
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 136
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 126
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 124
+      },
+      {
+        "function": "literalDigits",
+        "file": "impl/ts/src/values.ts",
+        "samples": 101
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 93
+      },
+      {
+        "function": "evaluate",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 74
+      },
+      {
+        "function": "freeze",
+        "file": "",
+        "samples": 73
+      },
+      {
+        "function": "iteratorItem",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 70
+      },
+      {
+        "function": "formatDec",
+        "file": "impl/ts/src/decimal.ts",
+        "samples": 66
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 62
+      },
+      {
+        "function": "asRange",
+        "file": "impl/ts/src/values.ts",
+        "samples": 61
+      },
+      {
+        "function": "charge",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 61
+      },
+      {
+        "function": "toString",
+        "file": "",
+        "samples": 59
+      }
+    ]
+  },
+  {
+    "variant": "after",
+    "workload": "numbers/add",
+    "profile": "after-numbers-add.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "numbers/add",
+        "expected": {
+          "alloc": 32104,
+          "fuel": 26030,
+          "outcome": "completed",
+          "result": "2000"
+        },
+        "runs": 898
+      }
+    ],
+    "stderr": "",
+    "allSamples": 1993,
+    "pumpSamples": 1982,
+    "accountingInclusiveSamples": 130,
+    "logicalSizeInclusiveSamples": 54,
+    "accountingPercentOfPump": 6.559031281533804,
+    "logicalSizePercentOfPump": 2.7245206861755804,
+    "topPumpSelfSamples": [
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 216
+      },
+      {
+        "function": "characterBoundaries",
+        "file": "impl/ts/src/unicode.ts",
+        "samples": 175
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 143
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 121
+      },
+      {
+        "function": "pay",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 110
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 107
+      },
+      {
+        "function": "literalDigits",
+        "file": "impl/ts/src/values.ts",
+        "samples": 103
+      },
+      {
+        "function": "iteratorItem",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 83
+      },
+      {
+        "function": "freeze",
+        "file": "",
+        "samples": 73
+      },
+      {
+        "function": "BigInt",
+        "file": "",
+        "samples": 69
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 67
+      },
+      {
+        "function": "formatDec",
+        "file": "impl/ts/src/decimal.ts",
+        "samples": 67
+      },
+      {
+        "function": "asRange",
+        "file": "impl/ts/src/values.ts",
+        "samples": 59
+      },
+      {
+        "function": "toString",
+        "file": "",
+        "samples": 55
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 54
+      }
+    ]
+  },
+  {
+    "variant": "before",
+    "workload": "collections/list-append",
+    "profile": "before-collections-list-append.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "collections/list-append",
+        "expected": {
+          "alloc": 80200,
+          "fuel": 52056,
+          "outcome": "completed",
+          "result": "2001000"
+        },
+        "runs": 285
+      }
+    ],
+    "stderr": "",
+    "allSamples": 2096,
+    "pumpSamples": 2082,
+    "accountingInclusiveSamples": 402,
+    "logicalSizeInclusiveSamples": 193,
+    "accountingPercentOfPump": 19.30835734870317,
+    "logicalSizePercentOfPump": 9.269932756964458,
+    "topPumpSelfSamples": [
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 266
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 203
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 139
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 138
+      },
+      {
+        "function": "characterBoundaries",
+        "file": "impl/ts/src/unicode.ts",
+        "samples": 124
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 106
+      },
+      {
+        "function": "charge",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 96
+      },
+      {
+        "function": "pay",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 55
+      },
+      {
+        "function": "evaluate",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 54
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 51
+      },
+      {
+        "function": "extend",
+        "file": "impl/ts/src/list-storage.ts",
+        "samples": 50
+      },
+      {
+        "function": "cacheListExtension",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 49
+      },
+      {
+        "function": "literalDigits",
+        "file": "impl/ts/src/values.ts",
+        "samples": 42
+      },
+      {
+        "function": "node",
+        "file": "impl/ts/src/persistent-tree.ts",
+        "samples": 42
+      },
+      {
+        "function": "preempt",
+        "file": "impl/ts/src/group.ts",
+        "samples": 35
+      }
+    ]
+  },
+  {
+    "variant": "after",
+    "workload": "collections/list-append",
+    "profile": "after-collections-list-append.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "collections/list-append",
+        "expected": {
+          "alloc": 80200,
+          "fuel": 52056,
+          "outcome": "completed",
+          "result": "2001000"
+        },
+        "runs": 361
+      }
+    ],
+    "stderr": "",
+    "allSamples": 2107,
+    "pumpSamples": 2094,
+    "accountingInclusiveSamples": 234,
+    "logicalSizeInclusiveSamples": 93,
+    "accountingPercentOfPump": 11.174785100286533,
+    "logicalSizePercentOfPump": 4.441260744985673,
+    "topPumpSelfSamples": [
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 323
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 262
+      },
+      {
+        "function": "characterBoundaries",
+        "file": "impl/ts/src/unicode.ts",
+        "samples": 132
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 109
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 100
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/generated/costs.ts",
+        "samples": 81
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 79
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 69
+      },
+      {
+        "function": "pay",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 60
+      },
+      {
+        "function": "extend",
+        "file": "impl/ts/src/list-storage.ts",
+        "samples": 60
+      },
+      {
+        "function": "aligned",
+        "file": "impl/ts/src/decimal.ts",
+        "samples": 50
+      },
+      {
+        "function": "cacheListExtension",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 45
+      },
+      {
+        "function": "literalDigits",
+        "file": "impl/ts/src/values.ts",
+        "samples": 43
+      },
+      {
+        "function": "preempt",
+        "file": "impl/ts/src/group.ts",
+        "samples": 40
+      },
+      {
+        "function": "payAmount",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 40
+      }
+    ]
+  },
+  {
+    "variant": "before",
+    "workload": "macro/transform",
+    "profile": "before-macro-transform.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "macro/transform",
+        "expected": {
+          "alloc": 6418202,
+          "fuel": 20664,
+          "outcome": "completed",
+          "result": "90300"
+        },
+        "runs": 1025
+      }
+    ],
+    "stderr": "",
+    "allSamples": 2004,
+    "pumpSamples": 1986,
+    "accountingInclusiveSamples": 516,
+    "logicalSizeInclusiveSamples": 366,
+    "accountingPercentOfPump": 25.981873111782477,
+    "logicalSizePercentOfPump": 18.429003021148038,
+    "topPumpSelfSamples": [
+      {
+        "function": "freeze",
+        "file": "",
+        "samples": 246
+      },
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 166
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 139
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 131
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 102
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 68
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 62
+      },
+      {
+        "function": "evaluate",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 62
+      },
+      {
+        "function": "extend",
+        "file": "impl/ts/src/list-storage.ts",
+        "samples": 52
+      },
+      {
+        "function": "replace",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 48
+      },
+      {
+        "function": "cacheListExtension",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 43
+      },
+      {
+        "function": "node",
+        "file": "impl/ts/src/persistent-tree.ts",
+        "samples": 40
+      },
+      {
+        "function": "map",
+        "file": "impl/ts/src/values.ts",
+        "samples": 37
+      },
+      {
+        "function": "charge",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 36
+      },
+      {
+        "function": "map",
+        "file": "",
+        "samples": 30
+      }
+    ]
+  },
+  {
+    "variant": "after",
+    "workload": "macro/transform",
+    "profile": "after-macro-transform.cpuprofile.gz",
+    "run": [
+      {
+        "benchmark": "macro/transform",
+        "expected": {
+          "alloc": 6418202,
+          "fuel": 20664,
+          "outcome": "completed",
+          "result": "90300"
+        },
+        "runs": 1146
+      }
+    ],
+    "stderr": "",
+    "allSamples": 2041,
+    "pumpSamples": 2025,
+    "accountingInclusiveSamples": 473,
+    "logicalSizeInclusiveSamples": 349,
+    "accountingPercentOfPump": 23.358024691358025,
+    "logicalSizePercentOfPump": 17.234567901234566,
+    "topPumpSelfSamples": [
+      {
+        "function": "freeze",
+        "file": "",
+        "samples": 235
+      },
+      {
+        "function": "execute",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 160
+      },
+      {
+        "function": "finishInstruction",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 148
+      },
+      {
+        "function": "step",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 138
+      },
+      {
+        "function": "sizeOf",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 87
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/group.ts",
+        "samples": 80
+      },
+      {
+        "function": "cacheListExtension",
+        "file": "impl/ts/src/costs.ts",
+        "samples": 55
+      },
+      {
+        "function": "",
+        "file": "impl/ts/src/generated/costs.ts",
+        "samples": 55
+      },
+      {
+        "function": "turn",
+        "file": "impl/ts/src/group.ts",
+        "samples": 52
+      },
+      {
+        "function": "extend",
+        "file": "impl/ts/src/list-storage.ts",
+        "samples": 52
+      },
+      {
+        "function": "node",
+        "file": "impl/ts/src/persistent-tree.ts",
+        "samples": 50
+      },
+      {
+        "function": "delete",
+        "file": "",
+        "samples": 48
+      },
+      {
+        "function": "pay",
+        "file": "impl/ts/src/machine.ts",
+        "samples": 45
+      },
+      {
+        "function": "map",
+        "file": "impl/ts/src/values.ts",
+        "samples": 44
+      },
+      {
+        "function": "selected",
+        "file": "impl/ts/src/group.ts",
+        "samples": 39
+      }
+    ]
+  }
+]

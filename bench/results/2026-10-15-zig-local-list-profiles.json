@@ -1,0 +1,85 @@
+{
+  "recordedAt": "2026-10-15T04:53:54.352319+00:00",
+  "baselineRevision": "74f4307f",
+  "checkoutRevision": "74f4307fab367e0b61121f5fa88264181e4bc81e",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0",
+  "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "language": "1.0-rc.3",
+  "costModel": 0,
+  "mode": "safe",
+  "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
+  "samplesPerProcess": 5,
+  "pairs": 3,
+  "binarySha256": {
+    "before": "97e06e23f623ad2daa0c15f086b894eb662acf73379fa18fce5b3255b732fdb6",
+    "after": "97e06e23f623ad2daa0c15f086b894eb662acf73379fa18fce5b3255b732fdb6"
+  },
+  "sourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "5bfe6030edcd588ce48ca6703bccb7a28993a3555f9aa85369c15db2acdff66d",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  },
+  "generatorSha256": "e467f0613f5a618c36e7a9bcc159e17026e2590a9b39efff96b9f0b00033ffd5",
+  "ratesSha256": "3b6bb8eb03a9a1cedc94dd1bc9e4c582cb09a877acd063f93e52c8f2ee58040c",
+  "manifestSha256": "3f27106ec23e3875ce48199359f6f6e42340ac8a66d748e1592a6c91df24ab71",
+  "measurements": [],
+  "profiles": [
+    {
+      "binary": "before",
+      "name": "collections/list-update",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-collections-list-update-slice-0.txt.gz",
+      "reportSha256": "ed6359975f874459e3c8538552efa25065cfbf778139ba8cabf8a1fa2bb24cb0",
+      "samples": {
+        "pump": 1529,
+        "execute": 1435,
+        "charging": 120,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 818,
+        "scratchReset": 110,
+        "operandRetention": 0,
+        "decimal": 15,
+        "valueConstruction": 38,
+        "allocator": 169,
+        "chunksSet": 87,
+        "listSet": 61,
+        "valueRelease": 108
+      }
+    },
+    {
+      "binary": "after",
+      "name": "collections/list-update",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-collections-list-update-slice-0.txt.gz",
+      "reportSha256": "2b0530a9ee9bfe6474f6c960838c4b88e07524c636da4d66a18a0e5834e406dc",
+      "samples": {
+        "pump": 1532,
+        "execute": 1440,
+        "charging": 125,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 800,
+        "scratchReset": 96,
+        "operandRetention": 0,
+        "decimal": 20,
+        "valueConstruction": 45,
+        "allocator": 175,
+        "chunksSet": 100,
+        "listSet": 71,
+        "valueRelease": 109
+      }
+    }
+  ],
+  "baselineSourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "5bfe6030edcd588ce48ca6703bccb7a28993a3555f9aa85369c15db2acdff66d",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  }
+}

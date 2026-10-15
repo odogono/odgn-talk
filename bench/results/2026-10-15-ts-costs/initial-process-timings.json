@@ -1,0 +1,2605 @@
+{
+  "metadata": {
+    "started": "2026-10-15T04:47:36.650Z",
+    "finishedTiming": "2026-10-15T04:52:13.944Z",
+    "startingLoad": [
+      16.169921875,
+      9.60009765625,
+      4.94921875
+    ],
+    "endingLoad": [
+      12.4619140625,
+      12.51806640625,
+      7.76318359375
+    ],
+    "baseline": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+    "head": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+    "diff": "diff --git a/impl/ts/src/costs.ts b/impl/ts/src/costs.ts\nindex 9e4600ed..3024b1a2 100644\n--- a/impl/ts/src/costs.ts\n+++ b/impl/ts/src/costs.ts\n@@ -1,6 +1,7 @@\n // Cost Model 0 (chapter 8, The Cost Model): each rate's Fuel and allocation\n // formulas, the logical sizes of values, and the measures they're taken over.\n import { costMeasure, costModel, costSubject } from './generated/machine';\n+import { leafSize, makeCostRates } from './generated/costs';\n import { characters } from './text';\n import { scalarCount } from './unicode';\n import { digitsOf, integerOf, isInteger } from './decimal';\n@@ -262,6 +263,11 @@ export const sizeOf = (v: Value): number => {\n   if (cached !== undefined) {\n     return cached;\n   }\n+  const leaf = leafSize(v, measureOf);\n+  if (leaf !== undefined) {\n+    known.set(v, leaf);\n+    return leaf;\n+  }\n   // Deep values are sized leaves first, so no size recurses far. A\n   // shared part is visited once, not once per path to it (#890); its\n   // logical size still counts at each occurrence, through its parents.\n@@ -273,6 +279,11 @@ export const sizeOf = (v: Value): number => {\n     if (known.has(next) || seen.has(next)) {\n       continue;\n     }\n+    const leaf = leafSize(next, measureOf);\n+    if (leaf !== undefined) {\n+      known.set(next, leaf);\n+      continue;\n+    }\n     seen.add(next);\n     order.push(next);\n     for (const child of childrenOf(next)) {\n@@ -328,18 +339,16 @@ export const partSize = (\n };\n \n export type Charge = { alloc: number; fuel: number };\n+const compiledRates = makeCostRates(measureOf);\n \n /** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */\n export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;\n \n /** A rate's Fuel and allocation, over what the instruction worked on. */\n export const charge = (rate: number, measured: Measured = noCounts): Charge => {\n-  const formulas = rates[rate];\n-  if (!formulas) {\n+  const compiled = compiledRates[rate];\n+  if (!compiled) {\n     throw new Error(`No Cost Model rate ${rate}`);\n   }\n-  return {\n-    fuel: evaluate(formulas.fuel, measured, undefined),\n-    alloc: evaluate(formulas.alloc, measured, undefined),\n-  };\n+  return compiled(measured);\n };\ndiff --git a/tools/syntax/generate.ts b/tools/syntax/generate.ts\nindex a428b161..1d032e29 100644\n--- a/tools/syntax/generate.ts\n+++ b/tools/syntax/generate.ts\n@@ -15,6 +15,7 @@ import { parseSource } from '../../impl/ts/src/parser';\n import { generateGoCatalogues } from '../go/generate';\n import { generateZigCatalogues } from '../zig/generate';\n import { compileCostModel } from '../costs/compile';\n+import { emitTsCosts } from '../costs/emit-ts';\n \n const compiledCosts = compileCostModel(costs);\n const codes = (names: readonly string[]) =>\n@@ -282,6 +283,10 @@ const builtinDocsContent =\n     2,\n   )};\\n`;\n const outputs = [\n+  [\n+    resolve(import.meta.dir, '../../impl/ts/src/generated/costs.ts'),\n+    emitTsCosts(compiledCosts),\n+  ],\n   [\n     resolve(import.meta.dir, '../../impl/ts/src/generated/session.ts'),\n     readerContent,\n",
+    "bun": "1.4.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "sourceSha256": {
+      "impl/ts/src/costs.ts": "c6893e26d77218a0699bf829aba9481be81f88c124c321e0570dc983ce8efd85",
+      "impl/ts/src/generated/costs.ts": "5a7c52bc60bc8025a379dd5be6640f69e084bc5ba0996037d089fe62b6772ce6",
+      "tools/costs/emit-ts.ts": "e1d06f9b37d9590399449f3fa0a75a5537b50a0f81d10e08ed27ddc9f5b65e8a"
+    },
+    "warmupRuns": 20,
+    "batches": 7,
+    "runsPerBatch": 20,
+    "bundleSha256": {
+      "before": "836fcbe9054682447da3a6007923788ac4b6b34751565d7e25da27492340784c",
+      "after": "e624d02510b0a7cc99a2b18702cbf61198f969f619e2679a60cd528dd28aa4ff"
+    }
+  },
+  "records": [
+    {
+      "round": 1,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            11135458.349999996,
+            19667870.800000004,
+            13748845.849999998,
+            12649962.500000004,
+            13436966.65,
+            13171699.999999998,
+            16350314.600000003
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            7479314.550000003,
+            7743758.299999991,
+            8195781.250000005,
+            6889604.149999991,
+            8779895.800000008,
+            7801125.000000002,
+            8249845.849999997
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            37919727.1,
+            42726170.8,
+            45463495.80000001,
+            37252685.40000002,
+            40345702.09999997,
+            40307383.35000005,
+            42888306.25000001
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            12764666.64999998,
+            12236939.600000005,
+            12606035.450000037,
+            12444543.749999957,
+            12602591.649999976,
+            12639914.599999975,
+            12031008.349999957
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            8448316.650000015,
+            7628583.349999917,
+            9525764.600000003,
+            9470760.450000035,
+            10822487.499999989,
+            8918989.54999997,
+            9993252.099999972
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            9094135.39999996,
+            8602337.499999976,
+            9064462.49999999,
+            9130770.799999936,
+            9401977.050000004,
+            9234804.199999962,
+            7382608.299999992
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            12349431.249999998,
+            11149193.749999996,
+            11107058.35000008,
+            11133329.1500001,
+            11349277.10000011,
+            11098147.950000022,
+            11561902.100000042
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            16167568.7500001,
+            17137466.69999982,
+            18316056.24999993,
+            10522920.8499999,
+            10742012.500000056,
+            9914202.049999949,
+            11277020.799999991
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            9751016.699999854,
+            7311906.249999993,
+            7261304.149999887,
+            6978760.449999936,
+            5371993.750000002,
+            6862906.250000015,
+            7078049.999999894
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            5162072.950000038,
+            6239614.600000096,
+            5453335.399999923,
+            2204014.5999999368,
+            2662520.7999999477,
+            5386147.900000106,
+            3849764.5499999635
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            6321639.599999981,
+            6911777.099999927,
+            6822214.600000006,
+            7738127.100000019,
+            7589785.400000073,
+            5764881.249999962,
+            5319483.350000155
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            11027512.500000011,
+            11624168.749999989,
+            10509860.450000089,
+            13444506.250000086,
+            10119041.699999979,
+            11492631.250000158,
+            13453637.499999966
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            2767575.0000000335,
+            3226879.199999894,
+            3245727.0500000957,
+            3028866.649999873,
+            3957531.2499999204,
+            2951083.3000000278,
+            2185214.5999999265
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            19866579.150000144,
+            19341087.49999996,
+            17477439.59999989,
+            15443260.399999965,
+            15092950.000000019,
+            14792337.499999847,
+            16775241.69999997
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            14611116.650000077,
+            13768235.450000066,
+            14431252.099999983,
+            15130210.399999851,
+            15735100.000000056,
+            14637002.100000063,
+            16100062.50000006
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            5546514.600000046,
+            4890810.450000026,
+            4278391.650000049,
+            4236977.099999967,
+            4362497.900000016,
+            4318612.500000017,
+            3806187.499999942
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            20212166.699999943,
+            15253677.050000077,
+            15768987.500000004,
+            18416672.900000047,
+            20712739.600000165,
+            23146168.749999925,
+            21499485.450000066
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            11805306.249999922,
+            13151608.349999879,
+            10775256.249999803,
+            12607983.349999996,
+            13406679.150000127,
+            8770404.150000105,
+            9079472.90000011
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            3326322.900000014,
+            2726512.500000172,
+            2967329.1999999494,
+            4419039.600000178,
+            5762795.849999747,
+            4960485.399999743,
+            4494199.99999991
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            6988870.849999877,
+            9358560.399999987,
+            7184937.499999796,
+            8415841.65000022,
+            9472081.249999974,
+            7670664.600000237,
+            8449316.700000053
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            8221824.999999808,
+            9216189.549999762,
+            9180562.499999722,
+            9053039.599999828,
+            6537947.899999926,
+            8279710.400000113,
+            6300629.149999804
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            167100781.25,
+            167255108.34999985,
+            183467604.1999999,
+            155346989.60000023,
+            161599535.45000026,
+            165480943.75,
+            200678866.70000044
+          ]
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            12046433.3,
+            13105645.849999996,
+            14987791.649999997,
+            12456741.650000002,
+            10575556.25,
+            9742514.549999999,
+            14071091.650000006
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            7203327.1000000015,
+            8398110.400000019,
+            8177412.500000013,
+            7504933.349999988,
+            7535789.599999999,
+            5849922.900000001,
+            6375093.749999996
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            44580608.35000001,
+            45807420.85000002,
+            48476933.299999975,
+            55130831.249999985,
+            47276452.04999999,
+            53000181.24999997,
+            51581012.5
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            14668150.00000006,
+            17087504.14999995,
+            15635012.499999994,
+            14278681.249999955,
+            14315122.900000006,
+            15592062.499999974,
+            14793052.100000024
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            13338341.649999984,
+            12044652.099999985,
+            10777877.049999915,
+            10824683.350000033,
+            10958010.400000058,
+            9220245.849999992,
+            10963506.249999955
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            10031460.400000015,
+            9372900.000000026,
+            8916087.499999959,
+            9099933.300000066,
+            8247081.249999973,
+            9257752.100000108,
+            9206054.14999991
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            11771127.049999995,
+            11435427.099999834,
+            10592241.64999996,
+            11074995.84999987,
+            11148112.500000026,
+            9931418.750000011,
+            10483164.550000038
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            13950331.25000009,
+            12678010.400000129,
+            15066274.99999995,
+            12281437.499999993,
+            10504743.749999944,
+            13005585.400000017,
+            14677333.349999934
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            10518393.749999996,
+            10291312.500000093,
+            11507804.149999902,
+            10671491.649999917,
+            10580506.250000145,
+            8841387.500000019,
+            7061414.549999972
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            4453431.249999994,
+            4265541.649999978,
+            4951347.949999945,
+            4421754.200000032,
+            4616577.099999995,
+            4015216.7000000193,
+            4387231.249999968
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            6081414.600000062,
+            4744774.999999936,
+            5522518.750000017,
+            5877866.650000033,
+            5541208.299999925,
+            4721614.600000067,
+            6120872.899999995
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            11207397.899999887,
+            8863008.350000018,
+            12543499.99999995,
+            11174260.400000094,
+            13510747.900000025,
+            9402466.69999997,
+            10024975.000000086
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            2736145.850000139,
+            2643725.0000000857,
+            2792264.6000000895,
+            2632227.0999999093,
+            2401324.999999997,
+            2447160.4500000468,
+            1929595.849999896
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            17738283.349999983,
+            13610795.850000069,
+            17195539.60000012,
+            15266943.750000063,
+            13639775.00000001,
+            13463887.499999875,
+            13292362.500000127
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            12555185.449999955,
+            12815962.500000024,
+            12577549.999999974,
+            11474414.599999908,
+            12578977.049999958,
+            11598345.849999895,
+            11496277.100000042
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            5021983.300000102,
+            4059181.249999892,
+            3403414.5499999793,
+            4175975.000000108,
+            3809620.800000084,
+            2989102.0499999286,
+            3194589.6000001086
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            17537254.15000008,
+            20366264.55000005,
+            13974731.249999966,
+            14576616.699999794,
+            15315377.050000098,
+            14425249.99999987,
+            16801068.750000194
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            11094381.250000153,
+            15626289.600000018,
+            10201750.000000175,
+            8949070.84999977,
+            11587495.85000005,
+            10343962.499999907,
+            10914852.050000263
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            2973331.2499996824,
+            2407527.100000152,
+            2849185.399999988,
+            2905712.4999999357,
+            2767270.799999824,
+            2641833.29999978,
+            2693514.59999998
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4508283.30000004,
+            4839431.250000052,
+            5343560.399999842,
+            4501297.899999918,
+            5323385.399999825,
+            5013512.50000007,
+            5690704.200000254
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            6430264.60000001,
+            6548658.30000017,
+            5293050.000000222,
+            5175972.900000124,
+            5656537.4999998305,
+            7165612.499999771,
+            5008199.999999852
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            112243450.00000031,
+            89979647.9499997,
+            81822418.75,
+            70996372.89999992,
+            71996737.50000001,
+            70233297.90000024,
+            67006735.399999894
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            4477756.25,
+            4772466.699999998,
+            5176981.25,
+            4424239.6000000015,
+            5065110.399999998,
+            4359402.1,
+            4484654.15
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            2718666.65,
+            2730464.6000000047,
+            2731104.149999999,
+            2782999.9999999925,
+            2774691.6499999994,
+            2804710.399999999,
+            2800918.749999994
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            13954806.24999999,
+            14209972.899999991,
+            15459152.100000005,
+            14496368.749999989,
+            15427318.749999994,
+            23902204.150000013,
+            20090752.099999987
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            6242256.249999991,
+            5926620.849999972,
+            6539666.699999997,
+            5937389.600000006,
+            6903368.749999982,
+            7599168.74999999,
+            6431860.400000005
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            4744345.84999999,
+            4776964.550000003,
+            4811645.850000014,
+            5044104.199999993,
+            4583297.9000000255,
+            4816114.55000002,
+            4747429.200000034
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            5173062.500000015,
+            5217335.400000001,
+            5000729.150000007,
+            4486618.750000025,
+            4380791.649999992,
+            4698362.499999984,
+            5018068.7500000205
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            7434354.149999989,
+            6700772.949999964,
+            6518652.100000008,
+            6766841.649999969,
+            6791891.699999997,
+            6659487.500000023,
+            6973997.899999996
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            9761187.500000006,
+            12040118.749999966,
+            9520843.74999995,
+            8242841.700000008,
+            9997160.449999955,
+            8923697.900000025,
+            10038095.799999973
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            6105306.250000013,
+            7556547.949999912,
+            6161789.600000066,
+            6570660.450000014,
+            3861333.2999999328,
+            4216812.500000015,
+            4558808.349999981
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            2937981.249999939,
+            2460235.450000073,
+            2538008.3500000183,
+            2772716.649999984,
+            3073835.400000007,
+            2885616.6499999743,
+            2967364.600000019
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            3440781.2499999637,
+            3728008.349999982,
+            3668793.7500000773,
+            3432179.199999973,
+            4306058.349999966,
+            4193608.3500000676,
+            3834870.850000061
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            6696768.750000047,
+            5810912.499999994,
+            6017391.64999999,
+            5598527.05000003,
+            6375002.099999984,
+            6428579.150000041,
+            7288156.249999975
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            1659552.100000019,
+            1627352.0499999905,
+            1775450.0000000007,
+            1630622.8999999803,
+            1668089.5999999847,
+            1602872.8999999657,
+            1374314.5499999628
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            10489800.000000013,
+            11030187.500000011,
+            13004920.849999962,
+            10141558.299999997,
+            10860399.999999937,
+            11694712.499999968,
+            10249681.250000048
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            8480360.400000062,
+            10695062.500000041,
+            11240670.84999997,
+            9256027.100000028,
+            11427908.34999996,
+            10595577.09999999,
+            19956806.249999955
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            3008672.900000056,
+            3980733.3499999,
+            5242108.349999944,
+            3094020.8500000155,
+            2955697.9000000865,
+            4280481.249999866,
+            4586124.999999993
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            17589133.34999997,
+            18130281.250000007,
+            12585087.50000001,
+            13861658.30000009,
+            14354581.249999866,
+            14866060.40000006,
+            15949106.249999931
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            7767533.34999994,
+            8597795.849999966,
+            8215737.499999886,
+            11189997.949999997,
+            11966691.700000046,
+            10293758.2999999,
+            8790110.400000049
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            3307197.9499998633,
+            2791685.4000000968,
+            3039631.250000093,
+            2816995.800000041,
+            2396781.2500000945,
+            2633460.3999999673,
+            3419839.5500001423
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4105060.4000000022,
+            6491245.849999905,
+            6406954.199999928,
+            6175868.749999972,
+            5321414.550000009,
+            5316374.999999971,
+            5085379.1499999715
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            4908300.000000054,
+            7121333.349999987,
+            7143977.099999939,
+            7343402.100000094,
+            6617968.75,
+            6368750,
+            7553041.649999978
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            108153552.04999995,
+            102211952.10000005,
+            97866008.35000008,
+            90159160.44999976,
+            121228887.5000002,
+            102824137.50000015,
+            101722785.40000007
+          ]
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            8775449.999999998,
+            9551006.250000004,
+            9623758.350000003,
+            7385375.000000005,
+            7451941.649999993,
+            8893608.35,
+            8836118.750000004
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            4741016.649999995,
+            6903835.400000003,
+            5762641.65,
+            12996325.000000002,
+            6733427.099999994,
+            5598683.350000011,
+            6737333.349999994
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            32510883.3,
+            30301120.849999983,
+            34938868.75000003,
+            30557052.100000013,
+            29241154.20000003,
+            30037277.099999983,
+            36285706.25000002
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            14825539.600000003,
+            9723635.399999965,
+            10023164.600000018,
+            8470697.949999977,
+            10237679.149999985,
+            9369347.899999958,
+            11069602.05000005
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            7463672.95,
+            7728285.400000004,
+            7597847.900000033,
+            7822283.349999999,
+            7163818.749999973,
+            8037077.099999988,
+            7004397.900000003
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            6425500.000000011,
+            9308214.599999974,
+            8118729.150000036,
+            7980495.849999988,
+            9596637.499999996,
+            6534345.850000045,
+            7837064.5499999225
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            10023420.799999986,
+            10098510.45000005,
+            10997897.900000043,
+            9122087.499999998,
+            10499350.000000048,
+            9602106.249999996,
+            12409699.999999974
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            15209283.349999988,
+            14606987.500000015,
+            12810083.300000042,
+            10448741.65000001,
+            15437174.999999935,
+            10188360.399999965,
+            7560177.099999964
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            4485358.349999933,
+            9240952.099999959,
+            5834208.300000137,
+            6172385.399999985,
+            5003714.599999876,
+            6206450.000000041,
+            5834318.750000057
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            3075383.349999902,
+            4786606.250000114,
+            6029720.850000013,
+            3726339.6000000285,
+            3945291.6500000358,
+            4017200.0000000475,
+            3888602.1000000252
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            4766854.150000108,
+            5935172.950000015,
+            8258449.999999903,
+            4790118.749999965,
+            4367429.199999969,
+            3813793.749999968,
+            3556935.449999946
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            8859060.40000009,
+            9585816.650000015,
+            8604966.650000097,
+            8450666.649999948,
+            7956520.799999999,
+            7451720.849999947,
+            7470710.399999917
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            1791397.8999999017,
+            2235339.599999861,
+            2350239.599999986,
+            2049908.3500000779,
+            2151937.4999999856,
+            2023522.8999999892,
+            2033577.1000000022
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            15141216.650000025,
+            17161027.05000012,
+            15198587.50000003,
+            17518239.600000016,
+            14158729.15,
+            11020383.349999975,
+            17120902.099999875
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            12477760.449999914,
+            11303520.84999995,
+            14781718.75000007,
+            11356381.249999868,
+            11328724.99999994,
+            16006127.100000048,
+            11139437.499999985
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4842422.900000019,
+            3917672.9000000707,
+            3440718.7499999055,
+            2803245.8499999847,
+            3351349.9999999115,
+            3579422.9000001,
+            5702300.000000105
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            16904341.650000058,
+            17007837.500000097,
+            12215597.900000103,
+            13406345.85000007,
+            16866387.50000002,
+            14704049.999999916,
+            15098731.250000129
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            9551202.050000029,
+            10650981.250000041,
+            9306272.949999947,
+            8923662.499999955,
+            7968833.350000022,
+            7769506.249999905,
+            7374945.800000024
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            2531674.9999999953,
+            2740712.500000154,
+            2845437.4999999343,
+            2593358.350000017,
+            2416179.150000062,
+            3082043.750000048,
+            5079299.9999999665
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4663062.50000016,
+            3739312.5000000508,
+            5566106.2499999385,
+            4487870.850000036,
+            3277943.750000122,
+            3497002.0500000827,
+            4115587.499999856
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            6120829.149999918,
+            3559487.499999887,
+            4947870.850000072,
+            4842491.650000012,
+            3911610.4000000632,
+            4899918.749999961,
+            4041164.599999865
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            72520691.69999996,
+            78207237.49999997,
+            77490487.50000001,
+            74488975.00000021,
+            73399252.10000001,
+            78675497.90000013,
+            83753006.24999982
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            6130914.6,
+            6345487.499999998,
+            6169964.55,
+            5241329.200000001,
+            6059529.149999997,
+            6887910.3999999985,
+            7536172.899999997
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            5241289.599999993,
+            4002072.9000000074,
+            4560818.749999998,
+            4016679.1499999934,
+            4685706.250000009,
+            4611041.649999993,
+            5004225.000000008
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            22907487.500000004,
+            24109854.200000018,
+            25093295.85,
+            27646972.900000013,
+            28609414.55000002,
+            27639429.199999996,
+            30145429.199999988
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            8503764.599999975,
+            8180345.799999987,
+            9210914.549999962,
+            8453141.649999997,
+            7992789.599999969,
+            8452900,
+            7443270.849999999
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            4806722.949999994,
+            4531806.25,
+            4532531.250000011,
+            4692325.000000028,
+            4544827.10000002,
+            4612564.549999979,
+            4631558.350000023
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            4275537.500000064,
+            4585152.099999959,
+            5685579.200000029,
+            4819143.7499999665,
+            4033122.900000035,
+            3959318.7499999655,
+            3938808.349999999
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            4725154.199999997,
+            4693918.750000012,
+            4703514.600000017,
+            4756458.349999957,
+            5219549.999999981,
+            5150235.4500000365,
+            4822085.399999923
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            6716189.599999961,
+            6833683.299999939,
+            6759543.750000012,
+            6756872.899999963,
+            6241737.499999999,
+            4851375.000000007,
+            4404645.79999998
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            2816789.599999993,
+            2932027.1000000504,
+            2897310.4000000604,
+            2836610.3999999724,
+            2867172.8999999687,
+            2810477.0500000087,
+            4353791.6500000395
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            1974829.1500000053,
+            1905956.2499999627,
+            1911531.2500000075,
+            1910704.1999999639,
+            1906812.5000000694,
+            1913687.5000000144,
+            1858427.050000046
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            2627972.950000003,
+            2648524.9999999725,
+            2670058.349999999,
+            2741206.2499999595,
+            2621677.099999943,
+            2596839.5999999302,
+            2656341.6999999387
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4772949.999999946,
+            5013016.700000025,
+            4587747.949999994,
+            4996599.999999944,
+            4790091.650000067,
+            4562654.149999981,
+            4491445.850000037
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            1207185.3999999803,
+            1259447.899999941,
+            1202020.850000008,
+            1209904.1499999657,
+            1219135.3999999592,
+            1196906.250000029,
+            1235572.8999999883
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            8095404.149999922,
+            7822406.24999995,
+            7676285.449999978,
+            7660385.450000012,
+            7882389.599999988,
+            7576527.100000021,
+            7632883.3499999745
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            7390350.000000034,
+            7253483.29999997,
+            7425352.1000000555,
+            7518310.399999973,
+            7406114.549999984,
+            7690631.249999933,
+            7720560.400000067
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            2628339.599999981,
+            2334556.2500000596,
+            2146779.1500000204,
+            2049981.250000019,
+            2159516.7000000402,
+            2048291.7000000272,
+            2241764.5999999875
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            11026064.549999956,
+            10414006.249999966,
+            8547983.300000124,
+            9404916.650000086,
+            9528787.499999998,
+            10195647.90000004,
+            10747220.800000105
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            6481264.550000014,
+            7003422.900000078,
+            6461856.249999983,
+            5683070.79999995,
+            5946650.000000046,
+            5710785.3999999855,
+            5604774.999999972
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            1838510.4500001036,
+            1931218.7500001527,
+            2292183.3500000504,
+            1840010.4000000283,
+            1834270.85000003,
+            1745425.0000000685,
+            2151874.9999999274
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            3438550.000000032,
+            3385091.6999999755,
+            3902014.550000058,
+            3508410.3999999566,
+            3139733.349999915,
+            3598712.499999965,
+            3455854.1500000497
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            4331981.24999999,
+            4106689.5500000105,
+            4995554.1500001345,
+            3850483.3499999223,
+            3331108.3500000676,
+            3742056.2499999506,
+            3441770.850000103
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            70160558.34999987,
+            70331939.60000008,
+            76759741.64999989,
+            72786287.4999999,
+            69166629.19999999,
+            66549985.39999996,
+            65503800.000000045
+          ]
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "measurements": [
+        {
+          "benchmark": "core/loop",
+          "n": 2000,
+          "expected": {
+            "alloc": 64000,
+            "fuel": 48016,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            4481547.9,
+            5110058.35,
+            7831122.900000003,
+            5032210.449999996,
+            4496158.3500000015,
+            4464472.900000004,
+            4507589.6
+          ]
+        },
+        {
+          "benchmark": "core/fib",
+          "n": 15,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            2814045.849999997,
+            2765920.850000009,
+            2948127.0500000054,
+            2861279.150000007,
+            2925885.399999993,
+            2882070.8499999912,
+            2876781.249999999
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10",
+          "n": 15,
+          "slice": 10,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            16096266.7,
+            16505631.249999989,
+            18509212.499999993,
+            17457533.3,
+            17945677.049999993,
+            19093068.750000022,
+            18960987.500000007
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=100",
+          "n": 15,
+          "slice": 100,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            6196481.249999988,
+            6273660.400000017,
+            5402568.75,
+            5542912.500000011,
+            6261787.499999991,
+            5818550.000000005,
+            7053593.750000027
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=1000",
+          "n": 15,
+          "slice": 1000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            4640860.449999991,
+            4987077.100000033,
+            4896814.599999971,
+            5353733.349999993,
+            6135472.900000013,
+            5552135.4499999685,
+            6639716.700000009
+          ]
+        },
+        {
+          "benchmark": "core/fib@slice=10000",
+          "n": 15,
+          "slice": 10000,
+          "expected": {
+            "alloc": 47328,
+            "fuel": 46365,
+            "outcome": "completed",
+            "result": "610"
+          },
+          "samplesNs": [
+            5076010.399999996,
+            5629593.750000004,
+            5445181.249999996,
+            4808058.299999993,
+            5576800.000000003,
+            5438612.499999999,
+            7116064.600000027
+          ]
+        },
+        {
+          "benchmark": "core/calls",
+          "n": 2000,
+          "expected": {
+            "alloc": 32072,
+            "fuel": 46018,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            14232124.999999996,
+            13226062.499999989,
+            14157645.8,
+            12572839.600000042,
+            7444364.549999955,
+            7730120.850000003,
+            11964243.749999968
+          ]
+        },
+        {
+          "benchmark": "core/lambdas",
+          "n": 2000,
+          "expected": {
+            "alloc": 64120,
+            "fuel": 58027,
+            "outcome": "completed",
+            "result": "6003000"
+          },
+          "samplesNs": [
+            14105627.100000039,
+            11539037.499999996,
+            11553289.600000063,
+            13973495.850000018,
+            13817604.149999987,
+            16121506.25000004,
+            12065639.600000031
+          ]
+        },
+        {
+          "benchmark": "numbers/add",
+          "n": 2000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 26030,
+            "outcome": "completed",
+            "result": "2000"
+          },
+          "samplesNs": [
+            6644770.850000078,
+            9364356.250000037,
+            9353756.250000061,
+            8871972.900000038,
+            6735099.999999966,
+            7156702.0500000585,
+            5388406.249999935
+          ]
+        },
+        {
+          "benchmark": "numbers/multiply",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "5005000"
+          },
+          "samplesNs": [
+            3320645.8499999824,
+            3426308.300000073,
+            3557331.24999997,
+            3775452.100000075,
+            4606122.950000009,
+            4412024.999999994,
+            4741229.149999982
+          ]
+        },
+        {
+          "benchmark": "numbers/divide",
+          "n": 1000,
+          "expected": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          },
+          "samplesNs": [
+            5929452.050000055,
+            4956852.1000000145,
+            6004399.999999987,
+            4342764.550000084,
+            4046095.849999984,
+            4641241.649999938,
+            3295347.899999979
+          ]
+        },
+        {
+          "benchmark": "numbers/quantity",
+          "n": 500,
+          "expected": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            7064318.749999983,
+            8542568.75000001,
+            8485235.400000056,
+            9103068.749999966,
+            8716841.699999986,
+            9028239.59999996,
+            8580012.499999974
+          ]
+        },
+        {
+          "benchmark": "text/build",
+          "n": 500,
+          "expected": {
+            "alloc": 383838,
+            "fuel": 28928,
+            "outcome": "completed",
+            "result": "1500"
+          },
+          "samplesNs": [
+            2092614.549999962,
+            1842875.0000000037,
+            1713356.2499999243,
+            1735883.300000023,
+            1659802.099999979,
+            1894525.000000067,
+            1852314.600000045
+          ]
+        },
+        {
+          "benchmark": "text/index",
+          "n": 1000,
+          "expected": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          },
+          "samplesNs": [
+            13248443.750000024,
+            13046689.59999999,
+            13779185.399999913,
+            11744906.249999985,
+            12410972.89999998,
+            14010277.099999985,
+            14421391.649999896
+          ]
+        },
+        {
+          "benchmark": "text/patterns",
+          "n": 300,
+          "expected": {
+            "alloc": 231372,
+            "fuel": 13818,
+            "outcome": "completed",
+            "result": "900"
+          },
+          "samplesNs": [
+            11751766.700000007,
+            13271697.89999989,
+            13928891.649999967,
+            11864737.500000047,
+            13184583.300000122,
+            12417595.79999998,
+            11955697.950000104
+          ]
+        },
+        {
+          "benchmark": "collections/list-build",
+          "n": 500,
+          "expected": {
+            "alloc": 3022112,
+            "fuel": 19091,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            4629152.050000085,
+            3718937.4999999925,
+            3473679.1499999524,
+            3589550.0000000536,
+            2969785.4500000174,
+            3402083.2999998676,
+            3722520.8500000006
+          ]
+        },
+        {
+          "benchmark": "collections/list-append",
+          "n": 2000,
+          "expected": {
+            "alloc": 80200,
+            "fuel": 52056,
+            "outcome": "completed",
+            "result": "2001000"
+          },
+          "samplesNs": [
+            19875216.65000004,
+            15910154.150000017,
+            12186412.500000006,
+            14633372.899999995,
+            16802199.999999903,
+            15026570.850000098,
+            16087370.799999917
+          ]
+        },
+        {
+          "benchmark": "collections/list-update",
+          "n": 1500,
+          "expected": {
+            "alloc": 24328,
+            "fuel": 28553,
+            "outcome": "completed",
+            "result": "1501"
+          },
+          "samplesNs": [
+            9019891.649999954,
+            10014602.100000048,
+            10386541.700000089,
+            8851933.350000035,
+            9227058.34999997,
+            8484714.600000005,
+            8377337.500000067
+          ]
+        },
+        {
+          "benchmark": "collections/map-update",
+          "n": 500,
+          "expected": {
+            "alloc": 12432,
+            "fuel": 8056,
+            "outcome": "completed",
+            "result": "501"
+          },
+          "samplesNs": [
+            2606722.9500000393,
+            2713064.5999999614,
+            2616945.7999998485,
+            3638674.9999999665,
+            2425870.849999956,
+            2233785.449999959,
+            2297383.3499998366
+          ]
+        },
+        {
+          "benchmark": "host/immediate",
+          "n": 500,
+          "expected": {
+            "alloc": 16072,
+            "fuel": 13518,
+            "outcome": "completed",
+            "result": "125250"
+          },
+          "samplesNs": [
+            6111070.850000033,
+            5243879.1500000665,
+            4221418.750000157,
+            4561093.749999964,
+            5109931.249999863,
+            5234891.699999934,
+            4441010.40000005
+          ]
+        },
+        {
+          "benchmark": "macro/transform",
+          "n": 300,
+          "expected": {
+            "alloc": 6418202,
+            "fuel": 20664,
+            "outcome": "completed",
+            "result": "90300"
+          },
+          "samplesNs": [
+            7349377.100000128,
+            5672916.649999933,
+            7052927.049999925,
+            4679406.250000102,
+            6200087.499999972,
+            4948914.599999988,
+            5659118.750000016
+          ]
+        },
+        {
+          "benchmark": "lifecycle/rollback",
+          "n": 300,
+          "expected": {
+            "alloc": 40888,
+            "fuel": 102023,
+            "outcome": "completed",
+            "result": "300"
+          },
+          "samplesNs": [
+            118194054.14999983,
+            118424420.80000019,
+            111584162.50000009,
+            127096508.34999993,
+            118744610.39999989,
+            98954637.50000016,
+            97280677.09999995
+          ]
+        }
+      ]
+    }
+  ]
+}

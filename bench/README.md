@@ -62,6 +62,12 @@ record paired exact division, `div`/`mod` and Quantity timings, allocation
 probes, native/WASI equivalence and the residual AppleScript gaps for
 [#923](https://github.com/odogono/odgn-talk/issues/923).
 
+The [Zig Unit metadata measurements](results/2026-10-14-zig-unit-metadata.md)
+record static conversion descriptors and ordered plans, compact Unit payloads,
+paired conversion/comparison probes, separate CPU captures and surviving-copy
+assembly. `zig/unit-paths.py` reproduces the paired suite and optional macOS
+profiles against two prebuilt native Hosts.
+
 The [Zig Character indexing measurements](results/2026-10-14-zig-character-indexing.md)
 record paired forward-index improvements, scaling, negative-index limits and
 the fresh four-runner text comparison for
@@ -89,6 +95,11 @@ record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node
 cache in [#878](https://github.com/odogono/odgn-talk/issues/878).
 
+The [Zig scalar constructor measurements](results/2026-10-14-zig-scalar-constructors.md)
+record narrow Number, Boolean and Nothing construction, safe native assembly,
+paired scalar-heavy and broader timings, and separate allocation probes for
+[#937](https://github.com/odogono/odgn-talk/issues/937).
+
 The [Zig operand storage measurements](results/2026-10-14-zig-operand-storage.md)
 record paired sliced/unsliced timings, native disassembly and CPU samples for
 reusing protected-operand storage in
@@ -96,6 +107,39 @@ reusing protected-operand storage in
 
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
+
+For isolated TS Cost Model comparisons, run:
+
+```sh
+bun bench/ts/src/compare-costs.ts <before-ref> .cache/cost-comparison
+```
+
+The [TS accounting measurements](results/2026-10-15-ts-costs.md) retain the
+paired Run timings, separate CPU/heap evidence and four-runner Load/Run spread
+for [#942](https://github.com/odogono/odgn-talk/issues/942).
+
+The two bundles share the current sources except that the before bundle reads
+`impl/ts/src/costs.ts` from the named revision. Both bundles run in one process;
+each workload warms up for 20 Runs per variant, then runs three rounds of seven
+paired batches of 20 full-size Runs, alternating AB/BA within each round.
+`timings.json` retains every batch mean, output, exact Fuel and logical
+allocation; a mismatch fails the comparison. Separate heap probes record JSC
+and process memory before and after 100 Runs and after a forced full GC, with
+the final GC's duration. These are memory observations, not total allocation
+counts. The four-runner JSON summaries also retain `maxNs` alongside their
+minimum, median and sample count; older reports may omit it.
+An optional third argument selects an exact workload name.
+
+Profile the resulting bundles separately from timing, for example:
+
+```sh
+bun --cpu-prof --cpu-prof-dir=.cache/cost-comparison .cache/cost-comparison/before.js profile macro/transform
+bun --cpu-prof --cpu-prof-dir=.cache/cost-comparison .cache/cost-comparison/after.js profile macro/transform
+```
+
+Profile mode repeats validated Runs for three seconds after warm-up. Profiles
+also contain process startup, Load, validation and warm-up; their sample shares
+do not establish a timing speedup.
 
 The [Go Save and Restore optimization measurements](results/2026-10-10-go-save-restore.md)
 record before/after timings and allocations for [#504](https://github.com/odogono/odgn-talk/issues/504).
@@ -171,6 +215,21 @@ List literals containing a spread, and 128 writes to the last item with the
 original retained as a Constant built during Load. Each run checks output; `--compare` also checks Fuel and
 logical allocation against the saved baseline. Counting-allocator probes run
 separately from default-allocator timings, with the same boundaries above.
+
+To distinguish retained originals, aliases renewed at every write, collected
+versions, `finally`-protected writes and nested roots, use:
+
+```sh
+python3 bench/zig/local-list-writes.py <before-host> <after-host> --before-revision <sha> --out <results.json>
+```
+
+This alternates process order across three pairs and sweeps 8, 100, 1,000 and
+3,000 items. It performs 128 replacements per Run, or 64 with every version
+collected to stay within the unchanged Allocation Budget. Sources, expected
+outputs, Fuel, logical allocation and separate allocation probes accompany
+every pair. Passing the same binary twice measures control variability.
+The [ownership investigation](results/2026-10-15-zig-local-list-writes.md)
+records the rejected temp-retirement fast path and its baseline evidence.
 
 For paired before/after timings and probes across every supported workload,
 build two Hosts the same way and run:
@@ -291,7 +350,13 @@ two-second CPU samples of both binaries after timings finish. The JSON records
 overlapping inclusive sample categories; compressed raw reports retain the
 call trees and offsets for attribution. The
 [instruction bookkeeping report](results/2026-10-14-zig-instruction-bookkeeping.md)
-records the compile-time rate-lookup experiment and its limits.
+records the compile-time rate-lookup experiment and its limits. The
+[Cost Model formula measurements](results/2026-10-14-zig-cost-evaluation.md)
+compare generated static evaluators with the term interpreter, including the
+full native regression check and the remaining AppleScript gaps. For separate
+captures of charging in arithmetic and Quantity workloads, pass
+`--profiles-only --profile-filter numbers/add --profile-filter numbers/quantity`
+alongside `--profiles`; repeated profile filters select alternatives.
 
 The Go runner is an ordinary `testing.B` benchmark, so the Go tools work on it directly:
 

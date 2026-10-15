@@ -111,5 +111,5 @@ on measure(portsDir, b, smoke, repeats)
 	else
 		set median to ((item half of sorted) + (item (half + 1) of sorted)) / 2
 	end if
-	return {benchmark:benchmarkName, |run|:{medianNs:median, minNs:item 1 of sorted, samples:count of sorted}, runner:"applescript"}
+	return {benchmark:benchmarkName, |run|:{maxNs:item -1 of sorted, medianNs:median, minNs:item 1 of sorted, samples:count of sorted}, runner:"applescript"}
 end measure

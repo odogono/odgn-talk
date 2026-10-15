@@ -30,9 +30,13 @@ parser.add_argument("--count", type=int, default=5)
 parser.add_argument("--filter", action="append", help="keep workload names containing this text; repeat for alternatives")
 parser.add_argument("--profiles", type=Path, help="directory for separate macOS sample reports")
 parser.add_argument("--out", type=Path, required=True)
+parser.add_argument("--profiles-only", action="store_true", help="capture profiles without timings")
+parser.add_argument("--profile-filter", action="append", help="profile names containing this text instead of the default selection")
 args = parser.parse_args()
 if args.pairs < 1 or args.count < 1:
     parser.error("pairs and count must be positive")
+if args.profiles_only and not args.profiles:
+    parser.error("--profiles-only requires --profiles")
 if args.profiles and platform.system() != "Darwin":
     parser.error("CPU samples require macOS sample; timings work on other native targets")
 root = Path(__file__).resolve().parents[2]
@@ -69,7 +73,7 @@ def attribution(report):
             nodes[stack[-1]]["self"] -= count
         stack.append(len(nodes))
         nodes.append(node)
-    counts = dict.fromkeys(["pump", "execute", "charging", "formulaEvaluation", "instruction", "scratchReset", "operandRetention", "decimal", "valueConstruction", "allocator"], 0)
+    counts = dict.fromkeys(["pump", "execute", "charging", "formulaEvaluation", "specializedEvaluation", "instruction", "scratchReset", "operandRetention", "decimal", "valueConstruction", "allocator", "chunksSet", "listSet", "valueRelease"], 0)
     for node in nodes:
         path, count = node["path"], node["self"]
         assert count >= 0
@@ -77,13 +81,15 @@ def attribution(report):
             continue
         counts["pump"] += count
         # These are overlapping inclusive categories, not additive shares.
-        if any("machine.costs.charge" in symbol or "machine.costs.evaluate" in symbol for symbol in path):
+        if any("machine.costs.charge" in symbol or "machine.costs.evaluate" in symbol or "generated.rates.evaluateSpecialized" in symbol for symbol in path):
             counts["charging"] += count
         for key, pattern in [("execute", "Group.execute"),
-                             ("formulaEvaluation", "machine.costs.evaluate"), ("instruction", "Group.instruction"),
+                             ("formulaEvaluation", "machine.costs.evaluate"), ("specializedEvaluation", "generated.rates.evaluateSpecialized"),
+                             ("instruction", "Group.instruction"),
                              ("scratchReset", "ArenaAllocator.reset"), ("operandRetention", "Operands."),
                              ("decimal", "decimal.decimal."), ("valueConstruction", "value.scalar"),
-                             ("allocator", "Allocator.")]:
+                             ("allocator", "Allocator."), ("chunksSet", "machine.chunks.set"),
+                             ("listSet", "value.listSet"), ("valueRelease", "value.Value.release")]:
             if any(pattern in symbol for symbol in path):
                 counts[key] += count
     return counts
@@ -103,7 +109,9 @@ result = {
     "mode": "safe", "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
     "samplesPerProcess": args.count, "pairs": args.pairs,
     "binarySha256": {name: sha(host) for name, host in (("before", args.before), ("after", args.after))},
-    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/machine.zig", "impl/zig/src/machine/costs.zig", "bench/zig/host.c")},
+    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/machine.zig", "impl/zig/src/machine/costs.zig", "impl/zig/src/value.zig", "impl/zig/src/machine/group_allocator.zig", "bench/zig/host.c")},
+    "generatorSha256": sha(root / "tools/zig/generate.ts"),
+    "ratesSha256": sha(root / "impl/zig/src/generated/rates.zig"),
     "manifestSha256": sha(manifest), "measurements": [], "profiles": [],
 }
 result["baselineSourceSha256"] = {
@@ -135,7 +143,7 @@ with tempfile.TemporaryDirectory() as temporary:
         workloads = [b for b in workloads if any(text in b["name"] for text in args.filter)]
         if not workloads:
             parser.error("filter selects no supported workloads")
-    for pair in range(args.pairs):
+    for pair in range(0 if args.profiles_only else args.pairs):
         for b in workloads:
             # Alternate order across pairs to reduce first-process bias.
             hosts = [("before", args.before), ("after", args.after)]
@@ -151,6 +159,10 @@ with tempfile.TemporaryDirectory() as temporary:
     if args.profiles:
         args.profiles.mkdir(parents=True, exist_ok=True)
         selected = [b for b in workloads if b["name"] in ("core/loop", "core/calls", "core/fib", "probe/straightline", "probe/protected-loop")]
+        if args.profile_filter:
+            selected = [b for b in workloads if any(text in b["name"] for text in args.profile_filter)]
+        if not selected:
+            parser.error("profile filter selects no supported workloads")
         for label, host in (("before", args.before), ("after", args.after)):
             for b in selected:
                 name = f"{label}-{b['name'].replace('/', '-')}-slice-{b['slice']}"

@@ -266,6 +266,49 @@ test "cap pressure flushes the Value cache instead of refusing" {
     try std.testing.expect(!memory.refused);
 }
 
+test "small scalars reset cached container headers and preserve allocator ownership" {
+    var memory: GroupAllocator = .init(std.testing.allocator, 1 << 20);
+    defer memory.deinit();
+    const a = memory.allocator();
+    const child = try model.scalar(std.testing.allocator, .{ .number = .fromInt(7) });
+    defer child.release();
+    const empty = try model.list(a, &.{});
+    const grown = try model.listGrow(a, empty, &.{child}, true);
+    empty.release();
+    try std.testing.expect(grown.list_storage != null and grown.ownership_rank > 0);
+    grown.core_message = true;
+    grown.script_name = true;
+    const address = @intFromPtr(grown);
+    grown.release();
+    try std.testing.expectEqual(@as(usize, 1), child.references);
+    const examples = [_]model.Data{ .nothing, .{ .bool = false }, .{ .number = .fromInt(-9) }, .{ .bool = true } };
+    for (examples) |data| {
+        const v = try model.scalar(a, data);
+        try std.testing.expectEqual(address, @intFromPtr(v));
+        try std.testing.expectEqual(@as(usize, 1), v.references);
+        try std.testing.expectEqual(a.ptr, v.allocator.ptr);
+        try std.testing.expectEqual(a.vtable, v.allocator.vtable);
+        try std.testing.expectEqual(@as(u64, 0), v.measure);
+        try std.testing.expect(!v.core_message and !v.script_name);
+        try std.testing.expect(v.list_storage == null and v.release_next == null);
+        try std.testing.expectEqual(@as(u64, 0), v.ownership_rank);
+        try std.testing.expectEqual(std.meta.activeTag(data), v.kind());
+        switch (data) {
+            .bool => |b| try std.testing.expectEqual(b, v.data.bool),
+            .number => |n| try std.testing.expectEqual(n, v.data.number),
+            .nothing => {},
+            else => unreachable,
+        }
+        // It remains a leaf when retained by a container, even after reuse.
+        const parent = try model.list(std.testing.allocator, &.{v});
+        try std.testing.expect(parent.ownership_rank > v.ownership_rank);
+        parent.release();
+        try std.testing.expectEqual(@as(usize, 1), v.references);
+        v.release();
+    }
+    try std.testing.expect(!memory.refused);
+}
+
 test "dead frame buffers are reused by exact size and alignment, bounded and counted" {
     var memory: GroupAllocator = .init(std.testing.allocator, 1 << 20);
     const a = memory.allocator();
@@ -465,8 +508,13 @@ test "large loads retain source and code, not compiler working storage" {
 }
 
 fn compileAllocations(a: Allocator) !void {
+    // checkAllAllocationFailures supplies this allocator. In-place resizes
+    // depend on backing allocator state; force allocation fallback so every
+    // refusal index describes the same request across smaller Value layouts.
+    const failing: *std.testing.FailingAllocator = @ptrCast(@alignCast(a.ptr));
+    failing.resize_fail_index = 0;
     const machine = @import("machine.zig");
-    const compiled = try machine.compileLibrary(a, "lib", "1", "constant k = [1, 2]\nfunction twice x\n  return x * 2\nend twice\n", &.{}, null);
+    const compiled = try machine.compileLibrary(a, "lib", "1", "constant k = [1, 2]\nfunction metres x\n  return (x as mm) as m\nend metres\n", &.{}, null);
     defer compiled.library.destroy();
 }
 

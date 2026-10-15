@@ -151,7 +151,7 @@ pub const Value = struct {
             .number => |n| Decimal.order(n, y.data.number) == .eq,
             .quantity => |q| blk: {
                 const r = y.data.quantity;
-                if (!q.unit.compatible(r.unit)) break :blk false;
+                if (!q.unit.compatible(&r.unit)) break :blk false;
                 break :blk Decimal.order(try q.unit.comparisonBase(x.allocator, q.number), try r.unit.comparisonBase(x.allocator, r.number)) == .eq;
             },
             .text, .bytes, .pattern => |t| std.mem.eql(u8, t, switch (y.data) {
@@ -283,7 +283,7 @@ pub const Comparer = struct {
                 .number => |n| Decimal.order(n, y.data.number),
                 .quantity => |q| blk: {
                     const r = y.data.quantity;
-                    if (!q.unit.compatible(r.unit)) return error.CantCompare;
+                    if (!q.unit.compatible(&r.unit)) return error.CantCompare;
                     break :blk Decimal.order(try q.unit.comparisonBase(a.allocator, q.number), try r.unit.comparisonBase(a.allocator, r.number));
                 },
                 .text => std.mem.order(u8, try self.text(x), try self.text(y)), // UTF-8 preserves scalar order.
@@ -589,12 +589,81 @@ fn ownershipRank(data: Data) error{OutOfMemory}!u64 {
     }
     return std.math.add(u64, child_rank, 1) catch error.OutOfMemory;
 }
-/// A value with no children, which takes ownership of `data`'s slices.
-pub fn scalar(gpa: std.mem.Allocator, data: Data) !*Value {
+/// Takes ownership of `data`'s slices and any already-retained children.
+/// Keep the small tags visible to callers so they need not build a full Data.
+pub inline fn scalar(gpa: std.mem.Allocator, data: Data) !*Value {
+    return switch (data) {
+        .nothing => narrowScalar(gpa, .nothing, {}),
+        .bool => |b| narrowScalar(gpa, .bool, b),
+        .number => |n| narrowScalar(gpa, .number, n),
+        else => scalarOwned(gpa, data),
+    };
+}
+
+fn narrowScalar(gpa: std.mem.Allocator, comptime tag: Kind, payload: @FieldType(Data, @tagName(tag))) !*Value {
+    // create(Value) poisons the whole node in safe builds. This allocation
+    // has exactly the same size, alignment and owner, but initializes every
+    // defined field below without requiring inactive union storage to be
+    // poisoned. Zig still zero-fills that storage for the void Nothing tag.
+    // No inactive payload may be read, including on cached nodes.
+    const storage = gpa.rawAlloc(@sizeOf(Value), .of(Value), @returnAddress()) orelse return error.OutOfMemory;
+    const v: *Value = @ptrCast(@alignCast(storage));
+    v.* = .{ .allocator = gpa, .data = @unionInit(Data, @tagName(tag), payload) };
+    return v;
+}
+
+fn scalarOwned(gpa: std.mem.Allocator, data: Data) !*Value {
     const rank = try ownershipRank(data);
     const v = try gpa.create(Value);
     v.* = .{ .allocator = gpa, .data = data, .ownership_rank = rank };
     return v;
+}
+
+test "small scalars initialize every header and payload and refuse before publishing" {
+    const examples = [_]Data{
+        .nothing,
+        .{ .bool = false },
+        .{ .bool = true },
+        .{ .number = try Decimal.parse("-12345678901234567890123456789012.00") },
+        .{ .number = try Decimal.parse("0.000") },
+    };
+    for (examples) |data| {
+        var counting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+        const gpa = counting.allocator();
+        const v = try scalar(gpa, data);
+        try std.testing.expectEqual(@as(usize, 1), counting.allocations);
+        try std.testing.expectEqual(@sizeOf(Value), counting.allocated_bytes);
+        try std.testing.expectEqual(std.meta.activeTag(data), v.kind());
+        try std.testing.expectEqual(@as(usize, 1), v.references);
+        try std.testing.expectEqual(gpa.ptr, v.allocator.ptr);
+        try std.testing.expectEqual(gpa.vtable, v.allocator.vtable);
+        try std.testing.expectEqual(@as(u64, 0), v.measure);
+        try std.testing.expect(!v.core_message and !v.script_name);
+        try std.testing.expectEqual(@as(?*ListStorage, null), v.list_storage);
+        try std.testing.expectEqual(@as(u64, 0), v.ownership_rank);
+        try std.testing.expectEqual(@as(?*Value, null), v.release_next);
+        switch (data) {
+            .nothing => try std.testing.expectEqual(@as(u64, 8), logicalSize(v)),
+            .bool => |b| {
+                try std.testing.expectEqual(b, v.data.bool);
+                try std.testing.expectEqual(@as(u64, 8), logicalSize(v));
+            },
+            .number => |n| {
+                try std.testing.expectEqual(n, v.data.number);
+                try std.testing.expectEqual(@as(u64, 16), logicalSize(v));
+            },
+            else => unreachable,
+        }
+        try std.testing.expectEqual(v, v.retain());
+        v.release();
+        try std.testing.expectEqual(@as(usize, 1), v.references);
+        try std.testing.expectEqual(@as(usize, 0), counting.deallocations);
+        v.release();
+        try std.testing.expectEqual(counting.allocated_bytes, counting.freed_bytes);
+        var refusing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+        try std.testing.expectError(error.OutOfMemory, scalar(refusing.allocator(), data));
+        try std.testing.expectEqual(@as(usize, 0), refusing.allocations);
+    }
 }
 /// Text from UTF-8, normalised to NFC. Invalid UTF-8 is refused.
 pub fn text(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
@@ -849,7 +918,7 @@ fn mapOwned(gpa: std.mem.Allocator, pairs: []Pair) Error!*Value {
 /// Quantities.
 pub fn range(gpa: std.mem.Allocator, from: *Value, to: *Value) Error!*Value {
     if (from.kind() != to.kind() or (from.data != .number and from.data != .quantity)) return error.InvalidValue;
-    if (from.data == .quantity and !from.data.quantity.unit.compatible(to.data.quantity.unit)) return error.IncompatibleUnits;
+    if (from.data == .quantity and !from.data.quantity.unit.compatible(&to.data.quantity.unit)) return error.IncompatibleUnits;
     const v = try scalar(gpa, .{ .range = .{ .from = from, .to = to } });
     v.measure = logicalSize(from) +| logicalSize(to);
     _ = from.retain();
@@ -971,7 +1040,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
         if (x.data != .quantity or y.data != .quantity) return error.InvalidValue;
         const l = x.data.quantity;
         const r = y.data.quantity;
-        if (!l.unit.compatible(r.unit)) return error.IncompatibleUnits;
+        if (!l.unit.compatible(&r.unit)) return error.IncompatibleUnits;
         const rhs = try l.unit.fromBase(gpa, try r.unit.toBase(gpa, r.number));
         return scalar(gpa, .{ .quantity = .{ .number = try decimal.calculate(gpa, op, l.number, rhs), .unit = l.unit } });
     }
@@ -985,7 +1054,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
         .number => |n| .{ .number = n, .unit = .{} },
         else => return error.InvalidValue,
     };
-    const u = try units.Unit.combine(l.unit, r.unit, op == .divide);
+    const u = try units.Unit.combine(&l.unit, &r.unit, op == .divide);
     const base = try decimal.calculate(gpa, op, try l.unit.toBase(gpa, l.number), try r.unit.toBase(gpa, r.number));
     const n = try u.fromBase(gpa, base);
     return scalar(gpa, if (u.empty()) .{ .number = n } else .{ .quantity = .{ .number = n, .unit = u } });
