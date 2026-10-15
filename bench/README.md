@@ -199,6 +199,21 @@ original retained as a Constant built during Load. Each run checks output; `--co
 logical allocation against the saved baseline. Counting-allocator probes run
 separately from default-allocator timings, with the same boundaries above.
 
+To distinguish retained originals, aliases renewed at every write, collected
+versions, `finally`-protected writes and nested roots, use:
+
+```sh
+python3 bench/zig/local-list-writes.py <before-host> <after-host> --before-revision <sha> --out <results.json>
+```
+
+This alternates process order across three pairs and sweeps 8, 100, 1,000 and
+3,000 items. It performs 128 replacements per Run, or 64 with every version
+collected to stay within the unchanged Allocation Budget. Sources, expected
+outputs, Fuel, logical allocation and separate allocation probes accompany
+every pair. Passing the same binary twice measures control variability.
+The [ownership investigation](results/2026-10-15-zig-local-list-writes.md)
+records the rejected temp-retirement fast path and its baseline evidence.
+
 For paired before/after timings and probes across every supported workload,
 build two Hosts the same way and run:
 

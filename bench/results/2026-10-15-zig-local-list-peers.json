@@ -1,0 +1,86 @@
+{
+  "commit": "74f4307f-dirty",
+  "date": "2026-10-15",
+  "machine": {
+    "arch": "arm64",
+    "cores": 10,
+    "cpu": "Apple M5",
+    "memory": "24 GiB",
+    "os": "darwin"
+  },
+  "measurements": [
+    {
+      "benchmark": "collections/list-update",
+      "runner": "zig",
+      "fuel": 28553,
+      "logicalAlloc": 24328,
+      "load": {
+        "medianNs": 11032.429,
+        "minNs": 10973.447,
+        "samples": 3
+      },
+      "run": {
+        "medianNs": 569420.455,
+        "minNs": 559788.889,
+        "samples": 3
+      }
+    },
+    {
+      "benchmark": "collections/list-update",
+      "fuel": 28553,
+      "hostBytes": 164561.8678414097,
+      "load": {
+        "medianNs": 200500,
+        "minNs": 163042,
+        "samples": 2708
+      },
+      "logicalAlloc": 24328,
+      "run": {
+        "medianNs": 2570584,
+        "minNs": 2314625,
+        "samples": 235
+      },
+      "runner": "ts"
+    },
+    {
+      "benchmark": "collections/list-update",
+      "run": {
+        "minNs": 419130.858972494,
+        "samples": 3,
+        "medianNs": 420702.7996017132
+      },
+      "runner": "applescript"
+    },
+    {
+      "benchmark": "collections/list-update",
+      "hostAllocs": 106,
+      "hostBytes": 22952,
+      "run": {
+        "medianNs": 35077,
+        "minNs": 32319,
+        "samples": 3
+      },
+      "runner": "gopher-lua"
+    }
+  ],
+  "outlierFactor": 3,
+  "outliers": [],
+  "parity": [],
+  "settings": {
+    "count": 3,
+    "filter": "collections/list-update",
+    "runners": "zig,ts,applescript,gopher-lua",
+    "smoke": false
+  },
+  "skipped": [],
+  "versions": {
+    "bun": "1.4.3",
+    "zig": "0.17.0",
+    "zig build": "native safe; C Host -O2",
+    "cost model": "0",
+    "go": "go1.27.2",
+    "language": "1.0-rc.3",
+    "applescript": "2.8 (macOS 27.0.1)",
+    "gopher-lua": "v1.1.2"
+  }
+}

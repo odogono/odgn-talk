@@ -73,7 +73,7 @@ def attribution(report):
             nodes[stack[-1]]["self"] -= count
         stack.append(len(nodes))
         nodes.append(node)
-    counts = dict.fromkeys(["pump", "execute", "charging", "formulaEvaluation", "specializedEvaluation", "instruction", "scratchReset", "operandRetention", "decimal", "valueConstruction", "allocator"], 0)
+    counts = dict.fromkeys(["pump", "execute", "charging", "formulaEvaluation", "specializedEvaluation", "instruction", "scratchReset", "operandRetention", "decimal", "valueConstruction", "allocator", "chunksSet", "listSet", "valueRelease"], 0)
     for node in nodes:
         path, count = node["path"], node["self"]
         assert count >= 0
@@ -88,7 +88,8 @@ def attribution(report):
                              ("instruction", "Group.instruction"),
                              ("scratchReset", "ArenaAllocator.reset"), ("operandRetention", "Operands."),
                              ("decimal", "decimal.decimal."), ("valueConstruction", "value.scalar"),
-                             ("allocator", "Allocator.")]:
+                             ("allocator", "Allocator."), ("chunksSet", "machine.chunks.set"),
+                             ("listSet", "value.listSet"), ("valueRelease", "value.Value.release")]:
             if any(pattern in symbol for symbol in path):
                 counts[key] += count
     return counts

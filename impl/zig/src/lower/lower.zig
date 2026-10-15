@@ -734,6 +734,9 @@ const Frame = struct {
         return s;
     }
 
+    /// Releases compiler slot availability only. The canonical runtime local
+    /// keeps its Value until overwritten, including for retained-state sizing
+    /// and Save/Restore; this is not an ownership-transfer instruction.
     fn release(f: *Frame, s: u32) void {
         f.in_use.items[s - f.first_temp] = false;
     }
