@@ -1113,6 +1113,15 @@ allocator, so Zig tests use the leak-detecting test allocator. C values use the
 process allocator; a Group's own values use its Group allocator. Handles require
 Host synchronization when shared across threads.
 
+Number, Boolean and Nothing construction specializes the active tag before
+allocating a node. Each node initializes every header and its active payload
+through its owning allocator, without `Allocator.create`'s whole-node poison
+fill. Number and Boolean construction also avoid copying the full Data union;
+Zig still zero-fills Nothing's inactive union storage. The Value layout,
+inline Quantity and Group cache are unchanged. The
+[constructor measurements](../../bench/results/2026-10-14-zig-scalar-constructors.md)
+record safe native assembly, paired timings and allocation probes.
+
 Text and Decimal accessor pointers borrow their value. Byte accessors copy
 out, and display, encoding and canonical Unit strings return an owned
 `talk_owned_bytes`, released with `talk_owned_bytes_release`. Child accessors

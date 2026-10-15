@@ -1,0 +1,3237 @@
+{
+  "recordedAt": "2026-10-14T22:29:14.197447+00:00",
+  "baselineRevision": "f51ad856",
+  "checkoutRevision": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0",
+  "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "language": "1.0-rc.3",
+  "costModel": 0,
+  "mode": "safe",
+  "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
+  "samplesPerProcess": 5,
+  "pairs": 5,
+  "binarySha256": {
+    "before": "f02198a1b57eddfe3a793c59a646419fb63c34a19519df11d864d6ad54cccf68",
+    "after": "208a4d4e2b2289fcbddb42e562de800da6408f949c9d0d6d8c3a2eefb901ad44"
+  },
+  "sourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "3f4992c94d0fa486626084689614c9a5e0e5347fbfa5ae332e7efceeb98b6d8b",
+    "impl/zig/src/value.zig": "525766c277331388212dd7e2bfd81c971e4a65cb605fa1764eb95aad4880316a",
+    "impl/zig/src/machine/group_allocator.zig": "a41a4a670dab51d208929e7d5b0803a0fe7d777f01d363589f5820ac182bc166",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  },
+  "manifestSha256": "3f27106ec23e3875ce48199359f6f6e42340ac8a66d748e1592a6c91df24ab71",
+  "measurements": [
+    {
+      "pair": 1,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          351468.531,
+          331668.874,
+          350902.098,
+          355028.169,
+          306426.829
+        ],
+        "load": [
+          11294.556,
+          9799.53,
+          10683.828,
+          10458.9,
+          10906.216
+        ]
+      },
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          360582.734,
+          385369.231,
+          451810.811,
+          309429.448,
+          337898.649
+        ],
+        "load": [
+          10629.889,
+          11089.82,
+          9855.144,
+          11115.581,
+          9290.412
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          262000.0
+        ],
+        "load": [
+          19000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          491000.0
+        ],
+        "load": [
+          29000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1649000.0,
+          1576031.25,
+          1672129.032,
+          1618354.839,
+          1577781.25
+        ],
+        "load": [
+          10520.934,
+          10526.316,
+          10808.299,
+          11137.194,
+          10659.774
+        ]
+      },
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1645645.161,
+          1700333.333,
+          1564375.0,
+          1732466.667,
+          1648903.226
+        ],
+        "load": [
+          11253.657,
+          11405.338,
+          10910.321,
+          10509.668,
+          10491.607
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2549000.0
+        ],
+        "load": [
+          52000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2504000.0
+        ],
+        "load": [
+          56000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17961.566,
+          19122.753,
+          16771.294,
+          18375.965,
+          16038.486
+        ],
+        "load": [
+          255984.694,
+          199948.207,
+          218969.432,
+          268165.775,
+          211696.203
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          16193.266,
+          17007.483,
+          16202.528,
+          16220.24,
+          16242.936
+        ],
+        "load": [
+          211941.176,
+          240509.615,
+          219697.368,
+          196756.863,
+          216718.615
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          17000.0
+        ],
+        "load": [
+          195000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          31000.0
+        ],
+        "load": [
+          385000.0
+        ]
+      }
+    },
+    {
+      "pair": 1,
+      "name": "probe/straightline",
+      "slice": 100,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          23097.46,
+          22212.35,
+          22823.449,
+          21668.111,
+          21218.83
+        ],
+        "load": [
+          218807.86,
+          232337.963,
+          215201.717,
+          244487.805,
+          215517.241
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          20573.838,
+          24513.235,
+          21816.754,
+          21960.035,
+          21927.663
+        ],
+        "load": [
+          214888.412,
+          214123.932,
+          213365.957,
+          212627.119,
+          229045.662
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          40000.0
+        ],
+        "load": [
+          395000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          46000.0
+        ],
+        "load": [
+          386000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          300634.731,
+          312937.5,
+          301427.711,
+          273475.41,
+          304248.485
+        ],
+        "load": [
+          8664.703,
+          8538.593,
+          7678.747,
+          8549.932,
+          9141.316
+        ]
+      },
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          283316.384,
+          283412.429,
+          281640.449,
+          280642.458,
+          280441.341
+        ],
+        "load": [
+          8772.456,
+          7779.091,
+          9656.624,
+          9027.081,
+          9646.412
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          512000.0
+        ],
+        "load": [
+          32000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          485000.0
+        ],
+        "load": [
+          32000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1474058.824,
+          1493735.294,
+          1551848.485,
+          1439400.0,
+          1526454.545
+        ],
+        "load": [
+          10363.731,
+          9613.802,
+          9881.621,
+          10030.485,
+          10411.618
+        ]
+      },
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1654032.258,
+          1633741.935,
+          1644062.5,
+          1646032.258,
+          1566687.5
+        ],
+        "load": [
+          11748.414,
+          10910.321,
+          11911.625,
+          12177.258,
+          10053.478
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2465000.0
+        ],
+        "load": [
+          34000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2449000.0
+        ],
+        "load": [
+          45000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          16388.725,
+          18199.418,
+          18854.881,
+          15014.71,
+          17373.176
+        ],
+        "load": [
+          256810.256,
+          213365.957,
+          223742.222,
+          215154.506,
+          235056.338
+        ]
+      },
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          15455.951,
+          16025.641,
+          16660.893,
+          15793.43,
+          18396.615
+        ],
+        "load": [
+          228618.182,
+          206292.181,
+          250335.0,
+          219052.402,
+          211075.949
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          16000.0
+        ],
+        "load": [
+          183000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          31000.0
+        ],
+        "load": [
+          388000.0
+        ]
+      }
+    },
+    {
+      "pair": 2,
+      "name": "probe/straightline",
+      "slice": 100,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          21252.761,
+          21221.044,
+          23660.36,
+          21595.855,
+          21798.605
+        ],
+        "load": [
+          215047.21,
+          193212.355,
+          227058.824,
+          245823.529,
+          213854.701
+        ]
+      },
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          23816.667,
+          21184.244,
+          21378.367,
+          21553.879,
+          21470.159
+        ],
+        "load": [
+          247241.379,
+          246980.296,
+          218708.696,
+          280983.146,
+          220903.509
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          40000.0
+        ],
+        "load": [
+          385000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          40000.0
+        ],
+        "load": [
+          384000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          317308.176,
+          289994.22,
+          305457.317,
+          290843.023,
+          314591.195
+        ],
+        "load": [
+          9600.998,
+          9792.401,
+          9962.742,
+          10659.135,
+          10287.184
+        ]
+      },
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          302753.012,
+          291912.791,
+          284943.182,
+          282621.469,
+          294429.412
+        ],
+        "load": [
+          9734.67,
+          9063.429,
+          8659.855,
+          9546.201,
+          9643.587
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          497000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          258000.0
+        ],
+        "load": [
+          20000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1585000.0,
+          1647838.71,
+          1588781.25,
+          1537272.727,
+          1617000.0
+        ],
+        "load": [
+          10186.392,
+          9448.98,
+          10446.417,
+          9506.464,
+          10454.736
+        ]
+      },
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1506558.824,
+          1570500.0,
+          1522848.485,
+          1490588.235,
+          1569218.75
+        ],
+        "load": [
+          10190.748,
+          9797.022,
+          10486.056,
+          9412.761,
+          10242.319
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2467000.0
+        ],
+        "load": [
+          37000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          1533000.0
+        ],
+        "load": [
+          26000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          15958.519,
+          17674.797,
+          17617.471,
+          16579.576,
+          19426.185
+        ],
+        "load": [
+          231801.843,
+          246960.591,
+          248024.752,
+          241677.885,
+          220572.687
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17490.731,
+          18045.11,
+          16757.119,
+          17570.625,
+          18086.438
+        ],
+        "load": [
+          245784.314,
+          229385.321,
+          248242.574,
+          246832.512,
+          224224.215
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          17000.0
+        ],
+        "load": [
+          190000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          29000.0
+        ],
+        "load": [
+          379000.0
+        ]
+      }
+    },
+    {
+      "pair": 3,
+      "name": "probe/straightline",
+      "slice": 100,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          23092.336,
+          23810.0,
+          23559.585,
+          22451.077,
+          22932.6
+        ],
+        "load": [
+          246561.576,
+          219399.123,
+          242328.502,
+          219793.86,
+          237208.531
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          23121.59,
+          24643.35,
+          23954.045,
+          21975.835,
+          23634.388
+        ],
+        "load": [
+          221455.752,
+          215120.172,
+          244804.878,
+          216297.414,
+          224636.771
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          42000.0
+        ],
+        "load": [
+          384000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          40000.0
+        ],
+        "load": [
+          382000.0
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          285255.682,
+          319713.376,
+          282508.475,
+          300904.192,
+          306280.488
+        ],
+        "load": [
+          10099.354,
+          11213.004,
+          10473.817,
+          10489.406,
+          9695.425
+        ]
+      },
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          317873.418,
+          310602.484,
+          319242.038,
+          331370.861,
+          316879.747
+        ],
+        "load": [
+          9566.29,
+          9796.238,
+          10462.134,
+          10368.236,
+          9751.755
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          511000.0
+        ],
+        "load": [
+          27000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          503000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1588625.0,
+          1479441.176,
+          1589343.75,
+          1674258.065,
+          1498941.176
+        ],
+        "load": [
+          10672.785,
+          10771.866,
+          10623.752,
+          10397.172,
+          10555.415
+        ]
+      },
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1763586.207,
+          1766034.483,
+          1668700.0,
+          1586062.5,
+          1524909.091
+        ],
+        "load": [
+          10651.331,
+          13680.164,
+          12285.012,
+          11504.716,
+          10848.34
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2467000.0
+        ],
+        "load": [
+          47000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2490000.0
+        ],
+        "load": [
+          52000.0
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17698.868,
+          17988.489,
+          17827.807,
+          16256.177,
+          16133.226
+        ],
+        "load": [
+          274153.005,
+          244737.864,
+          247861.386,
+          244453.659,
+          241840.58
+        ]
+      },
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17177.259,
+          16264.065,
+          17714.488,
+          16115.013,
+          17468.39
+        ],
+        "load": [
+          232518.519,
+          241158.654,
+          248950.249,
+          225292.793,
+          230626.728
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          30000.0
+        ],
+        "load": [
+          376000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          29000.0
+        ],
+        "load": [
+          381000.0
+        ]
+      }
+    },
+    {
+      "pair": 4,
+      "name": "probe/straightline",
+      "slice": 100,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          23324.476,
+          21834.498,
+          23896.799,
+          23394.761,
+          22199.29
+        ],
+        "load": [
+          244526.829,
+          236591.549,
+          215394.85,
+          240846.154,
+          241067.308
+        ]
+      },
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          21714.41,
+          24170.13,
+          21855.832,
+          25761.463,
+          24201.258
+        ],
+        "load": [
+          242270.531,
+          231648.148,
+          234359.813,
+          225855.856,
+          241560.386
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          22000.0
+        ],
+        "load": [
+          192000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          22000.0
+        ],
+        "load": [
+          192000.0
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "name": "collections/list-build",
+      "slice": 0,
+      "n": 500,
+      "expect": "125250",
+      "sourceSha256": "472c5323b738ac48e2aa7ea22aa9391b04d10d2868442deaad05bfd234211087",
+      "before": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          304545.455,
+          315176.101,
+          291418.605,
+          311689.441,
+          291215.116
+        ],
+        "load": [
+          9320.41,
+          10317.31,
+          9053.413,
+          9720.645,
+          10165.481
+        ]
+      },
+      "after": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "run": [
+          298500.0,
+          306384.146,
+          277359.116,
+          294158.824,
+          306006.098
+        ],
+        "load": [
+          9583.749,
+          8609.676,
+          9558.593,
+          9555.513,
+          8508.676
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          499000.0
+        ],
+        "load": [
+          30000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 19091,
+        "logicalAlloc": 3022112,
+        "hostBytes": 218532,
+        "hostAllocs": 550,
+        "hostFrees": 416,
+        "hostLivePeakDelta": 197455,
+        "groupUsed": 56290,
+        "groupPeak": 205305,
+        "hostTopSizes": [
+          {
+            "size": 368,
+            "count": 503,
+            "bytes": 185104
+          },
+          {
+            "size": 40,
+            "count": 12,
+            "bytes": 480
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 32,
+            "count": 2,
+            "bytes": 64
+          },
+          {
+            "size": 144,
+            "count": 2,
+            "bytes": 288
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 400,
+            "count": 2,
+            "bytes": 800
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          }
+        ],
+        "run": [
+          489000.0
+        ],
+        "load": [
+          28000.0
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "name": "macro/report",
+      "slice": 0,
+      "n": 200,
+      "expect": "2639",
+      "sourceSha256": "4e610dd8730e70e6951dd36c659f5bf4fc591c4aa5011d7690c2b09db58a9b71",
+      "before": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1488942.857,
+          1490676.471,
+          1537545.455,
+          1486058.824,
+          1544272.727
+        ],
+        "load": [
+          10085.299,
+          9285.422,
+          10265.654,
+          9851.064,
+          10395.01
+        ]
+      },
+      "after": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "run": [
+          1486117.647,
+          1566468.75,
+          1520000.0,
+          1485352.941,
+          1584343.75
+        ],
+        "load": [
+          9125.0,
+          10400.166,
+          10347.196,
+          10351.273,
+          9288.633
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          2483000.0
+        ],
+        "load": [
+          48000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 86555,
+        "logicalAlloc": 1291900,
+        "hostBytes": 1345245,
+        "hostAllocs": 2030,
+        "hostFrees": 2018,
+        "hostLivePeakDelta": 15438,
+        "groupUsed": 12779,
+        "groupPeak": 32277,
+        "hostTopSizes": [
+          {
+            "size": 144,
+            "count": 402,
+            "bytes": 57888
+          },
+          {
+            "size": 3,
+            "count": 253,
+            "bytes": 759
+          },
+          {
+            "size": 1,
+            "count": 213,
+            "bytes": 213
+          },
+          {
+            "size": 2,
+            "count": 135,
+            "bytes": 270
+          },
+          {
+            "size": 368,
+            "count": 7,
+            "bytes": 2576
+          },
+          {
+            "size": 8,
+            "count": 4,
+            "bytes": 32
+          },
+          {
+            "size": 208,
+            "count": 3,
+            "bytes": 624
+          },
+          {
+            "size": 5,
+            "count": 2,
+            "bytes": 10
+          }
+        ],
+        "run": [
+          1529000.0
+        ],
+        "load": [
+          31000.0
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "name": "probe/straightline",
+      "slice": 0,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          16564.57,
+          17265.539,
+          17896.922,
+          17899.427,
+          18403.386
+        ],
+        "load": [
+          284130.682,
+          258353.846,
+          293284.884,
+          250417.91,
+          211599.156
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          17615.005,
+          16304.206,
+          18046.193,
+          16404.723,
+          19994.802
+        ],
+        "load": [
+          225909.91,
+          251819.095,
+          272271.739,
+          236306.604,
+          238357.143
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          30000.0
+        ],
+        "load": [
+          387000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 10606,
+        "hostAllocs": 19,
+        "hostFrees": 12,
+        "hostLivePeakDelta": 8982,
+        "groupUsed": 63420,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 208,
+            "count": 2,
+            "bytes": 416
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          },
+          {
+            "size": 24,
+            "count": 1,
+            "bytes": 24
+          },
+          {
+            "size": 68,
+            "count": 1,
+            "bytes": 68
+          },
+          {
+            "size": 92,
+            "count": 1,
+            "bytes": 92
+          },
+          {
+            "size": 136,
+            "count": 1,
+            "bytes": 136
+          }
+        ],
+        "run": [
+          31000.0
+        ],
+        "load": [
+          403000.0
+        ]
+      }
+    },
+    {
+      "pair": 5,
+      "name": "probe/straightline",
+      "slice": 100,
+      "n": 7,
+      "expect": "7",
+      "sourceSha256": "069e255d5adeb0520cfe3f4fa5a9ebcfd4a4e99d8109ee3f182e751f4f9a34a5",
+      "before": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          22358.516,
+          25967.809,
+          24198.355,
+          24073.664,
+          24051.467
+        ],
+        "load": [
+          247900.99,
+          239985.646,
+          235441.315,
+          245230.392,
+          246532.02
+        ]
+      },
+      "after": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "run": [
+          26518.558,
+          27085.003,
+          24660.75,
+          21158.629,
+          23769.487
+        ],
+        "load": [
+          220947.137,
+          244346.341,
+          217534.783,
+          243854.369,
+          265253.968
+        ]
+      },
+      "beforeProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          42000.0
+        ],
+        "load": [
+          384000.0
+        ]
+      },
+      "afterProbe": {
+        "fuel": 521,
+        "logicalAlloc": 0,
+        "hostBytes": 33904,
+        "hostAllocs": 41,
+        "hostFrees": 33,
+        "hostLivePeakDelta": 10141,
+        "groupUsed": 63556,
+        "groupPeak": 481156,
+        "hostTopSizes": [
+          {
+            "size": 208,
+            "count": 7,
+            "bytes": 1456
+          },
+          {
+            "size": 70,
+            "count": 5,
+            "bytes": 350
+          },
+          {
+            "size": 1198,
+            "count": 4,
+            "bytes": 4792
+          },
+          {
+            "size": 2482,
+            "count": 4,
+            "bytes": 9928
+          },
+          {
+            "size": 8,
+            "count": 3,
+            "bytes": 24
+          },
+          {
+            "size": 136,
+            "count": 2,
+            "bytes": 272
+          },
+          {
+            "size": 3,
+            "count": 1,
+            "bytes": 3
+          },
+          {
+            "size": 5,
+            "count": 1,
+            "bytes": 5
+          }
+        ],
+        "run": [
+          23000.0
+        ],
+        "load": [
+          198000.0
+        ]
+      }
+    }
+  ],
+  "profiles": [],
+  "baselineSourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "3f4992c94d0fa486626084689614c9a5e0e5347fbfa5ae332e7efceeb98b6d8b",
+    "impl/zig/src/value.zig": "cfe08244d4f7f538b7bbde9754645191afbd141bba766c0f7f03acaba8843a76",
+    "impl/zig/src/machine/group_allocator.zig": "ea3697683b4cb86bac9910800e236298311ad6e40fe425a4cfd42ed6c65bfc1b",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  }
+}

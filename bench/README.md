@@ -95,6 +95,11 @@ record the size-attributed allocation profile, three paired runs across all 30
 supported workloads and Host-allocator timings for the per-Group Value node
 cache in [#878](https://github.com/odogono/odgn-talk/issues/878).
 
+The [Zig scalar constructor measurements](results/2026-10-14-zig-scalar-constructors.md)
+record narrow Number, Boolean and Nothing construction, safe native assembly,
+paired scalar-heavy and broader timings, and separate allocation probes for
+[#937](https://github.com/odogono/odgn-talk/issues/937).
+
 The [Zig operand storage measurements](results/2026-10-14-zig-operand-storage.md)
 record paired sliced/unsliced timings, native disassembly and CPU samples for
 reusing protected-operand storage in
