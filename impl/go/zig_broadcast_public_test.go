@@ -22,13 +22,14 @@ func runBroadcastBridgeCases(t *testing.T) []bridgeObservation {
 			core := talk.New()
 			var g *talk.Group
 			var enabled, notified atomic.Bool
-			broadcast := func() {
-				id, err := g.Broadcast(talk.Message{Name: "hello", Args: []talk.Value{talk.Int(7)}})
+			broadcastMessage := func(m talk.Message) {
+				id, err := g.Broadcast(m)
 				if err != nil {
 					t.Fatal(err)
 				}
 				o.Values = append(o.Values, string(id))
 			}
+			broadcast := func() { broadcastMessage(talk.Message{Name: "hello", Args: []talk.Value{talk.Int(7)}}) }
 			checkReentry := func() {
 				if _, err := g.Pump(bridgeNow, talk.PumpOptions{}); !isReentrant(err) {
 					t.Fatal(err)
@@ -68,11 +69,7 @@ func runBroadcastBridgeCases(t *testing.T) []bridgeObservation {
 					args[0] = talk.List(talk.Int(7), talk.Bool(true))
 				}
 				limits := &talk.LimitOverride{FuelPerRun: 100}
-				id, err := g.Broadcast(talk.Message{Name: "hello", Args: args, Limits: limits})
-				if err != nil {
-					t.Fatal(err)
-				}
-				o.Values = append(o.Values, string(id))
+				broadcastMessage(talk.Message{Name: "hello", Args: args, Limits: limits})
 				args[0] = talk.Int(99)
 				limits.FuelPerRun = 1
 				load("late", source, talk.Limits{}, nil)
@@ -172,21 +169,14 @@ func runBroadcastBridgeCases(t *testing.T) []bridgeObservation {
 				if name == "broadcast stop" {
 					a.Stop("prior")
 				}
-				if name == "broadcast zero fuel" {
-					id, err := g.Broadcast(talk.Message{Name: "hello", Args: []talk.Value{talk.Int(7)}, Limits: &talk.LimitOverride{Set: talk.OverrideFuelPerRun}})
-					if err != nil {
-						t.Fatal(err)
-					}
-					o.Values = append(o.Values, string(id))
-				} else if name == "broadcast overrides" {
-					id, err := g.Broadcast(talk.Message{Name: "hello", Args: []talk.Value{talk.Int(7)}, Limits: &talk.LimitOverride{FuelPerRun: 100, AllocPerRun: 100, MaxWait: time.Millisecond, MaxJoin: 2}})
-					if err != nil {
-						t.Fatal(err)
-					}
-					o.Values = append(o.Values, string(id))
-				} else {
-					broadcast()
+				m := talk.Message{Name: "hello", Args: []talk.Value{talk.Int(7)}}
+				switch name {
+				case "broadcast zero fuel":
+					m.Limits = &talk.LimitOverride{Set: talk.OverrideFuelPerRun}
+				case "broadcast overrides":
+					m.Limits = &talk.LimitOverride{FuelPerRun: 100, AllocPerRun: 100, MaxWait: time.Millisecond, MaxJoin: 2}
 				}
+				broadcastMessage(m)
 				pump(talk.PumpOptions{FuelSlice: 6})
 				pump(talk.PumpOptions{})
 			}

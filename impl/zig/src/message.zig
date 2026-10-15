@@ -761,12 +761,12 @@ fn overrideOf(j: ?Json, out: *talk.LimitOverride) Invalid!?*talk.LimitOverride {
     if (v != .object) return error.InvalidValue;
     out.* = .{};
     var any = false;
-    inline for (.{ .{ "fuelPerRun", "fuel_per_run", 1 }, .{ "allocPerRun", "alloc_per_run", 2 }, .{ "maxWaitMs", "max_wait_ms", 4 }, .{ "maxJoin", "max_join", 8 } }) |t| {
-        if (v.object.get(t[0])) |x| {
+    inline for (machine.override_fields) |t| {
+        if (v.object.get(t.ts)) |x| {
             const n = asInt(x) orelse return error.InvalidValue;
             if (n < 0) return error.InvalidValue;
-            @field(out.*, t[1]) = n;
-            out.set |= t[2];
+            @field(out.*, t.field) = n;
+            out.set |= t.bit;
             any = true;
         }
     }
@@ -2239,8 +2239,8 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
             if (field(message, "limits")) |raw| {
                 refused = .{};
                 if (raw == .object) {
-                    inline for (.{ .{ "fuelPerRun", "fuel_per_run" }, .{ "allocPerRun", "alloc_per_run" }, .{ "maxWaitMs", "max_wait_ms" }, .{ "maxJoin", "max_join" } }) |f| {
-                        if (raw.object.get(f[0])) |x| @field(refused.?, f[1]) = asInt(x);
+                    inline for (machine.override_fields) |f| {
+                        if (raw.object.get(f.ts)) |x| @field(refused.?, f.field) = asInt(x);
                     }
                 }
             }

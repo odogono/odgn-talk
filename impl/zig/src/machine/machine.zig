@@ -1128,6 +1128,26 @@ fn limitValues(l: Limits) [limits_table.limit.len]u64 {
     return out;
 }
 
+/// Each overridable limit: its `ts` name, field name and Host `set` bit,
+/// in `limits.toml`'s order.
+pub const override_fields = .{
+    .{ .ts = "fuelPerRun", .field = "fuel_per_run", .bit = 1 },
+    .{ .ts = "allocPerRun", .field = "alloc_per_run", .bit = 2 },
+    .{ .ts = "maxWaitMs", .field = "max_wait_ms", .bit = 4 },
+    .{ .ts = "maxJoin", .field = "max_join", .bit = 8 },
+};
+
+/// An override's Trace form: a map of its present limits.
+fn writeOverride(o: anytype, w: *std.Io.Writer) void {
+    w.writeAll(" limits={") catch {};
+    var first = true;
+    inline for (override_fields) |f| if (@field(o, f.field)) |v| {
+        w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f.ts, v }) catch {};
+        first = false;
+    };
+    w.writeAll("}") catch {};
+}
+
 /// A Delivery's override of the per-Run limits it may tighten.
 pub const Override = struct {
     fuel_per_run: ?u64 = null,
@@ -1158,13 +1178,16 @@ pub const Override = struct {
     /// Its Trace form: a map from each limit's `ts` name, in
     /// `limits.toml`'s order.
     pub fn write(o: Override, w: *std.Io.Writer) void {
-        w.writeAll(" limits={") catch {};
-        var first = true;
-        inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
-            w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f[0], v }) catch {};
-            first = false;
-        };
-        w.writeAll("}") catch {};
+        writeOverride(o, w);
+    }
+
+    /// It capped at each of `l`, so it never loosens them.
+    fn clampTo(o: Override, l: Limits) Override {
+        var out = o;
+        inline for (override_fields) |f| {
+            if (@field(out, f.field)) |v| @field(out, f.field) = @min(v, @field(l, f.field));
+        }
+        return out;
     }
 };
 
@@ -1176,13 +1199,7 @@ pub const RefusedOverride = struct {
     max_join: ?i64 = null,
 
     pub fn write(o: RefusedOverride, w: *std.Io.Writer) void {
-        w.writeAll(" limits={") catch {};
-        var first = true;
-        inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
-            w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f[0], v }) catch {};
-            first = false;
-        };
-        w.writeAll("}") catch {};
+        writeOverride(o, w);
     }
 };
 
@@ -3209,12 +3226,7 @@ pub const Group = struct {
             errdefer g.gpa.free(message);
             const args = try g.gpa.dupe(*Value, b.args);
             for (args) |v| _ = v.retain();
-            var limits = b.limits;
-            if (limits) |*o| {
-                inline for (.{ "fuel_per_run", "alloc_per_run", "max_wait_ms", "max_join" }) |f| {
-                    if (@field(o, f)) |v| @field(o, f) = @min(v, @field(r.script.limits, f));
-                }
-            }
+            const limits = if (b.limits) |o| o.clampTo(r.script.limits) else null;
             try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = limits });
         }
     }
