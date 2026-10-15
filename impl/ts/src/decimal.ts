@@ -162,16 +162,67 @@ export const multiply = (a: Dec, b: Dec): Dec =>
     a.exponent + b.exponent,
     a.exponent + b.exponent,
   );
+
+// Try an exact quotient at the ideal exponent first. For a fractional quotient,
+// one scaled division tests termination within the available precision. This
+// candidate can have 35 digits; removing only exact trailing zeros either makes
+// it fit or leaves the general rounding path to decide the result.
+const exactQuotient = (
+  negative: boolean,
+  n: bigint,
+  d: bigint,
+  ideal: number,
+): Dec | null => {
+  if (n === 0n) {
+    return exact(false, 0n, Math.min(0, Math.max(MIN_EXPONENT, ideal)));
+  }
+  let c = n / d;
+  let exponent = ideal;
+  if (c * d !== n) {
+    // Fractional digits cannot fit after a 34-digit integer coefficient, or
+    // below the minimum exponent. Let the general path round these directly.
+    if (c >= LIMIT / 10n || ideal === MIN_EXPONENT) {
+      return null;
+    }
+    const scale = Math.min(
+      DIGITS + digitCount(d) - digitCount(n),
+      ideal - MIN_EXPONENT,
+    );
+    const scaled = n * pow10(scale);
+    c = scaled / d;
+    if (c * d !== scaled) {
+      return null;
+    }
+    exponent -= scale;
+    const digits = c.toString();
+    let end = digits.length;
+    const target = Math.min(0, ideal);
+    while (end > 1 && digits[end - 1] === '0' && exponent < target) {
+      end--;
+      exponent++;
+    }
+    c /= pow10(digits.length - end);
+  }
+  if (exponent > 0) {
+    // A nonzero coefficient at a larger exponent necessarily overflows.
+    if (exponent >= DIGITS) {
+      return null;
+    }
+    c *= pow10(exponent);
+    exponent = 0;
+  }
+  return exact(negative, c, exponent);
+};
+
 export const divide = (a: Dec, b: Dec): Dec => {
   if (b.coefficient === 0n) {
     throw new ArithmeticError('division by zero');
   }
-  return result(
-    a.negative !== b.negative,
-    a.coefficient,
-    b.coefficient,
-    a.exponent - b.exponent,
-    a.exponent - b.exponent,
+  const negative = a.negative !== b.negative;
+  const ideal = a.exponent - b.exponent;
+  return (
+    exactQuotient(negative, a.coefficient, b.coefficient, ideal) ??
+    result(negative, a.coefficient, b.coefficient, ideal, ideal)
   );
 };
 // The integer part of the exact quotient, toward zero.
@@ -182,10 +233,19 @@ const quotient = (a: Dec, b: Dec): bigint => {
   const { sa, sb } = aligned(a, b);
   return sa / sb;
 };
-export const div = (a: Dec, b: Dec): Dec => signed(quotient(a, b), 1n, 0, 0);
+export const div = (a: Dec, b: Dec): Dec => {
+  const q = quotient(a, b);
+  return exact(q < 0n, q < 0n ? -q : q, 0) ?? signed(q, 1n, 0, 0);
+};
 export const mod = (a: Dec, b: Dec): Dec => {
+  if (b.coefficient === 0n) {
+    throw new ArithmeticError('division by zero');
+  }
   const { sa, sb, e } = aligned(a, b);
-  return signed(sa - quotient(a, b) * sb, 1n, e, e);
+  const r = sa % sb;
+  // If a has the finer exponent, |r| <= a.coefficient; otherwise
+  // |r| < b.coefficient. The remainder therefore already fits 34 digits.
+  return { negative: r < 0n, coefficient: r < 0n ? -r : r, exponent: e };
 };
 export const negate = (a: Dec): Dec => ({
   ...a,
