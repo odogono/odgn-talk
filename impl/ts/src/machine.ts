@@ -16,6 +16,7 @@ import {
   type Reader,
 } from './binary';
 import { charge, partSize, rateOf, sizeOf, type Measured } from './costs';
+import { integerOf } from './decimal';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf } from './code-unit';
 import {
@@ -46,6 +47,7 @@ import {
   equals,
   getKey,
   hasKey,
+  integerValue,
   isEmpty,
   isKind,
   keyText,
@@ -87,6 +89,7 @@ import { HostError, ScriptError as HostScriptError } from './errors';
 import {
   bool,
   dec,
+  decimalParts,
   functionValue,
   functionsBelongTo,
   listValues,
@@ -916,6 +919,9 @@ class LimitFaultError extends Error {
     super(limit);
   }
 }
+// Derived from immutable range Values, never part of the saved iterator or
+// its logical size. Restored sources rebuild this cache on their first Next.
+const rangeStarts = new WeakMap<Value, bigint>();
 const iteratorItem = (source: Value | null, at: number): Value => {
   if (!source) {
     return nothing;
@@ -923,10 +929,12 @@ const iteratorItem = (source: Value | null, at: number): Value => {
   if (source.kind === 'list') {
     return source.index(at);
   }
-  const start = BigInt(
-    source.asRange()!.from.asDecimal()!.toString().split('.')[0]!,
-  );
-  return dec(String(start + BigInt(at - 1)));
+  let start = rangeStarts.get(source);
+  if (start === undefined) {
+    start = integerOf(decimalParts(source.asRange()!.from.asDecimal()!));
+    rangeStarts.set(source, start);
+  }
+  return integerValue(start + BigInt(at - 1));
 };
 
 const isValue = (item: Item | undefined): item is Value => Value.isValue(item);
