@@ -57,6 +57,22 @@ record three paired runs across all 30 supported workloads, separate allocation
 probes and native/WASI equivalence checks for
 [#877](https://github.com/odogono/odgn-talk/issues/877).
 
+The [Zig Decimal comparison measurements](results/2026-10-15-zig-comparison-paths.md)
+record exact comparison probes, paired loop/Fibonacci and broader timings,
+separate CPU captures and allocation checks for
+[#939](https://github.com/odogono/odgn-talk/issues/939). Build two native Hosts
+as `ts/src/measure-zig.ts` does, then reproduce them with:
+
+```sh
+python3 bench/zig/comparison-paths.py <before-host> <after-host> --before-revision <sha> --profiles <profile-directory> --out <results.json>
+```
+
+This includes every supported manifest workload and nine comparison probes.
+Use repeated `--filter` options to select a subset. Timed Runs use the default
+allocator; separate counting-allocator probes require identical output, Fuel,
+logical allocation and Group allocation counters. Optional macOS profiles
+sample only after all paired timings finish.
+
 The [Zig division and Unit measurements](results/2026-10-14-zig-division-paths.md)
 record paired exact division, `div`/`mod` and Quantity timings, allocation
 probes, native/WASI equivalence and the residual AppleScript gaps for
