@@ -19,6 +19,7 @@ parser.add_argument('after', type=Path)
 parser.add_argument('--before-revision', required=True)
 parser.add_argument('--pairs', type=int, default=3)
 parser.add_argument('--filter', action='append')
+parser.add_argument('--workloads', type=Path, help='Use a JSON workload array instead of the chunk-read suite')
 parser.add_argument('--out', type=Path, required=True)
 args = parser.parse_args()
 if args.pairs < 1:
@@ -44,11 +45,13 @@ for kind, source, index, expected in (
     literal = source.replace('\r', '" & fromCodePoint(13) & "').replace('\n', '" & newline & "')
     workloads.append({'name': f'probe/unicode-{kind}', 'n': 1000, 'expect': f'"{expected}"',
         'source': f'on run n\n  put "{literal}" into source\n  put "" into selected\n  repeat n times\n    put {kind} {index} of source into selected\n  end repeat\n  return selected\nend run\n'})
+if args.workloads:
+    workloads = json.loads(args.workloads.read_text())
 if args.filter:
     workloads = [b for b in workloads if any(f in b['name'] for f in args.filter)]
     if not workloads:
         parser.error('filter selects no workloads')
-cache = root / '.cache/ts-chunks'
+cache = root / '.cache/ts-paired'
 cache.mkdir(parents=True, exist_ok=True)
 fixture = cache / 'workloads.json'
 fixture.write_text(json.dumps(workloads, ensure_ascii=False))
@@ -59,7 +62,7 @@ result = {'recordedAt': datetime.now(timezone.utc).isoformat(), 'baselineRevisio
     'bun': subprocess.check_output(['bun', '--version'], text=True).strip(), 'pairs': args.pairs,
     'settings': {'warmupRuns': 5, 'samples': 5, 'minimumSampleMs': 50, 'heapProbeRuns': 20, 'profileMs': 3000},
     'bundleSha256': {label: sha(bundle.read_bytes()) for label, bundle in [('before', args.before), ('after', args.after)]},
-    'sourceSha256': {p: sha((root / p).read_bytes()) for p in ['impl/ts/src/operations.ts', 'bench/ts/src/character-indexing-worker.ts']},
+    'sourceSha256': {p: sha((root / p).read_bytes()) for p in ['impl/ts/src/operations.ts', 'impl/ts/src/decimal.ts', 'bench/ts/src/character-indexing-worker.ts']},
     'workloads': [{**b, 'sourceSha256': sha(b['source'].encode())} for b in workloads], 'timings': [], 'heap': {}}
 args.out.parent.mkdir(parents=True, exist_ok=True)
 def save():

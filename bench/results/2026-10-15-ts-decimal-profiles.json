@@ -1,0 +1,972 @@
+{
+  "recordedAt": "2026-10-15T05:28:40.571151+00:00",
+  "runtime": "1.4.3",
+  "intervalMicroseconds": 1000,
+  "warmupRuns": 20,
+  "profileMs": 3000,
+  "attribution": "Inclusive sampled stacks; includes startup, Load, warm-up and validation. Categories overlap; JIT inlining limits attribution. Separate from timing.",
+  "captures": [
+    {
+      "workload": "numbers/divide",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=before-numbers-divide.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "numbers/divide"
+      ],
+      "checked": [
+        {
+          "name": "numbers/divide",
+          "runs": 707,
+          "checked": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          }
+        }
+      ],
+      "bundleSha256": "ff9d7619e7df860fc6c3d83957605ab9799f5ff1bb980673a06734b8755c74a2",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/before-numbers-divide.cpuprofile.gz",
+      "samples": 2024,
+      "inclusive": {
+        "decimal": 732,
+        "rounding": 542
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        568
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          340
+        ],
+        [
+          "result",
+          207
+        ],
+        [
+          "execute",
+          149
+        ],
+        [
+          "finishInstruction",
+          118
+        ],
+        [
+          "step",
+          90
+        ],
+        [
+          "characterBoundaries",
+          88
+        ],
+        [
+          "",
+          86
+        ],
+        [
+          "pay",
+          80
+        ],
+        [
+          "freeze",
+          70
+        ],
+        [
+          "roundAt",
+          69
+        ],
+        [
+          "turn",
+          61
+        ],
+        [
+          "formatDec",
+          58
+        ],
+        [
+          "literalDigits",
+          57
+        ],
+        [
+          "selected",
+          53
+        ],
+        [
+          "sizeOf",
+          40
+        ],
+        [
+          "BigInt",
+          35
+        ],
+        [
+          "preempt",
+          33
+        ],
+        [
+          "dec",
+          32
+        ],
+        [
+          "Decimal",
+          31
+        ],
+        [
+          "iteratorItem",
+          31
+        ]
+      ]
+    },
+    {
+      "workload": "numbers/divide",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=after-numbers-divide.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "numbers/divide"
+      ],
+      "checked": [
+        {
+          "name": "numbers/divide",
+          "runs": 881,
+          "checked": {
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500"
+          }
+        }
+      ],
+      "bundleSha256": "55e22a6af2e99ae82ee42571fe1ed4a01e2d7aafa7d523bf447d67abcfc1ebb5",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/after-numbers-divide.cpuprofile.gz",
+      "samples": 2075,
+      "inclusive": {
+        "decimal": 502,
+        "exactQuotient": 243
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        612
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          220
+        ],
+        [
+          "execute",
+          194
+        ],
+        [
+          "characterBoundaries",
+          171
+        ],
+        [
+          "",
+          126
+        ],
+        [
+          "exactQuotient",
+          116
+        ],
+        [
+          "step",
+          100
+        ],
+        [
+          "finishInstruction",
+          94
+        ],
+        [
+          "pay",
+          88
+        ],
+        [
+          "freeze",
+          81
+        ],
+        [
+          "turn",
+          72
+        ],
+        [
+          "formatDec",
+          69
+        ],
+        [
+          "literalDigits",
+          65
+        ],
+        [
+          "asRange",
+          50
+        ],
+        [
+          "BigInt",
+          50
+        ],
+        [
+          "sizeOf",
+          46
+        ],
+        [
+          "iteratorItem",
+          44
+        ],
+        [
+          "selected",
+          42
+        ],
+        [
+          "dec",
+          38
+        ],
+        [
+          "Decimal",
+          35
+        ],
+        [
+          "aligned",
+          29
+        ]
+      ]
+    },
+    {
+      "workload": "numbers/quantity",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=before-numbers-quantity.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "numbers/quantity"
+      ],
+      "checked": [
+        {
+          "name": "numbers/quantity",
+          "runs": 472,
+          "checked": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          }
+        }
+      ],
+      "bundleSha256": "ff9d7619e7df860fc6c3d83957605ab9799f5ff1bb980673a06734b8755c74a2",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/before-numbers-quantity.cpuprofile.gz",
+      "samples": 2114,
+      "inclusive": {
+        "decimal": 728,
+        "rounding": 553
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        568
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          351
+        ],
+        [
+          "result",
+          200
+        ],
+        [
+          "factorsOf",
+          196
+        ],
+        [
+          "freeze",
+          140
+        ],
+        [
+          "execute",
+          85
+        ],
+        [
+          "dimension",
+          74
+        ],
+        [
+          "",
+          73
+        ],
+        [
+          "step",
+          55
+        ],
+        [
+          "finishInstruction",
+          51
+        ],
+        [
+          "roundAt",
+          50
+        ],
+        [
+          "combine",
+          42
+        ],
+        [
+          "formatDec",
+          39
+        ],
+        [
+          "pay",
+          38
+        ],
+        [
+          "filter",
+          38
+        ],
+        [
+          "sizeOf",
+          32
+        ],
+        [
+          "slice",
+          31
+        ],
+        [
+          "turn",
+          29
+        ],
+        [
+          "iteratorItem",
+          27
+        ],
+        [
+          "literalDigits",
+          25
+        ],
+        [
+          "parseUnit",
+          23
+        ]
+      ]
+    },
+    {
+      "workload": "numbers/quantity",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=after-numbers-quantity.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "numbers/quantity"
+      ],
+      "checked": [
+        {
+          "name": "numbers/quantity",
+          "runs": 828,
+          "checked": {
+            "alloc": 40088,
+            "fuel": 14579,
+            "outcome": "completed",
+            "result": "125250"
+          }
+        }
+      ],
+      "bundleSha256": "55e22a6af2e99ae82ee42571fe1ed4a01e2d7aafa7d523bf447d67abcfc1ebb5",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/after-numbers-quantity.cpuprofile.gz",
+      "samples": 2079,
+      "inclusive": {
+        "decimal": 232,
+        "exactQuotient": 19
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        612
+      ],
+      "exclusiveTop": [
+        [
+          "factorsOf",
+          256
+        ],
+        [
+          "freeze",
+          217
+        ],
+        [
+          "",
+          111
+        ],
+        [
+          "execute",
+          108
+        ],
+        [
+          "dimension",
+          86
+        ],
+        [
+          "finishInstruction",
+          72
+        ],
+        [
+          "filter",
+          71
+        ],
+        [
+          "toString",
+          65
+        ],
+        [
+          "step",
+          62
+        ],
+        [
+          "combine",
+          55
+        ],
+        [
+          "sizeOf",
+          53
+        ],
+        [
+          "pay",
+          43
+        ],
+        [
+          "formatDec",
+          43
+        ],
+        [
+          "characterBoundaries",
+          42
+        ],
+        [
+          "map",
+          40
+        ],
+        [
+          "turn",
+          37
+        ],
+        [
+          "slice",
+          37
+        ],
+        [
+          "literalDigits",
+          36
+        ],
+        [
+          "exact",
+          30
+        ],
+        [
+          "selected",
+          27
+        ]
+      ]
+    },
+    {
+      "workload": "text/index",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=before-text-index.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "text/index"
+      ],
+      "checked": [
+        {
+          "name": "text/index",
+          "runs": 955,
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          }
+        }
+      ],
+      "bundleSha256": "ff9d7619e7df860fc6c3d83957605ab9799f5ff1bb980673a06734b8755c74a2",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/before-text-index.cpuprofile.gz",
+      "samples": 2076,
+      "inclusive": {
+        "decimal": 540,
+        "rounding": 389,
+        "integer": 41
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        568
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          245
+        ],
+        [
+          "characterBoundaries",
+          164
+        ],
+        [
+          "",
+          161
+        ],
+        [
+          "execute",
+          143
+        ],
+        [
+          "result",
+          139
+        ],
+        [
+          "step",
+          118
+        ],
+        [
+          "finishInstruction",
+          83
+        ],
+        [
+          "freeze",
+          74
+        ],
+        [
+          "roundAt",
+          61
+        ],
+        [
+          "pay",
+          58
+        ],
+        [
+          "sizeOf",
+          54
+        ],
+        [
+          "literalDigits",
+          43
+        ],
+        [
+          "turn",
+          38
+        ],
+        [
+          "iteratorItem",
+          38
+        ],
+        [
+          "map",
+          36
+        ],
+        [
+          "dec",
+          35
+        ],
+        [
+          "characters",
+          34
+        ],
+        [
+          "aligned",
+          33
+        ],
+        [
+          "asRange",
+          32
+        ],
+        [
+          "delete",
+          29
+        ]
+      ]
+    },
+    {
+      "workload": "text/index",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=after-text-index.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "text/index"
+      ],
+      "checked": [
+        {
+          "name": "text/index",
+          "runs": 1284,
+          "checked": {
+            "alloc": 51072,
+            "fuel": 26640,
+            "outcome": "completed",
+            "result": "125"
+          }
+        }
+      ],
+      "bundleSha256": "55e22a6af2e99ae82ee42571fe1ed4a01e2d7aafa7d523bf447d67abcfc1ebb5",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/after-text-index.cpuprofile.gz",
+      "samples": 2046,
+      "inclusive": {
+        "decimal": 183,
+        "integer": 14
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        612
+      ],
+      "exclusiveTop": [
+        [
+          "",
+          200
+        ],
+        [
+          "characterBoundaries",
+          191
+        ],
+        [
+          "execute",
+          167
+        ],
+        [
+          "step",
+          150
+        ],
+        [
+          "finishInstruction",
+          122
+        ],
+        [
+          "toString",
+          103
+        ],
+        [
+          "freeze",
+          76
+        ],
+        [
+          "pay",
+          69
+        ],
+        [
+          "sizeOf",
+          56
+        ],
+        [
+          "map",
+          54
+        ],
+        [
+          "dec",
+          53
+        ],
+        [
+          "characters",
+          50
+        ],
+        [
+          "literalDigits",
+          49
+        ],
+        [
+          "BigInt",
+          45
+        ],
+        [
+          "payAmount",
+          42
+        ],
+        [
+          "turn",
+          41
+        ],
+        [
+          "peek",
+          38
+        ],
+        [
+          "asRange",
+          36
+        ],
+        [
+          "selected",
+          36
+        ],
+        [
+          "Decimal",
+          35
+        ]
+      ]
+    },
+    {
+      "workload": "probe/nonterminating",
+      "label": "before",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=before-probe-nonterminating.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/before.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "probe/nonterminating"
+      ],
+      "checked": [
+        {
+          "name": "probe/nonterminating",
+          "runs": 1534,
+          "checked": {
+            "alloc": 16072,
+            "fuel": 13686,
+            "outcome": "completed",
+            "result": "333.3333333333333333333333333333333"
+          }
+        }
+      ],
+      "bundleSha256": "ff9d7619e7df860fc6c3d83957605ab9799f5ff1bb980673a06734b8755c74a2",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/before-probe-nonterminating.cpuprofile.gz",
+      "samples": 2050,
+      "inclusive": {
+        "decimal": 903,
+        "rounding": 704
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        568
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          534
+        ],
+        [
+          "roundAt",
+          174
+        ],
+        [
+          "characterBoundaries",
+          152
+        ],
+        [
+          "result",
+          126
+        ],
+        [
+          "",
+          122
+        ],
+        [
+          "step",
+          98
+        ],
+        [
+          "execute",
+          93
+        ],
+        [
+          "finishInstruction",
+          69
+        ],
+        [
+          "literalDigits",
+          62
+        ],
+        [
+          "pay",
+          55
+        ],
+        [
+          "dec",
+          54
+        ],
+        [
+          "formatDec",
+          52
+        ],
+        [
+          "iteratorItem",
+          51
+        ],
+        [
+          "freeze",
+          49
+        ],
+        [
+          "BigInt",
+          42
+        ],
+        [
+          "asRange",
+          41
+        ],
+        [
+          "sizeOf",
+          30
+        ],
+        [
+          "turn",
+          28
+        ],
+        [
+          "selected",
+          24
+        ],
+        [
+          "/^0+/",
+          20
+        ]
+      ]
+    },
+    {
+      "workload": "probe/nonterminating",
+      "label": "after",
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=1000",
+        "--cpu-prof-dir=/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal",
+        "--cpu-prof-name=after-probe-nonterminating.cpuprofile",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/after.js",
+        "/Users/alex/.t3/worktrees/odgn-talk/t3-efce5c5e/.cache/ts-decimal/profiles-workloads.json",
+        "profile",
+        "probe/nonterminating"
+      ],
+      "checked": [
+        {
+          "name": "probe/nonterminating",
+          "runs": 1719,
+          "checked": {
+            "alloc": 16072,
+            "fuel": 13686,
+            "outcome": "completed",
+            "result": "333.3333333333333333333333333333333"
+          }
+        }
+      ],
+      "bundleSha256": "55e22a6af2e99ae82ee42571fe1ed4a01e2d7aafa7d523bf447d67abcfc1ebb5",
+      "raw": "bench/results/2026-10-15-ts-decimal-profiles/after-probe-nonterminating.cpuprofile.gz",
+      "samples": 2048,
+      "inclusive": {
+        "decimal": 731,
+        "rounding": 435,
+        "exactQuotient": 79
+      },
+      "decimalBundledLinesZeroBased": [
+        403,
+        612
+      ],
+      "exclusiveTop": [
+        [
+          "toString",
+          438
+        ],
+        [
+          "characterBoundaries",
+          171
+        ],
+        [
+          "",
+          143
+        ],
+        [
+          "roundAt",
+          137
+        ],
+        [
+          "execute",
+          117
+        ],
+        [
+          "step",
+          98
+        ],
+        [
+          "literalDigits",
+          83
+        ],
+        [
+          "finishInstruction",
+          68
+        ],
+        [
+          "formatDec",
+          61
+        ],
+        [
+          "pay",
+          60
+        ],
+        [
+          "freeze",
+          59
+        ],
+        [
+          "exactQuotient",
+          56
+        ],
+        [
+          "iteratorItem",
+          54
+        ],
+        [
+          "BigInt",
+          48
+        ],
+        [
+          "/^0+/",
+          48
+        ],
+        [
+          "dec",
+          46
+        ],
+        [
+          "asRange",
+          41
+        ],
+        [
+          "sizeOf",
+          39
+        ],
+        [
+          "delete",
+          27
+        ],
+        [
+          "payAmount",
+          24
+        ]
+      ]
+    }
+  ]
+}

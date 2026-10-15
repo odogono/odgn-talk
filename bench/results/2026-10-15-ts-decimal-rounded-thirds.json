@@ -1,0 +1,510 @@
+{
+  "recordedAt": "2026-10-15T05:33:15.475650+00:00",
+  "baselineRevision": "151f2b8efd00208cd0141ef9b2ddd2d8ff3099c4",
+  "checkoutRevision": "151f2b8efd00208cd0141ef9b2ddd2d8ff3099c4",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "bun": "1.4.3",
+  "pairs": 3,
+  "settings": {
+    "warmupRuns": 5,
+    "samples": 5,
+    "minimumSampleMs": 50,
+    "heapProbeRuns": 20,
+    "profileMs": 3000
+  },
+  "bundleSha256": {
+    "before": "ff9d7619e7df860fc6c3d83957605ab9799f5ff1bb980673a06734b8755c74a2",
+    "after": "55e22a6af2e99ae82ee42571fe1ed4a01e2d7aafa7d523bf447d67abcfc1ebb5"
+  },
+  "sourceSha256": {
+    "impl/ts/src/operations.ts": "3bcd16dc383f4e92d7f78f217b75609bbb70c6c8eaf45f5f2e63aacb6f06ea81",
+    "impl/ts/src/decimal.ts": "b86143ed180a40c264cb826256dfc0cc2cc9ebee27c3730659045d4a1d198fe7",
+    "bench/ts/src/character-indexing-worker.ts": "1ffd2c04e19566e62942507579741f91b2812c4e82d0cd54910772d58bf1c186"
+  },
+  "workloads": [
+    {
+      "name": "probe/rounded-thirds",
+      "n": 1000,
+      "expect": "0.3333333333333333333333333333333333",
+      "source": "on run n\n  put 0 into selected\n  repeat for each i in 1..n\n    put 1 / (i - i + 3) into selected\n  end repeat\n  return selected\nend run\n",
+      "sourceSha256": "33112510ed8873e069bb5e66c40c6444e20f8527f4d05d20a8e2385486e0db36"
+    }
+  ],
+  "timings": [
+    {
+      "pair": 1,
+      "order": [
+        "before",
+        "after"
+      ],
+      "before": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 20,
+              "ns": 2589058.35
+            },
+            {
+              "runs": 23,
+              "ns": 2188983.695652174
+            },
+            {
+              "runs": 23,
+              "ns": 2197327.8695652178
+            },
+            {
+              "runs": 19,
+              "ns": 2679877.210526317
+            },
+            {
+              "runs": 22,
+              "ns": 2330598.4545454546
+            }
+          ],
+          "load": [
+            1089500.0000000438,
+            576374.9999999845,
+            483499.99999999226,
+            418415.9999999793,
+            426874.99999999546,
+            1236833.000000047,
+            434708.999999998,
+            408541.0000000138,
+            386791.00000001653,
+            326166.9999999981
+          ]
+        }
+      ],
+      "after": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 19,
+              "ns": 2666796.052631579
+            },
+            {
+              "runs": 23,
+              "ns": 2267911.2173913037
+            },
+            {
+              "runs": 23,
+              "ns": 2178958.3478260865
+            },
+            {
+              "runs": 19,
+              "ns": 2687214.947368421
+            },
+            {
+              "runs": 22,
+              "ns": 2335835.2272727285
+            }
+          ],
+          "load": [
+            1086917.0000000282,
+            575209.0000000293,
+            486667.0000000113,
+            422917.00000004086,
+            1353958.9999999749,
+            438750.0000000273,
+            348124.99999998184,
+            360666.9999999781,
+            391666.999999984,
+            324292.000000014
+          ]
+        }
+      ]
+    },
+    {
+      "pair": 2,
+      "order": [
+        "after",
+        "before"
+      ],
+      "before": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 21,
+              "ns": 2424192.476190476
+            },
+            {
+              "runs": 19,
+              "ns": 2732458.3157894737
+            },
+            {
+              "runs": 23,
+              "ns": 2190130.4347826084
+            },
+            {
+              "runs": 21,
+              "ns": 2393297.6190476194
+            },
+            {
+              "runs": 22,
+              "ns": 2314297.363636363
+            }
+          ],
+          "load": [
+            1102290.9999999797,
+            571124.999999995,
+            481832.99999999464,
+            408166.99999999173,
+            413458.99999998894,
+            396000.000000015,
+            342874.99999999226,
+            2388666.999999998,
+            528166.9999999963,
+            377750.00000004866
+          ]
+        }
+      ],
+      "after": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 21,
+              "ns": 2450482.1428571427
+            },
+            {
+              "runs": 22,
+              "ns": 2291482.954545455
+            },
+            {
+              "runs": 23,
+              "ns": 2266215.5652173907
+            },
+            {
+              "runs": 19,
+              "ns": 2673078.947368421
+            },
+            {
+              "runs": 22,
+              "ns": 2355721.5909090918
+            }
+          ],
+          "load": [
+            1755541.9999999914,
+            583041.9999999776,
+            484042.00000004494,
+            423958.00000002736,
+            409874.99999999953,
+            406708.999999978,
+            346124.99999997223,
+            375791.99999998993,
+            375917.00000001537,
+            334125.00000002864
+          ]
+        }
+      ]
+    },
+    {
+      "pair": 3,
+      "order": [
+        "before",
+        "after"
+      ],
+      "before": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 21,
+              "ns": 2407196.428571429
+            },
+            {
+              "runs": 23,
+              "ns": 2186889.47826087
+            },
+            {
+              "runs": 24,
+              "ns": 2169036.458333333
+            },
+            {
+              "runs": 21,
+              "ns": 2438837.2857142845
+            },
+            {
+              "runs": 23,
+              "ns": 2255054.3478260874
+            }
+          ],
+          "load": [
+            1852750.0000000144,
+            649375.0000000205,
+            505625.0000000091,
+            426582.9999999937,
+            417416.0000000029,
+            393124.99999999773,
+            335374.99999999907,
+            361917.00000000536,
+            365667.0000000304,
+            338500.0000000105
+          ]
+        }
+      ],
+      "after": [
+        {
+          "name": "probe/rounded-thirds",
+          "checked": {
+            "alloc": 48072,
+            "fuel": 25018,
+            "outcome": "completed",
+            "result": "0.3333333333333333333333333333333333"
+          },
+          "run": [
+            {
+              "runs": 19,
+              "ns": 2680241.210526316
+            },
+            {
+              "runs": 22,
+              "ns": 2306643.909090909
+            },
+            {
+              "runs": 23,
+              "ns": 2264425.695652173
+            },
+            {
+              "runs": 20,
+              "ns": 2511918.7499999995
+            },
+            {
+              "runs": 21,
+              "ns": 2441029.761904762
+            }
+          ],
+          "load": [
+            1088833.0000000224,
+            579874.9999999587,
+            481875.00000000227,
+            1339749.999999981,
+            461792.0000000026,
+            409666.0000000156,
+            351875.0000000068,
+            364874.99999998364,
+            374290.99999997107,
+            334625.0000000168
+          ]
+        }
+      ]
+    }
+  ],
+  "heap": {
+    "before": [
+      {
+        "name": "probe/rounded-thirds",
+        "checked": {
+          "alloc": 48072,
+          "fuel": 25018,
+          "outcome": "completed",
+          "result": "0.3333333333333333333333333333333333"
+        },
+        "before": {
+          "memory": {
+            "current": 60818176,
+            "peak": 70140672,
+            "currentCommit": 192151552,
+            "peakCommit": 192151552,
+            "pageFaults": 58
+          },
+          "heap": {
+            "heapSize": 6882719,
+            "heapCapacity": 8776799,
+            "extraMemorySize": 4387519,
+            "objectCount": 30169,
+            "objectTypeCounts": {
+              "Array": 6231,
+              "string": 3725,
+              "Object": 1340,
+              "BigInt": 215
+            },
+            "mimalloc": {
+              "malloc_requested": 108771040,
+              "malloc_normal_count": 475363,
+              "malloc_huge_count": 7
+            }
+          }
+        },
+        "uncollected": {
+          "memory": {
+            "current": 69731072,
+            "peak": 70140672,
+            "currentCommit": 200540160,
+            "peakCommit": 200540160,
+            "pageFaults": 59
+          },
+          "heap": {
+            "heapSize": 7030545,
+            "heapCapacity": 22470737,
+            "extraMemorySize": 4433585,
+            "objectCount": 31982,
+            "objectTypeCounts": {
+              "Array": 93469,
+              "string": 42392,
+              "Object": 109836,
+              "BigInt": 38775
+            },
+            "mimalloc": {
+              "malloc_requested": 242022520,
+              "malloc_normal_count": 1402729,
+              "malloc_huge_count": 12
+            }
+          }
+        },
+        "collected": {
+          "memory": {
+            "current": 58163968,
+            "peak": 70140672,
+            "currentCommit": 200540160,
+            "peakCommit": 200540160,
+            "pageFaults": 59
+          },
+          "heap": {
+            "heapSize": 7293007,
+            "heapCapacity": 9425567,
+            "extraMemorySize": 4741375,
+            "objectCount": 30857,
+            "objectTypeCounts": {
+              "Array": 6236,
+              "string": 3742,
+              "Object": 1694,
+              "BigInt": 215
+            },
+            "mimalloc": {
+              "malloc_requested": 242128360,
+              "malloc_normal_count": 1402810,
+              "malloc_huge_count": 12
+            }
+          }
+        },
+        "gcMs": 1.4045419999999922
+      }
+    ],
+    "after": [
+      {
+        "name": "probe/rounded-thirds",
+        "checked": {
+          "alloc": 48072,
+          "fuel": 25018,
+          "outcome": "completed",
+          "result": "0.3333333333333333333333333333333333"
+        },
+        "before": {
+          "memory": {
+            "current": 65045344,
+            "peak": 73335648,
+            "currentCommit": 201261056,
+            "peakCommit": 201261056,
+            "pageFaults": 58
+          },
+          "heap": {
+            "heapSize": 6847237,
+            "heapCapacity": 8757205,
+            "extraMemorySize": 4351525,
+            "objectCount": 30169,
+            "objectTypeCounts": {
+              "Array": 6230,
+              "string": 3725,
+              "Object": 1339,
+              "BigInt": 216
+            },
+            "mimalloc": {
+              "malloc_requested": 106110776,
+              "malloc_normal_count": 499903,
+              "malloc_huge_count": 7
+            }
+          }
+        },
+        "uncollected": {
+          "memory": {
+            "current": 75744096,
+            "peak": 75744096,
+            "currentCommit": 216465408,
+            "peakCommit": 216465408,
+            "pageFaults": 59
+          },
+          "heap": {
+            "heapSize": 7046382,
+            "heapCapacity": 22307278,
+            "extraMemorySize": 4450334,
+            "objectCount": 31929,
+            "objectTypeCounts": {
+              "Array": 94121,
+              "string": 42656,
+              "Object": 105457,
+              "BigInt": 44239
+            },
+            "mimalloc": {
+              "malloc_requested": 224980376,
+              "malloc_normal_count": 1464515,
+              "malloc_huge_count": 12
+            }
+          }
+        },
+        "collected": {
+          "memory": {
+            "current": 60408672,
+            "peak": 75744096,
+            "currentCommit": 216465408,
+            "peakCommit": 216465408,
+            "pageFaults": 59
+          },
+          "heap": {
+            "heapSize": 7305752,
+            "heapCapacity": 9436840,
+            "extraMemorySize": 4752632,
+            "objectCount": 30868,
+            "objectTypeCounts": {
+              "Array": 6236,
+              "string": 3742,
+              "Object": 1694,
+              "BigInt": 216
+            },
+            "mimalloc": {
+              "malloc_requested": 225094648,
+              "malloc_normal_count": 1464604,
+              "malloc_huge_count": 12
+            }
+          }
+        },
+        "gcMs": 1.4127920000000103
+      }
+    ]
+  },
+  "heapSnapshotFields": "JSC sizes, object counts, selected object types and aggregate mimalloc request counters"
+}

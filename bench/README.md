@@ -188,6 +188,16 @@ heap/GC probes, and the four-runner comparison for
 `bench/ts/character-indexing.py`; its two inputs are standalone Bun bundles of
 `bench/ts/src/character-indexing-worker.ts`, built against the respective Cores.
 
+The [TS Decimal measurements](results/2026-10-15-ts-decimal-paths.md) record
+alternating division, integer/remainder, Quantity and indexing timings with
+signed, precision-boundary and subnormal probes for
+[#944](https://github.com/odogono/odgn-talk/issues/944). Run
+`bench/ts/decimal-paths.py` with before/after bundles of the same
+`bench/ts/src/character-indexing-worker.ts`; it reuses the paired driver with a
+Decimal workload array. `bench/ts/decimal-profiles.py` collects separate CPU
+captures from the saved measurements. The report also includes heap/GC
+observations and the requested four-runner comparison.
+
 ## Native Zig comparison
 
 The default run includes the native Zig Core through `talk.h`, built with the
