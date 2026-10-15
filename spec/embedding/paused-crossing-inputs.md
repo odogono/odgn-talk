@@ -257,18 +257,23 @@ performance acceptance remain separate gates.
 - **Implemented in:** design #958 and crossing implementation #964/#966 are
   merged; #971 merged as `e9b8aa570a6587018c7e79ac9875c7e579f1a4e8` and adds
   the focused callback parity gate plus four-platform embedded-probe execution.
-  #972 carries the opt-in abandonment timing in this contract and its Zig
-  implementation on branch `fix/issue-972`. Its implementation and probe evidence
-  are separate from a public Go adapter.
-- **Required base:** #971 merge or a descendant, chapter 9 input queue/Message
+  #972's opt-in abandonment timing merged in #973 (`ee6240d4`). #977
+  (`12c56beb`) adds the initial public data/Request adapter. #978 adds the public
+  Capability bridge and the Operation Trace observation extension below; its
+  Zig corrections are separately tracked in #979 and #980.
+- **Required base:** #977 merge or a descendant, chapter 9 input queue/Message
   Layer rules and chapter 6 cancellation/Stop. Rebuild the probe from the
   committed implementation source revision recorded in its manifest.
-- **Remaining work:** merge/accept #972's additive timing; #884 owns the public
-  binding/API/Corpus, facilities and performance gates. Focused probe execution
+- **Remaining work:** review/accept #978's additive Operation observation
+  contract and public Capability adapter. #884 retains full binding/API/Corpus,
+  facilities, arbitrary Trace-sink timing, non-yielding admission and performance
+  gates. Focused probe execution
   passed on Linux/macOS amd64/arm64 in #971; this does not establish full public
   Go API or application compatibility.
-- **Approval still needed:** no expectation files await first blessing. Full Go
-  retirement requires separately accepted numerical limits and evidence.
+- **Approval still needed:** #978's Operation Trace observation and settlement
+  notification contract needs review with its implementation. No expectation
+  files await first blessing. Full Go retirement requires separately accepted
+  numerical limits and evidence.
 
 ## Operation Trace observation at a paused crossing
 
@@ -312,3 +317,12 @@ Fuel already specified by chapter 9, Capability definition identity in typed
 before resumption. Admission of Answer/Fail alone does not end the Host's
 cancellation observation; normal consumption does. A discarded already-settled
 Call needs cancellation without a second `abandon` Trace record.
+
+For `crossing-trace-v1` Hosts, the same success/need/error envelopes that carry
+`abandoned` also carry `settled`: started Calls whose queued settlement has
+actually been consumed by their Run, listed once. The Host may then drop its
+cancellation registry entry without cancelling the public Context. Admission of
+Answer/Fail, or a Pump that leaves the ready Run sliced, is insufficient. If that
+Run is discarded first, its id appears in `abandoned` instead. Process both lists
+before invoking any following callback. This keeps cancellation correct across
+Fuel-cap preemption without retaining every completed Call for the Group's life.

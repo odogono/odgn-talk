@@ -130,6 +130,21 @@ const GroupEntry = struct {
         try o.raw("]");
     }
 
+    /// A queued answer is no longer cancellable only once its Run consumes it.
+    fn writeSettled(e: *GroupEntry, o: *Out) Allocator.Error!void {
+        try o.raw(",\"settled\":[");
+        var first = true;
+        for (e.started.items) |id| {
+            for (e.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id) and c.settlement_consumed and !c.abandoned.load(.acquire)) {
+                if (!first) try o.raw(",");
+                first = false;
+                try o.text(id);
+                break;
+            };
+        }
+        try o.raw("]");
+    }
+
     /// Called only once the complete reply has been serialized successfully.
     fn forgetAbandoned(e: *GroupEntry) void {
         var i: usize = 0;
@@ -1762,6 +1777,7 @@ fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFiel
     const closes: usize = if (fields == .ok) 2 else 1;
     o.raw(reply[0 .. reply.len - closes]) catch return oomReply();
     entry.writeAbandoned(&o) catch return oomReply();
+    if (s.crossing_trace) entry.writeSettled(&o) catch return oomReply();
     o.raw(reply[reply.len - closes ..]) catch return oomReply();
     const emitted = o.finish() catch return oomReply();
     entry.forgetAbandoned();
