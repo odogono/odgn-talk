@@ -305,3 +305,10 @@ A sink reacting to other records can still observe a later transport boundary;
 full Trace-sink and non-yielding concurrent-input compatibility remain #884
 gates. The contract and its implementation require review together in #978;
 there are no changed Data Files or expectation blessings.
+
+The public-adapter comparisons also track Zig corrections in #979: settlement
+Fuel already specified by chapter 9, Capability definition identity in typed
+`CallFailed`, and cancellation when a queued settlement's Run is discarded
+before resumption. Admission of Answer/Fail alone does not end the Host's
+cancellation observation; normal consumption does. A discarded already-settled
+Call needs cancellation without a second `abandon` Trace record.

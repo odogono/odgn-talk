@@ -2960,6 +2960,7 @@ pub const Group = struct {
     /// Script's turn, where a Run already in the queue keeps its place.
     fn cancel(g: *Group, s: *Script, r: *Run) !void {
         if (r.resume_with) |w| if (w == .cancelled) return;
+        abandonReadyCalls(r);
         // Its rollback first, which may defer while draining: nothing else
         // changes until it completes.
         if (r.continuing) try g.cleanupLifecycle(r);
@@ -4522,6 +4523,7 @@ pub const Group = struct {
 
     /// What a resumed Run's wait gave: a value pushed, or an error raised.
     fn resumeWith(g: *Group, run: *Run, frame: *Frame, with: Resume, waited: Waited, pc: u32, ins: lower.Instruction) !?*Value {
+        if (waited.call) |c| c.settlement_consumed = true;
         const gpa = g.gpa;
         switch (with) {
             .woke => return null,
@@ -5584,7 +5586,21 @@ pub const Group = struct {
     /// A Run's Segment rolled back for a drained Stop, cancellation or
     /// Rewind: its scopes abandoned and its participant rolled back. While
     /// draining, each crossing may defer, with progress in `run.cleanup`.
+    fn abandonReadyCalls(run: *Run) void {
+        if (run.resume_with != null) {
+            if (run.waited.call) |c| if (!c.settlement_consumed) {
+                c.abandoned.store(true, .release);
+            };
+        }
+        if (run.join) |j| for (j.members.items) |m| {
+            if (m.with != null) if (m.waited.call) |c| if (!c.settlement_consumed) {
+                c.abandoned.store(true, .release);
+            };
+        };
+    }
+
     fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
+        abandonReadyCalls(run);
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
         _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking or g.landing_active);
         run.cleanup = null;
@@ -9310,6 +9326,7 @@ pub const Group = struct {
                 if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
+        if (returned != null) g.answering_crossing = false;
         if (returned == null and g.observe_crossings) g.trace_pause = true;
         const interrupted = g.landedAt(run) catch |err| {
             if (err != error.Deferred) return err;
@@ -9620,7 +9637,8 @@ pub const Group = struct {
         g.write("call-failed {s} op={s}.{s}\n", .{ id, grant, operation_name });
         const r = &g.reports;
         const script_name = id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse 0];
-        g.addReport(.{ .call_failed = .{ .script = r.text(script_name) catch "", .call = r.text(id) catch "", .capability = r.text(grant) catch "", .operation = r.text(operation_name) catch "" } });
+        const definition = if (g.script(script_name)) |owner_script| if (owner_script.grant(grant)) |named| named.grant.capability.name else grant else grant;
+        g.addReport(.{ .call_failed = .{ .script = r.text(script_name) catch "", .call = r.text(id) catch "", .capability = r.text(definition) catch "", .operation = r.text(operation_name) catch "" } });
         return g.raise("host error", where);
     }
 

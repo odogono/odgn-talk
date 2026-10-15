@@ -134,7 +134,12 @@ const GroupEntry = struct {
     fn forgetAbandoned(e: *GroupEntry) void {
         var i: usize = 0;
         while (i < e.started.items.len) {
-            if (e.isAbandoned(e.started.items[i])) {
+            var consumed = false;
+            for (e.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, e.started.items[i])) {
+                consumed = c.settlement_consumed;
+                break;
+            };
+            if (consumed or e.isAbandoned(e.started.items[i])) {
                 e.gpa.free(e.started.orderedRemove(i));
             } else i += 1;
         }
@@ -2291,7 +2296,6 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         break :blk Direct.callAnswerWithCost(c, v, fuel);
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
-    entry.untrack(call_id);
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -3458,8 +3462,7 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
             const entry = s.exchange_entry.?;
             entry.group.group.trace_pause = false;
             s.paused_ref = null;
-            entry.group.group.answering_crossing = false;
-            return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+            return resumeAnswered(s, ref, entry);
         }
         const want: []const u8 = switch (s.need.?.kind) {
             .op => "op-result",
@@ -5197,4 +5200,23 @@ test "opt-in error replies carry their own Trace before another input" {
     try std.testing.expectEqualStrings("refused code=\"clock backwards\"", lines[1].string);
     const after = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{5}));
     try std.testing.expectEqual(@as(usize, 1), after.object.get("trace").?.array.items.len);
+}
+
+test "an enqueued answer keeps cancellation observable until its Run consumes it" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"abandoned-before-needs-v1\"]}}", .{0}));
+    const need = try pausedFixture(&c, "suspending", "on go\n ask api to read and wait\nend go", false);
+    const id = need.object.get("call").?.string;
+    _ = try okOf(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{}));
+    _ = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"g\",\"call\":\"{s}\",\"value\":1}}", .{ 7, id }));
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"done\"}}", .{8}));
+    const done = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9}));
+    const ids = done.object.get("abandoned").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), ids.len);
+    try std.testing.expectEqualStrings(id, ids[0].string);
+    const after = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
+    try std.testing.expectEqual(@as(usize, 0), after.object.get("abandoned").?.array.items.len);
 }
