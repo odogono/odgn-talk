@@ -1,0 +1,18 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/spikes/go-zig-binding
+cpu: Apple M5
+BenchmarkImmediate/native-go-10         	   95596	      3781 ns/op	    8267 B/op	      92 allocs/op
+BenchmarkImmediate/native-go-10         	   95398	      3745 ns/op	    8266 B/op	      92 allocs/op
+BenchmarkImmediate/native-go-10         	   95049	      3754 ns/op	    8266 B/op	      92 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	   10000	     32484 ns/op	  126845 B/op	     261 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	   10000	     31650 ns/op	  126800 B/op	     261 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	   10000	     31632 ns/op	  126800 B/op	     261 allocs/op
+BenchmarkColdCompile-10                          	       1	 613203459 ns/op	95114640 B/op	  197571 allocs/op
+BenchmarkColdCompile-10                          	       1	 614778791 ns/op	95114624 B/op	  197570 allocs/op
+BenchmarkColdCompile-10                          	       1	 616259084 ns/op	95119944 B/op	  197576 allocs/op
+BenchmarkInstantiate-10                          	    2696	    122777 ns/op	 3433409 B/op	     579 allocs/op
+BenchmarkInstantiate-10                          	    2904	    123745 ns/op	 3433409 B/op	     579 allocs/op
+BenchmarkInstantiate-10                          	    2908	    124068 ns/op	 3433409 B/op	     579 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/spikes/go-zig-binding	5.923s

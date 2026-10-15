@@ -6,6 +6,42 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Cancellation before subsequent callbacks, 2026-10-15
+
+After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
+confirmed pure-Go tests/vet/race and separate cross-builds on all four targets.
+The public-adapter audit then combined two previously separate behaviors: Call
+context cancellation and another Script's effect cleanup. Native Go cancels
+pending work before the cleanup callback. The Message Layer reached Rollback
+without notifying its Host until the final Pump reply. The red probe reproduced
+the same omission before Operation, property and Grant release callbacks.
+
+[#972](https://github.com/odogono/odgn-talk/issues/972) carries the additive
+[early-abandonment contract](../../spec/embedding/paused-crossing-inputs.md#abandonment-before-a-subsequent-callback)
+and Zig implementation. Hosts opt in with `hello.features` and check support
+for `abandoned-before-needs-v1`; existing Hosts retain final-success-reply timing.
+Opted-in Hosts receive notices before servicing the next need, including Grant
+release before a held reply, and on final worker errors. A serialized notice is
+consumed once, with no early Reports/Trace or extra worker execution.
+
+An outbox cannot fix this observation by waiting for the final reply; cancelling
+when Stop is admitted acts before the input lands. Direct WASM callback imports
+or cgo would introduce another backend and ownership model. An opt-in Message
+Layer notice closes this gap within the agreed backend, preserving existing
+Hosts. The correction precedes public adapter expansion; no Go backend selection,
+production API replacement, or retirement is included.
+
+Runtime source `05f2a66d0216626908a3b32c0b70a945add010d6` passes 270 Zig tests plus
+C Host checks, both 429-case ordinary/deferred Corpus replays, native sidecar and
+WASI checks, and the rebuilt embedded parity suite with pure-Go tests/vet/race.
+Current artifact execution is local Darwin/arm64; all four targets cross-compile
+without cgo and the existing CI matrix executes the new artifact separately.
+No expectation files change. [Current raw measurements](../../spikes/go-zig-binding/measurements-abandonment.txt)
+give median immediate-call run averages of 3.754 µs native / 31.650 µs probe
+(8.4×), cold compile/runtime/close 614.8 ms and cached instantiation/close 123.7 µs.
+The matched benchmark remains an immediate-call workload without the feature
+opt-in, not cancellation latency or performance acceptance.
+
 ## Callback compatibility probe, 2026-10-15
 
 The follow-up starts from #967's merged main (`dcd733c3`) and rebuilds the
@@ -25,10 +61,10 @@ and failed-setter Trace), [#969](https://github.com/odogono/odgn-talk/issues/969
 [#970](https://github.com/odogono/odgn-talk/issues/970) (deferred reissued Start).
 No corpus expectations changed. The corrected source passes 269 Zig tests, the C
 Host check, both ordinary and deferred 429-case corpus replays, native sidecar
-checks and the embedded pure-Go probe. Local execution/race checks are
-Darwin/arm64; all four targets cross-compile without cgo. A dedicated CI matrix
-executes the embedded probe on all four targets; its results must be checked
-before claiming broader execution coverage.
+checks and the embedded pure-Go probe. Its embedded-probe CI
+passes execution/vet/race and separate cgo-free cross-builds on Linux/macOS
+amd64/arm64. That evidence belongs to #971's artifact; the early-abandonment
+artifact needs its own matrix results.
 
 [Refreshed measurements](../../spikes/go-zig-binding/measurements-callbacks.txt)
 for that source give median immediate-call run averages of 3.733 µs native Go
