@@ -103,6 +103,23 @@ record before/after timings and allocations for [#504](https://github.com/odogon
 The [TS packed Unicode tables measurements](results/2026-10-12-ts-unicode-tables.md)
 record three paired before/after runs for [#399](https://github.com/odogono/odgn-talk/issues/399).
 
+The [TS range construction measurements](results/2026-10-15-ts-range-construction.md)
+record alternating before/after timings, separate CPU profiles and heap/forced-GC
+probes for [#943](https://github.com/odogono/odgn-talk/issues/943). To reproduce,
+install dependencies in both checkouts, copy `ts/src/range-construction.ts` into
+the baseline checkout, then run from the after checkout:
+
+```sh
+python3 bench/ts/range-construction.py <before-checkout> . --before-revision <sha> --out <results.json>
+```
+
+Each workload's before and after processes run next to one another, alternating
+order over three pairs. The probe checks output, Fuel and logical allocation on
+every Run, saves nine 50 ms Run samples and separate fresh-name Load samples,
+then collects heap/GC evidence and compressed CPU profiles outside timing.
+Host load averages accompany each process because unrelated jobs on a shared
+machine can dominate small changes.
+
 ## Native Zig comparison
 
 The default run includes the native Zig Core through `talk.h`, built with the
