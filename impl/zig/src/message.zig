@@ -2132,7 +2132,10 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         }
     }
     var limits_slot: talk.Limits = undefined;
-    const limits = limitsOf(field(msg, "limits"), &limits_slot) catch return hostError(s.gpa, ref, .invalid_value);
+    const limits = limitsOf(field(msg, "limits"), &limits_slot) catch {
+        entry.group.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
+        return hostError(s.gpa, ref, .invalid_value);
+    };
     // Trace lines from earlier work are not this load's.
     entry.group.flush();
     freeTrace(s.gpa, takeTrace(entry));

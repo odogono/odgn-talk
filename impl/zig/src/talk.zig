@@ -1112,7 +1112,10 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const name = bytes(o.name, o.name_len) catch return .invalid_value;
     const source = bytes(o.source, o.source_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(source)) return .invalid_value;
-    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) return .name_reused;
+    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "name reused");
+        return .name_reused;
+    };
     const given: []const LoadGrant = if (o.grants_len == 0) &.{} else (o.grants orelse return .invalid_value)[0..o.grants_len];
     const named = g.core.gpa.alloc(machine.NamedGrant, given.len) catch return .out_of_memory;
     defer g.core.gpa.free(named);

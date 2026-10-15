@@ -2603,6 +2603,11 @@ pub const Group = struct {
     };
 
     pub fn refuseWorker(g: *Group, input: WorkerInput) void {
+        g.refuseWorkerWithCode(input, "reentrant call");
+    }
+
+    /// Early API validation still records the attempted Host Input.
+    pub fn refuseWorkerWithCode(g: *Group, input: WorkerInput, code: []const u8) void {
         const out = g.trace orelse return;
         var arena: std.heap.ArenaAllocator = .init(g.gpa);
         defer arena.deinit();
@@ -2644,7 +2649,7 @@ pub const Group = struct {
                 out.print(" identity={x}", .{r.library.identity}) catch {};
             },
         }
-        out.writeAll("\nrefused code=\"reentrant call\"\n") catch {};
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
     }
 
     /// Registers a compiled Library with the Group, writing the
