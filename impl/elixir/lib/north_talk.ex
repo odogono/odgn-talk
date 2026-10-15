@@ -63,7 +63,44 @@ defmodule NorthTalk do
   @doc "Makes a Script Group. `trace: true` records its Trace."
   def new_group(owner, name, opts \\ []), do: GenServer.call(owner, {:new_group, name, opts})
 
-  @doc "Loads a Script into a Group. Returns its name, or a `NorthTalk.LoadError`."
+  @doc """
+  Defines a Capability for this owner: a module that uses
+  `NorthTalk.Capability`, or a `NorthTalk.Capability.from_functions/3` value.
+  Every Group of the owner can then be granted it.
+  """
+  def define_capability(owner, capability), do: GenServer.call(owner, {:define_capability, capability})
+
+  @doc """
+  Grants some of a defined Capability's Operations. Returns a
+  `NorthTalk.Grant` to pass to `load/4`.
+
+  Options:
+
+    * `:ops` - Operation names, or `:all` (the default).
+    * `:binding` - any term, given to every call through the Grant as
+      `NorthTalk.Call`'s `binding`.
+  """
+  def grant(owner, capability, opts \\ [])
+  def grant(owner, name, opts) when is_binary(name), do: GenServer.call(owner, {:grant, name, opts})
+  def grant(owner, capability, opts), do: grant(owner, NorthTalk.Capability.resolve(capability).name, opts)
+
+  @doc """
+  Answers a suspending call a callback deferred with `{:defer, ref}`.
+  Returns `{:error, :unknown_ref}` when no call is waiting under `ref`: it was
+  settled already, or abandoned on its Run's cancellation or deadline.
+  """
+  def answer(owner, ref, value), do: GenServer.call(owner, {:settle, ref, {:answer, value}})
+
+  @doc """
+  Fails a deferred call, as `answer/3` answers one. `failure` is a code, or
+  `%{code: c, message: m, data: map}`.
+  """
+  def fail(owner, ref, failure), do: GenServer.call(owner, {:settle, ref, {:fail, failure}})
+
+  @doc """
+  Loads a Script into a Group. Returns its name, or a `NorthTalk.LoadError`.
+  `grants:` maps each name the Script uses to a `NorthTalk.Grant`.
+  """
   def load(%Group{owner: owner} = group, name, source, opts \\ []),
     do: GenServer.call(owner, {:load, group, name, source, opts})
 
@@ -102,7 +139,18 @@ defmodule NorthTalk do
   """
   def pump(%Group{owner: owner} = group, opts \\ []), do: GenServer.call(owner, {:pump, group, opts})
 
-  for {name, arity} <- [new_group: 3, load: 4, compile_library: 5, add_library: 2, deliver: 4, request: 5, pump: 2] do
+  for {name, arity} <- [
+        define_capability: 2,
+        grant: 2,
+        grant: 3,
+        new_group: 3,
+        load: 4,
+        compile_library: 5,
+        add_library: 2,
+        deliver: 4,
+        request: 5,
+        pump: 2
+      ] do
     args = Macro.generate_arguments(arity, __MODULE__)
 
     @doc "Like `#{name}/#{arity}`, but raises the error."
