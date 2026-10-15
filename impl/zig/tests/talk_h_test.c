@@ -1939,6 +1939,24 @@ int main(void) {
     talk_pair entries[] = {talk_kv("a", 1, one)};
     expect(talk_map(entries, 1, &value) == TALK_OK && talk_value_get(value, "a", 1, &copy) == TALK_OK && talk_value_kind(copy) == TALK_KIND_NUMBER, "talk_kv builds a map entry");
     talk_value_release(copy); talk_value_release(value);
+    /* Indexed entries cross shared storage blocks in insertion order. */
+    talk_pair many[65];
+    char keys[65][8];
+    for (size_t i = 0; i < 65; ++i) {
+        int len = snprintf(keys[i], sizeof keys[i], "k%zu", i);
+        many[i] = talk_kv(keys[i], (size_t)len, one);
+    }
+    expect(talk_map(many, 65, &value) == TALK_OK, "large Map constructor");
+    for (size_t i = 0; i < 65; ++i) {
+        talk_pair entry;
+        expect(talk_value_entries(value, i, &entry), "large Map indexed entry");
+        expect(entry.key_len == strlen(keys[i]) && memcmp(entry.key, keys[i], entry.key_len) == 0, "large Map insertion order");
+        expect(talk_value_kind(entry.value) == TALK_KIND_NUMBER, "large Map retained child");
+        talk_value_release(entry.value);
+    }
+    talk_pair past;
+    expect(!talk_value_entries(value, 65, &past), "large Map entry end");
+    talk_value_release(value);
     struct timespec moment = {1790000000, 250000000};
     expect(talk_instant_from_time(&moment, &value) == TALK_OK && talk_value_as_instant(value, &seconds, &nanos) && seconds == 1790000000 && nanos == 250000000, "an Instant from a timespec");
     talk_value_release(value);

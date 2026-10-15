@@ -106,10 +106,13 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *
         },
         .map => |xs| {
             var escaped = false;
-            for (xs) |p| if (p.key.len > 0 and p.key[0] == '$') {
-                escaped = true;
-                break;
-            };
+            for (0..xs.len) |map_index| {
+                const p = xs.at(map_index);
+                if (p.key.len > 0 and p.key[0] == '$') {
+                    escaped = true;
+                    break;
+                }
+            }
             if (escaped) {
                 try tag(w, "map");
                 try w.writeByte('[');
@@ -119,7 +122,7 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *
             var i = xs.len;
             while (i > 0) {
                 i -= 1;
-                const p = xs[i];
+                const p = xs.at(i);
                 if (escaped) steps.appendAssumeCapacity(.{ .punctuation = "]" });
                 steps.appendAssumeCapacity(.{ .value = p.value });
                 steps.appendAssumeCapacity(.{ .punctuation = if (escaped) "," else ":" });
@@ -465,9 +468,9 @@ fn writePlain(w: *std.Io.Writer, root: *const Value) Error!void {
                 var i = xs.len;
                 while (i > 0) {
                     i -= 1;
-                    steps.appendAssumeCapacity(.{ .value = xs[i].value });
+                    steps.appendAssumeCapacity(.{ .value = xs.at(i).value });
                     steps.appendAssumeCapacity(.{ .punctuation = ":" });
-                    steps.appendAssumeCapacity(.{ .key = xs[i].key });
+                    steps.appendAssumeCapacity(.{ .key = xs.at(i).key });
                     if (i > 0) steps.appendAssumeCapacity(.{ .punctuation = "," });
                 }
             },

@@ -2292,7 +2292,7 @@ pub const Session = struct {
             else => {},
         }
         if (value.data == .map) {
-            const pairs = s.alloc().dupe(northtalk.value.Pair, value.data.map) catch return;
+            const pairs = value.data.map.copyEntries(s.alloc()) catch return;
             std.mem.sort(northtalk.value.Pair, pairs, {}, struct {
                 fn less(_: void, x: northtalk.value.Pair, y: northtalk.value.Pair) bool {
                     return std.mem.order(u8, x.key, y.key) == .lt;
@@ -2337,7 +2337,8 @@ pub const Session = struct {
         var name: ?[]const u8 = null;
         var origin: ?[]const u8 = null;
         var library: ?[]const u8 = null;
-        for (value.data.map) |p| {
+        for (0..value.data.map.len) |map_index| {
+            const p = value.data.map.at(map_index);
             if (p.value.data != .text) return null;
             const t = s.dupe(p.value.data.text);
             if (std.mem.eql(u8, p.key, "name")) name = t else if (std.mem.eql(u8, p.key, "origin")) origin = t else if (std.mem.eql(u8, p.key, "library")) library = t else return null;
@@ -2913,7 +2914,7 @@ pub const Session = struct {
                 var i = pairs.len;
                 while (i > 0) {
                     i -= 1;
-                    stack.append(s.alloc(), pairs[i].value) catch return;
+                    stack.append(s.alloc(), pairs.at(i).value) catch return;
                 }
             },
             else => {},
@@ -3251,8 +3252,8 @@ fn deepSessionValue() !void {
         if (left % 2 == 0) {
             try std.testing.expect(value.data == .map);
             try std.testing.expectEqual(@as(usize, 1), value.data.map.len);
-            try std.testing.expectEqualStrings("x", value.data.map[0].key);
-            value = value.data.map[0].value;
+            try std.testing.expectEqualStrings("x", value.data.map.at(0).key);
+            value = value.data.map.at(0).value;
         } else {
             try std.testing.expect(value.data == .list);
             try std.testing.expectEqual(@as(usize, 1), value.data.list.len);
@@ -3296,7 +3297,7 @@ fn sessionHandleAllocations(a: Allocator, scenario: enum { value, unknown, argum
         const args = try s.argsOf(parsed.value);
         defer for (args) |v| c.talk_value_release(v);
         const first: *const northtalk.value.Value = @ptrCast(@alignCast(args[0].?));
-        try std.testing.expect(first.data.map[0].value.data.list[0] == function);
+        try std.testing.expect(first.data.map.at(0).value.data.list[0] == function);
         try std.testing.expect(args[1] == @as(*c.talk_value, @ptrCast(function)));
         return;
     }
@@ -3310,12 +3311,12 @@ fn sessionHandleAllocations(a: Allocator, scenario: enum { value, unknown, argum
     const out = maybe orelse return error.TestUnexpectedResult;
     const value: *const northtalk.value.Value = @ptrCast(@alignCast(out));
     const items = value.data.list;
-    try std.testing.expect(items[0].data.map[0].value.data.list[0] == function);
+    try std.testing.expect(items[0].data.map.at(0).value.data.list[0] == function);
     try std.testing.expect(items[1] == function);
-    try std.testing.expectEqualStrings("$sessionFunction", items[2].data.map[0].key);
-    try std.testing.expectEqualStrings("literal", items[2].data.map[0].value.data.text);
-    try std.testing.expectEqualStrings("a\"b", items[2].data.map[1].key);
-    try std.testing.expect(items[2].data.map[1].value.data.bool);
+    try std.testing.expectEqualStrings("$sessionFunction", items[2].data.map.at(0).key);
+    try std.testing.expectEqualStrings("literal", items[2].data.map.at(0).value.data.text);
+    try std.testing.expectEqualStrings("a\"b", items[2].data.map.at(1).key);
+    try std.testing.expect(items[2].data.map.at(1).value.data.bool);
 }
 
 test "Session handle decoding releases completed children after every allocation failure" {

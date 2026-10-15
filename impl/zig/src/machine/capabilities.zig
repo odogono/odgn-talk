@@ -253,7 +253,7 @@ const Checker = struct {
             const i = top.next;
             const child: ?Frame = switch (top.v.data) {
                 .list => |xs| if (i < xs.len) .{ .v = xs[i], .step = .{ .index = i + 1 } } else null,
-                .map => |pairs| if (i < pairs.len) .{ .v = pairs[i].value, .step = .{ .key = pairs[i].key } } else null,
+                .map => |pairs| if (i < pairs.len) .{ .v = pairs.at(i).value, .step = .{ .key = pairs.at(i).key } } else null,
                 .range => |r| if (i < 2) .{ .v = if (i == 0) r.from else r.to } else null,
                 else => null,
             };
@@ -324,7 +324,8 @@ const Checker = struct {
                 }
                 if (m.open) {
                     // An open map's other entries are data.
-                    for (v.data.map) |p| {
+                    for (0..v.data.map.len) |map_index| {
+                        const p = v.data.map.at(map_index);
                         if (field(m.fields, p.key) != null) continue;
                         try c.enter(.{ .key = p.key });
                         if (try c.function(p.value)) |bad| return bad;
@@ -332,7 +333,8 @@ const Checker = struct {
                     }
                     return null;
                 }
-                for (v.data.map) |p| {
+                for (0..v.data.map.len) |map_index| {
+                    const p = v.data.map.at(map_index);
                     if (field(m.fields, p.key) != null) continue;
                     try c.enter(.{ .key = p.key });
                     const nothing_shape: Shape = .{ .allocator = c.a, .data = .{ .kind = .nothing } };
@@ -744,7 +746,8 @@ fn catalogued(code: []const u8) bool {
 pub fn validPropFailure(code: []const u8, data: ?*const Value) bool {
     if (data) |d| switch (d.data) {
         .nothing => {},
-        .map => |pairs| for (pairs) |p| {
+        .map => |pairs| for (0..pairs.len) |map_index| {
+            const p = pairs.at(map_index);
             for (reserved) |r| if (std.mem.eql(u8, r, p.key)) return false;
         },
         else => return false,
@@ -758,7 +761,8 @@ pub fn validPropFailure(code: []const u8, data: ?*const Value) bool {
 pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
     if (data) |d| switch (d.data) {
         .nothing => {},
-        .map => |pairs| for (pairs) |p| {
+        .map => |pairs| for (0..pairs.len) |map_index| {
+            const p = pairs.at(map_index);
             for (reserved) |r| if (std.mem.eql(u8, r, p.key)) return false;
         },
         else => return false,
@@ -770,20 +774,23 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
         // fields are the catalogue's.
         const entry = catalogueEntry(code) orelse return true;
         if (!op.closed_errors) return false;
-        const pairs = if (data) |d| (if (d.data == .map) d.data.map else &.{}) else &.{};
+        const pairs: model.Map = if (data) |d| (if (d.data == .map) d.data.map else model.Map.empty) else model.Map.empty;
         for (entry.fields) |f| {
-            for (pairs) |p| {
+            for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
                 if (std.mem.eql(u8, p.key, f)) break;
             } else return false;
         }
         for (e.fields) |f| {
-            const v = for (pairs) |p| {
+            const v = for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
                 if (std.mem.eql(u8, p.key, f.key)) break p.value;
             } else continue;
             if (!kindOf(f.shape, v)) return false;
         }
         if (e.choice) |choice| {
-            const v = for (pairs) |p| {
+            const v = for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
                 if (std.mem.eql(u8, p.key, choice.field)) break p.value;
             } else return false;
             if (v.data != .text) return false;
@@ -791,7 +798,8 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
                 if (std.mem.eql(u8, w, v.data.text)) break;
             } else return false;
         }
-        for (pairs) |p| {
+        for (0..pairs.len) |map_index| {
+            const p = pairs.at(map_index);
             const listed = for (entry.fields) |f| {
                 if (std.mem.eql(u8, p.key, f)) break true;
             } else if (entry.optional) |opt| for (opt) |f| {

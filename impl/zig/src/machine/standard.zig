@@ -458,7 +458,8 @@ fn beforeLocale(a: Allocator, op: *const caps.Operation, args: []const *Value, b
     _ = a;
     const given = localeArgs(op, args);
     if (given.misplaced) |v| return .{ .out_of_domain = v };
-    if (given.options) |o| if (o.data == .map) for (o.data.map) |p| {
+    if (given.options) |o| if (o.data == .map) for (0..o.data.map.len) |map_index| {
+        const p = o.data.map.at(map_index);
         const words: []const []const u8 = if (std.mem.eql(u8, p.key, "sensitivity"))
             &.{ "base", "accent", "case", "variant" }
         else if (std.mem.eql(u8, p.key, "width"))
@@ -526,20 +527,23 @@ fn afterLocale(op: *const caps.Operation, args: []const *Value, result: *const V
         if (result.data != .map) return false;
         const given = args[0].data.list;
         for (given) |t| if (result.get(t.data.text) == null) return false;
-        for (result.data.map) |p| {
+        for (0..result.data.map.len) |map_index| {
+            const p = result.data.map.at(map_index);
             for (given) |t| {
                 if (std.mem.eql(u8, t.data.text, p.key)) break;
             } else return false;
         }
         var top: i64 = 0;
-        for (result.data.map) |p| {
+        for (0..result.data.map.len) |map_index| {
+            const p = result.data.map.at(map_index);
             const n = integerOf(p.value) orelse return false;
             if (n < 1 or n > @as(i64, @intCast(result.data.map.len))) return false;
             top = @max(top, n);
         }
         var r: i64 = 1;
         while (r <= top) : (r += 1) {
-            for (result.data.map) |p| {
+            for (0..result.data.map.len) |map_index| {
+                const p = result.data.map.at(map_index);
                 if (integerOf(p.value).? == r) break;
             } else return false;
         }

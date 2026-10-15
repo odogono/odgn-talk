@@ -114,8 +114,11 @@ const DecodeFrame = union(enum) {
     field_done: struct { acc: *FieldAcc, key: []const u8, optional: bool },
 };
 
-fn lookup(entries: []const model.Pair, key: []const u8) ?*Value {
-    for (entries) |p| if (std.mem.eql(u8, p.key, key)) return p.value;
+fn lookup(entries: model.Map, key: []const u8) ?*Value {
+    for (0..entries.len) |i| {
+        const p = entries.at(i);
+        if (std.mem.eql(u8, p.key, key)) return p.value;
+    }
     return null;
 }
 
@@ -412,7 +415,7 @@ fn diagnostics(c: *Ctx, v: *Value, s: *const Shape, first: bool) ![]Diagnostic {
                     .map => |pairs| {
                         var i = pairs.len;
                         while (i >= 1) : (i -= 1) {
-                            try m.push(.{ .deep = .{ .v = pairs[i - 1].value, .path = try c.childKey(f.path, pairs[i - 1].key), .out = f.out, .trial = f.trial } });
+                            try m.push(.{ .deep = .{ .v = pairs.at(i - 1).value, .path = try c.childKey(f.path, pairs.at(i - 1).key), .out = f.out, .trial = f.trial } });
                         }
                     },
                     else => {},
@@ -421,7 +424,8 @@ fn diagnostics(c: *Ctx, v: *Value, s: *const Shape, first: bool) ![]Diagnostic {
             .extras => |f| {
                 const fields = f.s.data.map.fields;
                 var deeps: std.ArrayList(CheckFrame) = .empty;
-                for (f.v.data.map) |p| {
+                for (0..f.v.data.map.len) |map_index| {
+                    const p = f.v.data.map.at(map_index);
                     var declared = false;
                     for (fields) |field| if (std.mem.eql(u8, field.key, p.key)) {
                         declared = true;

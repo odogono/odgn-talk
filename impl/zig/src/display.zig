@@ -143,7 +143,8 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, trace: bool, gpa: std.mem.Alloca
             try steps.ensureUnusedCapacity(gpa, 3 * xs.len + 1);
             steps.appendAssumeCapacity(.{ .punctuation = "}" });
             var first: ?usize = null;
-            for (xs, 0..) |x, i| {
+            for (0..xs.len) |i| {
+                const x = xs.at(i);
                 if (trace and v.core_message and std.mem.eql(u8, x.key, "message")) continue;
                 first = i;
                 break;
@@ -151,7 +152,7 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, trace: bool, gpa: std.mem.Alloca
             var i = xs.len;
             while (i > 0) {
                 i -= 1;
-                const x = xs[i];
+                const x = xs.at(i);
                 if (trace and v.core_message and std.mem.eql(u8, x.key, "message")) continue;
                 steps.appendAssumeCapacity(.{ .value = x.value });
                 steps.appendAssumeCapacity(.{ .key = x.key });

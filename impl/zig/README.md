@@ -1145,11 +1145,18 @@ Each returned value owns one reference. Constructors copy byte input and
 retain child values; text and map keys become NFC. Map keys preserve insertion
 order and refuse NFC duplicates. Container writes rebind the root, preserving
 aliases and preventing cycles, including insertion of the previous root into
-its replacement. Map writes validate and normalise the incoming key, then copy
-the ordered entries and their owned key bytes; existing keys are already NFC
-and unique, so writes do not repeat constructor validation. Maps still use
-linear lookup and copy their entries on each write. Every node remembers its
-allocator, so Zig tests use the leak-detecting test allocator. C values use the
+its replacement. Map writes validate and normalise only the incoming key.
+Maps of at most 64 entries use flat storage; larger Maps share immutable blocks
+of 32 ordered entries. A write copies the directory and its changed block,
+including that block's key bytes, while retaining the other blocks. Indexed
+entry access is constant-time; key lookup remains linear. Deletion rebuilds
+ordered storage inside the value module without repeating key validation.
+Storage sharing does not change logical sizes, Fuel or the Save format. Final
+block release queues children through the allocation-free Value teardown.
+The [Map storage measurements](../../bench/results/2026-10-15-zig-map-storage.md)
+record scaling, retained-version memory and the small-Map regression checks.
+Every node remembers its allocator, so Zig tests use the leak-detecting test
+allocator. C values use the
 process allocator; a Group's own values use its Group allocator. Handles require
 Host synchronization when shared across threads.
 

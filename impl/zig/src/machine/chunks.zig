@@ -571,7 +571,10 @@ pub fn property(a: Allocator, gpa: Allocator, v: *Value, name: []const u8, delim
             if (std.mem.eql(u8, name, "keys")) for (out.items) |x| x.release();
             out.deinit(a);
         }
-        for (v.data.map) |p| try out.append(a, if (std.mem.eql(u8, name, "keys")) model.text(gpa, p.key) catch return error.OutOfMemory else p.value);
+        for (0..v.data.map.len) |map_index| {
+            const p = v.data.map.at(map_index);
+            try out.append(a, if (std.mem.eql(u8, name, "keys")) model.text(gpa, p.key) catch return error.OutOfMemory else p.value);
+        }
         return model.list(gpa, out.items) catch error.OutOfMemory;
     }
     if (std.mem.eql(u8, name, "bytes")) {

@@ -440,3 +440,19 @@ The [persistent collection measurements](results/2026-10-10-structural-sharing.m
 compare point writes at 512 and 8,192 elements and the full collection workloads
 for [#598](https://github.com/odogono/odgn-talk/issues/598). The focused Go benchmark
 runs with `go -C impl/go test ./internal/machine -run '^$' -bench BenchmarkCollectionPointWrites`.
+
+## Zig ordered Map storage
+
+`python3 bench/zig/map-storage.py <before-host> <after-host> --before-revision <sha> --out <results.json>`
+compares construction, replacement, retained versions, deletion and long keys
+from empty/tiny Maps through 3,000 entries. Build both native Hosts first as in
+`ts/src/measure-zig.ts`. Process order alternates across pairs; default-allocator
+timings and fresh-Group allocation probes are separate. Outputs, Fuel and logical
+allocation must agree. `--filter` selects a workload substring; `--max-size`
+limits the sweep for small-Map rechecks. Results include source/binary hashes,
+per-pair timings and both Group peak and Run live-peak delta. The review limits
+are a repeatable small-Map slowdown above 5%, or peak growth exceeding the larger
+of 10% and 4 KiB; timing remains advisory, never a CI gate.
+
+The [ordered Map storage results](results/2026-10-15-zig-map-storage.md) record
+the shared-block implementation, acceptance limits and native regression sweep.
