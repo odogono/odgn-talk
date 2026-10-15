@@ -30,9 +30,11 @@ defmodule NorthTalk.Owner do
 
   @impl true
   def init(opts) do
-    transport_opts = Keyword.take(opts, [:path, :compiled, :memory_cap, :timeout, :opt_level])
+    module = Keyword.get(opts, :transport, Transport.Wasi)
+    transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to])
 
-    with {:ok, transport} <- Transport.Wasi.start(transport_opts),
+    with {:ok, transport} <- module.start(transport_opts),
+         :ok <- stop_with_owner(transport),
          state = %__MODULE__{
            transport: transport,
            drive: Keyword.get(opts, :drive, :auto),
@@ -51,6 +53,22 @@ defmodule NorthTalk.Owner do
       {:error, error} ->
         {:stop, error}
     end
+  end
+
+  # The backend is unlinked, and terminate/2 does not run when the owner is
+  # killed, so a watcher closes the instance whenever the owner exits.
+  defp stop_with_owner(transport) do
+    owner = self()
+
+    spawn(fn ->
+      monitor = Process.monitor(owner)
+
+      receive do
+        {:DOWN, ^monitor, :process, ^owner, _} -> Transport.stop(transport)
+      end
+    end)
+
+    :ok
   end
 
   defp check_versions(versions) do
@@ -236,19 +254,27 @@ defmodule NorthTalk.Owner do
   # with, answered under the same ref, until the final reply.
   defp exchange(state, m, fields) do
     state = %{state | ref: state.ref + 1}
-    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}))
+    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}), false)
   end
 
-  defp exchange_frame(state, message) do
+  # A refused interim answer leaves the Core mid-exchange, so the instance is
+  # lost; a refused opening frame never reached the Core.
+  defp exchange_frame(state, message, interim?) do
     case Transport.exchange(state.transport, Jason.encode!(message)) do
       {:ok, reply} ->
         reply = Jason.decode!(reply, objects: :ordered_objects, floats: :decimals)
+        ref = state.ref
 
         cond do
-          need = reply["need"] -> exchange_frame(state, Map.put(answer(need), "ref", state.ref))
+          reply["ref"] != ref -> lost(state, {:invalid_reply, plain(reply)})
+          need = reply["need"] -> exchange_frame(state, Map.put(answer(need), "ref", ref), true)
           ok = reply["ok"] -> {{:ok, ok}, state}
           err = reply["err"] -> {{:error, error(err)}, state}
+          true -> lost(state, {:invalid_reply, plain(reply)})
         end
+
+      {:refused, reason} when interim? ->
+        lost(state, {:interim_answer_refused, reason})
 
       {:refused, reason} ->
         {{:error, %HostError{code: "refused", detail: inspect(reason)}}, state}
