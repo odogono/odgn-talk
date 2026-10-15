@@ -377,6 +377,8 @@ python3 tools/sidecar/check.py impl/zig/zig-out/bin/messagelayer
 uv run tools/wasi/list_memory.py --sidecar impl/zig/zig-out/bin/messagelayer
 ```
 
+CI cross-builds and executes the sidecar on Linux amd64/arm64 and macOS arm64.
+
 Each request and reply is a four-byte big-endian length followed by UTF-8 JSON.
 Every request receives one flushed reply, including interim needs. Stdout is
 reserved for frames. Clean EOF between frames exits with status zero; a

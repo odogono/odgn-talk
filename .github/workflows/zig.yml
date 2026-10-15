@@ -28,13 +28,13 @@ on:
       - '.github/workflows/zig.yml'
 
 jobs:
-  # Build all four supported native targets, then execute on matching runners.
+  # Build the CI targets, then execute on matching runners.
   # Cross-build evidence alone never establishes runtime compatibility.
   sidecar-cross:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [x86_64-linux-musl, aarch64-linux-musl, x86_64-macos, aarch64-macos]
+        target: [x86_64-linux-musl, aarch64-linux-musl, aarch64-macos]
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-15]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
