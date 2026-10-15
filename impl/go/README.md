@@ -120,9 +120,8 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
   incremental replay Host, resolving symbolic Host Inputs as the fuzzer's TS
   runner does. `cmd/fuzzworker/` serves it over the
   [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
-- `internal/messagelayer/` is the [Message Layer](#message-layer) over the
-  root package's embedding interface; `cmd/messagelayer/` serves it as a
-  sidecar on stdio. The Message Layer WASI reactor is the Zig build.
+- The [Message Layer](#message-layer), both the native sidecar and WASI
+  reactor, is supplied by the Zig Core. The Go embedding API stays native Go.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -1363,79 +1362,13 @@ panics with `HostError`. Trace callbacks run without the input queue lock.
 
 ## Message Layer
 
-`internal/messagelayer` carries the
-[Message Layer](../../spec/09-embedding.md#the-message-layer) over the ordinary
-Go embedding interface, for a Host that isn't Go or TS
-([#532](https://github.com/odogono/odgn-talk/issues/532)). A `Session` takes
-one JSON frame and returns one reply frame; the framing is the transport's.
-`cmd/messagelayer` is the sidecar: each frame is a 4-byte big-endian length
-and then the JSON, both ways on stdio.
-While an Operation, property, lifecycle or release need is outstanding, the
-sidecar admits the same Group's supported queued messages under separate refs,
-with ordinary synchronous admission errors. The worker ref stays reserved for
-its matching result. Stop, CancelRun and RewindRun land after the callback
-record; ordinary inputs, including disposal and delivery cancellation, wait
-for the next Pump. Answer/Fail during Start are admitted without prematurely
-settling the Call. Worker reentry is refused, and `hello.features` advertises
-`paused-inputs-v1`. Unsupported messages in this adapter remain unsupported;
-this marker does not supply missing Go Metered Operations or other API coverage.
+The native stdio sidecar and WASI reactor use the [Zig Core](../zig/README.md#building-and-testing). The Go `cmd/messagelayer` executable and its internal transport adapter are retired ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)); the Go public API, facilities and comparison baseline remain. Message Layer consumers need neither Go nor a WASI runtime for the native sidecar.
 
-Frames over 64 MiB are drained with bounded buffering and answered with a
-`protocol error` under `ref: -1`, since the rejected JSON isn't parsed. The
-same Session then answers the next frame. A truncated header or body ends the
-transport with an error.
-
-Frames have no JSON nesting-depth cap. A heap-stack
-parser validates the entire frame, including ignored fields, and retains raw
-Value Encoding spans while reading the layer's finite envelope and declaration
-structures. The Core's Value reader and writer also walk heap work stacks;
-encoding error paths are built only on failure, so deeply nested Values do not
-require quadratic path copying. Group ownership checks, display and Trace
-rendering, container size accounting and `any` Shape's Function scan also use
-heap work stacks, so admission and Host exchanges can carry deep Values.
-Replies embed encoded Values without
-revalidating them through `encoding/json`'s 10,000-level input ceiling.
-The frame-size and available-memory limits still apply. Malformed deep JSON
-is a protocol error; the Session and a pending Host exchange remain usable.
-Hosts must decode deep replies within their own resources. These are
-[chapter 9's nesting rules](../../spec/09-embedding.md#rules)
-([ADR 0088](../../docs/adr/0088-the-message-layer-accepts-deep-values.md)).
-
-A `pump`, `reload` or `replace-library` runs on its own goroutine. Each
-Operation, property or Grant release hook it reaches returns a `need` (`op`,
-`prop` or `release`) from `Send`, and parks until its matching `op-result`,
-`prop-result` or `release-result` arrives under the same `ref`. A Capability
-advertises its hook with `release: true` in `define-capability`; the `release`
-need carries `script`, `grant`, `reason` and `now`. The enclosing worker
-returns its final reports after every acknowledgement. Any other message
-sent meanwhile is a protocol error. So the Core never calls the Host, and the
-worker parks across Host exchanges without blocking the transport. An `op` carries `fuelLeft`, the
-Fuel the Run can still be charged; the reply's `charged` goes through
-`Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
-reply lists the started calls the Core has abandoned under `abandoned`.
-
-It carries `hello`, `define-capability`, the `clock` Standard Capability,
-`add`, `define-object-kind`, `grant`, `new-group`, `load`, `object`,
-`set-parent`, `dispose`, `deliver`, `request`, `cancel-delivery`, `broadcast`,
-`answer`, `fail`, `pump`, `save`, `fingerprint`, `stop`, `cancel-run`,
-`rewind-run`, `revoke`, `counters`, `grants`, `compile-library`, `add-library`,
-`replace-library` and `reload`. Library compilation accepts import identities
-and Operation declarations. It doesn't yet carry
-`call`, `decide`, `inspect`, `restore` and `settle`,
-`extend`, `export-manifest`, Segment lifecycles and Coordinators, the other
-Standard Capabilities, or the `$function` form of Function Values. Those
-messages reply with a protocol error that says so. A protocol error,
-`{"kind": "protocol error", "detail"}`, is the transport's, outside parity.
-
-A Script fault becomes a Pump report, and a recovered panic in the Core or a
-Host callback becomes an error reply. Neither ends the `Session`. Check it
-with `go -C impl/go test ./internal/messagelayer`.
+Go-Core saves cannot be restored on Zig: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until existing Groups are drained or rebuilt. No save converter is provided.
 
 ### WASI reactor
 
-The Message Layer reactor is now the [Zig `wasm32-wasi` build](../zig/README.md#building-and-testing), as [ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md) records. The Go `cmd/messagelayer-wasi` entry point is retired; the native Go sidecar remains. CI's shared reactor and List-memory checks run against Zig.
-
-Go-reactor saves cannot be restored on Zig: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until existing Groups are drained or rebuilt. No save converter is provided.
+The Message Layer reactor is the [Zig `wasm32-wasi` build](../zig/README.md#building-and-testing), as [ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md) records. The Go `cmd/messagelayer-wasi` entry point is retired. CI's shared reactor and List-memory checks run against Zig.
 
 #### Historical Go reactor measurements
 
@@ -1462,6 +1395,10 @@ Standard Library on first use brought the same check to **7 MiB** on every one
 of twelve fresh instances on 2026-10-14 (Wasmtime 49.0.0, macOS arm64).
 
 #### List memory and Host caps
+
+The following backstop guidance and measurements describe the historical Go
+Message Layer artifacts. For current native and WASI transports, use the
+[Zig guide](../zig/README.md#native-message-layer-sidecar).
 
 The Allocation Budget and Persistent State measure **logical size**, rather
 than physical Go heap or WASI linear memory. Container slots use a 32-byte
@@ -1509,17 +1446,7 @@ record all eight cases per transport for [#598](https://github.com/odogono/odgn-
 The [earlier buffer-growth measurements](../../tools/wasi/results/2026-10-10-list-memory.json)
 remain the evidence for [#584](https://github.com/odogono/odgn-talk/issues/584).
 
-The native sidecar can still be measured from the current checkout:
-
-```sh
-go -C impl/go build -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer ./cmd/messagelayer
-uv run tools/wasi/list_memory.py --sidecar .cache/messagelayer
-```
-
-The shared memory check enforces the stated backstop; the sidecar check
-asserts the child's OS-reported peak RSS. CI now runs the conformance-minimum
-WASI cases against Zig, including rollback and post-fault reuse. Native Go regression tests
-check slot size, sampled heap growth, aliases and concurrent List branches.
+These figures describe the historical Go artifacts. Current sidecar build and memory-check commands are in the [Zig guide](../zig/README.md#native-message-layer-sidecar). The shared memory check enforces the stated backstop; the sidecar check asserts the child's OS-reported peak RSS. CI runs conformance-minimum WASI and native sidecar cases against Zig, including rollback and post-fault reuse. Native Go regression tests still check slot size, sampled heap growth, aliases and concurrent List branches.
 
 
 ## Corpus runner

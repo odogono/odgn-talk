@@ -23,7 +23,7 @@ defmodule TalkHost.SessionTest do
 
       {s, hello} = Session.ok!(s, "hello", %{"protocol" => 1})
       if unquote(mod) == TalkHost.Transport.Sidecar do
-        assert hello["core"] =~ ~r{^go/}
+        assert hello["core"] =~ ~r{^zig/}
       else
         expected = if System.get_env("TALK_WASM"), do: ~r{^(go|zig)/}, else: ~r{^zig/}
         assert hello["core"] =~ expected

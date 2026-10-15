@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.Talk.Measure do
   @shortdoc "Measures the Message Layer from this Elixir Host"
   @moduledoc """
-  Measures the Zig Message Layer reactor over Wasmex and the Go native
+  Measures the Zig Message Layer reactor over Wasmex and the Zig native
   sidecar on an Erlang Port, against the thresholds set in #532.
 
       mix talk.measure [--quick] [--only latency,containment,faults] [--transports wasmex,sidecar,c]
@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Talk.Measure do
       only: its latency is measured inside the C Host. It runs by default when
       that build exists.
     * `--no-save` prints the report without writing it to `bench/results/`.
-    * `--build` rebuilds the Zig reactor and Go sidecar artifacts in `.cache/` first.
+    * `--build` rebuilds the Zig reactor and sidecar artifacts in `.cache/` first.
     * `--render` rewrites a saved run's Markdown from its JSON, without measuring.
 
   The sidecar's containment section needs Docker, for a cgroup memory limit.
@@ -222,7 +222,7 @@ defmodule Mix.Tasks.Talk.Measure do
     bytes = File.read!(path)
     sha = :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
 
-    # Erlang has no Brotli encoder, so this uses Brotli's CLI as the Go guide does.
+    # Erlang has no Brotli encoder, so this uses Brotli's CLI.
     brotli =
       case System.find_executable("brotli") do
         nil ->
@@ -239,9 +239,10 @@ defmodule Mix.Tasks.Talk.Measure do
   defp environment do
     {cpu, 0} = System.cmd("sysctl", ["-n", "machdep.cpu.brand_string"])
     {os, 0} = System.cmd("sw_vers", ["-productVersion"])
-    {go, 0} = System.cmd("go", ["env", "GOVERSION"])
     {zig, 0} = System.cmd("zig", ["version"])
     {commit, 0} = System.cmd("git", ["-C", TalkHost.Artifacts.root(), "rev-parse", "--short", "HEAD"])
+    sidecar = TalkHost.Artifacts.sidecar()
+    sidecar_sha = if File.regular?(sidecar), do: :crypto.hash(:sha256, File.read!(sidecar)) |> Base.encode16(case: :lower)
 
     docker =
       case System.cmd(
@@ -266,8 +267,8 @@ defmodule Mix.Tasks.Talk.Measure do
       "otp" => :erlang.system_info(:otp_release) |> to_string(),
       "wasmex" => Application.spec(:wasmex, :vsn) |> to_string(),
       "wasmtime" => wasmtime_version(),
-      "go" => String.trim(go),
       "zig" => String.trim(zig),
+      "sidecarSha256" => sidecar_sha,
       "docker" => docker
     }
   end

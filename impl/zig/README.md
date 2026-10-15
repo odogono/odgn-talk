@@ -215,6 +215,7 @@ zig build -Dtarget=wasm32-wasi    # zig-out/bin/talk.wasm
 zig build corpus                  # the whole Corpus, as CI runs it
 zig build corpus -- --list
 zig build fuzzworker              # zig-out/bin/talk-fuzzworker, for the fuzzer
+zig build sidecar                 # zig-out/bin/messagelayer, native framed stdio
 zig build corpus -- bytes/value-encoding
 zig fmt --check .
 ```
@@ -244,7 +245,7 @@ still use. Check names against the installed source, under `lib_dir` from
 - `std.testing.refAllDeclsRecursive` is gone; use `refAllDecls` per container.
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
-The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native Go sidecar remains separate. Go-reactor saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
+The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-Core saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
 
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
@@ -346,6 +347,52 @@ selects another build. CI runs both checks against Zig, with each List workload
 in its own job. The [C](../../bench/message-layer-c/) and
 [Elixir](../../bench/message-layer/elixir/) harnesses also build and default to
 this module, so remeasurement needs no `TALK_WASM` override.
+
+### Native Message Layer sidecar
+
+`zig build sidecar` installs `zig-out/bin/messagelayer` (also included in a
+native `zig build`). It shares `src/message.zig` with the WASI reactor and
+needs neither Go nor a WASI runtime. macOS uses the system `libSystem` for
+process I/O; the Linux artifacts are statically linked. The safe optimization policy applies
+to every target. Linux builds use static `*-linux-musl` targets:
+
+```sh
+# From impl/zig:
+zig build sidecar -Dtarget=x86_64-linux-musl --prefix ../../.cache/zig-linux-amd64
+zig build sidecar -Dtarget=aarch64-linux-musl --prefix ../../.cache/zig-linux-arm64
+zig build sidecar -Dtarget=x86_64-macos --prefix ../../.cache/zig-macos-amd64
+zig build sidecar -Dtarget=aarch64-macos --prefix ../../.cache/zig-macos-arm64
+# From the root, using a binary executable on this machine:
+python3 tools/sidecar/check.py impl/zig/zig-out/bin/messagelayer
+uv run tools/wasi/list_memory.py --sidecar impl/zig/zig-out/bin/messagelayer
+```
+
+Each request and reply is a four-byte big-endian length followed by UTF-8 JSON.
+Every request receives one flushed reply, including interim needs. Stdout is
+reserved for frames. Clean EOF between frames exits with status zero; a
+truncated header or body exits unsuccessfully with a `messagelayer:` stderr
+diagnostic. The maximum incoming frame is 64 MiB. Larger frames are drained
+through a 64 KiB buffer, answered with a protocol error under `ref: -1`, and
+leave the Session usable. Truncation while draining is a transport failure.
+JSON and Value nesting have no fixed depth limit. Callback inputs use distinct
+refs while the worker ref remains reserved for its result, just as in WASI.
+
+The executable checks exercise framing, malformed/deep JSON, Value Encoding,
+immediate and suspended Operations, paused Host Inputs, properties, effects,
+scope cleanup, Grant releases, cancellation/Stop and Zig save/restore in a fresh
+process. The shared Message Layer tests include Reload/replacement and native
+callback parity. CI separates cross-builds from execution on macOS and Linux,
+amd64 and arm64, and runs native List-memory and Linux cgroup checks. The
+[Elixir harness](../../bench/message-layer/elixir/) builds both Zig transports
+and uses the sidecar through an Erlang Port. Its Linux containment checks need
+Docker; an unavailable Docker check is unverified. Local platform and memory
+evidence is recorded in [the cutover verification](../../docs/research/zig-native-sidecar.md).
+
+Go-sidecar saves require fresh Groups from source and Host-owned data; there
+is no cross-Core converter. Keep the previous Go executable to drain old Groups
+if necessary. Zig saves remain supported on the replacement. The Go public API
+and its facilities stay available; [#884](https://github.com/odogono/odgn-talk/issues/884)
+retains the separate full-Core retirement and performance gates.
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless

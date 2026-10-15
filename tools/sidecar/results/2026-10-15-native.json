@@ -1,0 +1,855 @@
+{
+  "date": "2026-10-15",
+  "baseCommit": "9db1b5d4",
+  "sourceState": "uncommitted implementation on fix/issue-965",
+  "zig": "0.17.0",
+  "host": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "runtimeSources": {
+    "impl/zig/src/sidecar.zig": "51c38ced258501a6aa3932bd559fa5557f9ed2b9749a0cc3d807f15791fe51c9",
+    "impl/zig/src/message.zig": "d189f15011e65c761056b4b53239058aaaa96d1d5e9bb52a8d09de7b4ad11362"
+  },
+  "artifacts": {
+    "darwin-arm64": {
+      "path": ".cache/zig-native/bin/messagelayer",
+      "bytes": 2821728,
+      "sha256": "a0eedd1fc8342b8d5366f4b3b5b106b440c74a1bff1cd59402dc1718ff650dac",
+      "build": "safe, stripped; target builds pass",
+      "execution": "10 executable tests pass on Apple M5"
+    },
+    "darwin-amd64": {
+      "path": ".cache/zig-macos-amd64/bin/messagelayer",
+      "bytes": 3281728,
+      "sha256": "a6a0ee8387ab1dd802ce7c631433fd8aa7eda7e6e161ca5e2fcff0653302a57c",
+      "build": "safe, stripped; target builds pass",
+      "execution": "unverified: macOS Popen returns OSError errno 86 (Bad CPU type in executable)"
+    },
+    "linux-arm64": {
+      "path": ".cache/zig-linux-arm64/bin/messagelayer",
+      "bytes": 2885360,
+      "sha256": "640f9a58f5b39cdb8c374b2f3708e619bd8d90ee3828a049af8e2a585fb3ed2c",
+      "build": "safe, stripped; target builds pass",
+      "execution": "10 executable tests pass in Docker Desktop arm64 Linux VM; memory and cgroup containment pass"
+    },
+    "linux-amd64": {
+      "path": ".cache/zig-linux-amd64/bin/messagelayer",
+      "bytes": 3367792,
+      "sha256": "ff8819ce475c552c21d9d1c1ef39b832034fab9ee967a438eb93ad522db4b849",
+      "build": "safe, stripped; target builds pass",
+      "execution": "10 executable tests pass under qemu-x86_64 in an arm64 Linux Docker container; native amd64 hardware unverified; Docker Rosetta fails before main with bss_size overflow"
+    }
+  },
+  "memory": {
+    "darwin-arm64": {
+      "artifact": "impl/zig/zig-out/bin/messagelayer",
+      "sha256": "a0eedd1fc8342b8d5366f4b3b5b106b440c74a1bff1cd59402dc1718ff650dac",
+      "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+      "results": [
+        {
+          "seconds": 0.043,
+          "pumps": 2,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 1715861,
+            "alloc": 16777216
+          },
+          "healthy_result": 42,
+          "profile": "default",
+          "workload": "local",
+          "item": "text",
+          "peak_bytes": 8126464,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 0.484
+        },
+        {
+          "seconds": 0.232,
+          "pumps": 10,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 9437186,
+            "alloc": 16777216
+          },
+          "healthy_result": 42,
+          "profile": "default",
+          "workload": "local",
+          "item": "nothing",
+          "peak_bytes": 23019520,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 1.372
+        },
+        {
+          "seconds": 0.007,
+          "pumps": 12,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 156219,
+            "alloc": 1056288
+          },
+          "healthy_result": 11000,
+          "profile": "default",
+          "workload": "persistent",
+          "item": "text",
+          "peak_bytes": 4784128,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 0.285
+        },
+        {
+          "seconds": 0.032,
+          "pumps": 66,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 859191,
+            "alloc": 1057584
+          },
+          "healthy_result": 65000,
+          "profile": "default",
+          "workload": "persistent",
+          "item": "nothing",
+          "peak_bytes": 6225920,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 0.371
+        },
+        {
+          "seconds": 0.686,
+          "pumps": 28,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 27453629,
+            "alloc": 268435392
+          },
+          "healthy_result": 42,
+          "profile": "minimum",
+          "workload": "local",
+          "item": "text",
+          "peak_bytes": 67436544,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.251
+        },
+        {
+          "seconds": 3.948,
+          "pumps": 151,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 150994946,
+            "alloc": 268435456
+          },
+          "healthy_result": 42,
+          "profile": "minimum",
+          "workload": "local",
+          "item": "nothing",
+          "peak_bytes": 323239936,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 1.204
+        },
+        {
+          "seconds": 0.372,
+          "pumps": 763,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 9932737,
+            "alloc": 67162312
+          },
+          "healthy_result": 762000,
+          "profile": "minimum",
+          "workload": "persistent",
+          "item": "text",
+          "peak_bytes": 23248896,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.087
+        },
+        {
+          "seconds": 2.065,
+          "pumps": 4195,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 54610513,
+            "alloc": 67220680
+          },
+          "healthy_result": 4194000,
+          "profile": "minimum",
+          "workload": "persistent",
+          "item": "nothing",
+          "peak_bytes": 99090432,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.369
+        }
+      ]
+    },
+    "linux-arm64-docker": {
+      "artifact": "/w/.cache/zig-linux-arm64/bin/messagelayer",
+      "sha256": "640f9a58f5b39cdb8c374b2f3708e619bd8d90ee3828a049af8e2a585fb3ed2c",
+      "platform": "Linux-7.0.12-linuxkit-aarch64-with-glibc2.41",
+      "results": [
+        {
+          "seconds": 0.031,
+          "pumps": 2,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 1715861,
+            "alloc": 16777216
+          },
+          "healthy_result": 42,
+          "profile": "default",
+          "workload": "local",
+          "item": "text",
+          "peak_bytes": 29528064,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 1.76
+        },
+        {
+          "seconds": 0.167,
+          "pumps": 10,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 9437186,
+            "alloc": 16777216
+          },
+          "healthy_result": 42,
+          "profile": "default",
+          "workload": "local",
+          "item": "nothing",
+          "peak_bytes": 29659136,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 1.768
+        },
+        {
+          "seconds": 0.003,
+          "pumps": 12,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 156219,
+            "alloc": 1056288
+          },
+          "healthy_result": 11000,
+          "profile": "default",
+          "workload": "persistent",
+          "item": "text",
+          "peak_bytes": 29659136,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 1.768
+        },
+        {
+          "seconds": 0.016,
+          "pumps": 66,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 859191,
+            "alloc": 1057584
+          },
+          "healthy_result": 65000,
+          "profile": "default",
+          "workload": "persistent",
+          "item": "nothing",
+          "peak_bytes": 29659136,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 16777216,
+          "cap_bytes": 268435456,
+          "multiple": 1.768
+        },
+        {
+          "seconds": 0.5,
+          "pumps": 28,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 27453629,
+            "alloc": 268435392
+          },
+          "healthy_result": 42,
+          "profile": "minimum",
+          "workload": "local",
+          "item": "text",
+          "peak_bytes": 66240512,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.247
+        },
+        {
+          "seconds": 2.781,
+          "pumps": 151,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "alloc",
+            "at": {
+              "unit": "s",
+              "line": 4,
+              "col": 5,
+              "handler": "grow",
+              "pc": 8
+            },
+            "fuel": 150994946,
+            "alloc": 268435456
+          },
+          "healthy_result": 42,
+          "profile": "minimum",
+          "workload": "local",
+          "item": "nothing",
+          "peak_bytes": 322113536,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 1.2
+        },
+        {
+          "seconds": 0.202,
+          "pumps": 763,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 9932737,
+            "alloc": 67162312
+          },
+          "healthy_result": 762000,
+          "profile": "minimum",
+          "workload": "persistent",
+          "item": "text",
+          "peak_bytes": 29659136,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.11
+        },
+        {
+          "seconds": 1.079,
+          "pumps": 4195,
+          "fault": {
+            "kind": "run end",
+            "script": "s",
+            "run": "s/r1",
+            "delivery": "d1",
+            "handler": "grow",
+            "outcome": "limit fault",
+            "limit": "persistent",
+            "at": {
+              "unit": "s",
+              "line": 7,
+              "col": 5,
+              "handler": "grow",
+              "pc": 17
+            },
+            "fuel": 54610513,
+            "alloc": 67220680
+          },
+          "healthy_result": 4194000,
+          "profile": "minimum",
+          "workload": "persistent",
+          "item": "nothing",
+          "peak_bytes": 97771520,
+          "peak_kind": "process max RSS",
+          "allocation_budget": 268435456,
+          "cap_bytes": 3288334336,
+          "multiple": 0.364
+        }
+      ]
+    }
+  },
+  "linuxArm64Containment": {
+    "profiles": [
+      {
+        "cap": null,
+        "cases": [
+          {
+            "case": "a growing List",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 12595200
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "doubling text",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 17940480
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "a growing Script Variable",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 11161600
+            },
+            "outcomes": {
+              "completed": 11,
+              "limit fault: persistent": 3
+            }
+          }
+        ],
+        "limits": {
+          "fuelPerRun": 1000000000
+        },
+        "name": "default limits",
+        "perRun": 1000
+      },
+      {
+        "cap": 134217728,
+        "cases": [
+          {
+            "case": "a growing List",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 13152256
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "doubling text",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 18198528
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "a growing Script Variable",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 13127680
+            },
+            "outcomes": {
+              "completed": 11,
+              "limit fault: persistent": 3
+            }
+          }
+        ],
+        "limits": {
+          "fuelPerRun": 1000000000
+        },
+        "name": "default limits",
+        "perRun": 1000
+      },
+      {
+        "cap": null,
+        "cases": [
+          {
+            "case": "a growing List",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 68304896
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "doubling text",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 207015936
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "a growing Script Variable",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 29052928
+            },
+            "outcomes": {
+              "completed": 76,
+              "limit fault: persistent": 3
+            }
+          }
+        ],
+        "limits": {
+          "allocPerRun": 268435456,
+          "fuelPerRun": 1000000000,
+          "persistentState": 67108864
+        },
+        "name": "conformance minimum limits",
+        "perRun": 10000
+      },
+      {
+        "cap": 1073741824,
+        "cases": [
+          {
+            "case": "a growing List",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 68345856
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "doubling text",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 207155200
+            },
+            "outcomes": {
+              "limit fault: alloc": 3
+            }
+          },
+          {
+            "case": "a growing Script Variable",
+            "healthy": true,
+            "observed": {
+              "cgroupEvents": [
+                "low 0",
+                "high 0",
+                "max 0",
+                "oom 0",
+                "oom_kill 0",
+                "oom_group_kill 0",
+                "sock_throttled 0"
+              ],
+              "cgroupPeakBytes": 28528640
+            },
+            "outcomes": {
+              "completed": 76,
+              "limit fault: persistent": 3
+            }
+          }
+        ],
+        "limits": {
+          "allocPerRun": 268435456,
+          "fuelPerRun": 1000000000,
+          "persistentState": 67108864
+        },
+        "name": "conformance minimum limits",
+        "perRun": 10000
+      }
+    ],
+    "verdicts": [
+      {
+        "pass": true,
+        "rows": [
+          {
+            "note": "",
+            "pass": true,
+            "row": "Memory containment, default limits under 128.0 MiB",
+            "threshold": "Limit Fault, never out of memory",
+            "value": "every Run ended in a Limit Fault"
+          },
+          {
+            "note": "",
+            "pass": true,
+            "row": "Memory containment, conformance minimum limits under 1024.0 MiB",
+            "threshold": "Limit Fault, never out of memory",
+            "value": "every Run ended in a Limit Fault"
+          }
+        ],
+        "transport": "sidecar"
+      }
+    ]
+  }
+}
