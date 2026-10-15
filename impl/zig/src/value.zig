@@ -12,6 +12,86 @@ pub const Error = units.Error || error{ CantCompare, NotEncodable };
 pub const Kind = enum(c_int) { nothing, bool, number, quantity, text, bytes, list, map, range, instant, civil_date, pattern, function, object };
 /// One map entry. A key is NFC text, unique within its map.
 pub const Pair = struct { key: []const u8, value: *Value };
+/// Ordered borrowed access to a Map. Storage and key ownership stay here;
+/// callers must keep the containing Value alive while using an entry.
+pub const Map = struct {
+    const block_size = 32;
+    const flat_limit = 64;
+    pub const empty: Map = .{ .len = 0, .storage = .{ .flat = undefined } };
+    const Block = struct { references: usize = 1, pairs: []Pair };
+    len: usize,
+    storage: union { flat: [*]Pair, blocks: [*]*Block },
+
+    pub inline fn at(self: Map, index: usize) Pair {
+        std.debug.assert(index < self.len);
+        return self.slot(index).*;
+    }
+    fn slot(self: Map, index: usize) *Pair {
+        return if (self.len <= flat_limit) &self.storage.flat[index] else &self.storage.blocks[index / block_size].pairs[index % block_size];
+    }
+    fn blockCount(self: Map) usize {
+        return (self.len + block_size - 1) / block_size;
+    }
+    /// Copies borrowed entries, without acquiring their keys or children.
+    pub fn appendTo(self: Map, gpa: std.mem.Allocator, out: *std.ArrayList(Pair)) !void {
+        try out.ensureUnusedCapacity(gpa, self.len);
+        for (0..self.len) |i| out.appendAssumeCapacity(self.at(i));
+    }
+    pub fn copyEntries(self: Map, gpa: std.mem.Allocator) ![]Pair {
+        const out = try gpa.alloc(Pair, self.len);
+        for (out, 0..) |*p, i| p.* = self.at(i);
+        return out;
+    }
+    fn init(gpa: std.mem.Allocator, len: usize) !Map {
+        if (len <= flat_limit) return .{ .len = len, .storage = .{ .flat = (try gpa.alloc(Pair, len)).ptr } };
+        const blocks = try gpa.alloc(*Block, (len + block_size - 1) / block_size);
+        errdefer gpa.free(blocks);
+        var initialized: usize = 0;
+        errdefer for (blocks[0..initialized]) |b| {
+            gpa.free(b.pairs);
+            gpa.destroy(b);
+        };
+        for (blocks, 0..) |*b, i| {
+            b.* = try gpa.create(Block);
+            errdefer gpa.destroy(b.*);
+            b.*.* = .{ .pairs = try gpa.alloc(Pair, @min(block_size, len - i * block_size)) };
+            initialized += 1;
+        }
+        return .{ .len = len, .storage = .{ .blocks = blocks.ptr } };
+    }
+    // Only for unpublished storage, whose initialized entries are freed first.
+    fn freeStorage(self: Map, gpa: std.mem.Allocator) void {
+        if (self.len <= flat_limit) gpa.free(self.storage.flat[0..self.len]) else {
+            for (self.storage.blocks[0..self.blockCount()]) |b| {
+                gpa.free(b.pairs);
+                gpa.destroy(b);
+            }
+            gpa.free(self.storage.blocks[0..self.blockCount()]);
+        }
+    }
+    fn release(self: Map, gpa: std.mem.Allocator, pending: *?*Value) void {
+        if (self.len <= flat_limit) {
+            for (self.storage.flat[0..self.len]) |p| {
+                gpa.free(p.key);
+                queueRelease(p.value, pending);
+            }
+            gpa.free(self.storage.flat[0..self.len]);
+        } else {
+            for (self.storage.blocks[0..self.blockCount()]) |b| {
+                b.references -= 1;
+                if (b.references == 0) {
+                    for (b.pairs) |p| {
+                        gpa.free(p.key);
+                        queueRelease(p.value, pending);
+                    }
+                    gpa.free(b.pairs);
+                    gpa.destroy(b);
+                }
+            }
+            gpa.free(self.storage.blocks[0..self.blockCount()]);
+        }
+    }
+};
 /// A number with a non-empty Unit.
 pub const Quantity = struct { number: Decimal, unit: units.Unit };
 /// A range between two numbers, or two Quantities of compatible Units.
@@ -37,7 +117,7 @@ pub const Data = union(Kind) {
     text: []const u8,
     bytes: []const u8,
     list: []*Value,
-    map: []Pair,
+    map: Map,
     range: Range,
     instant: dates.Instant,
     civil_date: dates.Fields,
@@ -101,13 +181,7 @@ pub const Value = struct {
                         gpa.free(items);
                     }
                 },
-                .map => |pairs| {
-                    for (pairs) |p| {
-                        gpa.free(p.key);
-                        queueRelease(p.value, &pending);
-                    }
-                    gpa.free(pairs);
-                },
+                .map => |pairs| pairs.release(gpa, &pending),
                 .range => |r| {
                     queueRelease(r.from, &pending);
                     queueRelease(r.to, &pending);
@@ -129,7 +203,10 @@ pub const Value = struct {
     /// The value a map holds under the NFC `key`, borrowed, or null.
     pub fn get(self: *const Value, key: []const u8) ?*Value {
         if (self.data != .map) return null;
-        for (self.data.map) |p| if (std.mem.eql(u8, p.key, key)) return p.value;
+        for (0..self.data.map.len) |map_index| {
+            const p = self.data.map.at(map_index);
+            if (std.mem.eql(u8, p.key, key)) return p.value;
+        }
         return null;
     }
     /// Script equality: numbers by value, Quantities in Base Units, maps
@@ -258,7 +335,7 @@ pub const Comparer = struct {
                     var i = xs.len;
                     while (i > 0) {
                         i -= 1;
-                        stack.appendAssumeCapacity(.{ .x = xs[i].value, .y = y.get(xs[i].key) orelse return false });
+                        stack.appendAssumeCapacity(.{ .x = xs.at(i).value, .y = y.get(xs.at(i).key) orelse return false });
                     }
                 },
                 .range => |r| {
@@ -352,7 +429,8 @@ pub const Comparer = struct {
                 .list => |items| for (items) |child| {
                     total +|= 1 +| self.self_scans.get(@intFromPtr(child)).?;
                 },
-                .map => |pairs| for (pairs) |p| {
+                .map => |pairs| for (0..pairs.len) |map_index| {
+                    const p = pairs.at(map_index);
                     total +|= 1 +| self.self_scans.get(@intFromPtr(p.value)).?;
                 },
                 .range => |r| {
@@ -417,7 +495,8 @@ pub const Comparer = struct {
                 .map => |xs| {
                     const count = @min(xs.len, y.data.map.len);
                     var descended = false;
-                    for (xs[0..count]) |entry| {
+                    for (0..count) |i| {
+                        const entry = xs.at(i);
                         total +|= 1;
                         const other = y.get(entry.key) orelse return total;
                         if (try self.equal(entry.value, other)) {
@@ -455,7 +534,10 @@ pub const Comparer = struct {
 fn appendScanChildren(gpa: std.mem.Allocator, v: *const Value, out: *std.ArrayList(*const Value)) Error!void {
     switch (v.data) {
         .list => |items| try out.appendSlice(gpa, items),
-        .map => |pairs| for (pairs) |p| try out.append(gpa, p.value),
+        .map => |pairs| for (0..pairs.len) |map_index| {
+            const p = pairs.at(map_index);
+            try out.append(gpa, p.value);
+        },
         .range => |r| {
             try out.append(gpa, r.from);
             try out.append(gpa, r.to);
@@ -487,7 +569,10 @@ pub fn deepScanOf(gpa: std.mem.Allocator, v: *const Value, cache: *std.AutoHashM
         try order_list.append(gpa, next);
         switch (next.data) {
             .list => |items| try pending.appendSlice(gpa, items),
-            .map => |pairs| for (pairs) |p| try pending.append(gpa, p.value),
+            .map => |pairs| for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
+                try pending.append(gpa, p.value);
+            },
             else => {},
         }
     }
@@ -502,7 +587,8 @@ pub fn deepScanOf(gpa: std.mem.Allocator, v: *const Value, cache: *std.AutoHashM
                 scan.clean = scan.clean and info.clean;
                 scan.nodes +|= info.nodes;
             },
-            .map => |pairs| for (pairs) |p| {
+            .map => |pairs| for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
                 const info = cache.get(@intFromPtr(p.value)).?;
                 scan.clean = scan.clean and info.clean;
                 scan.nodes +|= info.nodes;
@@ -551,16 +637,11 @@ fn itemsSize(items: []const *Value) u64 {
     for (items) |x| total +|= logicalSize(x);
     return total;
 }
-fn pairsSize(pairs: []const Pair) u64 {
-    var total: u64 = 0;
-    for (pairs) |p| total +|= 16 +| p.key.len +| logicalSize(p.value);
-    return total;
-}
 fn capturedSize(captures: *const Value) u64 {
     return switch (captures.data) {
         .map => |m| blk: {
             var total: u64 = 0;
-            for (m) |p| total +|= logicalSize(p.value);
+            for (0..m.len) |i| total +|= logicalSize(m.at(i).value);
             break :blk total;
         },
         .list => |l| itemsSize(l),
@@ -580,7 +661,8 @@ fn ownershipRank(data: Data) error{OutOfMemory}!u64 {
         .list => |items| for (items) |item| {
             child_rank = @max(child_rank, item.ownership_rank);
         },
-        .map => |pairs| for (pairs) |pair| {
+        .map => |pairs| for (0..pairs.len) |map_index| {
+            const pair = pairs.at(map_index);
             child_rank = @max(child_rank, pair.value.ownership_rank);
         },
         .range => |r| child_rank = @max(r.from.ownership_rank, r.to.ownership_rank),
@@ -885,20 +967,24 @@ fn listGrowthAllocations(gpa: std.mem.Allocator) !void {
 /// A map in insertion order that retains each value and copies each key as
 /// NFC. A key duplicated after normalisation is refused.
 pub fn map(gpa: std.mem.Allocator, pairs: []const Pair) Error!*Value {
-    const out = try gpa.alloc(Pair, pairs.len);
+    const out = try Map.init(gpa, pairs.len);
+    errdefer out.freeStorage(gpa);
     var initialized: usize = 0;
-    errdefer freePairs(gpa, out[0..initialized], out);
+    errdefer for (0..initialized) |i| {
+        const p = out.at(i);
+        gpa.free(p.key);
+        p.value.release();
+    };
     for (pairs) |p| {
         if (!unicode.utf8.validate(p.key)) return error.InvalidValue;
         const key = try unicode.nfc(gpa, p.key);
         errdefer gpa.free(key);
-        for (out[0..initialized]) |old| if (std.mem.eql(u8, old.key, key)) return error.InvalidValue;
-        out[initialized] = .{ .key = key, .value = p.value.retain() };
+        for (0..initialized) |i| if (std.mem.eql(u8, out.at(i).key, key)) return error.InvalidValue;
+        out.slot(initialized).* = .{ .key = key, .value = p.value.retain() };
         initialized += 1;
     }
     return mapOwned(gpa, out);
 }
-/// Releases the first `initialized` pairs of `storage`, then `storage`.
 fn freePairs(gpa: std.mem.Allocator, initialized: []const Pair, storage: []Pair) void {
     for (initialized) |p| {
         gpa.free(p.key);
@@ -906,13 +992,20 @@ fn freePairs(gpa: std.mem.Allocator, initialized: []const Pair, storage: []Pair)
     }
     gpa.free(storage);
 }
-/// A map over valid, NFC and unique owned keys with retained values. Takes
-/// ownership of `pairs` only on success.
-fn mapOwned(gpa: std.mem.Allocator, pairs: []Pair) Error!*Value {
+/// Takes fully initialized storage only on success.
+fn mapOwned(gpa: std.mem.Allocator, pairs: Map) Error!*Value {
     const rank = try ownershipRank(.{ .map = pairs });
     const v = try gpa.create(Value);
-    v.* = .{ .allocator = gpa, .data = .{ .map = pairs }, .measure = pairsSize(pairs), .ownership_rank = rank };
+    v.* = .{ .allocator = gpa, .data = .{ .map = pairs }, .measure = mapSize(pairs), .ownership_rank = rank };
     return v;
+}
+fn mapSize(pairs: Map) u64 {
+    var total: u64 = 0;
+    for (0..pairs.len) |i| {
+        const p = pairs.at(i);
+        total +|= 16 +| p.key.len +| logicalSize(p.value);
+    }
+    return total;
 }
 /// A range that retains both ends, which must be numbers or compatible
 /// Quantities.
@@ -1009,28 +1102,89 @@ pub fn mapSet(root: **Value, key: []const u8, item: *Value) Error!void {
     if (!unicode.utf8.validate(key)) return error.InvalidValue;
     const normalized = try unicode.nfc(gpa, key);
     defer gpa.free(normalized);
-    var index: usize = old.data.map.len;
-    for (old.data.map, 0..) |p, i| if (std.mem.eql(u8, p.key, normalized)) {
+    const prior = old.data.map;
+    var index = prior.len;
+    for (0..prior.len) |i| if (std.mem.eql(u8, prior.at(i).key, normalized)) {
         index = i;
         break;
     };
-
-    // Existing keys are already valid, NFC and unique, so copy their owned
-    // bytes without the external constructor's scans. Build privately so
-    // refusal cannot change the old root or children.
-    const pairs = try gpa.alloc(Pair, old.data.map.len + @intFromBool(index == old.data.map.len));
-    var initialized: usize = 0;
-    errdefer freePairs(gpa, pairs[0..initialized], pairs);
-    for (pairs, 0..) |*p, i| {
-        const source_key = if (i < old.data.map.len) old.data.map[i].key else normalized;
-        const child = if (i == index) item else old.data.map[i].value;
-        p.* = .{ .key = try gpa.dupe(u8, source_key), .value = child.retain() };
-        initialized += 1;
+    const len = std.math.add(usize, prior.len, @intFromBool(index == prior.len)) catch return error.OutOfMemory;
+    // Copy one block and the directory. Shared blocks never grow hidden tails.
+    // No physical ownership is changed until every fallible operation succeeds.
+    const next = try gpa.create(Value);
+    errdefer gpa.destroy(next);
+    const rank = std.math.add(u64, item.ownership_rank, 1) catch return error.OutOfMemory;
+    var out: Map = undefined;
+    if (prior.len > Map.flat_limit) {
+        const count = (len + Map.block_size - 1) / Map.block_size;
+        const blocks = try gpa.alloc(*Map.Block, count);
+        errdefer gpa.free(blocks);
+        const changed = index / Map.block_size;
+        const block = try gpa.create(Map.Block);
+        errdefer gpa.destroy(block);
+        const pairs = try gpa.alloc(Pair, @min(Map.block_size, len - changed * Map.block_size));
+        var initialized: usize = 0;
+        errdefer freePairs(gpa, pairs[0..initialized], pairs);
+        for (pairs, 0..) |*p, j| {
+            const i = changed * Map.block_size + j;
+            const source_key = if (i < prior.len) prior.at(i).key else normalized;
+            p.* = .{ .key = try gpa.dupe(u8, source_key), .value = (if (i == index) item else prior.at(i).value).retain() };
+            initialized += 1;
+        }
+        block.* = .{ .pairs = pairs };
+        for (blocks, 0..) |*b, i| {
+            if (i == changed) b.* = block else {
+                b.* = prior.storage.blocks[i];
+                b.*.references += 1;
+            }
+        }
+        out = .{ .len = len, .storage = .{ .blocks = blocks.ptr } };
+    } else {
+        out = try Map.init(gpa, len);
+        errdefer out.freeStorage(gpa);
+        var initialized: usize = 0;
+        errdefer for (0..initialized) |i| {
+            const p = out.at(i);
+            gpa.free(p.key);
+            p.value.release();
+        };
+        for (0..len) |i| {
+            const source_key = if (i < prior.len) prior.at(i).key else normalized;
+            out.slot(i).* = .{ .key = try gpa.dupe(u8, source_key), .value = (if (i == index) item else prior.at(i).value).retain() };
+            initialized += 1;
+        }
     }
-    const next = try mapOwned(gpa, pairs);
-    next.core_message = old.core_message and !std.mem.eql(u8, normalized, "message");
+    const removed = if (index < prior.len) 16 +| prior.at(index).key.len +| logicalSize(prior.at(index).value) else 0;
+    const added = 16 +| normalized.len +| logicalSize(item);
+    next.* = .{ .allocator = gpa, .data = .{ .map = out }, .measure = if (old.measure == std.math.maxInt(u64)) mapSize(out) else (old.measure - removed) +| added, .ownership_rank = @max(old.ownership_rank, rank), .core_message = old.core_message and !std.mem.eql(u8, normalized, "message") };
     root.* = next;
     old.release();
+}
+/// Returns a Map without the NFC key. The input remains borrowed and unchanged.
+/// Like the former machine reconstruction, deletion clears Core error metadata.
+pub fn mapDelete(gpa: std.mem.Allocator, old: *const Value, key: []const u8) Error!*Value {
+    if (old.data != .map) return error.InvalidValue;
+    const prior = old.data.map;
+    var removed = prior.len;
+    for (0..prior.len) |i| if (std.mem.eql(u8, prior.at(i).key, key)) {
+        removed = i;
+        break;
+    };
+    const out = try Map.init(gpa, prior.len - @intFromBool(removed < prior.len));
+    errdefer out.freeStorage(gpa);
+    var initialized: usize = 0;
+    errdefer for (0..initialized) |i| {
+        const p = out.at(i);
+        gpa.free(p.key);
+        p.value.release();
+    };
+    for (0..prior.len) |i| {
+        if (i == removed) continue;
+        const p = prior.at(i);
+        out.slot(initialized).* = .{ .key = try gpa.dupe(u8, p.key), .value = p.value.retain() };
+        initialized += 1;
+    }
+    return mapOwned(gpa, out);
 }
 /// Applies `op` to numbers or Quantities, converting through Base Units.
 pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *Value) Error!*Value {
@@ -1277,8 +1431,8 @@ test "map copy-on-write and preserved insertion order" {
     try mapSet(&copy, "b", n);
     try mapSet(&copy, "a", copy);
     try std.testing.expect(original.get("b") == null);
-    try std.testing.expectEqualStrings("a", copy.data.map[0].key);
-    try std.testing.expectEqualStrings("b", copy.data.map[1].key);
+    try std.testing.expectEqualStrings("a", copy.data.map.at(0).key);
+    try std.testing.expectEqualStrings("b", copy.data.map.at(1).key);
     try std.testing.expect(copy.get("a").? != copy);
 }
 
@@ -1292,8 +1446,8 @@ fn mapUpdateAllocations(gpa: std.mem.Allocator) !void {
     root.core_message = true;
     try checkedMapSet(&root, "e\u{0301}", snapshot);
     try std.testing.expectEqual(@as(usize, 2), root.data.map.len);
-    try std.testing.expectEqualStrings("é", root.data.map[0].key);
-    try std.testing.expectEqualStrings("tail", root.data.map[1].key);
+    try std.testing.expectEqualStrings("é", root.data.map.at(0).key);
+    try std.testing.expectEqualStrings("tail", root.data.map.at(1).key);
     try std.testing.expectEqual(snapshot, root.get("é").?);
     try std.testing.expectEqual(one, snapshot.get("é").?);
     try std.testing.expect(root.ownership_rank > snapshot.ownership_rank);
@@ -1301,7 +1455,7 @@ fn mapUpdateAllocations(gpa: std.mem.Allocator) !void {
     const nested = try list(gpa, &.{root});
     defer nested.release();
     try checkedMapSet(&root, "nested", nested);
-    try std.testing.expectEqualStrings("nested", root.data.map[2].key);
+    try std.testing.expectEqualStrings("nested", root.data.map.at(2).key);
     try std.testing.expect(root.ownership_rank > nested.ownership_rank);
     try checkedMapSet(&root, "message", one);
     try std.testing.expect(!root.core_message);
@@ -1413,4 +1567,51 @@ test "List point writes recover exact measures after a saturated sum" {
     try std.testing.expectEqual(@as(u64, 16), root.measure);
     try std.testing.expectEqual(std.math.maxInt(u64), snapshot.measure);
     try std.testing.expectEqualSlices(*Value, &.{ large, large }, snapshot.data.list);
+}
+
+fn sharedMapAllocations(gpa: std.mem.Allocator) !void {
+    const item = try scalar(gpa, .nothing);
+    defer item.release();
+    var keys: [65][8]u8 = undefined;
+    var pairs: [65]Pair = undefined;
+    for (&pairs, 0..) |*p, i| p.* = .{ .key = try std.fmt.bufPrint(&keys[i], "k{d}", .{i}), .value = item };
+    var root = try map(gpa, pairs[0..32]);
+    defer root.release();
+    const small = root.retain();
+    defer small.release();
+    try checkedMapSet(&root, "k32", item);
+    const promoted = root.retain();
+    defer promoted.release();
+    for (33..65) |i| try checkedMapSet(&root, pairs[i].key, item);
+    const original = root.retain();
+    defer original.release();
+    // The changed child can itself own the prior Map, including shared blocks.
+    try checkedMapSet(&root, "k0", root);
+    try checkedMapSet(&root, "k32", small);
+    try checkedMapSet(&root, "k64", promoted);
+    try std.testing.expectEqual(original, root.get("k0").?);
+    try std.testing.expectEqual(item, original.get("k0").?);
+    try std.testing.expectEqual(@as(usize, 32), small.data.map.len);
+    for (pairs, 0..) |p, i| try std.testing.expectEqualStrings(p.key, root.data.map.at(i).key);
+    const reconstructed = try root.data.map.copyEntries(gpa);
+    defer gpa.free(reconstructed);
+    const fresh = try map(gpa, reconstructed);
+    defer fresh.release();
+    try std.testing.expect(try root.equal(fresh));
+    try std.testing.expectEqual(logicalSize(fresh), logicalSize(root));
+    // Delete through the representation transition; retained roots stay intact.
+    var deleted = root.retain();
+    defer deleted.release();
+    for (32..65) |i| {
+        const next = try mapDelete(gpa, deleted, pairs[i].key);
+        deleted.release();
+        deleted = next;
+    }
+    try std.testing.expectEqual(@as(usize, 32), deleted.data.map.len);
+    try std.testing.expectEqual(@as(usize, 65), root.data.map.len);
+}
+
+test "shared Map versions preserve ordered entries across promotion deletion and every refusal" {
+    try sharedMapAllocations(std.testing.allocator);
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, sharedMapAllocations, .{});
 }

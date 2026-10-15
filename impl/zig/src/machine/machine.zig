@@ -4032,7 +4032,8 @@ pub const Group = struct {
             try g.callFunction(run, code.library, code.body, d.args);
             const callee = &run.frames.items[run.frames.items.len - 1];
             const body = g.functionBody(code).?;
-            for (fv.data.function.captures.data.map, body.capture_slot..) |p, slot| {
+            for (0..fv.data.function.captures.data.map.len, body.capture_slot..) |i, slot| {
+                const p = fv.data.function.captures.data.map.at(i);
                 callee.locals[slot].release();
                 callee.locals[slot] = p.value.retain();
             }
@@ -4443,7 +4444,7 @@ pub const Group = struct {
                 const message: ?*Value = if (f.message) |t| try model.text(gpa, t) else null;
                 defer if (message) |t| t.release();
                 if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
-                if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
+                if (f.data) |d| if (d.data == .map) try d.data.map.appendTo(gpa, &pairs);
                 const capability = try model.text(gpa, waited.grant);
                 defer capability.release();
                 const op_value = try model.text(gpa, waited.operation);
@@ -6243,7 +6244,8 @@ pub const Group = struct {
         try g.callFunction(run, code.library, code.body, args);
         const callee = &run.frames.items[run.frames.items.len - 1];
         if (ins.op == .call_restricted) callee.restricted = true;
-        for (fv.data.function.captures.data.map, body.capture_slot..) |p, slot| {
+        for (0..fv.data.function.captures.data.map.len, body.capture_slot..) |i, slot| {
+            const p = fv.data.function.captures.data.map.at(i);
             callee.locals[slot].release();
             callee.locals[slot] = p.value.retain();
         }
@@ -6624,14 +6626,15 @@ pub const Group = struct {
                 for (e.fields) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
                 if (e.optional) |opt| for (opt) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
             }
-            for (raw.data.map) |p| {
+            for (0..raw.data.map.len) |map_index| {
+                const p = raw.data.map.at(map_index);
                 const listed = for (pairs.items) |q| {
                     if (std.mem.eql(u8, q.key, p.key)) break true;
                 } else false;
                 if (!listed) try pairs.append(g.gpa, p);
             }
         } else {
-            try pairs.appendSlice(g.gpa, raw.data.map);
+            try raw.data.map.appendTo(g.gpa, &pairs);
             if (raw.get("at") != null) return raw.retain();
         }
         try pairs.append(g.gpa, .{ .key = "at", .value = at });
@@ -6657,7 +6660,8 @@ pub const Group = struct {
         defer pairs.deinit(g.gpa);
         for (entry.fields) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
         if (entry.optional) |opt| for (opt) |f| if (raw.get(f)) |v| try pairs.append(g.gpa, .{ .key = f, .value = v });
-        for (raw.data.map) |p| {
+        for (0..raw.data.map.len) |map_index| {
+            const p = raw.data.map.at(map_index);
             const listed = std.mem.eql(u8, p.key, "code") or for (pairs.items) |q| {
                 if (std.mem.eql(u8, q.key, p.key)) break true;
             } else false;
@@ -8180,9 +8184,7 @@ pub const Group = struct {
                     break :blk key_value.?.data.text;
                 };
                 if (base.data != .map) return g.wrongKind("map", base);
-                var pairs: std.ArrayList(model.Pair) = .empty;
-                for (base.data.map) |p| if (!std.mem.eql(u8, p.key, key)) try pairs.append(a, p);
-                try g.push(frame, model.map(gpa, pairs.items) catch return error.OutOfMemory);
+                try g.push(frame, model.mapDelete(gpa, base, key) catch return error.OutOfMemory);
             },
             .append, .prepend, .append_all, .prepend_all => {
                 const v = pop(frame);
@@ -9129,7 +9131,7 @@ pub const Group = struct {
                 const message: ?*Value = if (f.message) |t| try model.text(gpa, t) else null;
                 defer if (message) |t| t.release();
                 if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
-                if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
+                if (f.data) |d| if (d.data == .map) try d.data.map.appendTo(gpa, &pairs);
                 const shown = model.map(gpa, pairs.items) catch {
                     record(g, id, grant_name, op_name, args, "error", empty, call.charged, false);
                     return g.hostError(id, grant_name, op_name, &where);
@@ -9256,7 +9258,7 @@ pub const Group = struct {
         defer operation_name.release();
         var pairs: std.ArrayList(model.Pair) = .empty;
         defer pairs.deinit(gpa);
-        try pairs.appendSlice(gpa, shown.data.map);
+        try shown.data.map.appendTo(gpa, &pairs);
         try pairs.appendSlice(gpa, &.{ .{ .key = "capability", .value = capability }, .{ .key = "operation", .value = operation_name } });
         g.pending_error = try model.map(gpa, pairs.items);
         g.pending_core = false;
@@ -9582,7 +9584,7 @@ fn validName(w: []const u8) bool {
 fn withKey(gpa: Allocator, map: *Value, key: []const u8, value: *Value) !*Value {
     var pairs: std.ArrayList(model.Pair) = .empty;
     defer pairs.deinit(gpa);
-    try pairs.appendSlice(gpa, map.data.map);
+    try map.data.map.appendTo(gpa, &pairs);
     try pairs.append(gpa, .{ .key = key, .value = value });
     const out = try model.map(gpa, pairs.items);
     out.core_message = map.core_message;
@@ -9705,7 +9707,7 @@ fn failureMap(gpa: Allocator, f: Failure) !*Value {
     const message: ?*Value = if (f.message) |t| try model.text(gpa, t) else null;
     defer if (message) |t| t.release();
     if (message) |t| try pairs.append(gpa, .{ .key = "message", .value = t });
-    if (f.data) |d| if (d.data == .map) try pairs.appendSlice(gpa, d.data.map);
+    if (f.data) |d| if (d.data == .map) try d.data.map.appendTo(gpa, &pairs);
     return model.map(gpa, pairs.items);
 }
 
