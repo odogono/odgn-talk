@@ -3481,8 +3481,8 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: 
     const entry = s.exchange_entry orelse return protocolError(s.gpa, ref, "no paused worker");
     const group = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
     if (group != entry) return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
-    if (messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" })) return hostError(s.gpa, ref, .reentrant_call);
-    if (!messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
+    const worker = messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" });
+    if (!worker and !messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
     const mg = &entry.group.group;
     const pumping = mg.pumping;
     const trace = mg.trace;
@@ -3500,7 +3500,42 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: 
         mg.pumping = pumping;
         mg.trace = trace;
     }
+    if (worker) {
+        recordWorkerRefusal(s, entry, msg, m);
+        return hostError(s.gpa, ref, .reentrant_call);
+    }
     return dispatch(s, msg, ref, m, &.{});
+}
+
+fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8) void {
+    const g = &entry.group.group;
+    if (std.mem.eql(u8, m, "pump")) {
+        const now = model.dates.parseInstant(asText(field(msg, "now")) orelse return) catch return;
+        g.refuseWorker(.{ .pump = .{ .now = now, .slice = asInt(field(msg, "fuelSlice")) orelse 0, .cap = asInt(field(msg, "fuelCap")) orelse 0 } });
+    } else if (std.mem.eql(u8, m, "load")) {
+        g.refuseWorker(.{ .load = .{ .name = asText(field(msg, "name")) orelse return, .source = asText(field(msg, "source")) orelse return } });
+    } else if (std.mem.eql(u8, m, "inspect")) {
+        g.refuseWorker(.inspect);
+    } else if (std.mem.eql(u8, m, "counters")) {
+        g.refuseWorker(.{ .counters = asText(field(msg, "script")) orelse return });
+    } else if (std.mem.eql(u8, m, "reload") or std.mem.eql(u8, m, "extend")) {
+        const script = g.script(asText(field(msg, "script")) orelse return) orelse return;
+        const source = asText(field(msg, "source")) orelse return;
+        if (std.mem.eql(u8, m, "extend")) {
+            g.refuseWorker(.{ .extend = .{ .script = script, .source = source } });
+        } else {
+            const carry = carryOf(field(msg, "carry")) orelse return;
+            g.refuseWorker(.{ .reload = .{ .script = script, .source = source, .carry = carry == .carry_variables, .keep_mailbox = asBool(field(msg, "keepMailbox")) orelse false } });
+        }
+    } else if (std.mem.eql(u8, m, "add-library") or std.mem.eql(u8, m, "replace-library")) {
+        const library = libraryOf(s, field(msg, "identity") orelse return) orelse return;
+        if (std.mem.eql(u8, m, "add-library")) {
+            g.refuseWorker(.{ .add_library = library });
+        } else {
+            const carry = carryOf(field(msg, "carry")) orelse return;
+            g.refuseWorker(.{ .replace_library = .{ .library = library, .carry = carry == .carry_variables } });
+        }
+    }
 }
 
 // ---------------------------------------------------------- wasm exports
@@ -3610,6 +3645,39 @@ fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
     try out.writer.writeByte('1');
     for (0..depth) |_| try out.writer.writeAll(if (objects_only) "}" else "]");
     return out.toOwnedSlice();
+}
+
+test "worker refusals during a paused callback keep Trace after its return" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try pausedFixture(&c, "immediate", "on go\n ask api to read\n return it\nend go", false);
+    const inputs = [_][]const u8{
+        "{\"m\":\"pump\",\"ref\":7,\"group\":\"g\",\"now\":\"2026-10-14T12:00:00Z\"}",
+        "{\"m\":\"load\",\"ref\":8,\"group\":\"g\",\"name\":\"nested\",\"source\":\"\"}",
+        "{\"m\":\"inspect\",\"ref\":9,\"group\":\"g\"}",
+        "{\"m\":\"save\",\"ref\":10,\"group\":\"g\"}",
+    };
+    for (inputs, 7..) |input, ref| {
+        const refused = try c.common(@intCast(ref), "{s}", .{input});
+        try std.testing.expectEqualStrings("reentrant call", refused.object.get("err").?.object.get("code").?.string);
+        try std.testing.expect(refused.object.get("trace") == null);
+    }
+    const completed = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":42}}", .{});
+    const done = try okOf(completed);
+    var called = false;
+    var refused_count: usize = 0;
+    for (done.object.get("trace").?.array.items) |line| {
+        if (std.mem.startsWith(u8, line.string, "call s/r1.c1")) called = true;
+        if (std.mem.eql(u8, line.string, "refused code=\"reentrant call\"")) {
+            try std.testing.expect(called);
+            refused_count += 1;
+        }
+        try std.testing.expect(!std.mem.startsWith(u8, line.string, "> save"));
+    }
+    try std.testing.expectEqual(@as(usize, 3), refused_count);
+    try std.testing.expectEqual(@as(i64, 42), (try runEnd(completed)).object.get("result").?.integer);
 }
 
 test "property Host failure reports retain setter input without a call-failed Trace record" {

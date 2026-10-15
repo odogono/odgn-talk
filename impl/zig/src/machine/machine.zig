@@ -2584,6 +2584,64 @@ pub const Group = struct {
         };
     }
 
+    /// Refused worker inputs still belong to the Trace. This only formats
+    /// their metadata: it runs no Script code and changes no Group state.
+    pub const WorkerInput = union(enum) {
+        pump: struct { now: model.dates.Instant, slice: i64 = 0, cap: i64 = 0 },
+        load: struct { name: []const u8, source: []const u8 },
+        reload: struct { script: *Script, source: []const u8, carry: bool, keep_mailbox: bool },
+        extend: struct { script: *Script, source: []const u8 },
+        add_library: *Library,
+        replace_library: struct { library: *Library, carry: bool },
+        inspect,
+        counters: []const u8,
+    };
+
+    pub fn refuseWorker(g: *Group, input: WorkerInput) void {
+        const out = g.trace orelse return;
+        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        switch (input) {
+            .pump => |p| {
+                const shown = model.dates.string(a, model.dates.fields(p.now), true) catch return;
+                out.print("> pump clock={s}", .{shown}) catch {};
+                if (p.slice > 0) out.print(" fuel-slice={d}", .{p.slice}) catch {};
+                if (p.cap > 0) out.print(" fuel-cap={d}", .{p.cap}) catch {};
+            },
+            .inspect => out.writeAll("> vars") catch {},
+            .counters => |name| out.print("> counters {s}", .{name}) catch {},
+            .load => |l| {
+                var parsed = g.parseCode(a, l.source) catch return;
+                defer parsed.deinit();
+                out.print("> load {s} identity={x}", .{ l.name, codeIdentity(l.name, l.source, .script, parsed.imports) }) catch {};
+            },
+            .reload => |r| {
+                var parsed = g.parseCode(a, r.source) catch return;
+                defer parsed.deinit();
+                out.print("> reload {s} carry={s}", .{ r.script.name, if (r.carry) "yes" else "no" }) catch {};
+                if (r.keep_mailbox) out.writeAll(" mailbox=keep") catch {};
+                out.writeAll(" source=") catch {};
+                display.writeSource(out, r.source) catch {};
+                out.print(" identity={x}", .{codeIdentity(r.script.name, r.source, .script, parsed.imports)}) catch {};
+            },
+            .extend => |e| {
+                var parsed = g.parseCode(a, e.source) catch return;
+                defer parsed.deinit();
+                out.print("> extend {s} source=", .{e.script.name}) catch {};
+                display.writeSource(out, e.source) catch {};
+                out.print(" identity={x}", .{extendedIdentity(e.script.identity, codeIdentity(e.script.name, e.source, .extension, parsed.imports))}) catch {};
+            },
+            .add_library => |l| out.print("> add-library {s} identity={x}", .{ l.name, l.identity }) catch {},
+            .replace_library => |r| {
+                out.print("> replace-library {s} carry={s} source=", .{ r.library.name, if (r.carry) "yes" else "no" }) catch {};
+                display.writeSource(out, r.library.source) catch {};
+                out.print(" identity={x}", .{r.library.identity}) catch {};
+            },
+        }
+        out.writeAll("\nrefused code=\"reentrant call\"\n") catch {};
+    }
+
     /// Registers a compiled Library with the Group, writing the
     /// `add-library` input and any refusal: a stdlib name is `reserved
     /// name`, a name the Group holds `name reused`, and an import the Group

@@ -282,7 +282,8 @@ Script until all terminations finish; fatal cleanup prevents publication and
 returns `effect state unknown`. Load, Reload, Extend and Library replacement
 cannot revive a Group stopped by fatal cleanup. Pump, Save, Fingerprint, Inspect
 and code-change worker calls from lifecycle callbacks return `reentrant call`,
-during a Pump and during code changes.
+during a Pump and during code changes. Refused worker inputs retain their Trace
+records after the callback record, including across a Message Layer pause.
 Paused needs admit the same Group's queued Host Inputs under distinct refs;
 `hello.features` advertises `paused-inputs-v1`. Admission preserves synchronous
 errors and ids, while ordinary inputs still wait for the next Pump. Stop,
