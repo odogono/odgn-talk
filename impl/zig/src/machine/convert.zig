@@ -10,6 +10,11 @@ const Decimal = model.Decimal;
 
 /// Converts `v` to the kind or Unit `target`, as written after `as`.
 pub fn convert(a: Allocator, gpa: Allocator, v: *Value, target: []const u8) !?*Value {
+    return prepared(a, gpa, v, target, null);
+}
+
+/// Uses code-owned metadata when Load verified a static Unit target.
+pub fn prepared(a: Allocator, gpa: Allocator, v: *Value, target: []const u8, descriptor: ?*const model.units.Descriptor) !?*Value {
     if (std.mem.eql(u8, target, "text")) return switch (v.data) {
         .bytes => |b| if (unicode.utf8.validate(b)) try model.text(gpa, b) else null,
         else => try model.text(gpa, try chunks.textForm(a, v)),
@@ -44,10 +49,15 @@ pub fn convert(a: Allocator, gpa: Allocator, v: *Value, target: []const u8) !?*V
         else => null,
     };
     // A Unit.
-    const unit = model.units.Unit.parse(target) catch return null;
-    const source: struct { number: Decimal, unit: ?model.units.Unit } = switch (v.data) {
+    var parsed_unit: model.units.Unit = undefined;
+    const unit: *const model.units.Unit = if (descriptor) |d| &d.unit else blk: {
+        parsed_unit = model.units.Unit.parse(target) catch return null;
+        break :blk &parsed_unit;
+    };
+    var text_unit: model.units.Unit = undefined;
+    const source: struct { number: Decimal, unit: ?*const model.units.Unit } = switch (v.data) {
         .number => |n| .{ .number = n, .unit = null },
-        .quantity => |q| .{ .number = q.number, .unit = q.unit },
+        .quantity => |*q| .{ .number = q.number, .unit = &q.unit },
         .text => |t| blk: {
             const s = std.mem.trim(u8, t, " \t\r\n");
             var end: usize = 0;
@@ -56,13 +66,49 @@ pub fn convert(a: Allocator, gpa: Allocator, v: *Value, target: []const u8) !?*V
             const rest = std.mem.trim(u8, s[end..], " ");
             if (rest.len == 0) break :blk .{ .number = n, .unit = null };
             const q = model.units.Unit.parseQuantity(a, n, rest) catch return null;
-            break :blk .{ .number = q.number, .unit = q.unit };
+            text_unit = q.unit;
+            break :blk .{ .number = q.number, .unit = &text_unit };
         },
         else => return null,
     };
     const n = if (source.unit) |from| blk: {
+        if (descriptor) |d| {
+            if (!std.mem.eql(i64, &from.dimensions(), &d.dimensions)) return null;
+            break :blk d.plan.execute(a, from.toBase(a, source.number) catch return null, true, false) catch return null;
+        }
         if (!from.compatible(unit)) return null;
         break :blk unit.fromBase(a, from.toBase(a, source.number) catch return null) catch return null;
     } else source.number;
-    return try model.scalar(gpa, .{ .quantity = .{ .number = n, .unit = unit } });
+    return try model.scalar(gpa, .{ .quantity = .{ .number = n, .unit = unit.* } });
+}
+
+test "prepared targets preserve conversion outcomes for numbers Quantities and text" {
+    const a = std.testing.allocator;
+    for ([_][]const u8{ "2.50", "-3 degF", "0 mL", "1 m*cm", "not a quantity" }) |text| {
+        const v = try model.text(a, text);
+        defer v.release();
+        for ([_][]const u8{ "mm", "degC", "L", "m^2", "month" }) |target| {
+            const descriptor = model.units.Descriptor.init(try model.units.Unit.parse(target));
+            const original = try convert(a, a, v, target);
+            defer if (original) |value| value.release();
+            const planned = try prepared(a, a, v, target, &descriptor);
+            defer if (planned) |value| value.release();
+            try std.testing.expectEqual(original != null, planned != null);
+            if (original) |value| {
+                try std.testing.expectEqual(value.data.quantity.number, planned.?.data.quantity.number);
+                try std.testing.expectEqual(value.data.quantity.unit, planned.?.data.quantity.unit);
+            }
+        }
+    }
+    const number = try model.scalar(a, .{ .number = try Decimal.parse("2.50") });
+    defer number.release();
+    try std.testing.expectEqual(@as(?*Value, null), try prepared(a, a, number, "m*cm", null));
+    const quantity = try model.quantity(a, try Decimal.parse("2.50"), "degF");
+    defer quantity.release();
+    const descriptor = model.units.Descriptor.init(try model.units.Unit.parse("degC"));
+    const original = (try convert(a, a, quantity, "degC")).?;
+    defer original.release();
+    const planned = (try prepared(a, a, quantity, "degC", &descriptor)).?;
+    defer planned.release();
+    try std.testing.expectEqual(original.data.quantity.number, planned.data.quantity.number);
 }

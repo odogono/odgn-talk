@@ -151,7 +151,7 @@ pub const Value = struct {
             .number => |n| Decimal.order(n, y.data.number) == .eq,
             .quantity => |q| blk: {
                 const r = y.data.quantity;
-                if (!q.unit.compatible(r.unit)) break :blk false;
+                if (!q.unit.compatible(&r.unit)) break :blk false;
                 break :blk Decimal.order(try q.unit.comparisonBase(x.allocator, q.number), try r.unit.comparisonBase(x.allocator, r.number)) == .eq;
             },
             .text, .bytes, .pattern => |t| std.mem.eql(u8, t, switch (y.data) {
@@ -283,7 +283,7 @@ pub const Comparer = struct {
                 .number => |n| Decimal.order(n, y.data.number),
                 .quantity => |q| blk: {
                     const r = y.data.quantity;
-                    if (!q.unit.compatible(r.unit)) return error.CantCompare;
+                    if (!q.unit.compatible(&r.unit)) return error.CantCompare;
                     break :blk Decimal.order(try q.unit.comparisonBase(a.allocator, q.number), try r.unit.comparisonBase(a.allocator, r.number));
                 },
                 .text => std.mem.order(u8, try self.text(x), try self.text(y)), // UTF-8 preserves scalar order.
@@ -849,7 +849,7 @@ fn mapOwned(gpa: std.mem.Allocator, pairs: []Pair) Error!*Value {
 /// Quantities.
 pub fn range(gpa: std.mem.Allocator, from: *Value, to: *Value) Error!*Value {
     if (from.kind() != to.kind() or (from.data != .number and from.data != .quantity)) return error.InvalidValue;
-    if (from.data == .quantity and !from.data.quantity.unit.compatible(to.data.quantity.unit)) return error.IncompatibleUnits;
+    if (from.data == .quantity and !from.data.quantity.unit.compatible(&to.data.quantity.unit)) return error.IncompatibleUnits;
     const v = try scalar(gpa, .{ .range = .{ .from = from, .to = to } });
     v.measure = logicalSize(from) +| logicalSize(to);
     _ = from.retain();
@@ -971,7 +971,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
         if (x.data != .quantity or y.data != .quantity) return error.InvalidValue;
         const l = x.data.quantity;
         const r = y.data.quantity;
-        if (!l.unit.compatible(r.unit)) return error.IncompatibleUnits;
+        if (!l.unit.compatible(&r.unit)) return error.IncompatibleUnits;
         const rhs = try l.unit.fromBase(gpa, try r.unit.toBase(gpa, r.number));
         return scalar(gpa, .{ .quantity = .{ .number = try decimal.calculate(gpa, op, l.number, rhs), .unit = l.unit } });
     }
@@ -985,7 +985,7 @@ pub fn arithmetic(gpa: std.mem.Allocator, op: decimal.Operator, x: *Value, y: *V
         .number => |n| .{ .number = n, .unit = .{} },
         else => return error.InvalidValue,
     };
-    const u = try units.Unit.combine(l.unit, r.unit, op == .divide);
+    const u = try units.Unit.combine(&l.unit, &r.unit, op == .divide);
     const base = try decimal.calculate(gpa, op, try l.unit.toBase(gpa, l.number), try r.unit.toBase(gpa, r.number));
     const n = try u.fromBase(gpa, base);
     return scalar(gpa, if (u.empty()) .{ .number = n } else .{ .quantity = .{ .number = n, .unit = u } });

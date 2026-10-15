@@ -1676,7 +1676,7 @@ pub const Session = struct {
         if (value.data != .quantity) return null;
         const q = value.data.quantity;
         const second = northtalk.units.Unit.parse("s") catch return null;
-        if (!q.unit.compatible(second)) return null;
+        if (!q.unit.compatible(&second)) return null;
         var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
         defer arena.deinit();
         const base = q.unit.toBase(arena.allocator(), q.number) catch return null;

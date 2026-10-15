@@ -7703,7 +7703,9 @@ pub const Group = struct {
                 const v = pop(frame);
                 defer v.release();
                 m.input = v.retain();
-                const r = conversions.convert(a, gpa, v, ops[0].text) catch |e| switch (e) {
+                const target = if (ops[0] == .unit_target) ops[0].unit_target.text else ops[0].text;
+                const descriptor = if (ops[0] == .unit_target) &ops[0].unit_target.descriptor else null;
+                const r = conversions.prepared(a, gpa, v, target, descriptor) catch |e| switch (e) {
                     error.OutOfMemory => return error.OutOfMemory,
                     else => null,
                 };
@@ -7712,7 +7714,7 @@ pub const Group = struct {
                     try g.push(frame, try boolean(gpa, r != null));
                 } else {
                     const out = r orelse {
-                        const to = try model.text(gpa, ops[0].text);
+                        const to = try model.text(gpa, target);
                         defer to.release();
                         return g.raise("can't convert", &.{ .{ .key = "value", .value = v }, .{ .key = "to", .value = to } });
                     };
@@ -8666,12 +8668,12 @@ pub const Group = struct {
                 const second = units.Unit.parse("s") catch unreachable;
                 const month = units.Unit.parse("month") catch unreachable;
                 const takes = if (date_only) "day" else "s";
-                if (q.unit.compatible(month) and x.data == .civil_date) {
+                if (q.unit.compatible(&month) and x.data == .civil_date) {
                     const months = q.unit.toBase(a, q.number) catch return error.OutOfMemory;
                     const n = months.integer(i64) catch return g.incompatible("month", q.unit);
                     return g.addMonths(x, if (subtract) -n else n);
                 }
-                if (!q.unit.compatible(second)) return g.incompatible(takes, q.unit);
+                if (!q.unit.compatible(&second)) return g.incompatible(takes, q.unit);
                 var ns = waitMillis(y).?;
                 if (subtract) ns = -ns;
                 switch (x.data) {
@@ -8796,7 +8798,7 @@ pub const Group = struct {
                 if (n < 1) return g.wrongKind("integer", y);
                 var unit = q.unit;
                 var i: i64 = 1;
-                while (i < n) : (i += 1) unit = units.Unit.combine(unit, q.unit, false) catch return g.incompatible(q.unit.string(a, false) catch return error.OutOfMemory, units.Unit.parse("1") catch q.unit);
+                while (i < n) : (i += 1) unit = units.Unit.combine(&unit, &q.unit, false) catch return g.incompatible(q.unit.string(a, false) catch return error.OutOfMemory, units.Unit.parse("1") catch q.unit);
                 const r = model.decimal.power(a, q.number, y.data.number) catch |e| return switch (e) {
                     error.Overflow => overflow(g),
                     error.OutOfMemory => error.OutOfMemory,
@@ -9669,7 +9671,7 @@ fn waitMillis(d: *const Value) ?i128 {
     if (d.data != .quantity) return null;
     const q = d.data.quantity;
     const second = units.Unit.parse("s") catch return null;
-    if (!q.unit.compatible(second)) return null;
+    if (!q.unit.compatible(&second)) return null;
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const base = q.unit.toBase(arena.allocator(), q.number) catch return null;

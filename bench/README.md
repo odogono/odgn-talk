@@ -62,6 +62,12 @@ record paired exact division, `div`/`mod` and Quantity timings, allocation
 probes, native/WASI equivalence and the residual AppleScript gaps for
 [#923](https://github.com/odogono/odgn-talk/issues/923).
 
+The [Zig Unit metadata measurements](results/2026-10-14-zig-unit-metadata.md)
+record static conversion descriptors and ordered plans, compact Unit payloads,
+paired conversion/comparison probes, separate CPU captures and surviving-copy
+assembly. `zig/unit-paths.py` reproduces the paired suite and optional macOS
+profiles against two prebuilt native Hosts.
+
 The [Zig Character indexing measurements](results/2026-10-14-zig-character-indexing.md)
 record paired forward-index improvements, scaling, negative-index limits and
 the fresh four-runner text comparison for
