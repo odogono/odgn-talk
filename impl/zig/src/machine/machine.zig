@@ -4510,7 +4510,12 @@ pub const Group = struct {
         }
         const fuel = run.fuel;
         const alloc = run.alloc;
-        const raised: ?*Value = try g.resumeWith(run, frame, with, waited, pc, ins);
+        const raised: ?*Value = g.resumeWith(run, frame, with, waited, pc, ins) catch |err| {
+            if (err != error.LimitFault) return err;
+            const limit = g.pending_fault.?;
+            g.pending_fault = null;
+            return g.limitFault(run, limit, unitName(run, frame), pc, ins);
+        };
         // An answer whose cost takes the Run over its Fuel faults at its
         // call, and isn't charged.
         if (raised == null and run.cleanup_from == null and run.fuel > fuel and run.fuel > run.limits.fuel_per_run) {
@@ -4524,6 +4529,15 @@ pub const Group = struct {
             if (outcome) |end| return end;
         }
         return g.execute(run, true);
+    }
+
+    /// Settlement conversion is atomic for both answers and failures: a
+    /// rejected conversion neither charges nor enters Script error recovery.
+    fn payResumeConversion(g: *Group, run: *Run, fuel: u64, alloc: u64) !void {
+        if (fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.alloc + alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
+        run.fuel += fuel;
+        run.alloc += alloc;
     }
 
     /// What a resumed Run's wait gave: a value pushed, or an error raised.
@@ -4617,8 +4631,7 @@ pub const Group = struct {
                 // Only the rate's terms over the result, and the answer's
                 // own cost.
                 const size = costs.size(x.value);
-                run.fuel += (size + 31) / 32 + x.fuel;
-                run.alloc += size;
+                try g.payResumeConversion(run, (size + 31) / 32 + x.fuel, size);
                 try g.push(frame, x.value.retain());
                 return null;
             },
@@ -4629,8 +4642,7 @@ pub const Group = struct {
                 // Its Data is converted as a result is, an empty map when
                 // it has none.
                 const size: u64 = if (f.data) |d| costs.size(d) else 16;
-                run.fuel += (size + 31) / 32;
-                run.alloc += size;
+                try g.payResumeConversion(run, (size + 31) / 32, size);
                 var pairs: std.ArrayList(model.Pair) = .empty;
                 defer pairs.deinit(gpa);
                 const code = try model.text(gpa, f.code);
