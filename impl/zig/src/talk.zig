@@ -1112,7 +1112,10 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const name = bytes(o.name, o.name_len) catch return .invalid_value;
     const source = bytes(o.source, o.source_len) catch return .invalid_value;
     if (!std.unicode.utf8ValidateSlice(source)) return .invalid_value;
-    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) return .name_reused;
+    for (g.scripts.items) |s| if (std.mem.eql(u8, s.name, name)) {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "name reused");
+        return .name_reused;
+    };
     const given: []const LoadGrant = if (o.grants_len == 0) &.{} else (o.grants orelse return .invalid_value)[0..o.grants_len];
     const named = g.core.gpa.alloc(machine.NamedGrant, given.len) catch return .out_of_memory;
     defer g.core.gpa.free(named);
@@ -1125,7 +1128,10 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
         b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
     }
     if (o.owner) |owner| if (!g.owns(owner)) return .wrong_group;
-    const limits = limitsOf(o.limits) catch return .invalid_value;
+    const limits = limitsOf(o.limits) catch {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
+        return .invalid_value;
+    };
     const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
@@ -1991,6 +1997,7 @@ pub const direct = struct {
     pub const save = talk_save;
     pub const fingerprint = talk_fingerprint;
     pub const callAnswer = talk_call_answer;
+    pub const callAnswerWithCost = talk_call_answer_with_cost;
     pub const callFail = talk_call_fail;
     pub const requestCharge = talk_request_charge;
     pub const grant = talk_capability_def_grant;

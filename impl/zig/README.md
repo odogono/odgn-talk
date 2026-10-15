@@ -305,6 +305,20 @@ callbacks or Script execution; inputs queued by release use the original worker'
 Pump/code-change boundary. Deferred cleanup of another Run retains the original
 Host return without repeating its callback or record. Native callbacks retain
 their synchronous contract.
+Hosts may opt in to `crossing-trace-v1` to receive available Trace before
+Operation needs and a `trace` need after each ordinary Operation's call record,
+before controls land or result conversion. Its `trace-result` acknowledgement
+continues the same Pump without repeating the callback or accounting. Refusal
+and Load-error replies carry outer Trace with this feature; legacy Hosts retain
+final-reply timing. This is an Operation crossing observation contract, not
+per-record suspension during arbitrary execution or non-yielding WASM admission.
+The [contract](../../spec/embedding/paused-crossing-inputs.md#operation-trace-observation-at-a-paused-crossing)
+describes the supported boundary. Message Layer `answer.fuel` now reaches the
+settlement-cost API. A queued settlement remains tracked until consumed, so a
+Run discarded before resumption still notifies cancellation before later needs.
+Typed CallFailed reports name the Capability definition, while Trace and
+ScriptError fields continue to name the Grant.
+
 `zig build corpus -- --defer-crossings` defers each eligible crossing once and
 holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
@@ -1368,5 +1382,6 @@ Every Pump enforces a nondecreasing Clock before draining queued inputs or
 changing accounting. Equal readings are allowed, and a new Group may begin
 before the Unix epoch. A restored Group starts with its saved Clock as the
 lower bound. The C API and Message Layer return `clock backwards` for a
-decrease; the Message Layer retains the refusal Trace for its next successful
-reply, as it does other refused worker records.
+decrease. Without `crossing-trace-v1`, the Message Layer retains refusal Trace
+for its next successful reply; opted-in Hosts receive available records on the
+error reply itself. Early Load refusals record the attempted input and refusal.

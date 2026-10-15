@@ -1409,6 +1409,9 @@ pub const Group = struct {
     /// A Host function deferred, so this Pump pauses mid-turn for its
     /// answer; `resumePump` takes the turns up again (the Message Layer).
     crossing_pause: bool = false,
+    /// Message Layer opt-in: observe Operation records before landing.
+    observe_crossings: bool = false,
+    trace_pause: bool = false,
     /// The transport is about to re-enter the callback that paused it.
     /// Its queued controls must follow that callback's record, not land
     /// at the start of the re-made instruction.
@@ -2600,6 +2603,11 @@ pub const Group = struct {
     };
 
     pub fn refuseWorker(g: *Group, input: WorkerInput) void {
+        g.refuseWorkerWithCode(input, "reentrant call");
+    }
+
+    /// Early API validation still records the attempted Host Input.
+    pub fn refuseWorkerWithCode(g: *Group, input: WorkerInput, code: []const u8) void {
         const out = g.trace orelse return;
         var arena: std.heap.ArenaAllocator = .init(g.gpa);
         defer arena.deinit();
@@ -2641,7 +2649,7 @@ pub const Group = struct {
                 out.print(" identity={x}", .{r.library.identity}) catch {};
             },
         }
-        out.writeAll("\nrefused code=\"reentrant call\"\n") catch {};
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
     }
 
     /// Registers a compiled Library with the Group, writing the
@@ -2797,6 +2805,7 @@ pub const Group = struct {
     /// it ends the Run's Stretch.
     fn landedAt(g: *Group, run: *Run) !bool {
         g.flushHeld();
+        if (g.trace_pause) return error.Deferred;
         if (g.landing.items.len == 0) return run.landed != null;
         try g.land(run);
         return run.landed != null;
@@ -2956,6 +2965,7 @@ pub const Group = struct {
     /// Script's turn, where a Run already in the queue keeps its place.
     fn cancel(g: *Group, s: *Script, r: *Run) !void {
         if (r.resume_with) |w| if (w == .cancelled) return;
+        abandonReadyCalls(r);
         // Its rollback first, which may defer while draining: nothing else
         // changes until it completes.
         if (r.continuing) try g.cleanupLifecycle(r);
@@ -4500,7 +4510,12 @@ pub const Group = struct {
         }
         const fuel = run.fuel;
         const alloc = run.alloc;
-        const raised: ?*Value = try g.resumeWith(run, frame, with, waited, pc, ins);
+        const raised: ?*Value = g.resumeWith(run, frame, with, waited, pc, ins) catch |err| {
+            if (err != error.LimitFault) return err;
+            const limit = g.pending_fault.?;
+            g.pending_fault = null;
+            return g.limitFault(run, limit, unitName(run, frame), pc, ins);
+        };
         // An answer whose cost takes the Run over its Fuel faults at its
         // call, and isn't charged.
         if (raised == null and run.cleanup_from == null and run.fuel > fuel and run.fuel > run.limits.fuel_per_run) {
@@ -4516,8 +4531,18 @@ pub const Group = struct {
         return g.execute(run, true);
     }
 
+    /// Settlement conversion is atomic for both answers and failures: a
+    /// rejected conversion neither charges nor enters Script error recovery.
+    fn payResumeConversion(g: *Group, run: *Run, fuel: u64, alloc: u64) !void {
+        if (fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.alloc + alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
+        run.fuel += fuel;
+        run.alloc += alloc;
+    }
+
     /// What a resumed Run's wait gave: a value pushed, or an error raised.
     fn resumeWith(g: *Group, run: *Run, frame: *Frame, with: Resume, waited: Waited, pc: u32, ins: lower.Instruction) !?*Value {
+        if (waited.call) |c| c.settlement_consumed = true;
         const gpa = g.gpa;
         switch (with) {
             .woke => return null,
@@ -4606,8 +4631,7 @@ pub const Group = struct {
                 // Only the rate's terms over the result, and the answer's
                 // own cost.
                 const size = costs.size(x.value);
-                run.fuel += (size + 31) / 32 + x.fuel;
-                run.alloc += size;
+                try g.payResumeConversion(run, (size + 31) / 32 + x.fuel, size);
                 try g.push(frame, x.value.retain());
                 return null;
             },
@@ -4618,8 +4642,7 @@ pub const Group = struct {
                 // Its Data is converted as a result is, an empty map when
                 // it has none.
                 const size: u64 = if (f.data) |d| costs.size(d) else 16;
-                run.fuel += (size + 31) / 32;
-                run.alloc += size;
+                try g.payResumeConversion(run, (size + 31) / 32, size);
                 var pairs: std.ArrayList(model.Pair) = .empty;
                 defer pairs.deinit(gpa);
                 const code = try model.text(gpa, f.code);
@@ -5580,7 +5603,21 @@ pub const Group = struct {
     /// A Run's Segment rolled back for a drained Stop, cancellation or
     /// Rewind: its scopes abandoned and its participant rolled back. While
     /// draining, each crossing may defer, with progress in `run.cleanup`.
+    fn abandonReadyCalls(run: *Run) void {
+        if (run.resume_with != null) {
+            if (run.waited.call) |c| if (!c.settlement_consumed) {
+                c.abandoned.store(true, .release);
+            };
+        }
+        if (run.join) |j| for (j.members.items) |m| {
+            if (m.with != null) if (m.waited.call) |c| if (!c.settlement_consumed) {
+                c.abandoned.store(true, .release);
+            };
+        };
+    }
+
     fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
+        abandonReadyCalls(run);
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
         _ = try g.lifecycle(run, &run.cleanup.?, g.draining or g.reworking or g.landing_active);
         run.cleanup = null;
@@ -9306,6 +9343,8 @@ pub const Group = struct {
                 if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
+        if (returned != null) g.answering_crossing = false;
+        if (returned == null and g.observe_crossings) g.trace_pause = true;
         const interrupted = g.landedAt(run) catch |err| {
             if (err != error.Deferred) return err;
             run.returned_op = .{ .outcome = outcome, .charged = call.charged, .valid = valid };
@@ -9615,7 +9654,8 @@ pub const Group = struct {
         g.write("call-failed {s} op={s}.{s}\n", .{ id, grant, operation_name });
         const r = &g.reports;
         const script_name = id[0 .. std.mem.indexOfScalar(u8, id, '/') orelse 0];
-        g.addReport(.{ .call_failed = .{ .script = r.text(script_name) catch "", .call = r.text(id) catch "", .capability = r.text(grant) catch "", .operation = r.text(operation_name) catch "" } });
+        const definition = if (g.script(script_name)) |owner_script| if (owner_script.grant(grant)) |named| named.grant.capability.name else grant else grant;
+        g.addReport(.{ .call_failed = .{ .script = r.text(script_name) catch "", .call = r.text(id) catch "", .capability = r.text(definition) catch "", .operation = r.text(operation_name) catch "" } });
         return g.raise("host error", where);
     }
 

@@ -28,7 +28,9 @@ fatal worker errors and exactly-once notices. Existing Hosts keep final-reply
 timing; request the feature in `hello` and check support before relying on it.
 
 This remains an isolated probe. The [experimental public Go adapter](../../impl/go/README.md#experimental-zig-backend)
-now covers a first data/Request slice behind `talk_zig_experimental`. Full API/corpus
+covers data/Request and ordinary immediate/suspending Capability slices behind
+`talk_zig_experimental`. Its public Host tests independently compare Trace, Fuel
+and typed Reports against a separately built native-Go test binary. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
 later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
 [findings](../../docs/research/go-zig-binding.md) and the
@@ -114,6 +116,25 @@ passes all four native execution/race jobs as well as cross-builds for its
 recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
+
+## Public Capability artifact refresh, 2026-10-15
+
+[Raw output](measurements-public-callbacks.txt) records three repetitions with
+artifact source `bba90b5036893b3b4b042483908812d07c565fba`, SHA-256
+`067857e5b1404ee31566a6440823963c1652c3120cde2f3235bebe05af2ec157`, and
+public-adapter/native-Go revision `bba90b50`. On Darwin/arm64 Apple M5, Go 1.27.2,
+wazero 1.12.0 and `CGO_ENABLED=0`, median immediate-call run averages are
+**3.808 µs native Go vs 32.975 µs probe (8.7×)**, cold compile/runtime/close
+**628.3 ms**, and cached instantiation/close **123.0 µs**. This remains the
+independent probe's workload, with no `crossing-trace-v1` opt-in; it does not
+measure the public adapter, tail latency or an accepted performance limit.
+Earlier measurement files retain their own artifact provenance.
+
+The refreshed artifact passes the independent probe and public-adapter
+pure-Go/race/vet checks locally on Darwin/arm64. Separate pure-Go cross-builds
+cover Linux amd64/arm64 and macOS arm64. CI must execute this revision on the
+other required runners before platform acceptance; the earlier merged runs
+below establish execution only for their named revisions.
 
 ## Public-slice artifact refresh, 2026-10-15
 
