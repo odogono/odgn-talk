@@ -112,6 +112,7 @@ import {
 import {
   combine,
   fromBase,
+  ownUnit,
   parseUnit,
   powerOf,
   sameDimension,
@@ -637,7 +638,7 @@ const numberOperand = (v: Value): Dec => {
 
 const numberOf = (q: QuantityRef): Dec => decimalParts(q.number);
 const inBase = (q: QuantityRef): Dec => toBase(numberOf(q), q.unit);
-const noUnit: UnitSpec = [];
+const noUnit: UnitSpec = ownUnit([]);
 // A number takes part in `*` and `/` as a Quantity with no Unit.
 const asQuantityRef = (v: Value): QuantityRef =>
   v.asQuantityRef() ?? { number: v.asDecimal()!, unit: noUnit };
@@ -954,7 +955,21 @@ const cantConvert = (value: Value, to: string) =>
     ['value', value],
     ['to', text(to)],
   ]);
-export const convert = (v: Value, kind: string): Value => {
+/** A verified static Unit target, owned by its loaded code unit. */
+export type UnitConversion = { readonly to: string; readonly unit: UnitSpec };
+export const prepareConversion = (kind: string): UnitConversion | undefined => {
+  if (['text', 'bytes', 'number', 'civil date', 'instant'].includes(kind)) {
+    return undefined;
+  }
+  const unit = parseUnit(kind);
+  return Object.freeze({ unit, to: unitText(unit) });
+};
+
+export const convert = (
+  v: Value,
+  kind: string,
+  prepared?: UnitConversion,
+): Value => {
   switch (kind) {
     case 'text':
       if (v.kind === 'bytes') {
@@ -1012,14 +1027,12 @@ export const convert = (v: Value, kind: string): Value => {
       throw cantConvert(v, kind);
     }
   }
-  return convertToUnit(v, kind);
+  return convertToUnit(v, prepared ?? prepareConversion(kind)!);
 };
 
 // `as` with a Unit (chapter 3): a number takes the Unit, a Quantity of its
 // dimension converts through Base Units, and text reads as either first.
-const convertToUnit = (v: Value, written: string): Value => {
-  const unit = parseUnit(written);
-  const to = unitText(unit);
+const convertToUnit = (v: Value, { unit, to }: UnitConversion): Value => {
   let input = v;
   if (v.kind === 'text') {
     const m = /^(-?(?:0x[\dA-Fa-f]+|\d+(?:\.\d+)?)) *(.*)$/s.exec(
@@ -1045,9 +1058,13 @@ const convertToUnit = (v: Value, written: string): Value => {
     throw error instanceof ArithmeticError ? cantConvert(v, to) : error;
   }
 };
-export const canConvert = (v: Value, kind: string): Value => {
+export const canConvert = (
+  v: Value,
+  kind: string,
+  prepared?: UnitConversion,
+): Value => {
   try {
-    convert(v, kind);
+    convert(v, kind, prepared);
     return bool(true);
   } catch (error) {
     if (error instanceof ScriptError) {
