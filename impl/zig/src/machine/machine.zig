@@ -2584,6 +2584,64 @@ pub const Group = struct {
         };
     }
 
+    /// Refused worker inputs still belong to the Trace. This only formats
+    /// their metadata: it runs no Script code and changes no Group state.
+    pub const WorkerInput = union(enum) {
+        pump: struct { now: model.dates.Instant, slice: i64 = 0, cap: i64 = 0 },
+        load: struct { name: []const u8, source: []const u8 },
+        reload: struct { script: *Script, source: []const u8, carry: bool, keep_mailbox: bool },
+        extend: struct { script: *Script, source: []const u8 },
+        add_library: *Library,
+        replace_library: struct { library: *Library, carry: bool },
+        inspect,
+        counters: []const u8,
+    };
+
+    pub fn refuseWorker(g: *Group, input: WorkerInput) void {
+        const out = g.trace orelse return;
+        var arena: std.heap.ArenaAllocator = .init(g.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        switch (input) {
+            .pump => |p| {
+                const shown = model.dates.string(a, model.dates.fields(p.now), true) catch return;
+                out.print("> pump clock={s}", .{shown}) catch {};
+                if (p.slice > 0) out.print(" fuel-slice={d}", .{p.slice}) catch {};
+                if (p.cap > 0) out.print(" fuel-cap={d}", .{p.cap}) catch {};
+            },
+            .inspect => out.writeAll("> vars") catch {},
+            .counters => |name| out.print("> counters {s}", .{name}) catch {},
+            .load => |l| {
+                var parsed = g.parseCode(a, l.source) catch return;
+                defer parsed.deinit();
+                out.print("> load {s} identity={x}", .{ l.name, codeIdentity(l.name, l.source, .script, parsed.imports) }) catch {};
+            },
+            .reload => |r| {
+                var parsed = g.parseCode(a, r.source) catch return;
+                defer parsed.deinit();
+                out.print("> reload {s} carry={s}", .{ r.script.name, if (r.carry) "yes" else "no" }) catch {};
+                if (r.keep_mailbox) out.writeAll(" mailbox=keep") catch {};
+                out.writeAll(" source=") catch {};
+                display.writeSource(out, r.source) catch {};
+                out.print(" identity={x}", .{codeIdentity(r.script.name, r.source, .script, parsed.imports)}) catch {};
+            },
+            .extend => |e| {
+                var parsed = g.parseCode(a, e.source) catch return;
+                defer parsed.deinit();
+                out.print("> extend {s} source=", .{e.script.name}) catch {};
+                display.writeSource(out, e.source) catch {};
+                out.print(" identity={x}", .{extendedIdentity(e.script.identity, codeIdentity(e.script.name, e.source, .extension, parsed.imports))}) catch {};
+            },
+            .add_library => |l| out.print("> add-library {s} identity={x}", .{ l.name, l.identity }) catch {},
+            .replace_library => |r| {
+                out.print("> replace-library {s} carry={s} source=", .{ r.library.name, if (r.carry) "yes" else "no" }) catch {};
+                display.writeSource(out, r.library.source) catch {};
+                out.print(" identity={x}", .{r.library.identity}) catch {};
+            },
+        }
+        out.writeAll("\nrefused code=\"reentrant call\"\n") catch {};
+    }
+
     /// Registers a compiled Library with the Group, writing the
     /// `add-library` input and any refusal: a stdlib name is `reserved
     /// name`, a name the Group holds `name reused`, and an import the Group
@@ -3544,6 +3602,7 @@ pub const Group = struct {
             // run; the others' arms take what they own.
             const kept = switch (input) {
                 .stop, .cancel_run, .rewind_run => true,
+                .settlement => |x| x.how == .reissue,
                 else => false,
             };
             g.drainOne(input) catch |e| {
@@ -3560,6 +3619,16 @@ pub const Group = struct {
             };
             _ = g.batch.orderedRemove(0);
             if (kept) g.releaseInputs(&.{input});
+            // Reissued Start is a Host crossing. Land its controls before
+            // another settlement can invoke a sibling Start. The input is
+            // already consumed, so deferred cleanup resumes only the landing.
+            if (input == .settlement and input.settlement.how == .reissue) {
+                g.land(null) catch |e| {
+                    if (e != error.Deferred) return e;
+                    g.crossing_pause = true;
+                    return;
+                };
+            }
             if (g.release_pause) {
                 g.crossing_pause = true;
                 return;
@@ -3643,7 +3712,7 @@ pub const Group = struct {
             },
             .broadcast => |b| try g.drainBroadcast(b),
             .settlement => |x| {
-                defer g.gpa.free(x.id);
+                defer if (x.how != .reissue) g.gpa.free(x.id);
                 switch (x.how) {
                     .answer, .fail => {
                         const index = for (g.pending.items, 0..) |p, i| {
@@ -4021,7 +4090,12 @@ pub const Group = struct {
         c.now = g.clock;
         c.binding = sg.grant.binding;
         c.left = run.limits.fuel_per_run -| run.fuel;
+        c.deferrable = true;
+        const held = g.holdTrace();
         const outcome = decl.host.call(decl.host.context, c, c.args);
+        g.flushChargeRefusals();
+        g.trace = held;
+        if (outcome == .deferred) return error.Deferred;
         c.starting = false;
         run.fuel += c.charged;
         g.pump_fuel += c.charged;
@@ -4036,6 +4110,7 @@ pub const Group = struct {
             if (c.charged > 0) w.print(" charged={d}", .{c.charged}) catch {};
             w.writeAll("\n") catch {};
         }
+        g.flushHeld();
         switch (outcome) {
             .started => {},
             .value => |v| try g.ready(g.pending.orderedRemove(index), .{ .answer = .{ .value = v, .fuel = 0 } }),
@@ -9337,7 +9412,7 @@ pub const Group = struct {
             return .crossing;
         };
         if (interrupted) return error.Landed;
-        if (!valid) return g.propError(o, key);
+        if (!valid) return g.propError(run, o, key);
         switch (outcome) {
             .value => |v| {
                 const size = costs.size(v);
@@ -9351,20 +9426,20 @@ pub const Group = struct {
                 owned = false;
                 return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
-            else => return g.propError(o, key),
+            else => return g.propError(run, o, key),
         }
     }
 
     fn recordPropertyReturn(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, result: objects.Result, valid: bool, input: ?*Value) !void {
         switch (result) {
-            .value, .done => g.propRecord(run, o, key, op, if (valid and (input != null or result == .value)) "value" else "error", if (!valid) null else input orelse if (result == .value) result.value else null),
+            .value, .done => g.propRecord(run, o, key, op, if (valid and (input != null or result == .value)) "value" else "error", if (!valid) null else input orelse if (result == .value) result.value else null, null),
             .failed => |f| {
                 const malformed_data = if (f.data) |d| d.data != .map and d.data != .nothing else false;
                 const shown = if (malformed_data) null else failureMap(g.gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
                 defer if (shown) |v| v.release();
-                g.propRecord(run, o, key, op, "error", shown);
+                g.propRecord(run, o, key, op, "error", shown, input);
             },
-            else => g.propRecord(run, o, key, op, "error", null),
+            else => g.propRecord(run, o, key, op, "error", null, input),
         }
     }
 
@@ -9377,10 +9452,9 @@ pub const Group = struct {
         defer gpa.free(f.code);
         defer if (f.message) |t| gpa.free(t);
         defer if (f.data) |d| d.release();
-        _ = run;
-        const shown = failureMap(gpa, f) catch return g.propError(o, key);
+        const shown = failureMap(gpa, f) catch return g.propError(run, o, key);
         defer shown.release();
-        if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(o, key);
+        if (!capabilities.validPropFailure(f.code, f.data)) return g.propError(run, o, key);
         // Its Data is converted as a value read is, an empty map when it
         // has none.
         const empty = try model.map(gpa, &.{});
@@ -9463,7 +9537,7 @@ pub const Group = struct {
                 owned = false;
                 return g.propFailed(run, o, key, .{ .code = f.code, .message = f.message, .data = f.data }, m);
             },
-            else => return g.propError(o, key),
+            else => return g.propError(run, o, key),
         }
     }
 
@@ -9480,18 +9554,33 @@ pub const Group = struct {
     }
 
     /// `prop <run> object= name= op= value=|error=`.
-    fn propRecord(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, what: []const u8, v: ?*const Value) void {
+    fn propRecord(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, what: []const u8, v: ?*const Value, input: ?*const Value) void {
         const out = g.trace orelse return;
         out.print("prop {s} object=", .{run.id}) catch {};
         display.writeTrace(out, o.value) catch {};
-        out.print(" name={s} op={s} {s}=", .{ key, op, what }) catch {};
+        out.print(" name={s} op={s}", .{ key, op }) catch {};
+        if (input) |x| {
+            out.writeAll(" value=") catch {};
+            display.writeTrace(out, x) catch {};
+        }
+        out.print(" {s}=", .{what}) catch {};
         if (v) |x| display.writeTrace(out, x) catch {} else out.writeAll("{}") catch {};
         out.writeAll("\n") catch {};
     }
 
     /// A property's failure raises as an Operation's does, with
     /// `capability` the Object Kind and `operation` the property.
-    fn propError(g: *Group, o: *objects.Object, key: []const u8) error{ Raised, OutOfMemory } {
+    fn propError(g: *Group, run: *Run, o: *objects.Object, key: []const u8) error{ Raised, OutOfMemory } {
+        // Properties have no Call id and no call-failed Trace record, but
+        // their Host failures still reach the embedding Host as Reports.
+        const r = &g.reports;
+        g.addReport(.{ .call_failed = .{
+            .script = r.text(run.script.name) catch "",
+            .call = "",
+            .capability = r.text(o.kind.name) catch "",
+            .operation = r.text(key) catch "",
+            .detail = "invalid property result or Host failure",
+        } });
         const capability = model.text(g.gpa, o.kind.name) catch return error.OutOfMemory;
         defer capability.release();
         const operation_name = model.text(g.gpa, key) catch return error.OutOfMemory;

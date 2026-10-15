@@ -5,14 +5,21 @@ not a replacement Go embedding package. The Go Core remains in place.
 
 ## Result
 
-**The original Stop crossing gate now passes.** A Go Operation queues Stop before
+**The focused callback compatibility gate now passes locally.** A Go Operation queues Stop before
 returning through the Message Layer, and the same Pump rolls its Segment back.
 `TestStopAtCrossingParity` compares native Go and the embedded Zig artifact for
 immediate returns, wrong Shapes, Script failures, Host errors and suspending
 Start. It requires identical Trace lines and Fuel and checks `n=0` on both paths.
 The previous characterization of native `n=0` versus transport `n=8` is replaced.
 
-This remains an isolated probe, not a public Go binding. Full callback/API/corpus
+The follow-up callback suite also compares panic conversion, properties, work
+context cancellation, Function and Object ownership, effect cleanup, restored
+Calls and worker reentry. It found and corrected Zig discrepancies tracked in
+[#968](https://github.com/odogono/odgn-talk/issues/968),
+[#969](https://github.com/odogono/odgn-talk/issues/969) and
+[#970](https://github.com/odogono/odgn-talk/issues/970).
+
+This remains an isolated probe, not a public Go binding. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
 later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
 [findings](../../docs/research/go-zig-binding.md) and the
@@ -52,7 +59,18 @@ measurements. This isolated module does not add dependencies to the Go Core.
 - WASI initialization, version matching, and embedded artifact integrity.
 - Immediate and genuinely deferred answers from another Go goroutine.
 - Same-callback Stop parity against native Go, including exact Trace, Fuel and rollback.
-- Basic Zig save/restore; no cross-Core save conversion.
+- Operation panic conversion in immediate, suspending and fire-and-forget modes;
+  getter/setter success, wrong Shape and panic, including Stop before conversion.
+- Suspended Call work contexts cancelled on CancelRun, Stop, timeout and Request
+  context cancellation; exactly one abandonment and harmless late answers.
+- Captured Function round trips/calls, nested foreign-Group rejection and stale
+  Functions after Reload; Object identity, duplicate ids and owner disposal.
+- Staged Host effects commit normally or roll back on Stop, with automatic scope
+  abandonment and Grant release in order, without repeat cleanup.
+- Zig save/restore with Answer, Fail, Adopt and Reissue settlements; reissued Start
+  preserves its Call id and can Stop before returning. No cross-Core save conversion.
+- Worker reentry (Pump, Save, Load, Inspect, Counters and code/Library changes),
+  refusal Trace ordering, malformed/wrong-ref/wrong-Group recovery, independent Sessions.
 - Independent concurrent reactors sharing compiled code, serialized export calls,
   and Go-owned reply bytes retained across guest memory growth.
 
@@ -62,10 +80,40 @@ Each complete conversation needs one owner. Closing an Engine requires its
 reactors to have finished. The probe's JSON decoder also retains Go's nesting
 limit; it is not sufficient for the Message Layer's unlimited nesting contract.
 
-No claim is made yet about callback panic conversion, cancellation contexts,
-property callbacks, Function Value identity, effect hooks, full public API or
-corpus compatibility, driver Pool integration, or Session facilities. Those remain
-retirement requirements beyond the original Stop gate.
+The adapters in `compatibility_test.go` execute real Go callbacks outside the
+export lock, recover panic into `hostError`, and map `abandoned` notifications to
+Host work-context cancellation. These responsibilities are demonstrated in tests;
+`Reactor` itself supplies only bytes and export serialization. Report comparisons
+select identities/order, outcomes, accounting, error codes and cleanup status;
+Trace comparisons are exact. Non-normative error wording and Host-only detail
+are excluded. The suite is a focused parity gate, not all public embedding tests.
+
+Object wire values contain kind/id, not a Group owner. A public Go adapter must
+validate Object handles recursively before encoding; equal kind/id in another
+Group cannot establish shared ownership. Function tokens carry a Group identity
+and the protocol rejects foreign tokens. Public handle ownership, callback
+registration/lifetimes, all error and metering paths, GC ergonomics, Pool
+integration, the full API/Corpus and Session facilities remain binding work.
+
+The [probe CI](../../.github/workflows/go-zig-probe.yml) executes pure-Go tests,
+vet and race checks on Linux/macOS amd64/arm64, separately from cross-compilation.
+Local execution and race evidence is Darwin/arm64; the other runners must pass
+before claiming all-platform execution. A passing sidecar matrix does not prove
+embedded-wazero execution.
+
+## Current callback-artifact measurements, 2026-10-15
+
+[Raw output](measurements-callbacks.txt) records three repetitions using source
+`5ae0965a6c6a3503aac6c5742e3313d7477c9d94`, SHA-256
+`f725e3ecf740c104f501b2a785e011c49519fc1b2f503397a51f7022d0fc93a6`,
+Go 1.27.2, wazero v1.12.0, Zig 0.17.0 safe, Darwin/arm64 Apple M5 and
+`CGO_ENABLED=0`. Median run averages: native Go **3.733 µs**, embedded probe
+**31.510 µs** (**8.4×**); cold runtime/compile/close **641.7 ms**, cached-code
+instantiate/close **119.0 µs**. These are the same unoptimized end-to-end workload
+and measurement boundaries described below, not isolated crossing cost or
+latency percentiles. No numerical performance limit is accepted. Application
+workloads, deferred-call performance, tail latency and retained memory remain
+unmeasured for this artifact.
 
 ## Historical measurements
 
@@ -75,7 +123,8 @@ They have not been rerun and must not be attributed to the new artifact.
 
 [Raw output](measurements.txt) records three repetitions on Darwin/arm64,
 Apple M5, Go 1.27.2, wazero v1.12.0, Zig 0.17.0, safe optimization, with
-`CGO_ENABLED=0`. The artifact's source commit is in [its manifest](artifact.json).
+`CGO_ENABLED=0`. The historical artifact source is the revision named above; the current artifact
+has separate provenance in [its manifest](artifact.json).
 Compilation and loading are outside the immediate-call timing. Both paths request
 and pump the same Script and verify `42`; native Go uses its public API while
 the probe includes map-based JSON encoding, decoding, Reports and test helpers.
@@ -88,6 +137,5 @@ guest allocations as independent events and are not retained-memory measurements
 The binary is 2,999,778 bytes; initial guest linear memory after hello is
 1,835,008 bytes, excluding compiled code and Go runtime overhead.
 
-All four agreed targets cross-compile without cgo. Execution and race checks
-were performed only on Darwin/arm64. Linux amd64/arm64 and Darwin/amd64 execution,
-application workloads, tail latency and retained memory remain unverified.
+The historical run cross-compiled all four targets and executed only on
+Darwin/arm64. See current evidence above for the callback artifact.

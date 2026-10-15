@@ -6,6 +6,43 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Callback compatibility probe, 2026-10-15
+
+The follow-up starts from #967's merged main (`dcd733c3`) and rebuilds the
+artifact from runtime source `5ae0965a`. Its focused native-Go/embedded-Zig suite
+passes panic conversion in all three Operation modes, property callbacks and
+Stop-before-conversion, suspended Call context cancellation, Function identity
+and Group ownership, Object identity/disposal, staged effect rollback/scope
+abandonment/Grant release, pending-call Answer/Fail/Adopt/Reissue and worker
+reentry. The [probe guide](../../spikes/go-zig-binding/README.md) defines the
+comparison fields and the Host adapter's remaining ownership responsibilities.
+This is executable feasibility evidence, not a public-compatible binding.
+
+The new tests found three Zig discrepancies and track their corrections in
+[#968](https://github.com/odogono/odgn-talk/issues/968) (property failure Reports
+and failed-setter Trace), [#969](https://github.com/odogono/odgn-talk/issues/969)
+(callback worker-refusal Trace) and
+[#970](https://github.com/odogono/odgn-talk/issues/970) (deferred reissued Start).
+No corpus expectations changed. The corrected source passes 269 Zig tests, the C
+Host check, both ordinary and deferred 429-case corpus replays, native sidecar
+checks and the embedded pure-Go probe. Local execution/race checks are
+Darwin/arm64; all four targets cross-compile without cgo. A dedicated CI matrix
+executes the embedded probe on all four targets; its results must be checked
+before claiming broader execution coverage.
+
+[Refreshed measurements](../../spikes/go-zig-binding/measurements-callbacks.txt)
+for that source give median immediate-call run averages of 3.733 µs native Go
+and 31.510 µs embedded probe (8.4×), cold compile/runtime/close 641.7 ms and
+cached-code instantiate/close 119.0 µs on the same Apple M5/Go 1.27.2 setup.
+These do not establish a numerical acceptance limit, latency percentiles,
+application throughput or retained memory. Historical measurements below remain
+attached to their original artifact.
+
+Remaining work is a public-compatible Go adapter and complete embedding/Corpus
+acceptance, facilities and Pool integration, broader error/metering/lifecycle
+coverage, all-platform execution and agreed workload/performance limits. The Go
+Core remains supported; no retirement ADR or public API replacement is included.
+
 ## Crossing implementation, 2026-10-15
 
 The maintainer accepted merged design #958 for implementation. Runtime source
@@ -24,8 +61,8 @@ remain historical evidence, not claims about the updated implementation.
 Later #884 gates remain: the full callback compatibility matrix, production
 binding/API/corpus acceptance, Go facilities, all-platform execution and explicitly
 accepted numerical performance limits. No production binding or retirement is
-introduced by resolving the original Stop gate. The earlier measurements have
-not been rerun for this artifact.
+introduced by resolving the original Stop gate. The historical measurements below describe their original artifact; the callback
+follow-up above records a separate current run.
 
 ## Follow-up design, 2026-10-15
 
@@ -165,9 +202,8 @@ backend choice. Cold compilation, cached-code instantiation and initial linear
 memory were measured separately; neither application tail latency nor retained
 process memory was measured.
 
-Beyond the original Stop gate, test callback panics, asynchronous
-cancellation, property callbacks, Function Value/Host Object ownership, effect
-rollback/release, pending-call restore, callback reentrancy and Pool concurrency.
+The focused callback probe above covers the next gate after Stop. Broaden its
+error/metering/lifecycle coverage and test Pool concurrency in the public adapter.
 Build the public-compatible adapter, run existing embedding tests and the full
 Conformance Corpus through it, migrate the Go facilities, and measure the
 existing benchmark suite plus deferred calls and multi-Group workloads.

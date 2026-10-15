@@ -282,13 +282,16 @@ Script until all terminations finish; fatal cleanup prevents publication and
 returns `effect state unknown`. Load, Reload, Extend and Library replacement
 cannot revive a Group stopped by fatal cleanup. Pump, Save, Fingerprint, Inspect
 and code-change worker calls from lifecycle callbacks return `reentrant call`,
-during a Pump and during code changes.
+during a Pump and during code changes. Refused worker inputs retain their Trace
+records after the callback record, including across a Message Layer pause.
 Paused needs admit the same Group's queued Host Inputs under distinct refs;
 `hello.features` advertises `paused-inputs-v1`. Admission preserves synchronous
 errors and ids, while ordinary inputs still wait for the next Pump. Stop,
 CancelRun and RewindRun land after the callback record and scope acknowledgement,
 before result conversion. A suspending Call retains its identity and metering
-eligibility while Start is paused, so Answer/Fail and RequestCharge can enqueue
+eligibility while Start is paused, including a restored Call reissued at the
+first Pump. Reissued Start preserves its settlement until acknowledged and lands
+controls before a sibling Start. Answer/Fail and RequestCharge can enqueue
 before `started`. Worker reentry remains refused throughout a transport pause.
 Grant releases pause the continuation until `release-result`, before later
 callbacks or Script execution; inputs queued by release use the original worker's
@@ -911,7 +914,12 @@ the Kind's Get, with a `prop` record, charged `get-key`, the property's
 `getCost` and the value's conversion; `id` is the Core's, and a Guard reads
 nothing else. A well-formed Get or Set failure raises its code, as an
 Operation's does, with `capability` the Kind and `operation` the property,
-and its Data's conversion is charged. Any other failure is `host error`. `set` checks the Shape, uncharged when it fails, then runs the
+and its Data's conversion is charged. Any other failure is `host error`, with
+a `call failed` Report identifying the Kind/property and an empty Call id.
+Properties emit no `call-failed` Trace record. A failed setter's `prop` record
+retains both its assigned `value` and `error`; Stop/cancel landing still happens
+before failure classification and suppresses interrupted Host-failure Reports.
+`set` checks the Shape, uncharged when it fails, then runs the
 Set. A Delivery or `send` to an object goes to its nearest Owning Script,
 whose path is walked again when the message reaches the head of its mailbox,
 so a message follows its object if it moves. A Run that ends `unhandled` or
