@@ -60,6 +60,9 @@ func libraryOptions(libraries map[string]*Library) (map[string]map[string]check.
 // CompileLibrary checks immutable code; imports may also name the ambient stdlib.
 // Calls are rechecked against the importing Script's own Grants at load.
 func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error) {
+	if experimentalGroupFactory != nil {
+		return nil, backendUnsupported("Libraries")
+	}
 	available := map[string]*Library{}
 	addStandardLibraries(available, usedNamesIn(src.Source)...)
 	for _, l := range imports {
@@ -192,6 +195,9 @@ func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Lib
 
 // AddLibrary registers code only after every direct dependency identity matches.
 func (g *Group) AddLibrary(l *Library) error {
+	if g.backend != nil {
+		return backendUnsupported("Libraries")
+	}
 	if l == nil {
 		return &HostError{InvalidValue, "nil Library"}
 	}

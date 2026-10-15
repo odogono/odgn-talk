@@ -16,9 +16,7 @@ def output(*args):
 if output("git", "status", "--porcelain", "--", "impl/zig", "spec", "GLOSSARY.md"):
     raise SystemExit("Commit Core/spec changes before recording artifact provenance")
 subprocess.run(["zig", "build", "-Dtarget=wasm32-wasi", "-Doptimize=safe"], cwd=root / "impl/zig", check=True)
-artifact = here / "talk.wasm"
-shutil.copyfile(root / "impl/zig/zig-out/bin/talk.wasm", artifact)
-artifact.chmod(0o644)
+artifact = root / "impl/zig/zig-out/bin/talk.wasm"
 metadata = {
     "sourceCommit": output("git", "rev-parse", "HEAD"),
     "zig": output("zig", "version"),
@@ -26,4 +24,10 @@ metadata = {
     "optimize": "safe",
     "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
 }
-(here / "artifact.json").write_text(json.dumps(metadata, indent=2) + "\n")
+# Keep the independent comparison probe and public adapter on identical bytes.
+for destination in (here, root / "impl/go/internal/zigwasm"):
+    destination.mkdir(parents=True, exist_ok=True)
+    binary = destination / "talk.wasm"
+    shutil.copyfile(artifact, binary)
+    binary.chmod(0o644)
+    (destination / "artifact.json").write_text(json.dumps(metadata, indent=2) + "\n")

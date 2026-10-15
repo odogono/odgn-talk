@@ -1378,6 +1378,8 @@ pub const Group = struct {
     failing_operands: u64 = 0,
     /// The last Pump's Clock reading, which a Capability call reads.
     clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 },
+    /// No lower bound until the first Pump; Restore supplies its saved bound.
+    observed_clock: ?model.dates.Instant = null,
     /// The waits with deadlines, and how many have been set.
     pending: std.ArrayList(*Pending) = .empty,
     timers: u64 = 0,
@@ -3413,6 +3415,12 @@ pub const Group = struct {
     /// for none (chapter 5, Fuel Slices).
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
         try g.checkWorker();
+        const previous = g.observed_clock orelse if (g.restored) |r| r.clock else null;
+        if (previous) |last| if (clock.seconds < last.seconds or (clock.seconds == last.seconds and clock.nanos < last.nanos)) {
+            g.refusePump(clock, @intCast(slice), @intCast(cap));
+            return error.ClockBackwards;
+        };
+        g.observed_clock = clock;
         g.pumping = true;
         defer g.pumping = false;
         g.rewound = false;

@@ -37,6 +37,9 @@ func (*Stop) isReport() {}
 // Reload validates and checks carried state before terminating old Runs and
 // rolling back their participants.
 func (s *Script) Reload(source string, carry CarryOver, o ...ReloadOptions) ([]Report, error) {
+	if s.group.backend != nil {
+		return nil, backendUnsupported("Reload")
+	}
 	g := s.group
 	addStandardLibraries(g.libraries, usedNamesIn(source)...)
 	_, importIDs, _, _ := libraryOptions(g.libraries)

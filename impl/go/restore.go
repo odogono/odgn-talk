@@ -35,6 +35,9 @@ type saveHeader struct {
 // Restore checks declarations before rehydrating frames. Host bindings and
 // futures are rebuilt separately from the saved plain machine data.
 func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreResult, err error) {
+	if experimentalGroupFactory != nil {
+		return nil, RestoreResult{}, backendUnsupported("Restore")
+	}
 	var g *Group
 	defer func() {
 		if err != nil {

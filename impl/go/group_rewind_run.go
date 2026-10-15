@@ -9,6 +9,10 @@ import (
 // RewindRun queues a Rewind (ADR 0068). It lands as CancelRun does: at a Host
 // crossing or the Pump's end.
 func (s *Script) RewindRun(id RunID) {
+	if s.group.backend != nil {
+		s.group.backend.control(s, "rewind-run", map[string]any{"run": id})
+		return
+	}
 	g := s.group
 	g.mu.Lock()
 	g.controlsQueued = true

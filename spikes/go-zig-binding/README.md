@@ -27,7 +27,8 @@ cancellation before Operation, property, Rollback and Grant release callbacks,
 fatal worker errors and exactly-once notices. Existing Hosts keep final-reply
 timing; request the feature in `hello` and check support before relying on it.
 
-This remains an isolated probe, not a public Go binding. Full API/corpus
+This remains an isolated probe. The [experimental public Go adapter](../../impl/go/README.md#experimental-zig-backend)
+now covers a first data/Request slice behind `talk_zig_experimental`. Full API/corpus
 compatibility, facilities, platform execution and agreed performance limits are
 later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
 [findings](../../docs/research/go-zig-binding.md) and the
@@ -60,7 +61,9 @@ python3 spikes/go-zig-binding/build-artifact.py
 
 The builder refuses uncommitted Core/spec changes rather than attaching false
 commit provenance. Changes to the binary require rerunning the probe and
-measurements. This isolated module does not add dependencies to the Go Core.
+measurements. The same command refreshes the identical artifact and manifest in
+`impl/go/internal/zigwasm`. This probe remains an independent module and native-Go
+comparison baseline; the opt-in public adapter has its own pinned dependency.
 
 ## What it checks
 
@@ -111,6 +114,18 @@ passes all four native execution/race jobs as well as cross-builds for its
 recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
+
+## Public-slice artifact refresh, 2026-10-15
+
+[Raw output](measurements-public-slice.txt) reruns the same probe benchmarks
+against source `0dd032fd1c62397e9adaeb3914be724956ba4198`, SHA-256
+`196ef79a1aa9c32724e32db526f54d22f29b94a3e85612368f94d574308c922f`,
+including the ordinary Pump Clock correction. On Darwin/arm64 Apple M5, Go 1.27.2,
+wazero v1.12.0, Zig 0.17.0 safe, three-run median averages are **4.145 µs native
+Go vs 34.338 µs probe (8.3×)**, **633.3 ms** cold setup/compile/close and
+**126.7 µs** cached instantiation/close. These measure the independent callback
+probe, not the experimental public adapter or application tail latency. No
+performance limit or retirement verdict follows from this refresh.
 
 ## Early-abandonment artifact measurements, 2026-10-15
 

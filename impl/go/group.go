@@ -21,6 +21,7 @@ import (
 var ErrMailboxFull error = errors.New("mailbox full")
 
 type Group struct {
+	backend                 groupBackend
 	sessionExpose           func(any)
 	accounting              accountingState
 	accountingDiscardReason string
@@ -154,13 +155,18 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	p.settled = true
 	if p.stop != nil {
 		p.stop()
+		p.stop = nil
 	}
 	p.value = v
 	p.err = e
 	close(p.done)
 }
 func (c *Core) NewGroup(o GroupOptions) *Group {
-	return &Group{core: c, options: o, libraries: map[string]*Library{}}
+	g := &Group{core: c, options: o, libraries: map[string]*Library{}}
+	if experimentalGroupFactory != nil {
+		g.backend = experimentalGroupFactory(g)
+	}
+	return g
 }
 func (g *Group) Name() string               { return g.options.Name }
 func (g *Group) Script(name string) *Script { g.mu.Lock(); defer g.mu.Unlock(); return g.script(name) }
@@ -197,6 +203,9 @@ func (g *Group) refuse(code HostErrorCode, detail string) error {
 	return &HostError{code, detail}
 }
 func (g *Group) Load(o LoadOptions) (*Script, error) {
+	if g.backend != nil {
+		return g.backend.load(o)
+	}
 	tree, parseErr := syntax.ParseCompact(o.Source)
 	addStandardLibraries(g.libraries, usedNames(tree)...)
 	exports, ids, states, calls := libraryOptions(g.libraries)
@@ -369,6 +378,12 @@ func (g *Group) enqueue(s *Script, m Message, ctx context.Context, request bool,
 	return g.admit(s, m, ctx, request, decision, address)
 }
 func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, decision *Deciding, address delivery) (DeliveryID, *Pending, error) {
+	if g.backend != nil {
+		if decision != nil || address.function != nil || address.path || address.kind == "broadcast" {
+			return "", nil, backendUnsupported("decisions, Functions, Objects and broadcasts")
+		}
+		return g.backend.admit(s, m, ctx, request)
+	}
 	fields := map[string]string{"to": "unknown", "message": m.Name}
 	if s != nil {
 		fields["to"] = s.name
@@ -526,6 +541,9 @@ func validGroup(root corevalue.Value, g *Group) bool {
 	return true
 }
 func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
+	if g.backend != nil {
+		return g.backend.pump(now, o)
+	}
 	now = now.Round(0).UTC()
 	// Format the Host input without constructing a Value: refused Clocks can
 	// fall outside the Instant range, and must not panic while being traced.
@@ -653,6 +671,9 @@ func overrideDisplay(o LimitOverride) string {
 	return v.Display()
 }
 func (g *Group) Inspect() Inspection {
+	if g.backend != nil {
+		return g.backend.inspect()
+	}
 	if e := g.beginWorker(); e != nil {
 		g.recordRefusal("vars", nil, nil, ReentrantCall)
 		panic(e)
@@ -737,6 +758,9 @@ func (g *Group) Inspect() Inspection {
 	return out
 }
 func (s *Script) Counters() Counters {
+	if s.group.backend != nil {
+		return s.group.backend.counters(s)
+	}
 	if e := s.group.beginWorker(); e != nil {
 		s.group.recordRefusal("counters", []string{s.name}, nil, ReentrantCall)
 		panic(e)

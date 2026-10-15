@@ -1686,7 +1686,7 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
         s.pumping_entry = null;
     }
     const mg = &entry.group.group;
-    if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
         s.paused_ref = ref;
@@ -3682,6 +3682,27 @@ fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
     try out.writer.writeByte('1');
     for (0..depth) |_| try out.writer.writeAll(if (objects_only) "}" else "]");
     return out.toOwnedSlice();
+}
+
+test "backwards Pump preserves queued work and the first Clock may predate Unix" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\n return 7\\nend go\\n\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"0001-01-01T00:00:00Z\"}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000002Z\"}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{6}));
+    const refused = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000001Z\"}}", .{7});
+    try std.testing.expectEqualStrings("host error", try errKind(refused));
+    try std.testing.expectEqualStrings("clock backwards", refused.object.get("err").?.object.get("code").?.string);
+    const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000002Z\"}}", .{8});
+    try std.testing.expectEqual(@as(i64, 7), (try runEnd(done)).object.get("result").?.integer);
+    const lines = (try okOf(done)).object.get("trace").?.array.items;
+    try std.testing.expectEqualStrings("refused code=\"clock backwards\"", lines[1].string);
+    try std.testing.expect(std.mem.startsWith(u8, lines[2].string, "> request "));
 }
 
 test "worker refusals during a paused callback keep Trace after its return" {

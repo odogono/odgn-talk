@@ -56,6 +56,9 @@ func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 // Object registers a stable kind/id pair in this Group. Registration and
 // Dispose may be called from any goroutine, including a Host callback.
 func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error) {
+	if g.backend != nil {
+		return nil, backendUnsupported("Objects")
+	}
 	if kind == nil || kind.name == "" || !utf8.ValidString(id) {
 		return nil, &HostError{InvalidValue, "invalid Object kind or id"}
 	}
@@ -89,6 +92,9 @@ type objectKey struct{ kind, id string }
 // handle retains identity and encoding and remains a valid Group-owned Value.
 // Disposing an owner stops its Script; routing skips the disposed Object.
 func (g *Group) Dispose(o *Object) error {
+	if g.backend != nil {
+		return backendUnsupported("Objects")
+	}
 	if o == nil || o.group != g {
 		object := "nothing"
 		if o != nil && o.kind != nil {
@@ -127,6 +133,9 @@ func (*HostError) isReport() {}
 // SetParent queues a parent change, rejecting known cycles and disposed children.
 // ParentKinds is metadata, not a restriction on the Message Path.
 func (g *Group) SetParent(o, parent *Object) error {
+	if g.backend != nil {
+		return backendUnsupported("Objects")
+	}
 	fields := map[string]string{"object": "nothing", "parent": "nothing"}
 	if o != nil {
 		fields["object"] = o.Value().String()

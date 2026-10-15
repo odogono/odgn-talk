@@ -79,7 +79,7 @@ The spec-defined, lossless JSON form of a value, with `$` tags for kinds that pl
 _Avoid_: wire format, serialisation, tagged JSON
 
 **Message Layer**:
-The language-neutral form of the embedding interface: one JSON message per embedding call, with values in the Value Encoding, for a Host that isn't Go or TS, over WASI or a sidecar. The Host starts every exchange, and the Core never calls the Host.
+The language-neutral form of the embedding interface: one JSON message per embedding call, with values in the Value Encoding, for Hosts over WASI or a sidecar. The Host starts every exchange, and the Core never calls the Host.
 _Avoid_: protocol, wire format, RPC
 
 **Grant**:

@@ -9,12 +9,13 @@ Commands, a REPL and deterministic Transcript replay. The Spec, Data Files and C
 the authority; the TS Core is not a reference
 ([ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md)).
 
-The [experimental Zig-backed Go probe](../../spikes/go-zig-binding/README.md)
-embeds the Zig WASI reactor through wazero. It is not a public API replacement:
-its crossing parity tests cover Stop from inside a callback, including rollback
-at the same crossing. The Go Core remains the supported Go embedding package;
-the [binding investigation](../../docs/research/go-zig-binding.md) records the
-evidence and alternatives.
+Native Go remains the default and supported embedding package. An opt-in
+[experimental Zig backend](#experimental-zig-backend) exercises the first public
+embedding slice through wazero. The separate
+[comparison probe](../../spikes/go-zig-binding/README.md) retains its native-Go
+baseline and broader callback experiments; the
+[binding investigation](../../docs/research/go-zig-binding.md) records the gates
+before replacing the Go Core.
 
 A Timeout Block, `with timeout of d … end timeout`, bounds the waits written inside it ([ADR 0073](../../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)). `timeout-start` pushes a deadline, the Clock reading plus `d` or the enclosing block's when that is no later, which stays on the stack below the body as an iterator does, so Unwind depths count it and a catch outside the block drops it. `exit repeat` and `next repeat` emit `timeout-end` for each block they leave. Each Suspension Point reads the topmost deadline on its frame's stack: past it, the instruction raises `timeout` with `deadline: true` at once, and otherwise the block's deadline replaces the wait's own timer when it is no later, or for a Join, is a timer of its own set before its members'. The checker reports `not in a timeout` and `empty timeout`, and a Host `Fail` may not use the reserved key `deadline`.
 
@@ -45,6 +46,58 @@ These implicit bindings cannot be replaced or used as roots for ordinary
 Container mutations. `set` does not modify chunks inside a property's value.
 Direct known-owner read-only properties are checked at load; `it` and Target
 properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-writes-do-not-replace-implicit-bindings.md)).
+
+## Experimental Zig backend
+
+With Go 1.27, `-tags talk_zig_experimental` selects Zig behind the existing root
+package API. `CoreVersions` then reports Zig's Core/save versions. Ordinary builds
+retain native Go. The tag is a development slice, with no full API compatibility
+or Go Core retirement claim.
+
+Supported: immutable data Values and Value Encoding; Group/Script names and
+lookup; Load and positioned diagnostics; direct Script Deliver/Request; Pump
+Clock, Fuel slices/cap, typed lifecycle/accounting Reports; observational Trace
+sinks; Inspect/Counters; Request context cancellation and OnReady; queued Stop,
+CancelRun and RewindRun. Local Script functions execute in Zig; Function Values
+and Host callbacks are outside this slice. Successful execution and queued-input
+Trace records are delivered from replies. Refusal records retained by the
+Message Layer can arrive on a later successful reply; complete error/refusal
+Trace timing remains an API compatibility gate.
+
+Unsupported calls return an `experimental Zig backend` error, or panic when the
+existing signature has no error result: Capability/Host Object attachment and
+handles, Function Values/calls, object-addressed inputs, Broadcast/Decide,
+Libraries, Reload/Extend, Save/Restore/Settle, Fingerprint and Grants inspection.
+They do not fall back to native Go language execution. Pool, Store, sqlite,
+Session/REPL, tenants and the full Corpus are still native-Go facilities pending
+their own adapter acceptance. Concurrent input admission during an executing
+WASM export and Trace sinks that generate inputs need further work; exports
+are serialized, which alone does not satisfy the full input-queue contract.
+
+The internal `zigwasm` package verifies the embedded artifact digest. The adapter
+checks language, Cost Model and Unicode versions before use. Compiled code is
+cached process-wide; each Group owns an independent guest. Group cleanup closes
+the guest through Go's garbage collector, without per-Value Release. Replies
+are copied before another export, and returned Values own Go memory. Data
+conversion uses the existing iterative codec rather than encoding/json's
+nesting limit. Ordinary consumers need Go and pinned module dependencies,
+without Zig or a WASM runtime download. The maintainer command
+`python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
+from committed Core/spec sources and records identical provenance.
+
+Run the accepted first slice from the repository root:
+
+```sh
+CGO_ENABLED=0 impl/go/zig-experimental-check.sh
+impl/go/zig-experimental-check.sh -race
+go -C impl/go vet -tags talk_zig_experimental .
+```
+
+The same selection executes in CI on Linux amd64/arm64 and macOS arm64, with
+separate pure-Go cross-builds. It includes unchanged public-interface Go tests
+and dedicated adapter tests, rather than asserting the whole native suite
+passes under this tag. Full API/Corpus, facility, concurrency and measured
+performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/issues/884).
 
 ## Task navigation
 

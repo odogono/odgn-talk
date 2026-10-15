@@ -325,7 +325,7 @@ A Decision asks Scripts whether something may happen, such as a game move or a f
 
 ## The message layer
 
-The message layer is the language-neutral form of this interface, for a Host that isn't Go or TS, such as Elixir, over WASI or a sidecar process ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [#79](https://github.com/odogono/odgn-talk/issues/79)). [The message-layer research](../docs/research/message-layer.md) gives the reasons and the measurements.
+The message layer is the language-neutral form of this interface, for Hosts over WASI or a sidecar process, including language-specific embedding adapters and Hosts such as Elixir ([ADR 0030](../docs/adr/0030-values-cross-the-host-boundary-as-tagged-values-converted-by-spec-rules.md), [#79](https://github.com/odogono/odgn-talk/issues/79)). [The message-layer research](../docs/research/message-layer.md) gives the reasons and the measurements.
 
 ### Rules
 
