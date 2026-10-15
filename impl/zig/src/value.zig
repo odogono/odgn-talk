@@ -131,8 +131,9 @@ pub const Value = struct {
     allocator: std.mem.Allocator,
     /// The logical size of a container's or Function's contents (chapter 8,
     /// Logical sizes), kept as it is built so that measuring never walks a
-    /// deep value; for a Text Pattern, its program size once measured, or 0.
-    /// Sums saturate: no budget reaches 2^64.
+    /// deep value; for a Text Pattern, its program size once measured, or 0;
+    /// for ASCII Text, its exact Character count (CRLF counts once).
+    /// Logical size sums saturate: no budget reaches 2^64.
     measure: u64 = 0,
     /// A Core-raised error map, whose `message` the Trace leaves out
     /// (chapter 11): its wording is outside parity.
@@ -140,6 +141,10 @@ pub const Value = struct {
     /// A Script's name as `load-object` pushes it: a Script is not a
     /// value, so retained state doesn't count it (chapter 8).
     script_name: bool = false,
+    /// Immutable Text metadata. Only ASCII Character counts are additive,
+    /// with a correction for CRLF across the join. Other Texts keep the
+    /// full Unicode measurement path. This flag fits in header padding.
+    text_ascii: bool = false,
     list_storage: ?*ListStorage = null,
     /// Greater than every physical child's rank. Shared List growth keeps
     /// it fixed; higher-ranked insertions copy to preserve acyclic ownership.
@@ -698,6 +703,12 @@ fn scalarOwned(gpa: std.mem.Allocator, data: Data) !*Value {
     const rank = try ownershipRank(data);
     const v = try gpa.create(Value);
     v.* = .{ .allocator = gpa, .data = data, .ownership_rank = rank };
+    if (data == .text) {
+        if (asciiCharacters(data.text)) |n| {
+            v.text_ascii = true;
+            v.measure = n;
+        }
+    }
     return v;
 }
 
@@ -720,7 +731,7 @@ test "small scalars initialize every header and payload and refuse before publis
         try std.testing.expectEqual(gpa.ptr, v.allocator.ptr);
         try std.testing.expectEqual(gpa.vtable, v.allocator.vtable);
         try std.testing.expectEqual(@as(u64, 0), v.measure);
-        try std.testing.expect(!v.core_message and !v.script_name);
+        try std.testing.expect(!v.core_message and !v.script_name and !v.text_ascii);
         try std.testing.expectEqual(@as(?*ListStorage, null), v.list_storage);
         try std.testing.expectEqual(@as(u64, 0), v.ownership_rank);
         try std.testing.expectEqual(@as(?*Value, null), v.release_next);
@@ -750,6 +761,11 @@ test "small scalars initialize every header and payload and refuse before publis
 /// Text from UTF-8, normalised to NFC. Invalid UTF-8 is refused.
 pub fn text(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
     if (!unicode.utf8.validate(s)) return error.InvalidValue;
+    return normalizedText(gpa, s);
+}
+
+/// Normalises valid UTF-8; callers validate external bytes before reaching here.
+fn normalizedText(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
     const normal = try unicode.nfc(gpa, s);
     errdefer gpa.free(normal);
     return scalar(gpa, .{ .text = normal });
@@ -759,12 +775,50 @@ pub fn text(gpa: std.mem.Allocator, s: []const u8) Error!*Value {
 pub fn concatText(gpa: std.mem.Allocator, left: []const u8, right: []const u8) Error!*Value {
     if (!unicode.utf8.validate(left) or !unicode.utf8.validate(right)) return error.InvalidValue;
     const joined = try std.mem.concat(gpa, u8, &.{ left, right });
-    if (unicode.normalize.isAscii(joined)) {
-        errdefer gpa.free(joined);
-        return scalar(gpa, .{ .text = joined });
+    if (asciiCharacters(joined)) |n| return asciiTextOwned(gpa, joined, n);
+    defer gpa.free(joined);
+    return normalizedText(gpa, joined);
+}
+
+/// Concatenates two immutable Text Values, whose bytes are already valid
+/// UTF-8/NFC. Unicode still needs normalization across the join; only ASCII
+/// can reuse both measurements without scanning the growing prefix.
+pub fn concatTextValues(gpa: std.mem.Allocator, left: *const Value, right: *const Value) Error!*Value {
+    if (left.data != .text or right.data != .text) return error.InvalidValue;
+    const l = left.data.text;
+    const r = right.data.text;
+    const joined = try std.mem.concat(gpa, u8, &.{ l, r });
+    if (left.text_ascii and right.text_ascii) {
+        const crlf: u64 = @intFromBool(l.len > 0 and r.len > 0 and l[l.len - 1] == '\r' and r[0] == '\n');
+        return asciiTextOwned(gpa, joined, left.measure + right.measure - crlf);
     }
     defer gpa.free(joined);
-    return text(gpa, joined);
+    return normalizedText(gpa, joined);
+}
+
+/// Consumes an owned ASCII buffer, including on allocation refusal.
+fn asciiTextOwned(gpa: std.mem.Allocator, joined: []u8, characters: u64) Error!*Value {
+    errdefer gpa.free(joined);
+    const v = try gpa.create(Value);
+    v.* = .{ .allocator = gpa, .data = .{ .text = joined }, .text_ascii = true, .measure = characters };
+    return v;
+}
+
+fn asciiCharacters(s: []const u8) ?u64 {
+    var n: u64 = 0;
+    var previous: u8 = 0;
+    for (s) |b| {
+        if (b >= 0x80) return null;
+        n += @intFromBool(b != '\n' or previous != '\r');
+        previous = b;
+    }
+    return n;
+}
+
+/// Exact Characters of a Text, reusing immutable ASCII metadata when known.
+pub fn textCharacters(v: *const Value) u64 {
+    std.debug.assert(v.data == .text);
+    return if (v.text_ascii) v.measure else unicode.grapheme.count(v.data.text);
 }
 
 fn concatTextAllocations(gpa: std.mem.Allocator) !void {
@@ -787,6 +841,97 @@ test "Text concatenation normalises across joins and frees every failed allocati
     try std.testing.checkAllAllocationFailures(std.testing.allocator, concatTextAllocations, .{});
     try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, "\xff", "x"));
     try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, "x", "\xff"));
+}
+
+fn concatTextValuesAllocations(gpa: std.mem.Allocator) !void {
+    const cases = [_][3][]const u8{
+        .{ "ab", "cd", "abcd" },
+        .{ "", "", "" },
+        .{ "", "\r\n", "\r\n" },
+        .{ "\r\n", "", "\r\n" },
+        .{ "a\r", "\nb\r\n", "a\r\nb\r\n" },
+        .{ "e", "\u{0301}", "é" },
+        .{ "\u{1100}", "\u{1161}", "가" },
+        .{ "가", "\u{11a8}", "각" },
+        .{ "a\u{0302}", "\u{0323}", "ậ" },
+        .{ "é", "a", "éa" },
+        .{ "a", "é", "aé" },
+        .{ "👨\u{200d}", "👩\u{200d}👧", "👨\u{200d}👩\u{200d}👧" },
+        .{ "🇬", "🇧🇫", "🇬🇧🇫" },
+        .{ "क्", "ष", "क्ष" },
+        .{ "\u{0600}", "a", "\u{0600}a" },
+    };
+    for (cases) |case| {
+        const left = try text(gpa, case[0]);
+        defer left.release();
+        const right = try text(gpa, case[1]);
+        defer right.release();
+        // Retained old Values, including their counts, must survive the join.
+        const old_left = try gpa.dupe(u8, left.data.text);
+        defer gpa.free(old_left);
+        const old_right = try gpa.dupe(u8, right.data.text);
+        defer gpa.free(old_right);
+        const joined = try concatTextValues(gpa, left, right);
+        defer joined.release();
+        try std.testing.expectEqualStrings(case[2], joined.data.text);
+        try std.testing.expectEqualStrings(old_left, left.data.text);
+        try std.testing.expectEqualStrings(old_right, right.data.text);
+        for ([_]*Value{ left, right, joined }) |v| {
+            try std.testing.expectEqual(unicode.normalize.isAscii(v.data.text), v.text_ascii);
+            try std.testing.expectEqual(@as(u64, unicode.grapheme.count(v.data.text)), textCharacters(v));
+            try std.testing.expectEqual(@as(u64, 16 + v.data.text.len), logicalSize(v));
+        }
+    }
+}
+
+test "trusted Text joins preserve NFC, Characters, retained operands and allocation refusal" {
+    try concatTextValuesAllocations(std.testing.allocator);
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, concatTextValuesAllocations, .{});
+}
+
+test "ASCII metadata counts every control pair and survives either join association" {
+    const gpa = std.testing.allocator;
+    // Includes every ASCII byte, NUL and the CR/LF pair split at each point.
+    var bytes_: [130]u8 = undefined;
+    for (bytes_[0..128], 0..) |*b, i| b.* = @intCast(i);
+    bytes_[128..].* = .{ '\r', '\n' };
+    for (0..bytes_.len + 1) |i| {
+        const left = try text(gpa, bytes_[0..i]);
+        defer left.release();
+        const right = try text(gpa, bytes_[i..]);
+        defer right.release();
+        const joined = try concatTextValues(gpa, left, right);
+        defer joined.release();
+        try std.testing.expectEqualStrings(&bytes_, joined.data.text);
+        try std.testing.expectEqual(@as(u64, unicode.grapheme.count(&bytes_)), textCharacters(joined));
+    }
+    for ([_][]const u8{ "", "\r", "\n", "\r\n", "\n\r", "x" }) |s| {
+        for ([_][]const u8{ "", "\r", "\n", "\r\n", "\n\r", "x" }) |t| {
+            const a = try text(gpa, s);
+            defer a.release();
+            const b = try text(gpa, t);
+            defer b.release();
+            const ab = try concatTextValues(gpa, a, b);
+            defer ab.release();
+            const abb = try concatTextValues(gpa, ab, b);
+            defer abb.release();
+            const bb = try concatTextValues(gpa, b, b);
+            defer bb.release();
+            const a_bb = try concatTextValues(gpa, a, bb);
+            defer a_bb.release();
+            try std.testing.expectEqualStrings(abb.data.text, a_bb.data.text);
+            try std.testing.expectEqual(textCharacters(abb), textCharacters(a_bb));
+            try std.testing.expectEqual(@as(u64, unicode.grapheme.count(abb.data.text)), textCharacters(abb));
+        }
+    }
+}
+
+test "untrusted Text input still refuses strict UTF-8 errors" {
+    for ([_][]const u8{ "\xff", "\xc0\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xe2\x82" }) |s| {
+        try std.testing.expectError(error.InvalidValue, text(std.testing.allocator, s));
+        try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, s, ""));
+        try std.testing.expectError(error.InvalidValue, concatText(std.testing.allocator, "", s));
+    }
 }
 
 /// Bytes, copied from `s`.

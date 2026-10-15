@@ -130,8 +130,17 @@ The WASI check loads 1 MiB of newlines and 100,000 empty Handlers within a
 Handlers after compilation. [The load measurements](../../docs/research/zig-load-scaling.md)
 record the causes and before/after figures for #790.
 
-ASCII concatenation writes directly into the result's owned storage; other
-text joins are normalised across the boundary. The WASI check doubles text
+Text-to-Text concatenation trusts the immutable operands' validated UTF-8.
+ASCII Values keep an exact Character count, correcting for CRLF at joins,
+and their byte length supplies scalar charges without rescanning the result.
+The metadata uses existing Value header space, adds no separate allocation,
+and is reconstructed from Text bytes on Restore; saved formats and logical
+charges are unchanged. Unicode joins still normalise the complete result and
+use the pinned grapheme rules rather than adding Character counts. Host Text
+construction still validates strict UTF-8. Results remain contiguous owned
+buffers, so repeated growth still copies the whole prefix.
+
+ASCII concatenation writes directly into the result's owned storage. The WASI check doubles text
 under the default Allocation Budget with a 128 MiB instance cap, and the
 conformance minimum with a 1 GiB cap. Three successive Runs must end in the
 Allocation Limit Fault, with the instance still answering and running a

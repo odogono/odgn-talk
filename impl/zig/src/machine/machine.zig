@@ -7596,7 +7596,10 @@ pub const Group = struct {
                 defer y.release();
                 const x = pop(frame);
                 defer x.release();
-                const r = model.concatText(gpa, try chunks.textForm(a, x), try chunks.textForm(a, y)) catch return error.OutOfMemory;
+                const r = if (x.data == .text and y.data == .text)
+                    model.concatTextValues(gpa, x, y) catch return error.OutOfMemory
+                else
+                    model.concatText(gpa, try chunks.textForm(a, x), try chunks.textForm(a, y)) catch return error.OutOfMemory;
                 m.result = r.retain();
                 try g.push(frame, r);
             },
