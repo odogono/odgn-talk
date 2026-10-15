@@ -118,6 +118,32 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Ordinary Broadcast artifact refresh, 2026-10-15
+
+[Raw output](measurements-broadcast.txt) records three repetitions with artifact
+source `2afaddd76d6cf1794b1271d1f034b53fff5bc805`, SHA-256
+`044b1a5b789c60db5cefa59608abb16eb96967fdd53be1a9a7ba84fc67c25c84`,
+and public-adapter/native-Go revision `7772853e`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.716 µs native Go vs 31.810 µs probe (8.6×)**,
+cold compile/runtime/close **616.6 ms**, cached instantiation/close **125.8 µs**.
+This is the same independent immediate-call workload; it does not measure
+public Broadcast latency, tail latency or an accepted retirement limit.
+
+The public comparison now covers 59 callback/input scenarios. Fourteen new
+Broadcast scenarios compare exact Trace, Fuel, typed Reports and inspected
+state against a separately compiled native-Go Host. They cover drain-time
+selection, prior Stop/cancelled waits, nested input copies, explicit zero and
+tighter recipient limits, refusals, and Operation/release/Trace/OnReady-generated
+Broadcasts. Shared Zig corrections are tracked in #987; native Go’s wait-override
+Trace key correction is tracked in #988. Both artifacts are refreshed together.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C tests, all 429 ordinary and
+deferred Corpus cases, TS Corpus and both WASI checks pass locally. Independent
+pure-Go adapter/probe cross-builds cover Linux amd64/arm64 and macOS arm64.
+This revision still needs CI execution on the other required runners; ordinary
+Broadcast support does not establish Decision-future or full API compatibility.
+
 ## Fire/Grant release artifact refresh, 2026-10-15
 
 [Raw output](measurements-fire-release.txt) records three repetitions with
@@ -138,7 +164,8 @@ C API regressions cover direct Capability calls and imported Library needs.
 Public adapter/probe pure-Go, race and vet checks pass locally, along with
 native Go, Zig unit/C tests, ordinary/deferred Corpus and WASI checks. Separate
 pure-Go cross-builds cover Linux amd64/arm64 and macOS arm64. Execution on the
-other required runners remains this revision's CI gate.
+other required runners was accepted in merged PR #985 with all 36 checks
+passing, including adapter/probe tests/vet/race and separate cross-builds.
 
 ## Public Capability artifact refresh, 2026-10-15
 
@@ -155,9 +182,9 @@ Earlier measurement files retain their own artifact provenance.
 
 The refreshed artifact passes the independent probe and public-adapter
 pure-Go/race/vet checks locally on Darwin/arm64. Separate pure-Go cross-builds
-cover Linux amd64/arm64 and macOS arm64. CI must execute this revision on the
-other required runners before platform acceptance; the earlier merged runs
-below establish execution only for their named revisions.
+cover Linux amd64/arm64 and macOS arm64. PR #982 merged with all 36 checks passing, including adapter/probe execution
+and separate cross-builds on all three required platforms. The older merged
+runs below establish execution only for their named revisions.
 
 ## Public-slice artifact refresh, 2026-10-15
 
