@@ -3602,6 +3602,7 @@ pub const Group = struct {
             // run; the others' arms take what they own.
             const kept = switch (input) {
                 .stop, .cancel_run, .rewind_run => true,
+                .settlement => |x| x.how == .reissue,
                 else => false,
             };
             g.drainOne(input) catch |e| {
@@ -3618,6 +3619,16 @@ pub const Group = struct {
             };
             _ = g.batch.orderedRemove(0);
             if (kept) g.releaseInputs(&.{input});
+            // Reissued Start is a Host crossing. Land its controls before
+            // another settlement can invoke a sibling Start. The input is
+            // already consumed, so deferred cleanup resumes only the landing.
+            if (input == .settlement and input.settlement.how == .reissue) {
+                g.land(null) catch |e| {
+                    if (e != error.Deferred) return e;
+                    g.crossing_pause = true;
+                    return;
+                };
+            }
             if (g.release_pause) {
                 g.crossing_pause = true;
                 return;
@@ -3701,7 +3712,7 @@ pub const Group = struct {
             },
             .broadcast => |b| try g.drainBroadcast(b),
             .settlement => |x| {
-                defer g.gpa.free(x.id);
+                defer if (x.how != .reissue) g.gpa.free(x.id);
                 switch (x.how) {
                     .answer, .fail => {
                         const index = for (g.pending.items, 0..) |p, i| {
@@ -4079,7 +4090,12 @@ pub const Group = struct {
         c.now = g.clock;
         c.binding = sg.grant.binding;
         c.left = run.limits.fuel_per_run -| run.fuel;
+        c.deferrable = true;
+        const held = g.holdTrace();
         const outcome = decl.host.call(decl.host.context, c, c.args);
+        g.flushChargeRefusals();
+        g.trace = held;
+        if (outcome == .deferred) return error.Deferred;
         c.starting = false;
         run.fuel += c.charged;
         g.pump_fuel += c.charged;
@@ -4094,6 +4110,7 @@ pub const Group = struct {
             if (c.charged > 0) w.print(" charged={d}", .{c.charged}) catch {};
             w.writeAll("\n") catch {};
         }
+        g.flushHeld();
         switch (outcome) {
             .started => {},
             .value => |v| try g.ready(g.pending.orderedRemove(index), .{ .answer = .{ .value = v, .fuel = 0 } }),

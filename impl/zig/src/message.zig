@@ -4368,6 +4368,24 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     const end = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g2\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{14}));
     try std.testing.expectEqual(@as(i64, 42), end.object.get("result").?.integer);
 
+    // Reissued Start keeps its Call and pauses until the Host acknowledges it.
+    const restore_again = try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"reissued\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 30, save });
+    _ = restore_again.object.get("need").?;
+    const again = try okOf(try c.sendRef(30, "{{\"m\":\"resolve-result\",\"ref\":30,\"grants\":[{d}],\"objects\":[true]}}", .{grant}));
+    const reissued = again.object.get("pending").?.array.items[0].object.get("call").?.string;
+    const settled_again = try okOf(try c.send("{{\"m\":\"settle\",\"ref\":{d},\"group\":\"reissued\",\"call\":\"{s}\",\"settlement\":{{\"reissue\":true}}}}", .{ 31, reissued }));
+    _ = settled_again;
+    const starting = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"reissued\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{32});
+    const start_need = starting.object.get("need") orelse return unexpected(starting);
+    try std.testing.expectEqualStrings("op", start_need.object.get("m").?.string);
+    try std.testing.expectEqualStrings(call, start_need.object.get("call").?.string);
+    const waiting = try okOf(try c.sendRef(32, "{{\"m\":\"op-result\",\"ref\":32,\"started\":true}}", .{}));
+    for (waiting.object.get("reports").?.array.items) |r| try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "run end"));
+    const answer_again = try okOf(try c.send("{{\"m\":\"answer\",\"ref\":{d},\"group\":\"reissued\",\"call\":\"{s}\",\"value\":42}}", .{ 33, reissued }));
+    _ = answer_again;
+    const answered_again = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"reissued\",\"now\":\"2026-10-10T12:00:01Z\"}}", .{34});
+    try std.testing.expectEqual(@as(i64, 42), (try runEnd(answered_again)).object.get("result").?.integer);
+
     // An object the Host doesn't resolve restores disposed; a failed
     // settlement ends the Run with its error.
     _ = (try c.send("{{\"m\":\"restore\",\"ref\":{d},\"group\":\"g3\",\"name\":\"g\",\"save\":{{\"$bytes\":\"{s}\"}}}}", .{ 15, save })).object.get("need").?;

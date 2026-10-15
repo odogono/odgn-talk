@@ -289,7 +289,9 @@ Paused needs admit the same Group's queued Host Inputs under distinct refs;
 errors and ids, while ordinary inputs still wait for the next Pump. Stop,
 CancelRun and RewindRun land after the callback record and scope acknowledgement,
 before result conversion. A suspending Call retains its identity and metering
-eligibility while Start is paused, so Answer/Fail and RequestCharge can enqueue
+eligibility while Start is paused, including a restored Call reissued at the
+first Pump. Reissued Start preserves its settlement until acknowledged and lands
+controls before a sibling Start. Answer/Fail and RequestCharge can enqueue
 before `started`. Worker reentry remains refused throughout a transport pause.
 Grant releases pause the continuation until `release-result`, before later
 callbacks or Script execution; inputs queued by release use the original worker's
