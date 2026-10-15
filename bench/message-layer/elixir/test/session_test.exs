@@ -1,15 +1,16 @@
 defmodule TalkHost.SessionTest do
   use ExUnit.Case, async: false
   alias TalkHost.{Session, Transport}
+  alias NorthTalk.Transport.Wasi
 
   @now "2026-10-10T12:00:00Z"
 
   test "fresh WASI instances stay within 16 MiB after a small Script and Pump" do
-    memory = TalkHost.Measure.memory(fn -> Transport.Wasi.start(opt_level: :speed) end, 3)
+    memory = TalkHost.Measure.memory(fn -> Wasi.start(opt_level: :speed) end, 3)
     assert memory["maxBytes"] <= 16 * 1024 * 1024, inspect(memory)
   end
 
-  transports = [Transport.Sidecar, Transport.Wasi] ++
+  transports = [Transport.Sidecar, Wasi] ++
     if(File.exists?(TalkHost.Artifacts.c_host()), do: [Transport.Bridge], else: [])
 
   for mod <- transports do

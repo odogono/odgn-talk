@@ -24,6 +24,7 @@ defmodule Mix.Tasks.Talk.Measure do
   use Mix.Task
 
   alias TalkHost.{Containment, Faults, Measure, Transport}
+  alias NorthTalk.Transport.Wasi
 
   @mib 1024 * 1024
   @sections ~w(latency containment faults)
@@ -89,7 +90,7 @@ defmodule Mix.Tasks.Talk.Measure do
     transports =
       Enum.filter(
         [
-          {"wasmex", fn -> Transport.Wasi.start(opt_level: :speed) end},
+          {"wasmex", fn -> Wasi.start(opt_level: :speed) end},
           {"sidecar", fn -> Transport.Sidecar.start() end}
         ],
         fn {name, _} -> name in chosen end
@@ -136,11 +137,11 @@ defmodule Mix.Tasks.Talk.Measure do
   defp maybe(results, true, key, fun), do: Map.put(results, key, fun.())
 
   defp latency(transports, sizes) do
-    wasmex_none = {"wasmex, opt-level none", fn -> Transport.Wasi.start(opt_level: :none) end}
+    wasmex_none = {"wasmex, opt-level none", fn -> Wasi.start(opt_level: :none) end}
 
     compile =
       for level <- [:speed, :none] do
-        micros = for _ <- 1..3, do: elem(Transport.Wasi.compile(TalkHost.Artifacts.wasm(), level), 1)
+        micros = for _ <- 1..3, do: elem(Wasi.compile(TalkHost.Artifacts.wasm(), level), 1)
         {Atom.to_string(level), %{"medianMs" => Enum.at(Enum.sort(micros), 1) / 1000}}
       end
       |> Map.new()
@@ -191,7 +192,7 @@ defmodule Mix.Tasks.Talk.Measure do
       IO.puts(:stderr, "faults: #{name}")
 
       start =
-        if name == "wasmex", do: fn -> Transport.Wasi.start(opt_level: :speed, memory_cap: 1024 * @mib) end, else: start
+        if name == "wasmex", do: fn -> Wasi.start(opt_level: :speed, memory_cap: 1024 * @mib) end, else: start
 
       {key(name), Faults.run(start, Keyword.merge(sizes, seed: 532, extra: extra(name)))}
     end
@@ -207,7 +208,7 @@ defmodule Mix.Tasks.Talk.Measure do
     [
       {"talk_send past the talk_buffer allocation",
        fn session ->
-         case Transport.Wasi.send_length(session.transport, -1) do
+         case Wasi.send_length(session.transport, -1) do
            {:ok, json} -> {session, %{JSON.decode!(json)["err"]["kind"] => 1}}
            {:error, reason} -> {session, %{"lost" => 1, "lostOn" => ["talk_send(0xFFFFFFFF): #{inspect(reason)}"]}}
          end

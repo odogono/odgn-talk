@@ -9,6 +9,7 @@ defmodule TalkHost.Faults do
   the first reply, and runs a fresh Script in a new Group.
   """
   alias TalkHost.{Session, Transport}
+  alias NorthTalk.Transport.Wasi
 
   @now "2026-10-10T12:00:00Z"
 
@@ -168,7 +169,7 @@ defmodule TalkHost.Faults do
   def why_lost(session) do
     stderr =
       case session.transport do
-        %Transport.Wasi{} = t -> Transport.Wasi.stderr(t)
+        %Wasi{} = t -> Wasi.stderr(t)
         %Transport.Sidecar{} = t -> Transport.Sidecar.stderr(t)
         %Transport.Bridge{} = t -> Transport.Bridge.stderr(t)
       end

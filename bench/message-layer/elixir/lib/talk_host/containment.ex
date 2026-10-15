@@ -17,6 +17,7 @@ defmodule TalkHost.Containment do
   next one, and the memory observed belongs to that Script.
   """
   alias TalkHost.{Faults, Transport}
+  alias NorthTalk.Transport.Wasi
 
   @mib 1024 * 1024
 
@@ -39,7 +40,7 @@ defmodule TalkHost.Containment do
 
   @scripts [{"a growing List", "hog"}, {"doubling text", "double"}, {"a growing Script Variable", :hoard}]
 
-  def wasi(reps), do: linear(reps, Transport.Wasi)
+  def wasi(reps), do: linear(reps, Wasi)
   def bridge(reps), do: linear(reps, Transport.Bridge)
 
   defp linear(reps, transport) do
