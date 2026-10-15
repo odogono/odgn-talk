@@ -101,7 +101,7 @@ static host open_capped(wasm_engine_t *engine, wasmtime_linker_t *linker,
   h.store = wasmtime_store_new(engine, NULL, NULL);
   if (!h.store) fail("store allocation failed");
   h.ctx = wasmtime_store_context(h.store);
-  // A backstop, distinct from Script budgets. Hitting it may trap Go's runtime.
+  // A backstop, distinct from Script budgets. Hitting it may trap the reactor.
   wasmtime_store_limiter(h.store, memory_cap, -1, 1, -1, 1);
   wasi_config_t *wasi = wasi_config_new();
   if (!wasi) fail("WASI allocation failed");

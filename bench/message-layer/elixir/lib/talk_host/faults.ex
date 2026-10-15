@@ -162,7 +162,7 @@ defmodule TalkHost.Faults do
   end
 
   @doc """
-  Why the instance was lost: the Go runtime's fatal error from stderr if it
+  Why the instance was lost: the reactor or sidecar's fatal error from stderr if it
   wrote one, or else the transport's reason, such as a Wasm trap.
   """
   def why_lost(session) do
@@ -358,8 +358,8 @@ defmodule TalkHost.Faults do
 
   @doc """
   Delivers `handler` `reps` times to the fault Script under `limits`, for
-  containment. It stops at a lost instance, since a trapped Go reactor goes
-  on answering with stale protocol errors.
+  containment. It stops at a lost instance; a fatal runtime error or trap
+  leaves that instance unusable.
   """
   def contained(session, handler, limits, reps) do
     {session, {:ok, group}} = new_script(session, @faults_source, limits)

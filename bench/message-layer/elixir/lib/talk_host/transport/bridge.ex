@@ -1,7 +1,7 @@
 defmodule TalkHost.Transport.Bridge do
   @moduledoc """
   The minimal C Host's `--serve` mode ([`bench/message-layer-c`](../../../../../message-layer-c/)):
-  one `wasip1` instance in the wasmtime C API, carried over stdin and stdout in
+  one `wasm32-wasi` instance in the wasmtime C API, carried over stdin and stdout in
   the sidecar's framing. It lets the fault and containment suites judge the C
   Host's row of #532 with the same cases as the Elixir transports. Latency is
   measured inside the C Host instead, since the Port would add to it.
@@ -37,7 +37,7 @@ defmodule TalkHost.Transport.Bridge do
     end
   end
 
-  @doc "Whatever the bridge wrote to stderr: the Go runtime's fatal error, or a wasmtime trap."
+  @doc "Whatever the bridge wrote to stderr: a reactor error or a wasmtime trap."
   def stderr(%__MODULE__{sidecar: s}), do: Sidecar.stderr(s)
 
   @doc "Linear memory, as the bridge last recorded it, including just before a trap."

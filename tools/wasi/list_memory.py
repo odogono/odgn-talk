@@ -4,7 +4,8 @@
 # ///
 """Check List-growth faults and memory through the actual Message Layer.
 
-uv run tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm
+uv run tools/wasi/list_memory.py
+uv run tools/wasi/list_memory.py --wasm path/to/talk.wasm
 uv run tools/wasi/list_memory.py --sidecar .cache/messagelayer
 
 Each profile/workload gets a fresh process or WASI instance, without Trace.
@@ -25,7 +26,7 @@ from pathlib import Path
 
 import wasmtime
 
-from check import Host, run_end
+from check import DEFAULT_WASM, Host, run_end
 
 MIB = 1 << 20
 PROFILES = {
@@ -139,15 +140,16 @@ def exercise(host, limits, workload, item):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    transport = parser.add_mutually_exclusive_group(required=True)
+    transport = parser.add_mutually_exclusive_group()
     transport.add_argument("--wasm", type=Path)
     transport.add_argument("--sidecar", type=Path)
     parser.add_argument("--profile", choices=["all", *PROFILES], default="all")
     parser.add_argument("--workload", choices=["all", "local", "persistent"], default="all")
     parser.add_argument("--item", choices=["all", "text", "nothing"], default="all")
     args = parser.parse_args()
-    path = args.wasm or args.sidecar
-    if args.wasm:
+    wasm = args.sidecar is None
+    path = args.sidecar if args.sidecar else (args.wasm or DEFAULT_WASM)
+    if wasm:
         engine = wasmtime.Engine()
         module = wasmtime.Module.from_file(engine, str(path))
     results = []
@@ -162,16 +164,16 @@ def main():
                     continue
                 # Backstop below wasm32's 4 GiB ceiling, including runtime overhead.
                 cap = 64 * MIB + 12 * limits["allocPerRun"]
-                host = Host(engine, module, memory_limit=cap) if args.wasm else Sidecar(path)
+                host = Host(engine, module, memory_limit=cap) if wasm else Sidecar(path)
                 result = exercise(host, limits, workload, item)
-                peak = host.memory.data_len(host.store) if args.wasm else host.close()
+                peak = host.memory.data_len(host.store) if wasm else host.close()
                 assert peak <= cap, (profile, workload, peak, cap)
                 result.update(
                     profile=profile,
                     workload=workload,
                     item=item,
                     peak_bytes=peak,
-                    peak_kind="linear memory" if args.wasm else "process max RSS",
+                    peak_kind="linear memory" if wasm else "process max RSS",
                     allocation_budget=limits["allocPerRun"],
                     cap_bytes=cap,
                     multiple=round(peak / limits["allocPerRun"], 3),

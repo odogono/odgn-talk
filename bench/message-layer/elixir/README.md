@@ -1,11 +1,11 @@
 # Message Layer from an Elixir Host
 
-An Elixir Host for the Go Core's [Message Layer](../../../spec/09-embedding.md#the-message-layer). It measures what [#532](https://github.com/odogono/odgn-talk/issues/532) asks of each Host against [its thresholds](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407), for [#553](https://github.com/odogono/odgn-talk/issues/553). Nothing here is normative ([ADR 0054](../../../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md)).
+An Elixir Host for the [Message Layer](../../../spec/09-embedding.md#the-message-layer). It measures what [#532](https://github.com/odogono/odgn-talk/issues/532) asks of each Host against [its thresholds](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407), for [#553](https://github.com/odogono/odgn-talk/issues/553). Nothing here is normative ([ADR 0054](../../../docs/adr/0054-benchmarks-live-outside-the-cores-and-only-advise-the-cost-model.md)).
 
-It drives the Core through two transports:
+It drives the Cores through two transports:
 
-- **Wasmex:** the `wasip1` reactor from [`cmd/messagelayer-wasi`](../../../impl/go/cmd/messagelayer-wasi/), in Wasmex 0.15.1 (wasmtime 47), compiled with Cranelift `opt_level: :speed`.
-- **Sidecar:** the native [`cmd/messagelayer`](../../../impl/go/cmd/messagelayer/) on an Erlang Port, whose `{:packet, 4}` framing matches the sidecar's exactly.
+- **Wasmex:** the Zig [`wasm32-wasi` reactor](../../../impl/zig/README.md#building-and-testing), in Wasmex 0.15.1 (wasmtime 47), compiled with Cranelift `opt_level: :speed`.
+- **Sidecar:** the native Go [`cmd/messagelayer`](../../../impl/go/cmd/messagelayer/) on an Erlang Port, whose `{:packet, 4}` framing matches the sidecar's exactly.
 
 It also runs its containment and fault suites against the [minimal C Host](../../message-layer-c/) on wasmtime, through that Host's `--serve` bridge on a Port, so the C Host faces the same cases (#554). That transport, `c, wasmtime`, runs when `bench/message-layer-c/out/host` exists; build it with `bench/message-layer-c/run.sh`. Its latency and memory are measured inside the C Host, since the Port would add to them.
 
@@ -17,16 +17,17 @@ mix talk.measure --only latency         # remeasures one section into the day's 
 mix talk.measure --quick                # checks the harness; saves nothing, and its figures mean nothing
 mix talk.measure --transports c         # measures some transports: wasmex, sidecar, c
 mix talk.measure --render <file>.json   # rewrites a saved run's Markdown
-mix test                                # one Operation round trip on each transport
+mix test                                # round trips; includes C when out/host exists
 ```
 
-Set `TALK_WASM` to measure another reactor module by path on the `wasmex`
-and `c` transports — the Zig Core's `wasm32-wasi` build
-([#635](https://github.com/odogono/odgn-talk/issues/635)) — instead of the
-Go build in `.cache/`; the sidecar stays the Go binary, and `--build`
-always rebuilds the Go artifacts.
+`--build` builds the Zig reactor at `.cache/zig-wasi/bin/talk.wasm` and the
+native and Linux Go sidecars. Wasmex and the C bridge use this Zig module by
+default. Set `TALK_WASM` to an explicit artifact path for another build; it
+selects the module to measure without changing what `--build` builds.
 
-It needs Elixir 1.18 or later and Go 1.27. The sidecar's memory containment runs the Linux build in a container, so it needs Docker. Without Docker, that row is reported as skipped. A full run takes about half an hour on an Apple M5. Latency figures are sensitive to other load, so the report records the load average at the start; run it on a quiet machine.
+The Go WASI entry point is retired ([ADR 0089](../../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). Go-reactor saves cannot be restored by Zig; start fresh Groups from source and Host-owned data, or retain the previous Go runtime/artifact until those Groups are drained or rebuilt. The native Go sidecar stays available.
+
+It needs Elixir 1.18 or later, Zig 0.17.0 and Go 1.27. The sidecar's memory containment runs the Linux build in a container, so it needs Docker. Without Docker, that row is reported as skipped. A full run takes about half an hour on an Apple M5. Latency figures are sensitive to other load, so the report records the load average at the start; run it on a quiet machine.
 
 ## What it measures
 

@@ -142,7 +142,8 @@ defmodule TalkHost.Report do
     | Machine | #{env["cpu"]}, #{env["os"]}#{if l = env["loadAverage"], do: ", load average #{l} at the start", else: ""} |
     | Elixir | #{env["elixir"]}, OTP #{env["otp"]} |
     | Wasmex | #{env["wasmex"]} (wasmtime #{env["wasmtime"]}), Cranelift `opt_level: :speed` |
-    | Go | #{env["go"]} |
+    | Go toolchain | #{env["go"]} |
+    | Zig toolchain | #{env["zig"] || "not recorded"} |
     | Docker | #{env["docker"] || "not available"} |
     | Reactor | `#{r["payload"]["sha256"]}` |
     | Samples | #{sizes(r["sizes"])} |

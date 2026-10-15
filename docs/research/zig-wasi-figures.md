@@ -1,5 +1,7 @@
 # The Zig Core's first WASI figures
 
+Historical measurement record. The current Message Layer reactor is the Zig `wasm32-wasi` build; the Go WASI entry point is retired ([ADR 0089](../adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native Go sidecar remains. Commands and support claims below describe the measured revisions.
+
 Answers [ADR 0078](../adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)'s open consequence, for [#634](https://github.com/odogono/odgn-talk/issues/634): the first Zig build that loads a Script records its Brotli payload and memory per instance against the Go reactor's 2.04 MiB and 15.5 MiB ([the Message Layer measurements](message-layer-measurements.md)).
 
 ## Outcome

@@ -2,6 +2,8 @@
 
 Answers the second half of [#635](https://github.com/odogono/odgn-talk/issues/635), for [ADR 0078](../adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)'s open consequence: whether the Zig `wasm32-wasi` build replaces the Go `wasip1` reactor behind the Message Layer. Both are measured against [#532's thresholds](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407) with the harnesses that measured the Go reactor first ([the Message Layer measurements](message-layer-measurements.md)), on the same machine and commit. This third run follows the Message Layer parity work on #635. The previous run, at `fd2f13be`, found the Zig build passing every row with a smaller message set; its results are beside these.
 
+The maintainer accepted this recommendation on 2026-10-14. [ADR 0089](../adr/0089-the-zig-build-serves-the-message-layer-reactor.md) records the switch and retirement of the Go WASI entry point. These results and message differences describe `71d8bfda`; current support lives in the [Zig guide](../../impl/zig/README.md#the-machine).
+
 ## Outcome
 
 **Yes.** The Zig build passes every row on both Hosts and is faster, smaller and lighter than the Go reactor on every measured row: 2× to 25× on latency, 3.6× on memory per instance, and 3.3× to 4.5× on payload. The Go reactor misses one row this run: its C Host Capability call p50 is 58.1 µs against the 50 µs threshold, in all three runs.
@@ -66,6 +68,16 @@ At the conformance minimum limits under the 1 GiB cap, the observed linear memor
 Not profiled; the likely reasons are these. The Go reactor carries the Go runtime and its garbage collector in every instance, which is most of its 15.75 MiB and its 1 ms instantiation. Zig's instance is the Core's own data and a 1 MiB stack. On a call, Go's reactor crosses its `go:wasmexport` boundary into a goroutine scheduler; Zig's `talk_send` is a direct call. The C Host shows the difference undiluted, since the Elixir Host adds its own NIF and JSON costs to both.
 
 ## Reproducing
+
+Current-default remeasurement (Zig reactor, with the native Go sidecar):
+
+```sh
+bench/message-layer-c/run.sh
+(cd bench/message-layer/elixir && mix talk.measure --build)
+```
+
+The commands below record the historical comparison at `71d8bfda`. Use that
+checkout to rebuild the retired Go reactor; current harnesses default to Zig.
 
 ```sh
 cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi && cd ../..

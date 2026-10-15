@@ -11,6 +11,7 @@ ADR 0071 gated a third Core on the Message Layer falling short for a named Host.
 ## Consequences
 
 - **Supersedes ADR 0071's gate only.** The third Core is written from the Spec and the corpus, never translated from the Go or TS Core. Its targets are `talk.h` and `wasm32-wasi`. The browser stays on the TS Core, and saves stay per Core (ADR 0008). The Spec stays implementable without garbage collection.
+- **The replacement consequence is settled by [ADR 0089](0089-the-zig-build-serves-the-message-layer-reactor.md).** The Zig build now serves the Message Layer reactor and the Go WASI entry point is retired. The following records the original gate.
 - **The Message Layer stays,** and the Go `wasip1` build keeps serving Hosts with a WASM runtime until the Zig `wasm32-wasi` build conforms. Whether the Zig build then replaces it behind the Message Layer is decided by measuring both against [#532's thresholds](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407), with the harnesses in `bench/message-layer-c` and `bench/message-layer/elixir`.
 - **The payload and memory estimates are unmeasured.** The first Zig build that loads a Script records its Brotli payload and memory per instance against the Go reactor's 2.04 MiB and 15.5 MiB.
 - Supersedes in part [ADR 0071](0071-a-third-core-serves-embedding-outside-go-and-ts-after-the-message-layer-is-measured.md).

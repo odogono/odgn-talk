@@ -223,6 +223,8 @@ still use. Check names against the installed source, under `lib_dir` from
 - `std.testing.refAllDeclsRecursive` is gone; use `refAllDecls` per container.
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
+The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native Go sidecar remains separate. Go-reactor saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
+
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
 the exports directly, passing structs and text through `talk_alloc` and
@@ -267,6 +269,16 @@ a Fuel Slice (#900).
 holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
 Values are walked from heap work lists, never by native recursion.
+For the Message Layer, supply WASI imports and call `_initialize` once before
+serial export calls. `talk_buffer(n) -> i32` reserves the input frame's bytes;
+write JSON without a length prefix. Zero or more than 64 MiB returns 0, which
+must not be written through. `talk_send(n) -> i64` returns the reply as unsigned
+`ptr << 32 | len`; copy it before the next `talk_send`. The input buffer lasts
+until the next `talk_buffer`. A length beyond the reserved buffer is a protocol
+error. Either export may grow memory, so refresh memory views
+after calls. Host Operations and properties use interim needs and result
+messages, without custom Host imports or reentrant exports.
+
 Message Layer frames have no JSON nesting-depth cap. Parsed Value Encodings,
 including Function captures, go directly to the Core's heap-stack Value builder
 without recursive JSON re-encoding. Replies use the iterative Value writer.
@@ -292,7 +304,19 @@ uv run tools/wasi/zig.py impl/zig/zig-out/bin/talk.wasm
 The script declares its Python version and dependencies inline; `uv run` creates
 the environment. This checks the C API reactor; Message Layer verification uses
 the shared [reactor harness](../../tools/wasi/check.py):
-`uv run tools/wasi/check.py impl/zig/zig-out/bin/talk.wasm`.
+
+```sh
+(cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)
+uv run tools/wasi/check.py
+uv run tools/wasi/list_memory.py --profile minimum
+```
+
+The shared scripts default to `.cache/zig-wasi/bin/talk.wasm`; an explicit path
+(`check.py path/to/talk.wasm`, or `list_memory.py --wasm path/to/talk.wasm`)
+selects another build. CI runs both checks against Zig, with each List workload
+in its own job. The [C](../../bench/message-layer-c/) and
+[Elixir](../../bench/message-layer/elixir/) harnesses also build and default to
+this module, so remeasurement needs no `TALK_WASM` override.
 
 From the repository root, `bun tools/zig/api.ts` compares `talk.h` with
 `talk.go`. It fails on a `talk.h` name that `talk.go` doesn't declare, unless

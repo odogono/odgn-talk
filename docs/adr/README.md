@@ -90,3 +90,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0086: Creative Play runs in a worker and Stop freezes the session](0086-creative-play-runs-in-a-worker-and-stop-freezes-the-session.md)
 - [0087: The creative tool is Folio, and Projects save as `.folio` files](0087-the-creative-tool-is-folio-and-projects-save-as-folio-files.md)
 - [0088: The Message Layer accepts deep Values](0088-the-message-layer-accepts-deep-values.md)
+- [0089: The Zig build serves the Message Layer reactor](0089-the-zig-build-serves-the-message-layer-reactor.md)

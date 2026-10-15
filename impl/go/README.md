@@ -122,7 +122,7 @@ bound for both Cores ([#582](https://github.com/odogono/odgn-talk/issues/582)).
   [fuzzer's worker protocol](../../tooling/fuzz/README.md#dual-core-mode).
 - `internal/messagelayer/` is the [Message Layer](#message-layer) over the
   root package's embedding interface; `cmd/messagelayer/` serves it as a
-  sidecar on stdio, and `cmd/messagelayer-wasi/` as a WASI Preview 1 reactor.
+  sidecar on stdio. The Message Layer WASI reactor is the Zig build.
 - `internal/apicheck/` compares root exports and signatures with `talk.go`,
   including promoted members. Missing declarations are reported without failing
   until [#141](https://github.com/odogono/odgn-talk/issues/141).
@@ -1373,19 +1373,16 @@ and then the JSON, both ways on stdio.
 Frames over 64 MiB are drained with bounded buffering and answered with a
 `protocol error` under `ref: -1`, since the rejected JSON isn't parsed. The
 same Session then answers the next frame. A truncated header or body ends the
-transport with an error. The WASI check also loads 1 MiB of blank lines,
-100,000 empty Handlers in separate instances with a 1 GiB memory cap.
-100,000-term addition and exponentiation chains receive a Load nesting
-diagnostic, and each instance continues answering requests.
+transport with an error.
 
-Frames have no JSON nesting-depth cap, on native or WASI builds. A heap-stack
+Frames have no JSON nesting-depth cap. A heap-stack
 parser validates the entire frame, including ignored fields, and retains raw
 Value Encoding spans while reading the layer's finite envelope and declaration
 structures. The Core's Value reader and writer also walk heap work stacks;
 encoding error paths are built only on failure, so deeply nested Values do not
 require quadratic path copying. Group ownership checks, display and Trace
 rendering, container size accounting and `any` Shape's Function scan also use
-heap work stacks, so admission and Host exchanges can carry deep Values on WASI.
+heap work stacks, so admission and Host exchanges can carry deep Values.
 Replies embed encoded Values without
 revalidating them through `encoding/json`'s 10,000-level input ceiling.
 The frame-size and available-memory limits still apply. Malformed deep JSON
@@ -1402,8 +1399,7 @@ advertises its hook with `release: true` in `define-capability`; the `release`
 need carries `script`, `grant`, `reason` and `now`. The enclosing worker
 returns its final reports after every acknowledgement. Any other message
 sent meanwhile is a protocol error. So the Core never calls the Host, and the
-same `Session` serves the `wasip1` exports, where a goroutine parks across
-exports but an export can't wait on the Host. An `op` carries `fuelLeft`, the
+worker parks across Host exchanges without blocking the transport. An `op` carries `fuelLeft`, the
 Fuel the Run can still be charged; the reply's `charged` goes through
 `Call.Charge`. A started call is answered with `answer` or `fail`, and a `pump`
 reply lists the started calls the Core has abandoned under `abandoned`.
@@ -1427,57 +1423,15 @@ with `go -C impl/go test ./internal/messagelayer`.
 
 ### WASI reactor
 
-The [C Host measurement harness](../../bench/message-layer-c/) drives the
-reactor through Wasmtime's C API and measures Pump and Capability exchanges,
-instantiation and memory, with Script-fault reuse checks.
+The Message Layer reactor is now the [Zig `wasm32-wasi` build](../zig/README.md#building-and-testing), as [ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md) records. The Go `cmd/messagelayer-wasi` entry point is retired; the native Go sidecar remains. CI's shared reactor and List-memory checks run against Zig.
 
-`cmd/messagelayer-wasi` builds with standard Go as a WASI Preview 1 reactor.
-From the repository root:
+Go-reactor saves cannot be restored on Zig: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or keep the previous Go runtime/artifact until existing Groups are drained or rebuilt. No save converter is provided.
 
-```sh
-mkdir -p .cache
-GOOS=wasip1 GOARCH=wasm go -C impl/go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer.wasm ./cmd/messagelayer-wasi
-uv run tools/wasi/check.py .cache/messagelayer.wasm
-```
+#### Historical Go reactor measurements
 
-The check uses Python 3.11 or later, wasmtime 49.0.0's Python bindings and
-Brotli 1.2.0; `uv` installs the pinned dependencies declared in the script.
-CI runs the same build and check. The Go module itself has no extra dependency.
+The following measurements describe the retired Go reactor, not the current Zig default. Reproduce them from the named historical commits and the commands in the linked raw reports. Current reactor build and check commands are in the [Zig guide](../zig/README.md#building-and-testing).
 
-Each instance owns one Message Layer Session. The Host supplies the WASI
-imports, calls `_initialize` once, then drives these exports serially:
-
-- `talk_buffer(n) -> i32` reserves `n` input bytes and returns their linear
-  memory address. Write the JSON frame there, without a length prefix.
-  The buffer is valid until the next `talk_buffer`. A zero length or a length
-  above 64 MiB returns 0; the Host must not write through that address.
-- `talk_send(n) -> i64` reads `n` bytes of the reserved buffer and returns
-  the reply packed as `ptr << 32 | len`. Interpret it as unsigned, copy
-  the reply from linear memory, and decode the JSON. The reply is valid until
-  the next `talk_send`. A length exceeding the reserved buffer returns a
-  protocol error with `ref: -1`, without reading outside the buffer.
-
-Either export can grow linear memory; refresh memory views after a call.
-Host Operations and properties use the same `need`/result exchanges as the
-sidecar, with no custom Host imports or reentrant exports. A Host queues inputs
-that arrive while an export runs, and a Host needing prompt interruption pumps
-with a Fuel Slice. Supported messages and limitations are the same on both
-transports; `wasip1` adds no embedding API.
-
-The check exercises `hello`, invalid lengths and malformed frames, hostile
-source and JSON nesting with instance reuse, memory
-growth and reply retention, immediate and suspending Operations across exports,
-charging, a Script error followed by more requests, save, fingerprint and
-independent instances. Fresh instances must hold no more than 16 MiB of linear
-memory after `hello`, a Group, a small Script and one Pump; the check records
-twelve instances and enforces this limit before hostile workloads. The small
-Script names no Library, so no Standard Library compiles. It also prints
-the artifact's SHA-256 and raw, gzip
-level 9 (`mtime=0`), and Brotli quality 11 byte counts. These are payload sizes
-of the stripped module, including Go's runtime; they aren't compiled-module
-cache sizes or per-instance memory measurements.
-
-Measured on 2026-10-10 with Go 1.27.2 and the reactor build command above:
+Measured on 2026-10-10 with Go 1.27.2 and the former stripped reactor build:
 **12,457,777 bytes raw**, **2,980,976 bytes gzip**, **2,106,513 bytes Brotli**.
 The check ran under Wasmtime 49.0.0 with Python 3.14.8, zlib 1.2.12 and
 Brotli 1.2.0. The module's SHA-256 was
@@ -1545,17 +1499,16 @@ record all eight cases per transport for [#598](https://github.com/odogono/odgn-
 The [earlier buffer-growth measurements](../../tools/wasi/results/2026-10-10-list-memory.json)
 remain the evidence for [#584](https://github.com/odogono/odgn-talk/issues/584).
 
-Reproduce the measurements after building the reactor as above:
+The native sidecar can still be measured from the current checkout:
 
 ```sh
 go -C impl/go build -trimpath -buildvcs=false -ldflags='-s -w' -o ../../.cache/messagelayer ./cmd/messagelayer
 uv run tools/wasi/list_memory.py --sidecar .cache/messagelayer
-uv run tools/wasi/list_memory.py --wasm .cache/messagelayer.wasm
 ```
 
-The WASI check enforces the stated linear-memory backstop; the sidecar check
-asserts the child's OS-reported peak RSS. CI runs the conformance-minimum
-WASI cases, including rollback and post-fault reuse. Native regression tests
+The shared memory check enforces the stated backstop; the sidecar check
+asserts the child's OS-reported peak RSS. CI now runs the conformance-minimum
+WASI cases against Zig, including rollback and post-fault reuse. Native Go regression tests
 check slot size, sampled heap growth, aliases and concurrent List branches.
 
 

@@ -41,7 +41,7 @@ data["provenance"] = {
     "date_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "checkout_commit": command("git", "rev-parse", "HEAD"),
     "checkout_status": command("git", "status", "--short"),
-    "go_source_status": command("git", "-C", "../..", "status", "--short", "--", "impl/go"),
+    "zig_source_status": command("git", "-C", "../..", "status", "--short", "--", "impl/zig"),
     "reactor_revision": os.environ.get("REACTOR_REVISION", "external build; revision unspecified"),
     "host_sha256": digest("host.c"),
     "runner_sha256": digest("run.sh"),
@@ -54,7 +54,7 @@ data["provenance"] = {
     "cpu": command("sysctl", "-n", "machdep.cpu.brand_string")
     if sys.platform == "darwin" else platform.processor(),
     "cc": command(os.environ.get("CC", "cc"), "--version"),
-    "go": command("go", "version"),
+    "zig": command("zig", "version"),
     "python": platform.python_version(),
     "zlib": zlib.ZLIB_RUNTIME_VERSION,
     "brotli": command("brotli", "--version"),

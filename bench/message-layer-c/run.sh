@@ -9,24 +9,17 @@ for program in python3 brotli "${CC:-cc}"; do
   command -v "$program" >/dev/null || { echo "Required program missing: $program" >&2; exit 1; }
 done
 
-# Use an explicit reactor path when measuring an unmerged #551 build.
-wasm=${1:-out/messagelayer.wasm}
+# An explicit path measures another reactor without rebuilding it.
+wasm=${1:-../../.cache/zig-wasi/bin/talk.wasm}
 if [[ $# == 0 ]]; then
-  if [[ ! -d ../../impl/go/cmd/messagelayer-wasi ]]; then
-    echo 'The reactor requires #551; pass the path to an explicit reactor build.' >&2
-    exit 1
-  fi
-  mkdir -p out
-  GOOS=wasip1 GOARCH=wasm go -C ../../impl/go build -buildmode=c-shared \
-    -trimpath -buildvcs=false -ldflags='-s -w' \
-    -o ../../bench/message-layer-c/out/messagelayer.wasm ./cmd/messagelayer-wasi
+  (cd ../../impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)
   export REACTOR_REVISION="$(git rev-parse HEAD)"
-  export REACTOR_SOURCE=../../impl/go/cmd/messagelayer-wasi/main_wasip1.go
-  export REACTOR_BUILD_FLAGS='GOOS=wasip1 GOARCH=wasm -buildmode=c-shared -trimpath -buildvcs=false -ldflags="-s -w"'
+  export REACTOR_SOURCE=../../impl/zig/src/message.zig
+  export REACTOR_BUILD_FLAGS='zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi'
 fi
 export WASMTIME_PREFIX
 if [[ ! -f "$wasm" ]]; then
-  echo "Reactor not found: $wasm (requires #551)" >&2
+  echo "Reactor not found: $wasm" >&2
   exit 1
 fi
 

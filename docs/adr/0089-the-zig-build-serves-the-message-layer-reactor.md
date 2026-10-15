@@ -1,0 +1,9 @@
+# The Zig build serves the Message Layer reactor
+
+The Zig `wasm32-wasi` build replaces the Go `wasip1` reactor behind the Message Layer, as accepted by the maintainer on 2026-10-14 in [#635](https://github.com/odogono/odgn-talk/issues/635) and carried out in [#918](https://github.com/odogono/odgn-talk/issues/918). The [remeasurement at `71d8bfda`](../research/zig-message-layer-measurements.md) ([#914](https://github.com/odogono/odgn-talk/pull/914)) meets every threshold in [#532](https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407) on both Hosts, while Go misses the C Host Capability-call row. Zig covers every message the Go reactor dispatches. This settles [ADR 0078](0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md)'s open replacement consequence.
+
+The Go WASI entry point is retired now, without a deprecation window. Keeping a second reactor built and checked would add maintenance without preserving a message or a performance advantage. CI runs the shared reactor and List-memory checks against Zig; the Elixir and C harnesses build and select Zig by default. Explicit artifact paths remain available for historical comparisons.
+
+The native Go stdio sidecar stays, including the Elixir harness's sidecar transport and containment suite. Retiring the Go Core or replacing that sidecar is a separate decision ([#884](https://github.com/odogono/odgn-talk/issues/884)). The browser stays on TS.
+
+Saves remain per Core ([ADR 0008](0008-same-core-save-restore.md)): a Go-reactor save cannot be restored by Zig. Hosts must start fresh Groups from source and Host-owned data. A Host holding Go saves must keep its previous Go runtime/artifact until those Groups can be drained or rebuilt; this switch supplies no save converter. A deployment should identify its Core with `hello` before selecting saves.

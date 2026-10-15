@@ -1,6 +1,6 @@
 defmodule TalkHost.Transport.Wasi do
   @moduledoc """
-  The Go Core's `wasip1` reactor in Wasmex. A frame is written into the
+  The Zig Core's `wasm32-wasi` reactor in Wasmex. A frame is written into the
   buffer `talk_buffer(n)` gives, and `talk_send(n)` returns the reply packed
   as `ptr << 32 | len`.
 
@@ -69,7 +69,7 @@ defmodule TalkHost.Transport.Wasi do
     end
   end
 
-  @doc "Whatever the Go runtime wrote to stderr, such as a fatal error."
+  @doc "Whatever the reactor wrote to stderr, such as a fatal error."
   def stderr(%__MODULE__{stderr: pipe}) do
     Wasmex.Pipe.seek(pipe, 0)
     Wasmex.Pipe.read(pipe)
