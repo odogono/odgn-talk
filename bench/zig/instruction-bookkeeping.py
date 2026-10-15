@@ -103,7 +103,7 @@ result = {
     "mode": "safe", "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
     "samplesPerProcess": args.count, "pairs": args.pairs,
     "binarySha256": {name: sha(host) for name, host in (("before", args.before), ("after", args.after))},
-    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/machine.zig", "impl/zig/src/machine/costs.zig", "bench/zig/host.c")},
+    "sourceSha256": {path: sha(root / path) for path in ("impl/zig/src/machine/machine.zig", "impl/zig/src/machine/costs.zig", "impl/zig/src/value.zig", "impl/zig/src/machine/group_allocator.zig", "bench/zig/host.c")},
     "manifestSha256": sha(manifest), "measurements": [], "profiles": [],
 }
 result["baselineSourceSha256"] = {
