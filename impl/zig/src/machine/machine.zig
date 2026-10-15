@@ -3142,11 +3142,11 @@ pub const Group = struct {
 
     /// Whether a Script wants a Broadcast's message: it has a Handler for
     /// it, or a `wait for` pending on it. A Fallback doesn't count.
-    fn wants(g: *Group, s: *const Script, message: []const u8) bool {
+    fn wants(g: *Group, s: *const Script, message: []const u8, cancelled: []const *const Run) bool {
         if (s.handlerUnit(message, .handler) != null) return true;
         for (g.pending.items) |p| {
             const event = p.event orelse continue;
-            if (p.run.script != s) continue;
+            if (p.run.script != s or std.mem.indexOfScalar(*const Run, cancelled, p.run) != null) continue;
             for (s.unitIn(event.library).events[event.entry].branches) |b| switch (b) {
                 .when => |w| if (std.mem.eql(u8, w.message, message)) return true,
                 .after => {},
@@ -3157,11 +3157,11 @@ pub const Group = struct {
 
     /// Finds a Broadcast's recipients, in load order, each with its own
     /// delivery id.
-    fn resolveBroadcast(g: *Group, b: *Broadcast, stopping: []const *const Script) !void {
+    fn resolveBroadcast(g: *Group, b: *Broadcast, stopping: []const *const Script, cancelled: []const *const Run) !void {
         if (b.recipients != null) return;
         var out: std.ArrayList(Recipient) = .empty;
         errdefer out.deinit(g.gpa);
-        for (g.scripts.items) |s| if (s.stopped == null and std.mem.indexOfScalar(*const Script, stopping, s) == null and g.wants(s, b.message)) {
+        for (g.scripts.items) |s| if (s.stopped == null and std.mem.indexOfScalar(*const Script, stopping, s) == null and g.wants(s, b.message, cancelled)) {
             try out.append(g.gpa, .{ .script = s, .delivery = g.deliveries + 1 });
             g.deliveries += 1;
         };
@@ -3449,8 +3449,16 @@ pub const Group = struct {
         // Broadcast leaves that Script out of its recipients.
         var stopping: std.ArrayList(*const Script) = .empty;
         defer stopping.deinit(g.gpa);
+        var cancelled: std.ArrayList(*const Run) = .empty;
+        defer cancelled.deinit(g.gpa);
         for (g.batch.items) |*input| switch (input.*) {
-            .broadcast => |*b| try g.resolveBroadcast(b, stopping.items),
+            .broadcast => |*b| try g.resolveBroadcast(b, stopping.items, cancelled.items),
+            .cancel_run => |id| {
+                for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) try cancelled.append(g.gpa, r);
+            },
+            .cancel_delivery => |id| {
+                for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) try cancelled.append(g.gpa, r);
+            },
             .stop => |x| if (g.script(x.script)) |target| try stopping.append(g.gpa, target),
             .dispose => |o| for (g.scripts.items) |x| if (x.owner == o) try stopping.append(g.gpa, x),
             else => {},
