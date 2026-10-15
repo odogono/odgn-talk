@@ -4,11 +4,15 @@
 // turns pointer and form events into them.
 import {
   HANDLES,
+  PAGE_HANDLES,
+  MIN_PAGE_WIDTH,
+  MIN_PAGE_HEIGHT,
   labelSuggestion,
   StackEditor,
   type Edit,
   type Gesture,
   type Handle,
+  type PageHandle,
   type NameCheck,
 } from './editing';
 import {
@@ -192,6 +196,7 @@ const floatWindows = () => {
     const clampedTop = Math.min(Math.max(header, top), window.innerHeight - 24);
     win.style.left = `${clampedLeft}px`;
     win.style.top = `${clampedTop}px`;
+    win.style.setProperty('--window-left', `${clampedLeft}px`);
     win.style.setProperty('--window-top', `${clampedTop}px`);
   };
   const register = (win: HTMLElement) => {
@@ -369,6 +374,30 @@ export const mountStack = (
   const drawPage = () => {
     renderPage(editor.page, project.designWidth, pageNode, project, images);
     const selected = editor.selected;
+    stage.querySelector('.page-handles')?.remove();
+    if (!selected.length && !editor.readOnly) {
+      stage.append(
+        h(
+          'div',
+          { class: 'page-handles' },
+          ...PAGE_HANDLES.map(handle => {
+            const dimension =
+              handle === 's'
+                ? 'height'
+                : handle.length === 1
+                  ? 'width (all Pages)'
+                  : 'width (all Pages) and height';
+            return h('button', {
+              type: 'button',
+              class: `handle ${handle}`,
+              'data-page-handle': handle,
+              'aria-label': `Resize Page ${dimension}`,
+              title: `Resize Page ${dimension}. Arrow keys resize; Shift for 10 pixels.`,
+            });
+          }),
+        ),
+      );
+    }
     for (const element of selected) {
       pageNode
         .querySelector(`[data-element="${CSS.escape(element.name)}"]`)
@@ -610,7 +639,10 @@ export const mountStack = (
     h(
       'div',
       { class: 'row' },
-      field('Height', input('pageHeight', page.height, 'number', { min: 1 })),
+      field(
+        'Height',
+        input('pageHeight', page.height, 'number', { min: MIN_PAGE_HEIGHT }),
+      ),
       field('Background', color('background', page.background)),
     ),
     h(
@@ -649,7 +681,9 @@ export const mountStack = (
     field('Title', input('projectName', project.name)),
     field(
       'Design width',
-      input('designWidth', project.designWidth, 'number', { min: 1 }),
+      input('designWidth', project.designWidth, 'number', {
+        min: MIN_PAGE_WIDTH,
+      }),
     ),
     h('h2', {}, 'Sounds'),
     ...(project.assets.filter(isSoundAsset).length
@@ -804,13 +838,13 @@ export const mountStack = (
             minimum === undefined ? value : Math.max(minimum, value as number);
         }
       } else if (key === 'pageHeight') {
-        editor.page.height = Math.max(1, value as number);
+        editor.page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
       } else if (key === 'background') {
         editor.page.background = String(value);
       } else if (key === 'projectName') {
         project.name = String(value);
       } else if (key === 'designWidth') {
-        project.designWidth = Math.max(1, value as number);
+        project.designWidth = Math.max(MIN_PAGE_WIDTH, value as number);
       }
     });
     if (!live) {
@@ -872,6 +906,76 @@ export const mountStack = (
       const from = editor.pageIndex;
       edit(() => editor.movePage(from, from + Number(button.dataset.movePage)));
     }
+  });
+
+  // Page handles live outside the clipped Page, at screen size. Capture on
+  // the stable stage because drawing replaces the handles on every move.
+  stage.addEventListener('pointerdown', down => {
+    const handle = (down.target as HTMLElement).closest<HTMLElement>(
+      '[data-page-handle]',
+    )?.dataset.pageHandle as PageHandle | undefined;
+    if (!handle || down.button !== 0 || editor.readOnly) {
+      return;
+    }
+    down.preventDefault();
+    down.stopPropagation();
+    closeText();
+    finishFieldEdit();
+    editor.selectPage();
+    const gesture = editor.startPageResize(handle)!;
+    const startScale = scale;
+    stage.setPointerCapture(down.pointerId);
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== down.pointerId || editor.readOnly) {
+        return;
+      }
+      gesture.to(
+        (event.clientX - down.clientX) / startScale,
+        (event.clientY - down.clientY) / startScale,
+      );
+      drawPage();
+    };
+    const up = (event: PointerEvent) => {
+      if (event.pointerId !== down.pointerId) {
+        return;
+      }
+      stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up);
+      stage.removeEventListener('pointercancel', up);
+      stage.removeEventListener('lostpointercapture', up);
+      gesture.finish();
+      if (stage.hasPointerCapture(down.pointerId)) {
+        stage.releasePointerCapture(down.pointerId);
+      }
+      draw();
+    };
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('lostpointercapture', up);
+  });
+  stage.addEventListener('keydown', event => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-page-handle]',
+    );
+    const handle = target?.dataset.pageHandle as PageHandle | undefined;
+    const step = event.shiftKey ? 10 : 1;
+    const delta = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    }[event.key];
+    if (!handle || !delta || editor.readOnly) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const gesture = editor.startPageResize(handle)!;
+    gesture.to(delta[0]! / 2, delta[1]!);
+    gesture.finish();
+    draw();
+    stage.querySelector<HTMLElement>(`[data-page-handle="${handle}"]`)?.focus();
   });
 
   // Selection, moving and resizing on the Page.

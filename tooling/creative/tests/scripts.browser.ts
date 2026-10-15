@@ -90,6 +90,42 @@ export const runBrowserTests = async () => {
       'All owner kinds are editable',
     );
   });
+  await test('Script windows resize in both directions and the editor fills them', async () => {
+    const win = windows()[0]!;
+    assert(getComputedStyle(win).resize === 'both', 'Window has a resize grip');
+    const view = viewOf(win);
+    const before = view.dom.getBoundingClientRect();
+    const original = { width: win.style.width, height: win.style.height };
+    win.style.width = `${win.offsetWidth + 100}px`;
+    win.style.height = `${win.offsetHeight + 100}px`;
+    await new Promise(requestAnimationFrame);
+    const after = view.dom.getBoundingClientRect();
+    assert(after.width > before.width + 90, 'Editor grows with window width');
+    assert(
+      after.height > before.height + 90,
+      'Editor grows with window height',
+    );
+    win.style.width = '340px';
+    win.style.height = '280px';
+    await new Promise(requestAnimationFrame);
+    assert(
+      view.dom.offsetWidth < before.width,
+      'Editor shrinks with window width',
+    );
+    assert(
+      view.dom.offsetHeight < before.height,
+      'Editor shrinks with window height',
+    );
+    win.style.width = '3000px';
+    win.style.height = '3000px';
+    const bounds = win.getBoundingClientRect();
+    assert(
+      bounds.right <= innerWidth && bounds.bottom <= innerHeight,
+      'Window stays within viewport',
+    );
+    win.style.width = original.width;
+    win.style.height = original.height;
+  });
   await test('renaming refreshes diagnostics and undo preserves window identity', async () => {
     const win = windows()[0]!;
     shell.editor.renameElement('button1', 'newButton');
@@ -148,6 +184,41 @@ export const runBrowserTests = async () => {
         imported.project.script === '-- Script 1',
       'Page and Project round trip',
     );
+  });
+  await test('custom Handler edits refresh diagnostics without hiding name errors', async () => {
+    const win = windows()[2]!;
+    const view = viewOf(win);
+    const original = view.state.doc.toString();
+    const script =
+      'on foundChart\n  put missingName into chart\nend foundChart\n';
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: script },
+    });
+    await until(() =>
+      win
+        .querySelector('.script-problems')!
+        .textContent!.includes('unknown name'),
+    );
+    assert(
+      !win
+        .querySelector('.script-problems')!
+        .textContent!.includes('does not declare'),
+      'Custom message is declared after editing',
+    );
+    view.dispatch({
+      changes: {
+        from: 0,
+        to: view.state.doc.length,
+        insert: script.replace('missingName', 'true'),
+      },
+    });
+    await until(
+      () =>
+        win.querySelector('.script-problems')!.textContent === '✓ No problems',
+    );
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: original },
+    });
   });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);

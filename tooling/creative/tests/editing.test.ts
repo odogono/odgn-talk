@@ -1,12 +1,72 @@
 import { expect, test } from 'bun:test';
 import {
+  createElement,
+  createPage,
+  createProject,
+  type ButtonElement,
+} from '../src/model';
+import {
+  PAGE_HANDLES,
+  MIN_PAGE_HEIGHT,
+  MIN_PAGE_WIDTH,
   checkElementName,
   checkPageName,
   labelSuggestion,
   resizeBox,
   StackEditor,
 } from '../src/editing';
-import { createProject, type ButtonElement } from '../src/model';
+
+test('Page handles resize around the centre with a fixed top and minimum size', () => {
+  expect(PAGE_HANDLES).toEqual(['w', 'e', 'sw', 's', 'se']);
+  for (const handle of PAGE_HANDLES) {
+    const editor = new StackEditor(createProject('Resize'));
+    editor.page.elements.push(createElement('rectangle', 'box'));
+    editor.project.pages.push(createPage('other'));
+    const width = editor.project.designWidth;
+    const height = editor.page.height;
+    const otherHeight = editor.project.pages[1]!.height;
+    const beforeElements = structuredClone(editor.page.elements);
+    const gesture = editor.startPageResize(handle)!;
+    gesture.to(20, 30);
+    expect(editor.project.designWidth).toBe(
+      width + (handle.includes('e') ? 40 : handle.includes('w') ? -40 : 0),
+    );
+    expect(editor.page.height).toBe(height + (handle.includes('s') ? 30 : 0));
+    expect(editor.project.pages[1]!.height).toBe(otherHeight);
+    expect(editor.page.elements).toEqual(beforeElements);
+    gesture.to(handle.includes('w') ? 10_000 : -10_000, -10_000);
+    expect(editor.project.designWidth).toBe(
+      handle === 's' ? width : MIN_PAGE_WIDTH,
+    );
+    expect(editor.page.height).toBe(
+      handle.includes('s') ? MIN_PAGE_HEIGHT : height,
+    );
+    gesture.finish();
+    editor.undo();
+    expect(editor.project.designWidth).toBe(width);
+    expect(editor.page.height).toBe(height);
+    expect(editor.canUndo).toBe(false);
+    editor.redo();
+    expect(editor.project.designWidth).toBe(
+      handle === 's' ? width : MIN_PAGE_WIDTH,
+    );
+  }
+});
+
+test('Page resize rejects read-only edits and stale gestures cannot change another Page', () => {
+  const editor = new StackEditor(createProject('Resize'));
+  editor.project.pages.push(createPage('other'));
+  editor.readOnly = true;
+  expect(editor.startPageResize('se')).toBeUndefined();
+  editor.readOnly = false;
+  const gesture = editor.startPageResize('se')!;
+  gesture.to(20, 30);
+  editor.goToPage(1);
+  const before = structuredClone(editor.project);
+  gesture.to(500, 500);
+  gesture.finish();
+  expect(editor.project).toEqual(before);
+});
 
 const editorWith = (...kinds: Parameters<StackEditor['addElement']>[0][]) => {
   const editor = new StackEditor(createProject('Mystery'));
