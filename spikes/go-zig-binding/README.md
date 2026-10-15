@@ -118,6 +118,28 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Fire/Grant release artifact refresh, 2026-10-15
+
+[Raw output](measurements-fire-release.txt) records three repetitions with
+artifact source/public-adapter revision `43859e23e07ea78102500762a481b10fef975252`,
+SHA-256 `42077d940f70226b844fa6f62577d96c8151dc9dde9e4b26a68e75322e238f7d`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.807 µs native Go vs 31.040 µs probe (8.2×)**,
+cold compile/runtime/close **607.5 ms**, cached instantiation/close **122.1 µs**.
+This refresh measures the same independent immediate-call probe; it does not
+measure public Fire/release performance, tail latency or an accepted limit.
+
+The public suite compares 45 callback scenarios with a separately compiled
+native-Go Host, including Fire costs/failures/Stop and Grant release ordering,
+cancellation, panic swallowing, trimming, concurrent queued Requests and OnReady
+reentry. Exact Trace, Fuel and typed Reports match. The unchanged public
+Load/cache checks also catch the empty-Grant correction tracked in #984;
+C API regressions cover direct Capability calls and imported Library needs.
+Public adapter/probe pure-Go, race and vet checks pass locally, along with
+native Go, Zig unit/C tests, ordinary/deferred Corpus and WASI checks. Separate
+pure-Go cross-builds cover Linux amd64/arm64 and macOS arm64. Execution on the
+other required runners remains this revision's CI gate.
+
 ## Public Capability artifact refresh, 2026-10-15
 
 [Raw output](measurements-public-callbacks.txt) records three repetitions with
