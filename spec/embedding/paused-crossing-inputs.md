@@ -258,20 +258,19 @@ performance acceptance remain separate gates.
   merged; #971 merged as `e9b8aa570a6587018c7e79ac9875c7e579f1a4e8` and adds
   the focused callback parity gate plus four-platform embedded-probe execution.
   #972's opt-in abandonment timing merged in #973 (`ee6240d4`). #977
-  (`12c56beb`) adds the initial public data/Request adapter. #978 adds the public
-  Capability bridge and the Operation Trace observation extension below; its
-  Zig corrections are separately tracked in #979 and #980.
-- **Required base:** #977 merge or a descendant, chapter 9 input queue/Message
+  (`12c56beb`) adds the initial public data/Request adapter. #982 merged as
+  `33e4b94b` and implements #978’s public Capability bridge and the Operation
+  Trace observation extension below, including Zig corrections #979 and #980.
+- **Required base:** #982 merge or a descendant, chapter 9 input queue/Message
   Layer rules and chapter 6 cancellation/Stop. Rebuild the probe from the
   committed implementation source revision recorded in its manifest.
-- **Remaining work:** review/accept #978's additive Operation observation
-  contract and public Capability adapter. #884 retains full binding/API/Corpus,
+- **Remaining work:** #983 extends the public adapter to fire-and-forget
+  Operations and Grant release hooks. #884 retains full binding/API/Corpus,
   facilities, arbitrary Trace-sink timing, non-yielding admission and performance
   gates. Focused probe execution
   passed on Linux/macOS amd64/arm64 in #971; this does not establish full public
   Go API or application compatibility.
-- **Approval still needed:** #978's Operation Trace observation and settlement
-  notification contract needs review with its implementation. No expectation
+- **Approval still needed:** none for the merged #978 contract. No expectation
   files await first blessing. Full Go retirement requires separately accepted
   numerical limits and evidence.
 
@@ -303,12 +302,12 @@ the error. Each record is consumed once across outer arrays and final
 reply. `answer` also accepts optional `fuel`, a nonnegative safe integer, for
 `AnswerWithCost`; omission means zero. It charges on resumption with conversion.
 
-This extension covers ordinary immediate and suspending Operations. It does
-not advertise per-record suspension during arbitrary Script execution, property
+This extension covers ordinary immediate, suspending and fire-and-forget
+Operations. It does not advertise per-record suspension during arbitrary Script execution, property
 or lifecycle observation, or input admission while a WASM export has not yielded.
 A sink reacting to other records can still observe a later transport boundary;
 full Trace-sink and non-yielding concurrent-input compatibility remain #884
-gates. The contract and its implementation require review together in #978;
+gates. The contract and its implementation were accepted in #982 for #978;
 there are no changed Data Files or expectation blessings.
 
 The public-adapter comparisons also track Zig corrections in #979: settlement

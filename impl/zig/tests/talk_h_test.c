@@ -109,6 +109,11 @@ static int group_test(void) {
     talk_script *refused = NULL;
     bad |= talk_load(group, &broken, &refused) != TALK_LOAD_REFUSED || refused != NULL;
     bad |= strstr(trace, "diag broken code=\"not a container\" pos=2:14\n") == NULL;
+    /* Public Loads always check their Grant environment, even when empty. */
+    const char *ungranted_source = "on go\n ask api to read \"x\"\nend go\n";
+    talk_load_options ungranted = {"ungranted", 9, ungranted_source, strlen(ungranted_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    bad |= talk_load(group, &ungranted, &refused) != TALK_LOAD_REFUSED || refused != NULL;
+    bad |= strstr(trace, "diag ungranted code=\"unknown operation\"") == NULL;
     talk_pending_release(pending);
     talk_group_release(group);
     talk_core_release(core);

@@ -1132,7 +1132,7 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
         g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
         return .invalid_value;
     };
-    const loaded = g.group.load(name, source, .{ .grants = if (given.len > 0) named else null, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
+    const loaded = g.group.load(name, source, .{ .grants = named, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
         .refused => return .load_refused,
         .loaded => {},
