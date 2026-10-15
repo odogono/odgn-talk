@@ -591,6 +591,10 @@ capacity and retained items outside an older slice count against the Group's
 physical cap; Cost Model 0 still charges only the specified logical allocation.
 The [List measurements](../../bench/results/2026-10-14-zig-list-paths.md)
 record size scaling, allocations and the remaining point-write cost.
+Lowering temp release makes a slot available to the compiler; it does not
+clear the runtime local. Such locals still contribute to retained frame size
+and Save/Restore. The [local-write ownership investigation](../../bench/results/2026-10-15-zig-local-list-writes.md)
+explains why last-use loads alone cannot enable unique machine point writes.
 
 Forward Character reads walk only through the requested end and keep byte
 offsets instead of segmentation arrays. Missing and reversed reads still
