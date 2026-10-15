@@ -761,12 +761,12 @@ fn overrideOf(j: ?Json, out: *talk.LimitOverride) Invalid!?*talk.LimitOverride {
     if (v != .object) return error.InvalidValue;
     out.* = .{};
     var any = false;
-    inline for (.{ .{ "fuelPerRun", "fuel_per_run", 1 }, .{ "allocPerRun", "alloc_per_run", 2 }, .{ "maxWaitMs", "max_wait_ms", 4 }, .{ "maxJoin", "max_join", 8 } }) |t| {
-        if (v.object.get(t[0])) |x| {
+    inline for (machine.override_fields) |t| {
+        if (v.object.get(t.ts)) |x| {
             const n = asInt(x) orelse return error.InvalidValue;
             if (n < 0) return error.InvalidValue;
-            @field(out.*, t[1]) = n;
-            out.set |= t[2];
+            @field(out.*, t.field) = n;
+            out.set |= t.bit;
             any = true;
         }
     }
@@ -2233,7 +2233,21 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
         }
     }
     var override_slot: talk.LimitOverride = undefined;
-    const override = overrideOf(field(message, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
+    const override = overrideOf(field(message, "limits"), &override_slot) catch {
+        if (to_all) {
+            var refused: ?machine.RefusedOverride = null;
+            if (field(message, "limits")) |raw| {
+                refused = .{};
+                if (raw == .object) {
+                    inline for (machine.override_fields) |f| {
+                        if (raw.object.get(f.ts)) |x| @field(refused.?, f.field) = asInt(x);
+                    }
+                }
+            }
+            entry.group.group.refuseBroadcast(mname, args, how == .decide, refused, "invalid value");
+        }
+        return hostError(s.gpa, ref, .invalid_value);
+    };
     const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
     var id: talk.Buffer = .{};
     // Pending Requests and Decisions belong to the Group, which reports

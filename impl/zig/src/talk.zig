@@ -456,15 +456,25 @@ fn overrideOf(given: ?*const LimitOverride) error{InvalidValue}!?machine.Overrid
     if (o.set & ~@as(u8, 15) != 0) return error.InvalidValue;
     var out: machine.Override = .{};
     var any = false;
-    inline for (.{ .{ "fuel_per_run", 1 }, .{ "alloc_per_run", 2 }, .{ "max_wait_ms", 4 }, .{ "max_join", 8 } }) |f| {
-        const v = @field(o, f[0]);
+    inline for (machine.override_fields) |f| {
+        const v = @field(o, f.field);
         if (v < 0) return error.InvalidValue;
-        if (v != 0 or o.set & f[1] != 0) {
-            @field(out, f[0]) = @intCast(v);
+        if (v != 0 or o.set & f.bit != 0) {
+            @field(out, f.field) = @intCast(v);
             any = true;
         }
     }
     return if (any) out else null;
+}
+
+fn refusedOverrideOf(given: ?*const LimitOverride) ?machine.RefusedOverride {
+    const o = given orelse return null;
+    var out: machine.RefusedOverride = .{};
+    inline for (machine.override_fields) |f| {
+        const v = @field(o, f.field);
+        if (v != 0 or o.set & f.bit != 0) @field(out, f.field) = v;
+    }
+    return out;
 }
 
 pub const LoadObject = extern struct { name: ?[*]const u8, name_len: usize, object: *objects.Object };
@@ -3467,11 +3477,13 @@ export fn talk_decide(g: *Group, to: *objects.Object, m: *const Message, id: ?*B
 
 fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
-    const override = overrideOf(m.limits) catch return .invalid_value;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
-    if (!machine.hostMessageName(name, args.len)) {
-        g.group.refuseBroadcast(name, @constCast(args), decision, "invalid value");
+    const parsed = overrideOf(m.limits);
+    const override = parsed catch null;
+    const bad_override = if (parsed) |o| (if (o) |x| x.loosens(.{}) else false) else |_| true;
+    if (!machine.hostMessageName(name, args.len) or bad_override) {
+        g.group.refuseBroadcast(name, @constCast(args), decision, refusedOverrideOf(m.limits), "invalid value");
         return .invalid_value;
     }
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;

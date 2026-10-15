@@ -14,6 +14,7 @@ var experimentalVersions func() Versions
 type groupBackend interface {
 	load(LoadOptions) (*Script, error)
 	admit(*Script, Message, context.Context, bool) (DeliveryID, *Pending, error)
+	broadcast(Message) (BroadcastID, error)
 	pump(time.Time, PumpOptions) (PumpResult, error)
 	inspect() Inspection
 	counters(*Script) Counters

@@ -58,7 +58,10 @@ Supported: immutable data Values and Value Encoding; Group/Script names and
 lookup; Load and positioned diagnostics; direct Script Deliver/Request; Pump
 Clock, Fuel slices/cap and typed lifecycle/accounting/CallFailed Reports;
 Inspect/Counters and Grant inspection; Request context cancellation and OnReady;
-queued Stop, CancelRun, RewindRun and Revoke. Local Script functions execute in Zig.
+queued Stop, CancelRun, RewindRun and Revoke. Ordinary `Group.Broadcast` selects
+recipients at drain time in load order, including pending message waits and
+prior Stop/cancellation. It preserves mailbox and limit rules; callback-generated
+Broadcasts run at the next Pump. Local Script functions execute in Zig.
 
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
@@ -89,7 +92,7 @@ remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
 existing signature has no error result: Host Object attachment/handles,
-Function Values/calls, object-addressed inputs, Broadcast/Decide, Libraries,
+Function Values/calls, object-addressed inputs, Decide/DecideBroadcast, Libraries,
 Reload/Extend, Save/Restore/Settle and Fingerprint. Capability attachments with
 scoped or Segment lifecycle hooks, Standard
 factory refinements, Object/Function Shapes or Shapes nested beyond 32 levels
@@ -1398,7 +1401,9 @@ Message Paths or emit an `unhandled` report, including after `pass`.
 Broadcast admission checks arguments and limit overrides against the Core's
 defaults. Each recipient keeps the tighter of its own limits and the override.
 Recipients join FIFO mailboxes even past capacity, since they are unknown at
-admission. Runs and start Segments carry the Broadcast id.
+admission. Runs and start Segments carry the Broadcast id. Host input override
+Trace maps use the Data File names, including `maxWaitMs` for Go’s `MaxWait`,
+measured in whole milliseconds.
 
 A Broadcast Decision settles after every recipient seals. Any veto wins over
 undecided outcomes, which win over allowed; an empty Broadcast is allowed.

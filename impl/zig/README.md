@@ -671,7 +671,11 @@ with cancellation.
 A Broadcast (`talk_broadcast`) or Broadcast Decision (`talk_decide_broadcast`)
 finds its recipients when the queue is drained: the Scripts with a Handler
 for the message or a `wait for` pending on it, in load order, each with its
-own delivery id, which the `>` line lists. A recipient's Delivery carries the
+own delivery id, which the `>` line lists. A wait whose Run a `cancel-run` or
+`cancel-delivery` queued in the same drain will cancel doesn't count. A limit
+override may not loosen the default limits; each recipient keeps the tighter of
+its own limits and the override. A refused Broadcast's `>` line keeps the
+override's fields as given, and consumes no id. A recipient's Delivery carries the
 broadcast id, never climbs, never reaches a Fallback and is never
 `unhandled`; neither does a Decision's. A Broadcast Decision gathers each
 recipient's part, its veto, its undecided outcome or its allowing, and writes

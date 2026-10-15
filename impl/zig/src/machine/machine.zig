@@ -1128,6 +1128,26 @@ fn limitValues(l: Limits) [limits_table.limit.len]u64 {
     return out;
 }
 
+/// Each overridable limit: its `ts` name, field name and Host `set` bit,
+/// in `limits.toml`'s order.
+pub const override_fields = .{
+    .{ .ts = "fuelPerRun", .field = "fuel_per_run", .bit = 1 },
+    .{ .ts = "allocPerRun", .field = "alloc_per_run", .bit = 2 },
+    .{ .ts = "maxWaitMs", .field = "max_wait_ms", .bit = 4 },
+    .{ .ts = "maxJoin", .field = "max_join", .bit = 8 },
+};
+
+/// An override's Trace form: a map of its present limits.
+fn writeOverride(o: anytype, w: *std.Io.Writer) void {
+    w.writeAll(" limits={") catch {};
+    var first = true;
+    inline for (override_fields) |f| if (@field(o, f.field)) |v| {
+        w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f.ts, v }) catch {};
+        first = false;
+    };
+    w.writeAll("}") catch {};
+}
+
 /// A Delivery's override of the per-Run limits it may tighten.
 pub const Override = struct {
     fuel_per_run: ?u64 = null,
@@ -1158,13 +1178,28 @@ pub const Override = struct {
     /// Its Trace form: a map from each limit's `ts` name, in
     /// `limits.toml`'s order.
     pub fn write(o: Override, w: *std.Io.Writer) void {
-        w.writeAll(" limits={") catch {};
-        var first = true;
-        inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
-            w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f[0], v }) catch {};
-            first = false;
-        };
-        w.writeAll("}") catch {};
+        writeOverride(o, w);
+    }
+
+    /// It capped at each of `l`, so it never loosens them.
+    fn clampTo(o: Override, l: Limits) Override {
+        var out = o;
+        inline for (override_fields) |f| {
+            if (@field(out, f.field)) |v| @field(out, f.field) = @min(v, @field(l, f.field));
+        }
+        return out;
+    }
+};
+
+/// Admission can refuse negative values which an executable Override cannot hold.
+pub const RefusedOverride = struct {
+    fuel_per_run: ?i64 = null,
+    alloc_per_run: ?i64 = null,
+    max_wait_ms: ?i64 = null,
+    max_join: ?i64 = null,
+
+    pub fn write(o: RefusedOverride, w: *std.Io.Writer) void {
+        writeOverride(o, w);
     }
 };
 
@@ -3129,9 +3164,12 @@ pub const Group = struct {
 
     /// Writes a Broadcast the Host call refused, with no id, then its
     /// `refused` record.
-    pub fn refuseBroadcast(g: *Group, message: []const u8, args: []*Value, decision: bool, code: []const u8) void {
-        g.writeInput(.{ .broadcast = .{ .id = 0, .message = message, .args = args, .decision = decision } });
-        g.write("refused code=\"{s}\"\n", .{code});
+    pub fn refuseBroadcast(g: *Group, message: []const u8, args: []*Value, decision: bool, limits: ?RefusedOverride, code: []const u8) void {
+        const out = g.trace orelse return;
+        out.print("> {s} message={s}", .{ if (decision) "decide-broadcast" else "broadcast", message }) catch {};
+        writeArgs(out, args);
+        if (limits) |o| o.write(out);
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
     }
 
     pub fn releaseBroadcast(g: *Group, b: Broadcast) void {
@@ -3142,11 +3180,11 @@ pub const Group = struct {
 
     /// Whether a Script wants a Broadcast's message: it has a Handler for
     /// it, or a `wait for` pending on it. A Fallback doesn't count.
-    fn wants(g: *Group, s: *const Script, message: []const u8) bool {
+    fn wants(g: *Group, s: *const Script, message: []const u8, cancelled: []const *const Run) bool {
         if (s.handlerUnit(message, .handler) != null) return true;
         for (g.pending.items) |p| {
             const event = p.event orelse continue;
-            if (p.run.script != s) continue;
+            if (p.run.script != s or std.mem.indexOfScalar(*const Run, cancelled, p.run) != null) continue;
             for (s.unitIn(event.library).events[event.entry].branches) |b| switch (b) {
                 .when => |w| if (std.mem.eql(u8, w.message, message)) return true,
                 .after => {},
@@ -3157,11 +3195,11 @@ pub const Group = struct {
 
     /// Finds a Broadcast's recipients, in load order, each with its own
     /// delivery id.
-    fn resolveBroadcast(g: *Group, b: *Broadcast, stopping: []const *const Script) !void {
+    fn resolveBroadcast(g: *Group, b: *Broadcast, stopping: []const *const Script, cancelled: []const *const Run) !void {
         if (b.recipients != null) return;
         var out: std.ArrayList(Recipient) = .empty;
         errdefer out.deinit(g.gpa);
-        for (g.scripts.items) |s| if (s.stopped == null and std.mem.indexOfScalar(*const Script, stopping, s) == null and g.wants(s, b.message)) {
+        for (g.scripts.items) |s| if (s.stopped == null and std.mem.indexOfScalar(*const Script, stopping, s) == null and g.wants(s, b.message, cancelled)) {
             try out.append(g.gpa, .{ .script = s, .delivery = g.deliveries + 1 });
             g.deliveries += 1;
         };
@@ -3188,7 +3226,8 @@ pub const Group = struct {
             errdefer g.gpa.free(message);
             const args = try g.gpa.dupe(*Value, b.args);
             for (args) |v| _ = v.retain();
-            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = b.limits });
+            const limits = if (b.limits) |o| o.clampTo(r.script.limits) else null;
+            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = limits });
         }
     }
 
@@ -3449,8 +3488,16 @@ pub const Group = struct {
         // Broadcast leaves that Script out of its recipients.
         var stopping: std.ArrayList(*const Script) = .empty;
         defer stopping.deinit(g.gpa);
+        var cancelled: std.ArrayList(*const Run) = .empty;
+        defer cancelled.deinit(g.gpa);
         for (g.batch.items) |*input| switch (input.*) {
-            .broadcast => |*b| try g.resolveBroadcast(b, stopping.items),
+            .broadcast => |*b| try g.resolveBroadcast(b, stopping.items, cancelled.items),
+            .cancel_run => |id| {
+                for (g.scripts.items) |x| for (x.live.items) |r| if (std.mem.eql(u8, r.id, id)) try cancelled.append(g.gpa, r);
+            },
+            .cancel_delivery => |id| {
+                for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) try cancelled.append(g.gpa, r);
+            },
             .stop => |x| if (g.script(x.script)) |target| try stopping.append(g.gpa, target),
             .dispose => |o| for (g.scripts.items) |x| if (x.owner == o) try stopping.append(g.gpa, x),
             else => {},

@@ -264,8 +264,9 @@ performance acceptance remain separate gates.
 - **Required base:** #982 merge or a descendant, chapter 9 input queue/Message
   Layer rules and chapter 6 cancellation/Stop. Rebuild the probe from the
   committed implementation source revision recorded in its manifest.
-- **Remaining work:** #983 extends the public adapter to fire-and-forget
-  Operations and Grant release hooks. #884 retains full binding/API/Corpus,
+- **Remaining work:** #983/#984 merged in #985 (`87eccc57`) with Fire/release
+  support and all required-platform checks passing. #986 adds ordinary Broadcast
+  delivery. #884 retains full binding/API/Corpus,
   facilities, arbitrary Trace-sink timing, non-yielding admission and performance
   gates. Focused probe execution
   passed on Linux/macOS amd64/arm64 in #971; this does not establish full public

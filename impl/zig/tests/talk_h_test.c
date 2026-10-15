@@ -459,6 +459,52 @@ static int segment_test(void) {
     return bad;
 }
 
+/* Broadcast admission and recipient selection share both transport paths. */
+static int broadcast_selection_test(void) {
+    int bad = 0;
+    for (int by_delivery = 0; by_delivery < 2; by_delivery++) {
+        for (int handler = 0; handler < 2; handler++) {
+            talk_core *core = talk_new();
+            talk_group *group = NULL;
+            talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+            trace_len = 0;
+            memset(trace, 0, sizeof trace);
+            bad |= talk_new_group(core, &options, &group) != TALK_OK;
+            const char *source = handler ? "on watch\n wait for hello\n return\nend watch\non hello\n return\nend hello\n" : "on watch\n wait for hello\n return\nend watch\n";
+            talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+            talk_script *script = NULL;
+            bad |= talk_load(group, &load, &script) != TALK_OK;
+            talk_message watch = {"watch", 5, NULL, 0, NULL};
+            bad |= talk_script_deliver(script, &watch, NULL) != TALK_OK;
+            bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
+            bad |= (by_delivery ? talk_cancel_delivery(group, "d1", 2) : talk_script_cancel_run(script, "s/r1", 4)) != TALK_OK;
+            talk_message hello = {"hello", 5, NULL, 0, NULL};
+            talk_limits defaults;
+            talk_default_limits(&defaults);
+            talk_limit_override loose = {0};
+            loose.fuel_per_run = defaults.fuel_per_run + 1;
+            hello.limits = &loose;
+            bad |= talk_broadcast(group, &hello, NULL) != TALK_INVALID_VALUE;
+            talk_deciding *decision = NULL;
+            bad |= talk_decide_broadcast(group, &hello, NULL, &decision) != TALK_INVALID_VALUE || decision != NULL;
+            hello.limits = NULL;
+            talk_owned_bytes id = {0};
+            bad |= talk_broadcast(group, &hello, &id) != TALK_OK;
+            bad |= id.len != 2 || memcmp(id.data, "b1", 2) != 0;
+            talk_owned_bytes_release(&id);
+            bad |= talk_pump(group, 0, 0, NULL, NULL) != TALK_OK;
+            talk_counters counters;
+            talk_script_counters(script, &counters);
+            bad |= counters.runs != (int64_t)(handler ? 2 : 1);
+            bad |= strstr(trace, "end=unhandled") != NULL;
+            if (bad) fprintf(stderr, "%s", trace);
+            talk_group_release(group);
+            talk_core_release(core);
+        }
+    }
+    return bad;
+}
+
 /* Decisions: a `, deciding` clause vetoes or allows, and a Selector that
  * isn't one is refused at the call. */
 static int decision_test(void) {
@@ -2027,6 +2073,7 @@ int main(void) {
     expect(metering_test() == 0, "metered C calls request Fuel through a Pump and retain their future and issued eligibility");
     expect(store_test() == 0, "store needs its coordinator's hooks, and get hears an omitted default as Nothing");
     expect(router_test() == 0, "the router routes commits, retries a full mailbox after a Pump, and resyncs a checkpoint after a change");
+    expect(broadcast_selection_test() == 0, "Broadcast excludes cancelled waits, retains Handlers, and refuses loose limits without consuming ids");
     expect(decision_test() == 0, "a Decision is vetoed or allowed by its deciding clause, and a bad Selector is refused at the call");
     expect(segment_test() == 0, "Grants sharing a Segment Coordinator commit together, and a failed commit rolls the Segment back");
     expect(scope_test() == 0, "a Capability Scope's declarations are checked, and its Run abandons it through talk.h alone");

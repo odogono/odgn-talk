@@ -294,7 +294,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 		{"extend", func() error { return s.Extend("") }},
 		{"function", func() error { _, _, e := g.Call(context.Background(), talk.Nothing, nil, nil); return e }},
 		{"decision", func() error { _, _, e := s.Decide(context.Background(), talk.Message{Name: "go"}); return e }},
-		{"broadcast", func() error { _, e := g.Broadcast(talk.Message{Name: "go"}); return e }},
 		{"object", func() error { _, e := g.Object(nil, "o", nil); return e }},
 		{"parent", func() error { return g.SetParent(nil, nil) }},
 		{"dispose", func() error { return g.Dispose(nil) }},

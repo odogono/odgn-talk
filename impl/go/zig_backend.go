@@ -288,24 +288,9 @@ func (b *zigGroup) admit(s *Script, m Message, ctx context.Context, request bool
 	if s == nil || s.group != b.group {
 		return "", nil, &HostError{WrongGroup, "receiver does not belong to Group"}
 	}
-	args := make([]any, len(m.Args))
-	for i, v := range m.Args {
-		if err := zigDataOnly(v); err != nil {
-			return "", nil, err
-		}
-		encoded, err := EncodeValue(v)
-		if err != nil {
-			return "", nil, err
-		}
-		args[i] = json.RawMessage(encoded)
-	}
-	message := map[string]any{"name": m.Name, "args": args}
-	if m.Limits != nil {
-		limits, err := zigOverride(*m.Limits)
-		if err != nil {
-			return "", nil, err
-		}
-		message["limits"] = limits
+	message, err := zigMessage(m)
+	if err != nil {
+		return "", nil, err
 	}
 	method := "deliver"
 	if request {
@@ -315,7 +300,7 @@ func (b *zigGroup) admit(s *Script, m Message, ctx context.Context, request bool
 	// may enqueue or Pump immediately after that lock is released.
 	var id DeliveryID
 	var pending *Pending
-	_, err := b.exchange(method, map[string]any{"to": map[string]any{"script": s.name}, "message": message}, func(reply Value) error {
+	_, err = b.exchange(method, map[string]any{"to": map[string]any{"script": s.name}, "message": message}, func(reply Value) error {
 		id = DeliveryID(zigText(reply.Get("delivery")))
 		if request {
 			pending = &Pending{done: make(chan struct{})}
@@ -338,6 +323,57 @@ func (b *zigGroup) admit(s *Script, m Message, ctx context.Context, request bool
 	}
 	b.ready()
 	return id, pending, nil
+}
+
+func zigMessage(m Message) (map[string]any, error) {
+	args := make([]any, len(m.Args))
+	for i, v := range m.Args {
+		if err := zigDataOnly(v); err != nil {
+			return nil, err
+		}
+		encoded, err := EncodeValue(v)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = json.RawMessage(encoded)
+	}
+	message := map[string]any{"name": m.Name, "args": args}
+	if m.Limits != nil {
+		limits, err := zigOverride(*m.Limits)
+		if err != nil {
+			return nil, err
+		}
+		message["limits"] = limits
+	}
+	return message, nil
+}
+
+func (b *zigGroup) broadcast(m Message) (BroadcastID, error) {
+	// Presence bits and sub-millisecond durations cannot be represented by
+	// the wire override. Send an invalid sentinel through the guest so its
+	// refusal keeps callback Trace ordering and does not consume an id.
+	wire := m
+	wire.Limits = nil
+	message, err := zigMessage(wire)
+	if err != nil {
+		return "", err
+	}
+	if m.Limits != nil {
+		limits, err := zigOverride(*m.Limits)
+		if err != nil {
+			message["limits"] = []any{}
+		} else {
+			message["limits"] = limits
+		}
+	}
+
+	reply, err := b.send("broadcast", map[string]any{"message": message})
+	if err != nil {
+		return "", err
+	}
+	id := BroadcastID(zigText(reply.Get("broadcast")))
+	b.ready()
+	return id, nil
 }
 
 func (b *zigGroup) ready() {
