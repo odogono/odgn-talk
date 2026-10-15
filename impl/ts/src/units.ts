@@ -9,6 +9,23 @@ export type Slot = { readonly exponent: number; readonly unit: string };
 /** A Unit's slots in Kind order. An empty Unit is a plain number. */
 export type UnitSpec = readonly Slot[];
 
+// Only Units owned here may carry identity-based metadata. A frozen outer
+// array supplied by a caller can still contain mutable slots.
+const owned = new WeakSet<UnitSpec>();
+/** Take ownership once, copying and freezing every caller-owned slot. */
+export const ownUnit = (spec: UnitSpec): UnitSpec => {
+  if (owned.has(spec)) {
+    return spec;
+  }
+  const unit = Object.freeze(
+    spec.map(slot =>
+      Object.freeze({ unit: slot.unit, exponent: slot.exponent }),
+    ),
+  );
+  owned.add(unit);
+  return unit;
+};
+
 /** A Unit that can't be written, or a combination chapter 3 refuses. */
 export class UnitError extends Error {
   override name = 'UnitError';
@@ -92,7 +109,7 @@ export const parseUnit = (text: string): UnitSpec => {
   if (calendar) {
     throw new UnitError("a Calendar Unit can't be part of a Compound Unit");
   }
-  return ordered(slots);
+  return ownUnit(ordered(slots));
 };
 
 const ordered = (slots: Slot[]): UnitSpec =>
@@ -113,7 +130,7 @@ const factor = (slot: Slot) =>
  * denominator's, each in Kind order. A word Unit standing alone is plural
  * unless the magnitude is exactly 1, when `number` is given.
  */
-export const unitText = (spec: UnitSpec, number?: string): string => {
+const printUnit = (spec: UnitSpec, number?: string): string => {
   const top = spec.filter(slot => slot.exponent > 0);
   const bottom = spec.filter(slot => slot.exponent < 0);
   if (
@@ -130,6 +147,19 @@ export const unitText = (spec: UnitSpec, number?: string): string => {
     (top.length ? top.map(factor).join('*') : '1') +
     (bottom.length ? `/${bottom.map(factor).join('*')}` : '')
   );
+};
+
+const texts = new WeakMap<UnitSpec, string>();
+export const unitText = (spec: UnitSpec, number?: string): string => {
+  if (number !== undefined || !owned.has(spec)) {
+    return printUnit(spec, number);
+  }
+  let text = texts.get(spec);
+  if (text === undefined) {
+    text = printUnit(spec);
+    texts.set(spec, text);
+  }
+  return text;
 };
 
 /** A Unit's dimension: each base dimension's exponent, Calendar Units apart. */
@@ -150,8 +180,20 @@ const dimension = (spec: UnitSpec): string => {
     .map(([base, exponent]) => `${base}^${exponent}`)
     .join('*');
 };
+const dimensions = new WeakMap<UnitSpec, string>();
+const dimensionOf = (spec: UnitSpec): string => {
+  if (!owned.has(spec)) {
+    return dimension(spec);
+  }
+  let signature = dimensions.get(spec);
+  if (signature === undefined) {
+    signature = dimension(spec);
+    dimensions.set(spec, signature);
+  }
+  return signature;
+};
 export const sameDimension = (a: UnitSpec, b: UnitSpec): boolean =>
-  dimension(a) === dimension(b);
+  dimensionOf(a) === dimensionOf(b);
 
 // A Unit's factors (chapter 3, Converting): for each slot in Kind order, as
 // many times as its exponent, its Unit's factor and its Kind's, a ratio's
@@ -178,9 +220,35 @@ const factorsOf = (spec: UnitSpec) => {
   return { top, bottom };
 };
 
+type Factors = {
+  readonly bottom: readonly Dec[];
+  readonly top: readonly Dec[];
+};
+const factorPlans = new WeakMap<UnitSpec, Factors>();
+const factorsFor = (spec: UnitSpec): Factors => {
+  if (!owned.has(spec)) {
+    return factorsOf(spec);
+  }
+  const cached = factorPlans.get(spec);
+  if (cached) {
+    return cached;
+  }
+  const { top, bottom } = factorsOf(spec);
+  const plan = Object.freeze({
+    top: Object.freeze(top),
+    bottom: Object.freeze(bottom),
+  });
+  // Unusually large powers still follow the general path without retaining
+  // an arbitrarily long expanded factor sequence beside a live Value.
+  if (top.length + bottom.length <= 128) {
+    factorPlans.set(spec, plan);
+  }
+  return plan;
+};
+
 /** A value in the Unit, into Base Units: times each numerator factor, then over each denominator one. */
 export const toBase = (value: Dec, spec: UnitSpec): Dec => {
-  const { top, bottom } = factorsOf(spec);
+  const { top, bottom } = factorsFor(spec);
   let v = value;
   for (const f of top) {
     v = multiply(v, f);
@@ -193,7 +261,7 @@ export const toBase = (value: Dec, spec: UnitSpec): Dec => {
 
 /** A value in Base Units, into the Unit: times each denominator factor, then over each numerator one. */
 export const fromBase = (value: Dec, spec: UnitSpec): Dec => {
-  const { top, bottom } = factorsOf(spec);
+  const { top, bottom } = factorsFor(spec);
   let v = value;
   for (const f of bottom) {
     v = multiply(v, f);
@@ -218,7 +286,7 @@ const checkCalendar = (spec: UnitSpec) => {
  * left's Unit for that slot, its exponents added, or kept when the left has
  * none.
  */
-export const combine = (
+const combineSlots = (
   a: UnitSpec,
   b: UnitSpec,
   op: 'multiply' | 'divide',
@@ -234,11 +302,46 @@ export const combine = (
       slots.push({ unit: slot.unit, exponent });
     }
   }
-  return checkCalendar(ordered(slots));
+  return ownUnit(checkCalendar(ordered(slots)));
+};
+
+type Combinations = { divide?: UnitSpec; multiply?: UnitSpec };
+let combinations = new WeakMap<UnitSpec, WeakMap<UnitSpec, Combinations>>();
+let combinationCount = 0;
+/** Reuse combinations of owned Units, retaining at most 256 results. */
+export const combine = (
+  a: UnitSpec,
+  b: UnitSpec,
+  op: 'multiply' | 'divide',
+): UnitSpec => {
+  if (!owned.has(a) || !owned.has(b)) {
+    return combineSlots(a, b, op);
+  }
+  const cached = combinations.get(a)?.get(b)?.[op];
+  if (cached) {
+    return cached;
+  }
+  const result = combineSlots(a, b, op);
+  if (combinationCount === 256) {
+    combinations = new WeakMap();
+    combinationCount = 0;
+  }
+  let right = combinations.get(a);
+  if (!right) {
+    right = new WeakMap();
+    combinations.set(a, right);
+  }
+  const pair = right.get(b) ?? {};
+  pair[op] = result;
+  right.set(b, pair);
+  combinationCount++;
+  return result;
 };
 
 /** The Unit of `q ^ n`: each exponent times `n`. */
 export const powerOf = (spec: UnitSpec, n: number): UnitSpec =>
-  checkCalendar(
-    spec.map(slot => ({ unit: slot.unit, exponent: slot.exponent * n })),
+  ownUnit(
+    checkCalendar(
+      spec.map(slot => ({ unit: slot.unit, exponent: slot.exponent * n })),
+    ),
   );

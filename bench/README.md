@@ -147,6 +147,23 @@ record before/after timings and allocations for [#504](https://github.com/odogon
 The [TS packed Unicode tables measurements](results/2026-10-12-ts-unicode-tables.md)
 record three paired before/after runs for [#399](https://github.com/odogono/odgn-talk/issues/399).
 
+The [TS Unit metadata measurements](results/2026-10-15-ts-unit-paths.md) record
+alternating Run and Load timings, separate CPU and heap probes, lifecycle
+equivalence and the four-runner comparison for
+[#941](https://github.com/odogono/odgn-talk/issues/941). To repeat the paired
+measurements, install dependencies in both checkouts and copy
+`bench/ts/src/measure-unit-paths.ts` and `check-unit-paths.ts` unchanged into the
+baseline's `bench/ts/src/`, then run:
+
+```sh
+python3 bench/ts/unit-paths.py /path/to/before --before-revision <sha> --out results.json
+```
+
+The harness bounds its wait for a quiet host, validates every timed Run, and
+keeps CPU profiling and GC/heap probes outside the timing processes. The JSON
+records each pair's medians, minima, maxima and sample counts separately for
+Load and Run.
+
 ## Native Zig comparison
 
 The default run includes the native Zig Core through `talk.h`, built with the

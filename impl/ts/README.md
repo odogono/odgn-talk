@@ -406,6 +406,15 @@ The values and operations implement chapter 3 and 4's rules for Nothing, boolean
 
 Quantities keep their Unit as one slot per Unit Kind, in Kind order (`src/units.ts`). Arithmetic and `as` with a Unit go through Base Units, multiplying and dividing by each factor in turn, every step rounded, with the result in the left operand's Unit or the Unit `as` names. Equality and ordering compare values in Base Units. `abs`, `floor`, `ceiling`, `truncate` and `round` keep a Quantity's Unit, and ranges may have Quantity ends of one dimension. This slice settled, as Spec fixes, that a Unit names one Unit of each Unit Kind (`2 m*ft` is `bad unit`, and `2 m*m` is `2 m^2`), the `expected` field of `^`'s `wrong kind`, the `incompatible units` fields when a plain number takes part (`1`) or a Calendar Unit can't stand alone, that `as` past the number limits raises `can't convert`, and the Value Encoding's singular Units.
 
+Unit slots and their arrays are frozen and shared by internal Quantity results.
+Caller-supplied slots are copied before ownership is taken. Dimensions, normal
+text and ordered factor sequences are cached by owned Unit identity; sequences
+longer than 128 factors use the general conversion path without being retained.
+A weak combination cache holds at most 256 results before resetting. Each loaded
+code unit prepares its static `as` and `can be` Unit targets once, with plans
+rebuilt on Reload and Restore. These caches change neither Decimal factor
+operations nor logical allocation, Fuel, Value Encoding or saved state.
+
 Bytes are built field by field by `bytes-field`, `bytes-sized` and `bytes-bits`, and read back by the `bin-…` instructions over a reader, never searching or backtracking (`src/binary.ts`). Integer fields are two's complement, big-endian unless `little`, and bit fields most significant bit first. `as text` decodes strict UTF-8, keeping a byte order mark, and then normalises. A Bytes search runs a literal program over the bytes, one position per byte, so it counts the steps a text literal search does. This slice settled, as Spec fixes, chapter 8's `bytes-sized` for `v as n bytes`, which `bytes-field` couldn't take a size for, the fields of each build and byte-write error, that a literal field outside a byte never matches, how Bytes searches count `steps`, what `bin-field` charges for `bin-literal` and `bin-bits`, and the canonical Base64 of `$bytes`. The Core's parser also now reads a build whose first field is a build, `<< <<1, 2>> >>`.
 
 `^` uses the correctly rounded `power` math for fractional number exponents, with the `power` operator rate and `"^"` in overflow errors. A negative base names `"power"` in its domain error. Integer exponents keep their ideal exponent, and Quantities still require a positive integer exponent.

@@ -23,6 +23,7 @@ import { characterBoundaries, isWhiteSpace, normalizeNFC } from './unicode';
 import {
   parseUnit,
   sameDimension,
+  ownUnit,
   toBase,
   UnitError,
   unitText,
@@ -682,10 +683,7 @@ export const quantity = (n: Value, unit: string): Value => {
 };
 /** A Quantity of a Unit already in Kind order; the Abstract Machine's constructor. */
 export const quantityOf = (n: Decimal, unit: UnitSpec): Value =>
-  makeValue(
-    'quantity',
-    Object.freeze({ number: n, unit: Object.freeze([...unit]) }),
-  );
+  makeValue('quantity', Object.freeze({ number: n, unit: ownUnit(unit) }));
 
 // Equal when their dimensions match and their values in Base Units do.
 const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>

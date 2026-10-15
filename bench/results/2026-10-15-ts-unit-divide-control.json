@@ -1,0 +1,167 @@
+{
+  "purpose": "Isolated scalar Load follow-up for the variable grouped control",
+  "pairs": [
+    [
+      {
+        "label": "before",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 98625,
+              "minNs": 77416,
+              "maxNs": 1629417,
+              "samples": 5376
+            },
+            "run": {
+              "medianNs": 2324229.5,
+              "minNs": 2008500,
+              "maxNs": 3805250,
+              "samples": 266
+            }
+          }
+        ]
+      },
+      {
+        "label": "after",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 108792,
+              "minNs": 83791,
+              "maxNs": 1461167,
+              "samples": 5104
+            },
+            "run": {
+              "medianNs": 2305646,
+              "minNs": 2007416,
+              "maxNs": 4130958,
+              "samples": 268
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "label": "after",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 110375,
+              "minNs": 85958,
+              "maxNs": 1634833,
+              "samples": 5027
+            },
+            "run": {
+              "medianNs": 2335792,
+              "minNs": 2042250,
+              "maxNs": 4048833,
+              "samples": 265
+            }
+          }
+        ]
+      },
+      {
+        "label": "before",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 96834,
+              "minNs": 75375,
+              "maxNs": 3070750,
+              "samples": 5532
+            },
+            "run": {
+              "medianNs": 2283271,
+              "minNs": 2030208,
+              "maxNs": 3864416,
+              "samples": 268
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "label": "before",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 107250,
+              "minNs": 80500,
+              "maxNs": 1473625,
+              "samples": 5183
+            },
+            "run": {
+              "medianNs": 2309375,
+              "minNs": 2070792,
+              "maxNs": 3798250,
+              "samples": 265
+            }
+          }
+        ]
+      },
+      {
+        "label": "after",
+        "mode": "timing",
+        "bun": "1.4.3",
+        "output": [
+          {
+            "name": "numbers/divide",
+            "alloc": 32104,
+            "fuel": 18031,
+            "outcome": "completed",
+            "result": "500500",
+            "load": {
+              "medianNs": 109542,
+              "minNs": 86708,
+              "maxNs": 1546875,
+              "samples": 5082
+            },
+            "run": {
+              "medianNs": 2363875,
+              "minNs": 2081000,
+              "maxNs": 4146750,
+              "samples": 261
+            }
+          }
+        ]
+      }
+    ]
+  ]
+}
