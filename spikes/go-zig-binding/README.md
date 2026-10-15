@@ -117,6 +117,25 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Public Capability artifact refresh, 2026-10-15
+
+[Raw output](measurements-public-callbacks.txt) records three repetitions with
+artifact source `81b588628ba861db2cbef571d154be56fd8b3c79`, SHA-256
+`7500ad56edaac1bbc5aa4bac5ef8353f1ba9e66ec93d52886cee083b2a58cd16`, and
+public-adapter/native-Go revision `ba7a5679`. On Darwin/arm64 Apple M5, Go 1.27.2,
+wazero 1.12.0 and `CGO_ENABLED=0`, median immediate-call run averages are
+**3.698 µs native Go vs 31.310 µs probe (8.5×)**, cold compile/runtime/close
+**612.9 ms**, and cached instantiation/close **126.5 µs**. This remains the
+independent probe's workload, with no `crossing-trace-v1` opt-in; it does not
+measure the public adapter, tail latency or an accepted performance limit.
+Earlier measurement files retain their own artifact provenance.
+
+The refreshed artifact passes the independent probe and public-adapter
+pure-Go/race/vet checks locally on Darwin/arm64. Separate pure-Go cross-builds
+cover Linux amd64/arm64 and macOS arm64. CI must execute this revision on the
+other required runners before platform acceptance; the earlier merged runs
+below establish execution only for their named revisions.
+
 ## Public-slice artifact refresh, 2026-10-15
 
 [Raw output](measurements-public-slice.txt) reruns the same probe benchmarks

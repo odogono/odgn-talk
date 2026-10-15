@@ -247,13 +247,13 @@ func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
 }
 
 func (b *zigGroup) load(o LoadOptions) (*Script, error) {
-	if len(o.Objects) > 0 || o.Owner != nil {
-		return nil, backendUnsupported("Objects")
-	}
 	if err := b.beginWorker("load", map[string]any{"name": o.Name, "source": o.Source}); err != nil {
 		return nil, err
 	}
 	defer b.group.endWorker()
+	if len(o.Objects) > 0 || o.Owner != nil {
+		return nil, backendUnsupported("Objects")
+	}
 	grants, kept, err := b.grants(o.Grants)
 	if err != nil {
 		return nil, err
