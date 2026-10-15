@@ -164,6 +164,13 @@ keeps CPU profiling and GC/heap probes outside the timing processes. The JSON
 records each pair's medians, minima, maxima and sample counts separately for
 Load and Run.
 
+The [TS chunk-read measurements](results/2026-10-15-ts-character-indexing.md)
+record alternating paired timings, fixed-index length sweeps, separate CPU and
+heap/GC probes, and the four-runner comparison for
+[#940](https://github.com/odogono/odgn-talk/issues/940). The paired driver is
+`bench/ts/character-indexing.py`; its two inputs are standalone Bun bundles of
+`bench/ts/src/character-indexing-worker.ts`, built against the respective Cores.
+
 ## Native Zig comparison
 
 The default run includes the native Zig Core through `talk.h`, built with the
@@ -327,7 +334,7 @@ Each runner first runs a Benchmark once and confirms it completes with its expec
 | Host bytes | Go: bytes allocated per Run (`-benchmem`). TS: the average growth in Bun's heap across a sample, after collection. CPython: the peak one Run holds, as `tracemalloc` traces it. None of these are comparable. The WebAssembly peers allocate inside their own memory and report nothing, and AppleScript has no way to report it. |
 | Host allocs | Go only: allocations per Run. |
 
-A Peer Language has no Fuel and no timed Load, so it reports only Run times and host allocation.
+A Peer Language has no Fuel and no timed Load, so it reports only Run times and host allocation. JSON summaries also retain each phase's maximum sample time and sample count; older saved reports may contain only the minimum and median.
 
 **Cost Model outliers** are Benchmarks whose ns/Fuel is more than the outlier factor times the median of the same runner's. They point at operations whose Fuel charge is low for their real cost, or at slow paths in a Core. They are advisory: a reweighting goes through the Spec, never through this suite.
 
