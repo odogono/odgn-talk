@@ -1089,8 +1089,9 @@ Inputs; `, replacing` cancels through the same path. Where the cancel lands, a
 preempted Run, in the middle of its Segment, has its scopes abandoned and its
 Segment and participant rolled back, and its cleanup becomes a Segment of its
 own. Every cancelled Run's pending calls and Join Members are abandoned, and
-named in `abandon` records after its first cleanup Stretch. Its `finally`
-blocks run once, innermost first, in its Script's turn, a queued Run keeping
+named in `abandon` records after its first cleanup Stretch. This includes a
+suspending Call cancelled at its starting callback, before any suspension
+Segment commits. Its `finally` blocks run once, innermost first, in its Script's turn, a queued Run keeping
 its place, on the Cleanup Budget in place of Fuel per Run. An error escaping
 cleanup ends it with `cleanup-failed … code=`, keeping its writes; a limit
 ends it with `cleanup-failed … limit=`, rolling them back. Either way the Run
@@ -1116,8 +1117,10 @@ rolls back as at a Limit Fault, its Script Variables too unless it was
 parked, its scopes are abandoned and its participant rolled back, and its
 message goes back to the head of its Script's mailbox as it left it, its ids,
 its place on its Message Path and an open Decision kept. Its Fuel stays in
-its Script's counters. The Pump it lands in returns `rewound` at once, so the
-Host can Reload before the message is dispatched again. One that lands on a
+its Script's counters. The Pump it lands in returns `rewound`, so the Host can Reload before the
+message is dispatched again. When a callback rewinds another Run, the active
+callback and its Segment finalization finish before that Pump returns, including
+any deferred lifecycle cleanup. One that lands on a
 Run that has passed a Suspension Point, or has ended, writes `note … kind=
 not-rewindable` and does nothing.
 
