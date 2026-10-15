@@ -85,6 +85,15 @@
     const machine = talk.loadScript(talk.compileSource('script variable seen\non go s\n put the length of s into seen\n put character 2 of s into c\n return [c, s contains <"q">, every match of <word> in "cat, dog", 1 / 3]\nend go', { name: "smoke" }).unit);
     const ran = talk.deliver(machine, "go", [talk.text("a👩\u200d👩\u200d👧q\u0301b")]).finish();
     assert(ran.kind === "completed" && ran.result.toString() === '["👩‍👩‍👧", false, [{text: "cat,", range: 1..4, captures: {}, ranges: {}}, {text: "dog", range: 6..8, captures: {}, ranges: {}}], 0.3333333333333333333333333333333333]' && machine.variables[0].toString() === "4", "Abstract Machine");
+    const chunks = talk.loadScript(talk.compileSource('on read s\n return [character 2 of s, characters -2..-1 of s, code point -1 of s]\nend read', { name: "chunks" }).unit);
+    for (const [source, expected] of [
+      ["abc", ["b", "bc", "c"]],
+      ["a\r\n👨‍👩‍👧", ["\r\n", "\r\n👨‍👩‍👧", "👧"]],
+      ["aq́🇬🇧", ["q́", "q́🇬🇧", "🇧"]],
+    ]) {
+      const read = talk.deliver(chunks, "read", [talk.text(source)]).finish();
+      assert(read.kind === "completed" && read.result.equals(talk.list(...expected.map(talk.text))), "ASCII, CRLF and Unicode chunk reads");
+    }
     const lines = [];
     const core = talk.createCore();
     const group = core.newGroup({ name: "smoke", trace: line => lines.push(line) });

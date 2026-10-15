@@ -76,6 +76,7 @@ import {
 } from './patterns';
 import { characters } from './text';
 import {
+  characterBoundaries,
   isWhiteSpace,
   lower,
   normalizeNFC,
@@ -111,6 +112,7 @@ import {
 import {
   combine,
   fromBase,
+  ownUnit,
   parseUnit,
   powerOf,
   sameDimension,
@@ -636,7 +638,7 @@ const numberOperand = (v: Value): Dec => {
 
 const numberOf = (q: QuantityRef): Dec => decimalParts(q.number);
 const inBase = (q: QuantityRef): Dec => toBase(numberOf(q), q.unit);
-const noUnit: UnitSpec = [];
+const noUnit: UnitSpec = ownUnit([]);
 // A number takes part in `*` and `/` as a Quantity with no Unit.
 const asQuantityRef = (v: Value): QuantityRef =>
   v.asQuantityRef() ?? { number: v.asDecimal()!, unit: noUnit };
@@ -953,7 +955,21 @@ const cantConvert = (value: Value, to: string) =>
     ['value', value],
     ['to', text(to)],
   ]);
-export const convert = (v: Value, kind: string): Value => {
+/** A verified static Unit target, owned by its loaded code unit. */
+export type UnitConversion = { readonly to: string; readonly unit: UnitSpec };
+export const prepareConversion = (kind: string): UnitConversion | undefined => {
+  if (['text', 'bytes', 'number', 'civil date', 'instant'].includes(kind)) {
+    return undefined;
+  }
+  const unit = parseUnit(kind);
+  return Object.freeze({ unit, to: unitText(unit) });
+};
+
+export const convert = (
+  v: Value,
+  kind: string,
+  prepared?: UnitConversion,
+): Value => {
   switch (kind) {
     case 'text':
       if (v.kind === 'bytes') {
@@ -1011,14 +1027,12 @@ export const convert = (v: Value, kind: string): Value => {
       throw cantConvert(v, kind);
     }
   }
-  return convertToUnit(v, kind);
+  return convertToUnit(v, prepared ?? prepareConversion(kind)!);
 };
 
 // `as` with a Unit (chapter 3): a number takes the Unit, a Quantity of its
 // dimension converts through Base Units, and text reads as either first.
-const convertToUnit = (v: Value, written: string): Value => {
-  const unit = parseUnit(written);
-  const to = unitText(unit);
+const convertToUnit = (v: Value, { unit, to }: UnitConversion): Value => {
   let input = v;
   if (v.kind === 'text') {
     const m = /^(-?(?:0x[\dA-Fa-f]+|\d+(?:\.\d+)?)) *(.*)$/s.exec(
@@ -1044,9 +1058,13 @@ const convertToUnit = (v: Value, written: string): Value => {
     throw error instanceof ArithmeticError ? cantConvert(v, to) : error;
   }
 };
-export const canConvert = (v: Value, kind: string): Value => {
+export const canConvert = (
+  v: Value,
+  kind: string,
+  prepared?: UnitConversion,
+): Value => {
   try {
-    convert(v, kind);
+    convert(v, kind, prepared);
     return bool(true);
   } catch (error) {
     if (error instanceof ScriptError) {
@@ -1203,11 +1221,16 @@ const isLineBreak = (ch: string) => ch === '\n' || ch === '\r' || ch === '\r\n';
  * A text's chunks of one kind, as half-open unit offsets: Characters for most
  * kinds, and code points for `code point`.
  */
-const spans = (s: string, kind: string, delimiter = ','): Span[] => {
+const spans = (
+  s: string,
+  kind: string,
+  delimiter = ',',
+  units?: string[],
+): Span[] => {
   if (kind === 'code point') {
     return Array.from(s, (ch, i) => ({ from: i, to: i + 1, text: ch }));
   }
-  const cs = characters(s);
+  const cs = units ?? characters(s);
   const span = (from: number, to: number) => ({
     from,
     to,
@@ -1305,22 +1328,10 @@ const covered = (index: Index, n: number): [number, number] | null => {
 };
 
 const textKinds = new Set(['character', 'word', 'line', 'item', 'code point']);
-const joinSpans = (
-  s: string,
-  kind: string,
-  chunks: Span[],
-  lo: number,
-  hi: number,
-) => {
-  if (kind === 'code point') {
-    return Array.from(s)
-      .slice(chunks[lo - 1]!.from, chunks[hi - 1]!.to)
-      .join('');
-  }
-  return characters(s)
-    .slice(chunks[lo - 1]!.from, chunks[hi - 1]!.to)
-    .join('');
-};
+// ASCII scalars each form one Character, except CRLF. Validate the whole
+// input: a non-ASCII suffix can extend the last ASCII scalar's Character.
+// eslint-disable-next-line no-control-regex -- ASCII includes the control scalars.
+const needsCharacterBoundaries = /[^\u0000-\u007f]|\r\n/;
 
 /** One chunk level read, with `scanned`: the units from the start to the chunk's end. */
 export const chunkGet = (
@@ -1332,15 +1343,42 @@ export const chunkGet = (
   const index = indexOf(indexValue);
   if (whole.kind === 'text' && textKinds.has(kind)) {
     const s = textOf(whole);
-    const chunks = spans(s, kind, delimiterText(delimiter));
-    const units =
-      kind === 'code point' ? Array.from(s).length : characters(s).length;
+    const d = delimiterText(delimiter);
+    if (kind === 'character') {
+      const boundaries = needsCharacterBoundaries.test(s)
+        ? characterBoundaries(s)
+        : null;
+      const units = boundaries ? boundaries.length - 1 : s.length;
+      const at = covered(index, units);
+      return at
+        ? {
+            result: text(
+              s.slice(
+                boundaries ? boundaries[at[0] - 1]! : at[0] - 1,
+                boundaries ? boundaries[at[1]]! : at[1],
+              ),
+            ),
+            scanned: at[1],
+          }
+        : { result: text(''), scanned: units };
+    }
+    const cs = kind === 'code point' ? Array.from(s) : characters(s);
+    const units = cs.length;
+    if (kind === 'code point') {
+      const at = covered(index, units);
+      return at
+        ? { result: text(cs.slice(at[0] - 1, at[1]).join('')), scanned: at[1] }
+        : { result: text(''), scanned: units };
+    }
+    const chunks = spans(s, kind, d, cs);
     const at = covered(index, chunks.length);
     if (!at) {
       return { result: text(''), scanned: units };
     }
     return {
-      result: text(joinSpans(s, kind, chunks, at[0], at[1])),
+      result: text(
+        cs.slice(chunks[at[0] - 1]!.from, chunks[at[1] - 1]!.to).join(''),
+      ),
       scanned: chunks[at[1] - 1]!.to,
     };
   }

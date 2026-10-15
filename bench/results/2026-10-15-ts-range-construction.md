@@ -178,16 +178,16 @@ later TS measurement is also substantially faster than the paired probe's
 TS medians, reinforcing the shared-load limitation. It is a separate suite
 snapshot, not another before/after pair or evidence of a further code change.
 
-These historical measurements predate the merge of #942's accounting
-optimization. The distinctly named four-runner files preserve #943's original
-evidence alongside the separate accounting results now on `main`; the saved
-measurements do not claim the combined effect of both optimizations.
+These historical measurements predate the merges of #940's chunk reads,
+#941's Unit metadata and #942's accounting optimizations. The distinctly named
+four-runner files preserve #943's original evidence alongside their separate
+results on `main`; the saved measurements do not claim their combined effect.
 
 ## Semantic verification
 
-After merging `main` at `37d296f2` to resolve the result-file name collision,
-all 5,924 TS tests, 168 benchmark tests and 429 Corpus cases passed, along with
-the TS Core and benchmark typechecks. The original measurement validation was:
+Integration against `main` at `327536fb`: all 5,942 TS tests, 168 benchmark
+tests and 429 Corpus cases passed, along with the TS Core and benchmark
+typechecks. The original measurement validation was:
 
 - All 5,821 TS tests passed; the focused lifecycle/recovery run passed 300 tests.
 - All 429 TS Corpus cases passed against existing expectations. No expectations

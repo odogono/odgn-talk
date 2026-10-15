@@ -41,6 +41,8 @@ import {
   comparison,
   concat,
   convert,
+  prepareConversion,
+  type UnitConversion,
   deleteKey,
   equals,
   getKey,
@@ -173,6 +175,8 @@ type Constant =
  * and Handler clauses, linked to the Libraries its `use` lines name.
  */
 export class Code {
+  /** Static conversion metadata; rebuilt on Load, Reload and Restore. */
+  readonly conversions = new Map<Instruction, UnitConversion>();
   readonly constants: Constant[];
   readonly definitions: Value[];
   readonly clauses = new Map<string, Body[]>();
@@ -195,6 +199,19 @@ export class Code {
     readonly unit: CodeUnit,
     readonly identity = '',
   ) {
+    const targets = new Map<string, UnitConversion | undefined>();
+    for (const ins of unit.code) {
+      if (ins.opcode === Op.Convert || ins.opcode === Op.CanConvert) {
+        const target = ins.operands[0] as string;
+        if (!targets.has(target)) {
+          targets.set(target, prepareConversion(target));
+        }
+        const plan = targets.get(target);
+        if (plan) {
+          this.conversions.set(ins, plan);
+        }
+      }
+    }
     this.constants = unit.constants.map((display, i) => {
       const els = unit.patterns.get(i);
       if (els) {
@@ -4259,8 +4276,8 @@ export class Run {
         m.input = this.peek();
         m.result =
           ins.opcode === Op.Convert
-            ? convert(m.input, a as string)
-            : canConvert(m.input, a as string);
+            ? convert(m.input, a as string, code.conversions.get(ins))
+            : canConvert(m.input, a as string, code.conversions.get(ins));
         return this.replace(1, rate);
       case Op.Contains:
       case Op.BeginsWith:
