@@ -465,8 +465,13 @@ test "large loads retain source and code, not compiler working storage" {
 }
 
 fn compileAllocations(a: Allocator) !void {
+    // checkAllAllocationFailures supplies this allocator. In-place resizes
+    // depend on backing allocator state; force allocation fallback so every
+    // refusal index describes the same request across smaller Value layouts.
+    const failing: *std.testing.FailingAllocator = @ptrCast(@alignCast(a.ptr));
+    failing.resize_fail_index = 0;
     const machine = @import("machine.zig");
-    const compiled = try machine.compileLibrary(a, "lib", "1", "constant k = [1, 2]\nfunction twice x\n  return x * 2\nend twice\n", &.{}, null);
+    const compiled = try machine.compileLibrary(a, "lib", "1", "constant k = [1, 2]\nfunction metres x\n  return (x as mm) as m\nend metres\n", &.{}, null);
     defer compiled.library.destroy();
 }
 
