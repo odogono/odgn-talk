@@ -1409,6 +1409,9 @@ pub const Group = struct {
     /// A Host function deferred, so this Pump pauses mid-turn for its
     /// answer; `resumePump` takes the turns up again (the Message Layer).
     crossing_pause: bool = false,
+    /// Message Layer opt-in: observe Operation records before landing.
+    observe_crossings: bool = false,
+    trace_pause: bool = false,
     /// The transport is about to re-enter the callback that paused it.
     /// Its queued controls must follow that callback's record, not land
     /// at the start of the re-made instruction.
@@ -2797,6 +2800,7 @@ pub const Group = struct {
     /// it ends the Run's Stretch.
     fn landedAt(g: *Group, run: *Run) !bool {
         g.flushHeld();
+        if (g.trace_pause) return error.Deferred;
         if (g.landing.items.len == 0) return run.landed != null;
         try g.land(run);
         return run.landed != null;
@@ -9306,6 +9310,7 @@ pub const Group = struct {
                 if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
+        if (returned == null and g.observe_crossings) g.trace_pause = true;
         const interrupted = g.landedAt(run) catch |err| {
             if (err != error.Deferred) return err;
             run.returned_op = .{ .outcome = outcome, .charged = call.charged, .valid = valid };

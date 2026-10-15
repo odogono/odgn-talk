@@ -1991,6 +1991,7 @@ pub const direct = struct {
     pub const save = talk_save;
     pub const fingerprint = talk_fingerprint;
     pub const callAnswer = talk_call_answer;
+    pub const callAnswerWithCost = talk_call_answer_with_cost;
     pub const callFail = talk_call_fail;
     pub const requestCharge = talk_request_charge;
     pub const grant = talk_capability_def_grant;

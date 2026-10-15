@@ -347,7 +347,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
-| `hello` | `protocol`, optional `features`: requested supported feature names | `language`, `costModel`, `unicode`, `core`, `saveFormat`, optional `features`: text names (`paused-inputs-v1` advertises paused-input admission; `abandoned-before-needs-v1` supports opt-in cancellation before callbacks) | `CoreVersions` |
+| `hello` | `protocol`, optional `features`: requested supported feature names | `language`, `costModel`, `unicode`, `core`, `saveFormat`, optional `features`: text names (`paused-inputs-v1` advertises paused-input admission; `abandoned-before-needs-v1` supports opt-in cancellation before callbacks; `crossing-trace-v1` supports opt-in Operation Trace observation before landing) | `CoreVersions` |
 | `define-capability` | `name`, `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks and `release` requests as its Grant release hook. `sqlite` isn't offered through the message layer yet | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |

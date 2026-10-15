@@ -246,6 +246,8 @@ pub const Session = struct {
     admitting: bool = false,
     /// Opted in at hello: notify before the next callback, once across replies.
     early_abandoned: bool = false,
+    crossing_trace: bool = false,
+    reply_error: bool = false,
     release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
@@ -409,6 +411,7 @@ fn protocolError(gpa: Allocator, ref: i64, detail: []const u8) []u8 {
 }
 
 fn hostError(gpa: Allocator, ref: i64, code: talk.HostErrorCode) []u8 {
+    if (handling) |s| s.reply_error = true;
     if (code == .err_mailbox_full) {
         var o = Out.init(gpa);
         defer o.deinit();
@@ -465,6 +468,7 @@ fn diagnosticMessage(code: []const u8) []const u8 {
 /// The `load error` reply for a refused load, from the `diag` records
 /// its Trace made: `diag <unit> code="…" pos=<line>:<col>`.
 fn loadError(gpa: Allocator, ref: i64, lines: []const []u8) []u8 {
+    if (handling) |s| s.reply_error = true;
     var o = Out.init(gpa);
     defer o.deinit();
     o.raw("{\"ref\":") catch {};
@@ -1686,6 +1690,7 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
         s.pumping_entry = null;
     }
     const mg = &entry.group.group;
+    mg.observe_crossings = s.crossing_trace and entry.traced;
     if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
@@ -1698,10 +1703,43 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
 /// A release may be the only reason execution paused: its acknowledgement
 /// resumes the saved worker rather than returning a precomputed final reply.
 fn pausedReply(s: *Session, ref: i64) []u8 {
-    if (s.need != null) return holdForReleases(s, ref, s.exchange_entry.?, needReply(s, ref), .outer);
+    if (s.need != null) {
+        const reply = holdForReleases(s, ref, s.exchange_entry.?, needReply(s, ref), .outer);
+        return if (s.crossing_trace) withTrace(s, s.exchange_entry.?, reply) else reply;
+    }
+    if (s.exchange_entry.?.group.group.trace_pause) {
+        var o = Out.init(s.gpa);
+        defer o.deinit();
+        o.raw("{\"ref\":") catch return oomReply();
+        o.int(ref) catch return oomReply();
+        o.raw(",\"need\":{\"m\":\"trace\"}}") catch return oomReply();
+        const reply = o.finish() catch return oomReply();
+        return withTrace(s, s.exchange_entry.?, withAbandoned(s, s.exchange_entry.?, reply, .outer));
+    }
     std.debug.assert(s.releases.items.len > 0);
     s.release_continuation = true;
     return holdForReleases(s, ref, s.exchange_entry.?, s.gpa.dupe(u8, "") catch return oomReply(), .outer);
+}
+
+/// Opt-in outer Trace for needs and errors. Consumed only after the complete
+/// envelope is allocated; legacy final-ok Trace remains unchanged.
+fn withTrace(s: *Session, entry: *GroupEntry, reply: []u8) []u8 {
+    if (reply.ptr == &oom_buf or !entry.traced) return reply;
+    entry.group.flush();
+    if (entry.pending_trace.items.len == 0) return reply;
+    defer freeReply(s.gpa, reply);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    o.raw(reply[0 .. reply.len - 1]) catch return oomReply();
+    o.raw(",\"trace\":[") catch return oomReply();
+    for (entry.pending_trace.items, 0..) |line, i| {
+        if (i > 0) o.raw(",") catch return oomReply();
+        o.text(line) catch return oomReply();
+    }
+    o.raw("]}") catch return oomReply();
+    const emitted = o.finish() catch return oomReply();
+    freeTrace(s.gpa, takeTrace(entry));
+    return emitted;
 }
 
 const ReplyFields = enum { ok, outer, plain };
@@ -1881,7 +1919,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\"]") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2110,12 +2148,13 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     const code = Direct.load(entry.group, &options, &script);
     entry.group.flush();
     if (code == .load_refused) {
+        if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
         return loadError(s.gpa, ref, lines);
     }
     if (code != .ok) {
-        freeTrace(s.gpa, takeTrace(entry));
+        if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
         return hostError(s.gpa, ref, code);
     }
     var o = Out.init(s.gpa);
@@ -2247,7 +2286,9 @@ fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
         const vj = field(msg, "value") orelse return hostError(s.gpa, ref, .invalid_value);
         const v = decodeValue(s.gpa, vj, entry) catch |e| return hostError(s.gpa, ref, decodeError(e, entry));
         defer v.release();
-        break :blk Direct.callAnswer(c, v);
+        const fuel = if (field(msg, "fuel")) |f| asInt(f) orelse return hostError(s.gpa, ref, .invalid_value) else 0;
+        if (fuel < 0 or fuel > 9_007_199_254_740_991) return hostError(s.gpa, ref, .invalid_value);
+        break :blk Direct.callAnswerWithCost(c, v, fuel);
     };
     if (code != .ok) return hostError(s.gpa, ref, code);
     entry.untrack(call_id);
@@ -3379,6 +3420,18 @@ fn cancelDeliveryReply(s: *Session, msg: Json, ref: i64) []u8 {
 /// (free it with `freeReply`). Never fails: a malformed frame is a
 /// protocol error, and the instance carries on.
 pub fn handle(s: *Session, frame: []const u8) []u8 {
+    s.reply_error = false;
+    const reply = handleFrame(s, frame);
+    if (!s.crossing_trace or !s.reply_error) return reply;
+    // Errors retain the records made by the refused Host Input. Callback
+    // records held in the machine are still held until their crossing returns.
+    const parsed = std.json.parseFromSlice(Json, s.gpa, frame, .{ .parse_numbers = false, .max_value_len = max_frame }) catch return reply;
+    defer parsed.deinit();
+    const entry = groupOf(s, parsed.value) orelse return reply;
+    return withTrace(s, entry, reply);
+}
+
+fn handleFrame(s: *Session, frame: []const u8) []u8 {
     handling = s;
     defer handling = null;
     if (!std.unicode.utf8ValidateSlice(frame)) return protocolError(s.gpa, 0, "the frame is not UTF-8");
@@ -3399,6 +3452,15 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
         return releaseResultReply(s, ref);
     }
     if (s.paused_ref) |paused| {
+        if (s.need == null and s.exchange_entry.?.group.group.trace_pause) {
+            if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
+            if (!std.mem.eql(u8, m, "trace-result")) return protocolError(s.gpa, ref, "a crossing is waiting for trace-result");
+            const entry = s.exchange_entry.?;
+            entry.group.group.trace_pause = false;
+            s.paused_ref = null;
+            entry.group.group.answering_crossing = false;
+            return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+        }
         const want: []const u8 = switch (s.need.?.kind) {
             .op => "op-result",
             .prop => "prop-result",
@@ -3421,13 +3483,17 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         if (field(msg, "features")) |features| {
             if (features != .array) return protocolError(s.gpa, ref, "features must be text names");
             var early = s.early_abandoned;
+            var crossing_trace = s.crossing_trace;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
                     early = true;
+                } else if (std.mem.eql(u8, name, "crossing-trace-v1")) {
+                    crossing_trace = true;
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             s.early_abandoned = early;
+            s.crossing_trace = crossing_trace;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
@@ -5089,4 +5155,46 @@ test "callback return through another Run's rollback has native and Message Laye
         defer t.allocator.free(transported);
         try t.expectEqualStrings(native, transported);
     };
+}
+
+test "opt-in Operation Trace observation admits controls before result conversion" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\"]}}", .{0}));
+    const need = try pausedFixture(&c, "immediate", "script variable n = 0\non go\n put 8 into n\n ask api to read\n return n\nend go", false);
+    _ = need;
+    const observed = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":\"wrong Shape\"}}", .{});
+    try std.testing.expectEqualStrings("trace", observed.object.get("need").?.object.get("m").?.string);
+    const lines = observed.object.get("trace").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), lines.len);
+    try std.testing.expect(std.mem.startsWith(u8, lines[0].string, "call s/r1.c1"));
+    const wrong = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":1}}", .{});
+    try std.testing.expectEqualStrings("protocol error", wrong.object.get("err").?.object.get("kind").?.string);
+    _ = try okOf(try c.send("{{\"m\":\"stop\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\",\"reason\":\"Trace sink\"}}", .{7}));
+    const done = try c.sendRef(6, "{{\"m\":\"trace-result\",\"ref\":6}}", .{});
+    for ((try okOf(done)).object.get("reports").?.array.items) |r| {
+        try std.testing.expect(!std.mem.eql(u8, r.object.get("kind").?.string, "call failed"));
+    }
+    const inspected = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{8}));
+    const vars = inspected.object.get("scripts").?.array.items[0].object.get("vars").?.array.items;
+    try std.testing.expectEqual(@as(i64, 0), vars[0].array.items[1].integer);
+}
+
+test "opt-in error replies carry their own Trace before another input" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{3}));
+    const refused = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-14T12:00:00Z\"}}", .{4});
+    try std.testing.expectEqualStrings("clock backwards", refused.object.get("err").?.object.get("code").?.string);
+    const lines = refused.object.get("trace").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), lines.len);
+    try std.testing.expectEqualStrings("refused code=\"clock backwards\"", lines[1].string);
+    const after = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{5}));
+    try std.testing.expectEqual(@as(usize, 1), after.object.get("trace").?.array.items.len);
 }
