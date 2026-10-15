@@ -6,6 +6,28 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The first compatibility gate failed;
 the Go Core is not ready for retirement.**
 
+## Follow-up design, 2026-10-15
+
+The investigation merged in [#921](https://github.com/odogono/odgn-talk/pull/921)
+as `c49f544c`. The separate reactor switch merged in
+[#918](https://github.com/odogono/odgn-talk/pull/918) as `667458bc`.
+Against `0aed90d300069ae754ba7dab010f3ef4d92141e7`, the
+[paused-crossing audit](paused-crossing-input-audit.md) confirms the transport
+gate remains blocked and identifies starting-Call identity and result-landing
+requirements beyond opening the dispatcher.
+
+The [proposed crossing contract](../../spec/embedding/paused-crossing-inputs.md)
+specifies admission, ordering, lifecycle boundaries and parity acceptance. It is
+a design for review, not approved runtime behavior. Its implementation handoff
+records the current base and remaining gates. No production binding or retirement
+is authorized by this design.
+
+Zig Metered Operations, including `request-charge`, have since landed in
+[#920](https://github.com/odogono/odgn-talk/pull/920) as `f6477343`; the statement
+below about their absence describes the original investigation revision. Native
+Go still lacks that API in this follow-up checkout. The probe artifact and its
+measurements below remain evidence for their recorded source revision.
+
 ## Agreed direction
 
 Reducing maintenance of independent language implementations is the objective.
