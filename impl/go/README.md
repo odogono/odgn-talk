@@ -60,7 +60,7 @@ Clock, Fuel slices/cap and typed lifecycle/accounting/CallFailed Reports;
 Inspect/Counters and Grant inspection; Request context cancellation and OnReady;
 queued Stop, CancelRun, RewindRun and Revoke. Local Script functions execute in Zig.
 
-Ordinary immediate and suspending Capability Operations attach through the public
+Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
 declared costs, MaxPending and optional error catalogues. Call identity,
 accessors and Host binding data stay in Go. Start can Answer/Fail synchronously
@@ -71,6 +71,12 @@ discarded before resumption. Late settlements are harmless. Each worker owns its
 whole need/result exchange; callbacks, Trace sinks and OnReady run outside export
 and registry locks. Callback-generated queued inputs receive distinct refs;
 worker reentry returns the existing reentrant-call HostError.
+
+`WithReleaseHook` runs during Stop and Revoke with the public GrantContext,
+including binding, Clock and reason. Hooks run in Grant-name order, after Call
+context cancellation, outside transport locks. Panics cannot refuse release.
+Hook-generated inputs and OnReady obey the same worker boundary; repeated Stop
+or Revoke does not repeat its release. GrantsAsUsed trims unused hooks.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1` and
 `crossing-trace-v1`. The last feature publishes an Operation's call record and
@@ -85,7 +91,7 @@ Unsupported calls return an `experimental Zig backend` error, or panic when the
 existing signature has no error result: Host Object attachment/handles,
 Function Values/calls, object-addressed inputs, Broadcast/Decide, Libraries,
 Reload/Extend, Save/Restore/Settle and Fingerprint. Capability attachments with
-release, scoped or Segment lifecycle hooks, fire-and-forget Operations, Standard
+scoped or Segment lifecycle hooks, Standard
 factory refinements, Object/Function Shapes or Shapes nested beyond 32 levels
 are explicitly refused. They do not fall back to native Go language execution.
 Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go

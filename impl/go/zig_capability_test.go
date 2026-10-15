@@ -189,13 +189,8 @@ func TestZigBackendGrantRoutingAndLoadChecks(t *testing.T) {
 func TestZigBackendUnsupportedCapabilityDeclarations(t *testing.T) {
 	core := talk.New()
 	plain := talk.Operation{Name: "read", Do: func(*talk.Call, []talk.Value) (talk.Value, error) { return talk.Nothing, nil }}
-	release, _ := core.DefineCapability("release", plain, talk.WithReleaseHook(func(talk.GrantContext) { t.Fatal("release hook ignored") }))
 	lifecycle := talk.SegmentLifecycle{Begin: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }, Commit: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }, Rollback: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }}
 	segment, err := core.DefineSegmentCapability("segment", lifecycle, plain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fire, err := core.DefineCapability("fire", talk.Operation{Name: "post", Mode: talk.FireAndForget, Fire: func(*talk.Call, []talk.Value) error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +198,7 @@ func TestZigBackendUnsupportedCapabilityDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, def := range []*talk.CapabilityDef{release, segment, fire, function} {
+	for _, def := range []*talk.CapabilityDef{segment, function} {
 		g := core.NewGroup(talk.GroupOptions{})
 		_, err := g.Load(talk.LoadOptions{Name: "s", Source: "", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
 		if err == nil || !strings.HasPrefix(err.Error(), "experimental Zig backend:") || g.Script("s") != nil {

@@ -143,22 +143,7 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value)
 			err = receipt(packet.Get("ok"))
 		}
 		b.frameMu.Unlock()
-		b.abandoned(packet.Get("abandoned"))
-		b.abandoned(packet.Get("ok").Get("abandoned"))
-		b.settled(packet.Get("settled"))
-		b.settled(packet.Get("ok").Get("settled"))
-		sources := []Value{packet}
-		// Grants is a name-to-Operations map; "trace" is a legal Grant name,
-		// and Grant inspection itself produces no Trace records.
-		if m != "grants" {
-			sources = append(sources, packet.Get("ok"))
-		}
-		for _, source := range sources {
-			trace := source.Get("trace")
-			for i := 1; i <= trace.Len(); i++ {
-				b.group.emit(zigText(trace.Index(i)))
-			}
-		}
+		b.observe(packet, m)
 		if err != nil {
 			return Nothing, err
 		}
@@ -173,9 +158,27 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value)
 		if err != nil {
 			return Nothing, err
 		}
-		m = "op-result"
-		if zigText(need.Get("m")) == "trace" {
-			m = "trace-result"
+		m = zigText(need.Get("m")) + "-result"
+	}
+}
+
+// observe publishes every reply outside the export lock, including refused
+// reentrant worker calls which can carry earlier buffered Trace records.
+func (b *zigGroup) observe(packet Value, m string) {
+	b.abandoned(packet.Get("abandoned"))
+	b.abandoned(packet.Get("ok").Get("abandoned"))
+	b.settled(packet.Get("settled"))
+	b.settled(packet.Get("ok").Get("settled"))
+	sources := []Value{packet}
+	// Grants is a name-to-Operations map; "trace" is a legal Grant name,
+	// and Grant inspection itself produces no Trace records.
+	if m != "grants" {
+		sources = append(sources, packet.Get("ok"))
+	}
+	for _, source := range sources {
+		trace := source.Get("trace")
+		for i := 1; i <= trace.Len(); i++ {
+			b.group.emit(zigText(trace.Index(i)))
 		}
 	}
 }
@@ -203,7 +206,7 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	}
 	if packet.Get("need").Kind() != KindNothing {
 		b.paused = true
-	} else if fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" {
+	} else if fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" {
 		b.paused = false
 	}
 	return packet, nil
@@ -232,17 +235,20 @@ func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
 	if err == nil {
 		return nil
 	}
+	var packet Value
 	b.frameMu.Lock()
 	if b.paused {
 		b.ref++
 		fields["m"], fields["ref"], fields["group"] = m, b.ref, "g"
-		_, frameErr := b.frame(fields)
+		var frameErr error
+		packet, frameErr = b.frame(fields)
 		b.paused = true // the refusal leaves the enclosing need outstanding
 		if frameErr != nil {
 			err = frameErr
 		}
 	}
 	b.frameMu.Unlock()
+	b.observe(packet, m)
 	return err
 }
 
