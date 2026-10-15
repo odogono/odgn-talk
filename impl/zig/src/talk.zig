@@ -3467,9 +3467,12 @@ export fn talk_decide(g: *Group, to: *objects.Object, m: *const Message, id: ?*B
 
 fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_out: *u64) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
-    const override = overrideOf(m.limits) catch return .invalid_value;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
+    const override = overrideOf(m.limits) catch {
+        g.group.refuseBroadcast(name, @constCast(args), decision, "invalid value");
+        return .invalid_value;
+    };
     const loosens = if (override) |o| o.loosens(.{}) else false;
     if (!machine.hostMessageName(name, args.len) or loosens) {
         g.group.refuseBroadcast(name, @constCast(args), decision, "invalid value");

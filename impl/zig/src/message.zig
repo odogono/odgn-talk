@@ -2233,7 +2233,10 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
         }
     }
     var override_slot: talk.LimitOverride = undefined;
-    const override = overrideOf(field(message, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
+    const override = overrideOf(field(message, "limits"), &override_slot) catch {
+        if (to_all) entry.group.group.refuseBroadcast(mname, args, how == .decide, "invalid value");
+        return hostError(s.gpa, ref, .invalid_value);
+    };
     const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
     var id: talk.Buffer = .{};
     // Pending Requests and Decisions belong to the Group, which reports
