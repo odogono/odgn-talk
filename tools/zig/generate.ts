@@ -13,7 +13,11 @@ import { functionContract } from '../grammar/function-contract';
 import units from '../../spec/data/units.toml';
 import version from '../../spec/data/version.toml';
 import corpus from '../../spec/data/corpus.toml';
-import { compileCostModel, type CompiledCostModel } from '../costs/compile';
+import {
+  compileCostModel,
+  type CompiledCostModel,
+  type CostTerm,
+} from '../costs/compile';
 import { writeOutput } from '../go/output';
 import { header, zigField, zigString, zigType } from './output';
 
@@ -207,54 +211,137 @@ const terms = (list: readonly (readonly number[])[]) =>
     : list.length === 1
       ? `&.{${term(list[0]!)}}`
       : `&.{ ${list.map(term).join(', ')} }`;
-export const emitCostTerms = (model: CompiledCostModel): string =>
-  header('tools/zig/generate.ts from spec/data/costs.toml') +
-  '\n' +
-  '/// One compiled Cost Model term: factor * measure(subject) / divisor,\n' +
-  '/// rounded up on its own. `measure_constant` is worth 1.\n' +
-  'pub const CostTerm = struct {\n' +
-  '    measure: u8,\n' +
-  '    subject: u8,\n' +
-  '    factor: i64,\n' +
-  '    divisor: i64,\n' +
-  '};\n\n' +
-  'pub const CostRate = struct {\n' +
-  '    key: []const u8,\n' +
-  '    fuel: []const CostTerm,\n' +
-  '    alloc: []const CostTerm,\n' +
-  '};\n\n' +
-  'pub const CostSize = struct {\n' +
-  '    of: []const u8,\n' +
-  '    terms: []const CostTerm,\n' +
-  '};\n\n' +
-  model.measures
-    .map(
-      (name, i) =>
-        `pub const measure_${zigField(name).toLowerCase()} = ${i};\n`,
-    )
-    .join('') +
-  '\n' +
-  "/// `subject_x1` is a Built-in's first argument; `subject_x1 + n - 1` is its nth.\n" +
-  model.subjects
-    .map(
-      (name, i) =>
-        `pub const subject_${zigField(name).toLowerCase()} = ${i};\n`,
-    )
-    .join('') +
-  '\n' +
-  '/// Sorted by key, so a key is found by binary search.\n' +
-  `pub const cost_rates = [_]CostRate{\n${[...model.rates]
-    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+// Specialize instruction formulas only. Dynamic Built-ins and unfamiliar
+// measures/subjects retain the term interpreter. Deduplicate complete pairs,
+// without merging terms: each term must still round up independently.
+const specializedTerm = (
+  model: CompiledCostModel,
+  t: CostTerm,
+): string | null => {
+  const [code, subject, factor, divisor] = t;
+  const name = model.measures[code];
+  let measured: string;
+  if (name === 'constant') {
+    measured = '@as(u64, 1)';
+  } else if (['scanned', 'count', 'steps', 'declared'].includes(name ?? '')) {
+    measured = `m.${name}`;
+  } else if (
+    [
+      'size',
+      'contents',
+      'characters',
+      'scalars',
+      'utf8',
+      'bytes',
+      'items',
+      'entries',
+      'program',
+      'digits',
+    ].includes(name ?? '') &&
+    ['input', 'result'].includes(model.subjects[subject] ?? '')
+  ) {
+    measured = `(if (m.${model.subjects[subject]}) |v| measureValue(measure_${name}, v) else 0)`;
+  } else {
+    return null;
+  }
+  // Keep checked u64 multiplication and rounding in the interpreter's order.
+  const scaled =
+    factor === 1 ? measured : `(@as(u64, ${factor}) * ${measured})`;
+  return `((${scaled} + ${divisor} - 1) / ${divisor})`;
+};
+
+export const emitCostTerms = (model: CompiledCostModel): string => {
+  const formulas: { alloc: string; fuel: string }[] = [];
+  const formulaIds = new Map<string, number>();
+  const rateFormula = (r: CompiledCostModel['rates'][number]): string => {
+    if (r.key.startsWith('builtin.')) {
+      return 'null';
+    }
+    const fuel = r.fuel.map(t => specializedTerm(model, t));
+    const alloc = r.alloc.map(t => specializedTerm(model, t));
+    if (fuel.includes(null) || alloc.includes(null)) {
+      return 'null';
+    }
+    const key = JSON.stringify([r.fuel, r.alloc]);
+    let id = formulaIds.get(key);
+    if (id === undefined) {
+      id = formulas.length;
+      formulaIds.set(key, id);
+      formulas.push({
+        fuel: fuel.join(' + ') || '0',
+        alloc: alloc.join(' + ') || '0',
+      });
+    }
+    return `.f${id}`;
+  };
+  const sortedRates = [...model.rates].sort((a, b) =>
+    a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+  );
+  const rateRows = sortedRates
     .map(
       r =>
-        `    .{ .key = ${zigString(r.key)}, .fuel = ${terms(r.fuel)}, .alloc = ${terms(r.alloc)} },\n`,
+        `    .{ .key = ${zigString(r.key)}, .fuel = ${terms(r.fuel)}, .alloc = ${terms(r.alloc)}, .formula = ${rateFormula(r)} },\n`,
     )
-    .join('')}};\n\n` +
-  `pub const cost_sizes = [_]CostSize{\n${model.sizes
-    .map(
-      s => `    .{ .of = ${zigString(s.of)}, .terms = ${terms(s.terms)} },\n`,
-    )
-    .join('')}};\n`;
+    .join('');
+  return (
+    header('tools/zig/generate.ts from spec/data/costs.toml') +
+    '\n' +
+    '/// One compiled Cost Model term: factor * measure(subject) / divisor,\n' +
+    '/// rounded up on its own. `measure_constant` is worth 1.\n' +
+    'pub const CostTerm = struct {\n' +
+    '    measure: u8,\n' +
+    '    subject: u8,\n' +
+    '    factor: i64,\n' +
+    '    divisor: i64,\n' +
+    '};\n\n' +
+    'pub const CostRate = struct {\n' +
+    '    key: []const u8,\n' +
+    '    fuel: []const CostTerm,\n' +
+    '    alloc: []const CostTerm,\n' +
+    '    /// Null selects the generic term evaluator.\n' +
+    '    formula: ?Formula,\n' +
+    '};\n\n' +
+    'pub const CostSize = struct {\n' +
+    '    of: []const u8,\n' +
+    '    terms: []const CostTerm,\n' +
+    '};\n\n' +
+    model.measures
+      .map(
+        (name, i) =>
+          `pub const measure_${zigField(name).toLowerCase()} = ${i};\n`,
+      )
+      .join('') +
+    '\n' +
+    "/// `subject_x1` is a Built-in's first argument; `subject_x1 + n - 1` is its nth.\n" +
+    model.subjects
+      .map(
+        (name, i) =>
+          `pub const subject_${zigField(name).toLowerCase()} = ${i};\n`,
+      )
+      .join('') +
+    '\n' +
+    '/// Sorted by key, so a key is found by binary search.\n' +
+    `pub const cost_rates = [_]CostRate{\n${rateRows}};\n\n` +
+    'pub const Charge = struct { fuel: u64, alloc: u64 };\n\n' +
+    `pub const Formula = enum {\n${formulas.map((_, i) => `    f${i},\n`).join('')}};\n\n` +
+    '/// Generated from the same terms above; no rates are copied by hand.\n' +
+    'pub fn evaluateSpecialized(formula: Formula, m: anytype, comptime measureValue: anytype) Charge {\n' +
+    '    return switch (formula) {\n' +
+    formulas
+      .map(
+        (f, i) =>
+          `        .f${i} => .{ .fuel = ${f.fuel}, .alloc = ${f.alloc} },\n`,
+      )
+      .join('') +
+    '    };\n' +
+    '}\n\n' +
+    `pub const cost_sizes = [_]CostSize{\n${model.sizes
+      .map(
+        s => `    .{ .of = ${zigString(s.of)}, .terms = ${terms(s.terms)} },\n`,
+      )
+      .join('')}};\n`
+  );
+};
 
 export const generateZigCatalogues = async (check: boolean): Promise<void> => {
   const write = (name: string, content: string) =>
