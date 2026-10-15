@@ -5,17 +5,18 @@ not a replacement Go embedding package. The Go Core remains in place.
 
 ## Result
 
-**Compatibility gate blocked.** A Go Operation can call `Script.Stop` before
-returning. Native Go lands that Stop at the crossing and rolls back the Segment.
-The current Message Layer accepts only the matching result while an Operation
-need is outstanding. Sending Stop then is a protocol error. Sending the result
-first lets the Script finish and commit; sending Stop afterward cannot undo it.
-`TestStopAtCrossingCompatibilityBlocker` demonstrates native `n=0` versus
-transport `n=8`. Its passing result means the blocker was reproduced, **not**
-that the replacement passed compatibility.
+**The original Stop crossing gate now passes.** A Go Operation queues Stop before
+returning through the Message Layer, and the same Pump rolls its Segment back.
+`TestStopAtCrossingParity` compares native Go and the embedded Zig artifact for
+immediate returns, wrong Shapes, Script failures, Host errors and suspending
+Start. It requires identical Trace lines and Fuel and checks `n=0` on both paths.
+The previous characterization of native `n=0` versus transport `n=8` is replaced.
 
-The investigation therefore stops before expanding to the full public binding,
-Session bridge or retirement. See the [findings and next gate](../../docs/research/go-zig-binding.md).
+This remains an isolated probe, not a public Go binding. Full callback/API/corpus
+compatibility, facilities, platform execution and agreed performance limits are
+later gates in [#884](https://github.com/odogono/odgn-talk/issues/884). See the
+[findings](../../docs/research/go-zig-binding.md) and the
+[crossing contract](../../spec/embedding/paused-crossing-inputs.md).
 
 ## Run
 
@@ -50,7 +51,7 @@ measurements. This isolated module does not add dependencies to the Go Core.
 
 - WASI initialization, version matching, and embedded artifact integrity.
 - Immediate and genuinely deferred answers from another Go goroutine.
-- A same-callback Stop against native Go, including the failure of outbox deferral.
+- Same-callback Stop parity against native Go, including exact Trace, Fuel and rollback.
 - Basic Zig save/restore; no cross-Core save conversion.
 - Independent concurrent reactors sharing compiled code, serialized export calls,
   and Go-owned reply bytes retained across guest memory growth.
@@ -63,10 +64,14 @@ limit; it is not sufficient for the Message Layer's unlimited nesting contract.
 
 No claim is made yet about callback panic conversion, cancellation contexts,
 property callbacks, Function Value identity, effect hooks, full public API or
-corpus compatibility, driver Pool integration, or Session facilities. Those are
-retirement requirements still to be tested after the crossing blocker is resolved.
+corpus compatibility, driver Pool integration, or Session facilities. Those remain
+retirement requirements beyond the original Stop gate.
 
-## Measurements
+## Historical measurements
+
+The measurements below used the original investigation artifact from
+`34c990976c5b863b7791bc64c8ac760c263e2e9d`, not the rebuilt crossing implementation.
+They have not been rerun and must not be attributed to the new artifact.
 
 [Raw output](measurements.txt) records three repetitions on Darwin/arm64,
 Apple M5, Go 1.27.2, wazero v1.12.0, Zig 0.17.0, safe optimization, with

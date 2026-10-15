@@ -1614,7 +1614,6 @@ pub const Settlement = extern struct {
 /// answers or fails through.
 export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settlement, adopted: ?*?*Call) HostErrorCode {
     if (adopted) |a| a.* = null;
-    g.group.checkWorker() catch |err| return status(err);
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
     const call_id = bytes(id, len) catch return .invalid_value;

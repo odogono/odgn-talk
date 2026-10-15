@@ -282,10 +282,18 @@ returns `effect state unknown`. Load, Reload, Extend and Library replacement
 cannot revive a Group stopped by fatal cleanup. Pump, Save, Fingerprint, Inspect
 and code-change worker calls from lifecycle callbacks return `reentrant call`,
 during a Pump and during code changes.
-Grant release hooks queue Message Layer exchanges, sent before the next need
-or final reply. In-process landings during a Pump remain synchronous, as do
-the fatal effect stop and a landed Stop when cleaning up other Runs paused by
-a Fuel Slice (#900).
+Paused needs admit the same Group's queued Host Inputs under distinct refs;
+`hello.features` advertises `paused-inputs-v1`. Admission preserves synchronous
+errors and ids, while ordinary inputs still wait for the next Pump. Stop,
+CancelRun and RewindRun land after the callback record and scope acknowledgement,
+before result conversion. A suspending Call retains its identity and metering
+eligibility while Start is paused, so Answer/Fail and RequestCharge can enqueue
+before `started`. Worker reentry remains refused throughout a transport pause.
+Grant releases pause the continuation until `release-result`, before later
+callbacks or Script execution; inputs queued by release use the original worker's
+Pump/code-change boundary. Deferred cleanup of another Run retains the original
+Host return without repeating its callback or record. Native callbacks retain
+their synchronous contract.
 `zig build corpus -- --defer-crossings` defers each eligible crossing once and
 holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and

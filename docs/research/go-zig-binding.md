@@ -3,8 +3,29 @@
 Evidence recorded on 2026-10-14 for [#884](https://github.com/odogono/odgn-talk/issues/884),
 against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 [reproducible probe](../../spikes/go-zig-binding/README.md) embeds a Zig WASI
-reactor and executes it through wazero. **The first compatibility gate failed;
-the Go Core is not ready for retirement.**
+reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
+follow-up Stop parity is described below. The Go Core remains supported.**
+
+## Crossing implementation, 2026-10-15
+
+The maintainer accepted merged design #958 for implementation. Runtime source
+commit `ae39dc59` implements paused-input admission in Zig and the supported Go
+sidecar messages, retains starting Calls and callback returns, and pauses release
+continuations before further execution. Native Zig corrections are tracked in
+[#962](https://github.com/odogono/odgn-talk/issues/962).
+
+The rebuilt embedded artifact's [manifest](../../spikes/go-zig-binding/artifact.json)
+names its source revision and digest. `TestStopAtCrossingParity` now compares
+native Go with that artifact for immediate valid/wrong-Shape returns, Host/Script
+failures and suspending Start, requiring identical Trace and Fuel and `n=0`.
+This replaces the old blocker characterization; the original results below
+remain historical evidence, not claims about the updated implementation.
+
+Later #884 gates remain: the full callback compatibility matrix, production
+binding/API/corpus acceptance, Go facilities, all-platform execution and explicitly
+accepted numerical performance limits. No production binding or retirement is
+introduced by resolving the original Stop gate. The earlier measurements have
+not been rerun for this artifact.
 
 ## Follow-up design, 2026-10-15
 
@@ -12,13 +33,13 @@ The investigation merged in [#921](https://github.com/odogono/odgn-talk/pull/921
 as `c49f544c`. The separate reactor switch merged in
 [#918](https://github.com/odogono/odgn-talk/pull/918) as `667458bc`.
 Against `0aed90d300069ae754ba7dab010f3ef4d92141e7`, the
-[paused-crossing audit](paused-crossing-input-audit.md) confirms the transport
-gate remains blocked and identifies starting-Call identity and result-landing
+[paused-crossing audit](paused-crossing-input-audit.md) confirmed that the transport
+gate remained blocked at that revision and identifies starting-Call identity and result-landing
 requirements beyond opening the dispatcher.
 
-The [proposed crossing contract](../../spec/embedding/paused-crossing-inputs.md)
-specifies admission, ordering, lifecycle boundaries and parity acceptance. It is
-a design for review, not approved runtime behavior. Its implementation handoff
+The [crossing contract](../../spec/embedding/paused-crossing-inputs.md)
+specifies admission, ordering, lifecycle boundaries and parity acceptance. The proposal
+subsequently merged as #958 and was accepted for implementation. Its handoff
 records the current base and remaining gates. No production binding or retirement
 is authorized by this design.
 
@@ -74,18 +95,19 @@ Pump returns stopped and `n` is `0`. This agrees with the existing Go
 `TestStopAtCapabilityCrossingRollsBackAndSkipsConversion` test and the
 [interruption rules](../../spec/06-errors-and-limits.md#cancellation-and-stop).
 
-At the corresponding Zig Message Layer `op` need, `stop` is rejected with
+At the original probe's Zig Message Layer `op` need, `stop` was rejected with
 `protocol error: a Pump is waiting for its result`. Returning `op-result` first
 lets the Run complete with `8`. Sending Stop afterward leaves `n=8`. A wrapper
 cannot claim compatibility by deferring all callback-generated inputs until the
 Pump returns. This is a limitation of the present Message Layer path, not proof
 that native Zig Stop semantics are wrong or that wazero cannot support a binding.
 
-The relevant dispatcher is `impl/zig/src/message.zig`'s `handle`: while
+At the investigation revision, the relevant dispatcher was
+`impl/zig/src/message.zig`'s `handle`: while
 `paused_ref` is set, only the matching `op-result`, `prop-result` or
-`effect-result` is accepted. The Go Message Layer similarly rejects intervening
-messages. The Spec's “answer before sending anything else” and “Stops land at a
-crossing” rules need an explicit compatible transport mechanism before the
+`effect-result` is accepted. The Go Message Layer similarly rejected intervening
+messages. At that point, the Spec's “answer before sending anything else” and “Stops land at a
+crossing” rules needed an explicit compatible transport mechanism before the
 Message Layer can serve as a transparent public Go API adapter.
 
 ## Alternatives to evaluate next
@@ -143,7 +165,7 @@ backend choice. Cold compilation, cached-code instantiation and initial linear
 memory were measured separately; neither application tail latency nor retained
 process memory was measured.
 
-After the crossing gate is resolved, test callback panics, asynchronous
+Beyond the original Stop gate, test callback panics, asynchronous
 cancellation, property callbacks, Function Value/Host Object ownership, effect
 rollback/release, pending-call restore, callback reentrancy and Pool concurrency.
 Build the public-compatible adapter, run existing embedding tests and the full
