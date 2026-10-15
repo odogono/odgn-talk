@@ -39,7 +39,7 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 		if !exists {
 			handle = fmt.Sprintf("go-capability-%d", len(b.definitions)+1)
 			ops, _ := zigDeclaration(def)
-			if _, err := b.send("define-capability", map[string]any{"name": handle, "ops": ops}); err != nil {
+			if _, err := b.send("define-capability", map[string]any{"name": handle, "ops": ops, "release": def.release != nil}); err != nil {
 				return nil, nil, err
 			}
 			b.definitions[def] = handle
@@ -66,8 +66,8 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 }
 
 func zigDeclaration(d *CapabilityDef) ([]any, error) {
-	if d.release != nil || d.lifecycle != nil || d.coordinate != nil {
-		return nil, backendUnsupported("Capability lifecycle and release hooks")
+	if d.lifecycle != nil || d.coordinate != nil {
+		return nil, backendUnsupported("Capability Segment lifecycle hooks")
 	}
 	if len(d.checks) != 0 {
 		return nil, backendUnsupported("Standard Capability refinements")
@@ -80,8 +80,8 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 	ops := make([]any, 0, len(names))
 	for _, name := range names {
 		op := d.ops[name]
-		if op.Scope != nil || op.SegmentBound || op.Mode == FireAndForget {
-			return nil, backendUnsupported("scoped, Segment-bound and fire-and-forget Operations")
+		if op.Scope != nil || op.SegmentBound {
+			return nil, backendUnsupported("scoped and Segment-bound Operations")
 		}
 		args := make([]any, len(op.Args))
 		for i, arg := range op.Args {
@@ -192,7 +192,8 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	if zigText(need.Get("m")) == "trace" {
 		return map[string]any{}, nil
 	}
-	if zigText(need.Get("m")) != "op" {
+	kind := zigText(need.Get("m"))
+	if kind != "op" && kind != "release" {
 		return nil, backendUnsupported("Host callback " + zigText(need.Get("m")))
 	}
 	s := b.group.Script(zigText(need.Get("script")))
@@ -203,6 +204,23 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	grant := s.grants[grantName]
 	if grant == nil {
 		return nil, fmt.Errorf("Zig callback names an unknown Grant")
+	}
+	if kind == "release" {
+		if grant.definition.release == nil {
+			return nil, fmt.Errorf("Zig release names a Grant without a release hook")
+		}
+		now, err := time.Parse(time.RFC3339Nano, zigText(need.Get("now")))
+		if err != nil {
+			return nil, err
+		}
+		reason := ReleaseReason(zigText(need.Get("reason")))
+		switch reason {
+		case ReleaseStop, ReleaseReload, ReleaseRevoke, ReleaseDisable:
+		default:
+			return nil, fmt.Errorf("unknown Zig Grant release reason %q", reason)
+		}
+		invokeReleaseHook(grant.definition.release, GrantContext{Group: b.group, ScriptName: s.name, GrantName: grantName, Binding: grant.binding, Now: now, Reason: reason})
+		return map[string]any{}, nil
 	}
 	name := zigText(need.Get("operation"))
 	op, ok := grant.definition.ops[name]
@@ -272,6 +290,8 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		}
 	} else if op.Mode == Suspending {
 		out["started"] = true
+	} else if op.Mode == FireAndForget {
+		out["done"] = true
 	} else {
 		encoded, err := zigEncoded(result)
 		if err != nil {

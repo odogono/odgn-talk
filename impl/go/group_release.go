@@ -8,8 +8,7 @@ func (g *Group) releaseGrant(s *Script, name string, reason ReleaseReason) {
 	if grant == nil || grant.definition.release == nil {
 		return
 	}
-	defer func() { _ = recover() }()
-	grant.definition.release(GrantContext{Group: g, ScriptName: s.name, GrantName: name, Binding: grant.binding, Now: g.clock, Reason: reason})
+	invokeReleaseHook(grant.definition.release, GrantContext{Group: g, ScriptName: s.name, GrantName: name, Binding: grant.binding, Now: g.clock, Reason: reason})
 }
 
 func (g *Group) releaseGrants(s *Script, reason ReleaseReason) {
@@ -21,4 +20,10 @@ func (g *Group) releaseGrants(s *Script, reason ReleaseReason) {
 	for _, name := range names {
 		g.releaseGrant(s, name, reason)
 	}
+}
+
+// Cleanup cannot refuse its lifecycle boundary, including through a transport.
+func invokeReleaseHook(hook ReleaseHook, ctx GrantContext) {
+	defer func() { _ = recover() }()
+	hook(ctx)
 }

@@ -1597,6 +1597,13 @@ static int library_test(void) {
     bad |= talk_library_needs(base, &needs) != 0;
     bad |= loud == NULL || talk_library_needs(loud, &needs) != 1;
     if (!bad) bad |= needs[0].capability_len != 7 || memcmp(needs[0].capability, "console", 7) != 0 || needs[0].operation_len != 5 || memcmp(needs[0].operation, "write", 5) != 0;
+    bad |= talk_add_library(group, says) != TALK_OK;
+    bad |= talk_add_library(group, loud) != TALK_OK;
+    const char *ungranted_source = "use twice from loud\non go\n twice()\nend go\n";
+    talk_load_options ungranted = {"ungranted", 9, ungranted_source, strlen(ungranted_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *ungranted_script = NULL;
+    bad |= talk_load(group, &ungranted, &ungranted_script) != TALK_LOAD_REFUSED || ungranted_script != NULL;
+    bad |= strstr(trace, "diag ungranted code=\"missing grant\"") == NULL;
     const char *source = "use label from top\nscript variable got\non go\n  put label(5) into got\nend go\n";
     talk_load_options load = {"user", 4, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
     talk_script *script = NULL;

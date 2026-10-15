@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,7 +85,7 @@ func bridgeCanonical(v reflect.Value) any {
 func runBridgeCases(t *testing.T) []bridgeObservation {
 	t.Helper()
 	var observations []bridgeObservation
-	cases := []string{"immediate", "synchronous answer", "synchronous fail", "later answer", "later fail", "nil fail", "wrong result", "panic", "Host error", "declared error", "undeclared error", "start panic", "start error", "charge", "charge refusal", "callback inputs", "callback stop", "stop wrong result", "stop Host error", "start stop", "trace stop", "trace wrong result", "cancel cleanup", "revoke", "timeout", "answer then stop", "answer then cancel cleanup", "start cancel", "refusals"}
+	cases := []string{"immediate", "synchronous answer", "synchronous fail", "later answer", "later fail", "nil fail", "wrong result", "panic", "Host error", "declared error", "undeclared error", "start panic", "start error", "charge", "charge refusal", "callback inputs", "callback stop", "stop wrong result", "stop Host error", "start stop", "trace stop", "trace wrong result", "cancel cleanup", "revoke", "timeout", "answer then stop", "answer then cancel cleanup", "start cancel", "refusals", "fire", "fire panic", "fire error", "fire declared error", "fire charge", "fire charge refusal", "fire stop", "fire trace stop", "fire inputs"}
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
 			observation := bridgeObservation{Name: name}
@@ -99,6 +100,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 			if name == "Host error" {
 				suspending = false
 			}
+			fire := strings.HasPrefix(name, "fire")
 			op := talk.Operation{Name: "read", Args: []talk.Shape{talk.NumberShape}, Result: talk.NumberShape, Cost: talk.Cost{Fuel: 7, Alloc: 3}}
 			callback := func(c *talk.Call, args []talk.Value) (talk.Value, error) {
 				callbackCount++
@@ -108,14 +110,14 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 				observation.Calls = append(observation.Calls, fmt.Sprintf("%s %s %s", c.ID(), c.RunID(), c.SegmentID()))
 				pendingCall = c
 				switch name {
-				case "panic", "start panic":
+				case "panic", "start panic", "fire panic":
 					panic("private Host panic")
-				case "Host error", "start error", "stop Host error":
+				case "Host error", "start error", "stop Host error", "fire error":
 					if name == "stop Host error" {
 						s.Stop("callback")
 					}
 					return talk.Nothing, errors.New("private Host error")
-				case "declared error", "undeclared error":
+				case "declared error", "undeclared error", "fire declared error":
 					return talk.Nothing, &talk.ScriptError{Code: "offline"}
 				case "wrong result", "stop wrong result", "trace wrong result":
 					if name == "stop wrong result" {
@@ -127,19 +129,19 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 					c.AnswerWithCost(talk.Int(9), 5)
 				case "synchronous fail":
 					c.Fail(&talk.ScriptError{Code: "offline"})
-				case "charge":
+				case "charge", "fire charge":
 					if err := c.Charge(5); err != nil {
 						t.Fatal(err)
 					}
-				case "charge refusal":
+				case "charge refusal", "fire charge refusal":
 					if err := c.Charge(9007199254740991); !errors.Is(err, talk.ErrLimit) {
 						t.Fatal(err)
 					}
-				case "callback stop", "start stop":
+				case "callback stop", "start stop", "fire stop":
 					s.Stop("callback")
 				case "start cancel":
 					s.CancelRun(c.RunID())
-				case "callback inputs":
+				case "callback inputs", "fire inputs":
 					_, p, err := s.Request(nil, talk.Message{Name: "echo", Args: []talk.Value{talk.Int(3)}})
 					if err != nil {
 						t.Fatal(err)
@@ -158,13 +160,17 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 				}
 				return talk.Int(9), nil
 			}
-			if suspending {
+			if fire {
+				suspending = false
+				op.Mode = talk.FireAndForget
+				op.Fire = func(c *talk.Call, args []talk.Value) error { _, err := callback(c, args); return err }
+			} else if suspending {
 				op.Mode = talk.Suspending
 				op.Start = func(c *talk.Call, args []talk.Value) error { _, err := callback(c, args); return err }
 			} else {
 				op.Do = callback
 			}
-			if name == "declared error" {
+			if name == "declared error" || name == "fire declared error" {
 				op.Errors = []talk.ErrorDecl{{Code: "offline"}}
 			}
 			if name == "undeclared error" {
@@ -194,6 +200,9 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 				source += " and wait"
 			}
 			source += "\n put it into n\n return n\nend go\non echo x\n return x\nend echo\n"
+			if fire {
+				source = "script variable n = 0\non go\n put 8 into n\n tell api to read 4\n return n\nend go\non echo x\n return x\nend echo"
+			}
 			if strings.Contains(name, "cancel cleanup") || name == "start cancel" {
 				source = "on go\n try\n  ask api to read 4 and wait\n finally\n  ask api to clean\n end try\nend go\n"
 			}
@@ -201,7 +210,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if name == "trace stop" || name == "trace wrong result" {
+			if name == "trace stop" || name == "trace wrong result" || name == "fire trace stop" {
 				trace.record = func(line string) {
 					if strings.HasPrefix(line, "call s/r1.c1 ") {
 						s.Stop("trace")
@@ -278,7 +287,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 				}
 				pump(next)
 			}
-			if name == "callback inputs" {
+			if name == "callback inputs" || name == "fire inputs" {
 				pump(bridgeNow)
 			}
 			select {
@@ -316,6 +325,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 			observations = append(observations, observation)
 		})
 	}
+	observations = append(observations, runReleaseBridgeCases(t)...)
 	return observations
 }
 func isReentrant(err error) bool {
@@ -333,4 +343,167 @@ func TestCapabilityBridge(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
+	t.Helper()
+	var out []bridgeObservation
+	for _, name := range []string{"release stop", "release revoke", "release panic", "release inputs", "release cancellation", "release crossing stop", "release trim"} {
+		t.Run(name, func(t *testing.T) {
+			observation := bridgeObservation{Name: name}
+			core := talk.New()
+			var trace bridgeTrace
+			var g *talk.Group
+			var s, target *talk.Script
+			var call *talk.Call
+			var generated []*talk.Pending
+			var releases []talk.GrantContext
+			var inRelease, notified atomic.Bool
+			op := talk.Operation{Name: "touch", Result: talk.NothingShape, Do: func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
+				if name == "release crossing stop" {
+					s.Stop("crossing")
+				}
+				return talk.Nothing, nil
+			}}
+			if name == "release cancellation" {
+				op.Mode = talk.Suspending
+				op.Do = nil
+				op.Start = func(c *talk.Call, _ []talk.Value) error { call = c; return nil }
+			}
+			def, err := core.DefineCapability("resource", op, talk.WithReleaseHook(func(ctx talk.GrantContext) {
+				if ctx.Group != g || ctx.ScriptName != "s" || ctx.Now != bridgeNow || ctx.Binding != ctx.GrantName {
+					t.Fatalf("release context changed: %+v", ctx)
+				}
+				releases = append(releases, ctx)
+				observation.Calls = append(observation.Calls, fmt.Sprintf("release %s %s %s", ctx.ScriptName, ctx.GrantName, ctx.Reason))
+				if call != nil {
+					if call.Context().Err() == nil {
+						t.Fatal("release preceded cancellation")
+					}
+					observation.Calls = append(observation.Calls, "cancelled before release")
+				}
+				if name == "release inputs" {
+					inRelease.Store(true)
+					defer inRelease.Store(false)
+					if _, err := g.Pump(bridgeNow, talk.PumpOptions{}); !isReentrant(err) {
+						t.Fatal(err)
+					}
+					if _, err := g.Load(talk.LoadOptions{Name: "nested", Source: ""}); !isReentrant(err) {
+						t.Fatal(err)
+					}
+					done := make(chan error, 1)
+					go func() {
+						_, p, err := target.Request(nil, talk.Message{Name: "echo", Args: []talk.Value{talk.Int(6)}})
+						if err == nil {
+							generated = append(generated, p)
+						}
+						done <- err
+					}()
+					select {
+					case err := <-done:
+						if err != nil {
+							t.Fatal(err)
+						}
+					case <-time.After(5 * time.Second):
+						t.Fatal("release input deadlocked")
+					}
+				}
+				if name == "release panic" {
+					panic("release cannot refuse cleanup")
+				}
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			g = core.NewGroup(talk.GroupOptions{Name: "g", Trace: &trace, OnReady: func() {
+				if inRelease.Load() && notified.CompareAndSwap(false, true) {
+					if _, err := g.Pump(bridgeNow, talk.PumpOptions{}); !isReentrant(err) {
+						t.Fatal(err)
+					}
+					_, p, err := target.Request(nil, talk.Message{Name: "echo", Args: []talk.Value{talk.Int(6)}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					generated = append(generated, p)
+				}
+			}})
+			wait := ""
+			if name == "release cancellation" {
+				wait = " and wait"
+			}
+			s, err = g.Load(talk.LoadOptions{Name: "s", Source: "on go\n ask api to touch" + wait + "\nend go", Grants: map[string]*talk.Grant{"api": def.GrantAll("api"), "z": def.GrantAll("z")}, GrantsAsUsed: name == "release trim"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name == "release inputs" {
+				target, err = g.Load(talk.LoadOptions{Name: "target", Source: "on echo x\n return x\nend echo"})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			pump := func() {
+				result, err := g.Pump(bridgeNow, talk.PumpOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				observation.Pumps = append(observation.Pumps, bridgeCanonical(reflect.ValueOf(result)))
+			}
+			switch name {
+			case "release cancellation", "release crossing stop":
+				if _, err = s.Deliver(talk.Message{Name: "go"}); err != nil {
+					t.Fatal(err)
+				}
+				pump()
+			case "release revoke":
+				s.Revoke("api")
+				pump()
+				s.Revoke("api")
+				s.Revoke("missing")
+				pump()
+			}
+			if name != "release crossing stop" {
+				s.Stop("done")
+				pump()
+			}
+			for _, p := range generated {
+				select {
+				case <-p.Done():
+					t.Fatal("release input ran before next Pump")
+				default:
+				}
+			}
+			if len(generated) > 0 {
+				pump()
+				for _, p := range generated {
+					v, e := p.Result()
+					if e != nil || !v.Equal(talk.Int(6)) {
+						t.Fatal(v, e)
+					}
+					observation.Values = append(observation.Values, v.String())
+				}
+			}
+			if name == "release inputs" && !notified.Load() {
+				t.Fatal("release input did not notify OnReady")
+			}
+			before := len(releases)
+			s.Stop("again")
+			pump()
+			if len(releases) != before {
+				t.Fatal("repeated Stop repeated release")
+			}
+			want := 2
+			if name == "release revoke" {
+				want = 3
+			}
+			if name == "release trim" {
+				want = 1
+			}
+			if len(releases) != want {
+				t.Fatalf("got %d releases, want %d", len(releases), want)
+			}
+			observation.Trace = append([]string{}, trace.lines...)
+			out = append(out, observation)
+		})
+	}
+	return out
 }
