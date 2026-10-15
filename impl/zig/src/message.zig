@@ -2234,7 +2234,18 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     }
     var override_slot: talk.LimitOverride = undefined;
     const override = overrideOf(field(message, "limits"), &override_slot) catch {
-        if (to_all) entry.group.group.refuseBroadcast(mname, args, how == .decide, "invalid value");
+        if (to_all) {
+            var refused: ?machine.RefusedOverride = null;
+            if (field(message, "limits")) |raw| {
+                refused = .{};
+                if (raw == .object) {
+                    inline for (.{ .{ "fuelPerRun", "fuel_per_run" }, .{ "allocPerRun", "alloc_per_run" }, .{ "maxWaitMs", "max_wait_ms" }, .{ "maxJoin", "max_join" } }) |f| {
+                        if (raw.object.get(f[0])) |x| @field(refused.?, f[1]) = asInt(x);
+                    }
+                }
+            }
+            entry.group.group.refuseBroadcast(mname, args, how == .decide, refused, "invalid value");
+        }
         return hostError(s.gpa, ref, .invalid_value);
     };
     const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };

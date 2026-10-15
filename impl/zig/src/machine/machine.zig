@@ -1168,6 +1168,24 @@ pub const Override = struct {
     }
 };
 
+/// Admission can refuse negative values which an executable Override cannot hold.
+pub const RefusedOverride = struct {
+    fuel_per_run: ?i64 = null,
+    alloc_per_run: ?i64 = null,
+    max_wait_ms: ?i64 = null,
+    max_join: ?i64 = null,
+
+    pub fn write(o: RefusedOverride, w: *std.Io.Writer) void {
+        w.writeAll(" limits={") catch {};
+        var first = true;
+        inline for (.{ .{ "fuelPerRun", o.fuel_per_run }, .{ "allocPerRun", o.alloc_per_run }, .{ "maxWaitMs", o.max_wait_ms }, .{ "maxJoin", o.max_join } }) |f| if (f[1]) |v| {
+            w.print("{s}{s}: {d}", .{ if (first) "" else ", ", f[0], v }) catch {};
+            first = false;
+        };
+        w.writeAll("}") catch {};
+    }
+};
+
 /// What preempted a Run: its Script's Fuel Slice or the Group's Fuel cap.
 pub const Preemption = enum { slice, cap, crossing };
 
@@ -3129,9 +3147,12 @@ pub const Group = struct {
 
     /// Writes a Broadcast the Host call refused, with no id, then its
     /// `refused` record.
-    pub fn refuseBroadcast(g: *Group, message: []const u8, args: []*Value, decision: bool, code: []const u8) void {
-        g.writeInput(.{ .broadcast = .{ .id = 0, .message = message, .args = args, .decision = decision } });
-        g.write("refused code=\"{s}\"\n", .{code});
+    pub fn refuseBroadcast(g: *Group, message: []const u8, args: []*Value, decision: bool, limits: ?RefusedOverride, code: []const u8) void {
+        const out = g.trace orelse return;
+        out.print("> {s} message={s}", .{ if (decision) "decide-broadcast" else "broadcast", message }) catch {};
+        writeArgs(out, args);
+        if (limits) |o| o.write(out);
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
     }
 
     pub fn releaseBroadcast(g: *Group, b: Broadcast) void {
@@ -3188,7 +3209,13 @@ pub const Group = struct {
             errdefer g.gpa.free(message);
             const args = try g.gpa.dupe(*Value, b.args);
             for (args) |v| _ = v.retain();
-            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = b.limits });
+            var limits = b.limits;
+            if (limits) |*o| {
+                inline for (.{ "fuel_per_run", "alloc_per_run", "max_wait_ms", "max_join" }) |f| {
+                    if (@field(o, f)) |v| @field(o, f) = @min(v, @field(r.script.limits, f));
+                }
+            }
+            try g.post(r.script, .{ .id = r.delivery, .message = message, .args = args, .request = false, .decision = b.decision, .decides = b.decision, .broadcast = b.id, .limits = limits });
         }
     }
 

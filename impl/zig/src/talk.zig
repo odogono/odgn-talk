@@ -467,6 +467,16 @@ fn overrideOf(given: ?*const LimitOverride) error{InvalidValue}!?machine.Overrid
     return if (any) out else null;
 }
 
+fn refusedOverrideOf(given: ?*const LimitOverride) ?machine.RefusedOverride {
+    const o = given orelse return null;
+    var out: machine.RefusedOverride = .{};
+    inline for (.{ .{ "fuel_per_run", 1 }, .{ "alloc_per_run", 2 }, .{ "max_wait_ms", 4 }, .{ "max_join", 8 } }) |f| {
+        const v = @field(o, f[0]);
+        if (v != 0 or o.set & f[1] != 0) @field(out, f[0]) = v;
+    }
+    return out;
+}
+
 pub const LoadObject = extern struct { name: ?[*]const u8, name_len: usize, object: *objects.Object };
 
 pub const Message = extern struct {
@@ -3470,12 +3480,12 @@ fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
     const override = overrideOf(m.limits) catch {
-        g.group.refuseBroadcast(name, @constCast(args), decision, "invalid value");
+        g.group.refuseBroadcast(name, @constCast(args), decision, refusedOverrideOf(m.limits), "invalid value");
         return .invalid_value;
     };
     const loosens = if (override) |o| o.loosens(.{}) else false;
     if (!machine.hostMessageName(name, args.len) or loosens) {
-        g.group.refuseBroadcast(name, @constCast(args), decision, "invalid value");
+        g.group.refuseBroadcast(name, @constCast(args), decision, refusedOverrideOf(m.limits), "invalid value");
         return .invalid_value;
     }
     const owned = g.core.gpa.alloc(*Value, args.len) catch return .out_of_memory;
