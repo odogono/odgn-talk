@@ -169,6 +169,16 @@ records and event table, each instruction with its source position.
 instructions are the Zig Core's own (ADR 0009), and nothing outside `src/`
 depends on them.
 
+Verified static Unit conversion targets carry a dimension signature and an
+ordered factor plan in counted code storage. Invalid Unit targets retain their
+runtime conversion failure; preparing metadata adds no Load diagnostic.
+Plans preserve each Decimal operation and rounding step, storing exponent
+repetitions as counts. Reload and Restore rebuild them with the code unit;
+they are absent from canonical disassembly, fingerprints and snapshots.
+Unit Values keep compact catalogue indices and a derived active-Kind mask,
+so arithmetic and comparison traverse only present Kinds. No runtime Unit
+combination or dimension cache is retained.
+
 Each body is lowered into its own buffer, with labels local to it, and the
 buffers are laid out in body order at the end. A Lambda or an event test is
 numbered and lowered where the lowering reaches it, so its constants and

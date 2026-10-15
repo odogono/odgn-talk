@@ -451,7 +451,7 @@ fn offsetSeconds(a: Allocator, v: *const Value) ?i64 {
     if (v.data != .quantity) return null;
     const q = v.data.quantity;
     const second = @import("../units.zig").Unit.parse("s") catch return null;
-    if (!q.unit.compatible(second)) return null;
+    if (!q.unit.compatible(&second)) return null;
     const base = q.unit.toBase(a, q.number) catch return null;
     if (base.exponent < 0) {
         var c = base.coefficient;

@@ -6,7 +6,16 @@ const Decimal = dec.Decimal;
 /// Every refusal a Unit operation can report.
 pub const Error = dec.Error || error{IncompatibleUnits};
 /// One Unit Kind's factor: the catalogue Unit spelt in it and its power.
-pub const Slot = struct { unit: usize = 0, exponent: i32 = 0 };
+pub const Slot = struct { unit: std.math.IntFittingRange(0, table.unit.len - 1) = 0, exponent: i32 = 0 };
+const Mask = std.math.IntFittingRange(0, (1 << table.kind.len) - 1);
+fn bit(kind: usize) Mask {
+    return @as(Mask, 1) << @intCast(kind);
+}
+fn nextKind(mask: *Mask) usize {
+    const kind = @ctz(mask.*);
+    mask.* &= mask.* - 1;
+    return kind;
+}
 // Derive immutable numeric factors from the generated catalogue at compile
 // time. Keep the two ratio factors and every Kind factor as separate steps.
 const unit_factors = blk: {
@@ -49,23 +58,30 @@ const kind_dimensions = blk: {
 /// order, with a zero exponent where the Kind is absent.
 pub const Unit = struct {
     slots: [table.kind.len]Slot = @splat(.{}),
+    /// Derived alongside the slots by parse/parseQuantity/combine; do not
+    /// mutate slots independently. Never serialized or logically charged.
+    active: Mask = 0,
+    fn index(self: *Unit) void {
+        self.active = 0;
+        for (self.slots, 0..) |slot, k| if (slot.exponent != 0) {
+            self.active |= bit(k);
+        };
+    }
     /// Whether no Kind is present, as for a plain number.
-    pub fn empty(self: Unit) bool {
-        for (self.slots) |s| if (s.exponent != 0) return false;
-        return true;
+    pub fn empty(self: *const Unit) bool {
+        return self.active == 0;
     }
     /// Refuses a calendar Unit raised to a power or in a Compound Unit.
-    pub fn validate(self: Unit) Error!void {
-        var calendar = false;
-        var count: usize = 0;
-        for (self.slots, table.kind) |s, k| if (s.exponent != 0) {
-            count += 1;
-            if (k.calendar orelse false) {
-                if (s.exponent != 1) return error.IncompatibleUnits;
-                calendar = true;
-            }
+    pub fn validate(self: *const Unit) Error!void {
+        const calendars = comptime blk: {
+            var mask: Mask = 0;
+            for (table.kind, 0..) |kind, k| if (kind.calendar orelse false) {
+                mask |= bit(k);
+            };
+            break :blk mask;
         };
-        if (calendar and count != 1) return error.IncompatibleUnits;
+        const calendar = self.active & calendars;
+        if (calendar != 0 and (@popCount(self.active) != 1 or self.slots[@ctz(calendar)].exponent != 1)) return error.IncompatibleUnits;
     }
     /// Reads canonical Unit text, refusing a slot spelt two ways.
     pub fn parse(input: []const u8) Error!Unit {
@@ -102,13 +118,14 @@ pub const Unit = struct {
             // Mixed spellings in one slot require a numeric conversion.
             // parseQuantity handles them before canonicalizing.
             if (s.exponent != 0 and s.unit != i) return error.IncompatibleUnits;
-            s.unit = i;
+            s.unit = @intCast(i);
             s.exponent = std.math.add(i32, s.exponent, exponent) catch return error.InvalidValue;
             if (pos == input.len) break;
             if (input[pos] == '/' and !denominator) denominator = true else if (input[pos] != '*') return error.InvalidValue;
             pos += 1;
             if (pos == input.len) return error.InvalidValue;
         }
+        result.index();
         try result.validate();
         return result;
     }
@@ -153,6 +170,7 @@ pub const Unit = struct {
             if (pos == input.len) return error.InvalidValue;
         }
         if (calendar and terms.items.len != 1) return error.IncompatibleUnits;
+        result.index();
         try result.validate();
         var value = n;
         if (changed) {
@@ -181,7 +199,7 @@ pub const Unit = struct {
     }
     /// The canonical text, owned by the caller. `plural` spells a lone word
     /// Unit in the plural.
-    pub fn string(self: Unit, a: std.mem.Allocator, plural: bool) ![]u8 {
+    pub fn string(self: *const Unit, a: std.mem.Allocator, plural: bool) ![]u8 {
         var out: std.Io.Writer.Allocating = .init(a);
         defer out.deinit();
         var count: usize = 0;
@@ -211,39 +229,49 @@ pub const Unit = struct {
         return out.toOwnedSlice();
     }
     /// The power of each base dimension, indexed by the slot that holds it.
-    pub fn dimensions(self: Unit) [table.kind.len]i64 {
+    pub fn dimensions(self: *const Unit) [table.kind.len]i64 {
         var result: [table.kind.len]i64 = @splat(0);
-        for (self.slots, kind_dimensions) |s, d| result[d.slot] += @as(i64, s.exponent) * d.power;
+        var mask = self.active;
+        while (mask != 0) {
+            const k = nextKind(&mask);
+            const s = self.slots[k];
+            const d = kind_dimensions[k];
+            result[d.slot] += @as(i64, s.exponent) * d.power;
+        }
         return result;
     }
     /// Whether both Units have the same dimensions, so convert to each other.
-    pub fn compatible(self: Unit, other: Unit) bool {
+    pub fn compatible(self: *const Unit, other: *const Unit) bool {
         return std.mem.eql(i64, &self.dimensions(), &other.dimensions());
     }
     /// The product of two Units, or their quotient when `divide` is set.
-    pub fn combine(left: Unit, right: Unit, divide: bool) Error!Unit {
-        var result = left;
-        for (right.slots, 0..) |s, i| {
+    pub fn combine(left: *const Unit, right: *const Unit, divide: bool) Error!Unit {
+        var result = left.*;
+        var mask = right.active;
+        while (mask != 0) {
+            const i = nextKind(&mask);
+            const s = right.slots[i];
             if (result.slots[i].exponent == 0) result.slots[i].unit = s.unit;
             result.slots[i].exponent = std.math.add(i32, result.slots[i].exponent, if (divide) -s.exponent else s.exponent) catch return error.InvalidValue;
+            if (result.slots[i].exponent == 0) result.active &= ~bit(i) else result.active |= bit(i);
         }
         try result.validate();
         return result;
     }
     /// Converts `n`, measured in this Unit, into Base Units.
-    pub fn toBase(self: Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
+    pub fn toBase(self: *const Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
         return self.convert(a, n, false, false);
     }
     /// Converts `n`, measured in Base Units, into this Unit.
-    pub fn fromBase(self: Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
+    pub fn fromBase(self: *const Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
         return self.convert(a, n, true, false);
     }
     /// Converts `n` into Base Units for comparison only: intermediates may
     /// exceed the Script number range.
-    pub fn comparisonBase(self: Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
+    pub fn comparisonBase(self: *const Unit, a: std.mem.Allocator, n: Decimal) Error!Decimal {
         return self.convert(a, n, false, true);
     }
-    fn convert(self: Unit, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
+    fn convert(self: *const Unit, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
         const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
         var value = n;
         // Numerator factors precede denominator factors, both in kind order;
@@ -251,8 +279,10 @@ pub const Unit = struct {
         for (0..2) |step| {
             const numerator_phase = (step == 0) != from_base;
             const op: dec.Operator = if (numerator_phase != from_base) .multiply else .divide;
-            for (self.slots, 0..) |s, k| {
-                if (s.exponent == 0) continue;
+            var mask = self.active;
+            while (mask != 0) {
+                const k = nextKind(&mask);
+                const s = self.slots[k];
                 const u = table.unit[s.unit];
                 const count: u32 = @intCast(@abs(s.exponent));
                 const applies = (s.exponent > 0) == numerator_phase;
@@ -267,6 +297,69 @@ pub const Unit = struct {
                     };
                 }
             }
+        }
+        return value;
+    }
+};
+/// Verified static target metadata, owned by its code unit. Each run keeps
+/// the factor pair and repetition count, so exponents never expand storage.
+pub const Descriptor = struct {
+    unit: Unit,
+    dimensions: [table.kind.len]i64,
+    plan: Plan,
+    pub fn init(unit: Unit) Descriptor {
+        return .{ .unit = unit, .dimensions = unit.dimensions(), .plan = Plan.init(&unit) };
+    }
+};
+const plan_factors = blk: {
+    var factors: [table.unit.len + table.kind.len + 2]Decimal = undefined;
+    for (unit_factors, 0..) |factor_value, i| factors[i] = factor_value;
+    for (kind_factors, 0..) |factor_value, i| factors[table.unit.len + i] = factor_value orelse Decimal.fromInt(@as(u8, 1));
+    factors[factors.len - 2] = ratio_numerator;
+    factors[factors.len - 1] = ratio_denominator;
+    break :blk factors;
+};
+pub const Plan = struct {
+    const Factor = std.math.IntFittingRange(0, plan_factors.len - 1);
+    const Run = struct { first: Factor = 0, second: ?Factor = null, count: u32 = 0 };
+    runs: [2 * table.kind.len]Run = @splat(.{}),
+    numerator_end: u8 = 0,
+    len: u8 = 0,
+    pub fn init(unit: *const Unit) Plan {
+        var plan: Plan = .{};
+        for ([_]bool{ true, false }) |numerator| {
+            var mask = unit.active;
+            while (mask != 0) {
+                const k = nextKind(&mask);
+                const slot = unit.slots[k];
+                const applies = (slot.exponent > 0) == numerator;
+                const ratio = table.unit[slot.unit].ratio != null;
+                if (!applies and !ratio) continue;
+                plan.runs[plan.len] = .{
+                    .first = if (ratio) @intCast(plan_factors.len - (if (applies) @as(usize, 2) else 1)) else slot.unit,
+                    .second = if (applies and kind_factors[k] != null) @intCast(table.unit.len + k) else null,
+                    .count = @intCast(@abs(slot.exponent)),
+                };
+                plan.len += 1;
+            }
+            if (numerator) plan.numerator_end = plan.len;
+        }
+        return plan;
+    }
+    /// Executes exactly the Unit conversion sequence, with bounded or
+    /// comparison-only unbounded Decimal intermediates.
+    pub fn execute(self: *const Plan, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
+        const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
+        var value = n;
+        const numerator = self.runs[0..self.numerator_end];
+        const denominator = self.runs[self.numerator_end..self.len];
+        const phases: [2][]const Run = if (from_base) .{ denominator, numerator } else .{ numerator, denominator };
+        for (phases, 0..) |runs, phase| {
+            const op: dec.Operator = if (phase == 0) .multiply else .divide;
+            for (runs) |run| for (0..run.count) |_| {
+                value = try applyFactor(calculate, a, op, value, plan_factors[run.first]);
+                if (run.second) |extra| value = try applyFactor(calculate, a, op, value, plan_factors[extra]);
+            };
         }
         return value;
     }
@@ -351,4 +444,124 @@ test "compiled Unit factors preserve sequential rounding and quantum" {
     // path; fail every scratch request and verify all preceding work is freed.
     try std.testing.checkAllAllocationFailures(a, conversionAllocationTest, .{ try Unit.parse("degF"), n });
     try std.testing.checkAllAllocationFailures(a, conversionAllocationTest, .{ try Unit.parse("mm"), Decimal{ .coefficient = 5, .exponent = -6176 } });
+}
+
+// The pre-metadata traversal remains an independent differential oracle.
+fn originalConversion(self: *const Unit, a: std.mem.Allocator, n: Decimal, from_base: bool, comptime comparison: bool) Error!Decimal {
+    const calculate = if (comparison) dec.calculateUnbounded else dec.calculate;
+    var value = n;
+    // Numerator factors precede denominator factors, both in kind order;
+    // converting from Base Units reverses the phases.
+    for (0..2) |step| {
+        const numerator_phase = (step == 0) != from_base;
+        const op: dec.Operator = if (numerator_phase != from_base) .multiply else .divide;
+        for (self.slots, 0..) |s, k| {
+            if (s.exponent == 0) continue;
+            const u = table.unit[s.unit];
+            const count: u32 = @intCast(@abs(s.exponent));
+            const applies = (s.exponent > 0) == numerator_phase;
+            for (0..count) |_| {
+                if (u.ratio != null) {
+                    value = try calculate(a, op, value, if (applies) ratio_numerator else ratio_denominator);
+                } else if (applies) {
+                    value = try applyFactor(calculate, a, op, value, unit_factors[s.unit]);
+                }
+                if (kind_factors[k]) |extra| if (applies) {
+                    value = try applyFactor(calculate, a, op, value, extra);
+                };
+            }
+        }
+    }
+    return value;
+}
+
+fn checkConversionResult(expected: Error!Decimal, actual: Error!Decimal) !void {
+    if (expected) |number| {
+        try std.testing.expectEqual(number, try actual);
+    } else |err| try std.testing.expectError(err, actual);
+}
+fn plannedAllocationTest(a: std.mem.Allocator, unit: Unit, n: Decimal) !void {
+    const plan = Plan.init(&unit);
+    _ = try plan.execute(a, n, false, false);
+    _ = try plan.execute(a, n, true, false);
+    _ = try plan.execute(a, n, false, true);
+}
+test "sparse and planned conversion agree with original steps including unbounded comparison" {
+    const a = std.testing.allocator;
+    const numbers = [_]Decimal{
+        .{ .exponent = -6176 },
+        .{ .negative = true, .exponent = -6176 },
+        .{ .coefficient = 1, .exponent = 2 },
+        .{ .coefficient = 0, .exponent = 2 },
+        try Decimal.parse("-2.50"),
+        try Decimal.parse("9999999999999999999999999999999999"),
+        .{ .coefficient = 3, .exponent = -6176 },
+    };
+    var examples: std.ArrayList(Unit) = .empty;
+    defer examples.deinit(a);
+    for (table.unit) |unit| try examples.append(a, try Unit.parse(unit.name));
+    for ([_][]const u8{ "1/degF", "degF^3/hr", "mL/ft^3", "kg*mi^2/hr", "mL^2/degF^2", "m^3/L", "m/m", "month", "year" }) |text| try examples.append(a, try Unit.parse(text));
+    for (examples.items) |unit| {
+        const descriptor = Descriptor.init(unit);
+        var dimensions: [table.kind.len]i64 = @splat(0);
+        for (unit.slots, kind_dimensions) |slot, dimension| dimensions[dimension.slot] += @as(i64, slot.exponent) * dimension.power;
+        try std.testing.expectEqual(dimensions, descriptor.dimensions);
+        for (numbers) |n| for ([_]bool{ false, true }) |from_base| {
+            try checkConversionResult(originalConversion(&unit, a, n, from_base, false), unit.convert(a, n, from_base, false));
+            try checkConversionResult(originalConversion(&unit, a, n, from_base, false), descriptor.plan.execute(a, n, from_base, false));
+            try checkConversionResult(originalConversion(&unit, a, n, from_base, true), unit.convert(a, n, from_base, true));
+            try checkConversionResult(originalConversion(&unit, a, n, from_base, true), descriptor.plan.execute(a, n, from_base, true));
+        };
+    }
+    // i32 exponent extremes keep bounded metadata; no expanded factor list.
+    const huge = try Unit.parse("m^2147483647");
+    try std.testing.expectEqual(@as(i64, 2147483647), huge.dimensions()[1]);
+    try std.testing.expectEqual(@as(u8, 1), Plan.init(&huge).len);
+    try std.testing.expectError(error.InvalidValue, Unit.combine(&huge, &huge, false));
+    const inverse = try Unit.parse("1/m^2147483647");
+    const cancelled = try Unit.combine(&huge, &inverse, false);
+    try std.testing.expect(cancelled.empty());
+    const month = try Unit.parse("month");
+    const metre = try Unit.parse("m");
+    try std.testing.expectError(error.IncompatibleUnits, Unit.combine(&month, &metre, false));
+    try std.testing.expectError(error.IncompatibleUnits, Unit.parseQuantity(a, try Decimal.parse("1"), "month/month"));
+    try std.testing.checkAllAllocationFailures(a, plannedAllocationTest, .{ try Unit.parse("degF"), try Decimal.parse("2.50") });
+    try std.testing.checkAllAllocationFailures(a, plannedAllocationTest, .{ try Unit.parse("mL/ft^3"), numbers[6] });
+}
+
+test "sparse combinations preserve catalogue products quotients and calendar refusals" {
+    for (table.unit) |left| for (table.unit) |right| {
+        const l = try Unit.parse(left.name);
+        const r = try Unit.parse(right.name);
+        for ([_]bool{ false, true }) |divide| {
+            var reference = l;
+            var calendar = false;
+            var present: usize = 0;
+            for (r.slots, 0..) |slot, k| {
+                if (reference.slots[k].exponent == 0) reference.slots[k].unit = slot.unit;
+                reference.slots[k].exponent += if (divide) -slot.exponent else slot.exponent;
+            }
+            var invalid = false;
+            for (reference.slots, table.kind) |slot, kind| if (slot.exponent != 0) {
+                present += 1;
+                if (kind.calendar orelse false) {
+                    calendar = true;
+                    invalid = invalid or slot.exponent != 1;
+                }
+            };
+            invalid = invalid or (calendar and present != 1);
+            if (invalid) {
+                try std.testing.expectError(error.IncompatibleUnits, Unit.combine(&l, &r, divide));
+            } else {
+                const result = try Unit.combine(&l, &r, divide);
+                for (reference.slots, result.slots) |expected, actual| {
+                    try std.testing.expectEqual(expected.exponent, actual.exponent);
+                    if (expected.exponent != 0) try std.testing.expectEqual(expected.unit, actual.unit);
+                }
+                reference.index();
+                try std.testing.expectEqual(reference.active, result.active);
+                try std.testing.expectEqual(reference.dimensions(), result.dimensions());
+            }
+        }
+    };
 }
