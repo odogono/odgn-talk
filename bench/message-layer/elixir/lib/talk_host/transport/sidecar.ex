@@ -9,7 +9,7 @@ defmodule TalkHost.Transport.Sidecar do
       Defaults to the native sidecar in the repository's `.cache/`.
     * `:timeout` - milliseconds to wait for one reply, 60 s by default.
   """
-  @behaviour TalkHost.Transport
+  @behaviour NorthTalk.Transport
 
   defstruct [:port, :os_pid, :timeout, :stderr]
 

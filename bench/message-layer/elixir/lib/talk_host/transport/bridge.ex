@@ -12,7 +12,7 @@ defmodule TalkHost.Transport.Bridge do
       Store's limiter. wasm32's 4 GiB by default.
     * `:timeout` - milliseconds to wait for one reply, 60 s by default.
   """
-  @behaviour TalkHost.Transport
+  @behaviour NorthTalk.Transport
 
   alias TalkHost.Transport.Sidecar
 

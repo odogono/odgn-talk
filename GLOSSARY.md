@@ -80,6 +80,10 @@ _Avoid_: wire format, serialisation, tagged JSON
 The language-neutral form of the embedding interface: one JSON message per embedding call, with values in the Value Encoding, for Hosts over WASI or a sidecar. The Host starts every exchange, and the Core never calls the Host.
 _Avoid_: protocol, wire format, RPC
 
+**Instance Owner**:
+The one party in a Host that holds a Core instance and conducts every Message Layer exchange with it, one complete exchange at a time, including the needs answered inside it. It may drive several Script Groups in that instance.
+_Avoid_: conversation owner, driver, session (for the owner itself)
+
 **Grant**:
 A Capability made available to one Script at load, limited to a set of its Operations and carrying the Host's own binding data. The loader checks every Capability call against the Script's Grants.
 _Avoid_: permission, token, entitlement

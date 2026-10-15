@@ -4,7 +4,7 @@ An Elixir Host for the [Message Layer](../../../spec/09-embedding.md#the-message
 
 It drives the Cores through two transports:
 
-- **Wasmex:** the Zig [`wasm32-wasi` reactor](../../../impl/zig/README.md#building-and-testing), in Wasmex 0.15.1 (wasmtime 47), compiled with Cranelift `opt_level: :speed`.
+- **Wasmex:** the Zig [`wasm32-wasi` reactor](../../../impl/zig/README.md#building-and-testing), in Wasmex 0.15.1 (wasmtime 47), compiled with Cranelift `opt_level: :speed`. The transport is `NorthTalk.Transport.Wasi`, from the [Elixir embedding](../../../impl/elixir/), so this Host measures the same code applications run.
 - **Sidecar:** the native Zig [`messagelayer`](../../../impl/zig/README.md#native-message-layer-sidecar) on an Erlang Port, whose `{:packet, 4}` framing matches the sidecar's exactly.
 
 It also runs its containment and fault suites against the [minimal C Host](../../message-layer-c/) on wasmtime, through that Host's `--serve` bridge on a Port, so the C Host faces the same cases (#554). That transport, `c, wasmtime`, runs when `bench/message-layer-c/out/host` exists; build it with `bench/message-layer-c/run.sh`. Its latency and memory are measured inside the C Host, since the Port would add to them.
@@ -47,7 +47,7 @@ Latency and instantiation figures take 5,000 samples after warm-up, three times,
 
 | Path | Contents |
 | --- | --- |
-| [`lib/talk_host/transport/`](lib/talk_host/transport/) | The Wasmex and Port transports. |
+| [`lib/talk_host/transport/`](lib/talk_host/transport/) | The Port transports. The Wasmex one is [`NorthTalk.Transport.Wasi`](../../../impl/elixir/lib/north_talk/transport/wasi.ex). |
 | [`lib/talk_host/session.ex`](lib/talk_host/session.ex) | The Host's side of the protocol: `ref`s, and answering `op` and `prop` needs. |
 | [`lib/talk_host/measure.ex`](lib/talk_host/measure.ex) | Latency, instantiation and memory. |
 | [`lib/talk_host/containment.ex`](lib/talk_host/containment.ex), [`faults.ex`](lib/talk_host/faults.ex), [`hostile.ex`](lib/talk_host/hostile.ex) | Memory containment, the fault cases, and the hostile inputs. |

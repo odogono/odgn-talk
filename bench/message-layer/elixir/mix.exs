@@ -7,7 +7,7 @@ defmodule TalkHost.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      deps: [{:wasmex, "== 0.15.1"}]
+      deps: [{:north_talk, path: "../../../impl/elixir"}, {:wasmex, "== 0.15.1"}]
     ]
   end
 

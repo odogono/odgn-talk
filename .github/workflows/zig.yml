@@ -11,6 +11,7 @@ on:
       - 'tools/wasi/**'
       - 'tools/sidecar/**'
       - 'bench/message-layer/elixir/**'
+      - 'impl/elixir/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
   push:
@@ -24,6 +25,7 @@ on:
       - 'tools/wasi/**'
       - 'tools/sidecar/**'
       - 'bench/message-layer/elixir/**'
+      - 'impl/elixir/**'
       - 'tooling/fuzz/**'
       - '.github/workflows/zig.yml'
 
@@ -64,6 +66,36 @@ jobs:
         run: |
           python -m pip install wasmtime==49.0.0 brotli==1.2.0
           python tools/wasi/list_memory.py --sidecar impl/zig/zig-out/bin/messagelayer
+
+  # The Elixir embedding library, on its oldest and newest supported
+  # Elixir/OTP, against the reactor built here. No Go is installed.
+  elixir:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { otp: '27', elixir: '1.17' }
+          - { otp: '28', elixir: '1.19' }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - run: zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+        working-directory: impl/zig
+      - run: mix deps.get
+        working-directory: impl/elixir
+      - run: mix format --check-formatted
+        working-directory: impl/elixir
+      - run: mix compile --warnings-as-errors
+        working-directory: impl/elixir
+      - run: mix test
+        working-directory: impl/elixir
 
   sidecar-elixir:
     runs-on: ubuntu-latest
