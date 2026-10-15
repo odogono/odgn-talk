@@ -32,6 +32,7 @@ parser.add_argument("--profiles", type=Path, help="directory for separate macOS 
 parser.add_argument("--out", type=Path, required=True)
 parser.add_argument("--profiles-only", action="store_true", help="capture profiles without timings")
 parser.add_argument("--profile-filter", action="append", help="profile names containing this text instead of the default selection")
+parser.add_argument("--source-file", action="append", default=[], help="additional source to hash; a new baseline file is recorded as null")
 args = parser.parse_args()
 if args.pairs < 1 or args.count < 1:
     parser.error("pairs and count must be positive")
@@ -118,6 +119,10 @@ result["baselineSourceSha256"] = {
     path: hashlib.sha256(subprocess.check_output(["git", "show", f"{args.before_revision}:{path}"], cwd=root)).hexdigest()
     for path in result["sourceSha256"]
 }
+for path in args.source_file:
+    result["sourceSha256"][path] = sha(root / path)
+    baseline = subprocess.run(["git", "show", f"{args.before_revision}:{path}"], cwd=root, capture_output=True)
+    result["baselineSourceSha256"][path] = hashlib.sha256(baseline.stdout).hexdigest() if baseline.returncode == 0 else None
 with tempfile.TemporaryDirectory() as temporary:
     temporary = Path(temporary)
     straightline = temporary / "straightline.talk"

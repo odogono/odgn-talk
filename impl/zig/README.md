@@ -217,6 +217,14 @@ Every build is `-Doptimize=safe` (ReleaseSafe) unless told otherwise, so bounds
 and integer overflow stay checked while the Core reads hostile input.
 `-Doptimize=fast` is refused.
 
+Instruction scratch uses the standard arena. At each instruction boundary,
+an empty arena or one empty buffer without a free list skips the redundant
+`retain_capacity` reset. Dirty buffers, chains and free lists use the standard
+reset. This fast path reads the pinned Zig arena state; an upgrade must
+recheck that empty-state invariant and the tests in
+[`scratch.zig`](src/machine/scratch.zig). Charging, limit admission, landed
+control, preemption and operand protection still run at every instruction.
+
 Zig 0.17 renamed standard library APIs that older examples and documentation
 still use. Check names against the installed source, under `lib_dir` from
 `zig env`, rather than online docs:

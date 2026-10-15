@@ -1,0 +1,17 @@
+{
+  "baselineRevision": "0aed90d3",
+  "command": "xcrun llvm-objdump --disassemble --demangle <host>",
+  "assemblySelection": "Functions whose symbols are machine.machine.Group.execute or heap.ArenaAllocator.reset",
+  "sha256": {
+    "bench/results/2026-10-15-zig-scratch-profiles/after.asm.gz": "3494ff015bbfccf8653679dde5a0e17eafdab11f2a36d311da98d616e725b3c5",
+    "bench/results/2026-10-15-zig-scratch-profiles/before.asm.gz": "e4cecfc130d729cd64ed02281428e655eae12c2a923d4557021b52d1c2eeab1b",
+    ".cache/issue-956/before-host": "3565d1373e2f6493c8ee45d5b9dea33b2ac41edc5a923b57bfb8a713dfaffd70",
+    ".cache/issue-956/after-host": "b45592df65c494b70356f6f120cad1d4f96fdf5468c34c4adaf22b9a0315474a",
+    ".cache/bench-zig/host": "fa635650d30908cbcbe81ebe29663892ca70e04b7b21413467020fc93bea79e2",
+    ".cache/issue-956/after/lib/libtalk.a": "3acfbac0bc0b752e38471adcae3bf6616f5155cadc90e909a6fd4050cda14de9",
+    "impl/zig/zig-out/lib/libtalk.a": "3acfbac0bc0b752e38471adcae3bf6616f5155cadc90e909a6fd4050cda14de9"
+  },
+  "fourWayAndPairedAfterTextEqual": true,
+  "textComparison": "xcrun llvm-objdump --macho --section=__text --full-contents <host>; compare output after the first filename line",
+  "textDumpSha256ExcludingFilename": "046c3ad5129318f0057a96f7f138179169d2f6d4669afa3be98bd57ee10a23e6"
+}

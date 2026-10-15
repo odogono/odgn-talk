@@ -14,6 +14,7 @@ const parser = @import("../syntax/parser.zig");
 const lexer = @import("../syntax/lexer.zig");
 const ast = @import("../syntax/ast.zig");
 const chunks = @import("chunks.zig");
+const scratch_arena = @import("scratch.zig");
 pub const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
 const binary = @import("binary.zig");
@@ -6359,7 +6360,7 @@ pub const Group = struct {
         // defer releases its owners and clears its metadata on every path.
         var held: Operands = .{};
         while (true) {
-            _ = g.scratch.reset(.retain_capacity);
+            scratch_arena.reset(&g.scratch);
             // A clause a Command Call tried pays its rate with the clause
             // body's first instruction, this one.
             run.clause_fuel += run.called_clause;

@@ -44,6 +44,10 @@ nothing but the cases they blessed: the Zig Core is written from the Spec.
 | The Message Layer on `wasm32-wasi`: `talk_buffer`/`talk_send`, frames, needs and Reports | [message layer](src/message.zig), [machine](src/machine/machine.zig) (crossing pause, RunEnd reports) | [the message layer](../../spec/09-embedding.md#the-message-layer), [decisions on #625](https://github.com/odogono/odgn-talk/issues/625#issuecomment-6111271797) | tests in the module, [WASI checks](../../tools/wasi/zig.py), [the reactor check](../../tools/wasi/check.py), [List memory and fault reuse](../../tools/wasi/list_memory.py) | `uv run tools/wasi/check.py impl/zig/zig-out/bin/talk.wasm` |
 | Build, targets and CI | [`build.zig`](build.zig), [`build.zig.zon`](build.zig.zon), [workflow](../../.github/workflows/zig.yml) | [ADR 0078](../../docs/adr/0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md) | the workflow's steps | `cd impl/zig && zig build -Dtarget=wasm32-wasi`; then from the root `uv run tools/wasi/zig.py impl/zig/zig-out/bin/talk.wasm` |
 
+Instruction scratch reset's arena-state fast path lives in
+[`scratch.zig`](src/machine/scratch.zig); its tests cover empty and dirty
+buffers, chains, free lists and refused allocation/consolidation.
+
 Update generated files through their generators. A Zig upgrade is its own PR
 and changes no behaviour.
 

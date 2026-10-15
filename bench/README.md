@@ -121,6 +121,12 @@ record paired sliced/unsliced timings, native disassembly and CPU samples for
 reusing protected-operand storage in
 [#925](https://github.com/odogono/odgn-talk/issues/925).
 
+The [Zig scratch reset measurements](results/2026-10-15-zig-scratch-reset.md)
+record alternating sliced/unsliced timings, protected-loop probes, allocation
+parity, native assembly and separate CPU samples for skipping already-empty
+instruction arena resets in
+[#956](https://github.com/odogono/odgn-talk/issues/956).
+
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
