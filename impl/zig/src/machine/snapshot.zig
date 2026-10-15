@@ -259,8 +259,8 @@ fn writeValue(o: *Out, t: Tables, root: *const Value) !void {
                 var i = pairs.len;
                 while (i > 0) {
                     i -= 1;
-                    steps.appendAssumeCapacity(.{ .value = pairs[i].value });
-                    steps.appendAssumeCapacity(.{ .key = pairs[i].key });
+                    steps.appendAssumeCapacity(.{ .value = pairs.at(i).value });
+                    steps.appendAssumeCapacity(.{ .key = pairs.at(i).key });
                 }
             },
             .function => |f| {
@@ -2843,9 +2843,9 @@ test "Map updates retain insertion order and originals across restore and Segmen
         defer values.release();
         try testing.expect(try original.equal(script.variables[1]));
         try testing.expect(try original.equal(values.get("self").?));
-        try testing.expectEqualStrings("é", values.data.map[0].key);
-        try testing.expectEqualStrings("tail", values.data.map[1].key);
-        try testing.expectEqualStrings("self", values.data.map[2].key);
+        try testing.expectEqualStrings("é", values.data.map.at(0).key);
+        try testing.expectEqualStrings("tail", values.data.map.at(1).key);
+        try testing.expectEqualStrings("self", values.data.map.at(2).key);
         try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(3), values.get("é").?.data.number));
         try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(4), values.get("tail").?.data.number));
         _ = try g.deliver("s", "fault", &.{}, false);
@@ -3055,4 +3055,55 @@ test "a value nested 100,000 deep saves and restores on a small stack" {
     }.go, .{&result});
     t.join();
     try result;
+}
+
+test "shared Map blocks save as ordered values and restore across rollback" {
+    const gpa = testing.allocator;
+    var group: Group = .init(gpa, null);
+    defer group.deinit();
+    const source =
+        \\script variable values = {}
+        \\script variable original = nothing
+        \\on edit
+        \\  repeat for each i in 1..65
+        \\    put i into the (i as text) of values
+        \\  end repeat
+        \\  put values into original
+        \\  put values into values's self
+        \\  wait 1 s
+        \\  put 99 into the ("32") of values
+        \\end edit
+        \\on fault
+        \\  delete the ("1") of values
+        \\  repeat forever
+        \\  end repeat
+        \\end fault
+    ;
+    try testing.expect(try group.load("s", source, .{ .limits = .{ .fuel_per_run = 10_000 } }) == .loaded);
+    _ = try group.deliver("s", "edit", &.{}, false);
+    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    const saved = try save(&group, gpa, try group.groupFingerprint());
+    defer gpa.free(saved);
+    var restored: Group = .init(gpa, null);
+    defer restored.deinit();
+    var result: Result = .{};
+    defer result.deinit(gpa);
+    try testing.expectEqual(Outcome.full, try restore(&restored, saved, .{}, &result));
+    const saved_again = try save(&restored, gpa, try restored.groupFingerprint());
+    defer gpa.free(saved_again);
+    try testing.expectEqualSlices(u8, saved, saved_again);
+    for ([_]*Group{ &group, &restored }) |g| {
+        try g.pump(.{ .seconds = 1790000001, .nanos = 0 });
+        const script = g.script("s").?;
+        const values = script.variables[0].retain();
+        defer values.release();
+        try testing.expectEqual(@as(usize, 66), values.data.map.len);
+        try testing.expect(try values.get("self").?.equal(script.variables[1]));
+        try testing.expectEqualStrings("1", values.data.map.at(0).key);
+        try testing.expectEqualStrings("self", values.data.map.at(65).key);
+        try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(99), values.get("32").?.data.number));
+        _ = try g.deliver("s", "fault", &.{}, false);
+        try g.pump(.{ .seconds = 1790000002, .nanos = 0 });
+        try testing.expect(try values.equal(script.variables[0]));
+    }
 }

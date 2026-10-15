@@ -97,9 +97,12 @@ pub fn check(a: Allocator, args: []const *Value, binding: ?*anyopaque) Allocator
             const index = model.scalar(given.allocator, .{ .number = Decimal.fromInt(@as(i64, @intCast(i))) }) catch return error.OutOfMemory;
             return try wrong(a, parameter_kinds, v, index);
         },
-        .map => |pairs| for (pairs) |p| if (!bindable(p.value)) {
-            const key = model.text(given.allocator, p.key) catch return error.OutOfMemory;
-            return try wrong(a, parameter_kinds, p.value, key);
+        .map => |pairs| for (0..pairs.len) |map_index| {
+            const p = pairs.at(map_index);
+            if (!bindable(p.value)) {
+                const key = model.text(given.allocator, p.key) catch return error.OutOfMemory;
+                return try wrong(a, parameter_kinds, p.value, key);
+            }
         },
         else => return try wrong(a, "list or map", given, null),
     }
@@ -159,7 +162,8 @@ pub fn params(a: Allocator, v: *const Value) !Params {
             const values = try a.alloc(SqlValue, pairs.len);
             const names = try a.alloc([*]const u8, pairs.len);
             const lens = try a.alloc(usize, pairs.len);
-            for (pairs, values, names, lens) |p, *y, *n, *l| {
+            for (0..pairs.len, values, names, lens) |i, *y, *n, *l| {
+                const p = pairs.at(i);
                 y.* = try sqlValue(a, p.value);
                 n.* = p.key.ptr;
                 l.* = p.key.len;

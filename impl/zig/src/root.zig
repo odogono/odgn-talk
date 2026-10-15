@@ -74,6 +74,7 @@ test {
     _ = @import("machine/clause_charge_test.zig");
     _ = @import("machine/lifecycle_test.zig");
     _ = @import("machine/list_write_test.zig");
+    _ = @import("machine/text_concat_test.zig");
     _ = notify;
     _ = @import("decimal/transcendental.zig");
     _ = @import("pattern.zig");

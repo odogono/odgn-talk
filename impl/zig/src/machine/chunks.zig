@@ -556,7 +556,7 @@ pub fn exists(a: Allocator, whole: *const Value, kind: Kind, index_value: *const
 pub fn property(a: Allocator, gpa: Allocator, v: *Value, name: []const u8, delimiter: []const u8, effect: *Effect) Error!*Value {
     if (std.mem.eql(u8, name, "length")) {
         return switch (v.data) {
-            .text => |t| numberValue(gpa, @intCast(unicode.grapheme.count(t))),
+            .text => numberValue(gpa, @intCast(model.textCharacters(v))),
             .list => |l| numberValue(gpa, @intCast(l.len)),
             .map => |m| numberValue(gpa, @intCast(m.len)),
             .bytes => |b| numberValue(gpa, @intCast(b.len)),
@@ -571,7 +571,10 @@ pub fn property(a: Allocator, gpa: Allocator, v: *Value, name: []const u8, delim
             if (std.mem.eql(u8, name, "keys")) for (out.items) |x| x.release();
             out.deinit(a);
         }
-        for (v.data.map) |p| try out.append(a, if (std.mem.eql(u8, name, "keys")) model.text(gpa, p.key) catch return error.OutOfMemory else p.value);
+        for (0..v.data.map.len) |map_index| {
+            const p = v.data.map.at(map_index);
+            try out.append(a, if (std.mem.eql(u8, name, "keys")) model.text(gpa, p.key) catch return error.OutOfMemory else p.value);
+        }
         return model.list(gpa, out.items) catch error.OutOfMemory;
     }
     if (std.mem.eql(u8, name, "bytes")) {

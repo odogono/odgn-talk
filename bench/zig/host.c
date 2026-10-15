@@ -26,7 +26,9 @@ static double now(void) {
  * scratch and collection buffers. groupPeak is the Group's own physical
  * high-water mark, including Load; groupUsed is held memory after the checked
  * Run, including retained cache capacity. None of these is resident memory. */
-#define MAX_SIZES 8192
+/* Long Text growth has one distinct buffer size per append, plus the
+ * Group's other storage. Keep the untimed size histogram above 8,192 joins. */
+#define MAX_SIZES 32768
 #define TOP_SIZES 8
 typedef struct { size_t size, count, bytes; } size_stat;
 static size_t host_bytes, host_allocs, host_frees, host_live, host_live_peak;

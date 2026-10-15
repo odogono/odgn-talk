@@ -203,7 +203,7 @@ export fn talk_value_get(v: *const Value, s: ?[*]const u8, len: usize, out: *?*V
 }
 export fn talk_value_entries(v: *const Value, index: usize, out: *Pair) bool {
     if (v.data != .map or index >= v.data.map.len) return false;
-    const p = v.data.map[index];
+    const p = v.data.map.at(index);
     out.* = .{ .key = p.key.ptr, .key_len = p.key.len, .value = p.value.retain() };
     return true;
 }

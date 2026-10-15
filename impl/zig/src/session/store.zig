@@ -84,7 +84,10 @@ pub const Stores = struct {
         while (stack.pop()) |x| switch (x.data) {
             .object => return true,
             .list => |items| for (items) |item| stack.append(gpa, item) catch @panic("out of memory"),
-            .map => |pairs| for (pairs) |p| stack.append(gpa, p.value) catch @panic("out of memory"),
+            .map => |pairs| for (0..pairs.len) |map_index| {
+                const p = pairs.at(map_index);
+                stack.append(gpa, p.value) catch @panic("out of memory");
+            },
             else => {},
         };
         return false;
@@ -499,7 +502,8 @@ pub const Stores = struct {
         if (value.data != .map) return null;
         var next: std.StringArrayHashMapUnmanaged(Store.Entry) = .empty;
         var total: u64 = 0;
-        for (value.data.map) |p| {
+        for (0..value.data.map.len) |map_index| {
+            const p = value.data.map.at(map_index);
             if (p.key.len == 0) return null;
             const e = s.encode(@ptrCast(p.value)) orelse return null;
             if (e.size > quota.value) return null;

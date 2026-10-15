@@ -89,6 +89,25 @@ record paired forward-index improvements, scaling, negative-index limits and
 the fresh four-runner text comparison for
 [#927](https://github.com/odogono/odgn-talk/issues/927).
 
+The [Zig Text construction measurements](results/2026-10-15-zig-text-growth.md)
+record trusted concatenation, exact ASCII metadata, growth sweeps and the
+four-runner comparison for [#957](https://github.com/odogono/odgn-talk/issues/957).
+For paired Text construction and length/growth sweeps, build two native Hosts
+as above and run:
+
+```sh
+python3 bench/zig/text-growth.py <before-host> <after-host> --before-revision <sha> --profiles <directory> --out <results.json>
+```
+
+This includes every supported manifest workload and ASCII/Unicode probes that
+vary the append count and operand length. All timing pairs finish before
+counting-allocator probes and optional macOS CPU captures. Outputs, Fuel and
+logical allocation must agree. Explicit Text byte-write volumes are calculated
+from the generated growth inputs and reported separately from measured Group
+allocation requests; they are not memory-bus counters.
+Use `--profiles-only` with an existing `--out` file and the same binaries and
+runtime sources to capture profiles separately without repeating timings.
+
 For paired Character indexing measurements, including fixed-index probes that
 exclude modulo and equality, build two native Hosts as above and run:
 
@@ -120,6 +139,12 @@ The [Zig operand storage measurements](results/2026-10-14-zig-operand-storage.md
 record paired sliced/unsliced timings, native disassembly and CPU samples for
 reusing protected-operand storage in
 [#925](https://github.com/odogono/odgn-talk/issues/925).
+
+The [Zig scratch reset measurements](results/2026-10-15-zig-scratch-reset.md)
+record alternating sliced/unsliced timings, protected-loop probes, allocation
+parity, native assembly and separate CPU samples for skipping already-empty
+instruction arena resets in
+[#956](https://github.com/odogono/odgn-talk/issues/956).
 
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
@@ -434,3 +459,19 @@ The [persistent collection measurements](results/2026-10-10-structural-sharing.m
 compare point writes at 512 and 8,192 elements and the full collection workloads
 for [#598](https://github.com/odogono/odgn-talk/issues/598). The focused Go benchmark
 runs with `go -C impl/go test ./internal/machine -run '^$' -bench BenchmarkCollectionPointWrites`.
+
+## Zig ordered Map storage
+
+`python3 bench/zig/map-storage.py <before-host> <after-host> --before-revision <sha> --out <results.json>`
+compares construction, replacement, retained versions, deletion and long keys
+from empty/tiny Maps through 3,000 entries. Build both native Hosts first as in
+`ts/src/measure-zig.ts`. Process order alternates across pairs; default-allocator
+timings and fresh-Group allocation probes are separate. Outputs, Fuel and logical
+allocation must agree. `--filter` selects a workload substring; `--max-size`
+limits the sweep for small-Map rechecks. Results include source/binary hashes,
+per-pair timings and both Group peak and Run live-peak delta. The review limits
+are a repeatable small-Map slowdown above 5%, or peak growth exceeding the larger
+of 10% and 4 KiB; timing remains advisory, never a CI gate.
+
+The [ordered Map storage results](results/2026-10-15-zig-map-storage.md) record
+the shared-block implementation, acceptance limits and native regression sweep.
