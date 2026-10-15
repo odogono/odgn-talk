@@ -1,0 +1,1084 @@
+{
+  "recordedAt": "2026-10-15T05:57:44.982784+00:00",
+  "baselineRevision": "0aed90d3",
+  "checkoutRevision": "0aed90d300069ae754ba7dab010f3ef4d92141e7",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0",
+  "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "language": "1.0-rc.3",
+  "costModel": 0,
+  "mode": "safe",
+  "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
+  "samplesPerProcess": 5,
+  "pairs": 3,
+  "binarySha256": {
+    "before": "1b78531c4eda22e0af4e6b16b430d7465886e92a541baefb0601516602c1dce8",
+    "after": "1b78531c4eda22e0af4e6b16b430d7465886e92a541baefb0601516602c1dce8"
+  },
+  "sourceSha256": {
+    "impl/zig/src/machine/machine.zig": "3e500a32bbc7e9e33aee758c99a61d85069fe2981a1875731155349c17b8d318",
+    "impl/zig/src/machine/costs.zig": "5bfe6030edcd588ce48ca6703bccb7a28993a3555f9aa85369c15db2acdff66d",
+    "impl/zig/src/value.zig": "27b66f88993c97e17f8888a9143d323f458626282064e6d0d2a95465fbfc2e13",
+    "impl/zig/src/machine/group_allocator.zig": "3de9e354078bfa237e19678f18508692bc0c478e968876fbeb22e57d4ff4c14f",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  },
+  "generatorSha256": "e467f0613f5a618c36e7a9bcc159e17026e2590a9b39efff96b9f0b00033ffd5",
+  "ratesSha256": "3b6bb8eb03a9a1cedc94dd1bc9e4c582cb09a877acd063f93e52c8f2ee58040c",
+  "manifestSha256": "3f27106ec23e3875ce48199359f6f6e42340ac8a66d748e1592a6c91df24ab71",
+  "measurements": [],
+  "profiles": [
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-0.txt.gz",
+      "reportSha256": "baaa6d17d6952282ac8bea4026a6b6cfac75e4cdfe7d79d4aae511ae57601616",
+      "samples": {
+        "pump": 1534,
+        "execute": 1446,
+        "charging": 179,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 757,
+        "scratchReset": 124,
+        "operandRetention": 0,
+        "decimal": 97,
+        "valueConstruction": 0,
+        "allocator": 141,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 81
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 460
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 396
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 178
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 124
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 91
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 77
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 44
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 43
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 27
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 19
+        },
+        {
+          "symbol": "value.Comparer.scanned",
+          "samples": 14
+        },
+        {
+          "symbol": "value.Comparer.deinit",
+          "samples": 10
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 10
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 9
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 8
+        }
+      ]
+    },
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-100.txt.gz",
+      "reportSha256": "692e93f995216f1431c8a2dd535f13b34267ef144188329d7322eaeb732f2d6d",
+      "samples": {
+        "pump": 1474,
+        "execute": 941,
+        "charging": 98,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 472,
+        "scratchReset": 77,
+        "operandRetention": 0,
+        "decimal": 56,
+        "valueConstruction": 0,
+        "allocator": 135,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 43
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 314
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 298
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 279
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 97
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 77
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 52
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 35
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 31
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 28
+        },
+        {
+          "symbol": "heap.ArenaAllocator.alloc",
+          "samples": 28
+        },
+        {
+          "symbol": "dates.fields",
+          "samples": 26
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 22
+        },
+        {
+          "symbol": "talk.takeReports",
+          "samples": 18
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 12
+        }
+      ]
+    },
+    {
+      "binary": "before",
+      "name": "numbers/add",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-numbers-add-slice-0.txt.gz",
+      "reportSha256": "6646bb8c84288fda209d5e865dee63145c2ace4c5f04f0e513941335bb6b1745",
+      "samples": {
+        "pump": 1531,
+        "execute": 1442,
+        "charging": 180,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 737,
+        "scratchReset": 112,
+        "operandRetention": 0,
+        "decimal": 100,
+        "valueConstruction": 0,
+        "allocator": 154,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 79
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 440
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 423
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 178
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 112
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 83
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 58
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 44
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 43
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 33
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 24
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 22
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 18
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1466",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 15
+        },
+        {
+          "symbol": "machine.builtins.numberValue",
+          "samples": 9
+        }
+      ]
+    },
+    {
+      "binary": "before",
+      "name": "numbers/quantity",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-numbers-quantity-slice-0.txt.gz",
+      "reportSha256": "ed1ee09eade426b91ec98cb33aad65951091aada1e845d330c385a920d855fb6",
+      "samples": {
+        "pump": 1529,
+        "execute": 1461,
+        "charging": 118,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 896,
+        "scratchReset": 86,
+        "operandRetention": 0,
+        "decimal": 113,
+        "valueConstruction": 42,
+        "allocator": 118,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 74
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 351
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 285
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 129
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 111
+        },
+        {
+          "symbol": "units.Unit.convert__func_916",
+          "samples": 109
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 86
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 86
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 61
+        },
+        {
+          "symbol": "machine.convert.prepared",
+          "samples": 41
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 41
+        },
+        {
+          "symbol": "value.scalarOwned",
+          "samples": 35
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 35
+        },
+        {
+          "symbol": "mem.eqlBytes",
+          "samples": 34
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 17
+        },
+        {
+          "symbol": "__udivmodti4",
+          "samples": 15
+        }
+      ]
+    },
+    {
+      "binary": "before",
+      "name": "text/build",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-text-build-slice-0.txt.gz",
+      "reportSha256": "7723648e2619f286819f51c774eafbb2795634d697c7bc8c15f6011b6e243e34",
+      "samples": {
+        "pump": 1527,
+        "execute": 1507,
+        "charging": 413,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 982,
+        "scratchReset": 32,
+        "operandRetention": 0,
+        "decimal": 7,
+        "valueConstruction": 14,
+        "allocator": 58,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 42
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 412
+        },
+        {
+          "symbol": "value.concatText",
+          "samples": 363
+        },
+        {
+          "symbol": "unicode.utf8.validate",
+          "samples": 348
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 81
+        },
+        {
+          "symbol": "unicode.grapheme.end",
+          "samples": 55
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 45
+        },
+        {
+          "symbol": "unicode.grapheme.State.advance",
+          "samples": 39
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 32
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 19
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 18
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 14
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 13
+        },
+        {
+          "symbol": "value.scalarOwned",
+          "samples": 12
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 12
+        }
+      ]
+    },
+    {
+      "binary": "before",
+      "name": "collections/list-update",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-collections-list-update-slice-0.txt.gz",
+      "reportSha256": "4016f752f63b640b5449422af4640a6652e69935220f7644975c493b9a659b5d",
+      "samples": {
+        "pump": 1528,
+        "execute": 1450,
+        "charging": 123,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 812,
+        "scratchReset": 105,
+        "operandRetention": 0,
+        "decimal": 14,
+        "valueConstruction": 0,
+        "allocator": 172,
+        "chunksSet": 101,
+        "listSet": 67,
+        "valueRelease": 143
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 447
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 400
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 120
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 110
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 105
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 56
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 47
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 45
+        },
+        {
+          "symbol": "value.listSet",
+          "samples": 35
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 22
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 16
+        },
+        {
+          "symbol": "machine.chunks.set",
+          "samples": 16
+        },
+        {
+          "symbol": "heap.SmpAllocator.alloc",
+          "samples": 14
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1466",
+          "samples": 14
+        },
+        {
+          "symbol": "machine.builtins.numberValue",
+          "samples": 13
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-0.txt.gz",
+      "reportSha256": "7bc060951e0f7e51f5e085c92d300a8cb95b080f1d877296c46ec0ce49e09aa9",
+      "samples": {
+        "pump": 1523,
+        "execute": 1441,
+        "charging": 177,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 774,
+        "scratchReset": 101,
+        "operandRetention": 0,
+        "decimal": 92,
+        "valueConstruction": 0,
+        "allocator": 131,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 69
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 464
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 416
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 172
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 101
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 87
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 59
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 55
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 48
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 19
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 16
+        },
+        {
+          "symbol": "value.Comparer.scanned",
+          "samples": 16
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 15
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 14
+        },
+        {
+          "symbol": "value.Comparer.order",
+          "samples": 10
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 9
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-100.txt.gz",
+      "reportSha256": "afa52748cf476a006fcacf6114030242937b177b780ce6ce120f67dfa03ae60a",
+      "samples": {
+        "pump": 1488,
+        "execute": 952,
+        "charging": 106,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 492,
+        "scratchReset": 76,
+        "operandRetention": 0,
+        "decimal": 44,
+        "valueConstruction": 0,
+        "allocator": 140,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 48
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 321
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 304
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 264
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 97
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 76
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 40
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 40
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 29
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 27
+        },
+        {
+          "symbol": "heap.ArenaAllocator.alloc",
+          "samples": 26
+        },
+        {
+          "symbol": "dates.fields",
+          "samples": 26
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 22
+        },
+        {
+          "symbol": "Io.Writer.writeAll",
+          "samples": 20
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 16
+        },
+        {
+          "symbol": "machine.costs.size",
+          "samples": 16
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "numbers/add",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-numbers-add-slice-0.txt.gz",
+      "reportSha256": "52b79d996320e76f03aeedd7953dc12b6072e5b9a515cb6898e2418594559c3c",
+      "samples": {
+        "pump": 1531,
+        "execute": 1422,
+        "charging": 148,
+        "formulaEvaluation": 1,
+        "specializedEvaluation": 0,
+        "instruction": 754,
+        "scratchReset": 121,
+        "operandRetention": 0,
+        "decimal": 110,
+        "valueConstruction": 0,
+        "allocator": 156,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 66
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 448
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 427
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 143
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 121
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 88
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 58
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 57
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 51
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 29
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1466",
+          "samples": 22
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 18
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.machine.Group.constant",
+          "samples": 17
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 15
+        },
+        {
+          "symbol": "machine.builtins.numberValue",
+          "samples": 10
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "numbers/quantity",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-numbers-quantity-slice-0.txt.gz",
+      "reportSha256": "adb61241b39fe1a5c60a13a47e3a9b32553c22c73d8d9419fcc48d86c4269174",
+      "samples": {
+        "pump": 1524,
+        "execute": 1453,
+        "charging": 145,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 877,
+        "scratchReset": 63,
+        "operandRetention": 0,
+        "decimal": 105,
+        "valueConstruction": 30,
+        "allocator": 103,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 81
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 354
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 298
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 142
+        },
+        {
+          "symbol": "machine.machine.Group.arithmetic",
+          "samples": 119
+        },
+        {
+          "symbol": "units.Unit.convert__func_916",
+          "samples": 115
+        },
+        {
+          "symbol": "decimal.decimal.calculateInternal",
+          "samples": 86
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 64
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 63
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 37
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 36
+        },
+        {
+          "symbol": "machine.convert.prepared",
+          "samples": 33
+        },
+        {
+          "symbol": "value.scalarOwned",
+          "samples": 24
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 23
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 21
+        },
+        {
+          "symbol": "mem.eqlBytes",
+          "samples": 20
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "text/build",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-text-build-slice-0.txt.gz",
+      "reportSha256": "fc52c90e2bce280402e6391206d2e77bd8ea3f236ff141e580d39f95e704e079",
+      "samples": {
+        "pump": 1523,
+        "execute": 1496,
+        "charging": 393,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 992,
+        "scratchReset": 22,
+        "operandRetention": 0,
+        "decimal": 5,
+        "valueConstruction": 9,
+        "allocator": 48,
+        "chunksSet": 0,
+        "listSet": 0,
+        "valueRelease": 34
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 391
+        },
+        {
+          "symbol": "value.concatText",
+          "samples": 361
+        },
+        {
+          "symbol": "unicode.utf8.validate",
+          "samples": 353
+        },
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 94
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 68
+        },
+        {
+          "symbol": "unicode.grapheme.end",
+          "samples": 55
+        },
+        {
+          "symbol": "unicode.grapheme.State.advance",
+          "samples": 32
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 22
+        },
+        {
+          "symbol": "_platform_memset",
+          "samples": 18
+        },
+        {
+          "symbol": "_platform_memmove",
+          "samples": 17
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 11
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 11
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 10
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 10
+        }
+      ]
+    },
+    {
+      "binary": "after",
+      "name": "collections/list-update",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-collections-list-update-slice-0.txt.gz",
+      "reportSha256": "0c94fe0b24a74ddee039bb9847fa7946647b1775e4baeb0419df8b4b50edcd6b",
+      "samples": {
+        "pump": 1530,
+        "execute": 1428,
+        "charging": 147,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 763,
+        "scratchReset": 119,
+        "operandRetention": 0,
+        "decimal": 13,
+        "valueConstruction": 1,
+        "allocator": 185,
+        "chunksSet": 76,
+        "listSet": 56,
+        "valueRelease": 128
+      },
+      "topExclusivePumpSamples": [
+        {
+          "symbol": "machine.machine.Group.execute",
+          "samples": 445
+        },
+        {
+          "symbol": "machine.machine.Group.instruction",
+          "samples": 407
+        },
+        {
+          "symbol": "machine.costs.chargeInstruction",
+          "samples": 143
+        },
+        {
+          "symbol": "heap.ArenaAllocator.reset",
+          "samples": 119
+        },
+        {
+          "symbol": "value.Value.release",
+          "samples": 94
+        },
+        {
+          "symbol": "machine.machine.Group.pop",
+          "samples": 59
+        },
+        {
+          "symbol": "machine.machine.Group.push",
+          "samples": 49
+        },
+        {
+          "symbol": "array_list.Aligned(machine.machine.Slot,null).ensureTotalCapacity",
+          "samples": 36
+        },
+        {
+          "symbol": "value.listSet",
+          "samples": 32
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.free",
+          "samples": 20
+        },
+        {
+          "symbol": "machine.group_allocator.GroupAllocator.alloc",
+          "samples": 20
+        },
+        {
+          "symbol": "heap.SmpAllocator.free",
+          "samples": 15
+        },
+        {
+          "symbol": "decimal.decimal.Decimal.integer__func_1466",
+          "samples": 13
+        },
+        {
+          "symbol": "machine.builtins.numberValue",
+          "samples": 12
+        },
+        {
+          "symbol": "machine.machine.chunkKind",
+          "samples": 11
+        }
+      ]
+    }
+  ],
+  "baselineSourceSha256": {
+    "impl/zig/src/machine/machine.zig": "3e500a32bbc7e9e33aee758c99a61d85069fe2981a1875731155349c17b8d318",
+    "impl/zig/src/machine/costs.zig": "5bfe6030edcd588ce48ca6703bccb7a28993a3555f9aa85369c15db2acdff66d",
+    "impl/zig/src/value.zig": "27b66f88993c97e17f8888a9143d323f458626282064e6d0d2a95465fbfc2e13",
+    "impl/zig/src/machine/group_allocator.zig": "3de9e354078bfa237e19678f18508692bc0c478e968876fbeb22e57d4ff4c14f",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  },
+  "interpretation": "Both before/after labels identify the same current native Host; these are duplicate profiling captures, not a performance comparison or code change. Inclusive categories overlap; compiler inlining limits attribution. Pump-only samples exclude Host/setup/Load."
+}
