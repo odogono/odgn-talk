@@ -68,6 +68,7 @@ export default [
       'tooling/playground/tools/**/*.ts',
       'tooling/creative/tools/**/*.ts',
       'bench/ts/src/main.ts',
+      'bench/ts/src/character-indexing-worker.ts',
       'bench/ts/src/measure-peers.ts',
       'bench/ts/src/measure-ts.ts',
       'bench/ts/src/measure-zig.ts',
