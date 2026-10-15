@@ -42,6 +42,7 @@ test('large sample sets are summarised without expanding function arguments', ()
   const samples = Array<number>(1_000_000).fill(3);
   samples[500_000] = 1;
   expect(statsOf(samples)).toEqual({
+    maxNs: 3,
     medianNs: 3,
     minNs: 1,
     samples: 1_000_000,
@@ -61,9 +62,14 @@ PASS`;
       fuel: 46_365,
       hostAllocs: 516_339,
       hostBytes: 40_660_441,
-      load: { medianNs: 81_417.5, minNs: 80_000, samples: 2 },
+      load: { maxNs: 82_835, medianNs: 81_417.5, minNs: 80_000, samples: 2 },
       logicalAlloc: 47_328,
-      run: { medianNs: 26_000_000, minNs: 25_000_000, samples: 2 },
+      run: {
+        maxNs: 27_000_000,
+        medianNs: 26_000_000,
+        minNs: 25_000_000,
+        samples: 2,
+      },
       runner: 'go',
     },
   ]);
@@ -78,14 +84,14 @@ BenchmarkPeer/go-native/core/fib-10   578179   2120 ns/op   8 B/op   1 allocs/op
       benchmark: 'core/fib',
       hostAllocs: 1,
       hostBytes: 63,
-      run: { medianNs: 124_864.5, minNs: 124_000, samples: 2 },
+      run: { maxNs: 125_729, medianNs: 124_864.5, minNs: 124_000, samples: 2 },
       runner: 'gopher-lua',
     },
     {
       benchmark: 'core/fib',
       hostAllocs: 1,
       hostBytes: 8,
-      run: { medianNs: 2120, minNs: 2120, samples: 1 },
+      run: { maxNs: 2120, medianNs: 2120, minNs: 2120, samples: 1 },
       runner: 'go-native',
     },
   ]);

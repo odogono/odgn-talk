@@ -108,6 +108,39 @@ reusing protected-operand storage in
 The [TS Load optimization measurements](results/2026-10-09-ts-load.md) record
 three paired before/after runs for [#505](https://github.com/odogono/odgn-talk/issues/505).
 
+For isolated TS Cost Model comparisons, run:
+
+```sh
+bun bench/ts/src/compare-costs.ts <before-ref> .cache/cost-comparison
+```
+
+The [TS accounting measurements](results/2026-10-15-ts-costs.md) retain the
+paired Run timings, separate CPU/heap evidence and four-runner Load/Run spread
+for [#942](https://github.com/odogono/odgn-talk/issues/942).
+
+The two bundles share the current sources except that the before bundle reads
+`impl/ts/src/costs.ts` from the named revision. Both bundles run in one process;
+each workload warms up for 20 Runs per variant, then runs three rounds of seven
+paired batches of 20 full-size Runs, alternating AB/BA within each round.
+`timings.json` retains every batch mean, output, exact Fuel and logical
+allocation; a mismatch fails the comparison. Separate heap probes record JSC
+and process memory before and after 100 Runs and after a forced full GC, with
+the final GC's duration. These are memory observations, not total allocation
+counts. The four-runner JSON summaries also retain `maxNs` alongside their
+minimum, median and sample count; older reports may omit it.
+An optional third argument selects an exact workload name.
+
+Profile the resulting bundles separately from timing, for example:
+
+```sh
+bun --cpu-prof --cpu-prof-dir=.cache/cost-comparison .cache/cost-comparison/before.js profile macro/transform
+bun --cpu-prof --cpu-prof-dir=.cache/cost-comparison .cache/cost-comparison/after.js profile macro/transform
+```
+
+Profile mode repeats validated Runs for three seconds after warm-up. Profiles
+also contain process startup, Load, validation and warm-up; their sample shares
+do not establish a timing speedup.
+
 The [Go Save and Restore optimization measurements](results/2026-10-10-go-save-restore.md)
 record before/after timings and allocations for [#504](https://github.com/odogono/odgn-talk/issues/504).
 

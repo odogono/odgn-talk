@@ -1,0 +1,2752 @@
+[
+  {
+    "benchmark": "core/loop",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.3857080000000224,
+      "before": {
+        "heapSize": 7284211,
+        "heapCapacity": 9267939,
+        "objectCount": 30122,
+        "processMemory": {
+          "rss": 61899544,
+          "heapTotal": 3803136,
+          "heapUsed": 7284211,
+          "external": 4796691,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 61899544,
+          "peak": 86950680,
+          "currentCommit": 205062144,
+          "peakCommit": 205062144,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 8316973,
+        "heapCapacity": 24546189,
+        "objectCount": 45066,
+        "processMemory": {
+          "rss": 63488792,
+          "heapTotal": 18728960,
+          "heapUsed": 8316973,
+          "external": 5132733,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 63488792,
+          "peak": 86950680,
+          "currentCommit": 205324288,
+          "peakCommit": 205324288,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 7762000,
+        "heapCapacity": 9931872,
+        "objectCount": 30960,
+        "processMemory": {
+          "rss": 55788312,
+          "heapTotal": 4048896,
+          "heapUsed": 7762000,
+          "external": 5198480,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 55788312,
+          "peak": 86950680,
+          "currentCommit": 205324288,
+          "peakCommit": 205324288,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.8058750000000146,
+      "before": {
+        "heapSize": 7232111,
+        "heapCapacity": 9317727,
+        "objectCount": 30430,
+        "processMemory": {
+          "rss": 65078040,
+          "heapTotal": 3934208,
+          "heapUsed": 7232111,
+          "external": 4715407,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 65078040,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 8209523,
+        "heapCapacity": 24267907,
+        "objectCount": 44160,
+        "processMemory": {
+          "rss": 65602328,
+          "heapTotal": 18532352,
+          "heapUsed": 8209523,
+          "external": 5051059,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 65602328,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 7812576,
+        "heapCapacity": 9919488,
+        "objectCount": 31273,
+        "processMemory": {
+          "rss": 57525016,
+          "heapTotal": 4016128,
+          "heapUsed": 7812576,
+          "external": 5218864,
+          "arrayBuffers": 0
+        },
+        "jscMemory": {
+          "current": 57525016,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/calls",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.1417919999998958,
+      "before": {
+        "heapSize": 8182104,
+        "heapCapacity": 10509928,
+        "objectCount": 31804,
+        "processMemory": {
+          "rss": 56558360,
+          "heapTotal": 4278272,
+          "heapUsed": 8182104,
+          "external": 5547160,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 56558360,
+          "peak": 86950680,
+          "currentCommit": 205324288,
+          "peakCommit": 205324288,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 8800889,
+        "heapCapacity": 26733113,
+        "objectCount": 43627,
+        "processMemory": {
+          "rss": 52691736,
+          "heapTotal": 20416512,
+          "heapUsed": 8800889,
+          "external": 5632105,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 52691736,
+          "peak": 86950680,
+          "currentCommit": 205324288,
+          "peakCommit": 205324288,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 8465595,
+        "heapCapacity": 10852267,
+        "objectCount": 32477,
+        "processMemory": {
+          "rss": 51348248,
+          "heapTotal": 4392960,
+          "heapUsed": 8465595,
+          "external": 5774811,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 51348248,
+          "peak": 86950680,
+          "currentCommit": 205324288,
+          "peakCommit": 205324288,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.279292000000055,
+      "before": {
+        "heapSize": 8261818,
+        "heapCapacity": 10536282,
+        "objectCount": 32199,
+        "processMemory": {
+          "rss": 58999576,
+          "heapTotal": 4261888,
+          "heapUsed": 8261818,
+          "external": 5589898,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 58999576,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 8833627,
+        "heapCapacity": 26915419,
+        "objectCount": 43175,
+        "processMemory": {
+          "rss": 55149336,
+          "heapTotal": 20563968,
+          "heapUsed": 8833627,
+          "external": 5666955,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 55149336,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 8531457,
+        "heapCapacity": 10945297,
+        "objectCount": 32881,
+        "processMemory": {
+          "rss": 53101336,
+          "heapTotal": 4458496,
+          "heapUsed": 8531457,
+          "external": 5802305,
+          "arrayBuffers": 17096
+        },
+        "jscMemory": {
+          "current": 53101336,
+          "peak": 85459736,
+          "currentCommit": 203161600,
+          "peakCommit": 203161600,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/lambdas",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.3969589999999243,
+      "before": {
+        "heapSize": 8775970,
+        "heapCapacity": 11339874,
+        "objectCount": 33134,
+        "processMemory": {
+          "rss": 53068568,
+          "heapTotal": 4622336,
+          "heapUsed": 8775970,
+          "external": 6033042,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53068568,
+          "peak": 86950680,
+          "currentCommit": 213712896,
+          "peakCommit": 213712896,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 9550947,
+        "heapCapacity": 28714435,
+        "objectCount": 48942,
+        "processMemory": {
+          "rss": 52822808,
+          "heapTotal": 21923840,
+          "heapUsed": 9550947,
+          "external": 6106099,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52822808,
+          "peak": 86950680,
+          "currentCommit": 213712896,
+          "peakCommit": 213712896,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 8956500,
+        "heapCapacity": 11633028,
+        "objectCount": 33759,
+        "processMemory": {
+          "rss": 52871960,
+          "heapTotal": 4786176,
+          "heapUsed": 8956500,
+          "external": 6162356,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52871960,
+          "peak": 86950680,
+          "currentCommit": 213712896,
+          "peakCommit": 213712896,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.4375829999999041,
+      "before": {
+        "heapSize": 8845095,
+        "heapCapacity": 11385271,
+        "objectCount": 33484,
+        "processMemory": {
+          "rss": 56345368,
+          "heapTotal": 4638720,
+          "heapUsed": 8845095,
+          "external": 6062055,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 56345368,
+          "peak": 85459736,
+          "currentCommit": 211550208,
+          "peakCommit": 211550208,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 9521086,
+        "heapCapacity": 28807886,
+        "objectCount": 47453,
+        "processMemory": {
+          "rss": 53609240,
+          "heapTotal": 22005760,
+          "heapUsed": 9521086,
+          "external": 6117630,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53609240,
+          "peak": 85459736,
+          "currentCommit": 211550208,
+          "peakCommit": 211550208,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 8965750,
+        "heapCapacity": 11681014,
+        "objectCount": 34172,
+        "processMemory": {
+          "rss": 53084952,
+          "heapTotal": 4868096,
+          "heapUsed": 8965750,
+          "external": 6128422,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53084952,
+          "peak": 85459736,
+          "currentCommit": 211550208,
+          "peakCommit": 211550208,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/fib",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.2838749999998527,
+      "before": {
+        "heapSize": 9203586,
+        "heapCapacity": 11818162,
+        "objectCount": 33956,
+        "processMemory": {
+          "rss": 52216600,
+          "heapTotal": 4753408,
+          "heapUsed": 9203586,
+          "external": 6380258,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52216600,
+          "peak": 86950680,
+          "currentCommit": 213712896,
+          "peakCommit": 213712896,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 9953115,
+        "heapCapacity": 30072971,
+        "objectCount": 50365,
+        "processMemory": {
+          "rss": 52560664,
+          "heapTotal": 22972416,
+          "heapUsed": 9953115,
+          "external": 6416059,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52560664,
+          "peak": 86950680,
+          "currentCommit": 217907200,
+          "peakCommit": 217907200,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 9271980,
+        "heapCapacity": 11830780,
+        "objectCount": 34489,
+        "processMemory": {
+          "rss": 52544280,
+          "heapTotal": 4737024,
+          "heapUsed": 9271980,
+          "external": 6409260,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52544280,
+          "peak": 86950680,
+          "currentCommit": 217907200,
+          "peakCommit": 217907200,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.50974999999994,
+      "before": {
+        "heapSize": 9150736,
+        "heapCapacity": 11604480,
+        "objectCount": 34398,
+        "processMemory": {
+          "rss": 52232984,
+          "heapTotal": 4638720,
+          "heapUsed": 9150736,
+          "external": 6281264,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52232984,
+          "peak": 85459736,
+          "currentCommit": 211550208,
+          "peakCommit": 211550208,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 9792526,
+        "heapCapacity": 29845822,
+        "objectCount": 48093,
+        "processMemory": {
+          "rss": 53953304,
+          "heapTotal": 22841344,
+          "heapUsed": 9792526,
+          "external": 6319982,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53953304,
+          "peak": 85459736,
+          "currentCommit": 227540992,
+          "peakCommit": 227540992,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 9359137,
+        "heapCapacity": 11844593,
+        "objectCount": 35031,
+        "processMemory": {
+          "rss": 53445400,
+          "heapTotal": 4720640,
+          "heapUsed": 9359137,
+          "external": 6439457,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53445400,
+          "peak": 85459736,
+          "currentCommit": 227540992,
+          "peakCommit": 227540992,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=10",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.4121249999998327,
+      "before": {
+        "heapSize": 9488445,
+        "heapCapacity": 12380109,
+        "objectCount": 34944,
+        "processMemory": {
+          "rss": 57951048,
+          "heapTotal": 5130240,
+          "heapUsed": 9488445,
+          "external": 6581757,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 57951048,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12526962,
+        "heapCapacity": 33285794,
+        "objectCount": 104498,
+        "processMemory": {
+          "rss": 56558408,
+          "heapTotal": 26003456,
+          "heapUsed": 12526962,
+          "external": 6597842,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 56558408,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 9932149,
+        "heapCapacity": 13041525,
+        "objectCount": 35531,
+        "processMemory": {
+          "rss": 56132424,
+          "heapTotal": 5376000,
+          "heapUsed": 9932149,
+          "external": 6981029,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 56132424,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.6379170000000158,
+      "before": {
+        "heapSize": 9561191,
+        "heapCapacity": 12475959,
+        "objectCount": 35348,
+        "processMemory": {
+          "rss": 54493976,
+          "heapTotal": 5179392,
+          "heapUsed": 9561191,
+          "external": 6612071,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 54493976,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12687043,
+        "heapCapacity": 33561459,
+        "objectCount": 106599,
+        "processMemory": {
+          "rss": 53740312,
+          "heapTotal": 26249216,
+          "heapUsed": 12687043,
+          "external": 6627747,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 53740312,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10008275,
+        "heapCapacity": 13120995,
+        "objectCount": 35966,
+        "processMemory": {
+          "rss": 47678232,
+          "heapTotal": 5425152,
+          "heapUsed": 10008275,
+          "external": 7011347,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47678232,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=100",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.3845000000001164,
+      "before": {
+        "heapSize": 9743175,
+        "heapCapacity": 12817735,
+        "objectCount": 35914,
+        "processMemory": {
+          "rss": 56230728,
+          "heapTotal": 5376000,
+          "heapUsed": 9743175,
+          "external": 6757239,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 56230728,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10843705,
+        "heapCapacity": 31999769,
+        "objectCount": 59303,
+        "processMemory": {
+          "rss": 55509832,
+          "heapTotal": 24528896,
+          "heapUsed": 10843705,
+          "external": 6786377,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55509832,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 9946634,
+        "heapCapacity": 13033386,
+        "objectCount": 36592,
+        "processMemory": {
+          "rss": 55214920,
+          "heapTotal": 5441536,
+          "heapUsed": 9946634,
+          "external": 6907354,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55214920,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.7961669999999685,
+      "before": {
+        "heapSize": 9819093,
+        "heapCapacity": 12831669,
+        "objectCount": 36347,
+        "processMemory": {
+          "rss": 47743768,
+          "heapTotal": 5359616,
+          "heapUsed": 9819093,
+          "external": 6787557,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47743768,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10844935,
+        "heapCapacity": 32144215,
+        "objectCount": 58152,
+        "processMemory": {
+          "rss": 47711000,
+          "heapTotal": 24643584,
+          "heapUsed": 10844935,
+          "external": 6816135,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47711000,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10022300,
+        "heapCapacity": 13128988,
+        "objectCount": 37025,
+        "processMemory": {
+          "rss": 47711000,
+          "heapTotal": 5507072,
+          "heapUsed": 10022300,
+          "external": 6937420,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47711000,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=1000",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.4773329999998168,
+      "before": {
+        "heapSize": 10004088,
+        "heapCapacity": 13228936,
+        "objectCount": 36920,
+        "processMemory": {
+          "rss": 55247688,
+          "heapTotal": 5605376,
+          "heapUsed": 10004088,
+          "external": 6939064,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55247688,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10834942,
+        "heapCapacity": 32596446,
+        "objectCount": 54618,
+        "processMemory": {
+          "rss": 55264072,
+          "heapTotal": 24954880,
+          "heapUsed": 10834942,
+          "external": 6957070,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55264072,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10074452,
+        "heapCapacity": 13329844,
+        "objectCount": 37562,
+        "processMemory": {
+          "rss": 55264072,
+          "heapTotal": 5687296,
+          "heapUsed": 10074452,
+          "external": 6958052,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55264072,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.5872920000001614,
+      "before": {
+        "heapSize": 10086954,
+        "heapCapacity": 13291770,
+        "objectCount": 37414,
+        "processMemory": {
+          "rss": 47743768,
+          "heapTotal": 5638144,
+          "heapUsed": 10086954,
+          "external": 6969130,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47743768,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10838681,
+        "heapCapacity": 32696185,
+        "objectCount": 53274,
+        "processMemory": {
+          "rss": 47760152,
+          "heapTotal": 25020416,
+          "heapUsed": 10838681,
+          "external": 6991273,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47760152,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 9962386,
+        "heapCapacity": 13262530,
+        "objectCount": 38072,
+        "processMemory": {
+          "rss": 46924568,
+          "heapTotal": 5785600,
+          "heapUsed": 9962386,
+          "external": 6792434,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 46924568,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "core/fib@slice=10000",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.3999579999999696,
+      "before": {
+        "heapSize": 10084695,
+        "heapCapacity": 13045463,
+        "objectCount": 37660,
+        "processMemory": {
+          "rss": 55362376,
+          "heapTotal": 5408768,
+          "heapUsed": 10084695,
+          "external": 6952199,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55362376,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10814556,
+        "heapCapacity": 32745772,
+        "objectCount": 53672,
+        "processMemory": {
+          "rss": 55182152,
+          "heapTotal": 25102336,
+          "heapUsed": 10814556,
+          "external": 6958940,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55182152,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10267473,
+        "heapCapacity": 13143985,
+        "objectCount": 38305,
+        "processMemory": {
+          "rss": 55198536,
+          "heapTotal": 5376000,
+          "heapUsed": 10267473,
+          "external": 7083489,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55198536,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.9030830000001515,
+      "before": {
+        "heapSize": 10209681,
+        "heapCapacity": 13187617,
+        "objectCount": 38990,
+        "processMemory": {
+          "rss": 47022872,
+          "heapTotal": 5523456,
+          "heapUsed": 10209681,
+          "external": 6979665,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47022872,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10817511,
+        "heapCapacity": 33001703,
+        "objectCount": 52288,
+        "processMemory": {
+          "rss": 47022872,
+          "heapTotal": 25331712,
+          "heapUsed": 10817511,
+          "external": 6985495,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47022872,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10386673,
+        "heapCapacity": 13286113,
+        "objectCount": 39581,
+        "processMemory": {
+          "rss": 47006488,
+          "heapTotal": 5490688,
+          "heapUsed": 10386673,
+          "external": 7110929,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47006488,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "numbers/add",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.5406659999998737,
+      "before": {
+        "heapSize": 10080177,
+        "heapCapacity": 13258385,
+        "objectCount": 38628,
+        "processMemory": {
+          "rss": 55247688,
+          "heapTotal": 5703680,
+          "heapUsed": 10080177,
+          "external": 6870209,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55247688,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10547177,
+        "heapCapacity": 32683305,
+        "objectCount": 48701,
+        "processMemory": {
+          "rss": 55362376,
+          "heapTotal": 25102336,
+          "heapUsed": 10547177,
+          "external": 6896473,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55362376,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10336487,
+        "heapCapacity": 13872359,
+        "objectCount": 39273,
+        "processMemory": {
+          "rss": 55247688,
+          "heapTotal": 6113280,
+          "heapUsed": 10336487,
+          "external": 7074583,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55247688,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 1.8468749999992724,
+      "before": {
+        "heapSize": 10415814,
+        "heapCapacity": 13555302,
+        "objectCount": 39110,
+        "processMemory": {
+          "rss": 47088408,
+          "heapTotal": 5720064,
+          "heapUsed": 10415814,
+          "external": 7150742,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47088408,
+          "peak": 85459736,
+          "currentCommit": 241958912,
+          "peakCommit": 241958912,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10799625,
+        "heapCapacity": 33467049,
+        "objectCount": 47438,
+        "processMemory": {
+          "rss": 47203096,
+          "heapTotal": 25610240,
+          "heapUsed": 10799625,
+          "external": 7172313,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47203096,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10549371,
+        "heapCapacity": 13936923,
+        "objectCount": 39748,
+        "processMemory": {
+          "rss": 47203096,
+          "heapTotal": 6014976,
+          "heapUsed": 10549371,
+          "external": 7237451,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47203096,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "numbers/multiply",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.5148330000001806,
+      "before": {
+        "heapSize": 10512384,
+        "heapCapacity": 13770752,
+        "objectCount": 39449,
+        "processMemory": {
+          "rss": 55313224,
+          "heapTotal": 5851136,
+          "heapUsed": 10512384,
+          "external": 7235120,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55313224,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10814656,
+        "heapCapacity": 33576384,
+        "objectCount": 45519,
+        "processMemory": {
+          "rss": 55329608,
+          "heapTotal": 25626624,
+          "heapUsed": 10814656,
+          "external": 7265264,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 55329608,
+          "peak": 86950680,
+          "currentCommit": 255328256,
+          "peakCommit": 255328256,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10529960,
+        "heapCapacity": 14153944,
+        "objectCount": 40084,
+        "processMemory": {
+          "rss": 49398600,
+          "heapTotal": 6260736,
+          "heapUsed": 10529960,
+          "external": 7208712,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49398600,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.0024160000002666,
+      "before": {
+        "heapSize": 10597729,
+        "heapCapacity": 13830289,
+        "objectCount": 40002,
+        "processMemory": {
+          "rss": 47268632,
+          "heapTotal": 5883904,
+          "heapUsed": 10597729,
+          "external": 7261889,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47268632,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10865179,
+        "heapCapacity": 33709403,
+        "objectCount": 45551,
+        "processMemory": {
+          "rss": 47285016,
+          "heapTotal": 25741312,
+          "heapUsed": 10865179,
+          "external": 7283595,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47285016,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10657713,
+        "heapCapacity": 14044593,
+        "objectCount": 40561,
+        "processMemory": {
+          "rss": 47301400,
+          "heapTotal": 6080512,
+          "heapUsed": 10657713,
+          "external": 7279585,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47301400,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "numbers/divide",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.6237920000003214,
+      "before": {
+        "heapSize": 10430260,
+        "heapCapacity": 13858996,
+        "objectCount": 40432,
+        "processMemory": {
+          "rss": 49480520,
+          "heapTotal": 6096896,
+          "heapUsed": 10430260,
+          "external": 7077604,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49480520,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10752519,
+        "heapCapacity": 33396727,
+        "objectCount": 46774,
+        "processMemory": {
+          "rss": 49480520,
+          "heapTotal": 25593856,
+          "heapUsed": 10752519,
+          "external": 7118375,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49480520,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10404731,
+        "heapCapacity": 14089883,
+        "objectCount": 40958,
+        "processMemory": {
+          "rss": 49464136,
+          "heapTotal": 6391808,
+          "heapUsed": 10404731,
+          "external": 7013579,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49464136,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.5303329999997004,
+      "before": {
+        "heapSize": 10555142,
+        "heapCapacity": 13860582,
+        "objectCount": 40926,
+        "processMemory": {
+          "rss": 47366936,
+          "heapTotal": 6031360,
+          "heapUsed": 10555142,
+          "external": 7144726,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47366936,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 10821147,
+        "heapCapacity": 33600731,
+        "objectCount": 46032,
+        "processMemory": {
+          "rss": 47399704,
+          "heapTotal": 25741312,
+          "heapUsed": 10821147,
+          "external": 7174923,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47399704,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10779262,
+        "heapCapacity": 14446446,
+        "objectCount": 41545,
+        "processMemory": {
+          "rss": 47399704,
+          "heapTotal": 6440960,
+          "heapUsed": 10779262,
+          "external": 7320990,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47399704,
+          "peak": 85459736,
+          "currentCommit": 242483200,
+          "peakCommit": 242483200,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "numbers/quantity",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.1855829999994967,
+      "before": {
+        "heapSize": 10699496,
+        "heapCapacity": 14217000,
+        "objectCount": 41527,
+        "processMemory": {
+          "rss": 49808200,
+          "heapTotal": 6277120,
+          "heapUsed": 10699496,
+          "external": 7255384,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49808200,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 11466811,
+        "heapCapacity": 34921515,
+        "objectCount": 51849,
+        "processMemory": {
+          "rss": 49005384,
+          "heapTotal": 26658816,
+          "heapUsed": 11466811,
+          "external": 7578203,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49005384,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 10987186,
+        "heapCapacity": 14844082,
+        "objectCount": 42238,
+        "processMemory": {
+          "rss": 48038728,
+          "heapTotal": 6670336,
+          "heapUsed": 10987186,
+          "external": 7489250,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48038728,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.3679160000001502,
+      "before": {
+        "heapSize": 10956174,
+        "heapCapacity": 14530638,
+        "objectCount": 42193,
+        "processMemory": {
+          "rss": 48137008,
+          "heapTotal": 6408192,
+          "heapUsed": 10956174,
+          "external": 7437950,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48137008,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 11515305,
+        "heapCapacity": 35586537,
+        "objectCount": 50933,
+        "processMemory": {
+          "rss": 47629104,
+          "heapTotal": 27281408,
+          "heapUsed": 11515305,
+          "external": 7620633,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47629104,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 11178622,
+        "heapCapacity": 15175086,
+        "objectCount": 42902,
+        "processMemory": {
+          "rss": 47121200,
+          "heapTotal": 6883328,
+          "heapUsed": 11178622,
+          "external": 7607262,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47121200,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "collections/list-build",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.3637079999998605,
+      "before": {
+        "heapSize": 11133725,
+        "heapCapacity": 14573453,
+        "objectCount": 42369,
+        "processMemory": {
+          "rss": 48907080,
+          "heapTotal": 6277120,
+          "heapUsed": 11133725,
+          "external": 7611837,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48907080,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 13196987,
+        "heapCapacity": 37408139,
+        "objectCount": 95192,
+        "processMemory": {
+          "rss": 50217800,
+          "heapTotal": 29050880,
+          "heapUsed": 13196987,
+          "external": 7672763,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 50217800,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12141575,
+        "heapCapacity": 15706983,
+        "objectCount": 42893,
+        "processMemory": {
+          "rss": 49349448,
+          "heapTotal": 6440960,
+          "heapUsed": 12141575,
+          "external": 8581527,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49349448,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 3.2095829999998386,
+      "before": {
+        "heapSize": 11383566,
+        "heapCapacity": 14802222,
+        "objectCount": 42998,
+        "processMemory": {
+          "rss": 47203120,
+          "heapTotal": 6326272,
+          "heapUsed": 11383566,
+          "external": 7791454,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47203120,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 13122583,
+        "heapCapacity": 37707271,
+        "objectCount": 87084,
+        "processMemory": {
+          "rss": 48087856,
+          "heapTotal": 29165568,
+          "heapUsed": 13122583,
+          "external": 7857207,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48087856,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 11824992,
+        "heapCapacity": 15385824,
+        "objectCount": 43520,
+        "processMemory": {
+          "rss": 47907632,
+          "heapTotal": 6506496,
+          "heapUsed": 11824992,
+          "external": 8194832,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47907632,
+          "peak": 85459736,
+          "currentCommit": 246677504,
+          "peakCommit": 246677504,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "collections/list-append",
+    "before": {
+      "runs": 100,
+      "gcMs": 10.710375000000568,
+      "before": {
+        "heapSize": 13690950,
+        "heapCapacity": 22979542,
+        "objectCount": 53968,
+        "processMemory": {
+          "rss": 51282760,
+          "heapTotal": 12601344,
+          "heapUsed": 13690950,
+          "external": 9693702,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 51282760,
+          "peak": 86950680,
+          "currentCommit": 255852544,
+          "peakCommit": 255852544,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 52520556,
+        "heapCapacity": 85231740,
+        "objectCount": 1076252,
+        "processMemory": {
+          "rss": 79692640,
+          "heapTotal": 74074112,
+          "heapUsed": 52520556,
+          "external": 10473132,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 79692640,
+          "peak": 86950680,
+          "currentCommit": 308740096,
+          "peakCommit": 308740096,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 28530374,
+        "heapCapacity": 44909286,
+        "objectCount": 54626,
+        "processMemory": {
+          "rss": 73810784,
+          "heapTotal": 19744768,
+          "heapUsed": 28530374,
+          "external": 24480022,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 73810784,
+          "peak": 86950680,
+          "currentCommit": 308740096,
+          "peakCommit": 308740096,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 10.370583999999326,
+      "before": {
+        "heapSize": 13813572,
+        "heapCapacity": 23387380,
+        "objectCount": 54626,
+        "processMemory": {
+          "rss": 47989552,
+          "heapTotal": 12961792,
+          "heapUsed": 13813572,
+          "external": 9741092,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47989552,
+          "peak": 85459736,
+          "currentCommit": 248840192,
+          "peakCommit": 248840192,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 51219646,
+        "heapCapacity": 83584350,
+        "objectCount": 1039531,
+        "processMemory": {
+          "rss": 81068872,
+          "heapTotal": 72402944,
+          "heapUsed": 51219646,
+          "external": 10496910,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 81068872,
+          "peak": 87327560,
+          "currentCommit": 302907392,
+          "peakCommit": 302907392,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 28736734,
+        "heapCapacity": 40275822,
+        "objectCount": 55246,
+        "processMemory": {
+          "rss": 68977480,
+          "heapTotal": 14977024,
+          "heapUsed": 28736734,
+          "external": 24614302,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 68977480,
+          "peak": 87327560,
+          "currentCommit": 302907392,
+          "peakCommit": 302907392,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "collections/list-update",
+    "before": {
+      "runs": 100,
+      "gcMs": 1.9923330000001442,
+      "before": {
+        "heapSize": 12357245,
+        "heapCapacity": 16402301,
+        "objectCount": 45277,
+        "processMemory": {
+          "rss": 61195104,
+          "heapTotal": 7096320,
+          "heapUsed": 12357245,
+          "external": 8621485,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 61195104,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12807470,
+        "heapCapacity": 39543134,
+        "objectCount": 54280,
+        "processMemory": {
+          "rss": 52134752,
+          "heapTotal": 30214144,
+          "heapUsed": 12807470,
+          "external": 8644494,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 52134752,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 11819853,
+        "heapCapacity": 15704125,
+        "objectCount": 45856,
+        "processMemory": {
+          "rss": 51446624,
+          "heapTotal": 6981632,
+          "heapUsed": 11819853,
+          "external": 8037997,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 51446624,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.270041000000674,
+      "before": {
+        "heapSize": 12374884,
+        "heapCapacity": 16412052,
+        "objectCount": 45920,
+        "processMemory": {
+          "rss": 59556680,
+          "heapTotal": 7161856,
+          "heapUsed": 12374884,
+          "external": 8565700,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 59556680,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12797897,
+        "heapCapacity": 39601833,
+        "objectCount": 54329,
+        "processMemory": {
+          "rss": 49939272,
+          "heapTotal": 30328832,
+          "heapUsed": 12797897,
+          "external": 8588505,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49939272,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 11853164,
+        "heapCapacity": 15680172,
+        "objectCount": 46501,
+        "processMemory": {
+          "rss": 48923464,
+          "heapTotal": 6998016,
+          "heapUsed": 11853164,
+          "external": 7997660,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48923464,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "collections/map-update",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.215541999999914,
+      "before": {
+        "heapSize": 12306979,
+        "heapCapacity": 16048243,
+        "objectCount": 46227,
+        "processMemory": {
+          "rss": 51053408,
+          "heapTotal": 6883328,
+          "heapUsed": 12306979,
+          "external": 8480419,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 51053408,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12656212,
+        "heapCapacity": 39228452,
+        "objectCount": 49630,
+        "processMemory": {
+          "rss": 50168672,
+          "heapTotal": 29886464,
+          "heapUsed": 12656212,
+          "external": 8657492,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 50168672,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12176473,
+        "heapCapacity": 15885193,
+        "objectCount": 46858,
+        "processMemory": {
+          "rss": 49644384,
+          "heapTotal": 6899712,
+          "heapUsed": 12176473,
+          "external": 8300985,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49644384,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.61516599999959,
+      "before": {
+        "heapSize": 12277664,
+        "heapCapacity": 16167024,
+        "objectCount": 47004,
+        "processMemory": {
+          "rss": 48415560,
+          "heapTotal": 7112704,
+          "heapUsed": 12277664,
+          "external": 8369824,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48415560,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12581408,
+        "heapCapacity": 39109840,
+        "objectCount": 50651,
+        "processMemory": {
+          "rss": 48546632,
+          "heapTotal": 29935616,
+          "heapUsed": 12581408,
+          "external": 8489728,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48546632,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12541996,
+        "heapCapacity": 16240796,
+        "objectCount": 47511,
+        "processMemory": {
+          "rss": 48415560,
+          "heapTotal": 6965248,
+          "heapUsed": 12541996,
+          "external": 8591052,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48415560,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "text/build",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.130457999999635,
+      "before": {
+        "heapSize": 12231891,
+        "heapCapacity": 15903267,
+        "objectCount": 46317,
+        "processMemory": {
+          "rss": 49972064,
+          "heapTotal": 6850560,
+          "heapUsed": 12231891,
+          "external": 8332083,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49972064,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12403341,
+        "heapCapacity": 33778605,
+        "objectCount": 48597,
+        "processMemory": {
+          "rss": 49972064,
+          "heapTotal": 24497152,
+          "heapUsed": 12403341,
+          "external": 8370285,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49972064,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12189416,
+        "heapCapacity": 15800312,
+        "objectCount": 46940,
+        "processMemory": {
+          "rss": 49939296,
+          "heapTotal": 6834176,
+          "heapUsed": 12189416,
+          "external": 8281640,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49939296,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.6762500000004366,
+      "before": {
+        "heapSize": 12377127,
+        "heapCapacity": 15988791,
+        "objectCount": 46973,
+        "processMemory": {
+          "rss": 48792392,
+          "heapTotal": 6866944,
+          "heapUsed": 12377127,
+          "external": 8401223,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48792392,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 12529225,
+        "heapCapacity": 33798905,
+        "objectCount": 49270,
+        "processMemory": {
+          "rss": 48087880,
+          "heapTotal": 24453120,
+          "heapUsed": 12529225,
+          "external": 8439737,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48087880,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12368612,
+        "heapCapacity": 15968612,
+        "objectCount": 47598,
+        "processMemory": {
+          "rss": 48038728,
+          "heapTotal": 6899712,
+          "heapUsed": 12368612,
+          "external": 8384404,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48038728,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "text/index",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.0776669999995647,
+      "before": {
+        "heapSize": 12567359,
+        "heapCapacity": 16607711,
+        "objectCount": 47551,
+        "processMemory": {
+          "rss": 49005408,
+          "heapTotal": 7309312,
+          "heapUsed": 12567359,
+          "external": 8613903,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49005408,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 13184036,
+        "heapCapacity": 40304596,
+        "objectCount": 60561,
+        "processMemory": {
+          "rss": 48579424,
+          "heapTotal": 30984192,
+          "heapUsed": 13184036,
+          "external": 8635908,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48579424,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12613078,
+        "heapCapacity": 16548166,
+        "objectCount": 48082,
+        "processMemory": {
+          "rss": 48055136,
+          "heapTotal": 7243776,
+          "heapUsed": 12613078,
+          "external": 8619894,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48055136,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 2.3715830000001006,
+      "before": {
+        "heapSize": 12751742,
+        "heapCapacity": 16814398,
+        "objectCount": 48207,
+        "processMemory": {
+          "rss": 48628552,
+          "heapTotal": 7407616,
+          "heapUsed": 12751742,
+          "external": 8722286,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48628552,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 13335523,
+        "heapCapacity": 40895667,
+        "objectCount": 60355,
+        "processMemory": {
+          "rss": 48448328,
+          "heapTotal": 31459328,
+          "heapUsed": 13335523,
+          "external": 8751843,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48448328,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 12925269,
+        "heapCapacity": 16948309,
+        "objectCount": 48738,
+        "processMemory": {
+          "rss": 48448328,
+          "heapTotal": 7407616,
+          "heapUsed": 12925269,
+          "external": 8856197,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48448328,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "text/patterns",
+    "before": {
+      "runs": 100,
+      "gcMs": 2.5807499999991705,
+      "before": {
+        "heapSize": 13412793,
+        "heapCapacity": 17446665,
+        "objectCount": 48838,
+        "processMemory": {
+          "rss": 48235360,
+          "heapTotal": 7407616,
+          "heapUsed": 13412793,
+          "external": 9354553,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48235360,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 15795433,
+        "heapCapacity": 44710393,
+        "objectCount": 90521,
+        "processMemory": {
+          "rss": 49218400,
+          "heapTotal": 34179072,
+          "heapUsed": 15795433,
+          "external": 9846825,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49218400,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 13601571,
+        "heapCapacity": 17494867,
+        "objectCount": 49304,
+        "processMemory": {
+          "rss": 48235360,
+          "heapTotal": 7309312,
+          "heapUsed": 13601571,
+          "external": 9501059,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48235360,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 3.654916999999841,
+      "before": {
+        "heapSize": 13319462,
+        "heapCapacity": 17154166,
+        "objectCount": 49323,
+        "processMemory": {
+          "rss": 48415560,
+          "heapTotal": 7276544,
+          "heapUsed": 13319462,
+          "external": 9193126,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48415560,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 15470789,
+        "heapCapacity": 44151797,
+        "objectCount": 88267,
+        "processMemory": {
+          "rss": 49316680,
+          "heapTotal": 33802240,
+          "heapUsed": 15470789,
+          "external": 9665061,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49316680,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 13651720,
+        "heapCapacity": 17630456,
+        "objectCount": 49981,
+        "processMemory": {
+          "rss": 49333064,
+          "heapTotal": 7473152,
+          "heapUsed": 13651720,
+          "external": 9472808,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49333064,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "macro/transform",
+    "before": {
+      "runs": 100,
+      "gcMs": 3.7162499999994907,
+      "before": {
+        "heapSize": 13288881,
+        "heapCapacity": 17343761,
+        "objectCount": 50052,
+        "processMemory": {
+          "rss": 48284512,
+          "heapTotal": 7522304,
+          "heapUsed": 13288881,
+          "external": 9136961,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48284512,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 22605628,
+        "heapCapacity": 50935372,
+        "objectCount": 213724,
+        "processMemory": {
+          "rss": 48284512,
+          "heapTotal": 38651904,
+          "heapUsed": 22605628,
+          "external": 11598972,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48284512,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 15560629,
+        "heapCapacity": 19779525,
+        "objectCount": 50678,
+        "processMemory": {
+          "rss": 48284512,
+          "heapTotal": 7735296,
+          "heapUsed": 15560629,
+          "external": 11359733,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48284512,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 59
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 3.997124999999869,
+      "before": {
+        "heapSize": 13408609,
+        "heapCapacity": 17386353,
+        "objectCount": 50710,
+        "processMemory": {
+          "rss": 48530248,
+          "heapTotal": 7522304,
+          "heapUsed": 13408609,
+          "external": 9179553,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48530248,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "after": {
+        "heapSize": 20965784,
+        "heapCapacity": 49691000,
+        "objectCount": 183613,
+        "processMemory": {
+          "rss": 47874888,
+          "heapTotal": 37832704,
+          "heapUsed": 20965784,
+          "external": 11173800,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47874888,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      },
+      "retained": {
+        "heapSize": 15018707,
+        "heapCapacity": 23593075,
+        "objectCount": 58966,
+        "processMemory": {
+          "rss": 47858504,
+          "heapTotal": 12486656,
+          "heapUsed": 15018707,
+          "external": 10421923,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47858504,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 59
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "host/immediate",
+    "before": {
+      "runs": 100,
+      "gcMs": 3.3092500000002474,
+      "before": {
+        "heapSize": 13605636,
+        "heapCapacity": 21329876,
+        "objectCount": 57455,
+        "processMemory": {
+          "rss": 48956256,
+          "heapTotal": 11503616,
+          "heapUsed": 13605636,
+          "external": 9141764,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48956256,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 60
+        }
+      },
+      "after": {
+        "heapSize": 18424280,
+        "heapCapacity": 47457848,
+        "objectCount": 189475,
+        "processMemory": {
+          "rss": 49513312,
+          "heapTotal": 37687296,
+          "heapUsed": 18424280,
+          "external": 9219176,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 49513312,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 60
+        }
+      },
+      "retained": {
+        "heapSize": 14465106,
+        "heapCapacity": 21878146,
+        "objectCount": 58010,
+        "processMemory": {
+          "rss": 48743264,
+          "heapTotal": 11241472,
+          "heapUsed": 14465106,
+          "external": 9952178,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48743264,
+          "peak": 86950680,
+          "currentCommit": 310902784,
+          "peakCommit": 310902784,
+          "pageFaults": 60
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 3.6214579999996204,
+      "before": {
+        "heapSize": 13969698,
+        "heapCapacity": 20982546,
+        "objectCount": 58207,
+        "processMemory": {
+          "rss": 48120648,
+          "heapTotal": 10881024,
+          "heapUsed": 13969698,
+          "external": 9417026,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 48120648,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 60
+        }
+      },
+      "after": {
+        "heapSize": 18365950,
+        "heapCapacity": 48011966,
+        "objectCount": 179117,
+        "processMemory": {
+          "rss": 47792968,
+          "heapTotal": 38008832,
+          "heapUsed": 18365950,
+          "external": 9478382,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47792968,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 60
+        }
+      },
+      "retained": {
+        "heapSize": 14794908,
+        "heapCapacity": 22118236,
+        "objectCount": 58772,
+        "processMemory": {
+          "rss": 47792968,
+          "heapTotal": 11241472,
+          "heapUsed": 14794908,
+          "external": 10192268,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 47792968,
+          "peak": 87327560,
+          "currentCommit": 311361536,
+          "peakCommit": 311361536,
+          "pageFaults": 60
+        }
+      }
+    }
+  },
+  {
+    "benchmark": "lifecycle/rollback",
+    "before": {
+      "runs": 100,
+      "gcMs": 9.916457999999693,
+      "before": {
+        "heapSize": 16274742,
+        "heapCapacity": 49840518,
+        "objectCount": 103559,
+        "processMemory": {
+          "rss": 58278752,
+          "heapTotal": 39078912,
+          "heapUsed": 16274742,
+          "external": 10037462,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 58278752,
+          "peak": 86950680,
+          "currentCommit": 315883520,
+          "peakCommit": 315883520,
+          "pageFaults": 60
+        }
+      },
+      "after": {
+        "heapSize": 41671664,
+        "heapCapacity": 106139664,
+        "objectCount": 624238,
+        "processMemory": {
+          "rss": 62260112,
+          "heapTotal": 88497152,
+          "heapUsed": 41614352,
+          "external": 15166912,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 62260112,
+          "peak": 86950680,
+          "currentCommit": 338690048,
+          "peakCommit": 338690048,
+          "pageFaults": 60
+        }
+      },
+      "retained": {
+        "heapSize": 16344614,
+        "heapCapacity": 48304550,
+        "objectCount": 103880,
+        "processMemory": {
+          "rss": 58934160,
+          "heapTotal": 37489664,
+          "heapUsed": 16344614,
+          "external": 10090742,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 58934160,
+          "peak": 86950680,
+          "currentCommit": 338690048,
+          "peakCommit": 338690048,
+          "pageFaults": 60
+        }
+      }
+    },
+    "after": {
+      "runs": 100,
+      "gcMs": 10.237292000001617,
+      "before": {
+        "heapSize": 16476509,
+        "heapCapacity": 46033709,
+        "objectCount": 104310,
+        "processMemory": {
+          "rss": 54035296,
+          "heapTotal": 35163136,
+          "heapUsed": 16476509,
+          "external": 10146429,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 54035296,
+          "peak": 87327560,
+          "currentCommit": 312803328,
+          "peakCommit": 312803328,
+          "pageFaults": 60
+        }
+      },
+      "after": {
+        "heapSize": 32865583,
+        "heapCapacity": 106206959,
+        "objectCount": 437622,
+        "processMemory": {
+          "rss": 62194552,
+          "heapTotal": 90744832,
+          "heapUsed": 32865583,
+          "external": 13674799,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 62194552,
+          "peak": 87327560,
+          "currentCommit": 343998464,
+          "peakCommit": 343998464,
+          "pageFaults": 60
+        }
+      },
+      "retained": {
+        "heapSize": 16616521,
+        "heapCapacity": 44636489,
+        "objectCount": 104508,
+        "processMemory": {
+          "rss": 59065208,
+          "heapTotal": 33639424,
+          "heapUsed": 16616521,
+          "external": 10272921,
+          "arrayBuffers": 17448
+        },
+        "jscMemory": {
+          "current": 59065208,
+          "peak": 87327560,
+          "currentCommit": 343998464,
+          "peakCommit": 343998464,
+          "pageFaults": 60
+        }
+      }
+    }
+  }
+]

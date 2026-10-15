@@ -1,6 +1,7 @@
 // Cost Model 0 (chapter 8, The Cost Model): each rate's Fuel and allocation
 // formulas, the logical sizes of values, and the measures they're taken over.
 import { costMeasure, costModel, costSubject } from './generated/machine';
+import { leafSize, makeCostRates } from './generated/costs';
 import { characters } from './text';
 import { scalarCount } from './unicode';
 import { digitsOf, integerOf, isInteger } from './decimal';
@@ -262,6 +263,11 @@ export const sizeOf = (v: Value): number => {
   if (cached !== undefined) {
     return cached;
   }
+  const leaf = leafSize(v, measureOf);
+  if (leaf !== undefined) {
+    known.set(v, leaf);
+    return leaf;
+  }
   // Deep values are sized leaves first, so no size recurses far. A
   // shared part is visited once, not once per path to it (#890); its
   // logical size still counts at each occurrence, through its parents.
@@ -271,6 +277,11 @@ export const sizeOf = (v: Value): number => {
   while (pending.length) {
     const next = pending.pop()!;
     if (known.has(next) || seen.has(next)) {
+      continue;
+    }
+    const leaf = leafSize(next, measureOf);
+    if (leaf !== undefined) {
+      known.set(next, leaf);
       continue;
     }
     seen.add(next);
@@ -328,18 +339,16 @@ export const partSize = (
 };
 
 export type Charge = { alloc: number; fuel: number };
+const compiledRates = makeCostRates(measureOf);
 
 /** A Cost Model key's rate, an index that `charge` takes, or -1 if none. */
 export const rateOf = (key: string): number => rateIndex.get(key) ?? -1;
 
 /** A rate's Fuel and allocation, over what the instruction worked on. */
 export const charge = (rate: number, measured: Measured = noCounts): Charge => {
-  const formulas = rates[rate];
-  if (!formulas) {
+  const compiled = compiledRates[rate];
+  if (!compiled) {
     throw new Error(`No Cost Model rate ${rate}`);
   }
-  return {
-    fuel: evaluate(formulas.fuel, measured, undefined),
-    alloc: evaluate(formulas.alloc, measured, undefined),
-  };
+  return compiled(measured);
 };
