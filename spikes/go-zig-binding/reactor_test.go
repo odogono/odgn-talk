@@ -91,10 +91,15 @@ func field(t testing.TB, r obj, key string) obj {
 }
 func (h *host) ok(m string, f obj) obj     { h.t.Helper(); return field(h.t, h.frame(m, f, true), "ok") }
 func (h *host) result(m string, f obj) obj { h.t.Helper(); return h.frame(m, f, false) }
-func (h *host) setup(mode, source string) {
-	h.ok("define-capability", obj{"name": "api", "ops": []obj{{"name": "read", "mode": mode, "result": "number", "maxPending": 5000}}})
+func (h *host) setup(mode, source string)  { h.setupTrace(mode, source, false) }
+func (h *host) setupTrace(mode, source string, trace bool) {
+	operation := obj{"name": "read", "mode": mode, "result": "number"}
+	if mode == "suspending" {
+		operation["maxPending"] = 5000
+	}
+	h.ok("define-capability", obj{"name": "api", "ops": []obj{operation}})
 	grant := h.ok("grant", obj{"capability": "api", "ops": "all"})["grant"]
-	h.ok("new-group", obj{"group": "g", "name": "g"})
+	h.ok("new-group", obj{"group": "g", "name": "g", "trace": trace})
 	h.ok("load", obj{"group": "g", "name": "s", "source": source, "grants": obj{"api": grant}})
 }
 func (h *host) request(group string) {
@@ -172,53 +177,109 @@ func TestImmediateAndDeferredAnswers(t *testing.T) {
 
 const stopSource = "script variable n = 0\non go\n put 9 into n\n ask api to read\n put 8 into n\n return n\nend go"
 
-// This is a characterization of a BLOCKED retirement gate, not acceptance of
-// different semantics. If the transport changes, replace it with a parity test.
-func TestStopAtCrossingCompatibilityBlocker(t *testing.T) {
-	core := talk.New()
-	def, err := core.DefineCapability("api", talk.Operation{Name: "read", Mode: talk.Immediate, Result: talk.NumberShape, Do: func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
-		c.Group().Script(c.ScriptName()).Stop("crossing")
-		return talk.Int(7), nil
-	}})
-	if err != nil {
-		t.Fatal(err)
+type traceLines []string
+
+func (l *traceLines) Record(line string) { *l = append(*l, line) }
+
+// The embedded artifact must pass the original failed gate, with the same
+// Script, Clock, callback result and crossing inputs as native Go.
+func TestStopAtCrossingParity(t *testing.T) {
+	for _, mode := range []string{"immediate", "suspending"} {
+		for _, result := range []string{"value", "wrong shape", "failure", "host error"} {
+			if mode == "suspending" && result != "value" {
+				continue
+			}
+			t.Run(mode+"/"+result, func(t *testing.T) {
+				core := talk.New()
+				op := talk.Operation{Name: "read", Mode: talk.Immediate, Result: talk.NumberShape}
+				stop := func(c *talk.Call) { c.Group().Script(c.ScriptName()).Stop("crossing") }
+				reply := obj{"result": 7}
+				if mode == "suspending" {
+					op.Mode = talk.Suspending
+					op.MaxPending = 5 * time.Second
+					op.Start = func(c *talk.Call, _ []talk.Value) error { stop(c); return nil }
+					reply = obj{"started": true}
+				} else {
+					op.Do = func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
+						stop(c)
+						switch result {
+						case "wrong shape":
+							return talk.Text("bad")
+						case "failure":
+							return talk.Nothing, &talk.ScriptError{Code: "bad"}
+						case "host error":
+							return talk.Nothing, fmt.Errorf("broken")
+						}
+						return talk.Int(7), nil
+					}
+					switch result {
+					case "wrong shape":
+						reply = obj{"result": "bad"}
+					case "failure":
+						reply = obj{"fail": obj{"code": "bad"}}
+					case "host error":
+						reply = obj{"hostError": "broken"}
+					}
+				}
+				def, err := core.DefineCapability("api", op)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var trace traceLines
+				g := core.NewGroup(talk.GroupOptions{Trace: &trace})
+				source := stopSource
+				if mode == "suspending" {
+					source = strings.Replace(source, "ask api to read", "ask api to read and wait", 1)
+				}
+				script, err := g.Load(talk.LoadOptions{Name: "s", Source: source, Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				trace = nil
+				if _, _, err = script.Request(nil, talk.Message{Name: "go"}); err != nil {
+					t.Fatal(err)
+				}
+				native, err := g.Pump(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC), talk.PumpOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				nativeTrace := append(traceLines(nil), trace...)
+				if native.State != talk.Stopped || g.Inspect().Scripts[0].Vars[0].Val.String() != "0" {
+					t.Fatal("native Stop did not roll back")
+				}
+				h := newHost(t)
+				hello := h.ok("hello", obj{"protocol": 1})
+				if !strings.Contains(fmt.Sprint(hello["features"]), "paused-inputs-v1") {
+					t.Fatal("artifact lacks paused-inputs-v1", hello)
+				}
+				h.setupTrace(mode, source, true)
+				h.request("g")
+				field(t, h.pump("g"), "need")
+				worker := h.ref
+				admitted := h.ok("stop", obj{"group": "g", "script": "s", "reason": "crossing"})
+				if _, ok := admitted["trace"]; ok {
+					t.Fatal("premature callback Trace", admitted)
+				}
+				h.ref = worker
+				done := field(t, h.result("op-result", reply), "ok")
+				if done["state"] != "stopped" || done["fuelUsed"] != float64(native.FuelUsed) {
+					t.Fatal(done, native)
+				}
+				var got []string
+				for _, line := range done["trace"].([]any) {
+					got = append(got, line.(string))
+				}
+				if strings.Join(got, "\n") != strings.Join(nativeTrace, "\n") {
+					t.Fatalf("Trace differs\nnative:\n%s\nZig:\n%s", strings.Join(nativeTrace, "\n"), strings.Join(got, "\n"))
+				}
+				inspection := h.ok("inspect", obj{"group": "g"})
+				b, _ := json.Marshal(inspection)
+				if !bytes.Contains(b, []byte(`"vars":[["n",0]]`)) {
+					t.Fatal(string(b))
+				}
+			})
+		}
 	}
-	g := core.NewGroup(talk.GroupOptions{})
-	s, err := g.Load(talk.LoadOptions{Name: "s", Source: stopSource, Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err = s.Request(nil, talk.Message{Name: "go"}); err != nil {
-		t.Fatal(err)
-	}
-	report, err := g.Pump(time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC), talk.PumpOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	native := g.Inspect().Scripts[0].Vars[0].Val.String()
-	if report.State != talk.Stopped || native != "0" {
-		t.Fatalf("native semantics changed: %v %s", report.State, native)
-	}
-	h := newHost(t)
-	h.setup("immediate", stopSource)
-	h.request("g")
-	field(t, h.pump("g"), "need")
-	refused := field(t, h.result("stop", obj{"group": "g", "script": "s", "reason": "crossing"}), "err")
-	if refused["kind"] != "protocol error" {
-		t.Fatalf("revisit blocker: %v", refused)
-	}
-	completed := end(t, h.result("op-result", obj{"result": 7}))
-	if completed["result"] != float64(8) || completed["outcome"] != "completed" {
-		t.Fatal(completed)
-	}
-	h.ok("stop", obj{"group": "g", "script": "s", "reason": "crossing"})
-	field(t, h.pump("g"), "ok")
-	inspection := h.ok("inspect", obj{"group": "g"})
-	b, _ := json.Marshal(inspection)
-	if !bytes.Contains(b, []byte(`"vars":[["n",8]]`)) {
-		t.Fatal(string(b))
-	}
-	t.Logf("BLOCKED: native Stop rolls back n=%s; queued transport Stop leaves n=8; refusal=%v", native, refused)
 }
 func TestRetainedRepliesAndConcurrentInstances(t *testing.T) {
 	for i := 0; i < 4; i++ {
