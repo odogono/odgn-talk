@@ -69,7 +69,11 @@ properties are checked at runtime ([ADR 0085](../../docs/adr/0085-property-write
   subtraction, multiplication, terminating division and integer `div`/`mod`
   use checked `u128` intermediates when the exact result fits. Terminating
   division selects the representable exponent nearest its ideal without
-  rounding. Rounding and wider intermediates use managed big integers.
+  rounding. Decimal comparisons handle signs, zeros and equal exponents
+  directly, and align unequal exponents with checked `u128` scaling when it
+  fits. Wider comparisons retain bounded padded-digit comparison without
+  allocating. Rounding and wider arithmetic intermediates use managed big
+  integers.
   Quantity arithmetic shares these paths and uses compile-time catalogue
   factors, preserving separate conversion steps and their rounding; immutable
   result Values still allocate.

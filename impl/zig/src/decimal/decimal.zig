@@ -155,6 +155,31 @@ pub const Decimal = struct {
     pub fn order(a: Decimal, b: Decimal) std.math.Order {
         if (a.coefficient == 0 and b.coefficient == 0) return .eq;
         if (a.negative != b.negative) return if (a.negative) .lt else .gt;
+        const magnitude: std.math.Order = if (a.coefficient == 0)
+            .lt
+        else if (b.coefficient == 0)
+            .gt
+        else if (a.exponent == b.exponent)
+            std.math.order(a.coefficient, b.coefficient)
+        else blk: {
+            // Align only the higher-exponent coefficient. No rounding, result
+            // Value or scratch allocation is needed when it fits in u128.
+            const gap = @as(i64, a.exponent) - b.exponent;
+            if (@abs(gap) > 38) return orderGeneral(a, b);
+            break :blk if (gap > 0)
+                std.math.order(scaleExact(a.coefficient, @intCast(gap)) orelse return orderGeneral(a, b), b.coefficient)
+            else
+                std.math.order(a.coefficient, scaleExact(b.coefficient, @intCast(-gap)) orelse return orderGeneral(a, b));
+        };
+        return if (a.negative) magnitude.invert() else magnitude;
+    }
+
+    // Retain the original comparator for wide alignment and as an independent
+    // oracle for the exact paths. Its work is bounded by coefficient digits,
+    // even for the full exponent gap.
+    fn orderGeneral(a: Decimal, b: Decimal) std.math.Order {
+        if (a.coefficient == 0 and b.coefficient == 0) return .eq;
+        if (a.negative != b.negative) return if (a.negative) .lt else .gt;
         // Compare padded decimal digits, without allocating or scaling a
         // 6176-place coefficient into a bounded machine integer.
         var aa: [40]u8 = undefined;
@@ -856,6 +881,90 @@ fn randomDecimal(random: std.Random, wide: bool) Decimal {
         .exponent = if (wide) exponents[random.uintLessThan(usize, exponents.len)] else -@as(i32, @intCast(random.uintLessThan(u32, 5))),
         .negative = random.boolean(),
     };
+}
+
+fn expectOrderAgreement(x: Decimal, y: Decimal) !void {
+    const expected = Decimal.orderGeneral(x, y);
+    try std.testing.expectEqual(expected, Decimal.order(x, y));
+    try std.testing.expectEqual(expected.invert(), Decimal.order(y, x));
+}
+
+test "exact comparisons retain cohorts, signs, zeros and padded-digit fallbacks" {
+    const equal = .{
+        .{ "1", "1.0" },
+        .{ "1.00", "1" },
+        .{ "-1.00", "-1.0" },
+        .{ "0", "-0.000" },
+        .{ "999999999999999999999999999999999", "999999999999999999999999999999999.0" },
+    };
+    inline for (equal) |pair| {
+        const x = try Decimal.parse(pair[0]);
+        const y = try Decimal.parse(pair[1]);
+        try std.testing.expectEqual(std.math.Order.eq, Decimal.order(x, y));
+        try expectOrderAgreement(x, y);
+    }
+    const pairs = [_][2]Decimal{
+        .{ .{}, .{ .exponent = -6176 } },
+        .{ .{}, .{ .coefficient = 1, .exponent = -6176 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 2 } },
+        .{ .{ .coefficient = coefficient_limit - 2 }, .{ .coefficient = coefficient_limit - 1 } },
+        .{ .{ .coefficient = 12345, .exponent = -2 }, .{ .coefficient = 124 } },
+        .{ .{ .coefficient = 1, .exponent = -6176 }, .{ .coefficient = 1 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 1, .exponent = -38 } },
+        .{ .{ .coefficient = 1 }, .{ .coefficient = 1, .exponent = -39 } },
+        // 10^34 - 1 scales by 10^4, but overflows u128 at 10^5.
+        .{ .{ .coefficient = coefficient_limit - 1 }, .{ .coefficient = 1, .exponent = -4 } },
+        .{ .{ .coefficient = coefficient_limit - 1 }, .{ .coefficient = 1, .exponent = -5 } },
+        // Internal Base Unit comparisons can have positive exponents.
+        .{ .{ .coefficient = 1, .exponent = 3 }, .{ .coefficient = 1000 } },
+        .{ .{ .coefficient = coefficient_limit - 1, .exponent = 34 }, .{ .coefficient = 1, .exponent = -6176 } },
+    };
+    for (pairs) |pair| for ([_]bool{ false, true }) |xn| {
+        for ([_]bool{ false, true }) |yn| {
+            var x = pair[0];
+            var y = pair[1];
+            x.negative = xn and x.coefficient != 0;
+            y.negative = yn and y.coefficient != 0;
+            try expectOrderAgreement(x, y);
+        }
+    };
+    try std.testing.expect(scaleExact(coefficient_limit - 1, 4) != null);
+    try std.testing.expect(scaleExact(coefficient_limit - 1, 5) == null);
+    try std.testing.expect(scaleExact(1, 38) != null);
+    try std.testing.expect(scaleExact(1, 39) == null);
+}
+
+test "comparison oracle covers every decimal digit boundary and generated exponent alignments" {
+    const exponents = [_]i32{ -6176, -6175, -39, -38, -34, -2, -1, 0, 1, 34 };
+    var power_of_ten: u128 = 1;
+    for (0..34) |_| {
+        for ([_]u128{ power_of_ten - 1, power_of_ten, power_of_ten + 1 }) |coefficient| {
+            for (exponents) |xe| for (exponents) |ye| {
+                const x = Decimal{ .coefficient = coefficient, .exponent = xe };
+                const y = Decimal{ .coefficient = coefficient_limit - 1, .exponent = ye };
+                try expectOrderAgreement(x, y);
+                try expectOrderAgreement(x.negate(), y.negate());
+                try expectOrderAgreement(x, y.negate());
+                // Adjacent cohort, when it stays inside the 34-digit limit.
+                if (coefficient < coefficient_limit / 10 and xe > -6176) {
+                    try expectOrderAgreement(x, .{ .coefficient = coefficient * 10, .exponent = xe - 1 });
+                }
+            };
+        }
+        power_of_ten *= 10;
+    }
+    var generator = std.Random.DefaultPrng.init(939);
+    const random = generator.random();
+    for (0..20000) |i| {
+        const x = randomDecimal(random, i % 2 == 0);
+        var y = randomDecimal(random, i % 3 == 0);
+        switch (i % 4) {
+            0 => y.exponent = x.exponent,
+            1 => y.exponent = @max(-6176, x.exponent - @as(i32, @intCast(random.uintLessThan(u32, 40)))),
+            else => {},
+        }
+        try expectOrderAgreement(x, y);
+    }
 }
 
 test "generated fixed-width operators retain signs and ideal exponents" {

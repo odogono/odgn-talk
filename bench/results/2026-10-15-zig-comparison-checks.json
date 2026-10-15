@@ -1,0 +1,244 @@
+{
+  "wasi": {
+    "wasm": ".cache/decimal-comparison/wasi/bin/talk.wasm",
+    "sha256": "1839e346632ba0ad5e7af4e04c82bcad4dd3ac07d09aa67a23c7a59a08d6a87a",
+    "wasmtime": "49.0.0",
+    "brotli": "1.2.0",
+    "python": "3.14.8",
+    "zlib": "1.2.12",
+    "checks": "passed",
+    "instance": {
+      "linearMemory": 2162688,
+      "group": {
+        "used": 3442,
+        "peak": 6816,
+        "cap": 268435456,
+        "refused": false
+      },
+      "fuel": 7
+    },
+    "instanceWithStdlib": {
+      "linearMemory": 3473408,
+      "group": {
+        "used": 7938,
+        "peak": 11312,
+        "cap": 268435456,
+        "refused": false
+      },
+      "fuel": 337
+    },
+    "containment": {
+      "used": 530323,
+      "peak": 793741,
+      "cap": 1048576,
+      "refused": true
+    },
+    "mapContainment": {
+      "used": 36522,
+      "peak": 65536,
+      "cap": 65536,
+      "refused": true
+    },
+    "nesting": {
+      "parentheses": 62,
+      "lists": 62,
+      "blocks": 125
+    },
+    "largeLoads": {
+      "blank": {
+        "sourceBytes": 1048576,
+        "seconds": 0.046,
+        "retainedBytes": 1574036,
+        "groupPeakBytes": 64035614,
+        "linearMemory": 149094400
+      },
+      "handlers50000": {
+        "sourceBytes": 1027780,
+        "seconds": 0.0766,
+        "retainedBytes": 25624714,
+        "groupPeakBytes": 116896670,
+        "linearMemory": 159514624
+      },
+      "handlers100000": {
+        "sourceBytes": 2077780,
+        "seconds": 0.1701,
+        "retainedBytes": 51405964,
+        "groupPeakBytes": 182210486,
+        "linearMemory": 249692160
+      }
+    },
+    "messageLayer": {
+      "hello": {
+        "language": "1.0-rc.3",
+        "costModel": "0",
+        "unicode": "18.0.0",
+        "core": "zig/0.0.0",
+        "saveFormat": "zig/7"
+      },
+      "linearMemory": 2228224
+    },
+    "metering": {
+      "acceptedFuel": 17,
+      "outcomes": [
+        "accepted",
+        "limit",
+        "inactive"
+      ]
+    },
+    "supportedLimits": {
+      "refusedProfiles": 29,
+      "callDepth": 1000,
+      "freshLoad": "passed"
+    },
+    "textContainment": [
+      {
+        "allocPerRun": 16777216,
+        "cap": 134217728,
+        "linearMemory": [
+          35848192,
+          35848192,
+          35848192
+        ]
+      },
+      {
+        "allocPerRun": 268435456,
+        "cap": 1073741824,
+        "linearMemory": [
+          539164672,
+          539164672,
+          539164672
+        ]
+      }
+    ],
+    "characterIndexing": {
+      "runs": 3,
+      "fuel": 141,
+      "alloc": 1014
+    },
+    "bytes": {
+      "raw": 3032234,
+      "gzip9": 1012044,
+      "brotli11": 691674
+    }
+  },
+  "message-layer": {
+    "wasm": ".cache/decimal-comparison/wasi/bin/talk.wasm",
+    "sha256": "1839e346632ba0ad5e7af4e04c82bcad4dd3ac07d09aa67a23c7a59a08d6a87a",
+    "wasmtime": "49.0.0",
+    "brotli": "1.2.0",
+    "python": "3.14.8",
+    "zlib": "1.2.12",
+    "hello": {
+      "language": "1.0-rc.3",
+      "costModel": "0",
+      "unicode": "18.0.0",
+      "core": "zig/0.0.0",
+      "saveFormat": "zig/7"
+    },
+    "checks": "passed",
+    "instanceMemoryBytes": [
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688,
+      2162688
+    ],
+    "hostileLoads": {
+      "blank": {
+        "sourceBytes": 1048576,
+        "outcome": "loaded",
+        "seconds": 0.055,
+        "memoryGrowthBytes": 152043520
+      },
+      "handlers": {
+        "sourceBytes": 2077780,
+        "outcome": "loaded",
+        "seconds": 0.173,
+        "memoryGrowthBytes": 260898816
+      },
+      "chain": {
+        "sourceBytes": 400020,
+        "outcome": "source nesting too deep",
+        "seconds": 0.003,
+        "memoryGrowthBytes": 2752512
+      },
+      "powers": {
+        "sourceBytes": 400020,
+        "outcome": "source nesting too deep",
+        "seconds": 0.003,
+        "memoryGrowthBytes": 2752512
+      }
+    },
+    "bytes": {
+      "raw": 3032234,
+      "gzip9": 1012044,
+      "brotli11": 691674
+    }
+  },
+  "nativeTests": {
+    "tests": 241,
+    "cHostTests": "passed",
+    "summary": "Build Summary: 12/12 steps succeeded; 241/241 tests passed\ntest success\n+- run test 224 pass (224 total) 5s MaxRSS:368M\n|  +- compile test safe native success 52s MaxRSS:2G\n+- run test 8 pass (8 total) 189ms MaxRSS:4M\n|  +- compile test safe native success 42s MaxRSS:1G\n|     +- translate-c cached 41ms MaxRSS:32M\n+- run test 9 pass (9 total) 194ms MaxRSS:83M\n|  +- compile test safe native success 39s MaxRSS:1G\n|     +- translate-c (reused)\n+- run exe talk-h-test success 223ms\n   +- compile exe talk-h-test safe native success 98ms MaxRSS:70M\n      +- WriteFile cached\n      +- compile lib talk-test safe native success 38s MaxRSS:1G\n      +- compile lib talk-test safe native (reused)\n\n"
+  },
+  "nativeCorpus": {
+    "ordinaryAndRestored": {
+      "passed": 429,
+      "failures": []
+    },
+    "deferredCrossings": {
+      "passed": 429,
+      "failures": []
+    }
+  },
+  "revision": "151f2b8efd00208cd0141ef9b2ddd2d8ff3099c4",
+  "decimalSourceSha256": "7f9fc705f090b5c4ef1701e266da9b58262dcff5546081ad0d3c45cdad08c8e2",
+  "nativeTextSections": {
+    "before": {
+      "section": "__text",
+      "bytes": 2086676,
+      "sha256": "da482cc2b017734f9839e368b52cd5185f0ed8c28f2225905749b1c606b17f87"
+    },
+    "after": {
+      "section": "__text",
+      "bytes": 2087600,
+      "sha256": "4815687170dd1c964a1cda63a7a8979a10aa08e0724935d64e15e873a4111975"
+    },
+    "rebuiltAfter": {
+      "section": "__text",
+      "bytes": 2087600,
+      "sha256": "4815687170dd1c964a1cda63a7a8979a10aa08e0724935d64e15e873a4111975"
+    }
+  },
+  "fallbackBodyUnchangedFromBaseline": true,
+  "extraAllocationChecks": {
+    "pairedComparisons": 252,
+    "matchingCounters": [
+      "hostLivePeakDelta",
+      "hostTopSizes"
+    ]
+  },
+  "peerComparison": {
+    "measurements": 111,
+    "fuelParity": "passed",
+    "reportSha256": "63abd51ba9d3f14685fb6afc4e237346c64a3f79f0913ebe326356608b9c21d4",
+    "hostSha256": "cee1a1c17f049178167741ed5b314271e8036cc1e51b642a30a9896344bb41fb"
+  },
+  "repositoryChecks": {
+    "bun run check": "passed",
+    "bun run lint": "passed",
+    "bun run format:check": "passed",
+    "bun run docs:check": "passed",
+    "bun run unicode:check": "passed",
+    "bun run zig:check": "passed",
+    "bun tools/zig/api.ts": "passed",
+    "zig fmt --check impl/zig": "passed",
+    "git diff --check": "passed"
+  }
+}
