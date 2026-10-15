@@ -1,0 +1,299 @@
+{
+  "recordedAt": "2026-10-14T22:28:25.974619+00:00",
+  "baselineRevision": "f51ad856",
+  "checkoutRevision": "f51ad856e37d802b8865bb2870c3adebc293e7d1",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "zig": "0.17.0",
+  "cc": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+  "language": "1.0-rc.3",
+  "costModel": 0,
+  "mode": "safe",
+  "hostBuild": "cc -std=c11 -O2 -Wall -Wextra -Werror",
+  "samplesPerProcess": 5,
+  "pairs": 3,
+  "binarySha256": {
+    "before": "49b32c900ab405fc86c3aefd2a356ba7197b6c8271e04cb31c950eefd3d4b726",
+    "after": "8b3798bea7c8a9e4deb3b4b8710926ea3da8c0d973c0c559b3b4bcb8440e129c"
+  },
+  "sourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "5bfe6030edcd588ce48ca6703bccb7a28993a3555f9aa85369c15db2acdff66d",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  },
+  "generatorSha256": "e467f0613f5a618c36e7a9bcc159e17026e2590a9b39efff96b9f0b00033ffd5",
+  "ratesSha256": "3b6bb8eb03a9a1cedc94dd1bc9e4c582cb09a877acd063f93e52c8f2ee58040c",
+  "manifestSha256": "3f27106ec23e3875ce48199359f6f6e42340ac8a66d748e1592a6c91df24ab71",
+  "measurements": [],
+  "profiles": [
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-0.txt.gz",
+      "reportSha256": "541963d4bfb8c0e6631d5701dbfc682e833ec6ede7a14e8ddbeada3c1200667b",
+      "samples": {
+        "pump": 1534,
+        "execute": 1468,
+        "charging": 309,
+        "formulaEvaluation": 239,
+        "specializedEvaluation": 0,
+        "instruction": 721,
+        "scratchReset": 98,
+        "operandRetention": 0,
+        "decimal": 101,
+        "valueConstruction": 52,
+        "allocator": 117
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-loop-slice-100.txt.gz",
+      "reportSha256": "76d2016b733dc540b591f07df19bf43a4355a9394c6f2e544c3d991ad49ebbc2",
+      "samples": {
+        "pump": 1456,
+        "execute": 1001,
+        "charging": 208,
+        "formulaEvaluation": 168,
+        "specializedEvaluation": 0,
+        "instruction": 448,
+        "scratchReset": 71,
+        "operandRetention": 0,
+        "decimal": 52,
+        "valueConstruction": 37,
+        "allocator": 126
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/calls",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-calls-slice-0.txt.gz",
+      "reportSha256": "7352b861a3019b838d3df42ef9c00d0298a33f1747ef8810d1dd1144dace5be8",
+      "samples": {
+        "pump": 1533,
+        "execute": 1477,
+        "charging": 230,
+        "formulaEvaluation": 183,
+        "specializedEvaluation": 0,
+        "instruction": 739,
+        "scratchReset": 87,
+        "operandRetention": 0,
+        "decimal": 58,
+        "valueConstruction": 91,
+        "allocator": 183
+      }
+    },
+    {
+      "binary": "before",
+      "name": "core/calls",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-core-calls-slice-100.txt.gz",
+      "reportSha256": "4e458e65041703d54df045c88a2a5d51eb5e0176f975ad448f196bff1ff9434e",
+      "samples": {
+        "pump": 1444,
+        "execute": 926,
+        "charging": 152,
+        "formulaEvaluation": 113,
+        "specializedEvaluation": 0,
+        "instruction": 441,
+        "scratchReset": 50,
+        "operandRetention": 0,
+        "decimal": 41,
+        "valueConstruction": 50,
+        "allocator": 154
+      }
+    },
+    {
+      "binary": "before",
+      "name": "numbers/add",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-numbers-add-slice-0.txt.gz",
+      "reportSha256": "e65dbf8328a54555da622c28dcd542d98cc73419a4c94c9c5c63d6357cd45685",
+      "samples": {
+        "pump": 1547,
+        "execute": 1480,
+        "charging": 295,
+        "formulaEvaluation": 230,
+        "specializedEvaluation": 0,
+        "instruction": 722,
+        "scratchReset": 91,
+        "operandRetention": 0,
+        "decimal": 92,
+        "valueConstruction": 92,
+        "allocator": 125
+      }
+    },
+    {
+      "binary": "before",
+      "name": "numbers/quantity",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "before-numbers-quantity-slice-0.txt.gz",
+      "reportSha256": "6758fa6463558bb740f11a8a0735db4792a6308eb88dcf3226339e8c451f7348",
+      "samples": {
+        "pump": 1531,
+        "execute": 1488,
+        "charging": 221,
+        "formulaEvaluation": 182,
+        "specializedEvaluation": 0,
+        "instruction": 1005,
+        "scratchReset": 54,
+        "operandRetention": 0,
+        "decimal": 66,
+        "valueConstruction": 63,
+        "allocator": 80
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-0.txt.gz",
+      "reportSha256": "6a283646cccbb8deaf2e9d918371db98faab5bd3315965a62aaeb2e794f277fc",
+      "samples": {
+        "pump": 1540,
+        "execute": 1466,
+        "charging": 173,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 796,
+        "scratchReset": 103,
+        "operandRetention": 0,
+        "decimal": 102,
+        "valueConstruction": 61,
+        "allocator": 128
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/loop",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-loop-slice-100.txt.gz",
+      "reportSha256": "2c7fa76bc9f91590e380c6f7e42ab1c8bf214ca882564792de82d56f8b6494c2",
+      "samples": {
+        "pump": 1458,
+        "execute": 951,
+        "charging": 120,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 527,
+        "scratchReset": 59,
+        "operandRetention": 0,
+        "decimal": 81,
+        "valueConstruction": 46,
+        "allocator": 114
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/calls",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-calls-slice-0.txt.gz",
+      "reportSha256": "66a8969e035222c37812ebdba5a1f24e5ec64f7e4f6561edb4643dffd912d3cd",
+      "samples": {
+        "pump": 1534,
+        "execute": 1456,
+        "charging": 118,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 821,
+        "scratchReset": 76,
+        "operandRetention": 0,
+        "decimal": 73,
+        "valueConstruction": 109,
+        "allocator": 188
+      }
+    },
+    {
+      "binary": "after",
+      "name": "core/calls",
+      "slice": 100,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-core-calls-slice-100.txt.gz",
+      "reportSha256": "6efd178ce1432b949c698bbcfe4891bfdb91a6f7df1bb64d80e351c43f3f8c54",
+      "samples": {
+        "pump": 1458,
+        "execute": 865,
+        "charging": 88,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 477,
+        "scratchReset": 56,
+        "operandRetention": 0,
+        "decimal": 42,
+        "valueConstruction": 37,
+        "allocator": 166
+      }
+    },
+    {
+      "binary": "after",
+      "name": "numbers/add",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-numbers-add-slice-0.txt.gz",
+      "reportSha256": "f0cedaa814aa781ca31f025631ca870fc05d5deaad8d4716e120422dcfa59084",
+      "samples": {
+        "pump": 1538,
+        "execute": 1462,
+        "charging": 150,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 783,
+        "scratchReset": 95,
+        "operandRetention": 0,
+        "decimal": 100,
+        "valueConstruction": 85,
+        "allocator": 131
+      }
+    },
+    {
+      "binary": "after",
+      "name": "numbers/quantity",
+      "slice": 0,
+      "durationSeconds": 2,
+      "intervalMs": 1,
+      "report": "after-numbers-quantity-slice-0.txt.gz",
+      "reportSha256": "de0159ea6301df19b31067a22f0586c88500c55b13f0b9be10112b9b4c80ca6a",
+      "samples": {
+        "pump": 1538,
+        "execute": 1492,
+        "charging": 86,
+        "formulaEvaluation": 0,
+        "specializedEvaluation": 0,
+        "instruction": 1108,
+        "scratchReset": 59,
+        "operandRetention": 0,
+        "decimal": 84,
+        "valueConstruction": 69,
+        "allocator": 79
+      }
+    }
+  ],
+  "baselineSourceSha256": {
+    "impl/zig/src/machine/machine.zig": "a6fcaa909fc9a8ae297f1f58e579d4b221e1bef1ac7179b074a1caeef14c0cbf",
+    "impl/zig/src/machine/costs.zig": "3f4992c94d0fa486626084689614c9a5e0e5347fbfa5ae332e7efceeb98b6d8b",
+    "bench/zig/host.c": "1bff0c4d53d4fe5b43c6e0fe3e19903a2f7b9f8930254592bba423be5da1f82f"
+  }
+}
