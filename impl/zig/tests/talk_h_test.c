@@ -1133,6 +1133,82 @@ static int negative_override_test(void) {
     return bad;
 }
 
+static int dear_gets = 0;
+static talk_call_end get_dear(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    dear_gets++;
+    return talk_int(1, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_FAILED;
+}
+
+/* Host Object rules talk.go and talk.ts share (#1017): a property's declared
+ * cost is paid before its Get runs; a Load refuses an owner that already owns
+ * a Script, with its records; a climb into a full mailbox ends with a note and
+ * `unhandled`; and a send to a stopped Script fails its waiting sender. */
+static int object_path_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_prop props[] = {{"dear", 4, talk_any_shape(), get_dear, NULL, NULL, {1000, 0}, {0, 0}}};
+    talk_object_kind_def gauge_def = {"gauge", 5, props, 1, NULL, NULL, 0};
+    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0};
+    talk_object_kind *gauge = NULL, *room = NULL;
+    int bad = talk_define_object_kind(core, &gauge_def, &gauge) != TALK_OK;
+    bad |= talk_define_object_kind(core, &room_def, &room) != TALK_OK;
+    talk_object *meter = NULL, *a = NULL, *b = NULL, *owner = NULL;
+    bad |= talk_group_object(group, gauge, "m", 1, NULL, &meter) != TALK_OK;
+    bad |= talk_group_object(group, room, "a", 1, NULL, &a) != TALK_OK;
+    bad |= talk_group_object(group, room, "b", 1, NULL, &b) != TALK_OK;
+    bad |= talk_group_object(group, room, "owner", 5, NULL, &owner) != TALK_OK;
+    talk_load_object bound[] = {{"meter", 5, meter}};
+    const char *reader_source = "on read\n  return the dear of meter\nend read\n";
+    talk_load_options reader_load = {"reader", 6, reader_source, strlen(reader_source), NULL, 0, false, NULL, bound, 1, NULL};
+    talk_script *reader = NULL;
+    bad |= talk_load(group, &reader_load, &reader) != TALK_OK;
+    talk_limit_override small = {TALK_OVERRIDE_FUEL_PER_RUN, 50, 0, 0, 0};
+    talk_message read = {"read", 4, NULL, 0, &small};
+    bad |= talk_script_deliver(reader, &read, NULL) != TALK_OK;
+    const char *child_source = "on ping\n  pass ping\nend ping\n";
+    const char *parent_source = "on ping\n  return 1\nend ping\n";
+    talk_limits shallow = {0};
+    shallow.mailbox_depth = 1;
+    talk_load_options child_load = {"child", 5, child_source, strlen(child_source), NULL, 0, false, a, NULL, 0, NULL};
+    talk_load_options parent_load = {"parent", 6, parent_source, strlen(parent_source), NULL, 0, false, b, NULL, 0, &shallow};
+    talk_load_options again_load = {"again", 5, parent_source, strlen(parent_source), NULL, 0, false, a, NULL, 0, NULL};
+    talk_script *child = NULL, *parent = NULL, *again = NULL;
+    bad |= talk_load(group, &child_load, &child) != TALK_OK;
+    bad |= talk_load(group, &parent_load, &parent) != TALK_OK;
+    bad |= talk_load(group, &again_load, &again) != TALK_INVALID_VALUE || again != NULL;
+    bad |= talk_set_parent(group, a, b) != TALK_OK;
+    talk_message ping = {"ping", 4, NULL, 0, NULL};
+    talk_pending *climbing = NULL; /* fails: read from the unhandled report */
+    bad |= talk_script_request(child, &ping, NULL, &climbing) != TALK_OK;
+    bad |= talk_script_deliver(parent, &ping, NULL) != TALK_OK;
+    const char *receiver_source = "on ping\n  return 42\nend ping\n";
+    const char *sender_source = "on go\n  send ping to receiver and wait\nend go\n";
+    talk_load_options receiver_load = {"receiver", 8, receiver_source, strlen(receiver_source), NULL, 0, false, owner, NULL, 0, NULL};
+    talk_load_options sender_load = {"sender", 6, sender_source, strlen(sender_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *receiver = NULL, *sender = NULL;
+    bad |= talk_load(group, &receiver_load, &receiver) != TALK_OK;
+    bad |= talk_load(group, &sender_load, &sender) != TALK_OK;
+    bad |= talk_dispose(group, owner) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    bad |= talk_script_deliver(sender, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= dear_gets != 0;
+    bad |= strstr(trace, "> load again identity=") == NULL || strstr(trace, "refused code=\"invalid value\"") == NULL;
+    bad |= strstr(trace, "fault reader/r1 limit=fuel") == NULL || strstr(trace, "prop reader/r1") != NULL;
+    bad |= strstr(trace, "note child/r1 kind=climb-full\nunhandled d2 message=ping target=<object room \"a\">\n") == NULL;
+    bad |= strstr(trace, "raise sender/r1 code=\"send failed\"") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop Script: a waiting Run is discarded with no finally, a later Delivery
  * is dropped, and a Group whose Scripts are all stopped pumps as stopped. */
 static int stop_test(void) {
@@ -2168,6 +2244,7 @@ int main(void) {
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
+    expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
     expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");

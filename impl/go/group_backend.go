@@ -13,10 +13,12 @@ var experimentalVersions func() Versions
 
 type groupBackend interface {
 	load(LoadOptions) (*Script, error)
-	admit(*Script, Message, context.Context, bool) (DeliveryID, *Pending, error)
-	broadcast(Message) (BroadcastID, error)
-	// decide addresses s, or every recipient when s is nil.
-	decide(*Script, context.Context, Message) (string, *Deciding, error)
+	// queue admits a Group-checked input: to a Script, an Object, or every
+	// recipient of a Broadcast. how is its Trace input name.
+	queue(s *Script, to *Object, m Message, ctx context.Context, how string, decision *Deciding) (DeliveryID, *Pending, error)
+	object(*ObjectKind, string) error
+	setParent(o, parent *Object) error
+	dispose(*Object) error
 	pump(time.Time, PumpOptions) (PumpResult, error)
 	inspect() Inspection
 	counters(*Script) Counters

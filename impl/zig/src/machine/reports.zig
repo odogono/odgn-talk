@@ -42,6 +42,9 @@ pub const RunEnd = struct {
     broadcast: []const u8 = "",
     handler: []const u8 = "",
     fallback: bool = false,
+    /// Whether its message went on up the Message Path, by `pass` or with
+    /// no clause taking it, so it hasn't answered its asker.
+    climbed: bool = false,
     outcome: Outcome,
     effect: ?EffectFailure = null,
     cleanup_failed: ?CleanupFailure = null,

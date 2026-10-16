@@ -203,6 +203,10 @@ pub const Decided = struct {
 /// delivery id and, once sealed, its part.
 pub const OpenBroadcast = struct { deliveries: []u64, parts: []?Part };
 
+/// A Script's send that reached a stopped Script, held until the sender's
+/// Segment ends.
+pub const StoppedSend = struct { script: *Script, delivery: Delivery };
+
 pub const Run = struct {
     id: []const u8,
     script: *Script,
@@ -1406,6 +1410,9 @@ pub const Group = struct {
     decided: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
     decided_broadcasts: std.AutoHashMapUnmanaged(u64, Decided) = .empty,
     open_broadcasts: std.AutoHashMapUnmanaged(u64, OpenBroadcast) = .empty,
+    /// Script sends to a stopped Script, dropped once the sender's Segment
+    /// ends, as talk.go and talk.ts drop them.
+    stopped_sends: std.ArrayList(StoppedSend) = .empty,
     broadcasts: u64 = 0,
     /// The error an instruction raised, until the run loop takes it.
     pending_error: ?*Value = null,
@@ -1587,6 +1594,8 @@ pub const Group = struct {
         var open = g.open_broadcasts.valueIterator();
         while (open.next()) |x| g.releaseOpen(x.*);
         g.open_broadcasts.deinit(g.gpa);
+        for (g.stopped_sends.items) |x| g.releaseDelivery(x.delivery);
+        g.stopped_sends.deinit(g.gpa);
         if (g.restored) |*r| r.deinit(g.gpa);
         for (g.deferred.items) |x| if (x.mark) |m| g.releaseMark(m);
         g.deferred.deinit(g.gpa);
@@ -4303,7 +4312,9 @@ pub const Group = struct {
             g.releaseDelivery(d);
             return e;
         };
-        run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message, .limits = Override.apply(d.limits, s.limits) };
+        // A Host override never loosens the receiving Script's limits,
+        // which may be tighter than where it was admitted (chapter 5).
+        run.* = .{ .id = id, .script = s, .delivery = d, .handler = d.message, .limits = Override.apply(if (d.limits) |o| o.clampTo(s.limits) else null, s.limits) };
         g.reportRunStarted(s, run);
         g.takeBase(run) catch |e| {
             g.destroyRun(run);
@@ -4317,6 +4328,7 @@ pub const Group = struct {
         };
         if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
         try g.endSegment(s, run, outcome);
+        try g.dropStoppedSends();
     }
 
     /// A new Run's first Segment: a foreign call's frame, or dispatch to
@@ -4602,6 +4614,7 @@ pub const Group = struct {
         };
         if (outcome == .preempted) return g.preempt(s, run, outcome.preempted);
         try g.endSegment(s, run, outcome);
+        try g.dropStoppedSends();
     }
 
     /// A resumed Run's Segment, from what settled its wait.
@@ -4898,8 +4911,10 @@ pub const Group = struct {
         for (args.items) |v| size += costs.size(v);
         m.fuel_extra = (size + 31) / 32;
         m.alloc_extra = size;
-        // No Owning Script on its path: `unhandled`, and nothing is sent.
+        // No Owning Script on its path: `unhandled`, reported as a Host
+        // Delivery's is (chapter 5), and nothing is sent.
         const dest = to orelse {
+            try g.reports.add(.{ .unhandled = .{ .delivery = "", .message = try g.reports.text(name), .args = try g.reports.valueList(args.items), .target = target } });
             if (g.trace) |out| {
                 out.print("unhandled message={s}", .{name}) catch {};
                 writeArgs(out, args.items);
@@ -4943,7 +4958,13 @@ pub const Group = struct {
         d.waits = waits;
         d.target = target;
         d.at = at;
-        try g.post(dest, d);
+        if (dest.stopped != null) {
+            g.markRoot(rootOf(d));
+            g.stopped_sends.append(gpa, .{ .script = dest, .delivery = d }) catch |e| {
+                g.releaseDelivery(d);
+                return e;
+            };
+        } else try g.post(dest, d);
         if (!waits) return .next;
         if (member) {
             try g.startMember(run, .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
@@ -5646,6 +5667,10 @@ pub const Group = struct {
         if (d.from == null) end.delivery = try r.print("d{d}", .{d.id});
         if (d.broadcast > 0) end.broadcast = try r.print("b{d}", .{d.broadcast});
         if (run.fallback or g.hasHandler(s, run.handler)) end.handler = try r.text(run.handler);
+        end.climbed = d.broadcast == 0 and switch (outcome) {
+            .passed, .unhandled, .clause_failed => true,
+            else => false,
+        };
         const at: report.Location = .{ .unit = try r.text(run.end_at.unit), .line = run.end_at.line, .column = run.end_at.column, .handler = try r.text(run.end_at.handler), .pc = run.end_at.pc };
         switch (outcome) {
             .returned => |v| end.result = try r.value(v),
@@ -5957,7 +5982,7 @@ pub const Group = struct {
             // A message no clause took, or one passed, climbs the path.
             // A Broadcast never climbs: its open Verdict is allowed here.
             .unhandled, .clause_failed, .passed => if (d.broadcast == 0) {
-                try g.climb(s, d);
+                try g.climb(s, run.id, d);
             } else if (d.decision) try g.takePart(d, .allowed),
             .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
             .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
@@ -6157,6 +6182,32 @@ pub const Group = struct {
         g.releaseDelivery(d);
     }
 
+    /// Drops the Segment's sends to stopped Scripts, in load order: one
+    /// `stopped` record and `stop` report for each, then `send failed`,
+    /// reason `stopped`, for each waiting sender.
+    fn dropStoppedSends(g: *Group) !void {
+        if (g.stopped_sends.items.len == 0) return;
+        var held = g.stopped_sends;
+        g.stopped_sends = .empty;
+        defer held.deinit(g.gpa);
+        for (g.scripts.items) |s| {
+            var any = false;
+            for (held.items) |x| any = any or x.script == s;
+            if (!any) continue;
+            const reason = s.stopped.?;
+            if (g.trace) |out| {
+                out.print("stopped {s} reason=", .{s.name}) catch {};
+                writeText(out, reason);
+                out.writeAll("\n") catch {};
+            }
+            g.reportStop(s.name, reason, &.{}, &.{}, &.{}) catch {};
+            for (held.items) |x| if (x.script == s) {
+                g.discardMessage(x.delivery);
+                try g.settleDropped(s, x.delivery);
+            };
+        }
+    }
+
     /// A Delivery reaching a stopped Script is dropped; a Host's is listed
     /// in another `stopped` record under the Script's reason.
     fn dropStopped(g: *Group, s: *Script, reason: []const u8, d: Delivery) !void {
@@ -6246,7 +6297,9 @@ pub const Group = struct {
     /// A message no Run of `s` ended goes on from the parent of the object
     /// whose Owning Script received it, behind the messages already in the
     /// next Owning Script's mailbox. Copies it.
-    fn climb(g: *Group, s: *Script, d: Delivery) !void {
+    /// A climb into a full mailbox ends there: a `climb-full` note on the
+    /// Run that passed it, and `unhandled` (chapter 5).
+    fn climb(g: *Group, s: *Script, run_id: []const u8, d: Delivery) !void {
         const handled = if (d.at) |at| at.owned() else s.owner;
         // An `error` message no clause matched is dropped: it never climbs
         // and isn't reported as `unhandled`.
@@ -6260,6 +6313,10 @@ pub const Group = struct {
         var moved = copy;
         moved.at = parent;
         moved.passed_by = handled;
+        if (parent.owned()) |receiver| if (g.mailboxFull(g.script(receiver.owner_of.?).?)) {
+            g.write("note {s} kind=climb-full\n", .{run_id});
+            return g.unhandled(moved);
+        };
         try g.route(moved);
     }
 
@@ -8352,7 +8409,7 @@ pub const Group = struct {
                         return .next;
                     }
                     if (g.guardEntry(run, frame.pc - 1) == null) if (g.objectOf(base)) |o| {
-                        const step = try g.getProperty(run, frame, o, key, m);
+                        const step = try g.getProperty(run, frame, ins.op, o, key, m);
                         if (step == .crossing) {
                             // Put the operands back, in their order.
                             if (key_value) |k| try g.push(frame, k.retain());
@@ -9540,7 +9597,7 @@ pub const Group = struct {
     /// `the k of o` on a Host Object: its Kind's Get, with a `prop` record,
     /// charged as an immediate Operation's result is. A key the kind
     /// doesn't define reads as Nothing.
-    fn getProperty(g: *Group, run: *Run, frame: *Frame, o: *objects.Object, key: []const u8, m: *costs.Measures) !Step {
+    fn getProperty(g: *Group, run: *Run, frame: *Frame, op: Opcode, o: *objects.Object, key: []const u8, m: *costs.Measures) !Step {
         const gpa = g.gpa;
         if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = o.value }});
         const prop = o.kind.prop(key) orelse {
@@ -9548,6 +9605,7 @@ pub const Group = struct {
             return .next;
         };
         const returned = run.returned_prop;
+        if (returned == null) try g.coverProperty(run, op, m, prop.get_cost);
         run.returned_prop = null;
         const outcome = if (returned) |r| r else blk: {
             const held = g.holdTrace();
@@ -9591,6 +9649,18 @@ pub const Group = struct {
             },
             else => return g.propError(run, o, key),
         }
+    }
+
+    /// A Run that can't cover a property's instruction and declared cost
+    /// faults before the Host is called, as at an immediate Operation
+    /// (chapter 9).
+    fn coverProperty(g: *Group, run: *const Run, op: Opcode, m: *const costs.Measures, cost: capabilities.Cost) error{LimitFault}!void {
+        var probe = m.*;
+        probe.fuel_extra = cost.fuel;
+        probe.alloc_extra = cost.alloc;
+        const before = costs.chargeInstruction(op, &probe);
+        if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.base == 0 and run.alloc + before.alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
     }
 
     fn recordPropertyReturn(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, result: objects.Result, valid: bool, input: ?*Value) !void {
@@ -9668,6 +9738,7 @@ pub const Group = struct {
         }
         m.input = value.retain();
         const returned = run.returned_prop;
+        if (returned == null) try g.coverProperty(run, ins.op, m, prop.set_cost);
         run.returned_prop = null;
         const outcome = if (returned) |r| r else blk: {
             const held = g.holdTrace();

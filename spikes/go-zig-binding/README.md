@@ -118,6 +118,35 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Host Object artifact refresh, 2026-10-16
+
+[Raw output](measurements-objects.txt) records three repetitions with artifact
+source `6edafcc6`, SHA-256
+`9080c2370e22e2fe5a3a2a6929e78f97a45ff9c58b32893819386b05b3924aec`,
+and public-adapter/native-Go revision `7b2841da`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.983 µs native Go vs 33.410 µs probe (8.4×)**,
+cold compile/runtime/close **639.3 ms**, cached instantiation/close **132.5 µs**.
+This is the same independent immediate-call workload; it does not measure
+public Object or property latency, tail latency or an accepted retirement limit.
+
+The public comparison now covers 103 callback/input scenarios. Seventeen new
+Host Object scenarios compare exact Trace, Fuel, typed Reports, futures and
+inspected state against a separately compiled native-Go Host: Message Path
+routing and climbing, unowned targets, object Decisions, handles as values,
+properties with costs, failures, panics and callback-generated inputs, owner
+disposal, parent and foreign refusals, Object Shapes, full climbs, receiving
+limits, owner refusals, stopped receivers and Kinds first used in callbacks.
+Forty-one existing native Object, property and Message Path tests join the
+experimental selection. Zig corrections are tracked in #1021, the opt-in
+`climb-v1` Message Layer field in #1022, and a native Go/talk.ts difference
+in #1023. Both artifacts are refreshed together.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C tests, all 430 ordinary
+and deferred Corpus cases and both WASI checks pass locally. Independent pure-Go
+adapter/probe cross-builds cover Linux amd64/arm64 and macOS arm64. This
+revision still needs CI execution on the other required runners.
+
 ## Decision artifact refresh, 2026-10-16
 
 [Raw output](measurements-decide.txt) records three repetitions with artifact

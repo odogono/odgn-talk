@@ -72,6 +72,25 @@ allowed Run carries on. Refused Deliveries, Requests and Decisions with
 overrides that can't be represented go through the guest, so they keep their
 refusal records. Local Script functions execute in Zig.
 
+Host Objects keep their handles, natives and property callbacks in Go; the
+guest sees `{"$object": [kind, id]}`. Every Object Kind the Core knows is
+declared in the guest before each Pump and Load, so a Host callback can make
+the first handle of a Kind defined earlier. `Group.Object`, `ObjectByID`,
+`SetParent`, `Dispose` and `LoadOptions.Owner`/`Objects` work as natively, and
+so do Deliver, Request and Decide addressed to an Object, along its Message
+Path. Group ownership is checked in Go, in the native order and with the
+native refusal records. A Load naming another Group's handle sends the guest a
+placeholder it refuses with its own records. Object handles cross as message
+arguments, results, Reports, Inspect variables and Capability arguments and
+results, including Object Shapes. Decoded handles are the Host's own. Property
+`Get`/`Set` run through the guest's `prop` need with the public handle, after
+the guest pays the declared cost; failures and panics become the same Host
+failures, with `call failed` detail kept in Go. The adapter negotiates
+`climb-v1`, so a Request whose message climbs the Message Path settles at its
+answer, not at the first Run's end. A queued Object-addressed message is dropped
+when its owner is disposed in the same drain, as talk.ts does; native Go
+re-routes it (#1023).
+
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
 declared costs, MaxPending and optional error catalogues. Call identity,
@@ -90,8 +109,8 @@ context cancellation, outside transport locks. Panics cannot refuse release.
 Hook-generated inputs and OnReady obey the same worker boundary; repeated Stop
 or Revoke does not repeat its release. GrantsAsUsed trims unused hooks.
 
-The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1` and
-`crossing-trace-v1`. The last feature publishes an Operation's call record and
+The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
+`crossing-trace-v1` and `climb-v1`. The last feature publishes an Operation's call record and
 held refusal records before crossing controls land, so a Trace sink can queue
 Stop at that boundary. Error replies publish their available refusal/diagnostic
 records before returning the error. Other Script-execution Trace records can
@@ -100,11 +119,11 @@ compatibility gate. Input admission during a non-yielding WASM export also
 remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result: Host Object attachment/handles,
-Function Values/calls, object-addressed inputs including `Group.Decide`, Libraries,
-Reload/Extend, Save/Restore/Settle and Fingerprint. Capability attachments with
-scoped or Segment lifecycle hooks, Standard
-factory refinements, Object/Function Shapes or Shapes nested beyond 32 levels
+existing signature has no error result: Function Values/calls, Libraries,
+Reload/Extend, Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
+name in one Group, and a Kind first defined inside a Host callback, are refused.
+Capability attachments with scoped or Segment lifecycle hooks, Standard
+factory refinements, Function Shapes or Shapes nested beyond 32 levels
 are explicitly refused. They do not fall back to native Go language execution.
 Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go
 facilities pending their own adapter acceptance.

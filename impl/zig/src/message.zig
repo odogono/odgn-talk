@@ -81,6 +81,8 @@ const GroupEntry = struct {
     group: *talk.Group,
     /// Whether replies carry `trace`.
     traced: bool,
+    /// Whether `run end` reports carry `climbed` (`climb-v1`).
+    climb: bool = false,
     /// Trace lines not yet carried by a reply, from the sink.
     pending_trace: std.ArrayList([]u8) = .empty,
     /// Whether the last value read held another Group's Function Value.
@@ -267,6 +269,8 @@ pub const Session = struct {
     /// Opted in at hello: notify before the next callback, once across replies.
     early_abandoned: bool = false,
     crossing_trace: bool = false,
+    /// `climb-v1`: a `run end` whose message climbed says so.
+    climb: bool = false,
     reply_error: bool = false,
     release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -373,6 +377,8 @@ const Release = struct {
 /// A reply under construction.
 const Out = struct {
     buf: std.Io.Writer.Allocating,
+    /// Whether `run end` reports carry `climbed` (`climb-v1`).
+    climbed: bool = false,
 
     fn init(gpa: Allocator) Out {
         return .{ .buf = .init(gpa) };
@@ -1391,6 +1397,7 @@ fn needReply(s: *Session, ref: i64) []u8 {
 
 /// The Reports a Pump made, taken from the Group, as chapter 9 encodes them.
 fn writeReports(o: *Out, entry: *GroupEntry) Allocator.Error!void {
+    o.climbed = entry.climb;
     // The accounting tail first, as talk.h's report calls write it: its
     // rows for ended Runs are held in the reports being taken.
     entry.group.group.accountingTail();
@@ -1405,7 +1412,7 @@ fn writeHeld(o: *Out, held: *const machine.report.Reports) Allocator.Error!void 
     try o.raw("\"reports\":[");
     for (held.list.items, 0..) |r, i| {
         if (i > 0) try o.raw(",");
-        try writeReport(o, r);
+        try writeReport(o, r, o.climbed);
     }
     try o.raw("]");
 }
@@ -1472,7 +1479,7 @@ fn ancestryFields(o: *Out, a: machine.report.Ancestry) Allocator.Error!void {
     try optionalText(o, "parentCall", a.parent_call);
 }
 
-fn writeReport(o: *Out, report: machine.report.Report) Allocator.Error!void {
+fn writeReport(o: *Out, report: machine.report.Report, climbed: bool) Allocator.Error!void {
     switch (report) {
         .charge_result => |r| {
             try o.raw("{\"kind\":\"charge result\",\"request\":");
@@ -1493,6 +1500,7 @@ fn writeReport(o: *Out, report: machine.report.Report) Allocator.Error!void {
             try optionalText(o, "broadcast", r.broadcast);
             try optionalText(o, "handler", r.handler);
             if (r.fallback) try o.raw(",\"fallback\":true");
+            if (climbed and r.climbed) try o.raw(",\"climbed\":true");
             try o.raw(",\"outcome\":");
             try o.text(outcomeWord(r.outcome));
             if (r.result) |v| {
@@ -1940,7 +1948,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\"]") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2101,6 +2109,7 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         },
         .group = undefined,
         .traced = asBool(field(msg, "trace")) orelse false,
+        .climb = s.climb,
     };
     var group: ?*talk.Group = null;
     // No physical cap below the runtime's: over WASI the Host's store
@@ -2125,15 +2134,24 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
     const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
-    const owner = if (field(msg, "owner")) |j| objectOf(entry, j) orelse return hostError(s.gpa, ref, .invalid_value) else null;
+    // An Object this Group never made is another Group's handle, which a
+    // binding can name only by a placeholder: it is refused as wrong group.
+    var foreign = false;
+    const owner = if (field(msg, "owner")) |j| objectOf(entry, j) else null;
+    const foreign_owner = field(msg, "owner") != null and owner == null;
     var load_objects: []talk.LoadObject = &.{};
     defer s.gpa.free(load_objects);
+    var bound: usize = 0;
     if (field(msg, "objects")) |given| {
         if (given != .object) return hostError(s.gpa, ref, .invalid_value);
         load_objects = s.gpa.alloc(talk.LoadObject, given.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
-        for (given.object.keys(), given.object.values(), load_objects) |k, v, *slot| {
-            const object = objectOf(entry, v) orelse return hostError(s.gpa, ref, .invalid_value);
-            slot.* = .{ .name = k.ptr, .name_len = k.len, .object = object };
+        for (given.object.keys(), given.object.values()) |k, v| {
+            const object = objectOf(entry, v) orelse {
+                foreign = true;
+                continue;
+            };
+            load_objects[bound] = .{ .name = k.ptr, .name_len = k.len, .object = object };
+            bound += 1;
         }
     }
     var load_grants: []talk.LoadGrant = &.{};
@@ -2152,6 +2170,12 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         entry.group.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
         return hostError(s.gpa, ref, .invalid_value);
     };
+    // talk_load checks the owner before the bindings; a placeholder owner
+    // can't reach it.
+    if (foreign_owner or (foreign and !(if (owner) |ow| ow.disposed or ow.owner_of != null else false))) {
+        entry.group.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "wrong group");
+        return hostError(s.gpa, ref, .wrong_group);
+    }
     // Trace lines from earlier work are not this load's.
     entry.group.flush();
     freeTrace(s.gpa, takeTrace(entry));
@@ -2165,8 +2189,8 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
         .grants_len = load_grants.len,
         .grants_as_used = asBool(field(msg, "grantsAsUsed")) orelse false,
         .owner = owner,
-        .objects = if (load_objects.len == 0) null else load_objects.ptr,
-        .objects_len = load_objects.len,
+        .objects = if (bound == 0) null else load_objects.ptr,
+        .objects_len = bound,
         .limits = limits,
     };
     const code = Direct.load(entry.group, &options, &script);
@@ -2711,6 +2735,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     mg.accountingTail();
     var held = mg.reports.take();
     defer held.deinit();
+    o.climbed = entry.climb;
     writeHeld(&o, &held) catch return oomReply();
     return holdForReleases(s, ref, entry, finishOk(s, &o, entry), .ok);
 }
@@ -3079,7 +3104,7 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     entry.* = .{ .gpa = s.gpa, .name = s.gpa.dupe(u8, handle_name) catch {
         s.gpa.destroy(entry);
         return hostError(s.gpa, ref, .out_of_memory);
-    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false };
+    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .climb = s.climb };
     var group: ?*talk.Group = null;
     var result: ?*talk.RestoreResult = null;
     const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
@@ -3152,6 +3177,7 @@ fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (A
         try o.raw("]");
     }
     try o.raw(",");
+    o.climbed = entry.climb;
     if (res.reports) |reports| try writeHeld(o, &reports.held) else try o.raw("\"reports\":[]");
 }
 
@@ -3525,16 +3551,20 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             if (features != .array) return protocolError(s.gpa, ref, "features must be text names");
             var early = s.early_abandoned;
             var crossing_trace = s.crossing_trace;
+            var climb = s.climb;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
                     early = true;
                 } else if (std.mem.eql(u8, name, "crossing-trace-v1")) {
                     crossing_trace = true;
+                } else if (std.mem.eql(u8, name, "climb-v1")) {
+                    climb = true;
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
+            s.climb = climb;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {

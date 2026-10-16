@@ -953,7 +953,19 @@ whose path is walked again when the message reaches the head of its mailbox,
 so a message follows its object if it moves. A Run that ends `unhandled` or
 reaches `pass` sends the message on from the parent of the object whose
 Owning Script took it, and a Command Call with no Handler climbs from the
-parent of `me`. A message with no Owning Script left is reported `unhandled`.
+parent of `me`. A message with no Owning Script left is reported `unhandled`,
+with its `unhandled` report even for a Script's `send`. A climb into a full
+mailbox ends there, with a `climb-full` note on the Run that passed it and
+`unhandled`. A Host override never loosens the limits of the Script that
+receives the message after a move or climb. Property Get and Set pay their
+declared cost before the Host is called, faulting first if the Run can't.
+A Script's `send` to a stopped Script is dropped once the sender's Segment
+ends, with another `stopped` record and `stop` report, and a waiting sender
+gets `send failed`, reason `stopped`. `talk_load` refuses an owner from
+another Group or one disposed or already owning a Script, then a bound Object
+from another Group, with the `load` and `refused` records. Over the Message
+Layer, `climb-v1` marks the `run end` of a Run whose message climbed with
+`climbed: true`.
 
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are
