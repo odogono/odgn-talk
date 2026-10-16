@@ -6,6 +6,7 @@ import {
   syntaxSelector,
   type SyntaxNode,
 } from '@odgn/northtalk';
+import { FOLIO_COMMAND_MESSAGES } from './folio-library';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = Project | Page | Element;
@@ -105,7 +106,10 @@ const messages = [
   'closePage',
   'startPlay',
   'textChanged',
-].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
+]
+  .map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }))
+  // Folio answers its built-in commands at the end of every Message Path.
+  .concat(FOLIO_COMMAND_MESSAGES);
 
 // Folio also delivers messages authored Scripts send to each other. Declare
 // an owner's named Handlers alongside the built-in events; the Host event

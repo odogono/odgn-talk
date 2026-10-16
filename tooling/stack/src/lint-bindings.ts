@@ -1238,6 +1238,35 @@ export const lintBindings = (
       }
     }
   }
+  // A command no Handler in reach answers goes up the Message Path, where
+  // the Host may answer it: check its arguments against the declaration.
+  for (const e of all) {
+    if (e.kind !== 'name' || e.role !== 'command' || e.binding) {
+      continue;
+    }
+    const declared = manifest?.messageDecls.get(e.text);
+    const statement = parents.get(e);
+    if (!declared || statement?.rule !== 'SimpleStatement') {
+      continue;
+    }
+    const list = child(statement, 'ExpressionList');
+    const count = list
+      ? nodes(list).filter(n => n.rule === 'Expression').length
+      : 0;
+    const total = declared.args.length;
+    const required = declared.args.filter(a => a.k !== 'optional').length;
+    if (count < required || count > total) {
+      const plural = (n: number) => (n === 1 ? 'argument' : 'arguments');
+      emit('message-argument-count', e.span, {
+        message: e.text.replaceAll(':', ' ').trim(),
+        expected:
+          required === total
+            ? `${total} ${plural(total)}`
+            : `${required} to ${total} arguments`,
+        count: `${count} ${plural(count)}`,
+      });
+    }
+  }
   // A Fallback clause that routes on a Selector the Script has named clauses
   // for runs only when those clauses fail (ADR 0064).
   const known = (t: SemanticElement | undefined) =>

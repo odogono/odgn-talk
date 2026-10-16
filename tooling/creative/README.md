@@ -483,7 +483,10 @@ Session loads as the Script of a hidden object above the Project, so they end
 every Message Path. An Element, Page or Project Script can answer `on hide`
 itself, and `pass hide` to let Folio carry it out. An error in a built-in
 command, such as `hide 42`, is reported against the Script that called it, on
-line 1. The ownerless Message Box imports the Library instead.
+line 1. The ownerless Message Box imports the Library instead. Each Script's
+Manifest declares both as messages with their documentation, so the Script
+editor completes them, hovers their documentation and flags a `hide` without
+its argument, unless the Script answers `on hide` itself.
 
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element

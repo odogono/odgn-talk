@@ -5,6 +5,7 @@ import type { Shape } from '@odgn/northtalk';
 import {
   readManifest,
   type HostManifest,
+  type ManifestMessage,
   type ManifestOperation,
 } from './lsp/manifest';
 
@@ -58,13 +59,14 @@ export const shapeText = (shape: Shape): string => {
   }
 };
 
+const argText = (shape: Shape): string =>
+  shape.k === 'optional'
+    ? `[‹${shapeText(shape.of)}›]`
+    : `‹${shapeText(shape)}›`;
+
 /** `tell g to op …`, `ask g to op …` or `ask g to op … and wait`. */
 export const callForm = (grant: string, op: ManifestOperation): string => {
-  const args = op.args
-    .map(a =>
-      a.k === 'optional' ? `[‹${shapeText(a.of)}›]` : `‹${shapeText(a)}›`,
-    )
-    .join(', ');
+  const args = op.args.map(argText).join(', ');
   const verb = op.mode === 'fire-and-forget' ? 'tell' : 'ask';
   const wait = op.mode === 'suspending' ? ' and wait' : '';
   return `${verb} ${grant} to ${op.name}${args ? ` ${args}` : ''}${wait}`;
@@ -156,6 +158,34 @@ export const operationText = (
   sections.push(op.facts.map(f => (md ? `- ${f}` : `  ${f}`)).join('\n'));
   if (op.examples?.length) {
     sections.push('Examples:', ...op.examples.map(code));
+  }
+  return sections.join(md ? '\n\n' : '\n');
+};
+
+/** A manifest message as a command, such as `hide ‹page object›` or
+ * `move ‹value› to ‹text›`, with its documentation. */
+export const messageText = (
+  message: ManifestMessage,
+  format: DictionaryFormat,
+): string => {
+  const md = format === 'markdown';
+  const code = md ? codeBlock : (text: string) => text;
+  const args = message.args.map(argText);
+  const command = message.name.includes(':')
+    ? message.name
+        .slice(0, -1)
+        .split(':')
+        .map((part, i) => `${part} ${args[i]}`)
+        .join(' ')
+    : [message.name, args.join(', ')].filter(Boolean).join(' ');
+  const sections = [code(command)];
+  if (message.description) {
+    sections.push(
+      md ? escapeMarkdown(message.description) : message.description,
+    );
+  }
+  if (message.examples?.length) {
+    sections.push('Examples:', ...message.examples.map(code));
   }
   return sections.join(md ? '\n\n' : '\n');
 };

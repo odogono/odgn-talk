@@ -1137,3 +1137,58 @@ test('completes optional key reads and Nothing defaults', () => {
     ),
   ).toEqual([]);
 });
+
+test('a message the Host answers is completed, documented and checked unless the Script answers it', () => {
+  const host = {
+    ...manifest,
+    messages: [
+      ...manifest.messages,
+      {
+        name: 'hide',
+        args: [{ object: 'button' }],
+        receivers: [],
+        description: 'Hides an object.',
+        examples: ['hide okButton'],
+      },
+    ],
+  };
+  const { sent, request } = setup('on demo\n  hi\n  hide\nend demo', host);
+  const completion = request('textDocument/completion', at(1, 4));
+  expect(completion).toContainEqual(
+    expect.objectContaining({
+      label: 'hide',
+      documentation: expect.stringContaining('Hides an object.'),
+    }),
+  );
+  const hover = request('textDocument/hover', at(2, 3)) as {
+    contents: { value: string };
+  };
+  expect(hover.contents.value).toBe(
+    'hide ‹button object›\nHides an object.\nExamples:\nhide okButton',
+  );
+  const published = sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(published.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: 'message-argument-count',
+      severity: 2,
+      message:
+        'The Host Manifest declares hide with 1 argument, but this command gives 0 arguments.',
+    }),
+  );
+
+  // The Script's own Handler takes precedence over the Host's message.
+  const own = setup('on hide\nend hide\non demo\n  hide\nend demo', host);
+  const ownHover = own.request('textDocument/hover', at(3, 3)) as {
+    contents: { value: string };
+  };
+  expect(ownHover.contents.value).not.toContain('Hides an object.');
+  expect(ownHover.contents.value).toContain('on hide');
+  const ownDiagnostics = own.sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(ownDiagnostics.diagnostics.map(d => d.code)).not.toContain(
+    'message-argument-count',
+  );
+});

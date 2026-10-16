@@ -427,11 +427,12 @@ A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load s
 - **Its fields:** `kind`, `version` and `language`, then these arrays:
   - `grants`: name, Capability, and Operation Declarations
   - `libraries`: name, version, source and `needs`
-  - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds
+  - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds, with any documentation
   - `objectKinds`: name, properties and `parentKinds`
   - `objects`: well-known name and kind
 - **One data model:** Operation Declarations and Shapes use the same data model as the corpus's `case.toml`, written as JSON here and as TOML there. A Constant value inside them uses the Value Encoding.
 - **Documentation:** an Operation writes its `description`, then its `examples`, after its other keys, each only when present. They are the only keys `case.toml` lacks, and the only ones the Group Fingerprint leaves out, so rewording them changes the manifest's bytes but not the Fingerprint.
+- **Message documentation:** a message writes its `description`, then its `examples`, after its other keys, each only when present, as an Operation does. Tooling shows them for a Handler or command with the message's name, such as one a Host answers at the end of every Message Path.
 - **Order:** declarations are ordered by name.
 - **Bindings:** a Grant's binding never appears.
 - **The Core never reads it**, so a stale manifest can only mislead tooling.

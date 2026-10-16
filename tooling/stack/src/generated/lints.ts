@@ -121,6 +121,14 @@ export const lintCatalogue = [
     "status": "implemented"
   },
   {
+    "id": "message-argument-count",
+    "flags": "a command no Handler in the Script answers, giving a different number of arguments than the Host Manifest declares for its message",
+    "beginner": "warning",
+    "standard": "warning",
+    "message": "The Host Manifest declares {message} with {expected}, but this command gives {count}.",
+    "status": "implemented"
+  },
+  {
     "id": "fallback-routes-known",
     "flags": "a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail",
     "beginner": "hint",

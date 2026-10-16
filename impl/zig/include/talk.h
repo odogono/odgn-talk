@@ -1549,6 +1549,13 @@ typedef struct talk_message_decl {
      * to a Script. */
     const talk_object_kind *const *receivers;
     size_t receivers_len;
+    /* Plain text, and NorthTalk source texts that each send the message.
+     * NULL or empty is none. */
+    const char *description;
+    size_t description_len;
+    const char *const *examples;
+    const size_t *examples_lens;
+    size_t examples_len;
 } talk_message_decl;
 /* C only: a well-known name bound at load, and its object's kind. */
 typedef struct talk_manifest_object {

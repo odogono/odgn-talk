@@ -1698,7 +1698,9 @@ static int manifest_test(void) {
     talk_load_grant grants[] = {{"echo", 4, grant}};
     const talk_shape *move_args[] = {talk_number_shape(), talk_text_shape()};
     const talk_object_kind *receivers[] = {lamp};
-    talk_message_decl messages[] = {{"ping", 4, NULL, 0, NULL, 0}, {"move:to:", 8, move_args, 2, receivers, 1}};
+    const char *ping_examples[] = {"send ping to desk"};
+    const size_t ping_examples_lens[] = {17};
+    talk_message_decl messages[] = {{"ping", 4, NULL, 0, NULL, 0, "Checks the lamp.", 16, ping_examples, ping_examples_lens, 1}, {"move:to:", 8, move_args, 2, receivers, 1, NULL, 0, NULL, NULL, 0}};
     const talk_object_kind *kinds[] = {lamp};
     talk_manifest_object objects[] = {{"desk", 4, lamp}};
     talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &says, 1, messages, 2, kinds, 1, objects, 1};
@@ -1711,7 +1713,7 @@ static int manifest_test(void) {
         "{\"kind\":\"demo\",\"version\":\"1\",\"language\":\"%.*s\","
         "\"grants\":[{\"name\":\"echo\",\"capability\":\"echo\",\"operations\":[{\"name\":\"twice\",\"mode\":\"immediate\",\"args\":[\"text\"],\"result\":\"text\",\"cost\":{\"fuel\":7,\"alloc\":0},\"description\":\"Doubles a text.\",\"examples\":[\"ask echo to twice \\\"ab\\\"\"]}]}],"
         "\"libraries\":[{\"name\":\"says\",\"version\":\"1\",\"source\":\"function shout\\u000a  say \\\"a\\\"\\u000aend shout\\u000a\",\"needs\":[{\"capability\":\"console\",\"operation\":\"write\"}]}],"
-        "\"messages\":[{\"name\":\"move:to:\",\"args\":[\"number\",\"text\"],\"receivers\":[\"lamp\"]},{\"name\":\"ping\",\"args\":[],\"receivers\":[]}],"
+        "\"messages\":[{\"name\":\"move:to:\",\"args\":[\"number\",\"text\"],\"receivers\":[\"lamp\"]},{\"name\":\"ping\",\"args\":[],\"receivers\":[],\"description\":\"Checks the lamp.\",\"examples\":[\"send ping to desk\"]}],"
         "\"objectKinds\":[{\"name\":\"lamp\",\"props\":[{\"name\":\"state\",\"shape\":\"text\",\"readOnly\":true,\"getCost\":{\"fuel\":2,\"alloc\":0},\"setCost\":{\"fuel\":0,\"alloc\":0}}],\"parentKinds\":[\"room\"]}],"
         "\"objects\":[{\"name\":\"desk\",\"kind\":\"lamp\"}]}",
         (int)versions.language_len, versions.language);
@@ -1729,7 +1731,7 @@ static int manifest_test(void) {
     talk_message_decl twice_named[] = {messages[0], messages[0]};
     spec.messages = twice_named;
     bad |= talk_export_manifest(&spec, &again) != TALK_INVALID_VALUE;
-    talk_message_decl short_selector[] = {{"move:to:", 8, move_args, 1, NULL, 0}};
+    talk_message_decl short_selector[] = {{"move:to:", 8, move_args, 1, NULL, 0, NULL, 0, NULL, NULL, 0}};
     spec.messages = short_selector;
     spec.messages_len = 1;
     bad |= talk_export_manifest(&spec, &again) != TALK_INVALID_VALUE;
