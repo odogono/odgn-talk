@@ -87,9 +87,7 @@ results, including Object Shapes. Decoded handles are the Host's own. Property
 the guest pays the declared cost; failures and panics become the same Host
 failures, with `call failed` detail kept in Go. The adapter negotiates
 `climb-v1`, so a Request whose message climbs the Message Path settles at its
-answer, not at the first Run's end. A queued Object-addressed message is dropped
-when its owner is disposed in the same drain, as talk.ts does; native Go
-re-routes it (#1023).
+answer, not at the first Run's end.
 
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,

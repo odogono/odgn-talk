@@ -1,0 +1,18 @@
+# Unblessed: owner disposal drops a queued object-addressed Request (#1023); first blessing awaits human review.
+# Disposing an owner stops its Script within the same Host Input and drops
+# its mailbox, object-addressed messages too: they don't climb on.
+> load child identity=e26ee5d6ebfdc4e3aa657061853bd5fec612c7886e3977950e16c4e20a83f40c
+> load parent identity=1ae90ecbef832f8d01a499e6ca78837c2766fd535fec28dd5f7b1bf7c1252556
+> set-parent object=<object room "a"> parent=<object room "b">
+> deliver d1 to=<object room "a"> message=hold
+> pump clock=2026-10-16T09:00:00Z
+seg child/r1 start delivery=d1 handler=hold clause=1 fuel=15 alloc=0 state=176 end=wait until=2026-10-16T09:00:01Z
+pumped state=idle fuel=15 next=2026-10-16T09:00:01Z
+> request d2 to=<object room "a"> message=ping
+> dispose object=<object room "a">
+> pump clock=2026-10-16T09:00:00Z
+stopped child reason="owner disposed" discarded=[child/r1] dropped=[d2]
+pumped state=idle fuel=0
+> vars
+vars child
+vars parent

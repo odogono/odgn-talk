@@ -242,7 +242,8 @@ func TestMessagePathWaitingSendsReplyFromAncestorOrFailAtEnd(t *testing.T) {
 	}
 }
 
-func TestMessagePathOwnerDisposalStopsRunAndSkipsQueuedTarget(t *testing.T) {
+// Disposing an owner drops its mailbox, object-addressed messages too (#1023).
+func TestMessagePathOwnerDisposalStopsRunAndDropsQueuedTarget(t *testing.T) {
 	c := New()
 	g := c.NewGroup(GroupOptions{})
 	k := objectKindForTest(t, c, "room")
@@ -282,9 +283,8 @@ func TestMessagePathOwnerDisposalStopsRunAndSkipsQueuedTarget(t *testing.T) {
 	if failure == nil || failure.Data.String() != `{reason: "stopped"}` {
 		t.Fatal(failure, result)
 	}
-	answer, failure := queued.Result()
-	if failure != nil || answer.String() != `["b", "a"]` {
-		t.Fatal(answer, failure, result)
+	if _, failure := queued.Result(); failure == nil || failure.Data.String() != `{reason: "stopped"}` {
+		t.Fatal(failure, result)
 	}
 	stops := 0
 	for _, r := range operationalReports(result.Reports) {
