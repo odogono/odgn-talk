@@ -495,10 +495,10 @@ pub const stdlib: StdlibTable = .{
             .total = 1,
         },
         .{
-            .name = "nanosecond",
+            .name = "microsecond",
             .group = "dates",
-            .call = "nanosecond(d)",
-            .gives = "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999",
+            .call = "microsecond(d)",
+            .gives = "The fraction of a second of the date-time `d`, in whole microseconds from 0 to 999999",
             .errors = &.{
                 "out of domain",
             },
@@ -969,8 +969,8 @@ pub const stdlib: StdlibTable = .{
         .{
             .library = "date",
             .name = "makeDateTime",
-            .call = "makeDateTime(y, m, d, h, mi, s = 0, ns = 0)",
-            .gives = "The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `ns` nanoseconds",
+            .call = "makeDateTime(y, m, d, h, mi, s = 0, us = 0)",
+            .gives = "The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `us` microseconds",
             .errors = &.{
                 "out of range",
             },
@@ -978,8 +978,8 @@ pub const stdlib: StdlibTable = .{
         .{
             .library = "date",
             .name = "atTime",
-            .call = "atTime(d, h, mi, s = 0, ns = 0)",
-            .gives = "The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds",
+            .call = "atTime(d, h, mi, s = 0, us = 0)",
+            .gives = "The date-time on the date of `d` at `h`:`mi`:`s` and `us` microseconds",
             .errors = &.{
                 "out of range",
             },

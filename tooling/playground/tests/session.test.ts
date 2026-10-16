@@ -310,7 +310,7 @@ describe('A shared Transcript', () => {
     if (!('session' in opened)) {
       throw new Error('expected a replay');
     }
-    clock.now += 1_000_000_000n;
+    clock.now += 1_000_000n;
     expect(opened.session.input('greet "Bo"')).toEqual(['hello Bo', 'bye']);
     expect(opened.session.transcriptText).toStartWith(first.transcriptText);
   });

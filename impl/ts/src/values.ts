@@ -212,7 +212,7 @@ export class Value {
   asQuantityRef(): QuantityRef | undefined {
     return this.kind === 'quantity' ? (this.#data as QuantityRef) : undefined;
   }
-  /** An Instant as epoch nanoseconds. */
+  /** An Instant as epoch microseconds. */
   asInstant(): bigint | undefined {
     return this.kind === 'instant' ? (this.#data as bigint) : undefined;
   }
@@ -369,7 +369,7 @@ export class Value {
             a.year !== b.year ||
             a.month !== b.month ||
             a.day !== b.day ||
-            a.ns !== b.ns
+            a.us !== b.us
           ) {
             return false;
           }
@@ -692,13 +692,13 @@ const quantitiesEqual = (a: QuantityRef, b: QuantityRef): boolean =>
     toBase(decimalParts(a.number), a.unit),
     toBase(decimalParts(b.number), b.unit),
   ) === 0;
-/** An Instant, from epoch nanoseconds; a JS Date is never accepted. */
-export const instant = (epochNanos: bigint): Value => {
-  if (typeof epochNanos !== 'bigint') {
-    invalidValue('An Instant needs epoch nanoseconds as a bigint');
+/** An Instant, from epoch microseconds; a JS Date is never accepted. */
+export const instant = (epochMicros: bigint): Value => {
+  if (typeof epochMicros !== 'bigint') {
+    invalidValue('An Instant needs epoch microseconds as a bigint');
   }
   try {
-    return instantOf(checkInstant(epochNanos));
+    return instantOf(checkInstant(epochMicros));
   } catch (error) {
     if (error instanceof DateRangeError) {
       return invalidValue(`An Instant ${error.message}`);
@@ -706,7 +706,7 @@ export const instant = (epochNanos: bigint): Value => {
     throw error;
   }
 };
-export const instantOf = (ns: bigint): Value => makeValue('instant', ns);
+export const instantOf = (us: bigint): Value => makeValue('instant', us);
 type DateFields = Parameters<typeof civilFromFields>[0];
 /** A Civil Date, from its fields or from text in the `as civil date` form. */
 export const civilDate = (f: DateFields | string): Value => {

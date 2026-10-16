@@ -2312,7 +2312,7 @@ export const costModel = {
       "alloc": []
     },
     {
-      "key": "builtin.nanosecond",
+      "key": "builtin.microsecond",
       "fuel": [
         [0, 0, 3, 1]
       ],

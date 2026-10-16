@@ -165,7 +165,7 @@ func (v Value) displayLeaf() string {
 	case CivilDate:
 		return civilText(v.Date())
 	case Instant:
-		return time.Unix(v.Seconds(), int64(v.Nanos())).UTC().Format(time.RFC3339Nano)
+		return v.Time().Format(time.RFC3339Nano)
 	case Pattern:
 		return v.Text()
 	case Object:

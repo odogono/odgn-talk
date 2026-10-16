@@ -81,7 +81,7 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
 - **The other kinds:**
   - **Nothing** is `northtalk.Nothing` in Go and the `nothing` constant in TS. `null` and `undefined` are never accepted for it.
   - **A Quantity** is built from a `Decimal` and a Unit spelled as a Script spells it (`"kg"`), and reads back as its number and its canonical Unit. An unknown Unit is refused.
-  - **A Civil Date** is built from fields, or from text in the `as civil date` syntax, and an invalid date is refused. **An Instant** is built from seconds and nanoseconds since the Unix epoch, or in Go from a `time.Time`, dropping its monotonic reading and zone. No native type is ever read as a Civil Date.
+  - **A Civil Date** is built from fields, or from text in the `as civil date` syntax, and an invalid date is refused. **An Instant** is built from seconds since the Unix epoch and microseconds from 0 to 999999, and anything outside that range is refused. In Go it can also be built from a `time.Time`, dropping its monotonic reading and zone, and truncating toward the past to the microsecond ([ADR 0091](../docs/adr/0091-time-has-microsecond-resolution.md)). No native type is ever read as a Civil Date.
   - **Bytes** are copied in both directions.
   - **A range** is built from two ends as `..` builds one, and reads back as its two ends ([ADR 0034](../docs/adr/0034-numbers-never-have-a-positive-exponent-and-ranges-are-a-value-kind.md)).
   - **A Text Pattern** can only be passed back unchanged. Its canonical source can be read, for display.
@@ -97,7 +97,7 @@ Each Core gives the Host one opaque, tagged `Value` type. A Host builds values o
   - Booleans are JSON booleans, text is a JSON string, Nothing is `null`, and a list is an array.
   - A number with no fraction digits in its canonical text (so `3`, but not `3.0`) and a magnitude below 2⁵³ is a JSON number, and every other number is `{"$dec": "<canonical text>"}`. So trailing zeros survive.
   - A map is a JSON object, in order. A map with any key starting with `$` is `{"$map": [[key, value], …]}`, so a key never reads as a tag.
-  - The tags are `{"$quantity": ["2.50", "GBP"]}`, with the number's canonical text and the Unit in normal form, every word Unit singular (`["3", "day"]`), `{"$bytes": "<base64, padded>"}`, with the standard alphabet and the bits padding leaves over zero, `{"$range": [from, to]}`, `{"$instant": "<RFC 3339 in UTC, with the shortest fraction>"}`, `{"$date": "<the as civil date form>"}`, `{"$pattern": "<canonical source>"}` and `{"$object": [kind, id]}`.
+  - The tags are `{"$quantity": ["2.50", "GBP"]}`, with the number's canonical text and the Unit in normal form, every word Unit singular (`["3", "day"]`), `{"$bytes": "<base64, padded>"}`, with the standard alphabet and the bits padding leaves over zero, `{"$range": [from, to]}`, `{"$instant": "<RFC 3339 in UTC, with the shortest fraction, at most six digits>"}`, `{"$date": "<the as civil date form>"}`, `{"$pattern": "<canonical source>"}` and `{"$object": [kind, id]}`.
   - A Text Pattern is re-parsed when decoded, and a Host Object is found through the Host's resolver.
   - **Decoding accepts only these forms.** A value decodes only if encoding it gives back the numbers, tags and payloads the input wrote, so it is refused, never repaired, as `invalid value`. A number is its canonical text, and one that fits a JSON number is never `$dec` (`{"$dec": "3"}` is refused). `$map` holds only a map with a `$` key, every tag's payload has the form above, and Base64 has no other padding or alphabet. JSON white space and string escapes are syntax, not form, and text is normalised to NFC as the Text constructor does.
   - **Function Values** can't be encoded for storage, since a Host-held handle isn't durable. Only [the message layer](#the-message-layer) carries them.
@@ -115,6 +115,7 @@ Each input in the left column is refused as `invalid value`. The right column sh
 | `{"$quantity":["3","days"]}` | `{"$quantity":["3","day"]}` |
 | `{"$instant":"1970-01-01T01:00:00+01:00"}` | `{"$instant":"1970-01-01T00:00:00Z"}` |
 | `{"$instant":"1970-01-01T00:00:00.500Z"}` | `{"$instant":"1970-01-01T00:00:00.5Z"}` |
+| `{"$instant":"1970-01-01T00:00:00.0000001Z"}` | none: seven fraction digits are finer than a microsecond |
 | `{"$date":"2026-09-27T00:00:00.0"}` | `{"$date":"2026-09-27T00:00:00"}` |
 | `{"$map":[["a",1]]}` or `{"$map":[]}` | `{"a":1}` or `{}`, respectively |
 | `{"$bytes":"AB=="}` | `{"$bytes":"AA=="}` (unused padding bits are zero) |

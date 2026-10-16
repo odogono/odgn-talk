@@ -384,9 +384,7 @@ describe('moving message lifecycle', () => {
     const request = group.request(leaf, { name: 'sleep' });
     group.pump(clock);
     group.setParent(leaf, newObject);
-    const reports = operationalReports(
-      group.pump(clock + 1_000_000_000n).reports,
-    );
+    const reports = operationalReports(group.pump(clock + 1_000_000n).reports);
     expect(await request.result).toBe(leaf.value);
     expect(reports).toContainEqual(
       expect.objectContaining({

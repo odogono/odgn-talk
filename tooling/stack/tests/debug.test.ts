@@ -99,7 +99,7 @@ test('step over a suspension lets other Runs execute and their breakpoints pause
   expect(debug.current?.script).toBe('t');
   debug.clearBreakpoints();
   debug.resume();
-  debug.pump(1_000_000_000n);
+  debug.pump(1_000_000n);
   expect(group.inspect().scripts[1]!.vars[0]![1].equals(num(3))).toBe(true);
 });
 
@@ -110,7 +110,7 @@ test('a step over remains armed through a deadline Pump', () => {
   debug.pump();
   debug.clearBreakpoints();
   debug.stepOver();
-  expect(debug.pump(1_000_000_000n).state).toBe('paused');
+  expect(debug.pump(1_000_000n).state).toBe('paused');
   expect(debug.current?.line).toBe(3);
   expect(debug.snapshot().scripts[0]!.runs[0]!.segment).toBe(2);
   debug.resume();
@@ -202,7 +202,7 @@ test('break on Limit Fault exposes values before rollback', () => {
 
 test('paused-time subtraction cannot make a coarse Host Clock go backwards', () => {
   const { group, script } = setup();
-  const debug = new LiveDebugger(group, { now: () => 1_000_000_000n });
+  const debug = new LiveDebugger(group, { now: () => 1_000_000n });
   debug.registerSource(compileSource(source, { name: 's' }).unit!, 's');
   debug.setBreakpoints([{ unit: 's', line: 3 }]);
   const before = debug.clock();
@@ -271,7 +271,7 @@ test('Fix and Continue refuses a Run past its first Segment', () => {
   debug.setBreakpoints([{ unit: 's', script: 's', line: 3 }]);
   script.deliver({ name: 'go' });
   debug.pump();
-  expect(debug.pump(2_000_000n).state).toBe('paused');
+  expect(debug.pump(2000n).state).toBe('paused');
   expect(() =>
     debug.fixAndContinue(
       'on go\nend',

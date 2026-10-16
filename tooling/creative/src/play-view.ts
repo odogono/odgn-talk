@@ -10,7 +10,7 @@ import { renderElement, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 
 const now = () =>
-  BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1_000_000n;
+  BigInt(Math.floor(performance.timeOrigin + performance.now())) * 1000n;
 
 export const mountPlay = (shell: StackShell): void => {
   const toggle = h(
@@ -287,7 +287,7 @@ export const mountPlay = (shell: StackShell): void => {
         schedule(
           Math.min(
             2_147_483_647,
-            Math.max(0, Number((result.nextDeadline - clock) / 1_000_000n)),
+            Math.max(0, Number((result.nextDeadline - clock) / 1000n)),
           ),
         );
       }

@@ -373,7 +373,7 @@ test "frame reuse across recursive Runs leaves captures intact and retention sta
         var retained: usize = 0;
         for (0..20) |i| {
             _ = try group.deliver("s", "go", &.{}, false);
-            try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+            try group.pump(.{ .seconds = 1790000000, .micros = 0 });
             const result = group.script("s").?.variables[1];
             try std.testing.expect(result.data == .number);
             try std.testing.expectEqual(model.Decimal.fromInt(7), result.data.number);
@@ -409,7 +409,7 @@ fn callStorageAllocations(parent: Allocator) !void {
     _ = try group.load("s", source, .{});
     for (0..2) |_| {
         _ = try group.deliver("s", "go", &.{}, false);
-        try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+        try group.pump(.{ .seconds = 1790000000, .micros = 0 });
     }
 }
 
@@ -455,7 +455,7 @@ test "a Group past its cap refuses mid-Pump and gives back every byte" {
     const source = "script variable s\non grow\n  put \"x\" into s\n  repeat 40 times\n    put s & s into s\n  end repeat\nend grow\n";
     _ = try group.load("hog", source, .{});
     _ = try group.deliver("hog", "grow", &.{}, false);
-    try std.testing.expectError(error.OutOfMemory, group.pump(.{ .seconds = 1790000000, .nanos = 0 }));
+    try std.testing.expectError(error.OutOfMemory, group.pump(.{ .seconds = 1790000000, .micros = 0 }));
     try std.testing.expect(memory.refused);
 }
 
@@ -487,7 +487,7 @@ test "large loads retain source and code, not compiler working storage" {
     // Dispatch both ends of the body table after temporary storage is gone.
     _ = try group.deliver("handlers", "h0", &.{}, false);
     _ = try group.deliver("handlers", "h999", &.{}, false);
-    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    try group.pump(.{ .seconds = 1790000000, .micros = 0 });
 
     const script = group.script("handlers").?;
     const extending = memory.used;
@@ -594,8 +594,8 @@ test "a refusal at any allocation leaves nothing behind" {
                 m.release();
                 break :blk false;
             };
-            group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;
-            group.pump(.{ .seconds = 1790000001, .nanos = 0 }) catch break :blk false;
+            group.pump(.{ .seconds = 1790000000, .micros = 0 }) catch break :blk false;
+            group.pump(.{ .seconds = 1790000001, .micros = 0 }) catch break :blk false;
             break :blk !memory.refused;
         };
     }
@@ -634,13 +634,13 @@ test "Extend, Reload and Library replacement refused at any allocation leave not
             if ((group.load("s", source, .{}) catch break :blk false) != .loaded) return error.TestUnexpectedResult;
             const s = group.script("s") orelse break :blk false;
             _ = group.deliver("s", "go", &.{}, false) catch break :blk false;
-            group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;
+            group.pump(.{ .seconds = 1790000000, .micros = 0 }) catch break :blk false;
             const added = group.extend(s, "script variable m = 3\non more\n  return twice(m) + n\nend more\n") catch break :blk false;
             if (added != .extended) break :blk false;
             if ((group.extend(s, "on go\nend go\n") catch break :blk false) != .name_reused) break :blk false;
             if ((group.extend(s, "on") catch break :blk false) != .refused) break :blk false;
             _ = group.deliver("s", "more", &.{}, false) catch break :blk false;
-            group.pump(.{ .seconds = 1790000000, .nanos = 0 }) catch break :blk false;
+            group.pump(.{ .seconds = 1790000000, .micros = 0 }) catch break :blk false;
             _ = group.deliver("s", "go", &.{}, false) catch break :blk false;
             const reloaded = group.reload(s, source, true, true) catch break :blk false;
             if (reloaded != .reloaded) break :blk false;
@@ -648,7 +648,7 @@ test "Extend, Reload and Library replacement refused at any allocation leave not
             const replaced = group.replaceLibrary(next, true, gpa) catch break :blk false;
             if (replaced != .replaced) break :blk false;
             memory.allocator().free(replaced.replaced);
-            group.pump(.{ .seconds = 1790000002, .nanos = 0 }) catch break :blk false;
+            group.pump(.{ .seconds = 1790000002, .micros = 0 }) catch break :blk false;
             break :blk !memory.refused;
         };
     }

@@ -10,7 +10,7 @@
 import type { Group, PumpOptions, PumpResult } from './group';
 
 export type AutoDriveOptions = {
-  /** Epoch nanoseconds. The default reads `Date.now()`; readings never go backwards. */
+  /** Epoch microseconds. The default reads `Date.now()`; readings never go backwards. */
   clock?: () => bigint;
   /** A Pump that threw, such as a `clock backwards` HostError. The driver keeps going. */
   onError?: (error: unknown) => void;
@@ -42,7 +42,7 @@ const timeoutDeadline =
   (at: bigint, fire: () => void): (() => void) => {
     let handle: ReturnType<typeof setTimeout>;
     const arm = () => {
-      const ms = Number((at - read() + 999_999n) / 1_000_000n);
+      const ms = Number((at - read() + 999n) / 1000n);
       // A deadline past setTimeout's range is reached in steps.
       handle = setTimeout(
         ms > MAX_DELAY_MS ? arm : fire,
@@ -54,7 +54,7 @@ const timeoutDeadline =
   };
 
 export const autoDrive = (group: Group, o: AutoDriveOptions = {}): Drive => {
-  const read = o.clock ?? (() => BigInt(Date.now()) * 1_000_000n);
+  const read = o.clock ?? (() => BigInt(Date.now()) * 1000n);
   const setDeadline = o.setDeadline ?? timeoutDeadline(read);
   let last = 0n;
   let scheduled: ReturnType<typeof setTimeout> | undefined;

@@ -51,7 +51,7 @@ func CoreVersions() Versions {
 	if experimentalVersions != nil {
 		return experimentalVersions()
 	}
-	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/7"}
+	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/8"}
 }
 func DefaultLimits() Limits {
 	var l Limits

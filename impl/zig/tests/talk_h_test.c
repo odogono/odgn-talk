@@ -1984,12 +1984,14 @@ int main(void) {
     expect(talk_from_float(0.1, &value) == TALK_OK, "float conversion");
     expect(talk_value_string(value, &buffer) == TALK_OK && buffer.len == 3 && memcmp(buffer.data, "0.1", 3) == 0, "shortest decimal float digits");
     talk_owned_bytes_release(&buffer); talk_value_release(value);
-    expect(talk_instant(-1, 999999999, &value) == TALK_OK, "negative epoch constructor");
-    int64_t seconds = 0; int32_t nanos = 0;
+    expect(talk_instant(-1, 999999, &value) == TALK_OK, "negative epoch constructor");
+    int64_t seconds = 0; int32_t micros = 0;
     const char *text_out = NULL; size_t text_len = 0;
-    expect(talk_value_as_instant(value, &seconds, &nanos) && seconds == -1 && nanos == 999999999, "instant accessor");
+    expect(talk_value_as_instant(value, &seconds, &micros) && seconds == -1 && micros == 999999, "instant accessor");
     talk_value_release(value);
-    expect(talk_instant(0, -1, &value) == TALK_INVALID_VALUE, "invalid nanoseconds refused");
+    expect(talk_instant(0, -1, &value) == TALK_INVALID_VALUE, "invalid microseconds refused");
+    expect(talk_instant(0, 1000000, &value) == TALK_INVALID_VALUE && value == NULL, "a million microseconds refused");
+    expect(talk_parse_civil_date("2026-09-27T14:30:00.1234567", 27, &value) == TALK_INVALID_VALUE, "a seven-digit fraction refused");
     expect(talk_parse_civil_date("2026-02-30", 10, &value) == TALK_INVALID_VALUE, "invalid date refused");
     expect(talk_int(INT64_MIN, &value) == TALK_OK, "minimum int64");
     expect(talk_value_as_dec(value, &decimal) && talk_decimal_int64(decimal, &integer) == TALK_OK && integer == INT64_MIN, "integer accessor");
@@ -2022,8 +2024,8 @@ int main(void) {
     talk_pair past;
     expect(!talk_value_entries(value, 65, &past), "large Map entry end");
     talk_value_release(value);
-    struct timespec moment = {1790000000, 250000000};
-    expect(talk_instant_from_time(&moment, &value) == TALK_OK && talk_value_as_instant(value, &seconds, &nanos) && seconds == 1790000000 && nanos == 250000000, "an Instant from a timespec");
+    struct timespec moment = {1790000000, 250000999};
+    expect(talk_instant_from_time(&moment, &value) == TALK_OK && talk_value_as_instant(value, &seconds, &micros) && seconds == 1790000000 && micros == 250000, "an Instant from a timespec truncates to microseconds");
     talk_value_release(value);
     moment.tv_nsec = 1000000000;
     expect(talk_instant_from_time(&moment, &value) == TALK_INVALID_VALUE && value == NULL, "a timespec past its nanoseconds is refused");
@@ -2044,7 +2046,7 @@ int main(void) {
     talk_value_release(sum);
     talk_value *later = NULL, *minute = NULL;
     talk_parse_display("1 min", 5, &minute);
-    expect(talk_add(copy, minute, &later, &added) == TALK_OK && talk_value_as_instant(later, &seconds, &nanos) && seconds == 60, "an Instant plus a duration");
+    expect(talk_add(copy, minute, &later, &added) == TALK_OK && talk_value_as_instant(later, &seconds, &micros) && seconds == 60, "an Instant plus a duration");
     talk_value_release(later);
     talk_value *text = NULL;
     talk_text("x", 1, &text);

@@ -320,15 +320,15 @@ func TestFailedDependentReplacementIsTracedAndAtomic(t *testing.T) {
 	}
 }
 
-func TestClockAdvanceRoundsFractionalNanosecondsHalfEven(t *testing.T) {
+func TestClockAdvanceRoundsFractionalMicrosecondsHalfEven(t *testing.T) {
 	h := New(Environment{})
 	h.Input(":clock virtual 2026-09-30T10:00:00Z")
-	for _, source := range []string{":clock advance 0.0000000005 s", ":clock advance 0.0000000015 s", ":clock advance 0.0000000025 s"} {
+	for _, source := range []string{":clock advance 0.0000005 s", ":clock advance 0.0000015 s", ":clock advance 0.0000025 s"} {
 		if out := h.Input(source); len(out) > 0 {
 			t.Fatal(source, out)
 		}
 	}
-	if out := h.Input(":clock"); !reflect.DeepEqual(out, []string{"virtual 2026-09-30T10:00:00.000000004Z"}) {
+	if out := h.Input(":clock"); !reflect.DeepEqual(out, []string{"virtual 2026-09-30T10:00:00.000004Z"}) {
 		t.Fatal(out)
 	}
 }

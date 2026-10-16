@@ -19,7 +19,7 @@ Every value has exactly one kind:
 | `list` | a sequence of values, counted from 1 | `[…]` |
 | `map` | values under text keys, in insertion order | `{…}` |
 | `range` | two ends, both numbers or both Quantities | `..` |
-| `instant` | a point on the timeline, to the nanosecond | `as instant`, the `clock` and `calendar` Capabilities |
+| `instant` | a point on the timeline, to the microsecond | `as instant`, the `clock` and `calendar` Capabilities |
 | `civil date` | a calendar date, with an optional time of day | `as civil date`, the `date` Library |
 | `pattern` | a Text Pattern | `<…>` |
 | `function` | a Function Value | a Lambda, a function's bare name |
@@ -417,8 +417,8 @@ A range is two ends made with `..`, both numbers, or both Quantities of one dime
 
 There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md)):
 
-- **An Instant** is a point on the global timeline, to the nanosecond, with no leap seconds. It has no fields until a Script turns it into a Civil Date, with the `toCivil` Built-in or the `calendar` Capability ([chapter 7](07-libraries-and-the-standard-library.md)).
-- **A Civil Date** is a date in the proleptic Gregorian calendar (year, month and day), with an optional time of day (hour, minute, second and nanosecond), and no zone. A date-only value and a date-time are one kind, but they never compare against each other.
+- **An Instant** is a point on the global timeline, to the microsecond, with no leap seconds ([ADR 0091](../docs/adr/0091-time-has-microsecond-resolution.md)). It has no fields until a Script turns it into a Civil Date, with the `toCivil` Built-in or the `calendar` Capability ([chapter 7](07-libraries-and-the-standard-library.md)).
+- **A Civil Date** is a date in the proleptic Gregorian calendar (year, month and day), with an optional time of day (hour, minute, second and microsecond), and no zone. A date-only value and a date-time are one kind, but they never compare against each other.
 - **The range** is 0001-01-01 to 9999-12-31, for a Civil Date and, in UTC, for an Instant. Construction, parsing or arithmetic outside it raises `out of range`, with `field` `"year"` and the year as `value`.
 - **No literal:** a Script builds dates with `as civil date`, `as instant` and the `date` Library, and reads the time through the `clock` Capability.
 
@@ -436,8 +436,8 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
 
 - **No zones:** Civil arithmetic knows no zone, so every day is 86400 s long.
 - **Calendar durations** count months, and a year is 12 of them. Adding one moves the year and month, then clamps the day to the last day of that month, and keeps the time of day, so `2026-01-31` plus `1 month` is `2026-02-28`.
-- **Exact durations** are taken to whole nanoseconds, rounded half-even.
-- **Differences** are exact, written with no more decimal places than they need, and at most nine. So two Instants 90 seconds apart give `90 s`.
+- **Exact durations** are taken to whole microseconds, rounded half-even, so half a microsecond or less is nothing.
+- **Differences** are exact, written with no more decimal places than they need, and at most six. So two Instants 90 seconds apart give `90 s`.
 - **Errors:**
   - An Instant plus a calendar duration, a date-only value plus an exact duration that isn't a whole number of days, and a Civil Date plus a calendar duration that isn't a whole number of months all raise `incompatible units`. So does a date plus a Quantity of any other dimension. `left` is the Unit the date takes, `s` for an Instant or a date-time and `day` for a date-only value, or `month` for a calendar duration that isn't whole months, and `right` is the Quantity's Unit.
   - A date-only value against a date-time, an Instant against a Civil Date, two dates added, and a date with a plain number raise `wrong kind`. So does a duration on the left of a date. `expected` is `"quantity"` for what is added to a date, the left date's kind for what is subtracted from one, and `"quantity"` or `"number"`, after the left operand, for a date on the right. Every other operator on a date raises it with `"number"`.
@@ -448,8 +448,8 @@ There are two kinds, and the Cores hold no time-zone data ([ADR 0023](../docs/ad
   - `2026-09-27` for a date-only value
   - `2026-09-27T14:30:00` for a date-time
   - `2026-09-27T13:30:00Z` for an Instant, always in UTC
-- **A fraction of a second** appears only when it isn't zero, with up to nine digits and no trailing zeros: `2026-09-27T14:30:00.5`.
-- **`as civil date`** reads exactly that form, after White_Space is trimmed from either end: four digits of year, then `-`, two of month, `-` and two of day, and optionally `T`, two digits each of hour, minute and second, separated by `:`, and an optional fraction of one to nine digits. Text with a `Z` or an offset raises `can't convert`, and so does a date or time that doesn't exist, such as `2026-02-30` or a 60th second. The year `0000`, which the form can write but the range leaves out, raises `out of range`.
+- **A fraction of a second** appears only when it isn't zero, with up to six digits and no trailing zeros: `2026-09-27T14:30:00.5`.
+- **`as civil date`** reads exactly that form, after White_Space is trimmed from either end: four digits of year, then `-`, two of month, `-` and two of day, and optionally `T`, two digits each of hour, minute and second, separated by `:`, and an optional fraction of one to six digits. Seven or more fraction digits raise `can't convert`, and text is never truncated. Text with a `Z` or an offset raises `can't convert`, and so does a date or time that doesn't exist, such as `2026-02-30` or a 60th second. The year `0000`, which the form can write but the range leaves out, raises `out of range`.
 - **`as instant`** reads a date-time in the same form, followed by `Z` or a numeric offset (`+01:00`, `-05:30`) of less than 24 hours, and converts it to UTC. One that lands outside the range in UTC raises `out of range`.
 
 > **Example.**

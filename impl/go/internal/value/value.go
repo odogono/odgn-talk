@@ -38,9 +38,9 @@ const (
 var KindNames = []string{"nothing", "boolean", "number", "quantity", "text", "bytes", "list", "map", "range", "instant", "civil date", "pattern", "function", "object", "iterator", "reader", "replacement", "deadline"}
 
 type DateFields struct {
-	Year, Month, Day                 int
-	HasTime                          bool
-	Hour, Minute, Second, Nanosecond int
+	Year, Month, Day                  int
+	HasTime                           bool
+	Hour, Minute, Second, Microsecond int
 }
 type Pair struct {
 	Key string
@@ -128,7 +128,7 @@ type Fields struct {
 	Unit        Unit
 	Date        DateFields
 	Seconds     int64
-	Nanos       int32
+	Micros      int32
 	Object      *ObjectData
 	Function    *FunctionData
 }
@@ -139,7 +139,7 @@ type quantityData struct {
 }
 type instantData struct {
 	seconds int64
-	nanos   int32
+	micros  int32
 }
 
 func (f Fields) Value() Value {
@@ -160,7 +160,7 @@ func (f Fields) Value() Value {
 	case CivilDate:
 		v.data = f.Date
 	case Instant:
-		v.data = instantData{f.Seconds, f.Nanos}
+		v.data = instantData{f.Seconds, f.Micros}
 	case Object:
 		v.data = f.Object
 	case Function:
@@ -186,7 +186,7 @@ func (v Value) Number() decimal.Number {
 }
 func (v Value) Unit() Unit     { q, _ := v.data.(quantityData); return q.unit }
 func (v Value) Seconds() int64 { i, _ := v.data.(instantData); return i.seconds }
-func (v Value) Nanos() int32   { i, _ := v.data.(instantData); return i.nanos }
+func (v Value) Micros() int32  { i, _ := v.data.(instantData); return i.micros }
 func (v Value) WithNumber(n decimal.Number) Value {
 	if v.Kind == Quantity {
 		v.data = quantityData{n, v.Unit()}
@@ -273,7 +273,7 @@ func (v Value) Deadline() *DeadlineData       { x, _ := v.data.(*DeadlineData); 
 func (v Value) Fields() Fields {
 	return Fields{Kind: v.Kind, CoreMessage: v.CoreMessage, Bool: v.Bool, Text: v.Text(), Items: v.Items(),
 		Number: v.Number(), Unit: v.Unit(), Bytes: v.Bytes(), Entries: v.Entries(), Date: v.Date(),
-		Seconds: v.Seconds(), Nanos: v.Nanos(), Object: v.Object(), Function: v.Function(),
+		Seconds: v.Seconds(), Micros: v.Micros(), Object: v.Object(), Function: v.Function(),
 		Iterator: v.Iterator(), Reader: v.Reader(), Replacement: v.Replacement(), Deadline: v.Deadline()}
 }
 

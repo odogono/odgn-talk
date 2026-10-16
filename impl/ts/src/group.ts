@@ -3139,10 +3139,10 @@ export class Group {
         ...extra,
       }) as TimerAction;
     if (sus.k === 'wait') {
-      if (ends(now + sus.ns)) {
+      if (ends(now + sus.us)) {
         return this.timer(block!.at, deadline(), running).deadline;
       }
-      return this.timer(now + sus.ns, { k: 'wake', s, running }, running)
+      return this.timer(now + sus.us, { k: 'wake', s, running }, running)
         .deadline;
     }
     if (sus.k === 'wait-for') {
@@ -3151,7 +3151,7 @@ export class Group {
       const waiter = { running, timers: [] as Timer[] };
       const own = [
         ...(sus.timeout === null ? [] : [sus.timeout]),
-        ...sus.afters.map(after => after.ns),
+        ...sus.afters.map(after => after.us),
       ].reduce<bigint | null>(
         (min, ns) => (min === null || now + ns < min ? now + ns : min),
         null,
@@ -3174,7 +3174,7 @@ export class Group {
       }
       for (const after of sus.afters) {
         waiter.timers.push(
-          this.timer(now + after.ns, fire(after.branch), running),
+          this.timer(now + after.us, fire(after.branch), running),
         );
       }
       s.waiters.push(waiter);
@@ -3211,7 +3211,7 @@ export class Group {
     }
     const id = sus.k === 'ask' ? sus.call.id : sus.id;
     const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
-    const own = now + BigInt(ms) * 1_000_000n;
+    const own = now + BigInt(ms) * 1000n;
     const bounded = ends(own);
     const timer = this.timer(
       bounded ? block!.at : own,

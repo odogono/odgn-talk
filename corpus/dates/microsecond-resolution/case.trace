@@ -1,0 +1,15 @@
+> load micro identity=c5b13bf7972ee88ea4ee5b5920464b6e8f020eeb9703e4022fc949f525e079f1
+> deliver d1 to=micro message=go
+> deliver d2 to=micro message=invalid
+> pump clock=2026-10-16T09:00:00Z
+seg micro/r1 start delivery=d1 handler=go clause=1 fuel=21282 alloc=46241 state=338 end=return
+run micro/r1 outcome=completed delivery=d1 handler=go fuel=21282 alloc=46241
+raise micro/r2 code="can't convert" at=micro:55 pos=21:39
+raise micro/r2 code="can't convert" at=micro:72 pos=26:40
+raise micro/r2 code="out of range" at=date:1327 pos=311:3
+raise micro/r2 code="out of domain" at=date:1345 pos=324:3
+seg micro/r2 start delivery=d2 handler=invalid clause=1 fuel=4490 alloc=12703 state=2522 end=return
+run micro/r2 outcome=completed delivery=d2 handler=invalid fuel=4490 alloc=12703
+pumped state=idle fuel=25772
+> vars
+vars micro fields=[123456, 500000] texts=[2026-09-27T14:30:00.999999, "2026-09-27 14:30:00.123456", 2026-09-27T14:30:00.000001] rounded=[2026-09-27T14:30:00Z, 2026-09-27T14:30:00.000002Z, 2026-09-27T14:30:00.000002Z, 0.000001 s] caught=[{code: "can't convert", value: "2026-09-27T14:30:00.1234567", to: "civil date", at: {unit: "micro", handler: "invalid", line: 21, column: 39}}, {code: "can't convert", value: "2026-09-27T14:30:00.0000001Z", to: "instant", at: {unit: "micro", handler: "invalid", line: 26, column: 40}}, {code: "out of range", field: "microsecond", value: 1000000, at: {unit: "micro", handler: "invalid", line: 31, column: 9}}, {code: "out of domain", function: "formatDate", value: "${year}-${month}-${day} ${hour}:${minute}.${fraction:7}", at: {unit: "micro", handler: "invalid", line: 36, column: 9}}]

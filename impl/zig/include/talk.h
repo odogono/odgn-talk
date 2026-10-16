@@ -104,7 +104,7 @@ typedef struct talk_pair { const char *key; size_t key_len; talk_value *value; }
 typedef struct talk_date_fields {
     int year, month, day;
     bool has_time;
-    int hour, minute, second, nanosecond;
+    int hour, minute, second, microsecond;
 } talk_date_fields;
 /* C only: owns an allocated byte slice. Release with talk_owned_bytes_release. */
 typedef struct talk_owned_bytes { unsigned char *data; size_t len; } talk_owned_bytes;
@@ -124,9 +124,11 @@ talk_host_error_code talk_dec(const char *s, size_t len, talk_value **out);
 talk_host_error_code talk_quantity(const talk_decimal *n, const char *unit, size_t len, talk_value **out);
 talk_host_error_code talk_civil_date(talk_date_fields f, talk_value **out);
 talk_host_error_code talk_parse_civil_date(const char *s, size_t len, talk_value **out);
-talk_host_error_code talk_instant(int64_t seconds, int32_t nanos, talk_value **out);
+/* An Instant from epoch seconds and microseconds; micros outside
+ * 0..999999 is TALK_INVALID_VALUE. */
+talk_host_error_code talk_instant(int64_t seconds, int32_t micros, talk_value **out);
 /* An Instant from a struct timespec, such as a CLOCK_REALTIME reading. A C
- * time has no monotonic reading or zone to drop. tv_nsec outside
+ * time has no monotonic reading or zone to drop. tv_nsec is truncated to the microsecond; outside
  * 0..999999999 is TALK_INVALID_VALUE. */
 talk_host_error_code talk_instant_from_time(const struct timespec *t, talk_value **out);
 talk_host_error_code talk_bytes(const unsigned char *s, size_t len, talk_value **out);
@@ -147,7 +149,7 @@ bool talk_value_as_dec(const talk_value *v, const talk_decimal **out);
 /* The unit buffer is owned, the Decimal is borrowed. Word units are singular. */
 talk_host_error_code talk_value_as_quantity(const talk_value *v, const talk_decimal **n, talk_owned_bytes *unit);
 bool talk_value_as_civil_date(const talk_value *v, talk_date_fields *out);
-bool talk_value_as_instant(const talk_value *v, int64_t *seconds, int32_t *nanos);
+bool talk_value_as_instant(const talk_value *v, int64_t *seconds, int32_t *micros);
 /* Bytes are copied out, in an owned buffer. */
 talk_host_error_code talk_value_as_bytes(const talk_value *v, talk_owned_bytes *out);
 /* Range ends and indexed/map values return owned references. */
@@ -388,7 +390,7 @@ typedef struct talk_segment_context {
     size_t segment_id_len;
     void *binding;
     int64_t now_seconds;
-    int32_t now_nanos;
+    int32_t now_micros;
     const talk_segment_grant *grants;
     size_t grants_len;
 } talk_segment_context;
@@ -427,7 +429,7 @@ typedef struct talk_grant_context {
     size_t grant_name_len;
     void *binding;
     int64_t now_seconds;
-    int32_t now_nanos;
+    int32_t now_micros;
     talk_release_reason reason;
 } talk_grant_context;
 
@@ -659,7 +661,7 @@ void talk_call_script_name(const talk_call *c, const char **s, size_t *len);
 void talk_call_grant_name(const talk_call *c, const char **s, size_t *len);
 void *talk_call_binding(const talk_call *c);
 /* The Pump's Clock reading. */
-void talk_call_now(const talk_call *c, int64_t *seconds, int32_t *nanos);
+void talk_call_now(const talk_call *c, int64_t *seconds, int32_t *micros);
 /* The Run's id, such as "pricing/r1", and its current Segment's, such as
  * "pricing/r1.s1", which together with the Grant name own a Capability
  * Scope. */
@@ -1205,7 +1207,7 @@ typedef struct talk_pump_result {
      * deadline, talk.go's NextDeadline. */
     bool has_next_deadline;
     int64_t next_deadline_seconds;
-    int32_t next_deadline_nanos;
+    int32_t next_deadline_micros;
     int64_t fuel_used;
     talk_reports *reports; /* owned by the caller */
 } talk_pump_result;
@@ -1335,7 +1337,7 @@ bool talk_deciding_done(const talk_deciding *d);
 /* The Verdict, borrowed from the Group, or NULL until a Pump seals it. */
 const talk_decided *talk_deciding_decided(talk_deciding *d);
 /* Runs a Pump with one Clock reading. o may be NULL. */
-talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t nanos, const talk_pump_options *o, talk_pump_result *out);
+talk_host_error_code talk_pump(talk_group *g, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_pump_result *out);
 /* Makes the Group's handle for a Host-owned thing, the first time it
  * crosses into the Group. A reused id within the kind is
  * TALK_DUPLICATE_OBJECT_ID. The handle lives as long as the Group. */
@@ -1650,7 +1652,7 @@ typedef struct talk_run_view {
     /* C only: TALK_SUSPENDED, whether it has a deadline, talk.go's Until. */
     bool has_until;
     int64_t until_seconds;
-    int32_t until_nanos;
+    int32_t until_micros;
     const talk_id *calls; /* TALK_SUSPENDED: the calls, replies or Join Members it waits for */
     size_t calls_len;
 } talk_run_view;

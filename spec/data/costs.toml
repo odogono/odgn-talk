@@ -594,7 +594,7 @@ key = "builtin.second"
 fuel = "3"
 
 [[rate]]
-key = "builtin.nanosecond"
+key = "builtin.microsecond"
 fuel = "3"
 
 [[rate]]

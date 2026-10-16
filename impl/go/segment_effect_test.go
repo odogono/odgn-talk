@@ -93,7 +93,7 @@ func TestSegmentParticipantSurvivesPreemptionAndCommitsBeforeQueuedStop(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Unix(100, 200).UTC()
+	now := time.Unix(100, 200000).UTC()
 	r, err := g.Pump(now, PumpOptions{FuelSlice: 15})
 	if err != nil || r.State != Sliced || staged != 1 || published != 0 || len(contexts) != 1 {
 		t.Fatal(r, err, staged, published, contexts)

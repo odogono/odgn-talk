@@ -445,10 +445,10 @@ var Builtins = BuiltinsTable{
 			Total:    1,
 		},
 		BuiltinsTableBuiltinEntry{
-			Name:  "nanosecond",
+			Name:  "microsecond",
 			Group: "dates",
-			Call:  "nanosecond(d)",
-			Gives: "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999",
+			Call:  "microsecond(d)",
+			Gives: "The fraction of a second of the date-time `d`, in whole microseconds from 0 to 999999",
 			Errors: []string{
 				"out of domain",
 			},

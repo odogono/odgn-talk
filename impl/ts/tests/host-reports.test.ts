@@ -18,7 +18,7 @@ import {
 } from '../src/index';
 
 const now = parseInstant('2026-09-30T09:00:00Z');
-const later = (seconds: number) => now + BigInt(seconds) * 1_000_000_000n;
+const later = (seconds: number) => now + BigInt(seconds) * 1_000_000n;
 const failures = (reports: Report[]) =>
   reports.filter(r => r.kind === 'call failed');
 const kinds = (reports: Report[]) => reports.map(r => r.kind);

@@ -110,7 +110,7 @@ func TestDirectCodecReferences(t *testing.T) {
 }
 
 func TestDirectCodecValueValidationMatchesLegacy(t *testing.T) {
-	data, err := os.ReadFile("testdata/values-go6.json")
+	data, err := os.ReadFile("testdata/values-go8.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,8 +120,8 @@ func TestDirectCodecValueValidationMatchesLegacy(t *testing.T) {
 	}
 	mutations := map[string]any{
 		"Kind": 999, "Bool": true, "Text": "inactive", "Bytes": []any{}, "Items": []any{}, "Entries": []any{},
-		"Seconds": 1, "Nanos": 1, "Number": `["1",0,""]`, "Unit": map[string]any{"Slots": []any{}},
-		"Date": map[string]any{"Year": 1, "Month": 0, "Day": 0, "Hour": 0, "Minute": 0, "Second": 0, "Nanosecond": 0, "HasTime": false},
+		"Seconds": 1, "Micros": 1, "Number": `["1",0,""]`, "Unit": map[string]any{"Slots": []any{}},
+		"Date": map[string]any{"Year": 1, "Month": 0, "Day": 0, "Hour": 0, "Minute": 0, "Second": 0, "Microsecond": 0, "HasTime": false},
 	}
 	for i, row := range rows {
 		for field, x := range mutations {
@@ -165,7 +165,7 @@ func compareValueDecode(t *testing.T, raw []byte) {
 }
 
 func FuzzSnapshotValueCompatibility(f *testing.F) {
-	data, err := os.ReadFile("testdata/values-go6.json")
+	data, err := os.ReadFile("testdata/values-go8.json")
 	if err != nil {
 		f.Fatal(err)
 	}

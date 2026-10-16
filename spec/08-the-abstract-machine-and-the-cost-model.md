@@ -1143,7 +1143,7 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `hour` | `3` | 0 |  |
 | `minute` | `3` | 0 |  |
 | `second` | `3` | 0 |  |
-| `nanosecond` | `3` | 0 |  |
+| `microsecond` | `3` | 0 |  |
 | `weekday` | `4` | 0 |  |
 | `dayOfYear` | `4` | 0 |  |
 | `isoWeek` | `6` | 0 |  |

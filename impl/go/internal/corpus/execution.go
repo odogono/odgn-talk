@@ -821,7 +821,7 @@ func (x *executionReplay) apply(i int) error {
 		}
 	case "pump":
 		clock := fields["clock"].Value
-		now := time.Unix(clock.Seconds(), int64(clock.Nanos()))
+		now := clock.Time()
 		opts := talk.PumpOptions{}
 		opts.FuelCap, _ = strconv.ParseInt(fields["fuel-cap"].Raw, 10, 64)
 		opts.FuelSlice, _ = strconv.ParseInt(fields["fuel-slice"].Raw, 10, 64)

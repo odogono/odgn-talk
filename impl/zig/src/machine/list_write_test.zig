@@ -28,7 +28,7 @@ test "local List writes retain old wholes at instruction and restored boundaries
     if (loaded != .loaded) std.debug.print("{s}\n", .{out.written()});
     try testing.expect(loaded == .loaded);
     _ = try g.deliver("s", "go", &.{}, false);
-    const clock: @import("../dates.zig").Instant = .{ .seconds = 0, .nanos = 0 };
+    const clock: @import("../dates.zig").Instant = .{ .seconds = 0, .micros = 0 };
     try g.pumpWith(clock, 1, 0);
     var writes: usize = 0;
     var released_temp_seen = false;
@@ -98,8 +98,8 @@ test "local List writes retain old wholes at instruction and restored boundaries
             // Complete both suspended continuations from the same clock.
             out.writer.end = 0;
             copied.writer.end = 0;
-            try g.pump(.{ .seconds = 1, .nanos = 0 });
-            try copy.pump(.{ .seconds = 1, .nanos = 0 });
+            try g.pump(.{ .seconds = 1, .micros = 0 });
+            try copy.pump(.{ .seconds = 1, .micros = 0 });
             try testing.expectEqualStrings(out.written(), copied.written());
             try testing.expect(std.mem.indexOf(u8, out.written(), "[[1, 2], [3, 4]]") != null);
             suspended = true;

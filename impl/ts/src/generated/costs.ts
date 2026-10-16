@@ -175,7 +175,7 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Char
   (m) => ({ fuel: 3, alloc: 0 }),
   // builtin.second
   (m) => ({ fuel: 3, alloc: 0 }),
-  // builtin.nanosecond
+  // builtin.microsecond
   (m) => ({ fuel: 3, alloc: 0 }),
   // builtin.weekday
   (m) => ({ fuel: 4, alloc: 0 }),

@@ -295,14 +295,14 @@ func (h *Host) clock(rest string) []string {
 	case "virtual":
 		at := h.lastClock
 		if !h.hasClock && arg == "" {
-			at = h.env.Now()
+			at = h.env.Now().Truncate(time.Microsecond)
 		}
 		if arg != "" {
 			v, err := value.ParseDisplay(arg, nil)
 			if err != nil || v.Kind != value.Instant {
 				return refusal("bad arguments")
 			}
-			at = time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
+			at = v.Time()
 		}
 		if h.hasClock && at.Before(h.lastClock) {
 			return refusal("clock backwards")
@@ -328,7 +328,7 @@ func (h *Host) clock(rest string) []string {
 		if err != nil {
 			return refusal("bad arguments")
 		}
-		ns := new(big.Rat).Mul(n.Rat(), big.NewRat(1000000000, 1))
+		ns := new(big.Rat).Mul(n.Rat(), big.NewRat(1000000, 1))
 		if ns.Sign() < 0 {
 			return refusal("bad arguments")
 		}
@@ -339,7 +339,7 @@ func (h *Host) clock(rest string) []string {
 		if cmp := new(big.Int).Lsh(fraction, 1).Cmp(ns.Denom()); cmp > 0 || cmp == 0 && nanos.Bit(0) != 0 {
 			nanos.Add(nanos, big.NewInt(1))
 		}
-		q.QuoRem(nanos, big.NewInt(1000000000), r)
+		q.QuoRem(nanos, big.NewInt(1000000), r)
 		if !q.IsInt64() {
 			return refusal("bad arguments")
 		}
@@ -347,7 +347,7 @@ func (h *Host) clock(rest string) []string {
 		if !sec.IsInt64() {
 			return refusal("bad arguments")
 		}
-		at := time.Unix(sec.Int64(), int64(h.virtual.Nanosecond())+r.Int64()).UTC()
+		at := time.Unix(sec.Int64(), int64(h.virtual.Nanosecond())+r.Int64()*1000).UTC()
 		if _, err := value.ParseDisplay(formatTime(at), nil); err != nil {
 			return refusal("bad arguments")
 		}

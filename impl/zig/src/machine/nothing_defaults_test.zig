@@ -11,7 +11,7 @@ const testing = std.testing;
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
 
-const clock: model.dates.Instant = .{ .seconds = 1790000000, .nanos = 0 };
+const clock: model.dates.Instant = .{ .seconds = 1790000000, .micros = 0 };
 
 /// Loads `source` as Script `s`, requests `go` with `args`, pumps once and
 /// returns the Trace.

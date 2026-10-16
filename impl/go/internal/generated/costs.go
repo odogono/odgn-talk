@@ -647,7 +647,7 @@ var Costs = CostsTable{
 			Fuel: "3",
 		},
 		CostsTableRateEntry{
-			Key:  "builtin.nanosecond",
+			Key:  "builtin.microsecond",
 			Fuel: "3",
 		},
 		CostsTableRateEntry{

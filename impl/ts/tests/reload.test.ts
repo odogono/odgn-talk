@@ -70,7 +70,7 @@ describe('Reload', () => {
       s.reload('script variable p = <50 digits>', 'carry variables'),
     ).toThrow('pattern too large');
     expect(trace.some(l => l.startsWith('stopped '))).toBe(false);
-    g.pump(1_000_000_000n);
+    g.pump(1_000_000n);
     expect(vars(g)).toEqual([['n', '2']]);
   });
 
@@ -172,7 +172,7 @@ describe('Extend', () => {
     s.deliver({ name: 'newone' });
     const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
-    g.pump(1_000_000_000n);
+    g.pump(1_000_000n);
     expect(vars(g)[0]).toEqual(['n', '13']);
     expect(trace.some(l => l.startsWith('stopped '))).toBe(false);
     expect(trace.find(l => l.startsWith('> extend'))).toContain('identity=');
@@ -286,7 +286,7 @@ describe('Library replacement', () => {
     b.deliver({ name: 'go' });
     const r = operationalReports(g.pump(0n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('12');
-    const later = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
+    const later = operationalReports(g.pump(1_000_000n).reports)[0]!;
     expect('result' in later && later.result!.toString()).toBe('22');
   });
 
@@ -314,14 +314,14 @@ describe('Library replacement', () => {
       'unknown import',
     );
     expect(trace.some(l => l.startsWith('stopped '))).toBe(false);
-    const r = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
+    const r = operationalReports(g.pump(1_000_000n).reports)[0]!;
     expect('result' in r && r.result!.toString()).toBe('1');
     const next = g.load({
       name: 'next',
       source: 'use count from base\non go\n  return count()\nend go',
     });
     next.deliver({ name: 'go' });
-    const good = operationalReports(g.pump(1_000_000_000n).reports)[0]!;
+    const good = operationalReports(g.pump(1_000_000n).reports)[0]!;
     expect('result' in good && good.result!.toString()).toBe('1');
   });
 });

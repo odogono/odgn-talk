@@ -8,7 +8,7 @@ const objects = @import("objects.zig");
 const caps = @import("capabilities.zig");
 const testing = std.testing;
 const Case = struct { name: []const u8, source: []const u8, result: []const u8, fuelLimit: ?u64 = null, allocLimit: ?u64 = null, depthLimit: ?u64 = null, object: bool = false, disposed: bool = false, foreign: bool = false, host: bool = false };
-const clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 };
+const clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 };
 
 fn loadCases(a: std.mem.Allocator) !std.json.Parsed([]Case) {
     const raw = try std.Io.Dir.cwd().readFileAlloc(testing.io, "../../corpus/restricted-kit/cases.json", a, .unlimited);

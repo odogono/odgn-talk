@@ -19,7 +19,7 @@ import {
 import { num } from '../src/values';
 
 const clock = parseInstant('2026-09-30T09:00:00Z');
-const later = (seconds: number) => clock + BigInt(seconds) * 1_000_000_000n;
+const later = (seconds: number) => clock + BigInt(seconds) * 1_000_000n;
 const group = () => {
   const lines: string[] = [];
   return {

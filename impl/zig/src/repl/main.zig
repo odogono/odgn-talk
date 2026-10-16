@@ -36,14 +36,15 @@ const Repl = struct {
 
     fn now(r: *Repl) session.Instant {
         const t = std.Io.Timestamp.now(r.io, .real);
-        return .{ .seconds = @intCast(@divFloor(t.nanoseconds, std.time.ns_per_s)), .nanos = @intCast(@mod(t.nanoseconds, std.time.ns_per_s)) };
+        const us = @divFloor(t.nanoseconds, std.time.ns_per_us);
+        return .{ .seconds = @intCast(@divFloor(us, std.time.us_per_s)), .micros = @intCast(@mod(us, std.time.us_per_s)) };
     }
 
     /// An `@` line: a reading's display form.
     fn writeReading(r: *Repl, at: session.Instant) void {
         const w = r.transcript orelse return;
         var v: ?*c.talk_value = null;
-        if (c.talk_instant(at.seconds, at.nanos, &v) != c.TALK_OK) return;
+        if (c.talk_instant(at.seconds, at.micros, &v) != c.TALK_OK) return;
         defer c.talk_value_release(v);
         var shown: c.talk_owned_bytes = .{ .data = null, .len = 0 };
         if (c.talk_value_string(v, &shown) != c.TALK_OK) return;
@@ -142,14 +143,14 @@ const Repl = struct {
 
     fn sleep(context: *anyopaque, at: session.Instant) void {
         const r: *Repl = @ptrCast(@alignCast(context));
-        const ns = r.until(at);
-        if (ns > 0) r.io.sleep(.fromNanoseconds(@intCast(ns)), .real) catch {};
+        const us = r.until(at);
+        if (us > 0) r.io.sleep(.fromMicroseconds(@intCast(us)), .real) catch {};
     }
 
-    /// Nanoseconds from now to `at`, negative once it has passed.
+    /// Microseconds from now to `at`, negative once it has passed.
     fn until(r: *Repl, at: session.Instant) i128 {
         const t = r.now();
-        return (@as(i128, at.seconds) - t.seconds) * std.time.ns_per_s + (@as(i128, at.nanos) - t.nanos);
+        return (@as(i128, at.seconds) - t.seconds) * std.time.us_per_s + (@as(i128, at.micros) - t.micros);
     }
 
     /// A live session records no object crossings.
@@ -167,10 +168,10 @@ const Repl = struct {
     fn await(r: *Repl, s: *Session) !void {
         while (r.in.bufferedLen() == 0) {
             const due = s.nextDeadline() orelse return;
-            const wait_ns = r.until(due);
-            if (wait_ns > 0) {
+            const wait_us = r.until(due);
+            if (wait_us > 0) {
                 var fds = [_]std.posix.pollfd{.{ .fd = std.posix.STDIN_FILENO, .events = std.posix.POLL.IN, .revents = 0 }};
-                const ms: i32 = @intCast(@min(@divFloor(wait_ns + std.time.ns_per_ms - 1, std.time.ns_per_ms), std.math.maxInt(i32)));
+                const ms: i32 = @intCast(@min(@divFloor(wait_us + std.time.us_per_ms - 1, std.time.us_per_ms), std.math.maxInt(i32)));
                 if (try std.posix.poll(&fds, ms) > 0) return;
             }
             const reading_at = r.now();

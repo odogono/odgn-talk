@@ -149,7 +149,7 @@ func runBroadcastBridgeCases(t *testing.T) []bridgeObservation {
 					t.Fatal(target.Counters())
 				}
 			case "broadcast refusals":
-				for _, message := range []talk.Message{{Name: "hello:with:"}, {Name: "hello", Limits: &talk.LimitOverride{MaxWait: time.Nanosecond}}, {Name: "hello", Limits: &talk.LimitOverride{FuelPerRun: -1}}, {Name: "hello", Limits: &talk.LimitOverride{FuelPerRun: talk.DefaultLimits().FuelPerRun + 1}}, {Name: "hello", Limits: &talk.LimitOverride{Set: 1 << 7}}} {
+				for _, message := range []talk.Message{{Name: "hello:with:"}, {Name: "hello", Limits: &talk.LimitOverride{MaxWait: time.Microsecond}}, {Name: "hello", Limits: &talk.LimitOverride{FuelPerRun: -1}}, {Name: "hello", Limits: &talk.LimitOverride{FuelPerRun: talk.DefaultLimits().FuelPerRun + 1}}, {Name: "hello", Limits: &talk.LimitOverride{Set: 1 << 7}}} {
 					_, err := g.Broadcast(message)
 					var host *talk.HostError
 					if !errors.As(err, &host) {

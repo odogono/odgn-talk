@@ -223,10 +223,10 @@ test('Console read uses its human-input timeout instead of a shorter Script MaxW
   });
   s.deliver({ name: 'go' });
   g.pump(now);
-  g.pump(now + 2_000_000n);
+  g.pump(now + 2000n);
   expect(g.inspect().scripts[0]!.runs[0]!.status).toBe('suspended');
   const report = operationalReports(
-    g.pump(now + 2_147_483_647_000_000n).reports,
+    g.pump(now + 2_147_483_647_000n).reports,
   ).find(r => r.kind === 'run end')!;
   expect(report.error?.code).toBe('timeout');
 });

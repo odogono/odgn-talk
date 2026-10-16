@@ -345,7 +345,7 @@ Floats come into and go out of the language only through these four ([ADR 0021](
 | `hour(d)` | The hour of the date-time `d`, from 0 to 23 | `out of domain` |
 | `minute(d)` | The minute of the date-time `d`, from 0 to 59 | `out of domain` |
 | `second(d)` | The whole seconds of the date-time `d`, from 0 to 59 | `out of domain` |
-| `nanosecond(d)` | The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999 | `out of domain` |
+| `microsecond(d)` | The fraction of a second of the date-time `d`, in whole microseconds from 0 to 999999 | `out of domain` |
 | `weekday(d)` | The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday |  |
 | `dayOfYear(d)` | The day of the year of `d`, from 1 to 366 |  |
 | `isoWeek(d)` | The ISO 8601 week number of `d`, from 1 to 53 |  |
@@ -357,7 +357,7 @@ Floats come into and go out of the language only through these four ([ADR 0021](
 <!-- end -->
 
 - **Civil Dates only:** the field functions take a Civil Date ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md)). An Instant raises `wrong kind`, so a Script turns it into a Civil Date first, with `toCivil` or the `calendar` Capability.
-- **Time fields:** `hour`, `minute`, `second` and `nanosecond` of a date-only value raise `out of domain`.
+- **Time fields:** `hour`, `minute`, `second` and `microsecond` of a date-only value raise `out of domain`.
 - **ISO 8601 weeks:** `weekday` is 1 for Monday to 7 for Sunday, and `isoWeek` and `isoWeekYear` follow ISO 8601 week numbering. Day names come only from the `locale` Capability.
 - **Fixed offsets:** `offset` in `toCivil` and `toInstant` is an exact duration Quantity that is a whole number of minutes and less than 24 hr in magnitude. UTC is `0 s`. Any other offset raises `out of domain`.
 - **`toInstant(c, offset)`** takes a date-time, and a date-only value raises `out of domain`.
@@ -763,8 +763,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 | Export | Gives | Also raises |
 | --- | --- | --- |
 | `makeDate(y, m, d)` | The date-only Civil Date `y`-`m`-`d` | `out of range` |
-| `makeDateTime(y, m, d, h, mi, s = 0, ns = 0)` | The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `ns` nanoseconds | `out of range` |
-| `atTime(d, h, mi, s = 0, ns = 0)` | The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds | `out of range` |
+| `makeDateTime(y, m, d, h, mi, s = 0, us = 0)` | The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `us` microseconds | `out of range` |
+| `atTime(d, h, mi, s = 0, us = 0)` | The date-time on the date of `d` at `h`:`mi`:`s` and `us` microseconds | `out of range` |
 | `dateOnly(d)` | The date of the Civil Date `d`, without its time of day |  |
 | `daysInMonth(d)` | The number of days in the month of the Civil Date `d` |  |
 | `isLeapYear(y)` | Whether the integer `y` is a leap year in the proleptic Gregorian calendar |  |
@@ -776,8 +776,8 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 <!-- end -->
 
-- **Building:** `makeDate`, `makeDateTime` and `atTime` are written in the language over `as civil date`. Each field is an integer in its range: year 1 to 9999, month 1 to 12, day 1 to the month's length, hour 0 to 23, minute 0 to 59, second 0 to 59, and nanosecond 0 to 999999999. Anything else raises `out of range`, with `field` the field's name (`"year"`, `"month"`, …) and `value` the argument. Nothing is ever normalised, so `makeDate(2026, 2, 30)` raises.
-- **`atTime(d, h, mi, s = 0, ns = 0)`** adds a time of day to a date-only value. A date-time raises `out of domain`, and a Script that wants to replace a time writes `atTime(dateOnly(d), …)`.
+- **Building:** `makeDate`, `makeDateTime` and `atTime` are written in the language over `as civil date`. Each field is an integer in its range: year 1 to 9999, month 1 to 12, day 1 to the month's length, hour 0 to 23, minute 0 to 59, second 0 to 59, and microsecond 0 to 999999. Anything else raises `out of range`, with `field` the field's name (`"year"`, `"month"`, …) and `value` the argument. Nothing is ever normalised, so `makeDate(2026, 2, 30)` raises.
+- **`atTime(d, h, mi, s = 0, us = 0)`** adds a time of day to a date-only value. A date-time raises `out of domain`, and a Script that wants to replace a time writes `atTime(dateOnly(d), …)`.
 - **`isLeapYear(y)`** takes any integer, by the proleptic Gregorian rule.
 - **`splitDuration(d)`** takes an exact duration Quantity and gives plain numbers: whole `days`, `hours` from 0 to 23 and `minutes` from 0 to 59, with the fraction kept in `seconds`, which is less than 60. A negative duration gives the parts of its magnitude, each negated. A Quantity of another Unit Kind raises `incompatible units`.
 - **`monthsBetween(a, b)`** takes two date-only values or two date-times, and mixing them raises `can't compare`. When `a` is at or before `b`, it is the greatest `n` for which `a + n months` is at or before `b`, with month arithmetic clamping the day as [chapter 3](03-values.md#date-arithmetic) says. When `b` is earlier, it is minus `monthsBetween(b, a)`. So from 2026-01-31 to 2026-02-28 is `1`.
@@ -787,15 +787,15 @@ This mapping is the one rule for plain JSON. The `json` Library follows it, and 
 
 `formatDate` and `parseDate` share one template language of named, numeric fields in dollar-brace placeholders ([ADR 0023](../docs/adr/0023-named-time-zones-come-from-a-standard-capability.md)).
 
-- **Tokens:** `${year}`, `${month}`, `${day}`, `${hour}`, `${minute}`, `${second}` and `${weekday}`, each with an optional width `:n`, and `${fraction:n}`, the first n digits of the nanoseconds, with n from 1 to 9. `$$` is a literal dollar. Other dollar signs and ordinary braces are literal. Everything else is literal text.
+- **Tokens:** `${year}`, `${month}`, `${day}`, `${hour}`, `${minute}`, `${second}` and `${weekday}`, each with an optional width `:n`, and `${fraction:n}`, the first n digits of the microseconds, with n from 1 to 6. `$$` is a literal dollar. Other dollar signs and ordinary braces are literal. Everything else is literal text.
 - **All numeric:** there are no names, no 12-hour clock and no AM/PM, which are Locale concerns. Month and day names come from the `locale` Capability.
 - **A valid template** holds `${year}`, `${month}` and `${day}`. A time token needs `${hour}` and `${minute}`. Each token appears at most once. Any other token, a missing width on `${fraction}` or an unclosed `${` is invalid. An invalid template raises `out of domain`, with `value` the template.
 - **`formatDate(d, template)`:**
   - `d` is a Civil Date, so an Instant goes through `toCivil` or the `calendar` Capability first. A template with time tokens given a date-only value raises `out of domain`, with `value` the date.
-  - Digits are ASCII. `:n` pads with zeros to n digits and never truncates. `${fraction:n}` truncates the nanoseconds to n digits.
+  - Digits are ASCII. `:n` pads with zeros to n digits and never truncates. `${fraction:n}` truncates the microseconds to n digits.
 - **`parseDate(t, template)`:**
   - The whole text must match. Literal text matches exactly. A token with a width takes exactly that many ASCII digits, and one without takes the longest run of one or more.
-  - Seconds and nanoseconds default to 0. The result is a date-only value unless the template has time tokens.
+  - Seconds and microseconds default to 0. The result is a date-only value unless the template has time tokens.
   - A mismatch, or a `${weekday}` that disagrees with the date, raises `can't convert`, with `{value: t, to: "civil date", format: template, offset}` and `offset` the position of the first Character that doesn't fit, or of the weekday's digit.
   - A field that matches but is outside its range raises `out of range`, as `makeDate` does.
 

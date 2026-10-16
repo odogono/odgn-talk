@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 7;
+pub const format_version: u32 = 8;
 
 pub const Error = error{
     InvalidSave,
@@ -423,12 +423,12 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
     };
 }
 
-/// A deadline in nanoseconds: none, or an Instant the Core can show.
+/// A deadline in microseconds: none, or an Instant the Core can show.
 fn deadline(i: *In) Error!i128 {
     const ns = try i.signed();
     if (ns == std.math.maxInt(i128)) return ns;
-    const seconds = std.math.cast(i64, @divFloor(ns, std.time.ns_per_s)) orelse return error.InvalidSave;
-    const at: model.dates.Instant = .{ .seconds = seconds, .nanos = @intCast(@mod(ns, std.time.ns_per_s)) };
+    const seconds = std.math.cast(i64, @divFloor(ns, std.time.us_per_s)) orelse return error.InvalidSave;
+    const at: model.dates.Instant = .{ .seconds = seconds, .micros = @intCast(@mod(ns, std.time.us_per_s)) };
     model.dates.validateInstant(at) catch return error.InvalidSave;
     return ns;
 }
@@ -927,7 +927,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.bytes.appendSlice(gpa, &print);
     try o.int(g.saves);
     try o.signed(g.clock.seconds);
-    try o.int(@intCast(g.clock.nanos));
+    try o.int(@intCast(g.clock.micros));
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
     try o.int(g.timers);
@@ -2183,9 +2183,9 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     i.pos += 32;
     g.saves = try i.int();
     const seconds = try i.signed();
-    const nanos = try i.int();
-    if (nanos >= std.time.ns_per_s) return error.InvalidSave;
-    g.clock = .{ .seconds = std.math.cast(i64, seconds) orelse return error.InvalidSave, .nanos = @intCast(nanos) };
+    const micros = try i.int();
+    if (micros >= std.time.us_per_s) return error.InvalidSave;
+    g.clock = .{ .seconds = std.math.cast(i64, seconds) orelse return error.InvalidSave, .micros = @intCast(micros) };
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
     g.timers = try i.int();
@@ -2716,7 +2716,7 @@ fn busyGroup(gpa: Allocator) !Group {
     _ = try g.deliver("a", "go", &args, false);
     _ = try g.deliver("a", "nap", &.{}, false);
     _ = try g.deliver("a", "watch", &.{}, false);
-    try g.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    try g.pump(.{ .seconds = 1790000000, .micros = 0 });
     _ = try g.deliver("a", "nap", &.{}, false);
     return g;
 }
@@ -2750,7 +2750,7 @@ test "a variables-only restore keeps Script Variables and discards the rest" {
     try testing.expectEqual(@as(usize, 1), result.dropped.len);
     for (restored.scripts.items) |x| try testing.expectEqual(@as(usize, 0), x.live.items.len);
     try testing.expectEqual(@as(usize, 0), restored.pending.items.len);
-    try restored.pump(.{ .seconds = 1790000010, .nanos = 0 });
+    try restored.pump(.{ .seconds = 1790000010, .micros = 0 });
 }
 
 test "a save from language 1.0-rc.2 is a mismatch, refused or restored variables-only" {
@@ -2794,8 +2794,8 @@ test "a save restores to the same save, and a restored Group goes on" {
     defer gpa.free(again);
     try testing.expectEqualSlices(u8, first, again);
     // It runs on, each Run where it was.
-    try restored.pump(.{ .seconds = 1790000010, .nanos = 0 });
-    try g.pump(.{ .seconds = 1790000010, .nanos = 0 });
+    try restored.pump(.{ .seconds = 1790000010, .micros = 0 });
+    try g.pump(.{ .seconds = 1790000010, .micros = 0 });
     const x = try save(&g, gpa, print);
     defer gpa.free(x);
     const y = try save(&restored, gpa, print);
@@ -2826,7 +2826,7 @@ test "Map updates retain insertion order and originals across restore and Segmen
     ;
     try testing.expect(try group.load("s", source, .{ .limits = .{ .fuel_per_run = 10_000 } }) == .loaded);
     _ = try group.deliver("s", "edit", &.{}, false);
-    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    try group.pump(.{ .seconds = 1790000000, .micros = 0 });
     const saved = try save(&group, gpa, try group.groupFingerprint());
     defer gpa.free(saved);
     var restored: Group = .init(gpa, null);
@@ -2837,7 +2837,7 @@ test "Map updates retain insertion order and originals across restore and Segmen
     const original = try display.parse(gpa, "{\"é\": 1, tail: 2}", .{});
     defer original.release();
     for ([_]*Group{ &group, &restored }) |g| {
-        try g.pump(.{ .seconds = 1790000001, .nanos = 0 });
+        try g.pump(.{ .seconds = 1790000001, .micros = 0 });
         const script = g.script("s").?;
         const values = script.variables[0].retain();
         defer values.release();
@@ -2849,7 +2849,7 @@ test "Map updates retain insertion order and originals across restore and Segmen
         try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(3), values.get("é").?.data.number));
         try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(4), values.get("tail").?.data.number));
         _ = try g.deliver("s", "fault", &.{}, false);
-        try g.pump(.{ .seconds = 1790000002, .nanos = 0 });
+        try g.pump(.{ .seconds = 1790000002, .micros = 0 });
         try testing.expect(try values.equal(script.variables[0]));
     }
 }
@@ -2977,7 +2977,7 @@ fn richGroup(gpa: Allocator) !Group {
     }
     _ = try g.deliver("a", "spin", &.{}, false);
     // A Fuel cap that stops `spin` in the middle of its loop.
-    try g.pumpWith(.{ .seconds = 1790000000, .nanos = 0 }, 0, 140);
+    try g.pumpWith(.{ .seconds = 1790000000, .micros = 0 }, 0, 140);
     return g;
 }
 
@@ -2993,8 +2993,8 @@ fn hostile(gpa: Allocator, bad: []u8) !void {
         result.deinit(gpa);
         if (outcome == .mismatch) continue;
         _ = restored.deliver("a", "spin", &.{}, false) catch {};
-        restored.pump(.{ .seconds = 1790000001, .nanos = 0 }) catch {};
-        restored.pump(.{ .seconds = 1790000020, .nanos = 0 }) catch {};
+        restored.pump(.{ .seconds = 1790000001, .micros = 0 }) catch {};
+        restored.pump(.{ .seconds = 1790000020, .micros = 0 }) catch {};
     }
 }
 
@@ -3081,7 +3081,7 @@ test "shared Map blocks save as ordered values and restore across rollback" {
     ;
     try testing.expect(try group.load("s", source, .{ .limits = .{ .fuel_per_run = 10_000 } }) == .loaded);
     _ = try group.deliver("s", "edit", &.{}, false);
-    try group.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    try group.pump(.{ .seconds = 1790000000, .micros = 0 });
     const saved = try save(&group, gpa, try group.groupFingerprint());
     defer gpa.free(saved);
     var restored: Group = .init(gpa, null);
@@ -3093,7 +3093,7 @@ test "shared Map blocks save as ordered values and restore across rollback" {
     defer gpa.free(saved_again);
     try testing.expectEqualSlices(u8, saved, saved_again);
     for ([_]*Group{ &group, &restored }) |g| {
-        try g.pump(.{ .seconds = 1790000001, .nanos = 0 });
+        try g.pump(.{ .seconds = 1790000001, .micros = 0 });
         const script = g.script("s").?;
         const values = script.variables[0].retain();
         defer values.release();
@@ -3103,7 +3103,7 @@ test "shared Map blocks save as ordered values and restore across rollback" {
         try testing.expectEqualStrings("self", values.data.map.at(65).key);
         try testing.expectEqual(std.math.Order.eq, model.Decimal.order(model.Decimal.fromInt(99), values.get("32").?.data.number));
         _ = try g.deliver("s", "fault", &.{}, false);
-        try g.pump(.{ .seconds = 1790000002, .nanos = 0 });
+        try g.pump(.{ .seconds = 1790000002, .micros = 0 });
         try testing.expect(try values.equal(script.variables[0]));
     }
 }

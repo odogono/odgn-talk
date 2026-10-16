@@ -383,7 +383,7 @@ func (b *zigGroup) ready() {
 }
 
 func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) {
-	fields := map[string]any{"now": now.Round(0).UTC().Format(time.RFC3339Nano), "fuelSlice": options.FuelSlice, "fuelCap": options.FuelCap}
+	fields := map[string]any{"now": now.Round(0).UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano), "fuelSlice": options.FuelSlice, "fuelCap": options.FuelCap}
 	if err := b.beginWorker("pump", fields); err != nil {
 		return PumpResult{}, err
 	}

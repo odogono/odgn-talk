@@ -71,7 +71,7 @@ export class Upstream {
   }
 }
 
-const SECOND = 1_000_000_000n;
+const SECOND = 1_000_000n;
 const turn = () => new Promise(resolve => setTimeout(resolve, 0));
 
 /**

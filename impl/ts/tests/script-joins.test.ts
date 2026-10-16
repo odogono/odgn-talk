@@ -77,7 +77,7 @@ for (const ending of ['end', 'end wait']) {
         a.deliver({ name: 'go' });
         let result = g.pump(clock);
         if (failure === 'timeout') {
-          result = g.pump(clock + 1_000_000_000n);
+          result = g.pump(clock + 1_000_000n);
         }
         const end = operationalReports(result.reports).find(
           r => r.kind === 'run end' && r.script === 'a',

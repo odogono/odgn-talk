@@ -407,7 +407,7 @@ export class LiveDebugger {
   snapshot(): DebugSnapshot {
     return this.controller.snapshot();
   }
-  /** Epoch nanoseconds supplied by the Host, less cumulative paused wall time. */
+  /** Epoch microseconds supplied by the Host, less cumulative paused wall time. */
   clock(): bigint {
     const reading =
       this.environment.now() -

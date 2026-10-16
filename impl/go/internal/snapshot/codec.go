@@ -582,6 +582,17 @@ func (c Codec) validate(v reflect.Value) error {
 				return err
 			}
 		}
+		// Microsecond resolution (ADR 0091): a nanosecond field is refused.
+		if x.Kind == value.Instant {
+			if _, err := value.NewInstant(x.Seconds(), x.Micros()); err != nil {
+				return err
+			}
+		}
+		if x.Kind == value.CivilDate {
+			if _, err := value.NewCivil(x.Date()); err != nil {
+				return err
+			}
+		}
 		if x.Kind == value.Quantity && len(x.Unit().Slots) == 0 {
 			return fmt.Errorf("dimensionless Quantity")
 		}
@@ -614,7 +625,7 @@ func activeFields(f value.Fields) bool {
 		f.Date = value.DateFields{}
 	case value.Instant:
 		f.Seconds = 0
-		f.Nanos = 0
+		f.Micros = 0
 	case value.Object:
 		f.Object = nil
 	case value.Function:
@@ -630,5 +641,5 @@ func activeFields(f value.Fields) bool {
 	}
 	return f.Reader == nil && f.Replacement == nil && f.Iterator == nil && f.Deadline == nil &&
 		f.Number == (decimal.Number{}) && f.Text == "" && f.Bytes == nil && f.Items == nil && f.Entries == nil &&
-		f.Unit.Slots == nil && f.Date == (value.DateFields{}) && f.Seconds == 0 && f.Nanos == 0 && f.Object == nil && f.Function == nil
+		f.Unit.Slots == nil && f.Date == (value.DateFields{}) && f.Seconds == 0 && f.Micros == 0 && f.Object == nil && f.Function == nil
 }

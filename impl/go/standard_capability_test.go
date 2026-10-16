@@ -68,7 +68,7 @@ func TestClockFactoryUsesPumpReadingAndCopiesCost(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 2, 10, 0, 0, 123456789, time.FixedZone("zone", 3600))
-	for _, reading := range []time.Time{now, now, now.Add(time.Nanosecond)} {
+	for _, reading := range []time.Time{now, now, now.Add(time.Microsecond)} {
 		_, p, err := s.Request(context.Background(), Message{Name: "go"})
 		if err != nil {
 			t.Fatal(err)
@@ -82,7 +82,7 @@ func TestClockFactoryUsesPumpReadingAndCopiesCost(t *testing.T) {
 			t.Fatalf("%v, %v; %+v", value, failure, result)
 		}
 	}
-	if !strings.Contains(strings.Join(trace, "\n"), "op=stamp.now args=[] result=2026-10-02T09:00:00.123456789Z") {
+	if !strings.Contains(strings.Join(trace, "\n"), "op=stamp.now args=[] result=2026-10-02T09:00:00.123456Z") {
 		t.Fatal(trace)
 	}
 	if _, err := g.Load(LoadOptions{Name: "missing", Source: "on go\n ask clock to now\nend go\n"}); err == nil {

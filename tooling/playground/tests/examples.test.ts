@@ -15,7 +15,7 @@ const run = (example: Example) => {
   let now = parseInstant('2026-10-09T09:00:00Z');
   const session = new PlaygroundSession({
     now: () => now,
-    monotonic: () => Number(now / 1_000_000n),
+    monotonic: () => Number(now / 1000n),
     builtIns: { calendar, locale },
   });
   const setupLines = [':grant canvas canvas', ...(example.setup ?? [])].flatMap(

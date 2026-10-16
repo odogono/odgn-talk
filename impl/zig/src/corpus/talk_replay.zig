@@ -1686,14 +1686,14 @@ pub const Host = struct {
             try check(c.talk_parse_display(clock.ptr, clock.len, &instant));
             defer c.talk_value_release(instant);
             var seconds: i64 = 0;
-            var nanos: i32 = 0;
-            if (!c.talk_value_as_instant(instant, &seconds, &nanos)) return error.BadClock;
+            var micros: i32 = 0;
+            if (!c.talk_value_as_instant(instant, &seconds, &micros)) return error.BadClock;
             const pump_options: c.talk_pump_options = .{ .fuel_slice = if (field(input, "fuel-slice")) |x| try std.fmt.parseInt(i64, x, 10) else 0, .fuel_cap = if (field(input, "fuel-cap")) |x| try std.fmt.parseInt(i64, x, 10) else 0 };
             // A refusal is in the Trace as a `refused` record.
             var made: Crossing = .{ .group = h.group, .scripts = scripts, .store = store, .inputs = inside };
             crossing = &made;
             var pumped: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
-            const code = c.talk_pump(h.group, seconds, nanos, &pump_options, &pumped);
+            const code = c.talk_pump(h.group, seconds, micros, &pump_options, &pumped);
             crossing = null;
             h.held.keepReports(pumped.reports);
             c.talk_reports_release(pumped.reports);

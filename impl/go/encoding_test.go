@@ -10,12 +10,12 @@ import (
 func TestValueEncodingRoundTrips(t *testing.T) {
 	r, _ := Range(Int(3), Int(7))
 	d, _ := ParseCivilDate("2026-09-27T14:30:00.5")
-	i, _ := Instant(-1, 999999999)
+	i, _ := Instant(-1, 999999)
 	m, _ := Map(KV("$ref", Int(1)), KV("é", List(Nothing, Bool(true))))
 	for _, tt := range []struct {
 		v    Value
 		want string
-	}{{Nothing, `null`}, {Bool(true), `true`}, {Int(3), `3`}, {dec(t, "3.0"), `{"$dec":"3.0"}`}, {dec(t, "9007199254740992"), `{"$dec":"9007199254740992"}`}, {text(t, "\"\\\n\t\x00<>\u2028"), `"\"\\\u000a\u0009\u0000<>` + "\u2028" + `"`}, {quantity(t, "2.50", "GBP"), `{"$quantity":["2.50","GBP"]}`}, {Bytes([]byte{13, 10}), `{"$bytes":"DQo="}`}, {r, `{"$range":[3,7]}`}, {d, `{"$date":"2026-09-27T14:30:00.5"}`}, {i, `{"$instant":"1969-12-31T23:59:59.999999999Z"}`}, {m, `{"$map":[["$ref",1],["é",[null,true]]]}`}} {
+	}{{Nothing, `null`}, {Bool(true), `true`}, {Int(3), `3`}, {dec(t, "3.0"), `{"$dec":"3.0"}`}, {dec(t, "9007199254740992"), `{"$dec":"9007199254740992"}`}, {text(t, "\"\\\n\t\x00<>\u2028"), `"\"\\\u000a\u0009\u0000<>` + "\u2028" + `"`}, {quantity(t, "2.50", "GBP"), `{"$quantity":["2.50","GBP"]}`}, {Bytes([]byte{13, 10}), `{"$bytes":"DQo="}`}, {r, `{"$range":[3,7]}`}, {d, `{"$date":"2026-09-27T14:30:00.5"}`}, {i, `{"$instant":"1969-12-31T23:59:59.999999Z"}`}, {m, `{"$map":[["$ref",1],["é",[null,true]]]}`}} {
 		b, e := EncodeValue(tt.v)
 		if e != nil || string(b) != tt.want {
 			t.Fatalf("%s: got %s %v; want %s", tt.v, b, e, tt.want)
@@ -41,6 +41,7 @@ func TestDecodeValueRefusesNoncanonicalForms(t *testing.T) {
 		`{"$instant":"1970-01-01T01:00:00+01:00"}`,
 		`{"$instant":"1970-01-01T00:00:00.500Z"}`,
 		`{"$instant":"1970-01-01T00:00:00.0Z"}`,
+		`{"$instant":"1970-01-01T00:00:00.1234567Z"}`, `{"$date":"2026-09-27T14:30:00.1234567"}`,
 		`{"$date":"2026-09-27T00:00:00.0"}`,
 		`{"$date":"2026-09-27T14:30:00.500"}`, `{"$date":" 2026-09-27 "}`,
 		`{"$map":[["a",1]]}`, `{"$map":[]}`,

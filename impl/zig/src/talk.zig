@@ -97,9 +97,9 @@ export fn talk_parse_civil_date(s: ?[*]const u8, len: usize, out: *?*Value) Host
     const f = model.dates.parseCivil(bytes(s, len) catch return .invalid_value) catch return .invalid_value;
     return result(out, model.scalar(allocator, .{ .civil_date = f }));
 }
-export fn talk_instant(seconds: i64, nanos: i32, out: *?*Value) HostErrorCode {
+export fn talk_instant(seconds: i64, micros: i32, out: *?*Value) HostErrorCode {
     out.* = null;
-    const t = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
+    const t = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(t) catch return .invalid_value;
     return result(out, model.scalar(allocator, .{ .instant = t }));
 }
@@ -109,7 +109,8 @@ pub const Timespec = extern struct { sec: i64, nsec: c_long };
 export fn talk_instant_from_time(t: *const Timespec, out: *?*Value) HostErrorCode {
     out.* = null;
     if (t.nsec < 0 or t.nsec >= std.time.ns_per_s) return .invalid_value;
-    return talk_instant(t.sec, @intCast(t.nsec), out);
+    // Truncated toward the past, so a reading is never later than its time.
+    return talk_instant(t.sec, @intCast(@divTrunc(t.nsec, std.time.ns_per_us)), out);
 }
 export fn talk_bytes(s: ?[*]const u8, len: usize, out: *?*Value) HostErrorCode {
     out.* = null;
@@ -164,10 +165,10 @@ export fn talk_value_as_civil_date(v: *const Value, out: *model.dates.Fields) bo
     out.* = v.data.civil_date;
     return true;
 }
-export fn talk_value_as_instant(v: *const Value, seconds: *i64, nanos: *i32) bool {
+export fn talk_value_as_instant(v: *const Value, seconds: *i64, micros: *i32) bool {
     if (v.data != .instant) return false;
     seconds.* = v.data.instant.seconds;
-    nanos.* = v.data.instant.nanos;
+    micros.* = v.data.instant.micros;
     return true;
 }
 export fn talk_value_as_bytes(v: *const Value, out: *Buffer) HostErrorCode {
@@ -496,7 +497,7 @@ pub const PumpResult = extern struct {
     state: GroupState,
     has_next_deadline: bool = false,
     next_deadline_seconds: i64 = 0,
-    next_deadline_nanos: i32 = 0,
+    next_deadline_micros: i32 = 0,
     fuel_used: i64,
     reports: ?*Reports = null,
 };
@@ -1333,10 +1334,10 @@ export fn talk_pending_done(p: *const Pending) bool {
     return p.group.group.results.contains(p.id);
 }
 
-export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
     g.group.checkWorker() catch |err| {
         const options = if (o) |x| x.* else PumpOptions{ .fuel_slice = 0, .fuel_cap = 0 };
-        const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
+        const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
         model.dates.validateInstant(clock) catch return status(err);
         g.group.refuseWorker(.{ .pump = .{ .now = clock, .slice = options.fuel_slice, .cap = options.fuel_cap } });
         g.flush();
@@ -1344,7 +1345,7 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     };
     if (g.memory.refused) return .out_of_memory;
     defer g.flush();
-    const clock = model.dates.Instant{ .seconds = seconds, .nanos = nanos };
+    const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(clock) catch return .invalid_value;
     const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
@@ -1360,8 +1361,8 @@ export fn talk_pump(g: *Group, seconds: i64, nanos: i32, o: ?*const PumpOptions,
     r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel), .reports = reports };
     if (g.group.next()) |deadline| {
         r.has_next_deadline = true;
-        r.next_deadline_seconds = @intCast(@divFloor(deadline, std.time.ns_per_s));
-        r.next_deadline_nanos = @intCast(@mod(deadline, std.time.ns_per_s));
+        r.next_deadline_seconds = @intCast(@divFloor(deadline, std.time.us_per_s));
+        r.next_deadline_micros = @intCast(@mod(deadline, std.time.us_per_s));
     }
     return .ok;
 }
@@ -1842,7 +1843,7 @@ pub const RunView = extern struct {
     wait_len: usize = 0,
     has_until: bool = false,
     until_seconds: i64 = 0,
-    until_nanos: i32 = 0,
+    until_micros: i32 = 0,
     calls: [*]const Id = &.{},
     calls_len: usize = 0,
 };
@@ -1971,8 +1972,8 @@ fn runView(a: std.mem.Allocator, r: *const machine.Run) !RunView {
         // call's MaxWait.
         if (p.deadline != std.math.maxInt(i128) and ((p.call == null and p.id.len == 0) or p.block)) {
             out.has_until = true;
-            out.until_seconds = @intCast(@divFloor(p.deadline, std.time.ns_per_s));
-            out.until_nanos = @intCast(@mod(p.deadline, std.time.ns_per_s));
+            out.until_seconds = @intCast(@divFloor(p.deadline, std.time.us_per_s));
+            out.until_micros = @intCast(@mod(p.deadline, std.time.us_per_s));
         }
         if (p.call) |c| try calls.append(a, .{ .data = c.id.ptr, .len = c.id.len }) else if (p.id.len > 0) try calls.append(a, .{ .data = p.id.ptr, .len = p.id.len });
     }
@@ -2165,7 +2166,7 @@ test "a Group loads, pumps and inspects through the exports" {
     try std.testing.expectEqualStrings("41!", result_value.?.data.text);
 }
 
-test "ordinary C Pumps reject backwards seconds and nanoseconds" {
+test "ordinary C Pumps reject backwards seconds and microseconds" {
     const core = talk_new().?;
     defer talk_core_release(core);
     var group: ?*Group = null;
@@ -2564,7 +2565,7 @@ pub const GrantContext = extern struct {
     grant_name_len: usize,
     binding: ?*anyopaque,
     now_seconds: i64,
-    now_nanos: i32,
+    now_micros: i32,
     reason: ReleaseReason,
 };
 pub const ReleaseHook = *const fn (context: ?*anyopaque, g: *const GrantContext) callconv(.c) void;
@@ -2583,7 +2584,7 @@ fn releaseHook(context: ?*anyopaque, g: *const caps.GrantContext) void {
         .grant_name_len = g.grant.len,
         .binding = g.binding,
         .now_seconds = g.now.seconds,
-        .now_nanos = g.now.nanos,
+        .now_micros = g.now.micros,
         .reason = switch (g.reason) {
             inline else => |x| @field(ReleaseReason, @tagName(x)),
         },
@@ -2624,7 +2625,7 @@ pub const SegmentContext = extern struct {
     segment_id_len: usize,
     binding: ?*anyopaque,
     now_seconds: i64,
-    now_nanos: i32,
+    now_micros: i32,
     grants: [*]const caps.SegmentGrant,
     grants_len: usize,
 };
@@ -2668,7 +2669,7 @@ fn segmentHook(context: ?*anyopaque, phase: caps.Phase, s: *const caps.SegmentCo
         .segment_id_len = s.segment.len,
         .binding = s.binding,
         .now_seconds = s.now.seconds,
-        .now_nanos = s.now.nanos,
+        .now_micros = s.now.micros,
         .grants = s.grants.ptr,
         .grants_len = s.grants.len,
     };
@@ -2817,9 +2818,9 @@ export fn talk_call_grant_name(c: *const Call, s: *[*]const u8, len: *usize) voi
 export fn talk_call_binding(c: *const Call) ?*anyopaque {
     return c.binding;
 }
-export fn talk_call_now(c: *const Call, seconds: *i64, nanos: *i32) void {
+export fn talk_call_now(c: *const Call, seconds: *i64, micros: *i32) void {
     seconds.* = c.now.seconds;
-    nanos.* = c.now.nanos;
+    micros.* = c.now.micros;
 }
 export fn talk_call_run_id(c: *const Call, s: *[*]const u8, len: *usize) void {
     s.* = c.run.ptr;
@@ -3792,7 +3793,7 @@ test "the shared Run accounting fixtures" {
         for (pumps, expected, 0..) |clock, want, i| {
             const ns = clock.integer;
             var pumped: PumpResult = .{ .state = .idle, .fuel_used = 0 };
-            try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, @divFloor(ns, std.time.ns_per_s), @intCast(@mod(ns, std.time.ns_per_s)), null, &pumped));
+            try std.testing.expectEqual(HostErrorCode.ok, talk_pump(group.?, @divFloor(ns, std.time.ns_per_s), @intCast(@divFloor(@mod(ns, std.time.ns_per_s), std.time.ns_per_us)), null, &pumped));
             defer talk_reports_release(pumped.reports);
             var items: [*]const Report = undefined;
             const n = talk_reports_items(pumped.reports, &items);

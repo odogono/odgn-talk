@@ -41,7 +41,7 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 		}
 		t := civilTime(v)
 		if name == "toCivil" {
-			t = time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
+			t = v.Time()
 		}
 		d := time.Duration(minutes.Num().Int64()) * time.Minute
 		if name == "toInstant" {
@@ -52,10 +52,10 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 			return value.Value{}, yearError(big.NewInt(int64(t.Year())))
 		}
 		if name == "toInstant" {
-			out, _ := value.NewInstant(t.Unix(), int32(t.Nanosecond()))
+			out, _ := value.InstantFromTime(t)
 			return out, nil
 		}
-		out, _ := value.NewCivil(value.DateFields{Year: t.Year(), Month: int(t.Month()), Day: t.Day(), HasTime: true, Hour: t.Hour(), Minute: t.Minute(), Second: t.Second(), Nanosecond: t.Nanosecond()})
+		out, _ := value.NewCivil(value.DateFields{Year: t.Year(), Month: int(t.Month()), Day: t.Day(), HasTime: true, Hour: t.Hour(), Minute: t.Minute(), Second: t.Second(), Microsecond: t.Nanosecond() / 1000})
 		return out, nil
 	}
 	if v.Kind != value.CivilDate {
@@ -73,7 +73,7 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 		n = f.Day
 	case "hasTime":
 		return boolean(f.HasTime), nil
-	case "hour", "minute", "second", "nanosecond":
+	case "hour", "minute", "second", "microsecond":
 		if !f.HasTime {
 			return domain(v)
 		}
@@ -84,8 +84,8 @@ func builtinDate(name string, args []value.Value) (value.Value, *value.Value) {
 			n = f.Minute
 		case "second":
 			n = f.Second
-		case "nanosecond":
-			n = f.Nanosecond
+		case "microsecond":
+			n = f.Microsecond
 		}
 	case "weekday":
 		n = (int(t.Weekday())+6)%7 + 1

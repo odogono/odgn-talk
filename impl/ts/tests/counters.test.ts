@@ -159,8 +159,8 @@ describe('Script counters', () => {
     g.pump(0n);
     const { group: copy } = restore(g.save(), restoreOptions);
     expect(copy.script('s')!.counters()).toEqual(s.counters());
-    g.pump(1_000_000_000n);
-    copy.pump(1_000_000_000n);
+    g.pump(1_000_000n);
+    copy.pump(1_000_000n);
     expect(copy.script('s')!.counters()).toEqual(s.counters());
     expect(s.counters()).toMatchObject({ runs: 2, faults: 1 });
   });
@@ -229,8 +229,8 @@ describe('Script counters', () => {
       'suspended',
       'parked',
     ]);
-    g.pump(1_000_000_000n);
-    g.pump(2_000_000_000n);
+    g.pump(1_000_000n);
+    g.pump(2_000_000n);
     expect(s.counters()).toMatchObject({
       ...totals(trace),
       runs: 2,
@@ -389,9 +389,7 @@ describe('Script counters', () => {
     groups[0]!.script('s')!.counters();
     expect(groups[0]!.fingerprint()).toEqual(groups[1]!.fingerprint());
     expect(groups[0]!.save()).toEqual(groups[1]!.save());
-    expect(groups[0]!.pump(1_000_000_000n)).toEqual(
-      groups[1]!.pump(1_000_000_000n),
-    );
+    expect(groups[0]!.pump(1_000_000n)).toEqual(groups[1]!.pump(1_000_000n));
   });
 
   test('Counter reads are worker calls and reject reentry from an Operation', () => {

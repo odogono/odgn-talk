@@ -16,18 +16,18 @@ import {
   type Value,
 } from '@odgn/northtalk';
 
-const NS_PER_MS = 1_000_000n;
-const NS_PER_S = 1_000_000_000n;
-const DAY_NS = 86_400n * NS_PER_S;
+const US_PER_MS = 1000n;
+const US_PER_S = 1_000_000n;
+const DAY_US = 86_400n * US_PER_S;
 
 // --------------------------------------------------------------- calendar
 
 type Wall = {
   day: number;
   hour: number;
+  microsecond: number;
   minute: number;
   month: number;
-  nanosecond: number;
   second: number;
   year: number;
 };
@@ -66,8 +66,8 @@ const floorDiv = (a: bigint, b: bigint) => {
 };
 
 // The wall clock in the zone at an Instant.
-const wallAt = (ns: bigint, zone: string): Wall => {
-  const ms = floorDiv(ns, NS_PER_MS);
+const wallAt = (us: bigint, zone: string): Wall => {
+  const ms = floorDiv(us, US_PER_MS);
   const parts = Object.fromEntries(
     formatIn(zone)
       .formatToParts(new Date(Number(ms)))
@@ -80,21 +80,21 @@ const wallAt = (ns: bigint, zone: string): Wall => {
     hour: Number(parts.hour),
     minute: Number(parts.minute),
     second: Number(parts.second),
-    nanosecond: Number(ns - floorDiv(ns, NS_PER_S) * NS_PER_S),
+    microsecond: Number(us - floorDiv(us, US_PER_S) * US_PER_S),
   };
 };
 
-// A wall clock read as if it were UTC, in epoch nanoseconds.
+// A wall clock read as if it were UTC, in epoch microseconds.
 const asUtc = (w: Wall): bigint => {
   const d = new Date(0);
   d.setUTCFullYear(w.year, w.month - 1, w.day);
   d.setUTCHours(w.hour, w.minute, w.second, 0);
-  return BigInt(d.getTime()) * NS_PER_MS + BigInt(w.nanosecond);
+  return BigInt(d.getTime()) * US_PER_MS + BigInt(w.microsecond);
 };
 
-// The zone's offset from UTC at an Instant, in whole nanoseconds.
-const offsetAt = (ns: bigint, zone: string): bigint =>
-  asUtc(wallAt(ns, zone)) - ns;
+// The zone's offset from UTC at an Instant, in whole microseconds.
+const offsetAt = (us: bigint, zone: string): bigint =>
+  asUtc(wallAt(us, zone)) - us;
 
 const civilValue = (w: Wall, dateOnly = false): Value =>
   civilDate(dateOnly ? { year: w.year, month: w.month, day: w.day } : { ...w });
@@ -106,7 +106,7 @@ const sameWall = (a: Wall, b: Wall) =>
   a.hour === b.hour &&
   a.minute === b.minute &&
   a.second === b.second &&
-  a.nanosecond === b.nanosecond;
+  a.microsecond === b.microsecond;
 
 // The IANA id of the zone in use: the call's, or the Grant's.
 const zoneOf = (call: { binding: string }, zone?: string) => {
@@ -121,8 +121,8 @@ export const calendar: CalendarImpl = {
   toCivil: (call, i, zone) =>
     civilValue(wallAt(i.asInstant()!, zoneOf(call, zone))),
   offset: (call, i, zone) => {
-    const ns = offsetAt(i.asInstant()!, zoneOf(call, zone));
-    return quantity(num(Number(ns / NS_PER_S)), 's');
+    const us = offsetAt(i.asInstant()!, zoneOf(call, zone));
+    return quantity(num(Number(us / US_PER_S)), 's');
   },
   // The Instants whose wall clock reads `c`: one, two in an overlap, or
   // none in a gap, which `compatible` and `later` move forward past.
@@ -130,8 +130,8 @@ export const calendar: CalendarImpl = {
     const id = zoneOf(call, zone);
     const fields = c.asCivilDate() as Wall;
     const local = asUtc(fields);
-    const before = offsetAt(local - DAY_NS, id);
-    const after = offsetAt(local + DAY_NS, id);
+    const before = offsetAt(local - DAY_US, id);
+    const after = offsetAt(local + DAY_US, id);
     const found = [...new Set([local - before, local - after])]
       .filter(t => sameWall(wallAt(t, id), fields))
       .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));

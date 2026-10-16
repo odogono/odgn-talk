@@ -305,6 +305,17 @@ func (c legacyCodec) decode(data any, v reflect.Value) error {
 					return err
 				}
 			}
+			// ADR 0091 adds microsecond range checks to both codecs.
+			if x.Kind == value.Instant {
+				if _, err := value.NewInstant(x.Seconds(), x.Micros()); err != nil {
+					return err
+				}
+			}
+			if x.Kind == value.CivilDate {
+				if _, err := value.NewCivil(x.Date()); err != nil {
+					return err
+				}
+			}
 			if x.Kind == value.Quantity && len(x.Unit().Slots) == 0 {
 				return fmt.Errorf("dimensionless Quantity")
 			}

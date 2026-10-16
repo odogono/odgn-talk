@@ -376,10 +376,10 @@ fn finalSigma(scalars: []const u21, at: usize) bool {
 
 // ---------------------------------------------------------------- dates
 
-const Field = enum { year, month, day, hour, minute, second, nanosecond, weekday, day_of_year, iso_week, iso_week_year, has_time };
+const Field = enum { year, month, day, hour, minute, second, microsecond, weekday, day_of_year, iso_week, iso_week_year, has_time };
 
 fn dateField(name: []const u8) ?Field {
-    const names = [_]struct { []const u8, Field }{ .{ "year", .year }, .{ "month", .month }, .{ "day", .day }, .{ "hour", .hour }, .{ "minute", .minute }, .{ "second", .second }, .{ "nanosecond", .nanosecond }, .{ "weekday", .weekday }, .{ "dayOfYear", .day_of_year }, .{ "isoWeek", .iso_week }, .{ "isoWeekYear", .iso_week_year }, .{ "hasTime", .has_time } };
+    const names = [_]struct { []const u8, Field }{ .{ "year", .year }, .{ "month", .month }, .{ "day", .day }, .{ "hour", .hour }, .{ "minute", .minute }, .{ "second", .second }, .{ "microsecond", .microsecond }, .{ "weekday", .weekday }, .{ "dayOfYear", .day_of_year }, .{ "isoWeek", .iso_week }, .{ "isoWeekYear", .iso_week_year }, .{ "hasTime", .has_time } };
     for (names) |n| if (std.mem.eql(u8, n[0], name)) return n[1];
     return null;
 }
@@ -426,7 +426,7 @@ fn dateValue(gpa: Allocator, name: []const u8, field: Field, d: *Value, raised: 
     if (d.data != .civil_date) return wrongKind(raised, gpa, "civil date", d);
     const f = d.data.civil_date;
     switch (field) {
-        .hour, .minute, .second, .nanosecond => if (!f.has_time) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, d),
+        .hour, .minute, .second, .microsecond => if (!f.has_time) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, d),
         else => {},
     }
     return switch (field) {
@@ -436,7 +436,7 @@ fn dateValue(gpa: Allocator, name: []const u8, field: Field, d: *Value, raised: 
         .hour => numberValue(gpa, f.hour),
         .minute => numberValue(gpa, f.minute),
         .second => numberValue(gpa, f.second),
-        .nanosecond => numberValue(gpa, f.nanosecond),
+        .microsecond => numberValue(gpa, f.microsecond),
         .weekday => numberValue(gpa, isoWeekday(f)),
         .day_of_year => numberValue(gpa, dayOfYear(f)),
         .iso_week => numberValue(gpa, isoWeek(f).week),
@@ -484,12 +484,12 @@ fn civilOrInstant(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value
     if (civil) {
         const t = x.data.instant;
         if (yearOf(t.seconds + offset) < 1 or yearOf(t.seconds + offset) > 9999) return outOfRange(gpa, t.seconds + offset, raised);
-        const f = model.dates.fields(.{ .seconds = t.seconds + offset, .nanos = t.nanos });
+        const f = model.dates.fields(.{ .seconds = t.seconds + offset, .micros = t.micros });
         return model.scalar(gpa, .{ .civil_date = f }) catch error.OutOfMemory;
     }
     const f = x.data.civil_date;
     if (!f.has_time) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, x);
-    const t: model.dates.Instant = .{ .seconds = model.dates.seconds(f) - offset, .nanos = f.nanosecond };
+    const t: model.dates.Instant = .{ .seconds = model.dates.seconds(f) - offset, .micros = f.microsecond };
     model.dates.validateInstant(t) catch return outOfRange(gpa, t.seconds, raised);
     return model.scalar(gpa, .{ .instant = t }) catch error.OutOfMemory;
 }

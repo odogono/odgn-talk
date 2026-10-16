@@ -243,7 +243,7 @@ pub const Value = struct {
             .list => |xs| if (xs.len != y.data.list.len) false else if (xs.len == 0) true else null,
             .map => |xs| if (xs.len != y.data.map.len) false else if (xs.len == 0) true else null,
             .range => null,
-            .instant => |t| t.seconds == y.data.instant.seconds and t.nanos == y.data.instant.nanos,
+            .instant => |t| t.seconds == y.data.instant.seconds and t.micros == y.data.instant.micros,
             .civil_date => |f| std.meta.eql(f, y.data.civil_date),
             .object => |o| o.identity == y.data.object.identity,
             .function => |f| if (f.identity != y.data.function.identity or !std.mem.eql(u8, f.home, y.data.function.home)) false else null,
@@ -384,13 +384,13 @@ pub const Comparer = struct {
                 .instant => |t| blk: {
                     const r = y.data.instant;
                     const o = std.math.order(t.seconds, r.seconds);
-                    break :blk if (o == .eq) std.math.order(t.nanos, r.nanos) else o;
+                    break :blk if (o == .eq) std.math.order(t.micros, r.micros) else o;
                 },
                 .civil_date => |f| blk: {
                     const r = y.data.civil_date;
                     if (f.has_time != r.has_time) return error.CantCompare;
                     const o = std.math.order(dates.seconds(f), dates.seconds(r));
-                    break :blk if (o == .eq) std.math.order(f.nanosecond, r.nanosecond) else o;
+                    break :blk if (o == .eq) std.math.order(f.microsecond, r.microsecond) else o;
                 },
                 else => error.CantCompare,
             };
@@ -1437,7 +1437,7 @@ test "equality never errors and ordering follows Value Semantics" {
         .{ "\"ab\"", "\"abc\"" },
         .{ "<<0x01, 0xFF>>", "<<0x02>>" },
         .{ "<<0x01>>", "<<0x01, 0x00>>" },
-        .{ "1969-12-31T23:59:59.999999999Z", "1970-01-01T00:00:00Z" },
+        .{ "1969-12-31T23:59:59.999999Z", "1970-01-01T00:00:00Z" },
         .{ "2026-09-26", "2026-09-27" },
         .{ "2026-09-27T14:30:00", "2026-09-27T14:30:00.5" },
         .{ "[1, \"b\"]", "[2, \"a\"]" },

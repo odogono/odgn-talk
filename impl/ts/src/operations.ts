@@ -51,14 +51,14 @@ import {
   addMonths,
   checkInstant,
   civilDays,
-  civilNs,
+  civilUs,
   civilOfDays,
-  civilOfNs,
+  civilOfUs,
   dayOfYear,
   DateRangeError,
   isoWeek,
-  NS_PER_DAY,
-  NS_PER_SECOND,
+  US_PER_DAY,
+  US_PER_SECOND,
   parseCivil,
   parseInstantText,
   weekday,
@@ -534,11 +534,11 @@ const orderBy = (comparer: Comparer, a: Value, b: Value): -1 | 0 | 1 => {
       const x = a.civilRef()!;
       const y = b.civilRef()!;
       // A date-only value and a date-time aren't ordered against each other.
-      if ((x.ns === null) !== (y.ns === null)) {
+      if ((x.us === null) !== (y.us === null)) {
         throw cantCompare(a, b);
       }
-      const p = civilNs(x);
-      const q = civilNs(y);
+      const p = civilUs(x);
+      const q = civilUs(y);
       return p === q ? 0 : p < q ? -1 : 1;
     }
     case 'list': {
@@ -735,21 +735,21 @@ const inRangeDate = (make: () => Value): Value => {
     throw yearOutOfRange(error);
   }
 };
-// An exact duration in whole nanoseconds, rounded half-even.
-const durationNs = (q: QuantityRef): bigint => {
-  const ns = roundTo(
+// An exact duration in whole microseconds, rounded half-even.
+const durationUs = (q: QuantityRef): bigint => {
+  const us = roundTo(
     multiply(inBase(q), {
       negative: false,
-      coefficient: NS_PER_SECOND,
+      coefficient: US_PER_SECOND,
       exponent: 0,
     }),
     0,
     'half even',
   );
-  return (ns.negative ? -1n : 1n) * ns.coefficient;
+  return (us.negative ? -1n : 1n) * us.coefficient;
 };
-/** `wait d`'s duration in nanoseconds; anything but an exact duration is `wrong kind`. */
-export const waitNs = (v: Value): bigint => {
+/** `wait d`'s duration in microseconds; anything but an exact duration is `wrong kind`. */
+export const waitUs = (v: Value): bigint => {
   const q = v.asQuantityRef();
   if (!q) {
     throw wrongKind('quantity', v);
@@ -762,14 +762,14 @@ export const waitNs = (v: Value): bigint => {
       ['value', v],
     ]);
   }
-  return durationNs(q);
+  return durationUs(q);
 };
-// A difference in `s`, with no more decimal places than it needs, at most nine.
-const secondsOf = (ns: bigint): Value => {
+// A difference in `s`, with no more decimal places than it needs, at most six.
+const secondsOf = (us: bigint): Value => {
   let d: Dec = {
-    negative: ns < 0n,
-    coefficient: ns < 0n ? -ns : ns,
-    exponent: -9,
+    negative: us < 0n,
+    coefficient: us < 0n ? -us : us,
+    exponent: -6,
   };
   while (d.exponent < 0 && d.coefficient % 10n === 0n) {
     d = { ...d, coefficient: d.coefficient / 10n, exponent: d.exponent + 1 };
@@ -798,23 +798,23 @@ const dateArithmetic = (op: string, a: Value, b: Value): Value => {
     if (
       op === 'add' ||
       a.kind !== b.kind ||
-      (c && (c.ns === null) !== (d!.ns === null))
+      (c && (c.us === null) !== (d!.us === null))
     ) {
       throw wrongKind(op === 'add' ? 'quantity' : a.kind, b);
     }
     if (!c) {
       return secondsOf(a.asInstant()! - b.asInstant()!);
     }
-    return c.ns === null
+    return c.us === null
       ? inUnit(decOf(civilDays(c) - civilDays(d!)), DAYS)
-      : secondsOf(civilNs(c) - civilNs(d!));
+      : secondsOf(civilUs(c) - civilUs(d!));
   }
   const q = b.asQuantityRef();
   if (!q) {
     throw wrongKind('quantity', b);
   }
   // The Unit the date needs, for `incompatible units`.
-  const needs = c?.ns === null ? DAYS : SECONDS;
+  const needs = c?.us === null ? DAYS : SECONDS;
   if (sameDimension(q.unit, MONTHS) && c) {
     const months = fromBase(inBase(q), MONTHS);
     if (!isInteger(months)) {
@@ -825,18 +825,18 @@ const dateArithmetic = (op: string, a: Value, b: Value): Value => {
   if (!sameDimension(q.unit, SECONDS)) {
     throw incompatible(needs, q.unit);
   }
-  const ns = sign * durationNs(q);
+  const us = sign * durationUs(q);
   if (!c) {
-    return inRangeDate(() => instantOf(checkInstant(a.asInstant()! + ns)));
+    return inRangeDate(() => instantOf(checkInstant(a.asInstant()! + us)));
   }
-  if (c.ns !== null) {
-    return inRangeDate(() => civilOf(civilOfNs(civilNs(c) + ns)));
+  if (c.us !== null) {
+    return inRangeDate(() => civilOf(civilOfUs(civilUs(c) + us)));
   }
-  if (ns % NS_PER_DAY !== 0n) {
+  if (us % US_PER_DAY !== 0n) {
     throw incompatible(DAYS, q.unit);
   }
   return inRangeDate(() =>
-    civilOf(civilOfDays(civilDays(c) + ns / NS_PER_DAY, null)),
+    civilOf(civilOfDays(civilDays(c) + us / US_PER_DAY, null)),
   );
 };
 
@@ -1973,7 +1973,7 @@ const dateField = (name: string, d: Value): Value => {
     throw wrongKind('civil date', d);
   }
   if (name === 'hasTime') {
-    return bool(c.ns !== null);
+    return bool(c.us !== null);
   }
   const date: Record<string, () => number> = {
     year: () => c.year,
@@ -1987,20 +1987,20 @@ const dateField = (name: string, d: Value): Value => {
   if (date[name]) {
     return integerValue(BigInt(date[name]()));
   }
-  if (c.ns === null) {
+  if (c.us === null) {
     throw outOfDomain(name, d);
   }
-  const seconds = c.ns / NS_PER_SECOND;
+  const seconds = c.us / US_PER_SECOND;
   const field: Record<string, bigint> = {
     hour: seconds / 3600n,
     minute: (seconds / 60n) % 60n,
     second: seconds % 60n,
-    nanosecond: c.ns % NS_PER_SECOND,
+    microsecond: c.us % US_PER_SECOND,
   };
   return integerValue(field[name]!);
 };
 // `offset` in `toCivil` and `toInstant`: an exact duration of whole minutes,
-// less than 24 hr in magnitude, as nanoseconds.
+// less than 24 hr in magnitude, as microseconds.
 const offsetOf = (name: string, v: Value): bigint => {
   const q = v.asQuantityRef();
   const seconds = q && sameDimension(q.unit, SECONDS) ? inBase(q) : undefined;
@@ -2013,7 +2013,7 @@ const offsetOf = (name: string, v: Value): bigint => {
   ) {
     throw outOfDomain(name, v);
   }
-  return whole * NS_PER_SECOND;
+  return whole * US_PER_SECOND;
 };
 
 // Chapter 7's correctly rounded number functions, on plain numbers, with
@@ -2255,7 +2255,7 @@ export const builtin = (
     case 'hour':
     case 'minute':
     case 'second':
-    case 'nanosecond':
+    case 'microsecond':
     case 'weekday':
     case 'dayOfYear':
     case 'isoWeek':
@@ -2268,7 +2268,7 @@ export const builtin = (
       }
       const offset = offsetOf(name, y!);
       return {
-        result: inRangeDate(() => civilOf(civilOfNs(x!.asInstant()! + offset))),
+        result: inRangeDate(() => civilOf(civilOfUs(x!.asInstant()! + offset))),
       };
     }
     case 'toInstant': {
@@ -2276,12 +2276,12 @@ export const builtin = (
       if (!c) {
         throw wrongKind('civil date', x!);
       }
-      if (c.ns === null) {
+      if (c.us === null) {
         throw outOfDomain(name, x!);
       }
       const offset = offsetOf(name, y!);
       return {
-        result: inRangeDate(() => instantOf(checkInstant(civilNs(c) - offset))),
+        result: inRangeDate(() => instantOf(checkInstant(civilUs(c) - offset))),
       };
     }
     case 'abs':
