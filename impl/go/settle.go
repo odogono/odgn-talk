@@ -13,7 +13,7 @@ import (
 // first Pump. The adopted Call answers into the restored Group.
 func (g *Group) Settle(id CallID, s Settlement) (*Call, error) {
 	if g.backend != nil {
-		return nil, backendUnsupported("Settle")
+		return g.backend.settle(id, s)
 	}
 	fields := map[string]string{}
 	count := 0

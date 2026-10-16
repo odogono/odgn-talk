@@ -345,6 +345,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runTriageBridgeCases(t)...)
 	observations = append(observations, runEffectBridgeCases(t)...)
 	observations = append(observations, runStandardBridgeCases(t)...)
+	observations = append(observations, runSaveBridgeCases(t)...)
 	return observations
 }
 func isReentrant(err error) bool {

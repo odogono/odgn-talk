@@ -121,6 +121,30 @@ Reports of the Runs it discarded, settles their futures, keeps the mailbox
 when asked, runs Grant release hooks with reason `reload` and restarts a
 stopped Script. Function Values made by the old code are stale afterwards.
 
+`Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
+guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
+Saves are opaque `zig/8` bytes; native Go saves remain per-Core and cannot be
+read by this backend. Restore compiles the supplied Libraries in its fresh
+guest, rebinds Grants and native Objects through the public callbacks, and
+returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and
+Adopt retain their queued semantics; adopted Calls own fresh Go contexts.
+Object and Function Values in arguments, pending Calls and Script state belong
+to the restored Group. Set `RestoreOptions.Name` for the new Group's name;
+the Zig save does not retain the old Host name.
+
+`restore-bindings-v1` lets resolution register new Grants before its answer,
+and returns the Script, Object and Call metadata the adapter needs. Private
+Capability handles select callbacks; public Capability names participate in
+Fingerprints and declaration matching, independently of registration order.
+Save passes through live-effect refusals, with a transport fixture covering
+`effects pending`; public scoped/Segment attachments remain the separate
+slice. Restored Call Segment ids are reconstructed from retained Run state
+without changing the save format. Original Call Clock retention across later
+Pumps remains [#1067](https://github.com/odogono/odgn-talk/issues/1067).
+Reissue Fuel faults inside Joins remain [#1068](https://github.com/odogono/odgn-talk/issues/1068),
+and uncaught lost-call error Data differs from native Go ([#1069](https://github.com/odogono/odgn-talk/issues/1069)).
+Save-record input-generating Trace sinks remain part of [#1051](https://github.com/odogono/odgn-talk/issues/1051).
+
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
 declared costs, MaxPending and optional error catalogues. Call identity,
@@ -160,8 +184,8 @@ implementation and coordinator identity stay in Go. Ordinary declarations with
 the same public name do not acquire factory checks or catalogue failures.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1`, `climb-v1`, `function-gone-v1` and
-`standard-refinements-v1`. Crossing Trace support publishes an Operation's call record and
+`crossing-trace-v1`, `climb-v1`, `function-gone-v1`,
+`standard-refinements-v1` and `restore-bindings-v1`. Crossing Trace support publishes an Operation's call record and
 held refusal records before crossing controls land, so a Trace sink can queue
 Stop at that boundary. Error replies publish their available refusal/diagnostic
 records before returning the error. Other Script-execution Trace records can
@@ -169,8 +193,8 @@ still arrive in batches; arbitrary per-record input-generating sinks remain a
 compatibility gate. Input admission during a non-yielding WASM export also
 remains open: serialized exports and paused-crossing tests do not establish it.
 
-Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result: Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
+Unsupported Capability attachments return an `experimental Zig backend` error.
+Two Object Kinds sharing a
 name in one Group, and a Kind first defined inside a Host callback, are refused.
 Shapes nested beyond 32 levels are also refused. These three declaration limits
 are deliberate experimental limits, retained by the maintainer's decision on

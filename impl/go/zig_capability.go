@@ -39,7 +39,7 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 		if !exists {
 			handle = fmt.Sprintf("go-capability-%d", len(b.definitions)+1)
 			ops, _ := zigDeclaration(def)
-			declaration := map[string]any{"name": handle, "ops": ops, "release": def.release != nil, "segmentLifecycle": zigSegmentBound(def)}
+			declaration := map[string]any{"name": def.name, "handle": handle, "ops": ops, "release": def.release != nil, "segmentLifecycle": zigSegmentBound(def)}
 			if len(def.checks) != 0 {
 				declaration["standard"] = def.name
 			}
@@ -201,6 +201,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	kind := zigText(need.Get("m"))
+	if kind == "resolve" {
+		return b.restoreBindings(need)
+	}
 	if kind == "prop" {
 		return b.property(need)
 	}

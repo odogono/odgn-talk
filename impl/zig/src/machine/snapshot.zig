@@ -2349,7 +2349,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             w.print("> restore from=s{d}", .{g.saves}) catch {};
             writeIds(w, "unbound", r.unbound.items);
             writeIds(w, "withheld", withheld.items);
-            w.print(" fingerprint={x}\nrefused code=\"save mismatch\"\n", .{saved_print}) catch {};
+            w.print(" fingerprint={x} mode=variables-only\nrefused code=\"save mismatch\"\n", .{saved_print}) catch {};
         }
         return .mismatch;
     }
@@ -2473,6 +2473,13 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const changed = try i.count();
     for (0..changed) |_| try g.changed_roots.put(a, try i.int(), {});
     if (i.pos != i.bytes.len) return error.InvalidSave;
+    // A pending call belongs to the Segment which established its wait.
+    // Suspended Runs have closed that Segment; a preempted open Join has
+    // not. Reconstruct its id from saved Run accounting, preserving zig/8.
+    for (g.pending.items) |p| if (p.call) |c| {
+        const segment = std.math.add(u32, p.run.segments, if (p.run.continuing) 1 else 0) catch return error.InvalidSave;
+        c.segment = try std.fmt.allocPrint(g.keep.allocator(), "{s}.s{d}", .{ p.run.id, segment });
+    };
     // Each call's Grant binding.
     for (calls) |c| {
         const s = g.script(c.script) orelse return error.InvalidSave;
