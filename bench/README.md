@@ -13,7 +13,7 @@ bun run bench [--filter <text>] [--only <runner,...>] [--count <n>] [--smoke] [-
 - **`--filter`** keeps the Benchmarks whose names contain the text, such as `core` or `core/fib`.
 - **`--only`** runs a comma-separated selection of Cores (`go`, `ts`, `zig`) and [Peer Language runners](#peer-languages). `peers` selects every Peer Language. With multiple Cores, a Benchmark whose Fuel differs between them fails the run. Only selected runners start; version collection also uses only their dependencies.
 - **`--count`** is the Go `-count` and the number of Zig, CPython and AppleScript repeats, 10 by default. mitata picks the sample count on Bun.
-- **`--smoke`** runs each Benchmark once at its smoke size and checks output and Fuel parity, without saving anything. Its timings mean nothing.
+- **`--smoke`** runs each Benchmark once at its smoke size and checks output and Fuel parity, without saving anything. Its timings mean nothing. CI runs it on Linux for every PR that touches a Core, the suite or the Cost Model data ([`bench.yml`](../.github/workflows/bench.yml)).
 - **`--no-save`** prints the report without writing it to `results/`.
 - **`--outlier-factor`** sets the Cost Model outlier threshold, 3 by default.
 - **Exit codes:** 0 when every Benchmark and every port produced its expected output and Fuel agreed, 1 otherwise.
