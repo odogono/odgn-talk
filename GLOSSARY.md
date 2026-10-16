@@ -50,7 +50,7 @@ _Avoid_: alphabetical order, sort order (unqualified)
 
 **Operation**:
 One named action a Capability offers, e.g. `get` on `http`, called as `ask http to get url and wait` or `tell log to write "done"`. Each Operation is granted, costed and marked suspending or immediate on its own.
-_Avoid_: method, command, endpoint
+_Avoid_: method, command (unqualified), endpoint
 
 **Capability Scope**:
 A resource lifetime owned by one Run through a named Grant, opened and closed by declared Operations and abandoned by the Core if still open when its Run ends. It does not by itself make effects reversible.
@@ -361,6 +361,10 @@ _Avoid_: keyword (unqualified), reserved keyword
 **Command Call**:
 A statement that starts with a word that isn't a Reserved Word, calling the Handler of that name with the rest of the line as arguments, e.g. `greet "Ann"`. With Argument Labels, the call names the Handler's Selector, e.g. `move knight to "e4"` calls `move:to:`.
 _Avoid_: procedure call, invocation, message send (a `send` is something else)
+
+**Host Command**:
+A Command Call spelling of a granted Operation, written without `ask` or `tell`, e.g. `hide welcomeText` for `tell folio to hide welcomeText`. It is open to any Script holding a Grant that includes the Operation, and a Handler the Script defines with the same Selector takes precedence over it. It never climbs the Message Path.
+_Avoid_: built-in command, host function, prelude command
 
 **Import**:
 A `use … from …` line naming the definitions a Script or Library takes from a Library, e.g. `use pad, trim from text`. Only the names it lists are brought in.
