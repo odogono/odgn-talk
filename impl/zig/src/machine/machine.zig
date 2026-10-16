@@ -3278,6 +3278,18 @@ pub const Group = struct {
         g.write("refused code=\"{s}\"\n", .{code});
     }
 
+    /// Writes a Delivery, Request or Decision refused for an override no
+    /// Delivery can hold, such as a negative one, then its `refused` record.
+    pub fn refuseOverride(g: *Group, to: []const u8, d: Delivery, limits: ?RefusedOverride, code: []const u8) void {
+        const out = g.trace orelse return;
+        out.print("> {s} to=", .{if (d.decision) "decide" else if (d.request) "request" else "deliver"}) catch {};
+        if (d.target) |o| display.writeTrace(out, o.value) catch {} else out.writeAll(to) catch {};
+        out.print(" message={s}", .{d.message}) catch {};
+        writeArgs(out, d.args);
+        if (limits) |o| o.write(out);
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
+    }
+
     /// Queues a Decision to the Script `to`. Takes the arguments.
     pub fn decide(g: *Group, to: []const u8, message: []const u8, args: []*Value) !u64 {
         g.deliveries += 1;
