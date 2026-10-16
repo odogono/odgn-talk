@@ -47,7 +47,6 @@ h1 {
   font-size: 1rem;
   margin: 0;
 }
-h1 span,
 .muted {
   color: var(--muted);
   font-weight: normal;
@@ -325,9 +324,93 @@ button:disabled {
   text-align: left;
   font-size: 0.85rem;
 }
-#tools button span {
+#tools button span,
+#tool-modes button span {
   width: 1rem;
   text-align: center;
+}
+/* Browse and Edit: the mode the desk is in, above the Element tools. */
+#tool-modes {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1.5px solid var(--line);
+}
+#tool-modes button {
+  display: flex;
+  gap: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  font-size: 0.85rem;
+}
+#tool-modes [aria-pressed='true'] {
+  background: var(--accent);
+  color: white;
+}
+#message-window {
+  width: 26rem;
+}
+#message-panel {
+  padding: 0.5rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+#message-log {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  max-height: 9rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+#message-log .command {
+  color: var(--muted);
+}
+#message-log .command::before {
+  content: '› ';
+}
+#message-log .error {
+  color: var(--error);
+}
+#message-input {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border: 1.5px solid var(--line);
+}
+#errors-window {
+  width: 24rem;
+}
+#errors-panel {
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+#errors-panel p {
+  margin: 0 0 0.5rem;
+}
+#error-list {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+#error-list button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #ddd;
+  padding: 0.35rem 0.2rem;
+  text-align: left;
+  color: var(--error);
+}
+#error-list .where {
+  color: var(--text);
+  font-weight: 600;
+}
+#error-list button:hover:not(:disabled) .where {
+  color: inherit;
 }
 #info-window {
   width: 15rem;
@@ -443,14 +526,17 @@ button:disabled {
   color: var(--error);
 }
 
-/* The Edit menu stays above the desk and floating windows. */
-#edit-menu {
+/* Header menus stay above the desk and floating windows. */
+.menu {
   position: relative;
 }
-#edit-menu summary {
+.menu summary {
   cursor: pointer;
 }
-.edit-commands {
+.menu summary h1 {
+  display: inline;
+}
+.menu-commands {
   position: absolute;
   top: calc(100% + 0.5rem);
   left: 0;
@@ -461,7 +547,7 @@ button:disabled {
   background: var(--panel);
   box-shadow: 3px 3px 0 rgb(0 0 0 / 30%);
 }
-.edit-commands button {
+.menu-commands button {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -469,7 +555,10 @@ button:disabled {
   padding: 0.4rem 0.6rem;
   text-align: left;
 }
-.edit-commands kbd {
+.menu-commands [hidden] {
+  display: none;
+}
+.menu-commands kbd {
   font: inherit;
   color: var(--muted);
 }
@@ -529,6 +618,17 @@ button:disabled {
 /* The Project list and the earlier-versions panel. */
 #projects-window {
   width: 22rem;
+}
+#about-window {
+  width: 18rem;
+}
+#about-panel {
+  padding: 0.2rem 0.8rem 0.6rem;
+  font-size: 0.85rem;
+}
+#about-panel h2 {
+  font-size: 1.1rem;
+  margin: 0.5rem 0;
 }
 #versions-window {
   width: 20rem;
@@ -606,16 +706,18 @@ button:disabled {
   overflow: auto;
 }
 
-/* Edit controls cannot mutate or switch the authored Project during Play. */
+/* Edit controls cannot mutate or switch the authored Project while presenting. */
 .playing #desk,
 .playing #strip,
 .playing #tools-window,
 .playing #info-window,
 .playing #projects-window,
 .playing #versions-window,
+.playing #errors-window,
+.playing #message-window,
+.playing #about-window,
+.playing #file-menu,
 .playing #edit-menu,
-.playing #show-projects,
-.playing #show-versions,
 .playing #save-file,
 .playing #save-file-as,
 .playing #save-status,
@@ -626,6 +728,23 @@ button:disabled {
   padding: 16px;
   overflow: auto;
   flex: 1;
+}
+/* Browsing plays the Page where it is edited, beside the windows. */
+.browsing #caption,
+.browsing #stage,
+.browsing #strip,
+.browsing #info-window {
+  display: none;
+}
+#desk #reader {
+  padding: 0;
+  overflow: visible;
+}
+#desk #reader .play-scale {
+  margin: 0 auto;
+  border: 1.5px solid var(--line);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 85%);
+  box-sizing: content-box;
 }
 #reader .play-scale {
   position: relative;

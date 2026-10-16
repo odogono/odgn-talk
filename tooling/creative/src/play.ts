@@ -48,6 +48,16 @@ export type PlayMessage =
   | 'keyDown'
   | 'textChanged';
 
+// Each Message Box command loads as a fresh ownerless Script under this
+// prefix: the Core cannot unload Scripts, and the names change by Page.
+const MESSAGE_SCRIPT = 'message:';
+const messageHandler = (body: string) =>
+  `on runMessage\n${body}\nend runMessage`;
+
+/** A Message Box command: its result, or why it could not run. */
+export type MessageOutcome =
+  { ok: true; result: Promise<Value> } | { error: string; ok: false };
+
 // Construction/disposal consumes a Pump's budget so queued Core parent and
 // disposal inputs land before a Script can use the changed object graph.
 const PUMP_FUEL = 5000;
@@ -268,7 +278,7 @@ export class PlaySession {
   constructor(
     project: Project,
     public pageIndex = 0,
-    options: { soundBackend?: SoundBackend } = {},
+    options: { events?: boolean; soundBackend?: SoundBackend } = {},
   ) {
     this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
       const owner = this.owners.get(sound.owner);
@@ -378,9 +388,79 @@ export class PlaySession {
       }
     }
     this.#load([this.project, this.page, ...this.page.elements]);
-    this.send(this.project, 'startPlay');
-    this.send(this.page, 'openPage');
+    // A session that only runs Message Box commands sends no events.
+    if (options.events !== false) {
+      this.send(this.project, 'startPlay');
+      this.send(this.page, 'openPage');
+    }
   }
+
+  /**
+   * Runs a Message Box command against the showing Page, as an
+   * ownerless Script with the Page's names and every Grant. A line that is
+   * not a statement is tried as an expression, whose value is the result.
+   */
+  runMessage(command: string): MessageOutcome {
+    if (this.stopped || this.navigating) {
+      return { ok: false, error: 'The Page is changing; try again.' };
+    }
+    let first: string | undefined;
+    for (const source of [
+      messageHandler(command),
+      messageHandler(`return ${command}`),
+    ]) {
+      try {
+        const name = this.#loadMessage(source);
+        const request = this.group.script(name)!.request({
+          name: 'runMessage',
+        });
+        return {
+          ok: true,
+          result: request.result.catch((error: unknown) => {
+            throw new Error(
+              this.#messageErrors.get(name) ??
+                (error instanceof Error ? error.message : String(error)),
+            );
+          }),
+        };
+      } catch (error) {
+        if (!(error instanceof LoadError)) {
+          throw error;
+        }
+        first ??= error.diagnostics
+          .map(d => `line ${d.line - 1}: ${d.code}`)
+          .join('; ');
+      }
+    }
+    return { ok: false, error: first ?? 'Could not run' };
+  }
+
+  #loadMessage(source: string): string {
+    const objects = {
+      ...Object.fromEntries(
+        this.project.pages.map(p => [p.name, this.objects.get(p)!]),
+      ),
+      ...Object.fromEntries(
+        this.page.elements.map(e => [e.name, this.objects.get(e)!]),
+      ),
+      thisPage: this.objects.get(this.page)!,
+      project: this.objects.get(this.project)!,
+    };
+    const name = `${MESSAGE_SCRIPT}${++this.#messages}`;
+    this.group.load({
+      name,
+      source,
+      objects,
+      grants: {
+        pages: this.#pages.grant(['show'], undefined),
+        elements: this.#elements.grant('all', undefined),
+        sound: this.#sound.grant('all', this.sounds),
+      },
+    });
+    return name;
+  }
+  #messages = 0;
+  #messageErrors = new Map<string, string>();
 
   #load(owners: ScriptOwner[]): void {
     const pages = Object.fromEntries(
@@ -551,7 +631,21 @@ export class PlaySession {
     for (const report of result.reports) {
       if (
         report.kind === 'run end' &&
+        report.script.startsWith(MESSAGE_SCRIPT) &&
         (report.outcome === 'errored' || report.outcome === 'limit fault')
+      ) {
+        // The command sits one line below its wrapping handler.
+        const line = (report.at?.line ?? 2) - 1;
+        this.#messageErrors.set(
+          report.script,
+          `line ${line}: ${report.error?.message ?? `${report.limit} limit reached`}`,
+        );
+      }
+      if (
+        report.kind === 'run end' &&
+        (report.outcome === 'errored' || report.outcome === 'limit fault') &&
+        // A command's errors go back to the Message Box.
+        !report.script.startsWith(MESSAGE_SCRIPT)
       ) {
         const owner = this.owners.get(report.script)!;
         this.problems.push({
@@ -613,7 +707,7 @@ export class PlaySession {
     }
     this.stopped = true;
     // Stop silences every sound at once, before Scripts are asked to stop
-    // (ADR 0086); Back to Edit reaches here through the Play view's leave.
+    // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();
     this.#closing?.cancel.abort();
     this.#closing = undefined;

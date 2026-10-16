@@ -9,6 +9,7 @@ import {
   type InitialProject,
   type LockDelegate,
 } from './projects';
+import { mountMenus } from './menus';
 import { mountOffline } from './offline';
 import { mountStack } from './stack';
 import { mountPlay } from './play-view';
@@ -23,6 +24,7 @@ const element = (id: string) => {
 };
 
 element('core').textContent = `Core ${coreVersions.core}`;
+mountMenus(`NorthTalk Core ${coreVersions.core}`);
 
 // Opens storage and the last Project used, asks for its edit lock (another
 // tab may hold it), then mounts the shell and the Project windows. When
