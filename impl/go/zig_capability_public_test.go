@@ -50,6 +50,14 @@ func bridgeCanonical(v reflect.Value) any {
 		}
 		return json.RawMessage(data)
 	}
+	// Handles compare by identity: the kind/id each Core reports.
+	if v.Type() == reflect.TypeFor[*talk.Object]() {
+		if v.IsNil() {
+			return nil
+		}
+		h := v.Interface().(*talk.Object)
+		return h.Value().String()
+	}
 	if v.Type() == reflect.TypeFor[time.Time]() {
 		return v.Interface().(time.Time).Format(time.RFC3339Nano)
 	}
@@ -328,6 +336,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runReleaseBridgeCases(t)...)
 	observations = append(observations, runBroadcastBridgeCases(t)...)
 	observations = append(observations, runDecideBridgeCases(t)...)
+	observations = append(observations, runObjectBridgeCases(t)...)
 	return observations
 }
 func isReentrant(err error) bool {

@@ -106,16 +106,9 @@ func (d *Deciding) sealReport(report *Decided) *Decided {
 }
 
 func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, error) {
-	if s.group.backend != nil {
-		id, d, err := s.group.backend.decide(s, ctx, m)
-		return DeliveryID(id), d, err
-	}
 	return s.group.decide(s, ctx, m)
 }
 func (g *Group) Decide(ctx context.Context, to *Object, m Message) (DeliveryID, *Deciding, error) {
-	if g.backend != nil {
-		return "", nil, backendUnsupported("Decide")
-	}
 	return g.decide(nil, ctx, m, to)
 }
 func (g *Group) decide(s *Script, ctx context.Context, m Message, objects ...*Object) (DeliveryID, *Deciding, error) {

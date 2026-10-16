@@ -293,10 +293,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 		{"reload", func() error { _, e := s.Reload("", talk.ResetVariables); return e }},
 		{"extend", func() error { return s.Extend("") }},
 		{"function", func() error { _, _, e := g.Call(context.Background(), talk.Nothing, nil, nil); return e }},
-		{"object decision", func() error { _, _, e := g.Decide(context.Background(), nil, talk.Message{Name: "go"}); return e }},
-		{"object", func() error { _, e := g.Object(nil, "o", nil); return e }},
-		{"parent", func() error { return g.SetParent(nil, nil) }},
-		{"dispose", func() error { return g.Dispose(nil) }},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {

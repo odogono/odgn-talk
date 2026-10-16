@@ -56,18 +56,28 @@ func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 // Object registers a stable kind/id pair in this Group. Registration and
 // Dispose may be called from any goroutine, including a Host callback.
 func (g *Group) Object(kind *ObjectKind, id string, native any) (*Object, error) {
-	if g.backend != nil {
-		return nil, backendUnsupported("Objects")
-	}
 	if kind == nil || kind.name == "" || !utf8.ValidString(id) {
 		return nil, &HostError{InvalidValue, "invalid Object kind or id"}
+	}
+	key := objectKey{kind.name, id}
+	if g.backend != nil {
+		// The guest registers it outside the Group lock; it refuses a
+		// concurrent duplicate itself.
+		g.mu.Lock()
+		duplicate := g.objects[key] != nil
+		g.mu.Unlock()
+		if duplicate {
+			return nil, &HostError{DuplicateObjectID, "Object kind/id already registered"}
+		}
+		if err := g.backend.object(kind, id); err != nil {
+			return nil, err
+		}
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.objects == nil {
 		g.objects = map[objectKey]*Object{}
 	}
-	key := objectKey{kind.name, id}
 	if g.objects[key] != nil {
 		return nil, &HostError{DuplicateObjectID, "Object kind/id already registered"}
 	}
@@ -92,9 +102,6 @@ type objectKey struct{ kind, id string }
 // handle retains identity and encoding and remains a valid Group-owned Value.
 // Disposing an owner stops its Script; routing skips the disposed Object.
 func (g *Group) Dispose(o *Object) error {
-	if g.backend != nil {
-		return backendUnsupported("Objects")
-	}
 	if o == nil || o.group != g {
 		object := "nothing"
 		if o != nil && o.kind != nil {
@@ -102,6 +109,9 @@ func (g *Group) Dispose(o *Object) error {
 		}
 		g.recordRefusal("dispose", nil, map[string]string{"object": object}, WrongGroup)
 		return &HostError{WrongGroup, "Object does not belong to Group"}
+	}
+	if g.backend != nil {
+		return g.backend.dispose(o)
 	}
 	g.mu.Lock()
 	g.inputs = append(g.inputs, delivery{kind: "dispose", object: o, fields: map[string]string{"object": o.Value().String()}})
@@ -133,15 +143,20 @@ func (*HostError) isReport() {}
 // SetParent queues a parent change, rejecting known cycles and disposed children.
 // ParentKinds is metadata, not a restriction on the Message Path.
 func (g *Group) SetParent(o, parent *Object) error {
-	if g.backend != nil {
-		return backendUnsupported("Objects")
-	}
 	fields := map[string]string{"object": "nothing", "parent": "nothing"}
 	if o != nil {
 		fields["object"] = o.Value().String()
 	}
 	if parent != nil {
 		fields["parent"] = parent.Value().String()
+	}
+	if g.backend != nil {
+		// Ownership is the binding's; cycles and disposal are the guest's.
+		if o == nil || o.group != g || parent != nil && parent.group != g {
+			g.recordRefusal("set-parent", nil, fields, WrongGroup)
+			return &HostError{WrongGroup, "invalid parent relationship"}
+		}
+		return g.backend.setParent(o, parent)
 	}
 	g.mu.Lock()
 	code := g.parentError(o, parent)

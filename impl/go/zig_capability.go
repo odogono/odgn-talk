@@ -3,7 +3,6 @@
 package northtalk
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -138,7 +137,7 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 		}
 		return s.Name, nil
 	case "object":
-		return nil, backendUnsupported("Object Shapes")
+		return map[string]any{"object": s.Name}, nil
 	case "quantity", "unitKind":
 		return map[string]any{s.Kind: s.Name}, nil
 	case "list", "optional":
@@ -169,30 +168,14 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 	}
 }
 
-func zigEncoded(v Value) (json.RawMessage, error) {
-	if err := zigDataOnly(v); err != nil {
-		return nil, err
-	}
-	raw, err := EncodeValue(v)
-	return json.RawMessage(raw), err
-}
-func zigScriptFailure(e *ScriptError) (map[string]any, error) {
-	data, err := zigEncoded(e.Data)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]any{"code": e.Code, "data": data}
-	if e.Message != "" {
-		out["message"] = e.Message
-	}
-	return out, nil
-}
-
 func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	if zigText(need.Get("m")) == "trace" {
 		return map[string]any{}, nil
 	}
 	kind := zigText(need.Get("m"))
+	if kind == "prop" {
+		return b.property(need)
+	}
 	if kind != "op" && kind != "release" {
 		return nil, backendUnsupported("Host callback " + zigText(need.Get("m")))
 	}
@@ -233,9 +216,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		v, err := DecodeValue(raw, nil)
+		v, err := DecodeValue(raw, b.resolve)
 		if err != nil {
-			detail := backendUnsupported("Function and Object callback arguments").Error()
+			detail := backendUnsupported("Function callback arguments").Error()
 			b.failureDetails[CallID(zigText(need.Get("call")))] = detail
 			return map[string]any{"hostError": detail}, nil
 		}
@@ -279,7 +262,7 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		out["limit"] = true
 	} else if failure != nil {
 		if e, ok := failure.(*ScriptError); ok && e != nil {
-			encoded, err := zigScriptFailure(e)
+			encoded, err := b.zigScriptFailure(e)
 			if err != nil {
 				out["hostError"] = err.Error()
 			} else {
@@ -293,7 +276,7 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	} else if op.Mode == FireAndForget {
 		out["done"] = true
 	} else {
-		encoded, err := zigEncoded(result)
+		encoded, err := b.zigEncoded(result)
 		if err != nil {
 			out["hostError"] = err.Error()
 		} else {
@@ -336,13 +319,13 @@ func (b *zigGroup) settled(ids Value) {
 func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fuel int64) {
 	fields := map[string]any{"call": string(c.id)}
 	if kind == "answer" {
-		encoded, err := zigEncoded(v)
+		encoded, err := b.zigEncoded(v)
 		if err != nil {
 			panic(err)
 		}
 		fields["value"], fields["fuel"] = encoded, fuel
 	} else if e != nil {
-		encoded, err := zigScriptFailure(e)
+		encoded, err := b.zigScriptFailure(e)
 		if err != nil {
 			panic(err)
 		}
