@@ -1134,14 +1134,27 @@ export fn talk_load(g: *Group, o: *const LoadOptions, out: *?*Script) HostErrorC
     const objects_in: []const LoadObject = if (o.objects_len == 0) &.{} else (o.objects orelse return .invalid_value)[0..o.objects_len];
     const bound = g.core.gpa.alloc(machine.NamedObject, objects_in.len) catch return .out_of_memory;
     defer g.core.gpa.free(bound);
-    for (objects_in, bound) |x, *b| {
-        if (!g.owns(x.object)) return .wrong_group;
-        b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
-    }
-    if (o.owner) |owner| if (!g.owns(owner)) return .wrong_group;
+    for (objects_in, bound) |x, *b| b.* = .{ .name = bytes(x.name, x.name_len) catch return .invalid_value, .object = x.object };
     const limits = limitsOf(o.limits) catch {
         g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
         return .invalid_value;
+    };
+    // An owner from another Group, then one disposed or already owning a
+    // Script, then a bound Object from another Group, is refused with its
+    // records, after the limits, as talk.go does.
+    if (o.owner) |owner| {
+        if (!g.owns(owner)) {
+            g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "wrong group");
+            return .wrong_group;
+        }
+        if (owner.disposed or owner.owner_of != null) {
+            g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "invalid value");
+            return .invalid_value;
+        }
+    }
+    for (objects_in) |x| if (!g.owns(x.object)) {
+        g.group.refuseWorkerWithCode(.{ .load = .{ .name = name, .source = source } }, "wrong group");
+        return .wrong_group;
     };
     const loaded = g.group.load(name, source, .{ .grants = named, .grants_as_used = o.grants_as_used, .owner = o.owner, .objects = bound, .limits = limits }) catch |err| return status(err);
     switch (loaded) {
