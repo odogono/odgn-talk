@@ -79,6 +79,7 @@ type zigGroup struct {
 	ref            int64
 	pendingMu      sync.Mutex
 	pending        map[DeliveryID]*Pending
+	decisions      map[string]*Deciding
 	runs           map[RunID]DeliveryID
 	definitions    map[*CapabilityDef]string
 	callsMu        sync.Mutex
@@ -92,7 +93,7 @@ func newZigGroup(g *Group) groupBackend {
 	if err != nil {
 		panic(err)
 	}
-	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1"}})
 	if err == nil {
 		features := hello.Get("features")
@@ -288,7 +289,7 @@ func (b *zigGroup) admit(s *Script, m Message, ctx context.Context, request bool
 	if s == nil || s.group != b.group {
 		return "", nil, &HostError{WrongGroup, "receiver does not belong to Group"}
 	}
-	message, err := zigMessage(m)
+	message, err := zigQueuedMessage(m)
 	if err != nil {
 		return "", nil, err
 	}
@@ -348,15 +349,15 @@ func zigMessage(m Message) (map[string]any, error) {
 	return message, nil
 }
 
-func (b *zigGroup) broadcast(m Message) (BroadcastID, error) {
-	// Presence bits and sub-millisecond durations cannot be represented by
-	// the wire override. Send an invalid sentinel through the guest so its
-	// refusal keeps callback Trace ordering and does not consume an id.
+// Presence bits and sub-millisecond durations cannot be represented by the
+// wire override. Send an invalid sentinel through the guest so its refusal
+// keeps callback Trace ordering and does not consume an id.
+func zigQueuedMessage(m Message) (map[string]any, error) {
 	wire := m
 	wire.Limits = nil
 	message, err := zigMessage(wire)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if m.Limits != nil {
 		limits, err := zigOverride(*m.Limits)
@@ -366,7 +367,14 @@ func (b *zigGroup) broadcast(m Message) (BroadcastID, error) {
 			message["limits"] = limits
 		}
 	}
+	return message, nil
+}
 
+func (b *zigGroup) broadcast(m Message) (BroadcastID, error) {
+	message, err := zigQueuedMessage(m)
+	if err != nil {
+		return "", err
+	}
 	reply, err := b.send("broadcast", map[string]any{"message": message})
 	if err != nil {
 		return "", err
@@ -374,6 +382,52 @@ func (b *zigGroup) broadcast(m Message) (BroadcastID, error) {
 	id := BroadcastID(zigText(reply.Get("broadcast")))
 	b.ready()
 	return id, nil
+}
+
+func (b *zigGroup) decide(s *Script, ctx context.Context, m Message) (string, *Deciding, error) {
+	if s != nil && s.group != b.group {
+		return "", nil, &HostError{WrongGroup, "receiver does not belong to Group"}
+	}
+	message, err := zigQueuedMessage(m)
+	if err != nil {
+		return "", nil, err
+	}
+	fields := map[string]any{"message": message}
+	if s == nil {
+		fields["broadcast"] = true
+	} else {
+		fields["to"] = map[string]any{"script": s.name}
+	}
+	// As with Requests, the future exists before Trace/OnReady can Pump.
+	var id string
+	d := &Deciding{done: make(chan struct{})}
+	_, err = b.exchange("decide", fields, func(reply Value) error {
+		id = zigText(reply.Get("delivery"))
+		if s == nil {
+			id = zigText(reply.Get("broadcast"))
+		}
+		b.pendingMu.Lock()
+		b.decisions[id] = d
+		b.pendingMu.Unlock()
+		if ctx != nil {
+			d.stop = context.AfterFunc(ctx, func() {
+				// A sealed Verdict ignores its deadline.
+				if d.isSealed() {
+					return
+				}
+				if _, err := b.send("cancel-delivery", map[string]any{"delivery": id}); err != nil {
+					panic(err)
+				}
+				b.ready()
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	b.ready()
+	return id, d, nil
 }
 
 func (b *zigGroup) ready() {
@@ -425,6 +479,8 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			report = &HostError{}
 		case "call failed":
 			report = &CallFailed{}
+		case "decided":
+			report = &Decided{}
 		default:
 			return result, backendUnsupported("Report " + zigText(row.Get("kind")))
 		}
@@ -477,6 +533,16 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			}
 		case *Unhandled:
 			settle(r.Delivery, Nothing, sendFailure("unhandled", nil))
+		case *Decided:
+			id := string(r.Delivery)
+			if r.Broadcast != "" {
+				id = string(r.Broadcast)
+			}
+			if d := b.decisions[id]; d != nil {
+				delete(b.decisions, id)
+				d.seal(r)
+				d.finish()
+			}
 		case *Stop:
 			for _, id := range r.DroppedMessages {
 				settle(id, Nothing, sendFailure("stopped", nil))
@@ -634,6 +700,8 @@ func zigDecode(src Value, dst reflect.Value) error {
 		return zigEnum(src, dst, map[string]int{"idle": int(Idle), "sliced": int(Sliced), "stopped": int(Stopped), "rewound": int(Rewound)})
 	case reflect.TypeFor[Outcome]():
 		return zigEnum(src, dst, map[string]int{"completed": int(Completed), "errored": int(Errored), "limit fault": int(LimitFault), "cancelled": int(Cancelled), "unhandled": int(UnhandledOutcome), "dropped": int(Dropped), "effect failed": int(EffectFailureOutcome)})
+	case reflect.TypeFor[Verdict]():
+		return zigEnum(src, dst, map[string]int{"allowed": int(Allowed), "vetoed": int(Vetoed), "undecided": int(Undecided)})
 	case reflect.TypeFor[RunStatus]():
 		return zigEnum(src, dst, map[string]int{"ready": int(Ready), "suspended": int(Suspended), "parked": int(Parked), "preempted": int(Preempted)})
 	}

@@ -15,6 +15,8 @@ type groupBackend interface {
 	load(LoadOptions) (*Script, error)
 	admit(*Script, Message, context.Context, bool) (DeliveryID, *Pending, error)
 	broadcast(Message) (BroadcastID, error)
+	// decide addresses s, or every recipient when s is nil.
+	decide(*Script, context.Context, Message) (string, *Deciding, error)
 	pump(time.Time, PumpOptions) (PumpResult, error)
 	inspect() Inspection
 	counters(*Script) Counters
