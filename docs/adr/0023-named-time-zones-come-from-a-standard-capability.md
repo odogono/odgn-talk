@@ -73,3 +73,4 @@ A Civil Date is one value kind whose time of day is optional, and dates run from
 - Settled by #71: `timer` joins `clock` and `calendar` as a Standard Capability, with `schedule` and `cancel`, both fire-and-forget. It is the durable-timer pattern of ADR 0005.
 
 - Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.
+- Narrowed by [ADR 0091](0091-time-has-microsecond-resolution.md): times are whole microseconds, so the `nanosecond` field becomes `microsecond` and date text takes a fraction of one to six digits.
