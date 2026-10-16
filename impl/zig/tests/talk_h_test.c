@@ -1049,6 +1049,90 @@ static int cancel_test(void) {
     return bad;
 }
 
+/* Cancelling a Decision by its delivery or broadcast id: an unsealed
+ * recipient is cancelled, one that sealed its part carries on, and a
+ * cancellation drained after the whole Decision sealed leaves no record. */
+static int decision_cancel_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *quick_source = "on enter, deciding\n  wait 1 s\nend enter\n";
+    const char *slow_source = "on enter, deciding\n  repeat forever\n  end repeat\nend enter\n";
+    talk_load_options quick_load = {"quick", 5, quick_source, strlen(quick_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_load_options slow_load = {"slow", 4, slow_source, strlen(slow_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *quick = NULL, *slow = NULL;
+    int bad = talk_load(group, &quick_load, &quick) != TALK_OK;
+    bad |= talk_load(group, &slow_load, &slow) != TALK_OK;
+    talk_message enter = {"enter", 5, NULL, 0, NULL};
+    talk_deciding *everyone = NULL, *single = NULL;
+    bad |= talk_decide_broadcast(group, &enter, NULL, &everyone) != TALK_OK;
+    talk_pump_options sliced = {20, 0};
+    bad |= talk_pump(group, 1790000000, 0, &sliced, NULL) != TALK_OK;
+    bad |= talk_deciding_done(everyone);
+    bad |= talk_cancel_delivery(group, "b1", 2) != TALK_OK;
+    bad |= talk_cancel_delivery(group, "b0", 2) != TALK_INVALID_VALUE;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    const talk_decided *all = talk_deciding_decided(everyone);
+    bad |= all == NULL || all->verdict != TALK_UNDECIDED || all->undecided_len != 1;
+    bad |= strstr(trace, "> cancel-delivery b1\n") == NULL;
+    bad |= strstr(trace, "run slow/r1 outcome=cancelled delivery=d2 broadcast=b1 handler=enter") == NULL;
+    bad |= strstr(trace, "decided b1 verdict=undecided undecided=[{script: \"slow\", run: \"slow/r1\", outcome: \"cancelled\"}]\n") == NULL;
+    /* After the seal, cancelling either id does nothing. */
+    bad |= talk_script_decide(quick, &enter, NULL, &single) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= !talk_deciding_done(single);
+    size_t before = trace_len;
+    bad |= talk_cancel_delivery(group, "b1", 2) != TALK_OK;
+    bad |= talk_cancel_delivery(group, "d3", 2) != TALK_OK;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    bad |= strstr(trace + before, "> cancel-delivery") != NULL;
+    bad |= strstr(trace + before, "run quick/r1 outcome=completed delivery=d1 broadcast=b1 handler=enter") == NULL;
+    bad |= strstr(trace + before, "run quick/r2 outcome=completed delivery=d3 handler=enter") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* A negative override no Delivery can hold is refused with its input and
+ * `refused` records, as other refusals are, and consumes no id. */
+static int negative_override_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "on enter\nend enter\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_limit_override negative = {TALK_OVERRIDE_FUEL_PER_RUN, -1, 0, 0, 0};
+    talk_message m = {"enter", 5, NULL, 0, &negative};
+    talk_pending *pending = NULL;
+    talk_deciding *deciding = NULL;
+    talk_owned_bytes id = {0};
+    bad |= talk_script_deliver(script, &m, NULL) != TALK_INVALID_VALUE;
+    bad |= talk_script_request(script, &m, NULL, &pending) != TALK_INVALID_VALUE || pending != NULL;
+    bad |= talk_script_decide(script, &m, NULL, &deciding) != TALK_INVALID_VALUE || deciding != NULL;
+    m.limits = NULL;
+    bad |= talk_script_deliver(script, &m, &id) != TALK_OK || id.len != 2 || memcmp(id.data, "d1", 2) != 0;
+    talk_owned_bytes_release(&id);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= strstr(trace, "> deliver to=s message=enter limits={fuelPerRun: -1}\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "> request to=s message=enter limits={fuelPerRun: -1}\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "> decide to=s message=enter limits={fuelPerRun: -1}\nrefused code=\"invalid value\"\n") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop Script: a waiting Run is discarded with no finally, a later Delivery
  * is dropped, and a Group whose Scripts are all stopped pumps as stopped. */
 static int stop_test(void) {
@@ -2084,6 +2168,8 @@ int main(void) {
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
+    expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
+    expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
     expect(save_test() == 0, "a save restores a waiting Run, a corrupt save is refused, and the first Pump can't go back in time");
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");

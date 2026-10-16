@@ -1353,6 +1353,9 @@ pub const Input = union(enum) {
     /// Cancels a Delivery's Run, or the Delivery itself if it is still in
     /// a mailbox.
     cancel_delivery: u64,
+    /// Cancels each recipient of a Broadcast Decision that hasn't sealed
+    /// its part, by broadcast number.
+    cancel_broadcast: u64,
 };
 
 pub const Broadcast = struct {
@@ -1756,7 +1759,7 @@ pub const Group = struct {
                 g.gpa.free(x.script);
                 g.gpa.free(x.reason);
             },
-            .set_parent, .dispose, .cancel_delivery, .charge_request => {},
+            .set_parent, .dispose, .cancel_delivery, .cancel_broadcast, .charge_request => {},
         };
     }
 
@@ -2967,30 +2970,67 @@ pub const Group = struct {
         try g.enqueue(.{ .cancel_delivery = id });
     }
 
+    /// Queues cancelling a Broadcast Decision, by its broadcast number.
+    pub fn cancelBroadcastInput(g: *Group, id: u64) !void {
+        try g.enqueue(.{ .cancel_broadcast = id });
+    }
+
+    /// Whether a Delivery carries a Decision whose Verdict it already sealed.
+    fn sealedDecision(d: Delivery) bool {
+        return d.decides and !d.decision;
+    }
+
     /// Cancels a Delivery: the Run it started, or, still in a mailbox, the
     /// Delivery itself, which is reported cancelled with no Run.
+    /// A Run whose Decision is already sealed carries on (chapter 9).
     fn cancelDelivery(g: *Group, id: u64) !void {
         for (g.scripts.items) |x| for (x.live.items) |r| if (r.delivery.id == id and r.delivery.from == null) {
+            if (sealedDecision(r.delivery) and !r.verdict) return;
             return g.cancel(x, r);
         };
         for (g.scripts.items) |x| for (x.work.items, 0..) |w, i| switch (w) {
-            .message => |d| if (d.id == id and d.from == null) {
+            .message => |d| if (d.id == id and d.from == null and !sealedDecision(d)) {
                 _ = x.work.orderedRemove(i);
-                if (g.trace) |out| {
-                    out.print("run outcome=cancelled delivery=d{d}", .{id}) catch {};
-                    if (d.function) |f| {
-                        out.writeAll(" fn=") catch {};
-                        display.writeTrace(out, f) catch {};
-                    }
-                    out.writeAll(" fuel=0 alloc=0\n") catch {};
-                }
-                g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.print("d{d}", .{id}) catch "", .outcome = .cancelled } });
-                if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
-                g.releaseDelivery(d);
+                try g.cancelQueued(x, d);
                 return;
             },
             .run => {},
         };
+    }
+
+    /// Cancels a Broadcast Decision's unsealed recipients, Script by Script
+    /// in load order: each one's queued Deliveries, then its Runs.
+    fn cancelBroadcast(g: *Group, id: u64) !void {
+        for (g.scripts.items) |x| {
+            var i: usize = 0;
+            while (i < x.work.items.len) switch (x.work.items[i]) {
+                .message => |d| if (d.broadcast == id and d.from == null and d.decision) {
+                    _ = x.work.orderedRemove(i);
+                    try g.cancelQueued(x, d);
+                } else {
+                    i += 1;
+                },
+                .run => i += 1,
+            };
+            // Cancelling a Run can't remove another Run of its Script.
+            for (x.live.items) |r| if (r.delivery.broadcast == id and r.delivery.from == null and (r.verdict or r.delivery.decision)) try g.cancel(x, r);
+        }
+    }
+
+    /// Reports a Delivery cancelled in its mailbox, with no Run.
+    fn cancelQueued(g: *Group, x: *Script, d: Delivery) !void {
+        if (g.trace) |out| {
+            out.print("run outcome=cancelled delivery=d{d}", .{d.id}) catch {};
+            if (d.broadcast != 0) out.print(" broadcast=b{d}", .{d.broadcast}) catch {};
+            if (d.function) |f| {
+                out.writeAll(" fn=") catch {};
+                display.writeTrace(out, f) catch {};
+            }
+            out.writeAll(" fuel=0 alloc=0\n") catch {};
+        }
+        g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.print("d{d}", .{d.id}) catch "", .broadcast = if (d.broadcast != 0) g.reports.print("b{d}", .{d.broadcast}) catch "" else "", .outcome = .cancelled } });
+        if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } });
+        g.releaseDelivery(d);
     }
 
     /// Cancels a Run that isn't running (chapter 6, Cancellation and Stop).
@@ -3238,6 +3278,18 @@ pub const Group = struct {
         g.write("refused code=\"{s}\"\n", .{code});
     }
 
+    /// Writes a Delivery, Request or Decision refused for an override no
+    /// Delivery can hold, such as a negative one, then its `refused` record.
+    pub fn refuseOverride(g: *Group, to: []const u8, d: Delivery, limits: ?RefusedOverride, code: []const u8) void {
+        const out = g.trace orelse return;
+        out.print("> {s} to=", .{if (d.decision) "decide" else if (d.request) "request" else "deliver"}) catch {};
+        if (d.target) |o| display.writeTrace(out, o.value) catch {} else out.writeAll(to) catch {};
+        out.print(" message={s}", .{d.message}) catch {};
+        writeArgs(out, d.args);
+        if (limits) |o| o.write(out);
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
+    }
+
     /// Queues a Decision to the Script `to`. Takes the arguments.
     pub fn decide(g: *Group, to: []const u8, message: []const u8, args: []*Value) !u64 {
         g.deliveries += 1;
@@ -3436,6 +3488,7 @@ pub const Group = struct {
                 writeText(out, x.reason);
             },
             .cancel_delivery => |id| out.print("> cancel-delivery d{d}", .{id}) catch {},
+            .cancel_broadcast => |id| out.print("> cancel-delivery b{d}", .{id}) catch {},
             .broadcast => |b| {
                 out.print("> {s}", .{if (b.decision) "decide-broadcast" else "broadcast"}) catch {};
                 // A refused Broadcast never had an id.
@@ -3482,6 +3535,21 @@ pub const Group = struct {
         g.settlements_closed = true;
         std.mem.swap(std.ArrayList(Input), &g.inputs, &g.batch);
         g.input_lock.unlock();
+        // A deadline that passed after its Decision sealed does nothing and
+        // leaves no record: a Message Layer Host learns of the seal only
+        // from the Pump's reports.
+        var kept: usize = 0;
+        for (g.batch.items) |input| {
+            const sealed = switch (input) {
+                .cancel_delivery => |id| g.decided.contains(id),
+                .cancel_broadcast => |id| g.decided_broadcasts.contains(id),
+                else => false,
+            };
+            if (sealed) continue;
+            g.batch.items[kept] = input;
+            kept += 1;
+        }
+        g.batch.shrinkRetainingCapacity(kept);
         // A Broadcast's recipients are those that want it now, as the queue
         // is drained.
         // A Stop, or a disposal that stops a Script, queued before a
@@ -3744,6 +3812,7 @@ pub const Group = struct {
                 };
             },
             .cancel_delivery => |id| try g.cancelDelivery(id),
+            .cancel_broadcast => |id| try g.cancelBroadcast(id),
             .rewind_run => |id| try g.rewind(id, null),
             .stop => |x| {
                 // A repeated Stop does nothing, and keeps the first reason.

@@ -1164,7 +1164,10 @@ fn queue(s: *Script, m: *const Message, how: Asking, id: ?*Buffer, n_out: *u64) 
     if (g.memory.refused) return .out_of_memory;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
-    const override = overrideOf(m.limits) catch return .invalid_value;
+    const override = overrideOf(m.limits) catch {
+        g.group.refuseOverride(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide }, refusedOverrideOf(m.limits), "invalid value");
+        return .invalid_value;
+    };
     const loosens = if (override) |o| (if (g.group.script(s.name)) |target| o.loosens(target.limits) else false) else false;
     if (!machine.hostMessageName(name, args.len) or loosens) {
         g.group.refuseDelivery(s.name, .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .limits = override }, "invalid value");
@@ -3421,10 +3424,12 @@ export fn talk_script_cancel_run(s: *Script, id: ?[*]const u8, len: usize) HostE
 export fn talk_cancel_delivery(g: *Group, id: ?[*]const u8, len: usize) HostErrorCode {
     if (g.memory.refused) return .out_of_memory;
     const text = bytes(id, len) catch return .invalid_value;
-    if (text.len < 2 or text[0] != 'd') return .invalid_value;
+    // A Broadcast Decision is cancelled by its broadcast id (chapter 11).
+    if (text.len < 2 or (text[0] != 'd' and text[0] != 'b')) return .invalid_value;
     const n = std.fmt.parseInt(u64, text[1..], 10) catch return .invalid_value;
     if (n == 0) return .invalid_value;
-    g.group.cancelDeliveryInput(n) catch |err| return status(err);
+    const queued = if (text[0] == 'b') g.group.cancelBroadcastInput(n) else g.group.cancelDeliveryInput(n);
+    queued catch |err| return status(err);
     return .ok;
 }
 
@@ -3440,7 +3445,10 @@ fn queueTo(g: *Group, to: *objects.Object, m: *const Message, how: Asking, id: ?
     if (!g.owns(to)) return .wrong_group;
     const name = bytes(m.name, m.name_len) catch return .invalid_value;
     const args: []const *Value = if (m.args_len == 0) &.{} else (m.args orelse return .invalid_value)[0..m.args_len];
-    const override = overrideOf(m.limits) catch return .invalid_value;
+    const override = overrideOf(m.limits) catch {
+        g.group.refuseOverride("", .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .target = to }, refusedOverrideOf(m.limits), "invalid value");
+        return .invalid_value;
+    };
     if (!machine.hostMessageName(name, args.len)) {
         g.group.refuseDelivery("", .{ .id = 0, .message = name, .args = @constCast(args), .request = how == .request, .decision = how == .decide, .target = to, .limits = override }, "invalid value");
         return .invalid_value;

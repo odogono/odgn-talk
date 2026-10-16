@@ -2234,17 +2234,22 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     }
     var override_slot: talk.LimitOverride = undefined;
     const override = overrideOf(field(message, "limits"), &override_slot) catch {
-        if (to_all) {
-            var refused: ?machine.RefusedOverride = null;
-            if (field(message, "limits")) |raw| {
-                refused = .{};
-                if (raw == .object) {
-                    inline for (machine.override_fields) |f| {
-                        if (raw.object.get(f.ts)) |x| @field(refused.?, f.field) = asInt(x);
-                    }
+        // Any non-map override, such as `[]`, is a sentinel for one the
+        // adapter can't represent; it is written as the empty override.
+        var refused: ?machine.RefusedOverride = null;
+        if (field(message, "limits")) |raw| {
+            refused = .{};
+            if (raw == .object) {
+                inline for (machine.override_fields) |f| {
+                    if (raw.object.get(f.ts)) |x| @field(refused.?, f.field) = asInt(x);
                 }
             }
+        }
+        if (to_all) {
             entry.group.group.refuseBroadcast(mname, args, how == .decide, refused, "invalid value");
+        } else if (how != .broadcast) {
+            const d: machine.Delivery = .{ .id = 0, .message = mname, .args = args, .request = how == .request, .decision = how == .decide, .target = target };
+            entry.group.group.refuseOverride(if (script) |sc| sc.name else "", d, refused, "invalid value");
         }
         return hostError(s.gpa, ref, .invalid_value);
     };

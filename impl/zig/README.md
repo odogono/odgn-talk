@@ -664,8 +664,9 @@ allows it. `pass` carries it up the Message Path, and the end of the path
 allows it. A Run that errors, faults or ends `effect failed` first, or a
 `, dropping` clause that drops it, leaves it undecided, after the `run`
 record. A Delivery, Request or Decision whose name has a `:` but isn't a
-Selector with one argument per part is refused at the call, with its `>`
-line, no id, and `refused code="invalid value"`. `cancel-delivery` comes
+Selector with one argument per part, or whose override no Delivery can hold,
+such as a negative one, is refused at the call, with its `>` line, no id, and
+`refused code="invalid value"`. `cancel-delivery` comes
 with cancellation.
 
 A Broadcast (`talk_broadcast`) or Broadcast Decision (`talk_decide_broadcast`)
@@ -1166,8 +1167,13 @@ alone for one that parks or is dropped; parking and dropping measure
 Persistent State.
 
 `talk_script_cancel_run` cancels a Run by its id, and the C-only
-`talk_cancel_delivery` a Request or Decision by its delivery id, both as Host
-Inputs; `, replacing` cancels through the same path. Where the cancel lands, a
+`talk_cancel_delivery` a Request or Decision by its delivery id, or a Broadcast
+Decision by its broadcast id, both as Host Inputs. A Broadcast cancellation
+takes each recipient that hasn't sealed its part, Script by Script in load
+order, its queued Delivery before its Run. A Run whose Decision already sealed
+carries on, and a cancellation drained after the whole Decision sealed does
+nothing and writes no record, since a Message Layer Host learns of the seal
+only from the Pump's reports; `, replacing` cancels through the same path. Where the cancel lands, a
 preempted Run, in the middle of its Segment, has its scopes abandoned and its
 Segment and participant rolled back, and its cleanup becomes a Segment of its
 own. Every cancelled Run's pending calls and Join Members are abandoned, and

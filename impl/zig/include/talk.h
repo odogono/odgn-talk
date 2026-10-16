@@ -1310,8 +1310,12 @@ talk_host_error_code talk_script_extend(talk_script *s, const char *source, size
  * not-rewindable and does nothing. */
 talk_host_error_code talk_script_rewind_run(talk_script *s, const char *id, size_t len);
 /* C only: queues cancelling a Request or Decision, by its delivery id, such
- * as "d1", which talk.go does through its context: its Run is cancelled, or,
- * still in a mailbox, it is removed and reported cancelled with no Run. */
+ * as "d1", or a Broadcast Decision by its broadcast id, such as "b1", which
+ * talk.go does through its context: its Run is cancelled, or, still in a
+ * mailbox, it is removed and reported cancelled with no Run. A Decision, or
+ * Broadcast recipient, that already sealed its Verdict is left alone; once
+ * the whole Decision has sealed the cancellation does nothing and leaves no
+ * Trace record. */
 talk_host_error_code talk_cancel_delivery(talk_group *g, const char *id, size_t len);
 /* A Script's Counters: its lifetime work since load, live Runs included,
  * and its current Persistent State and mailbox. */

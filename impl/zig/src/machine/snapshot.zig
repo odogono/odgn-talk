@@ -883,7 +883,7 @@ const Saving = struct {
                 try s.o.str(st.script);
                 try s.o.str(st.reason);
             },
-            .cancel_delivery => |id| try s.o.int(id),
+            .cancel_delivery, .cancel_broadcast => |id| try s.o.int(id),
             // A settlement is queued only after a restore, before the
             // first Pump; a save then would hold the restored calls again.
             .settlement => |st| {
@@ -1932,6 +1932,7 @@ const Restoring = struct {
                 break :blk .{ .stop = .{ .script = script, .reason = try r.owned() } };
             },
             .cancel_delivery => .{ .cancel_delivery = try r.i.int() },
+            .cancel_broadcast => .{ .cancel_broadcast = try r.i.int() },
             // A save is taken before any settlement is drained, and a
             // restored Group's settlements are its own.
             .settlement => error.InvalidSave,

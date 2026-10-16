@@ -118,6 +118,35 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Decision artifact refresh, 2026-10-16
+
+[Raw output](measurements-decide.txt) records three repetitions with artifact
+source `e22f3e1d0de291adbe7eb6722af463e88842cd08`, SHA-256
+`361f71cd1f4e556304a083aba04e8e455cb7da5532c0069bbec45c17ab05e2cf`,
+and public-adapter/native-Go revision `57049bc7`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.736 µs native Go vs 31.648 µs probe (8.5×)**,
+cold compile/runtime/close **619.0 ms**, cached instantiation/close **122.0 µs**.
+This is the same independent immediate-call workload; it does not measure
+public Decision latency, tail latency or an accepted retirement limit.
+
+The public comparison now covers 86 callback/input scenarios. Twenty-seven new
+Decision scenarios compare exact Trace, Fuel, typed Reports, settled futures
+and inspected state against a separately compiled native-Go Host. They cover
+vetoes with Value reasons, every undecided outcome, ordinary-clause and
+first-wait seals, dropping/replacing, Stop, cancellation in the mailbox,
+preempted and after the seal (including from a later crossing in the sealing
+Pump), Broadcast Decisions across slices and with no recipients, Broadcast
+cancellation that spares sealed recipients, refusals including Deliver/Request
+overrides, and Operation/release/Trace/OnReady-generated Decisions. Shared Zig
+corrections are tracked in #1014 and #1015. Both artifacts are refreshed
+together.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C tests, all 430 ordinary
+and deferred Corpus cases and both WASI checks pass locally. Independent pure-Go
+adapter/probe cross-builds cover Linux amd64/arm64 and macOS arm64. This
+revision still needs CI execution on the other required runners.
+
 ## Ordinary Broadcast artifact refresh, 2026-10-15
 
 [Raw output](measurements-broadcast.txt) records three repetitions with artifact
