@@ -6,7 +6,20 @@ defmodule NorthTalk.Owner do
 
   use GenServer
 
-  alias NorthTalk.{Clock, Group, HostError, Library, LoadError, Result, ScriptError, Transport, Value}
+  alias NorthTalk.{
+    Call,
+    Capability,
+    Clock,
+    Grant,
+    Group,
+    HostError,
+    Library,
+    LoadError,
+    Result,
+    ScriptError,
+    Transport,
+    Value
+  }
 
   @protocol 1
   @default_fuel_slice 10_000
@@ -18,9 +31,19 @@ defmodule NorthTalk.Owner do
     :clock,
     :fuel_slice,
     :reports_to,
+    :tasks,
     ref: 0,
     groups: %{},
-    waiters: %{}
+    waiters: %{},
+    # Capabilities by name, and each loaded Script's Grants by
+    # {group, script, grant name}.
+    capabilities: %{},
+    bindings: %{},
+    # Suspending calls not yet settled, by {group, call id}: their Task's
+    # monitor ref, or their deferred ref, each indexed back to the call.
+    calls: %{},
+    monitors: %{},
+    deferred: %{}
   ]
 
   def start_link(opts) do
@@ -33,10 +56,13 @@ defmodule NorthTalk.Owner do
     module = Keyword.get(opts, :transport, Transport.Wasi)
     transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to])
 
+    {:ok, tasks} = Task.Supervisor.start_link()
+
     with {:ok, transport} <- module.start(transport_opts),
          :ok <- stop_with_owner(transport),
          state = %__MODULE__{
            transport: transport,
+           tasks: tasks,
            drive: Keyword.get(opts, :drive, :auto),
            clock: Clock.start(),
            fuel_slice: Keyword.get(opts, :fuel_slice, @default_fuel_slice),
@@ -81,6 +107,7 @@ defmodule NorthTalk.Owner do
   def terminate(reason, %__MODULE__{transport: transport} = state) do
     code = if match?({:shutdown, {:instance_lost, _}}, reason), do: "instance lost", else: "instance closed"
     fail_waiters(state, %HostError{code: code, detail: inspect(reason)})
+    for {_, {:task, pid, _}} <- state.calls, do: Process.exit(pid, :kill)
     Transport.stop(transport)
   end
 
@@ -100,10 +127,63 @@ defmodule NorthTalk.Owner do
     end
   end
 
+  def handle_call({:define_capability, capability}, _from, state) do
+    capability = Capability.resolve(capability)
+    fields = %{"name" => capability.name, "ops" => Capability.declarations(capability)}
+
+    case exchange(state, "define-capability", fields) do
+      {{:ok, _}, state} -> {:reply, :ok, put_in(state.capabilities[capability.name], capability)}
+      {error, state} -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:grant, name, opts}, _from, state) do
+    ops = with list when is_list(list) <- Keyword.get(opts, :ops, :all), do: list
+    fields = %{"capability" => name, "ops" => if(ops == :all, do: "all", else: ops)}
+
+    if Map.has_key?(state.capabilities, name) do
+      {reply, state} = exchange(state, "grant", fields)
+      grant = &%Grant{owner: self(), handle: &1["grant"], capability: name, binding: opts[:binding]}
+      {:reply, ok(reply, grant), state}
+    else
+      {:reply, {:error, %HostError{code: "invalid value", detail: "no Capability #{name}"}}, state}
+    end
+  end
+
   def handle_call({:load, %Group{name: g}, name, source, opts}, _from, state) do
-    fields = %{"group" => g, "name" => name, "source" => source, "grants" => Keyword.get(opts, :grants, %{})}
-    {reply, state} = exchange(state, "load", fields)
-    {:reply, ok(reply, fn ok -> ok["script"] end), state}
+    grants = Map.new(Keyword.get(opts, :grants, %{}))
+
+    with :ok <- own_grants(grants) do
+      fields = %{
+        "group" => g,
+        "name" => name,
+        "source" => source,
+        "grants" => Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end)
+      }
+
+      case exchange(state, "load", fields) do
+        {{:ok, ok}, state} ->
+          script = ok["script"]
+          bindings = Map.new(grants, fn {k, grant} -> {{g, script, k}, grant} end)
+          {:reply, {:ok, script}, %{state | bindings: Map.merge(state.bindings, bindings)}}
+
+        {error, state} ->
+          {:reply, error, state}
+      end
+    else
+      error -> {:reply, error, state}
+    end
+  end
+
+  def handle_call({:settle, ref, settlement}, _from, state) do
+    case Map.pop(state.deferred, ref) do
+      {nil, _} ->
+        {:reply, {:error, :unknown_ref}, state}
+
+      {key, deferred} ->
+        state = %{state | deferred: deferred, calls: Map.delete(state.calls, key)}
+        {:reply, :ok, settle_call(state, key, settlement)}
+    end
   end
 
   def handle_call({:compile_library, name, version, source, opts}, _from, state) do
@@ -165,7 +245,98 @@ defmodule NorthTalk.Owner do
     {:noreply, state}
   end
 
+  # A suspending callback's Task finished.
+  def handle_info({monitor, result}, %{monitors: monitors} = state) when is_map_key(monitors, monitor) do
+    Process.demonitor(monitor, [:flush])
+    {key, state} = forget_task(state, monitor)
+
+    state =
+      case result do
+        {:defer, ref} ->
+          if Map.has_key?(state.deferred, ref),
+            do: settle_call(state, key, {:fail, host_failure("deferred ref #{inspect(ref)} is already in use")}),
+            else: %{
+              state
+              | calls: Map.put(state.calls, key, {:deferred, ref}),
+                deferred: Map.put(state.deferred, ref, key)
+            }
+
+        {:ok, value} ->
+          settle_call(state, key, {:answer, value})
+
+        {:error, failure} ->
+          settle_call(state, key, {:fail, failure})
+
+        other ->
+          settle_call(state, key, {:fail, host_failure("unexpected result #{inspect(other)}")})
+      end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:DOWN, monitor, :process, _, reason}, %{monitors: monitors} = state)
+      when is_map_key(monitors, monitor) do
+    {key, state} = forget_task(state, monitor)
+    {:noreply, settle_call(state, key, {:fail, host_failure(Exception.format_exit(reason))})}
+  end
+
   def handle_info(_, state), do: {:noreply, state}
+
+  defp forget_task(state, monitor) do
+    {key, monitors} = Map.pop(state.monitors, monitor)
+    {key, %{state | monitors: monitors, calls: Map.delete(state.calls, key)}}
+  end
+
+  # Answers or fails a suspending call. The Core may have abandoned it in
+  # the meantime; its refusal of a late settlement is ignored.
+  defp settle_call(state, {g, call}, settlement) do
+    fields =
+      case settlement do
+        {:answer, value} -> %{"group" => g, "call" => call, "value" => Value.encode(value)}
+        {:fail, failure} -> %{"group" => g, "call" => call, "error" => failure(failure)}
+      end
+
+    {_, state} = exchange(state, elem(settlement, 0) |> Atom.to_string(), fields)
+    schedule_pump(state, g)
+  rescue
+    error in HostError ->
+      {_, state} =
+        exchange(state, "fail", %{"group" => g, "call" => call, "error" => failure(host_failure(error.detail))})
+
+      schedule_pump(state, g)
+  end
+
+  # The Core abandoned these calls: their work stops, and any settlement
+  # still to come is refused as an unknown ref.
+  defp abandon(state, g, ids) do
+    Enum.reduce(ids, state, fn id, state ->
+      case Map.pop(state.calls, {g, id}) do
+        {{:task, pid, monitor}, calls} ->
+          Process.demonitor(monitor, [:flush])
+          Process.exit(pid, :kill)
+          %{state | calls: calls, monitors: Map.delete(state.monitors, monitor)}
+
+        {{:deferred, ref}, calls} ->
+          %{state | calls: calls, deferred: Map.delete(state.deferred, ref)}
+
+        {nil, _} ->
+          state
+      end
+    end)
+  end
+
+  defp own_grants(grants) do
+    me = self()
+
+    Enum.find_value(grants, :ok, fn
+      {name, %Grant{owner: ^me}} when is_binary(name) ->
+        nil
+
+      {name, grant} ->
+        {:error,
+         %HostError{code: "invalid value", detail: "#{inspect(name)}: #{inspect(grant)} is not a Grant of this owner"}}
+    end)
+  end
 
   # One Pump, its reports, and the next Pump it calls for when driving
   # automatically: at once if it was sliced, otherwise at its next deadline.
@@ -173,6 +344,7 @@ defmodule NorthTalk.Owner do
     case exchange(state, "pump", %{"group" => g, "now" => now, "fuelSlice" => fuel_slice}) do
       {{:ok, ok}, state} ->
         reports = Enum.map(ok["reports"], &report/1)
+        state = abandon(state, g, ok["abandoned"] || [])
         state = Enum.reduce(reports, state, &settle(&2, g, &1))
 
         state =
@@ -254,23 +426,33 @@ defmodule NorthTalk.Owner do
   # with, answered under the same ref, until the final reply.
   defp exchange(state, m, fields) do
     state = %{state | ref: state.ref + 1}
-    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}), false)
+    exchange_frame(state, Map.merge(fields, %{"m" => m, "ref" => state.ref}), fields["group"], false)
   end
 
   # A refused interim answer leaves the Core mid-exchange, so the instance is
   # lost; a refused opening frame never reached the Core.
-  defp exchange_frame(state, message, interim?) do
+  defp exchange_frame(state, message, g, interim?) do
     case Transport.exchange(state.transport, Jason.encode!(message)) do
       {:ok, reply} ->
         reply = Jason.decode!(reply, objects: :ordered_objects, floats: :decimals)
         ref = state.ref
 
         cond do
-          reply["ref"] != ref -> lost(state, {:invalid_reply, plain(reply)})
-          need = reply["need"] -> exchange_frame(state, Map.put(answer(need), "ref", ref), true)
-          ok = reply["ok"] -> {{:ok, ok}, state}
-          err = reply["err"] -> {{:error, error(err)}, state}
-          true -> lost(state, {:invalid_reply, plain(reply)})
+          reply["ref"] != ref ->
+            lost(state, {:invalid_reply, plain(reply)})
+
+          need = reply["need"] ->
+            {answer, state} = answer(state, g, plain(need), need["args"])
+            exchange_frame(state, Map.put(answer, "ref", ref), g, true)
+
+          ok = reply["ok"] ->
+            {{:ok, ok}, state}
+
+          err = reply["err"] ->
+            {{:error, error(err)}, state}
+
+          true ->
+            lost(state, {:invalid_reply, plain(reply)})
         end
 
       {:refused, reason} when interim? ->
@@ -284,17 +466,17 @@ defmodule NorthTalk.Owner do
     end
   end
 
-  # The Capabilities, Host Objects and lifecycle hooks that answer these
-  # needs come in later slices of #963; until then each is refused safely.
+  # Host Objects and lifecycle hooks answer their needs in later slices of
+  # #963; until then each is refused safely.
+  defp answer(state, g, %{"m" => "op"} = need, args) do
+    {result, state} = operation(state, g, need, args)
+    {Map.merge(%{"m" => "op-result", "charged" => 0}, result), state}
+  end
+
+  defp answer(state, _g, need, _args), do: {answer(need), state}
+
   defp answer(need) do
     case need["m"] do
-      "op" ->
-        %{
-          "m" => "op-result",
-          "hostError" => %{"detail" => "no Capability answers #{need["capability"]}"},
-          "charged" => 0
-        }
-
       "prop" ->
         %{"m" => "prop-result", "hostError" => %{"detail" => "no Host Objects"}}
 
@@ -315,6 +497,80 @@ defmodule NorthTalk.Owner do
         %{"m" => "#{m}-result"}
     end
   end
+
+  # Dispatch is by the Script's Grant, so the call reaches the Capability
+  # that Grant is of, with its binding, whatever other Capabilities name
+  # their Operations.
+  defp operation(state, g, need, args) do
+    with %Grant{} = grant <- state.bindings[{g, need["script"], need["grant"]}],
+         true <- grant.capability == need["capability"],
+         %Capability{} = capability <- state.capabilities[grant.capability],
+         %{} = op <- capability.operations[need["operation"]] do
+      call = %Call{
+        id: need["call"],
+        owner: self(),
+        group: %Group{owner: self(), name: g},
+        script: need["script"],
+        grant: need["grant"],
+        binding: grant.binding,
+        capability: grant.capability,
+        operation: need["operation"],
+        mode: op.mode,
+        now: need["now"]
+      }
+
+      run(state, capability, op, Value.decode(args), call)
+    else
+      _ -> {host_error("no Capability answers #{need["capability"]}.#{need["operation"]} for #{need["grant"]}"), state}
+    end
+  end
+
+  defp run(state, _capability, %{mode: :suspending} = op, args, call) do
+    %Task{pid: pid, ref: monitor} = Task.Supervisor.async_nolink(state.tasks, Capability, :invoke, [op, args, call])
+    key = {call.group.name, call.id}
+
+    state = %{
+      state
+      | calls: Map.put(state.calls, key, {:task, pid, monitor}),
+        monitors: Map.put(state.monitors, monitor, key)
+    }
+
+    {%{"started" => true}, state}
+  end
+
+  defp run(state, capability, op, args, call) do
+    task = Task.Supervisor.async_nolink(state.tasks, Capability, :invoke, [op, args, call])
+
+    result =
+      try do
+        case Task.yield(task, capability.timeout) || Task.shutdown(task, :brutal_kill) do
+          {:ok, {:ok, value}} when op.mode == :immediate -> %{"result" => Value.encode(value)}
+          {:ok, :noreply} when op.mode == :fire_and_forget -> %{"done" => true}
+          {:ok, {:error, failure}} -> %{"fail" => failure(failure)}
+          {:ok, other} -> host_error("unexpected result #{inspect(other)}")
+          {:exit, reason} -> host_error(Exception.format_exit(reason))
+          nil -> host_error("timed out after #{capability.timeout} ms")
+        end
+      rescue
+        error in HostError -> host_error(error.detail)
+      end
+
+    {result, state}
+  end
+
+  defp host_error(detail), do: %{"hostError" => %{"detail" => detail}}
+
+  # A failure the callback didn't declare. The Script sees `host error`.
+  defp host_failure(detail), do: %{code: "host error", message: detail}
+
+  defp failure(code) when is_binary(code), do: %{"code" => code}
+
+  defp failure(%{code: code} = f) do
+    data = if d = f[:data], do: Value.encode(d)
+    Enum.reject([{"code", code}, {"message", f[:message]}, {"data", data}], &is_nil(elem(&1, 1))) |> Map.new()
+  end
+
+  defp failure(other), do: raise(HostError, code: "invalid value", detail: "#{inspect(other)} is not a failure")
 
   # terminate/2 fails the waiting requests.
   defp lost(_state, reason), do: exit({:shutdown, {:instance_lost, reason}})

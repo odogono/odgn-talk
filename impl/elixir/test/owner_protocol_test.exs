@@ -2,9 +2,7 @@ defmodule NorthTalk.OwnerProtocolTest do
   use ExUnit.Case, async: true
   alias NorthTalk.{HostError, ScriptError, Transport}
 
-  # A real reactor with observable frames and injected faults. It defines a
-  # Capability directly so a Script can raise an interim `op` need before the
-  # application API registers Capabilities.
+  # A real reactor with observable frames and injected faults.
   defmodule Reactor do
     @behaviour Transport
     defstruct [:wasm, :observer, :scenario]
@@ -15,15 +13,6 @@ defmodule NorthTalk.OwnerProtocolTest do
       observer = opts[:observer]
       send(observer, {:backend, wasm.pid})
 
-      raw(wasm, %{
-        "m" => "define-capability",
-        "ref" => 100,
-        "name" => "api",
-        "ops" => [%{"name" => "ping", "mode" => "immediate", "args" => [], "cost" => %{"fuel" => 1}}]
-      })
-
-      grant = raw(wasm, %{"m" => "grant", "ref" => 101, "capability" => "api", "ops" => "all"})["ok"]["grant"]
-      send(observer, {:grant, grant})
       {:ok, %__MODULE__{wasm: wasm, observer: observer, scenario: opts[:scenario]}}
     end
 
@@ -62,7 +51,12 @@ defmodule NorthTalk.OwnerProtocolTest do
 
   defp setup_group(scenario, opts \\ []) do
     {:ok, owner} = NorthTalk.start_link([transport: Reactor, observer: self(), scenario: scenario] ++ opts)
-    assert_receive {:grant, grant}
+    ping = fn [], _ -> :not_a_result end
+
+    :ok =
+      NorthTalk.define_capability!(owner, NorthTalk.Capability.from_functions("api", %{"ping" => {[cost: 1], ping}}))
+
+    grant = NorthTalk.grant!(owner, "api")
     group = NorthTalk.new_group!(owner, "g", [])
     NorthTalk.load!(group, "s", @source, grants: %{"api" => grant})
     {owner, group}
