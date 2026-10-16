@@ -112,6 +112,13 @@ Library constant is still stale in its callers (#1036), and two checks only
 native Go makes, a Library calling its importer's Handler and a transitive name
 cycle, are decided in #1037.
 
+`Script.Reload` and `Script.Extend` go through the guest's `reload` and
+`extend`, which check, record and refuse them as natively, including `state
+too large`, `name reused` and every diagnostic. A Reload returns the typed
+Reports of the Runs it discarded, settles their futures, keeps the mailbox
+when asked, runs Grant release hooks with reason `reload` and restarts a
+stopped Script. Function Values made by the old code are stale afterwards.
+
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
 declared costs, MaxPending and optional error catalogues. Call identity,
@@ -140,8 +147,7 @@ compatibility gate. Input admission during a non-yielding WASM export also
 remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result:
-Reload/Extend, Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
+existing signature has no error result: Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
 name in one Group, and a Kind first defined inside a Host callback, are refused.
 Capability attachments with scoped or Segment lifecycle hooks, Standard
 factory refinements or Shapes nested beyond 32 levels
