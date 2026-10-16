@@ -6,8 +6,9 @@
 //
 // Every relative link in a tracked .md file must reach a file or directory,
 // and a #fragment on a Markdown target must name one of its headings, by
-// GitHub's slug rules. Links inside code are ignored. Each Core's task map,
-// impl/*/NAVIGATION.md, must also be linked from AGENTS.md and README.md.
+// GitHub's slug rules. Links inside code are ignored. Each task map,
+// impl/*/NAVIGATION.md or tooling/*/NAVIGATION.md, must also be linked from
+// AGENTS.md and README.md.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -115,8 +116,13 @@ export const check = (): { files: number; problems: string[] } => {
       }
     }
   }
-  for (const core of readdirSync(join(ROOT, 'impl')).sort()) {
-    const map = join(ROOT, 'impl', core, 'NAVIGATION.md');
+  const maps = ['impl', 'tooling'].flatMap(area =>
+    readdirSync(join(ROOT, area))
+      .sort()
+      .map(dir => `${area}/${dir}/NAVIGATION.md`),
+  );
+  for (const name of maps) {
+    const map = join(ROOT, name);
     if (!existsSync(map) || !statSync(map).isFile()) {
       continue;
     }
@@ -125,9 +131,7 @@ export const check = (): { files: number; problems: string[] } => {
         ({ target }) => resolve(ROOT, target.split('#')[0]!) === map,
       );
       if (!reached) {
-        problems.push(
-          `${index}: does not link the task map impl/${core}/NAVIGATION.md`,
-        );
+        problems.push(`${index}: does not link the task map ${name}`);
       }
     }
   }

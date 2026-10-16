@@ -63,7 +63,9 @@ python3 spikes/go-zig-binding/build-artifact.py
 ```
 
 The builder refuses uncommitted Core/spec changes rather than attaching false
-commit provenance. Changes to the binary require rerunning the probe and
+commit provenance. For local iteration on an uncommitted Zig change, follow the
+[hand-built loop](../../impl/go/README.md#experimental-zig-backend) and never
+commit its output. Changes to the binary require rerunning the probe and
 measurements. The same command refreshes the identical artifact and manifest in
 `impl/go/internal/zigwasm`. This probe remains an independent module and native-Go
 comparison baseline; the opt-in public adapter has its own pinned dependency.
