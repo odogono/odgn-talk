@@ -1,0 +1,30 @@
+Function Value artifact refresh, 2026-10-16
+{
+  "sourceCommit": "7888f3913f5ded904443763c6dc59a37f68b225e",
+  "zig": "0.17.0",
+  "target": "wasm32-wasi",
+  "optimize": "safe",
+  "sha256": "5a7a8421d46378c30c557029549666a35597670e33216de7b28a751c79ab3d1d"
+}
+Go/public adapter revision: a853b7ef14021a3f7c5c8691eb54c109949fce0a
+macOS-27.0.1-arm64-arm-64bit-Mach-O
+go version go1.27.2 darwin/arm64
+CGO_ENABLED=0 go test -run ^$ -bench . -benchmem -benchtime=300ms -count=3
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/spikes/go-zig-binding
+cpu: Apple M5
+BenchmarkImmediate/native-go-10         	   85256	      3815 ns/op	    8267 B/op	      92 allocs/op
+BenchmarkImmediate/native-go-10         	   94788	      3806 ns/op	    8267 B/op	      92 allocs/op
+BenchmarkImmediate/native-go-10         	   94033	      3924 ns/op	    8266 B/op	      92 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	    9302	     33178 ns/op	  127036 B/op	     261 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	   10000	     32849 ns/op	  126803 B/op	     261 allocs/op
+BenchmarkImmediate/zig-message-wazero-10         	   10000	     32711 ns/op	  126806 B/op	     261 allocs/op
+BenchmarkColdCompile-10                          	       1	 625389792 ns/op	96404696 B/op	  198343 allocs/op
+BenchmarkColdCompile-10                          	       1	 621750125 ns/op	96409792 B/op	  198347 allocs/op
+BenchmarkColdCompile-10                          	       1	 628712542 ns/op	96404360 B/op	  198340 allocs/op
+BenchmarkInstantiate-10                          	    2851	    121164 ns/op	 3433410 B/op	     579 allocs/op
+BenchmarkInstantiate-10                          	    2882	    126529 ns/op	 3433408 B/op	     579 allocs/op
+BenchmarkInstantiate-10                          	    2797	    124386 ns/op	 3433409 B/op	     579 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/spikes/go-zig-binding	6.042s

@@ -967,6 +967,16 @@ from another Group, with the `load` and `refused` records. Over the Message
 Layer, `climb-v1` marks the `run end` of a Run whose message climbed with
 `climbed: true`.
 
+A Host call of a Function Value (`talk_group_call`, the Message Layer's
+`call`) is admitted as a Request to its Home Script: an override that loosens
+that Script's limits, or one no Delivery can hold, and a full Home mailbox are
+refused with the `call-value` and `refused` records. A Script's `… and wait`
+call to another Home raises `mailbox full` when that mailbox is full and
+`function gone` when the Home is stopped. A Function Value call's `run end`
+names the value's display form as its Handler, and a limit fault in it the
+function's body. With `function-gone-v1`, a Pump reply's `gone` lists the Host
+calls found stale at the drain, which end with no report.
+
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are
 checked and lowered against: each Operation's mode and argument Shapes, as

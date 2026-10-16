@@ -15,7 +15,8 @@ type groupBackend interface {
 	load(LoadOptions) (*Script, error)
 	// queue admits a Group-checked input: to a Script, an Object, or every
 	// recipient of a Broadcast. how is its Trace input name.
-	queue(s *Script, to *Object, m Message, ctx context.Context, how string, decision *Deciding) (DeliveryID, *Pending, error)
+	// A call-value input names its Function Value as fn.
+	queue(s *Script, to *Object, fn *Value, m Message, ctx context.Context, how string, decision *Deciding) (DeliveryID, *Pending, error)
 	object(*ObjectKind, string) error
 	setParent(o, parent *Object) error
 	dispose(*Object) error

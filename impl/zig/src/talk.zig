@@ -1247,7 +1247,22 @@ export fn talk_group_call(g: *Group, f: *Value, args: ?[*]const *Value, len: usi
     if (g.memory.refused) return .out_of_memory;
     if (f.data != .function or g.group.codeOfValue(f) == null) return .invalid_value;
     const given: []const *Value = if (len == 0) &.{} else (args orelse return .invalid_value)[0..len];
-    g.group.override = overrideOf(limits) catch return .invalid_value;
+    // As a Request to its Home Script: an override may not loosen that
+    // Script's limits, and its mailbox must have room (talk.go's Call).
+    const home = g.group.script(f.data.function.home);
+    const override = overrideOf(limits) catch {
+        g.group.refuseCall(f, given, refusedOverrideOf(limits), "invalid value");
+        return .invalid_value;
+    };
+    if (override) |o| if (home) |h| if (o.loosens(h.limits)) {
+        g.group.refuseCall(f, given, refusedOverrideOf(limits), "invalid value");
+        return .invalid_value;
+    };
+    if (home) |h| if (g.group.mailboxFull(h)) {
+        g.group.refuseCall(f, given, refusedOverrideOf(limits), "mailbox full");
+        return .err_mailbox_full;
+    };
+    g.group.override = override;
     const owned = g.core.gpa.alloc(*Value, given.len) catch return .out_of_memory;
     defer g.core.gpa.free(owned);
     for (owned, given) |*x, v| x.* = v.retain();

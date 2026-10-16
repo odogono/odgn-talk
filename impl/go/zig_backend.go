@@ -98,10 +98,10 @@ func newZigGroup(g *Group) groupBackend {
 		panic(err)
 	}
 	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1"}})
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1"}})
 	if err == nil {
 		features := hello.Get("features")
-		for _, required := range []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1"} {
+		for _, required := range []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1"} {
 			found := false
 			for i := 1; i <= features.Len(); i++ {
 				if zigText(features.Index(i)) == required {
@@ -307,7 +307,7 @@ func (b *zigGroup) load(o LoadOptions) (*Script, error) {
 	return s, nil
 }
 
-func (b *zigGroup) queue(s *Script, to *Object, m Message, ctx context.Context, how string, d *Deciding) (DeliveryID, *Pending, error) {
+func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx context.Context, how string, d *Deciding) (DeliveryID, *Pending, error) {
 	message, err := b.zigQueuedMessage(m)
 	if err != nil {
 		return "", nil, err
@@ -315,6 +315,17 @@ func (b *zigGroup) queue(s *Script, to *Object, m Message, ctx context.Context, 
 	fields := map[string]any{"message": message}
 	method := how
 	switch {
+	case fn != nil:
+		// A call carries its Function Value, arguments and limits directly.
+		encoded, err := b.zigEncoded(*fn)
+		if err != nil {
+			return "", nil, err
+		}
+		method, how = "call", "request"
+		fields = map[string]any{"fn": encoded, "args": message["args"]}
+		if limits, ok := message["limits"]; ok {
+			fields["limits"] = limits
+		}
 	case how == "decide-broadcast":
 		method = "decide"
 		fields["broadcast"] = true
@@ -502,6 +513,11 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			p.settle(value, failure)
 		}
 	}
+	// A stale Function Value call ends with no report.
+	gone := reply.Get("gone")
+	for i := 1; i <= gone.Len(); i++ {
+		settle(DeliveryID(zigText(gone.Index(i))), Nothing, sendFailure("function gone", nil))
+	}
 	unhandled := map[DeliveryID]bool{}
 	for _, report := range result.Reports {
 		if r, ok := report.(*Unhandled); ok {
@@ -599,7 +615,9 @@ func (b *zigGroup) zigDataOnly(v Value) error {
 		stack = stack[:len(stack)-1]
 		switch v.Kind() {
 		case KindFunction:
-			return backendUnsupported("Function Values")
+			if v.inner.Function() == nil || v.inner.Function().Group != b.group {
+				return &HostError{WrongGroup, "Function Value belongs to another Group"}
+			}
 		case KindObject:
 			if o, _ := v.AsObject(); o == nil || o.group != b.group {
 				return &HostError{WrongGroup, "Object belongs to another Group"}
@@ -648,12 +666,17 @@ func zigOverride(l LimitOverride) (map[string]any, error) {
 // payloads are then decoded as Value Encodings, preserving tags and decimals.
 func zigDecode(src Value, dst reflect.Value) error { return zigDecodeResolving(src, dst, nil) }
 
-// decode resolves Object handles in Value Encodings against this Group.
+// decode resolves Object handles and Function Values in Value Encodings
+// against this Group.
 func (b *zigGroup) decode(src Value, dst reflect.Value) error {
-	return zigDecodeResolving(src, dst, b.resolve)
+	return zigDecodeResolving(src, dst, b)
 }
 
-func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id string) (*Object, bool)) error {
+func zigDecodeResolving(src Value, dst reflect.Value, b *zigGroup) error {
+	var resolve func(kind, id string) (*Object, bool)
+	if b != nil {
+		resolve = b.resolve
+	}
 	if src.Kind() == KindNothing {
 		return nil
 	}
@@ -674,7 +697,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 		if err != nil {
 			return err
 		}
-		v, err := DecodeValue(raw, resolve)
+		v, err := b.decodeValue(raw)
 		if err != nil {
 			return err
 		}
@@ -686,7 +709,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 			return fmt.Errorf("invalid Zig variable pair")
 		}
 		dst.FieldByName("Key").SetString(zigText(src.Index(1)))
-		return zigDecodeResolving(src.Index(2), dst.FieldByName("Val"), resolve)
+		return zigDecodeResolving(src.Index(2), dst.FieldByName("Val"), b)
 	}
 	if dst.Type() == reflect.TypeFor[time.Time]() {
 		t, err := time.Parse(time.RFC3339Nano, zigText(src))
@@ -703,7 +726,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 		for _, pair := range src.Entries() {
 			if pair.Key != "code" && pair.Key != "message" {
 				var v Value
-				if err := zigDecodeResolving(pair.Val, reflect.ValueOf(&v).Elem(), resolve); err != nil {
+				if err := zigDecodeResolving(pair.Val, reflect.ValueOf(&v).Elem(), b); err != nil {
 					return err
 				}
 				data = append(data, KV(pair.Key, v))
@@ -729,7 +752,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 	switch dst.Kind() {
 	case reflect.Pointer:
 		dst.Set(reflect.New(dst.Type().Elem()))
-		return zigDecodeResolving(src, dst.Elem(), resolve)
+		return zigDecodeResolving(src, dst.Elem(), b)
 	case reflect.Struct:
 		if src.Kind() != KindMap {
 			return fmt.Errorf("invalid Zig %s", dst.Type())
@@ -737,7 +760,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 		for i := 0; i < dst.NumField(); i++ {
 			f := dst.Type().Field(i)
 			if f.Anonymous {
-				if err := zigDecodeResolving(src, dst.Field(i), resolve); err != nil {
+				if err := zigDecodeResolving(src, dst.Field(i), b); err != nil {
 					return err
 				}
 				continue
@@ -752,7 +775,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 			if f.Name == "Function" {
 				key = "fn"
 			}
-			if err := zigDecodeResolving(src.Get(key), dst.Field(i), resolve); err != nil {
+			if err := zigDecodeResolving(src.Get(key), dst.Field(i), b); err != nil {
 				return fmt.Errorf("%s: %w", f.Name, err)
 			}
 		}
@@ -762,7 +785,7 @@ func zigDecodeResolving(src Value, dst reflect.Value, resolve func(kind, id stri
 		}
 		dst.Set(reflect.MakeSlice(dst.Type(), src.Len(), src.Len()))
 		for i := 0; i < src.Len(); i++ {
-			if err := zigDecodeResolving(src.Index(i+1), dst.Index(i), resolve); err != nil {
+			if err := zigDecodeResolving(src.Index(i+1), dst.Index(i), b); err != nil {
 				return err
 			}
 		}

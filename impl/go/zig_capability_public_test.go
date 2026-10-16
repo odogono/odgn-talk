@@ -46,7 +46,8 @@ func bridgeCanonical(v reflect.Value) any {
 	if v.Type() == reflect.TypeFor[talk.Value]() {
 		data, err := talk.EncodeValue(v.Interface().(talk.Value))
 		if err != nil {
-			panic(err)
+			// A Function Value can't be encoded; its display form identifies it.
+			return "display:" + v.Interface().(talk.Value).String()
 		}
 		return json.RawMessage(data)
 	}
@@ -337,6 +338,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runBroadcastBridgeCases(t)...)
 	observations = append(observations, runDecideBridgeCases(t)...)
 	observations = append(observations, runObjectBridgeCases(t)...)
+	observations = append(observations, runFunctionBridgeCases(t)...)
 	return observations
 }
 func isReentrant(err error) bool {

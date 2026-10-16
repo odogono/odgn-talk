@@ -132,9 +132,6 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 	case "any", "value":
 		return s.Kind, nil
 	case "kind":
-		if s.Name == "function" {
-			return nil, backendUnsupported("Function Shapes")
-		}
 		return s.Name, nil
 	case "object":
 		return map[string]any{"object": s.Name}, nil
@@ -216,9 +213,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		v, err := DecodeValue(raw, b.resolve)
+		v, err := b.decodeValue(raw)
 		if err != nil {
-			detail := backendUnsupported("Function callback arguments").Error()
+			detail := err.Error()
 			b.failureDetails[CallID(zigText(need.Get("call")))] = detail
 			return map[string]any{"hostError": detail}, nil
 		}

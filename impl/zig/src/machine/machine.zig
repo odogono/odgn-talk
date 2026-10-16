@@ -1413,6 +1413,9 @@ pub const Group = struct {
     /// Script sends to a stopped Script, dropped once the sender's Segment
     /// ends, as talk.go and talk.ts drop them.
     stopped_sends: std.ArrayList(StoppedSend) = .empty,
+    /// Host calls of Function Values found gone at the drain, by delivery
+    /// number, until a Message Layer reply takes them.
+    gone_calls: std.ArrayList(u64) = .empty,
     broadcasts: u64 = 0,
     /// The error an instruction raised, until the run loop takes it.
     pending_error: ?*Value = null,
@@ -1596,6 +1599,7 @@ pub const Group = struct {
         g.open_broadcasts.deinit(g.gpa);
         for (g.stopped_sends.items) |x| g.releaseDelivery(x.delivery);
         g.stopped_sends.deinit(g.gpa);
+        g.gone_calls.deinit(g.gpa);
         if (g.restored) |*r| r.deinit(g.gpa);
         for (g.deferred.items) |x| if (x.mark) |m| g.releaseMark(m);
         g.deferred.deinit(g.gpa);
@@ -3287,6 +3291,17 @@ pub const Group = struct {
         g.write("refused code=\"{s}\"\n", .{code});
     }
 
+    /// Writes a Host call of a Function Value the call refused, with no id,
+    /// then its `refused` record.
+    pub fn refuseCall(g: *Group, f: *Value, args: []const *Value, limits: ?RefusedOverride, code: []const u8) void {
+        const out = g.trace orelse return;
+        out.writeAll("> call-value fn=") catch {};
+        display.writeTrace(out, f) catch {};
+        writeArgs(out, args);
+        if (limits) |o| o.write(out);
+        out.print("\nrefused code=\"{s}\"\n", .{code}) catch {};
+    }
+
     /// Writes a Delivery, Request or Decision refused for an override no
     /// Delivery can hold, such as a negative one, then its `refused` record.
     pub fn refuseOverride(g: *Group, to: []const u8, d: Delivery, limits: ?RefusedOverride, code: []const u8) void {
@@ -3797,6 +3812,7 @@ pub const Group = struct {
                 // Script is stopped, runs nothing.
                 if (d.delivery.function) |f| if (s.stopped != null or g.codeOf(f) == null or g.functionBody(g.codeOf(f).?) == null) {
                     g.write("note d{d} kind=function-gone\n", .{d.delivery.id});
+                    try g.gone_calls.append(g.gpa, d.delivery.id);
                     g.releaseDelivery(d.delivery);
                     return;
                 };
@@ -5666,7 +5682,12 @@ pub const Group = struct {
         var end: report.RunEnd = .{ .script = try r.text(s.name), .run = try r.text(run.id), .outcome = .completed, .fallback = run.fallback, .fuel = run.fuel, .alloc = run.alloc };
         if (d.from == null) end.delivery = try r.print("d{d}", .{d.id});
         if (d.broadcast > 0) end.broadcast = try r.print("b{d}", .{d.broadcast});
-        if (run.fallback or g.hasHandler(s, run.handler)) end.handler = try r.text(run.handler);
+        if (run.fallback or g.hasHandler(s, run.handler)) {
+            end.handler = try r.text(run.handler);
+        } else if (d.function) |f| {
+            // A Function Value call's Run is labelled by its display form.
+            end.handler = try r.text(try display.string(g.scratch.allocator(), f));
+        }
         end.climbed = d.broadcast == 0 and switch (outcome) {
             .passed, .unhandled, .clause_failed => true,
             else => false,
@@ -6616,6 +6637,14 @@ pub const Group = struct {
             if (run.scopes.items.len > 0) return g.refuseOpenScope(run);
             // A message to the Home Script, whose reply ends the wait.
             const home = g.script(code.home) orelse return g.raise("function gone", &.{});
+            // A stopped Home Script's functions are gone (chapter 9).
+            if (home.stopped != null) return g.raise("function gone", &.{});
+            // A full Home mailbox refuses the call, as it does a send.
+            if (mailboxLen(home) >= home.limits.mailbox_depth) {
+                const shown = try model.text(g.gpa, home.name);
+                defer shown.release();
+                return g.raise("mailbox full", &.{.{ .key = "to", .value = shown }});
+            }
             run.calls += 1;
             const id = try std.fmt.allocPrint(g.gpa, "{s}.c{d}", .{ run.id, run.calls });
             g.ids.append(g.gpa, id) catch |e| {
@@ -7748,7 +7777,10 @@ pub const Group = struct {
             run.cleanup_limited = true;
             return g.cleanupFailed(run);
         }
-        run.end_at = .{ .unit = unit, .line = ins.position.line, .column = ins.position.column, .handler = run.handler, .pc = pc };
+        // A Function Value call's Run has no Handler: its fault names the
+        // function's own body, as talk.go's does.
+        const handler = if (run.handler.len == 0 and run.delivery.function != null and run.frames.items.len > 0) unitOf(run, &run.frames.items[0]).bodies[run.frames.items[0].body].name else run.handler;
+        run.end_at = .{ .unit = unit, .line = ins.position.line, .column = ins.position.column, .handler = handler, .pc = pc };
         if (g.trace) |w| {
             w.print("fault {s} limit={s} at={s}:{d} pos={d}:{d}", .{ run.id, @tagName(limit), unit, pc, ins.position.line, ins.position.column }) catch {};
             if (run.segment_base) |base| {

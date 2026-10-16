@@ -292,7 +292,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 		{"restore", func() error { _, _, e := core.Restore(nil, talk.RestoreOptions{}); return e }},
 		{"reload", func() error { _, e := s.Reload("", talk.ResetVariables); return e }},
 		{"extend", func() error { return s.Extend("") }},
-		{"function", func() error { _, _, e := g.Call(context.Background(), talk.Nothing, nil, nil); return e }},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
