@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// An owner disposal stops already-started Runs. Object-addressed mailbox
-// messages still follow their current paths, while direct messages are dropped.
+// An owner disposal stops the Script as Stop does: its Runs are discarded and
+// its whole mailbox dropped, object-addressed messages included (#1023).
 func (g *Group) disposeOwner(s *Script, reports *[]Report, settlements *[]func(), seal func(delivery, RunID, Verdict, Value, Outcome)) {
 	g.stopScript(s, "owner disposed", reports, settlements, seal)
 }
@@ -93,14 +93,6 @@ func (g *Group) terminateScript(s *Script, reason string, reports *[]Report, set
 			continue
 		}
 		d := item.delivery
-		if d.path {
-			if moved, changed := g.moveDelivery(d); changed {
-				if moved.script == nil {
-					g.unrouted = append(g.unrouted, moved)
-				}
-				continue
-			}
-		}
 		g.release(s)
 		if d.id != "" {
 			stop.DroppedMessages = append(stop.DroppedMessages, d.id)

@@ -1,0 +1,22 @@
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "room"
+[[objects]]
+kind = "room"
+id = "a"
+[[objects]]
+kind = "room"
+id = "b"
+[[scripts]]
+name = "child"
+source = "child.talk"
+owner = { kind = "room", id = "a" }
+[[scripts]]
+name = "parent"
+source = "parent.talk"
+owner = { kind = "room", id = "b" }

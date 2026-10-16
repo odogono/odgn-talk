@@ -288,6 +288,7 @@ objects/implicit-property-targets
 objects/message-path
 objects/moving-climb
 objects/moving-mailbox
+objects/owner-disposal-drops-queued
 objects/properties
 objects/queued-parent-refusals
 objects/sends
