@@ -119,7 +119,9 @@ cycle, are decided in #1037.
 too large`, `name reused` and every diagnostic. A Reload returns the typed
 Reports of the Runs it discarded, settles their futures, keeps the mailbox
 when asked, runs Grant release hooks with reason `reload` and restarts a
-stopped Script. Function Values made by the old code are stale afterwards.
+stopped Script. Function Values made by the old code are stale afterwards. Reloading a Script
+which was already stopped still omits its next Grant release callback
+([#1073](https://github.com/odogono/odgn-talk/issues/1073)).
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.

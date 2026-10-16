@@ -223,7 +223,7 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 				code(e)
 				pump(restored, bridgeNow.Add(time.Second), talk.PumpOptions{})
 				pump(restored, bridgeNow.Add(time.Second), talk.PumpOptions{})
-				_, e := restored.Settle(id, talk.Settlement{Adopt: true})
+				_, e = restored.Settle(id, talk.Settlement{Adopt: true})
 				code(e)
 			} else {
 				pump(restored, bridgeNow.Add(time.Second), talk.PumpOptions{})
@@ -246,4 +246,70 @@ func runSaveBridgeCases(t *testing.T) []bridgeObservation {
 		})
 	}
 	return observations
+}
+
+// A transport handle must never become part of a declaration's identity.
+// Loading in reverse order assigns different guest handles to the same public
+// definitions, including two definitions with one public Capability name.
+func TestPersistenceFingerprintRegistrationOrder(t *testing.T) {
+	core := talk.New()
+	define := func(n int64) *talk.Grant {
+		def, err := core.DefineCapability("service", talk.Operation{Name: "read", Result: talk.NumberShape, Cost: talk.Cost{Fuel: n}, Do: func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
+			if c.Binding() != n {
+				t.Fatal("restored binding changed", c.Binding())
+			}
+			return talk.Int(n), nil
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return def.GrantAll(n)
+	}
+	grants := map[string]*talk.Grant{"a": define(1), "z": define(2)}
+	makeGroup := func(names []string) *talk.Group {
+		g := core.NewGroup(talk.GroupOptions{})
+		for _, name := range names {
+			if _, err := g.Load(talk.LoadOptions{Name: name, Source: "on go\n ask api to read\n return it\nend go\n", Grants: map[string]*talk.Grant{"api": grants[name]}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return g
+	}
+	g := makeGroup([]string{"z", "a"})
+	if g.Fingerprint() != makeGroup([]string{"a", "z"}).Fingerprint() {
+		t.Fatal("registration order changed Fingerprint")
+	}
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, _, err := core.Restore(saved, talk.RestoreOptions{Grants: func(script, name string) *talk.Grant { return grants[script] }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Fingerprint() != g.Fingerprint() || !reflect.DeepEqual(restored.ScriptNames(), []string{"z", "a"}) {
+		t.Fatal("restore changed identity or load order")
+	}
+	for _, name := range []string{"z", "a"} {
+		_, p, err := restored.Script(name).Request(nil, talk.Message{Name: "go"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := restored.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		v, failure := p.Result()
+		want := int64(1)
+		if name == "z" {
+			want = 2
+		}
+		select {
+		case <-p.Done():
+		default:
+			t.Fatal("restored Request did not settle")
+		}
+		if failure != nil || !v.Equal(talk.Int(want)) {
+			t.Fatal(v, failure)
+		}
+	}
 }
