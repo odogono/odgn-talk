@@ -28,6 +28,9 @@ exec([
   '-Iimpl/zig/include',
   'bench/zig/host.c',
   'impl/zig/zig-out/lib/libtalk.a',
+  // libtalk.a isn't position-independent, and Linux toolchains link PIE by
+  // default.
+  ...(process.platform === 'linux' ? ['-no-pie'] : []),
   '-o',
   binary,
 ]);
