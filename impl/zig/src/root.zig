@@ -73,6 +73,7 @@ test {
     _ = @import("machine/reports.zig");
     _ = @import("machine/clause_charge_test.zig");
     _ = @import("machine/lifecycle_test.zig");
+    _ = @import("machine/library_binding_test.zig");
     _ = @import("machine/crossing_test.zig");
     _ = @import("machine/list_write_test.zig");
     _ = @import("machine/text_concat_test.zig");

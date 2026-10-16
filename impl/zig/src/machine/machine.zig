@@ -547,6 +547,9 @@ pub const Script = struct {
     names: std.ArrayList(check.Inherited) = .empty,
     variables: []*Value,
     definitions: []*Value,
+    /// Library Constants/defaults bound to this Home and code generation.
+    /// Derived lazily, never saved; extensions own their definitions instead.
+    library_definitions: std.AutoHashMapUnmanaged(*Library, []*Value) = .empty,
     /// Its work, in the order each became ready.
     work: std.ArrayList(Work) = .empty,
     /// Its Runs that are suspended or ready, which its state counts.
@@ -2063,6 +2066,10 @@ pub const Group = struct {
     /// Releases a Script's code: its unit's constants, its extensions and
     /// the arena that holds them.
     pub fn dropCode(g: *Group, s: *Script) void {
+        var definitions = s.library_definitions.valueIterator();
+        while (definitions.next()) |values| releaseAll(values.*, g.gpa);
+        s.library_definitions.deinit(g.gpa);
+        s.library_definitions = .empty;
         for (s.extensions.items) |x| x.destroy();
         s.extensions.deinit(g.gpa);
         for (s.unit.values) |v| if (v == .value) v.value.release();
@@ -2438,6 +2445,7 @@ pub const Group = struct {
         s.names = fresh.names;
         s.variables = fresh.variables;
         s.definitions = fresh.definitions;
+        s.library_definitions = fresh.library_definitions;
         s.identity = fresh.identity;
         s.generation = fresh.generation;
         // The detached Script holds nothing now.
@@ -2446,6 +2454,7 @@ pub const Group = struct {
         fresh.extensions = .empty;
         fresh.variables = &.{};
         fresh.definitions = &.{};
+        fresh.library_definitions = .empty;
         return true;
     }
 
@@ -6734,6 +6743,25 @@ pub const Group = struct {
         return bound.get(value).?.retain();
     }
 
+    /// A Library's immutable definitions, bound once per Home Script. Keep
+    /// templates shared while compiling Libraries, and extension definitions
+    /// in their owning unit, where the initialiser can still write them.
+    fn definitionsOf(g: *Group, run: *const Run, frame: *const Frame) ![]*Value {
+        const library = frame.library orelse return run.script.definitions;
+        if (g.compiling_library or library.extension > 0) return library.definitions;
+        if (run.script.library_definitions.get(library)) |values| return values;
+
+        const values = try g.gpa.alloc(*Value, library.definitions.len);
+        var i: usize = 0;
+        errdefer {
+            for (values[0..i]) |value| value.release();
+            g.gpa.free(values);
+        }
+        while (i < values.len) : (i += 1) values[i] = try g.bindLibraryValue(run.script, library, library.definitions[i]);
+        try run.script.library_definitions.put(g.gpa, library, values);
+        return values;
+    }
+
     /// `call-value` and `call-value-wait`: a Function Value whose Home
     /// Script is this one runs in the caller's Run, with its captures.
     fn callValue(g: *Group, run: *Run, frame: *Frame, ins: lower.Instruction) !Step {
@@ -6806,10 +6834,12 @@ pub const Group = struct {
         try g.pushFrameIn(run, library, body, args);
         const callee = &run.frames.items[run.frames.items.len - 1];
         const params = unitOf(run, callee).bodies[body].params;
+        var definitions: ?[]*Value = null;
         for (params[args.len..], args.len + 1..) |p, slot| {
             const eq = std.mem.indexOf(u8, p, " = ") orelse continue;
             const def = std.fmt.parseInt(usize, p[eq + 3 ..], 10) catch continue;
-            const bound = try g.bindLibraryValue(run.script, library, definitionsOf(run, callee)[def]);
+            if (definitions == null) definitions = try g.definitionsOf(run, callee);
+            const bound = definitions.?[def].retain();
             callee.locals[slot].release();
             callee.locals[slot] = bound;
         }
@@ -8061,12 +8091,13 @@ pub const Group = struct {
             },
             .load_definition => {
                 const i = definitionIndex(unit, ops[0].text);
-                try g.push(frame, try g.bindLibraryValue(run.script, frame.library, definitionsOf(run, frame)[i]));
+                try g.push(frame, (try g.definitionsOf(run, frame))[i].retain());
             },
             .store_definition => {
                 const i = definitionIndex(unit, ops[0].text);
-                definitionsOf(run, frame)[i].release();
-                definitionsOf(run, frame)[i] = pop(frame);
+                const definitions = try g.definitionsOf(run, frame);
+                definitions[i].release();
+                definitions[i] = pop(frame);
             },
             // `me` is the owner; `the target` the object the message was
             // delivered to, or for a message to a Script, its owner.
@@ -10408,10 +10439,6 @@ fn unitOf(run: *const Run, frame: *const Frame) *const lower.Unit {
     return if (frame.library) |l| &l.unit else &run.script.unit;
 }
 
-fn definitionsOf(run: *const Run, frame: *const Frame) []*Value {
-    return if (frame.library) |l| l.definitions else run.script.definitions;
-}
-
 fn unitName(run: *const Run, frame: *const Frame) []const u8 {
     return if (frame.library) |l| l.name else run.script.name;
 }
@@ -10454,4 +10481,48 @@ fn blockDeadline(frame: *const Frame) ?Deadline {
         if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline;
     }
     return null;
+}
+
+test "bound Library definitions reuse containers without allocating on later reads" {
+    const testing = std.testing;
+    const compiled = try compileLibrary(testing.allocator, "helper", "1",
+        \\constant plain = [1, 2, 3]
+        \\constant box = {f: given x: x + 1}
+        \\function read
+        \\  return box
+        \\end read
+        \\
+    , &.{}, null);
+    try testing.expect(compiled == .library);
+    const library = compiled.library;
+    defer library.destroy();
+    var failing = testing.FailingAllocator.init(testing.allocator, .{});
+    var g: Group = .init(failing.allocator(), null);
+    defer g.deinit();
+    try g.addLibrary(library);
+    const loaded = try g.load("a", "use read from helper\n", .{});
+    try testing.expect(loaded == .loaded);
+    var run: Run = .{ .id = "", .script = loaded.loaded, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
+    const frame: Frame = .{ .library = library, .body = 0, .pc = 0, .locals = &.{} };
+    const values = try g.definitionsOf(&run, &frame);
+    const box = definitionIndex(&library.unit, "box");
+    const plain = definitionIndex(&library.unit, "plain");
+    try testing.expect(values[box] != library.definitions[box]);
+    try testing.expectEqual(library.definitions[plain], values[plain]);
+    const callback = values[box].data.map.at(0).value;
+    try testing.expectEqualStrings("a", callback.data.function.home);
+    try testing.expect(g.codeOfValue(callback) != null);
+    try testing.expect(g.codeOfValue(library.definitions[box].data.map.at(0).value) == null);
+
+    // Refuse every new allocation: neither a plain container nor a bound
+    // template container may rebuild the import closure or walk its children.
+    failing.fail_index = failing.alloc_index;
+    failing.resize_fail_index = failing.resize_index;
+    for (0..100) |_| {
+        const again = try g.definitionsOf(&run, &frame);
+        try testing.expectEqual(values.ptr, again.ptr);
+        try testing.expectEqual(values[box], again[box]);
+        try testing.expectEqual(values[plain], again[plain]);
+    }
+    try testing.expect(!failing.has_induced_failure);
 }
