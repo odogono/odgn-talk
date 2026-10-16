@@ -629,46 +629,77 @@ end pointerEnter`;
 });
 
 const clickButton = (
-  projectScript = '',
-  buttonScript = 'on click\n hide text1\nend click',
+  scripts: { button?: string; page?: string; project?: string } = {},
 ) => {
   const project = fixture();
-  project.pages[0]!.elements[0]!.script = buttonScript;
-  project.script = projectScript;
+  project.pages[0]!.elements[0]!.script =
+    scripts.button ?? 'on click\n hide text1\nend click';
+  project.pages[0]!.script = scripts.page ?? '';
+  project.script = scripts.project ?? '';
   const play = new PlaySession(project);
   play.send(play.page.elements[0]!, 'click');
   drain(play);
   return play;
 };
 
-test('hide and show are built in: an unhandled call ends at Folio, below any override', () => {
+test('hide and show are Host Commands of every Script', () => {
   const plain = clickButton();
   expect(plain.problems).toEqual([]);
   expect(plain.page.elements[1]!.visible).toBe(false);
 
-  const overridden = clickButton('on hide t\nend hide');
-  expect(overridden.page.elements[1]!.visible).toBe(true);
-
-  const passed = clickButton('on hide t\n pass hide\nend hide');
-  expect(passed.problems).toEqual([]);
-  expect(passed.page.elements[1]!.visible).toBe(false);
-
-  const shown = clickButton(
-    '',
-    'on click\n hide text1\n show text1\nend click',
-  );
+  const shown = clickButton({
+    button: 'on click\n hide text1\n show text1\nend click',
+  });
+  expect(shown.problems).toEqual([]);
   expect(shown.page.elements[1]!.visible).toBe(true);
+
+  const project = fixture();
+  project.pages[0]!.script = 'on openPage\n hide text1\nend openPage';
+  const page = new PlaySession(project);
+  drain(page);
+  expect(page.problems).toEqual([]);
+  expect(page.page.elements[1]!.visible).toBe(false);
 });
 
-test('a built-in command error is reported against the Script that called it', () => {
-  const project = fixture();
-  project.pages[0]!.elements[0]!.script = 'on click\n hide 42\nend click';
-  const play = new PlaySession(project);
-  play.send(play.page.elements[0]!, 'click');
-  drain(play);
+test('a Script further up the Message Path no longer intercepts hide', () => {
+  for (const script of [
+    'on hide t\nend hide',
+    'on hide t\n pass hide\nend hide',
+  ]) {
+    for (const play of [
+      clickButton({ page: script }),
+      clickButton({ project: script }),
+    ]) {
+      expect(play.problems).toEqual([]);
+      expect(play.page.elements[1]!.visible).toBe(false);
+    }
+  }
+});
+
+test("a Script's own hide Handler takes its calls", () => {
+  const play = clickButton({
+    button:
+      'on hide t\n set the label of me to "mine"\nend hide\non click\n hide text1\nend click',
+  });
+  expect(play.problems).toEqual([]);
+  expect(play.page.elements[1]!.visible).toBe(true);
+  expect(play.page.elements[0]).toHaveProperty('label', 'mine');
+});
+
+test('a Host Command error is raised at the calling line and stops its Handler', () => {
+  const play = clickButton({
+    button:
+      'on click\n put 42 into target\n hide target\n set the label of me to "after"\nend click',
+  });
+  const button = play.project.pages[0]!.elements[0]!;
   expect(play.problems).toMatchObject([
-    { owner: project.pages[0]!.elements[0] },
+    { owner: play.authored.get(button), line: 3 },
   ]);
+  expect(button).toHaveProperty('label', 'Button');
+
+  // A literal of the wrong Shape is caught when the Script loads.
+  const literal = clickButton({ button: 'on click\n hide 42\nend click' });
+  expect(literal.problems).toMatchObject([{ line: 2 }]);
 });
 
 test('user prompts resume their Run with the reader’s answer', async () => {

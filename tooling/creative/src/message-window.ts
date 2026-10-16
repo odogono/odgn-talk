@@ -22,11 +22,7 @@ import {
   showCodeWindow,
 } from './code-window';
 import { h } from './dom';
-import {
-  MESSAGE_FIRST_LINE,
-  messageNames,
-  messageParts,
-} from './folio-library';
+import { MESSAGE_FIRST_LINE, messageParts } from './message-script';
 import { runInEdit, type MessageReply } from './message';
 import { type PlaySession } from './play';
 import { scriptManifest } from './script-manifest';
@@ -129,12 +125,12 @@ export const mountMessageWindow = (
     const name = target.session()?.page.name;
     return project.pages.find(p => p.name === name) ?? shell.editor.page;
   };
-  /** Refreshes the names, imports and Host Manifest for the current Page. */
+  /** Refreshes the names and Host Manifest for the current Page. */
   const sync = () => {
     const project = shell.editor.project;
     const showing = page();
     server.configure(scriptManifest(project, showing));
-    const { prefix, suffix } = messageParts(messageNames(project, showing));
+    const { prefix, suffix } = messageParts();
     const doc = view.state.doc.toString();
     const text = command();
     if (doc !== prefix + text + suffix) {
@@ -212,7 +208,7 @@ export const mountMessageWindow = (
 
   const view = codeEditor({
     parent,
-    doc: (({ prefix, suffix }) => prefix + suffix)(messageParts(new Set())),
+    doc: (({ prefix, suffix }) => prefix + suffix)(messageParts()),
     uri: URI,
     lsp,
     extensions: [

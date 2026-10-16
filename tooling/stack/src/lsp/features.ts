@@ -683,6 +683,14 @@ export const completion = (
         .filter(name => name.startsWith(partial))
         .map(name => messageItem(manifest!, name, client))
     : [];
+  // A Host Command starts a statement as a Command Call (ADR 0094).
+  const commands = commandPosition
+    ? [...(manifest?.grants ?? [])].flatMap(([grant, operations]) =>
+        [...operations.values()]
+          .filter(op => op.command && op.name.startsWith(partial))
+          .map(op => operationItem(grant, op, rest, client)),
+      )
+    : [];
   const bindings = analysis.checked.tree.scopes
     .filter(s => scopes.has(s.id))
     .flatMap(s =>
@@ -704,9 +712,14 @@ export const completion = (
           ),
         ),
     );
+  // A Script's own Handler takes the call, so its item wins.
+  const shadowed = (label: string) => bindings.some(b => b.label === label);
   return [
     ...bindings,
-    ...messages.filter(m => !bindings.some(b => b.label === m.label)),
+    ...commands.filter(c => !shadowed(c.label)),
+    ...messages.filter(
+      m => !shadowed(m.label) && !commands.some(c => c.label === m.label),
+    ),
   ];
 };
 
