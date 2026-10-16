@@ -46,3 +46,88 @@ defmodule NorthTalk.ValueTest do
     assert roundtrip(map) == map
   end
 end
+
+defmodule NorthTalk.ValueKindsTest do
+  use ExUnit.Case, async: true
+  alias NorthTalk.{Bytes, CivilDate, HostError, Instant, Object, Pattern, Quantity, Range, Value}
+
+  defp wire(term), do: term |> Value.encode() |> Jason.encode!()
+  defp read(json), do: json |> Jason.decode!(objects: :ordered_objects, floats: :decimals) |> Value.decode()
+
+  test "every kind round-trips to the same bytes" do
+    for {term, json} <- [
+          {nil, "null"},
+          {true, "true"},
+          {-3, "-3"},
+          {Decimal.new("2.50"), ~s({"$dec":"2.50"})},
+          {"é", ~s("é")},
+          {Bytes.new(<<0, 255, 104, 105>>), ~s({"$bytes":"AP9oaQ=="})},
+          {Bytes.new(""), ~s({"$bytes":""})},
+          {[1, [2]], "[1,[2]]"},
+          {NorthTalk.Map.new([{"b", 1}, {"a", 2}]), ~s({"b":1,"a":2})},
+          {NorthTalk.Map.new([{"$k", 1}]), ~s({"$map":[["$k",1]]})},
+          {Quantity.new(Decimal.new("2.50"), "GBP"), ~s({"$quantity":["2.50","GBP"]})},
+          {Quantity.new(3, "day"), ~s({"$quantity":["3","day"]})},
+          {Range.new(1, Decimal.new("2.5")), ~s({"$range":[1,{"$dec":"2.5"}]})},
+          {%Instant{unix_us: 1_704_160_000_500_000}, ~s({"$instant":"2024-01-02T01:46:40.5Z"})},
+          {%Instant{unix_us: -1}, ~s({"$instant":"1969-12-31T23:59:59.999999Z"})},
+          {%CivilDate{year: 2024, month: 1, day: 2}, ~s({"$date":"2024-01-02"})},
+          {%CivilDate{year: 2024, month: 1, day: 2, hour: 3, minute: 4, second: 5, microsecond: 250_000},
+           ~s({"$date":"2024-01-02T03:04:05.25"})},
+          {%CivilDate{year: 2024, month: 1, day: 2, hour: 0, minute: 0, second: 0, microsecond: 0},
+           ~s({"$date":"2024-01-02T00:00:00"})},
+          {Pattern.new(~s(<"ID-", 4 digits>)), ~s({"$pattern":"<\\"ID-\\", 4 digits>"})},
+          {%Object{kind: "door", id: "d1"}, ~s({"$object":["door","d1"]})}
+        ] do
+      assert wire(term) == json
+      assert read(json) == term
+      assert wire(read(json)) == json
+    end
+  end
+
+  test "Elixir dates are accepted on input" do
+    assert wire(~D[2024-01-02]) == ~s({"$date":"2024-01-02"})
+    assert wire(~N[2024-01-02 03:04:05.120]) == ~s({"$date":"2024-01-02T03:04:05.12"})
+    assert wire(~U[2024-01-02 03:04:05.000001Z]) == ~s({"$instant":"2024-01-02T03:04:05.000001Z"})
+    assert Instant.to_datetime(read(~s({"$instant":"2024-01-02T03:04:05.000001Z"}))) == ~U[2024-01-02 03:04:05.000001Z]
+  end
+
+  test "decoding refuses forms the encoder wouldn't write" do
+    for json <- [
+          ~s({"$dec":"3"}),
+          ~s({"$dec":"01"}),
+          ~s({"$dec":"1e2"}),
+          "1.0",
+          "9007199254740993",
+          ~s({"$map":[["a",1]]}),
+          ~s({"$k":1,"b":2}),
+          ~s({"$bytes":"AP9oaQ"}),
+          ~s({"$bytes":"AP9oaR=="}),
+          ~s({"$quantity":["03","day"]}),
+          ~s({"$instant":"2024-01-02T03:04:05.50Z"}),
+          ~s({"$instant":"2024-01-02T03:04:05+01:00"}),
+          ~s({"$date":"2024-02-30"}),
+          ~s({"$date":"2024-01-02T03:04:05.0"}),
+          ~s({"$instant":"1970-01-01T00:00:00.0000001Z"}),
+          ~s({"$date":"2026-09-27T14:30:00.1234567"}),
+          ~s({"$range":[1]}),
+          ~s({"$nope":1}),
+          ~s({"$function":["s","f","t"]})
+        ] do
+      assert_raise HostError, ~r/invalid value/, fn -> read(json) end
+    end
+  end
+
+  test "input never creates atoms and refuses what has no form" do
+    read(~s({"never_an_atom_993":{"$object":["k_never_993","i"]}}))
+
+    for name <- ["never_an_atom_993", "k_never_993"],
+        do: assert_raise(ArgumentError, fn -> String.to_existing_atom(name) end)
+
+    assert_raise HostError, ~r/UTF-8/, fn -> Value.encode(<<0xFF>>) end
+
+    assert_raise HostError, ~r/storage/, fn ->
+      Value.encode(%NorthTalk.Function{owner: self(), group: "g", id: make_ref()})
+    end
+  end
+end

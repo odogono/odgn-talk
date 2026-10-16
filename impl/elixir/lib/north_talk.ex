@@ -133,6 +133,42 @@ defmodule NorthTalk do
     do: GenServer.call(owner, {:send, "request", group, to, name, args}, timeout)
 
   @doc """
+  Calls a Function Value a Script gave the Host, through its own Group, and
+  waits until its Run ends, as `request/5` does. A handle of another Group,
+  or one released, is a `NorthTalk.HostError`: `wrong group` or `function
+  released`. A call through a closed owner is `instance closed`.
+  """
+  def call(%Group{owner: owner} = group, %NorthTalk.Function{} = fun, args \\ [], timeout \\ 5_000) do
+    GenServer.call(owner, {:call, group, fun, args}, timeout)
+  catch
+    # A timeout still exits the caller, as a request's does.
+    :exit, reason ->
+      if Process.alive?(owner),
+        do: exit(reason),
+        else: {:error, %NorthTalk.HostError{code: "instance closed", detail: "#{inspect(owner)} is not running"}}
+  end
+
+  @doc """
+  Releases a Function Value handle. Later use of it is `function released`.
+  Releasing it twice, or through a closed owner, does nothing. A Group's or
+  owner's handles are all released when it closes; there are no finalisers.
+  """
+  def release(%NorthTalk.Function{owner: owner} = fun) do
+    GenServer.call(owner, {:release, fun})
+  catch
+    :exit, _ -> :ok
+  end
+
+  @doc """
+  Closes a Group on the Host's side: releases its Function Values, fails its
+  waiting requests and stops Pumping it. Later calls through it are a
+  `NorthTalk.HostError` with code `group closed`. The Core has no message
+  that frees a Group, so its state stays in the instance until the owner
+  closes.
+  """
+  def close_group(%Group{owner: owner} = group), do: GenServer.call(owner, {:close_group, group})
+
+  @doc """
   Pumps a Group once. For `drive: :manual`; an automatic owner Pumps itself.
   Options: `:now`, a `DateTime` Clock reading, and `:fuel_slice`.
   Returns the Group's `state`, `next_deadline`, `fuel_used` and `reports`.
@@ -236,7 +272,9 @@ defmodule NorthTalk do
         replace_library: 3,
         save: 1,
         restore: 4,
-        settle: 3
+        settle: 3,
+        call: 4,
+        close_group: 1
       ] do
     args = Macro.generate_arguments(arity, __MODULE__)
 
