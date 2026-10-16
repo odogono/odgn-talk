@@ -1,6 +1,8 @@
 // The `folio` Library: HyperTalk-style commands for Folio's Objects, such as
-// `hide welcomeText`. The Message Box imports it; an authored Script can
-// with `use hide, show from folio`.
+// `hide welcomeText`. A Play Session also loads this source as the Script of
+// a hidden object above the Project, so an unhandled `hide x` from any Script
+// ends there, as HyperCard's built-in commands did; a Script can still answer
+// `on hide` itself or `pass hide`. The ownerless Message Box imports it.
 import { compileLibrary } from '@odgn/northtalk';
 import { type Page, type Project } from './model';
 
