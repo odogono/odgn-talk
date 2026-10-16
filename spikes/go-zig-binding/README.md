@@ -118,6 +118,34 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Function Value artifact refresh, 2026-10-16
+
+[Raw output](measurements-functions.txt) records three repetitions with artifact
+source `7888f391`, SHA-256
+`5a7a8421d46378c30c557029549666a35597670e33216de7b28a751c79ab3d1d`,
+and public-adapter/native-Go revision `a853b7ef`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.815 µs native Go vs 32.849 µs probe (8.6×)**,
+cold compile/runtime/close **625.4 ms**, cached instantiation/close **124.4 µs**.
+This is the same independent immediate-call workload; it does not measure
+public Function Value call latency, tail latency or an accepted retirement limit.
+
+The public comparison now covers 117 callback/input scenarios. Fourteen new
+Function Value scenarios compare exact Trace, Fuel, typed Reports, futures and
+inspected state against a separately compiled native-Go Host: named functions,
+captured Lambdas, defaults and wrong arity, Function Values as arguments, nested
+values and equality, stale Homes, cancellation, overrides, refusals, Function
+Shapes, callback-generated Calls, Inspect variables, and Script calls to full or
+stopped Homes. Twelve existing native Function tests join the experimental
+selection. Zig corrections are tracked in #1030 and the opt-in
+`function-gone-v1` Message Layer field in #1031. Both artifacts are refreshed
+together.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C tests, all 430 ordinary
+and deferred Corpus cases and both WASI checks pass locally. Independent pure-Go
+adapter/probe cross-builds cover Linux amd64/arm64 and macOS arm64. This
+revision still needs CI execution on the other required runners.
+
 ## Host Object artifact refresh, 2026-10-16
 
 [Raw output](measurements-objects.txt) records three repetitions with artifact

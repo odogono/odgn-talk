@@ -87,7 +87,18 @@ results, including Object Shapes. Decoded handles are the Host's own. Property
 the guest pays the declared cost; failures and panics become the same Host
 failures, with `call failed` detail kept in Go. The adapter negotiates
 `climb-v1`, so a Request whose message climbs the Message Path settles at its
-answer, not at the first Run's end. A queued Object-addressed message is dropped
+answer, not at the first Run's end.
+
+Function Values cross as the guest's `{"$function": [home, display, token]}`.
+In Go each is an ordinary `function` Value of its Group, whose identity is the
+token: `HomeScript`, `String` and `Equal` behave natively, another Group's is
+refused as `wrong group` before encoding, and the storage encoding still
+refuses it. They travel in message arguments, results, Reports, Inspect
+variables and Capability arguments and results, including Function Shapes.
+`Group.Call` goes through the guest's `call` with the native admission checks
+and records, its context cancelling the call, and the adapter negotiates
+`function-gone-v1`, so a call found stale at the drain rejects with `send
+failed`, reason `function gone`, as natively. A queued Object-addressed message is dropped
 when its owner is disposed in the same drain, as talk.ts does; native Go
 re-routes it (#1023).
 
@@ -110,7 +121,7 @@ Hook-generated inputs and OnReady obey the same worker boundary; repeated Stop
 or Revoke does not repeat its release. GrantsAsUsed trims unused hooks.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1` and `climb-v1`. The last feature publishes an Operation's call record and
+`crossing-trace-v1`, `climb-v1` and `function-gone-v1`. The last feature publishes an Operation's call record and
 held refusal records before crossing controls land, so a Trace sink can queue
 Stop at that boundary. Error replies publish their available refusal/diagnostic
 records before returning the error. Other Script-execution Trace records can
@@ -119,11 +130,11 @@ compatibility gate. Input admission during a non-yielding WASM export also
 remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result: Function Values/calls, Libraries,
+existing signature has no error result: Libraries,
 Reload/Extend, Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
 name in one Group, and a Kind first defined inside a Host callback, are refused.
 Capability attachments with scoped or Segment lifecycle hooks, Standard
-factory refinements, Function Shapes or Shapes nested beyond 32 levels
+factory refinements or Shapes nested beyond 32 levels
 are explicitly refused. They do not fall back to native Go language execution.
 Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go
 facilities pending their own adapter acceptance.
