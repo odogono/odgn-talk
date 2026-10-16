@@ -1351,8 +1351,11 @@ export const mountStack = (
         delete: editor.canDelete,
         duplicate: true,
       };
+      // Browsing hides the Page, so only Script edits can be undone.
       button.disabled =
-        editor.readOnly || !(enabled[command] ?? editor.selection.length > 0);
+        editor.readOnly ||
+        (playing === 'browse' && command !== 'undo' && command !== 'redo') ||
+        !(enabled[command] ?? editor.selection.length > 0);
     }
   };
   const runCommand = (command: EditingCommand) => {

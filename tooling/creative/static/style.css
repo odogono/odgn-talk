@@ -686,8 +686,6 @@ button:disabled {
 .playing #about-window,
 .playing #file-menu,
 .playing #edit-menu,
-.playing #show-projects,
-.playing #show-versions,
 .playing #save-file,
 .playing #save-file-as,
 .playing #save-status,
@@ -703,8 +701,7 @@ button:disabled {
 .browsing #caption,
 .browsing #stage,
 .browsing #strip,
-.browsing #info-window,
-.browsing #edit-menu {
+.browsing #info-window {
   display: none;
 }
 #desk #reader {
