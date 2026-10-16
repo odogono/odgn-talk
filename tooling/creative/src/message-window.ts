@@ -21,7 +21,7 @@ import {
   languageServer,
   showCodeWindow,
 } from './code-window';
-import { byId, h } from './dom';
+import { h } from './dom';
 import {
   MESSAGE_FIRST_LINE,
   messageNames,
@@ -30,7 +30,7 @@ import {
 import { runInEdit, type MessageReply } from './message';
 import { type PlaySession } from './play';
 import { scriptManifest } from './script-manifest';
-import { bringWindowForward } from './scripts';
+import { bringWindowForward, setWindowOpener } from './windows';
 import { type StackShell } from './stack';
 
 export type MessageTarget = {
@@ -256,7 +256,7 @@ export const mountMessageWindow = (
   };
 
   let shown = false;
-  byId('show-message').addEventListener('click', () => {
+  setWindowOpener('message-window', () => {
     if (!shown) {
       shown = true;
       showCodeWindow(win);

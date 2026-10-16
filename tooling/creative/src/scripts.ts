@@ -11,6 +11,7 @@ import {
   type LanguageServer,
 } from './code-window';
 import { h } from './dom';
+import { bringWindowForward } from './windows';
 import { openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
 import {
@@ -18,12 +19,6 @@ import {
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
-
-export const bringWindowForward = (window: HTMLElement): void => {
-  document
-    .querySelectorAll('.window')
-    .forEach(other => other.classList.toggle('front', other === window));
-};
 
 type OpenScript = {
   addAction: HTMLButtonElement;
@@ -161,8 +156,10 @@ export class ScriptWindows {
           this.editor.edit(() => {
             current.script = text;
           });
-          lsp.change(uri, text);
+          // Redraw first: it sends the Manifest with any new Handlers, so
+          // the diagnostics for this text already know them.
           this.redraw();
+          lsp.change(uri, text);
         },
         goTo() {},
         references(lines) {

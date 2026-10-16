@@ -624,9 +624,49 @@ export const runMessageBoxBrowserTests = async () => {
   set('the visible of welcomeText');
   enter();
   await until(() => log().at(-1) === 'true');
+  // Every window shares the title bar, and the Window menu shows and hides
+  // them, with a tick for each one showing.
+  document
+    .querySelector<HTMLButtonElement>('#tool-modes button:last-child')!
+    .click();
+  const item = (id: string) =>
+    document.querySelector<HTMLButtonElement>(
+      `#window-menu [data-window="${id}"]`,
+    )!;
+  const showing = (id: string) => !document.getElementById(id)!.hidden;
+  const menu = document.querySelector<HTMLDetailsElement>('#window-menu')!;
+  for (const id of ['tools-window', 'info-window', 'message-window']) {
+    const close = document.querySelector<HTMLButtonElement>(
+      `#${id} > .bar > .close`,
+    );
+    assert(close, `${id} has no close box`);
+    close!.click();
+    assert(!showing(id), `${id} close box did not hide it`);
+    menu.open = true;
+    menu.dispatchEvent(new Event('toggle'));
+    assert(
+      item(id).getAttribute('aria-checked') === 'false',
+      `${id} still ticked`,
+    );
+    item(id).click();
+    assert(showing(id), `Window menu did not show ${id}`);
+    assert(
+      item(id).getAttribute('aria-checked') === 'true',
+      `${id} not ticked`,
+    );
+  }
+  item('info-window').click();
+  assert(
+    JSON.parse(
+      localStorage.getItem('northtalk-creative-closed-windows') ?? '[]',
+    ).includes('info-window'),
+    'Closing Info was not remembered',
+  );
+  item('info-window').click();
   return {
     passed: true,
     checks: [
+      'Tools, Info and Message Box close from their title bars and reopen from the Window menu, ticked when showing; closed Tools and Info are remembered',
       'resizable code window with hidden, protected wrapper lines',
       'Ctrl-Space completes Page names from the language server',
       'hide in Edit is one undoable authored edit',

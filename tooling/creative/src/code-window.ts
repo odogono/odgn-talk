@@ -8,18 +8,14 @@ import {
   type LanguageHooks,
 } from '@odgn/northtalk-editor/editor';
 import { LspClient } from '@odgn/northtalk-editor/lsp-client';
-import { h } from './dom';
+import { floatingWindow, type FloatingWindow } from './windows';
 import { FOLIO_LIBRARY_NAME, FOLIO_LIBRARY_SOURCE } from './folio-library';
 import { type scriptManifest } from './script-manifest';
 
 type HostManifest = ReturnType<typeof scriptManifest>;
 
-/** A floating window with a title bar, a close box and a resize corner. */
-export type CodeWindow = {
-  close: HTMLButtonElement;
-  node: HTMLElement;
-  title: HTMLElement;
-};
+/** A floating window with the shared title bar and a resize corner. */
+export type CodeWindow = FloatingWindow;
 
 export const codeWindow = (o: {
   className: string;
@@ -28,26 +24,8 @@ export const codeWindow = (o: {
   label: string;
   left: number;
   top: number;
-}): CodeWindow => {
-  const title = h('span', {}, o.label);
-  const close = h('button', {
-    type: 'button',
-    class: 'close',
-    'aria-label': o.closeLabel,
-  });
-  const node = h(
-    'section',
-    {
-      id: o.id,
-      class: `window code-window ${o.className}`,
-      'aria-label': o.label,
-      'data-left': o.left,
-      'data-top': o.top,
-    },
-    h('div', { class: 'bar' }, close, title),
-  );
-  return { close, node, title };
-};
+}): CodeWindow =>
+  floatingWindow({ ...o, className: `code-window ${o.className}` });
 
 /** Shows a window built by `codeWindow`, registering it to float. */
 export const showCodeWindow = (win: CodeWindow): void => {

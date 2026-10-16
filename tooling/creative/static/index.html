@@ -57,8 +57,40 @@
           <button type="button" data-command="backward">Send backward</button>
           <button type="button" data-command="front">Bring to front</button>
           <button type="button" data-command="back">Send to back</button>
-          <hr />
-          <button id="show-message" type="button">Message Box…</button>
+        </div>
+      </details>
+      <details id="window-menu" class="menu">
+        <summary>Window</summary>
+        <div class="menu-commands" aria-label="Windows">
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="tools-window"
+          >
+            Tools
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="info-window"
+          >
+            Info
+          </button>
+          <button
+            id="show-message"
+            type="button"
+            role="menuitemcheckbox"
+            data-window="message-window"
+          >
+            Message Box
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            data-window="errors-window"
+          >
+            Errors
+          </button>
         </div>
       </details>
       <span id="project-title"></span>
@@ -133,7 +165,15 @@
       data-left="16"
       data-top="56"
     >
-      <div class="bar"><span id="tools-title">Tools</span></div>
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Tools"
+        ></button>
+        <span id="tools-title">Tools</span>
+      </div>
       <div id="tools"></div>
     </section>
     <section
@@ -143,7 +183,15 @@
       data-right="16"
       data-top="56"
     >
-      <div class="bar"><span id="info-title">Info</span></div>
+      <div class="bar">
+        <button
+          type="button"
+          class="close"
+          title="Close"
+          aria-label="Close Info"
+        ></button>
+        <span id="info-title">Info</span>
+      </div>
       <div id="text-toolbar" role="toolbar" aria-label="Text formatting" hidden>
         <button
           type="button"
