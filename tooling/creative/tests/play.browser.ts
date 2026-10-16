@@ -663,9 +663,30 @@ export const runMessageBoxBrowserTests = async () => {
     'Closing Info was not remembered',
   );
   item('info-window').click();
+  // Info resizes like the code windows, its fields filling the height.
+  const info = document.querySelector<HTMLElement>('#info-window')!;
+  const fields = document.querySelector<HTMLElement>('#info')!;
+  assert(getComputedStyle(info).resize === 'both', 'Info is not resizable');
+  info.style.height = '200px';
+  await new Promise(requestAnimationFrame);
+  const short = fields.clientHeight;
+  info.style.height = '400px';
+  await new Promise(requestAnimationFrame);
+  assert(
+    fields.clientHeight > short + 150,
+    'Info fields do not fill the window',
+  );
+  info.style.height = '';
+  // Window menu items read left to right from the tick.
+  const label = item('tools-window');
+  assert(
+    getComputedStyle(label).justifyContent === 'flex-start',
+    'Window menu items are not left-aligned',
+  );
   return {
     passed: true,
     checks: [
+      'Info resizes and its fields fill it; Window menu items are left-aligned',
       'Tools, Info and Message Box close from their title bars and reopen from the Window menu, ticked when showing; closed Tools and Info are remembered',
       'resizable code window with hidden, protected wrapper lines',
       'Ctrl-Space completes Page names from the language server',

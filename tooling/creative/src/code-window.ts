@@ -25,7 +25,7 @@ export const codeWindow = (o: {
   left: number;
   top: number;
 }): CodeWindow =>
-  floatingWindow({ ...o, className: `code-window ${o.className}` });
+  floatingWindow({ ...o, className: `resizable code-window ${o.className}` });
 
 /** Shows a window built by `codeWindow`, registering it to float. */
 export const showCodeWindow = (win: CodeWindow): void => {

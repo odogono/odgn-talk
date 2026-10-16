@@ -414,6 +414,13 @@ button:disabled {
 }
 #info-window {
   width: 15rem;
+  min-width: 12rem;
+  min-height: 8rem;
+}
+/* Info's fields take the height the window gives them, and scroll. */
+#info-window > #info {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 #info {
   display: flex;
@@ -421,7 +428,6 @@ button:disabled {
   gap: 0.5rem;
   padding: 0.6rem;
   font-size: 0.8rem;
-  max-height: calc(100vh - 12rem);
   overflow-y: auto;
 }
 #info h2 {
@@ -476,25 +482,29 @@ button:disabled {
 #info .suggestion button {
   font-family: ui-monospace, monospace;
 }
-.code-window[hidden] {
-  display: none;
-}
 /* Script windows and the Message Box: resizable from the bottom-right
    corner, with the editor taking the space the window gives it. */
-.code-window {
+/* Resizable windows (Script windows, the Message Box and Info) grow from
+   the bottom-right corner but stay on screen. */
+.window.resizable {
   display: flex;
   flex-direction: column;
-  width: min(28rem, 100vw);
-  height: 26rem;
-  min-width: min(20rem, 100vw);
-  min-height: min(16rem, calc(100dvh - var(--window-top, 140px) - 8px));
   max-width: calc(100vw - var(--window-left, 0px));
   max-height: calc(100dvh - var(--window-top, 140px) - 8px);
   overflow: auto;
   resize: both;
 }
-.code-window > * {
+.window.resizable[hidden] {
+  display: none;
+}
+.window.resizable > * {
   flex-shrink: 0;
+}
+.code-window {
+  width: min(28rem, 100vw);
+  height: 26rem;
+  min-width: min(20rem, 100vw);
+  min-height: min(16rem, calc(100dvh - var(--window-top, 140px) - 8px));
 }
 .code-editor {
   flex: 1;
@@ -559,6 +569,9 @@ button:disabled {
   border: 0;
   padding: 0.4rem 0.6rem;
   text-align: left;
+}
+.menu-commands [role='menuitemcheckbox'] {
+  justify-content: flex-start;
 }
 .menu-commands [hidden] {
   display: none;
