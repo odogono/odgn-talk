@@ -61,7 +61,16 @@ Inspect/Counters and Grant inspection; Request context cancellation and OnReady;
 queued Stop, CancelRun, RewindRun and Revoke. Ordinary `Group.Broadcast` selects
 recipients at drain time in load order, including pending message waits and
 prior Stop/cancellation. It preserves mailbox and limit rules; callback-generated
-Broadcasts run at the next Pump. Local Script functions execute in Zig.
+Broadcasts run at the next Pump. `Script.Decide` and `Group.DecideBroadcast`
+return `Deciding` futures that settle from the Pump's typed `decided` Report,
+when the Verdict seals rather than when the Run ends. Context cancellation
+before the seal queues `cancel-delivery` by delivery or Broadcast id. The
+future learns of the seal only from the Pump's reports, so a deadline that
+passes after Zig sealed but before that Pump returns still queues a
+cancellation and calls OnReady. Zig then drops it without a record and the
+allowed Run carries on. Refused Deliveries, Requests and Decisions with
+overrides that can't be represented go through the guest, so they keep their
+refusal records. Local Script functions execute in Zig.
 
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
@@ -92,7 +101,7 @@ remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
 existing signature has no error result: Host Object attachment/handles,
-Function Values/calls, object-addressed inputs, Decide/DecideBroadcast, Libraries,
+Function Values/calls, object-addressed inputs including `Group.Decide`, Libraries,
 Reload/Extend, Save/Restore/Settle and Fingerprint. Capability attachments with
 scoped or Segment lifecycle hooks, Standard
 factory refinements, Object/Function Shapes or Shapes nested beyond 32 levels
