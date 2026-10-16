@@ -35,6 +35,12 @@ import {
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
+import {
+  folioLibrary,
+  MESSAGE_FIRST_LINE,
+  messageNames,
+  messageSource,
+} from './folio-library';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
 export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
@@ -51,8 +57,6 @@ export type PlayMessage =
 // Each Message Box command loads as a fresh ownerless Script under this
 // prefix: the Core cannot unload Scripts, and the names change by Page.
 const MESSAGE_SCRIPT = 'message:';
-const messageHandler = (body: string) =>
-  `on runMessage\n${body}\nend runMessage`;
 
 /** A Message Box command: its result, or why it could not run. */
 export type MessageOutcome =
@@ -280,6 +284,9 @@ export class PlaySession {
     public pageIndex = 0,
     options: { events?: boolean; soundBackend?: SoundBackend } = {},
   ) {
+    // Every session holds the `folio` Library, for the Message Box and any
+    // authored Script that imports it.
+    this.group.addLibrary(folioLibrary);
     this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
       const owner = this.owners.get(sound.owner);
       if (owner) {
@@ -406,8 +413,8 @@ export class PlaySession {
     }
     let first: string | undefined;
     for (const source of [
-      messageHandler(command),
-      messageHandler(`return ${command}`),
+      messageSource(command, messageNames(this.project, this.page)),
+      messageSource(`return ${command}`, messageNames(this.project, this.page)),
     ]) {
       try {
         const name = this.#loadMessage(source);
@@ -428,7 +435,7 @@ export class PlaySession {
           throw error;
         }
         first ??= error.diagnostics
-          .map(d => `line ${d.line - 1}: ${d.code}`)
+          .map(d => `line ${d.line - MESSAGE_FIRST_LINE + 1}: ${d.code}`)
           .join('; ');
       }
     }
@@ -634,8 +641,9 @@ export class PlaySession {
         report.script.startsWith(MESSAGE_SCRIPT) &&
         (report.outcome === 'errored' || report.outcome === 'limit fault')
       ) {
-        // The command sits one line below its wrapping handler.
-        const line = (report.at?.line ?? 2) - 1;
+        // The command sits below its imports and wrapping Handler.
+        const line =
+          (report.at?.line ?? MESSAGE_FIRST_LINE) - MESSAGE_FIRST_LINE + 1;
         this.#messageErrors.set(
           report.script,
           `line ${line}: ${report.error?.message ?? `${report.limit} limit reached`}`,

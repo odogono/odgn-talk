@@ -28,7 +28,8 @@ import {
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
 import { importSound, isSoundAsset, SOUND_ACCEPT } from './sounds';
-import { ScriptWindows, bringWindowForward } from './scripts';
+import { ScriptWindows } from './scripts';
+import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
@@ -1413,6 +1414,7 @@ export const mountStack = (
   });
 
   new ResizeObserver(fit).observe(desk);
+  mountWindows();
   floatWindows();
   draw();
   return {

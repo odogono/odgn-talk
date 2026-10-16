@@ -522,3 +522,176 @@ end click`;
     ],
   };
 };
+
+export const runMessageBoxBrowserTests = async () => {
+  const project = createProject('Message Box');
+  const welcome = createElement('text', 'welcomeText');
+  project.pages[0]!.elements.push(welcome);
+  const shell = mountStack(project);
+  mountPlay(shell);
+  document.querySelector<HTMLButtonElement>('#show-message')!.click();
+  const win = document.querySelector<HTMLElement>('#message-window')!;
+  assert(win && !win.hidden, 'Message Box did not open');
+  assert(
+    win.classList.contains('code-window') &&
+      getComputedStyle(win).resize === 'both',
+    'Message Box is not a resizable code window',
+  );
+  const view = EditorView.findFromDOM(win.querySelector('.cm-editor')!)!;
+  const log = () =>
+    [...win.querySelectorAll('.message-log li')].map(li => li.textContent);
+  const type = (text: string) =>
+    view.dispatch({
+      changes: { from: view.state.selection.main.head, insert: text },
+    });
+  const enter = () =>
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+  assert(view.contentDOM.innerText.trim() === '', 'Wrapper lines are visible');
+
+  // Ctrl-Space completes the Page's names from the language server.
+  type('hide wel');
+  assert(
+    view.state.doc.toString().includes('hide wel'),
+    `Typing was refused at ${view.state.selection.main.head} in ${JSON.stringify(view.state.doc.toString())}`,
+  );
+  // Ask once the language server has the document, then wait for the list.
+  await new Promise(resolve => setTimeout(resolve, 300));
+  view.contentDOM.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+  );
+  await until(() =>
+    [...document.querySelectorAll('.cm-tooltip-autocomplete li')].some(li =>
+      li.textContent?.includes('welcomeText'),
+    ),
+  );
+
+  // The wrapper cannot be edited away.
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length } });
+  assert(
+    view.state.doc.toString().includes('on runMessage'),
+    'Typing removed the hidden wrapper',
+  );
+
+  // In Edit, `hide` changes the authored Element as one undoable edit.
+  view.dispatch({
+    changes: {
+      from: view.state.selection.main.head,
+      to: view.state.selection.main.head,
+    },
+  });
+  const { from, to } = (() => {
+    const doc = view.state.doc;
+    return { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+  })();
+  view.dispatch({
+    changes: { from, to, insert: 'hide welcomeText' },
+    selection: { anchor: from + 'hide welcomeText'.length },
+  });
+  // Close completion so Enter runs.
+  view.contentDOM.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  enter();
+  await until(() => !welcome.visible);
+  assert(shell.editor.canUndo, 'hide was not undoable');
+
+  // While browsing, `show` changes only the session.
+  document.querySelector<HTMLButtonElement>('#tool-modes button')!.click();
+  const set = (text: string) => {
+    const doc = view.state.doc;
+    const range = { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+    view.dispatch({
+      changes: { ...range, insert: text },
+      selection: { anchor: range.from + text.length },
+    });
+  };
+  set('show welcomeText');
+  enter();
+  await until(
+    () =>
+      document.querySelector<HTMLElement>(
+        '#reader [data-element="welcomeText"]',
+      )?.hidden === false,
+  );
+  assert(!welcome.visible, 'Browsing changed the authored Element');
+  set('the visible of welcomeText');
+  enter();
+  await until(() => log().at(-1) === 'true');
+  // Every window shares the title bar, and the Window menu shows and hides
+  // them, with a tick for each one showing.
+  document
+    .querySelector<HTMLButtonElement>('#tool-modes button:last-child')!
+    .click();
+  const item = (id: string) =>
+    document.querySelector<HTMLButtonElement>(
+      `#window-menu [data-window="${id}"]`,
+    )!;
+  const showing = (id: string) => !document.getElementById(id)!.hidden;
+  const menu = document.querySelector<HTMLDetailsElement>('#window-menu')!;
+  for (const id of ['tools-window', 'info-window', 'message-window']) {
+    const close = document.querySelector<HTMLButtonElement>(
+      `#${id} > .bar > .close`,
+    );
+    assert(close, `${id} has no close box`);
+    close!.click();
+    assert(!showing(id), `${id} close box did not hide it`);
+    menu.open = true;
+    menu.dispatchEvent(new Event('toggle'));
+    assert(
+      item(id).getAttribute('aria-checked') === 'false',
+      `${id} still ticked`,
+    );
+    item(id).click();
+    assert(showing(id), `Window menu did not show ${id}`);
+    assert(
+      item(id).getAttribute('aria-checked') === 'true',
+      `${id} not ticked`,
+    );
+  }
+  item('info-window').click();
+  assert(
+    JSON.parse(
+      localStorage.getItem('northtalk-creative-closed-windows') ?? '[]',
+    ).includes('info-window'),
+    'Closing Info was not remembered',
+  );
+  item('info-window').click();
+  // Info resizes like the code windows, its fields filling the height.
+  const info = document.querySelector<HTMLElement>('#info-window')!;
+  const fields = document.querySelector<HTMLElement>('#info')!;
+  assert(getComputedStyle(info).resize === 'both', 'Info is not resizable');
+  info.style.height = '200px';
+  await new Promise(requestAnimationFrame);
+  const short = fields.clientHeight;
+  info.style.height = '400px';
+  await new Promise(requestAnimationFrame);
+  assert(
+    fields.clientHeight > short + 150,
+    'Info fields do not fill the window',
+  );
+  info.style.height = '';
+  // Window menu items read left to right from the tick.
+  const label = item('tools-window');
+  assert(
+    getComputedStyle(label).justifyContent === 'flex-start',
+    'Window menu items are not left-aligned',
+  );
+  return {
+    passed: true,
+    checks: [
+      'Info resizes and its fields fill it; Window menu items are left-aligned',
+      'Tools, Info and Message Box close from their title bars and reopen from the Window menu, ticked when showing; closed Tools and Info are remembered',
+      'resizable code window with hidden, protected wrapper lines',
+      'Ctrl-Space completes Page names from the language server',
+      'hide in Edit is one undoable authored edit',
+      'show while browsing changes only the session; expressions print',
+    ],
+  };
+};

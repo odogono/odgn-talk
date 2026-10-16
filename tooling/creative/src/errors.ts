@@ -3,7 +3,7 @@
 import { byId, h } from './dom';
 import { type Page, type Project } from './model';
 import { scriptPage, type ScriptOwner } from './script-manifest';
-import { bringWindowForward } from './scripts';
+import { bringWindowForward } from './windows';
 import { type StackShell } from './stack';
 
 export type ScriptProblem = {
