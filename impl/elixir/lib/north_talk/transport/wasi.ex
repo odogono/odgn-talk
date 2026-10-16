@@ -7,7 +7,8 @@ defmodule NorthTalk.Transport.Wasi do
   Options:
 
     * `:compiled` - `{engine, module}` from `compile/2`. Defaults to the
-      module at `:path`, compiled once per path and level and cached.
+      module at `:path`, compiled once per SHA-256 and level and cached in
+      `:persistent_term`. The packaged reactor is verified against its pin.
     * `:path` - the reactor to compile when `:compiled` is absent.
       Defaults to `NorthTalk.Artifact.path/0`.
     * `:opt_level` - Cranelift's optimization level when the default module
@@ -15,6 +16,10 @@ defmodule NorthTalk.Transport.Wasi do
     * `:memory_cap` - the most bytes linear memory may grow to, through
       `Wasmex.StoreLimits`. Unlimited by default.
     * `:timeout` - milliseconds for one export call, 60 s by default.
+
+  A call that traps returns `{:error, {:trap, message}}`, and one that runs
+  past `:timeout` returns `{:error, :timeout}`. Either leaves the instance
+  unusable.
   """
   @behaviour NorthTalk.Transport
 
@@ -25,7 +30,11 @@ defmodule NorthTalk.Transport.Wasi do
   Every instance of the module must use the same Engine.
   """
   def compile(path \\ NorthTalk.Artifact.path(), opt_level \\ :speed) do
-    bytes = File.read!(path)
+    {bytes, _} = NorthTalk.Artifact.read!(path)
+    compile_bytes(bytes, opt_level)
+  end
+
+  defp compile_bytes(bytes, opt_level) do
     {:ok, engine} = Wasmex.Engine.new(%Wasmex.EngineConfig{cranelift_opt_level: opt_level})
     {:ok, store} = Wasmex.Store.new(nil, engine)
     {micros, {:ok, module}} = :timer.tc(fn -> Wasmex.Module.compile(store, bytes) end)
@@ -93,19 +102,30 @@ defmodule NorthTalk.Transport.Wasi do
     :exit, _ -> :ok
   end
 
+  # Wasmex interrupts a call at its native deadline and then never replies,
+  # so the call's own timeout is the one that fires.
   defp call(t, name, args) do
-    if Process.alive?(t.pid),
-      do: Wasmex.call_function(t.pid, name, args, t.timeout),
-      else: {:error, :dead}
+    if Process.alive?(t.pid) do
+      case Wasmex.call_function(t.pid, name, args, t.timeout) do
+        {:error, message} when is_binary(message) -> {:error, {:trap, message}}
+        other -> other
+      end
+    else
+      {:error, :dead}
+    end
   catch
+    :exit, {:timeout, _} -> {:error, :timeout}
     :exit, reason -> {:error, {:exit, reason}}
   end
 
   defp cached(path, opt_level) do
-    case :persistent_term.get({__MODULE__, path, opt_level}, nil) do
+    {bytes, digest} = NorthTalk.Artifact.read!(path)
+    key = {__MODULE__, digest, opt_level}
+
+    case :persistent_term.get(key, nil) do
       nil ->
-        {compiled, _} = compile(path, opt_level)
-        :persistent_term.put({__MODULE__, path, opt_level}, compiled)
+        {compiled, _} = compile_bytes(bytes, opt_level)
+        :persistent_term.put(key, compiled)
         compiled
 
       compiled ->

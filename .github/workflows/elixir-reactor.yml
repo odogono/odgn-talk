@@ -1,0 +1,36 @@
+name: Elixir reactor
+
+# Publishes the Zig Core's wasm32-wasi reactor as a GitHub release, for the
+# Elixir package to pin by SHA-256 (impl/elixir/lib/north_talk/artifact.ex).
+# Push a `reactor-v*` tag, then pin the printed digest under that tag.
+on:
+  push:
+    tags: ['reactor-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - run: zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+        working-directory: impl/zig
+      - name: Check the save format the package expects
+        run: |
+          expected=$(sed -n 's/^  @save_format "\(.*\)"$/\1/p' impl/elixir/lib/north_talk/artifact.ex)
+          actual="zig/$(sed -n 's/^pub const format_version: u32 = \([0-9]*\);$/\1/p' impl/zig/src/machine/snapshot.zig)"
+          test "$expected" = "$actual" || { echo "artifact.ex expects $expected, the Core writes $actual"; exit 1; }
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp .cache/zig-wasi/bin/talk.wasm talk.wasm
+          sha256sum talk.wasm | tee talk.wasm.sha256
+          gh release create "$GITHUB_REF_NAME" talk.wasm talk.wasm.sha256 \
+            --title "NorthTalk reactor $GITHUB_REF_NAME" \
+            --notes "The Zig Core's wasm32-wasi reactor from ${GITHUB_SHA}. SHA-256: $(cut -d' ' -f1 talk.wasm.sha256)"

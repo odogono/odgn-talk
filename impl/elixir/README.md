@@ -1,6 +1,6 @@
 # NorthTalk for Elixir
 
-An Elixir embedding of NorthTalk, backed by the Zig Core's `wasm32-wasi` reactor in [Wasmex](https://hex.pm/packages/wasmex). It speaks the [Message Layer](../../spec/09-embedding.md#the-message-layer) and needs neither Go nor a sidecar. [#963](https://github.com/odogono/odgn-talk/issues/963) tracks the rest of the application-facing API: a verified reactor release and fault recovery (#995).
+An Elixir embedding of NorthTalk, backed by the Zig Core's `wasm32-wasi` reactor in [Wasmex](https://hex.pm/packages/wasmex). It speaks the [Message Layer](../../spec/09-embedding.md#the-message-layer) and needs neither Go nor a sidecar. [#963](https://github.com/odogono/odgn-talk/issues/963) tracks the rest of the application-facing API.
 
 It supports Elixir 1.17 or later on OTP 27 or later, with Wasmex 0.15.1.
 
@@ -59,7 +59,7 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 - **Lifecycle hooks:** an Operation may open or close a Capability Scope (`scope:`) or be Segment-bound (`segment_bound: true`). A Capability with Segment-bound Operations defines `effect/2`, its Segment participant's `begin`, `commit` and `rollback` hooks, returning `:ok`, `:failed` or `:unknown`. Anything else, a raise or a timeout is `unknown`, which stops the Group with `effect state unknown`. `release/1`, the Grant release hook, runs when a Script's Grant stops being effective, with reason `:stop`, `:reload`, `:revoke` or `:disable`; what it returns is ignored. Hooks run in Tasks, like callbacks, and the Core's order holds: a scope left open is abandoned by an automatic call (`call.automatic`), then the participant commits or rolls back, then Grants are released, all before the reply or report that follows.
 - **Changing code:** `reload/4` stops and reloads a Script, carrying its Script Variables over unless `variables: :reset`; `replace_library/3` does so for every Script importing a Library, all or nothing; `extend/3` adds names without stopping anything. `stop/3` stops a Script. A Run discarded by any of them fails its waiting request with a `NorthTalk.ScriptError` of outcome `"discarded"`.
 - **Save and restore:** `save/1` returns a Group's bytes, refused with `effects pending` while a scope or participant is live. `restore/4` makes a new Group from them in this or another owner, rebinding each Script's Grants through `grants:`; a Grant not given restores revoked. Each pending call in the `NorthTalk.Restored` is settled with `settle/3`: an answer, a failure, `:reissue`, which calls its callback again, or `{:adopt, ref}`, settled later by `answer/3` or `fail/3`. An automatic owner first Pumps a restored Group once every pending call is settled; any still unsettled at the first Pump fails with `call lost`. Saves are per Core: only a Zig Core reads one. Grant bindings, callbacks and waiting requests are not saved, so `:reports_to` gets the outcome of a Run that was waited on.
-- **Lost instances:** if the reactor is lost, the owner fails every waiting request with `instance lost` and stops, so its supervisor can restart it.
+- **Lost instances:** if the reactor is lost other than by a trap or a timeout ([Limits and faults](#limits-and-faults)), such as by a malformed reply, the owner fails every waiting request with `instance lost` and stops, so its supervisor can restart it.
 
 ## Not offered
 
@@ -78,7 +78,16 @@ This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the
 2. `config :north_talk, wasm_path: ...`.
 3. The package's `priv/talk.wasm`.
 
+The package pins one reactor release by tag and SHA-256 in [`artifact.ex`](lib/north_talk/artifact.ex). `mix compile` fetches it into `priv/` and verifies it, unless an override is set, so a consumer needs neither Go nor Zig. The [Elixir reactor workflow](../../.github/workflows/elixir-reactor.yml) publishes a release when a `reactor-v*` tag is pushed; its digest is then pinned here. Until one is pinned, set `NORTH_TALK_WASM`.
+
+The compiled module is cached in `:persistent_term` per SHA-256. Before an owner makes any Group, `hello` must report the save format this package reads and its required features, or the owner refuses to start with `incompatible core`.
+
 The test configuration points at the repository's `.cache/` build.
+
+## Limits and faults
+
+- **Limits:** `:memory_cap` bounds guest linear memory, `:timeout` bounds each reactor call, and `:limits` sets the Script limits each `load/4` starts from, which its own `limits:` may override. `NorthTalk.memory/1` reports linear memory apart from the BEAM's own. A Group out of memory under the cap fails its waiting requests with `out of memory`.
+- **Traps and timeouts** poison the instance: the owner fails every waiting request with `instance trapped` and stops with `{:shutdown, :trapped}`. Effects are never retried. To carry on, start a new owner and `restore/4` a save kept from before. Other owners are unaffected.
 
 ## Layout
 
@@ -92,6 +101,7 @@ The test configuration points at the repository's `.cache/` build.
 | [`lib/north_talk/types.ex`](lib/north_talk/types.ex) | The value structs, and `NorthTalk.Function` handles. |
 | [`lib/north_talk/transport.ex`](lib/north_talk/transport.ex) | The transport behaviour: one frame in, one frame out. |
 | [`lib/north_talk/transport/wasi.ex`](lib/north_talk/transport/wasi.ex) | The reactor in Wasmex: compiling, instantiating, guest linear memory and `talk_buffer`/`talk_send`. |
-| [`lib/north_talk/artifact.ex`](lib/north_talk/artifact.ex) | Where the reactor is found. |
+| [`lib/north_talk/artifact.ex`](lib/north_talk/artifact.ex) | The pinned reactor release, where the reactor is found, and what this Host requires of it. |
+| [`lib/mix/tasks/compile.north_talk_reactor.ex`](lib/mix/tasks/compile.north_talk_reactor.ex) | The compile step that fetches and verifies the pinned reactor. |
 
 The [Elixir benchmark Host](../../bench/message-layer/elixir/) measures this transport.

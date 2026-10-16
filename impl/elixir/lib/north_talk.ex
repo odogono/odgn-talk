@@ -45,7 +45,20 @@ defmodule NorthTalk do
     * `:fuel_slice` - the Fuel one Pump may spend; 10,000 by default.
     * `:reports_to` - a pid sent `{:north_talk, group, report}` for every
       report a Pump returns.
-    * `:path`, `:memory_cap`, `:timeout` - passed to `NorthTalk.Transport.Wasi`.
+    * `:limits` - the Script limits every `load/4` starts from, as
+      `fuel_per_run:`, `alloc_per_run:`, `persistent_state:`, `call_depth:`,
+      `pattern_size:`, `mailbox_depth:`, `max_wait_ms:`, `max_join:` and
+      `cleanup_budget:` (spec/data/limits.toml). The Core's defaults apply
+      to any not given.
+    * `:memory_cap` - the most bytes guest linear memory may grow to.
+      Unlimited by default.
+    * `:timeout` - milliseconds one reactor call may run, 60 s by default.
+    * `:path` - the reactor, passed to `NorthTalk.Transport.Wasi`.
+
+  A trap or a timeout poisons the instance: the owner fails every waiting
+  request with `instance trapped` and stops with `{:shutdown, :trapped}`.
+  Nothing is retried. To carry on, start a new owner and restore a save
+  kept from before.
   """
   def start_link(opts \\ []), do: NorthTalk.Owner.start_link(opts)
 
@@ -56,6 +69,13 @@ defmodule NorthTalk do
 
   @doc "Stops an owner, failing any request still waiting with `instance closed`."
   def close(owner), do: GenServer.stop(owner)
+
+  @doc """
+  The instance's memory in bytes: `:linear` is the guest's linear memory,
+  which `:memory_cap` bounds; `:host` is the whole BEAM's, from
+  `:erlang.memory(:total)`, which excludes linear memory.
+  """
+  def memory(owner), do: GenServer.call(owner, :memory)
 
   @doc "The Core's versions and features from `hello`."
   def versions(owner), do: GenServer.call(owner, :versions)
@@ -99,7 +119,8 @@ defmodule NorthTalk do
 
   @doc """
   Loads a Script into a Group. Returns its name, or a `NorthTalk.LoadError`.
-  `grants:` maps each name the Script uses to a `NorthTalk.Grant`.
+  `grants:` maps each name the Script uses to a `NorthTalk.Grant`, and
+  `limits:` overrides the owner's `:limits` for this Script.
   """
   def load(%Group{owner: owner} = group, name, source, opts \\ []),
     do: GenServer.call(owner, {:load, group, name, source, opts})
