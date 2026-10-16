@@ -1,0 +1,57 @@
+# host-commands-load-checks: a Host Command is checked at load as the `tell`
+# or `ask` it stands for (ADR 0094; spec chapter 5, Calling a Handler by
+# name). `and wait` on one that doesn't suspend, or none on one that does, is
+# `wrong mode` at its name, as are argument counts and literal Shapes. Two of
+# a Script's Grants offering the same command, here one Capability granted
+# twice under two names, make a call to it a `name clash` at the call. An
+# Import named like a Host Command is a `name clash` at its name in the `use`
+# line, as an Import named like a Handler is.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+command = true
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+command = true
+
+[[operations]]
+capability = "till"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+command = true
+
+[[libraries]]
+name = "prices"
+version = "1"
+source = "prices.talk"
+
+[[scripts]]
+name = "modes"
+source = "modes.talk"
+grants = { till = { ops = "all" } }
+
+[[scripts]]
+name = "twice"
+source = "twice.talk"
+grants = { till = { ops = "all" }, spare = { capability = "till", ops = ["price"] } }
+
+[[scripts]]
+name = "importer"
+source = "importer.talk"
+grants = { till = { ops = ["price"] } }

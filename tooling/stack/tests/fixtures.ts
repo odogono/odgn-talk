@@ -1,6 +1,6 @@
 // Tooling fixtures, outside the Conformance Corpus (ADR 0028).
 import type { LintId, LintOptions } from '../src/lint';
-import type { ManifestMessage } from '../src/lsp/manifest';
+import type { ManifestMessage, ManifestOperation } from '../src/lsp/manifest';
 export const fixtureManifest = {
   capabilities: new Map(),
   grants: new Map(),
@@ -20,6 +20,30 @@ export const fixtureManifest = {
   objectKinds: new Map(),
   objects: [],
   objectsKinds: new Map(),
+};
+// A `folio` Grant whose `hide` is a Host Command (ADR 0094).
+export const commandManifest = {
+  ...fixtureManifest,
+  capabilities: new Map([['folio', 'folio']]),
+  grants: new Map([
+    [
+      'folio',
+      new Map<string, ManifestOperation>([
+        [
+          'hide',
+          {
+            name: 'hide',
+            mode: 'fire-and-forget',
+            args: [{ k: 'value' }],
+            command: true,
+            segmentBound: false,
+            errors: [],
+            declaration: {},
+          },
+        ],
+      ]),
+    ],
+  ]),
 };
 const script = (body: string) => `on demo\n${body}\nend demo`;
 const join = (lines: number) =>
@@ -105,6 +129,12 @@ export const fixtures: readonly {
     id: 'shadows-builtin',
     positive: 'constant min = 1\n' + script('say min'),
     negative: 'constant minimum = 1\n' + script('say minimum'),
+  },
+  {
+    id: 'shadowed-host-command',
+    positive: `on hide x\nend hide\n${script('hide 1')}`,
+    negative: `on hide x to y\nend hide\n${script('hide 1')}`,
+    options: { manifest: commandManifest },
   },
   {
     id: 'unknown-message',

@@ -1,0 +1,20 @@
+# Unblessed: Host Commands (#1019); first blessing awaits human review.
+# host-commands-shadowing: the knight's go calls its own price Handler,
+# leaving 1 in `it`, calls till.note, and sends `note:to:` to the board.
+
+> load board identity=6bbb1c085f288f078cdd8dd369efa4c4ca2fee6aae9aa6bad189e23fed0756c9
+> load knight identity=08cd21a0e1495372c5841bcd58fb5036dc8d62e474309bc5ad02b266ae4c1acc
+> set-parent object=<object piece "knight"> parent=<object board "board">
+> deliver d1 to=knight message=go
+> pump clock=2026-09-30T09:00:00Z
+call knight/r1.c1 op=till.note args=["moved"]
+send knight/r1 to=board message=note:to: args=["moved", "rook"]
+seg knight/r1 start delivery=d1 handler=go clause=1 fuel=68 alloc=73 state=16 end=return
+run knight/r1 outcome=completed delivery=d1 handler=go fuel=68 alloc=73
+seg board/r1 start from=knight/r1 handler=note:to: clause=1 fuel=32 alloc=132 state=58 end=return
+run board/r1 outcome=completed handler=note:to: fuel=32 alloc=132
+pumped state=idle fuel=100
+
+> vars
+vars board heard=["note moved to rook"]
+vars knight seen=1

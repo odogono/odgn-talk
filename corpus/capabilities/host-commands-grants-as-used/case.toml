@@ -1,0 +1,39 @@
+# host-commands-grants-as-used: with GrantsAsUsed, a Host Command call is a
+# use of its Operation (ADR 0094; spec chapter 9, Capabilities). `s` calls
+# `price` only as a Host Command, so its `till` Grant keeps `price`, loses
+# `note`, and its unused `clock` Grant is removed. Extend can't regain either.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 10 }
+command = true
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+command = true
+
+[[operations]]
+capability = "clock"
+name = "now"
+mode = "immediate"
+result = "number"
+command = true
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grantsAsUsed = true
+grants = { till = { ops = "all" }, clock = { ops = "all" } }

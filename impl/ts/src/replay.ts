@@ -264,6 +264,7 @@ const capabilitiesOf = (
         ...(op.segmentBound === undefined
           ? {}
           : { segmentBound: op.segmentBound }),
+        ...(op.command === undefined ? {} : { command: op.command }),
         cost: { fuel: op.cost?.fuel ?? 0, alloc: op.cost?.alloc ?? 0 },
         ...(op.result === undefined ? {} : { result: shapeOf(op.result) }),
         ...(op.errors

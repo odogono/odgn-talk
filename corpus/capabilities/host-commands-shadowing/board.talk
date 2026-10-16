@@ -1,0 +1,11 @@
+-- board.talk: the host-commands-shadowing case's parent Handlers.
+
+script variable heard = []
+
+on note text
+  put "note " & text after heard
+end note
+
+on note text to who
+  put "note " & text & " to " & who after heard
+end note

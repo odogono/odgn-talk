@@ -4,6 +4,7 @@
 // explicit stack, so deep source doesn't depend on the native call stack.
 import { grammar } from './generated/syntax';
 import {
+  hostCommands,
   toldLines,
   type Binding,
   type SemanticElement,
@@ -1145,6 +1146,20 @@ const simpleStatement = (node: SemanticNode, of: Of): Stmt => {
     const list = children.findIndex(
       child => child.kind === 'node' && child.rule === 'ExpressionList',
     );
+    const command = hostCommands.get(node);
+    if (command) {
+      // A Host Command is the `tell` or `ask` the checker chose (ADR 0094).
+      return {
+        k: toldLines.has(node) ? 'tell' : 'ask',
+        pos: at,
+        grant: command.grant,
+        operation: command.operation,
+        args: list >= 0 ? of<Expr[]>(children[list]) : [],
+        wait: children.some(
+          child => child.kind === 'node' && child.rule === 'AndWait',
+        ),
+      };
+    }
     return {
       k: 'command',
       pos: at,

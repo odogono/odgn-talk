@@ -89,6 +89,7 @@ export const operationData = (name: string, op: Operation<unknown>) => ({
       }
     : {}),
   ...(op.mode === 'immediate' && op.segmentBound ? { segmentBound: true } : {}),
+  ...(op.command ? { command: true } : {}),
 });
 export const grantData = (
   grant: Grant<unknown>,

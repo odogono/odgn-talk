@@ -8,6 +8,8 @@ import {
 import { record, string } from './protocol';
 export type ManifestOperation = {
   args: Shape[];
+  /** Whether it is also a Host Command, called by its name alone (ADR 0094). */
+  command: boolean;
   /** The declared cost; a manifest written by `ExportManifest` always has one. */
   cost?: { alloc: number; fuel: number };
   declaration: Record<string, unknown>;
@@ -174,6 +176,7 @@ export const readManifest = (value: unknown): HostManifest => {
           : { maxPending: whole(op.maxPending) }),
         ...(op.scope === undefined ? {} : { scope: scope(op.scope) }),
         segmentBound: op.segmentBound === true,
+        command: op.command === true,
         declaration: op,
         errors: array(op.errors ?? []).map(v => string(record(v).code)),
       });
@@ -247,7 +250,7 @@ export const grantDeclarations = (manifest: HostManifest): GrantDecls =>
       Object.fromEntries(
         [...operations].map(([name, op]) => [
           name,
-          { mode: op.mode, args: op.args },
+          { mode: op.mode, args: op.args, command: op.command },
         ]),
       ),
     ]),

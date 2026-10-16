@@ -1,0 +1,10 @@
+-- s.talk: rings through the register Library.
+
+use ring from register
+
+script variable total = 0
+
+on go sku
+  ring sku
+  add it to total
+end go

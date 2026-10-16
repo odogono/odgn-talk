@@ -1,0 +1,16 @@
+# Unblessed: Host Commands (#1019); first blessing awaits human review.
+# host-commands-load-checks: none of the three Scripts loads.
+
+> add-library prices identity=0b5a842eb13c6b7862efc667fee6ebb95242febf064b5fbf774f4b67dc263983
+> load modes identity=cd3ee200225edb08738434eb224e220064441f797a4779bc77be062f38267bcc
+diag modes code="wrong mode" pos=4:3
+diag modes code="wrong mode" pos=5:3
+diag modes code="wrong mode" pos=6:3
+diag modes code="wrong argument count" pos=7:3
+diag modes code="wrong argument" pos=8:8
+> load twice identity=94845efcf255cecf0034921e84cac170180a66f2502ebc5ab03c050aad0ed800
+diag twice code="name clash" pos=5:3
+> load importer identity=7fed5a8e6a419e67b6238280245fb1b43f29ab44b829e8978bac68921a4691ff
+diag importer code="name clash" pos=3:5
+
+> vars

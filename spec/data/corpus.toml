@@ -1623,6 +1623,12 @@ key = "segmentBound"
 is = "optional boolean, false by default; true enrolls this named Grant in its Segment's participant and requires immediate mode; the case runner supplies all three lifecycle hooks"
 kinds = ["trace", "disassembly"]
 
+[[setup]]
+table = "operations"
+key = "command"
+is = "optional boolean, false by default; true also makes the Operation a Host Command, callable by its name alone, and is refused on an Operation named by a Reserved Word"
+kinds = ["trace", "disassembly"]
+
 [[record]]
 name = "offer-chosen"
 input = false

@@ -1,0 +1,56 @@
+# host-commands-shadowing: a Command Call resolves to a Handler of the Script,
+# then to a Host Command, and only then climbs the Message Path (ADR 0094;
+# spec chapter 5, Calling a Handler by name). The knight's own `price`
+# Handler shadows the `price` Host Command, so no Operation is called. Its
+# `note` Host Command is called in its own Run and never climbs, so the
+# board's `note` Handler doesn't run. A labelled call never matches a Host
+# Command: `note … to …` names `note:to:`, which climbs to the board.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+command = true
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+command = true
+
+[[objectKinds]]
+name = "board"
+parentKinds = []
+
+[[objectKinds]]
+name = "piece"
+parentKinds = ["board"]
+
+[[objects]]
+kind = "board"
+id = "board"
+
+[[objects]]
+kind = "piece"
+id = "knight"
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+owner = { kind = "board", id = "board" }
+
+[[scripts]]
+name = "knight"
+source = "knight.talk"
+owner = { kind = "piece", id = "knight" }
+grants = { till = { ops = "all" } }

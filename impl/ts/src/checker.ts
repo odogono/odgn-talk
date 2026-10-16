@@ -2,7 +2,7 @@ import { checkConstructs } from './constructs';
 import { checkDecisions } from './decisions';
 import { declarationDocs } from './documentation';
 import { checkControl } from './control';
-import { checkEffects, type GrantDecls } from './effects';
+import { checkEffects, resolveHostCommands, type GrantDecls } from './effects';
 import { checkSuspension } from './suspension';
 import { builtins, diagnosticCodes, libraryExports } from './generated/syntax';
 import { RESERVED, type Token } from './lexer';
@@ -998,7 +998,8 @@ export const checkSyntax = (
       if (binding?.kind === 'handler') {
         site.name.binding = binding;
       }
-      // A missing local Handler continues up the Message Path at run time.
+      // Without a Handler it may be a Host Command (resolveHostCommands),
+      // or else it continues up the Message Path at run time.
       continue;
     }
     const binding = lookup(site);
@@ -1227,6 +1228,9 @@ export const checkSyntax = (
     options.ownerProperties,
   );
   checkConstructs(root, reportAt);
+  const commands = options.grants
+    ? resolveHostCommands(root, options.grants, reportAt)
+    : [];
   if (options.grants) {
     checkEffects(root, options.grants, reportAt);
   }
@@ -1260,6 +1264,7 @@ export const checkSyntax = (
     ok: diagnostics.length === 0,
     diagnostics,
     tree: {
+      ...(commands.length ? { commands } : {}),
       docs: [...declarationDocs(syntax).values()],
       maySuspend: [...may].filter(([, m]) => m).map(([name]) => name),
       root,

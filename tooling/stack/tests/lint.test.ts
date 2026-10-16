@@ -29,10 +29,10 @@ for (const { id, positive, negative, options } of fixtures) {
   });
 }
 
-test('ships twenty-five implemented catalogue entries', () => {
-  expect(lintCatalogue).toHaveLength(25);
+test('ships twenty-six implemented catalogue entries', () => {
+  expect(lintCatalogue).toHaveLength(26);
   expect(lintCatalogue.every(item => item.status === 'implemented')).toBe(true);
-  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(25);
+  expect(new Set(lintCatalogue.map(item => item.id)).size).toBe(26);
 });
 
 test('the Host or user selects the profile; default is standard', () => {

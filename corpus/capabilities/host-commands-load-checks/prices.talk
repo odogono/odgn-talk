@@ -1,0 +1,5 @@
+-- prices.talk: a Library Handler named like a Host Command.
+
+on price sku
+  return 1
+end price

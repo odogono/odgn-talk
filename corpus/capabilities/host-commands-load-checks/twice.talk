@@ -1,0 +1,6 @@
+-- twice.talk: two Grants offer `price`; only `note` is unambiguous.
+
+on go
+  note "a"
+  price "a"
+end go

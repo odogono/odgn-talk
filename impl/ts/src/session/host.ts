@@ -974,6 +974,7 @@ export class SessionHost {
       const base = {
         args: (spec.args ?? []).map(shapeOf),
         cost: { ...spec.cost, fuel: spec.cost?.fuel ?? 0 },
+        ...(spec.command === undefined ? {} : { command: spec.command }),
       };
       const op: Operation<unknown> =
         mode === 'immediate'

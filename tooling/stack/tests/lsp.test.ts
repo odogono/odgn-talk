@@ -1192,3 +1192,49 @@ test('a message the Host answers is completed, documented and checked unless the
     'message-argument-count',
   );
 });
+
+test('a Host Command is documented, checked at load and Linted when shadowed', () => {
+  const host = {
+    ...manifest,
+    grants: [
+      ...manifest.grants,
+      {
+        name: 'folio',
+        capability: 'folio',
+        operations: [
+          {
+            name: 'hide',
+            mode: 'fire-and-forget',
+            args: ['text'],
+            cost: { fuel: 0, alloc: 0 },
+            command: true,
+            description: 'Hides a part.',
+          },
+        ],
+      },
+    ],
+  };
+  const { sent, request } = setup(
+    'on demo\n  hide "a"\n  hide\nend demo',
+    host,
+  );
+  const hover = request('textDocument/hover', at(1, 3)) as {
+    contents: { value: string };
+  };
+  expect(hover.contents.value).toContain('Hides a part.');
+  expect(hover.contents.value).toContain('Host Command');
+  const published = sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(published.diagnostics.map(d => d.code)).toContain(
+    'wrong argument count',
+  );
+
+  const own = setup('on hide x\nend hide\non demo\n  hide "a"\nend demo', host);
+  const ownDiagnostics = own.sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(ownDiagnostics.diagnostics.map(d => d.code)).toContain(
+    'shadowed-host-command',
+  );
+});

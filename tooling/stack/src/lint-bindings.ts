@@ -1211,6 +1211,15 @@ export const lintBindings = (
       }
     }
   }
+  // Each Host Command the Script's Grants offer, with the Grants offering it.
+  const commands = new Map<string, string[]>();
+  for (const [grant, operations] of manifest?.grants ?? []) {
+    for (const op of operations.values()) {
+      if (op.command) {
+        commands.set(op.name, [...(commands.get(op.name) ?? []), grant]);
+      }
+    }
+  }
   for (const [name, clauses] of handlers) {
     const earlier: Pattern[][] = [];
     for (const clause of clauses) {
@@ -1236,6 +1245,14 @@ export const lintBindings = (
           message: name.replaceAll(':', ' ').trim(),
         });
       }
+      // The Script's own Handler takes its calls from the Host Command.
+      const grants = unit === 'script' ? commands.get(name) : undefined;
+      if (grants) {
+        emit('shadowed-host-command', message(clause)!.span, {
+          name,
+          grant: grants.join(', '),
+        });
+      }
     }
   }
   // A command no Handler in reach answers goes up the Message Path, where
@@ -1244,7 +1261,10 @@ export const lintBindings = (
     if (e.kind !== 'name' || e.role !== 'command' || e.binding) {
       continue;
     }
-    const declared = manifest?.messageDecls.get(e.text);
+    // A Host Command is checked at load as an Operation call instead.
+    const declared = commands.has(e.text)
+      ? undefined
+      : manifest?.messageDecls.get(e.text);
     const statement = parents.get(e);
     if (!declared || statement?.rule !== 'SimpleStatement') {
       continue;

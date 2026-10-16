@@ -14,7 +14,7 @@ import {
   type EffectUse,
   type GrantDecls,
 } from './effects';
-import type { SemanticNode } from './semantic';
+import type { SemanticNode, SemanticTree } from './semantic';
 import { LoadError, type LoadDiagnostic } from './errors';
 import { costModel, languageVersion } from './generated/machine';
 import { libraryExports, diagnosticCodes } from './generated/syntax';
@@ -68,6 +68,15 @@ export const codeIdentity = (
       source,
     ].join('\n'),
   );
+
+/**
+ * A unit's compile cache key: its code identity, plus the Host Commands its
+ * calls resolved to, since those depend on its Grants and not its source.
+ */
+export const compileKey = (identity: string, tree: SemanticTree) =>
+  tree.commands?.length
+    ? `${identity}\ncommands\n${tree.commands.join('\n')}`
+    : identity;
 
 type CallSite = EffectUse & {
   identity: string;
@@ -301,11 +310,12 @@ const build = (
     throw new LoadError(p.diagnostics);
   }
   // The same source compiled to name its caller is a separate code unit.
+  const compiledAs = compileKey(p.identity, p.checked.tree!);
   const key = isStdlib
-    ? `${p.identity} trusted stdlib`
+    ? `${compiledAs} trusted stdlib`
     : atCaller
-      ? `${p.identity} at caller`
-      : p.identity;
+      ? `${compiledAs} at caller`
+      : compiledAs;
   let entry = cache.get(key);
   if (!entry) {
     const tree = p.checked.tree!;

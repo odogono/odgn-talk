@@ -2095,5 +2095,14 @@ var Corpus = CorpusTable{
 				"disassembly",
 			},
 		},
+		CorpusTableSetupEntry{
+			Table: "operations",
+			Key:   "command",
+			Is:    "optional boolean, false by default; true also makes the Operation a Host Command, callable by its name alone, and is refused on an Operation named by a Reserved Word",
+			Kinds: []string{
+				"trace",
+				"disassembly",
+			},
+		},
 	},
 }

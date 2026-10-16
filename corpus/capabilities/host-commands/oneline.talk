@@ -1,0 +1,10 @@
+-- oneline.talk: the host-commands case's `ask` and `tell` calls.
+
+script variable total = 0
+
+on ring sku
+  ask till to price sku
+  tell till to note "rang " & sku & " at " & it
+  ask till to fetch sku and wait
+  add it to total
+end ring

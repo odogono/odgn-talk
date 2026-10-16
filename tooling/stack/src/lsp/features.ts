@@ -835,8 +835,30 @@ export const hover = (
     }
   }
   const name = nameAt(analysis, offset);
-  // A command no Handler in reach answers may be one the Host answers at
-  // the end of the Message Path; a Script's own Handler takes precedence.
+  // A command no Handler in reach answers may be a Host Command, an
+  // Operation one of the Script's Grants declares `command` (ADR 0094).
+  const command =
+    name?.role === 'command' && !resolvedBinding(analysis, name)
+      ? [...(manifest?.grants ?? [])].flatMap(([grant, operations]) => {
+          const op = operations.get(name.text);
+          return op?.command ? [{ grant, op }] : [];
+        })
+      : [];
+  if (name && command.length === 1) {
+    const format = client.markdown ? 'markdown' : 'plaintext';
+    return {
+      contents: {
+        kind: format,
+        value: operationText(
+          dictionaryOperation(command[0]!.grant, command[0]!.op),
+          format,
+        ),
+      },
+      range: rangeAt(analysis.document.text, name.span.start, name.span.end),
+    };
+  }
+  // Otherwise it may be one the Host answers at the end of the Message
+  // Path; a Script's own Handler takes precedence.
   const message =
     name?.role === 'command' && !resolvedBinding(analysis, name)
       ? manifest?.messageDecls.get(name.text)

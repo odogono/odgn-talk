@@ -1,0 +1,7 @@
+-- register.talk: a Library calling two Host Commands.
+
+on ring sku
+  price sku
+  note "rang " & sku & " at " & it
+  return it
+end ring
