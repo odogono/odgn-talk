@@ -2571,12 +2571,13 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     const code = Direct.scriptExtend(script, source.ptr, source.len);
     entry.group.flush();
     if (code == .load_refused) {
+        if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
         return loadError(s.gpa, ref, lines);
     }
     if (code != .ok) {
-        freeTrace(s.gpa, takeTrace(entry));
+        if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
         return hostError(s.gpa, ref, code);
     }
     var o = Out.init(s.gpa);
@@ -2769,7 +2770,8 @@ fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 }
 
 fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
-    freeTrace(s.gpa, takeTrace(entry));
+    // The error reply publishes its refusal records to an opted-in Host.
+    if (!s.crossing_trace) freeTrace(s.gpa, takeTrace(entry));
     return holdForReleases(s, ref, entry, hostError(s.gpa, ref, code), .outer);
 }
 
