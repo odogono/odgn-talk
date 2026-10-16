@@ -436,6 +436,11 @@ The maintainer approved its first blessing on 2026-10-05 and a later correction
 on 2026-10-07; see the [step-3 approval record](../docs/reviews/step-three-blessings/README.md).
 Standard Capability factories, Host Objects and full lifecycle remain separate Go work.
 
+The `libraries/constant-functions` regression (#1036) agrees on TS, Go and Zig,
+including save/restore replay. It pins Function Values in Library Constants and
+parameter defaults binding to each calling Script, through nested values and
+transitive imports. Its first blessing awaits human review.
+
 ## Non-Script suspension retention audit
 
 The eight #281 cases named in the [review record](../docs/reviews/suspension-retention/README.md)
