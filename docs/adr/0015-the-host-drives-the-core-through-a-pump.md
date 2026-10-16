@@ -45,7 +45,7 @@ Both Cores expose the same embedding shape. A Host declares its Capabilities onc
   - `Load`, `Reload`, `Pump` and `Save` are not, so the Host queues them to the Group's worker.
 - **Driver helpers:** each Core ships one: `talk.Driver` in Go (pool, run queue, a timer per Group), and `newGroup({ drive: "auto" })` in TS. Game Hosts pump by hand.
 - **Time:**
-  - An Instant has nanosecond resolution.
+  - An Instant has nanosecond resolution. Superseded by [ADR 0091](0091-time-has-microsecond-resolution.md), which makes it microseconds.
   - A Clock reading that goes backwards is a Host error. The Core rejects it rather than clamping.
 - **Counters:** counters carry over a Reload, as they already do over a variables-only restore (ADR 0008).
 - **Restore:** narrows ADR 0008. A pending call can also be settled by **adopt**, meaning the Host still has it in progress and will answer it under the same call id. Adopting costs nothing.

@@ -118,3 +118,4 @@ A function is a Built-in only if it can't be written in the language: it needs t
 - Narrowed by ADR 0044 (#184): `objectKind` joins the value Built-ins, so Scripts and Guards can read a Host Object's Object Kind without its display form.
 
 - Narrowed by ADR 0053: backticks interpolate expressions and raw fences hold multiline text. Reusable text/date templates now use `${…}` and `$$`, replacing the earlier bare-brace syntax. Ordinary quoted text is unchanged.
+- Narrowed by [ADR 0091](0091-time-has-microsecond-resolution.md): times are whole microseconds, so the `nanosecond` field becomes `microsecond` and date text takes a fraction of one to six digits.
