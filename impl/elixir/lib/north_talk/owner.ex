@@ -34,6 +34,7 @@ defmodule NorthTalk.Owner do
     :clock,
     :fuel_slice,
     :reports_to,
+    :limits,
     :tasks,
     # The tokens of Function Values held by the Host, by handle id.
     :functions,
@@ -61,11 +62,12 @@ defmodule NorthTalk.Owner do
   @impl true
   def init(opts) do
     module = Keyword.get(opts, :transport, Transport.Wasi)
-    transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to])
+    transport_opts = Keyword.drop(opts, [:transport, :drive, :fuel_slice, :reports_to, :limits])
 
     {:ok, tasks} = Task.Supervisor.start_link()
 
-    with {:ok, transport} <- module.start(transport_opts),
+    with {:ok, limits} <- limits(Keyword.get(opts, :limits, [])),
+         {:ok, transport} <- module.start(transport_opts),
          :ok <- stop_with_owner(transport),
          state = %__MODULE__{
            transport: transport,
@@ -74,7 +76,8 @@ defmodule NorthTalk.Owner do
            drive: Keyword.get(opts, :drive, :auto),
            clock: Clock.start(),
            fuel_slice: Keyword.get(opts, :fuel_slice, @default_fuel_slice),
-           reports_to: opts[:reports_to]
+           reports_to: opts[:reports_to],
+           limits: limits
          },
          {{:ok, versions}, state} <- exchange(state, "hello", %{"protocol" => @protocol}),
          :ok <- check_versions(versions) do
@@ -82,9 +85,11 @@ defmodule NorthTalk.Owner do
     else
       {{:error, error}, state} ->
         Transport.stop(state.transport)
+        Supervisor.stop(tasks)
         {:stop, error}
 
       {:error, error} ->
+        Supervisor.stop(tasks)
         {:stop, error}
     end
   end
@@ -105,22 +110,72 @@ defmodule NorthTalk.Owner do
     :ok
   end
 
+  # This Host reads one save format and needs its features; a reactor
+  # without them is refused before any Group is made.
   defp check_versions(versions) do
-    if is_binary(versions["core"]) and is_binary(versions["saveFormat"]),
-      do: :ok,
-      else: {:error, %HostError{code: "incompatible core", detail: inspect(versions)}}
+    features = versions["features"] || []
+    missing = NorthTalk.Artifact.required_features() -- features
+
+    cond do
+      not is_binary(versions["core"]) ->
+        {:error, %HostError{code: "incompatible core", detail: inspect(plain(versions))}}
+
+      versions["saveFormat"] != NorthTalk.Artifact.save_format() ->
+        {:error,
+         %HostError{
+           code: "incompatible core",
+           detail: "save format #{inspect(versions["saveFormat"])}, not #{NorthTalk.Artifact.save_format()}"
+         }}
+
+      missing != [] ->
+        {:error, %HostError{code: "incompatible core", detail: "missing features #{Enum.join(missing, ", ")}"}}
+
+      true ->
+        :ok
+    end
+  end
+
+  @limits %{
+    fuel_per_run: "fuelPerRun",
+    alloc_per_run: "allocPerRun",
+    persistent_state: "persistentState",
+    call_depth: "callDepth",
+    pattern_size: "patternSize",
+    mailbox_depth: "mailboxDepth",
+    max_wait_ms: "maxWaitMs",
+    max_join: "maxJoin",
+    cleanup_budget: "cleanupBudget"
+  }
+
+  defp limits(opts) do
+    Enum.reduce_while(opts, {:ok, %{}}, fn
+      {key, n}, {:ok, acc} when is_map_key(@limits, key) and is_integer(n) and n >= 0 ->
+        {:cont, {:ok, Map.put(acc, @limits[key], n)}}
+
+      other, _ ->
+        {:halt, {:error, %HostError{code: "invalid value", detail: "#{inspect(other)} is not a limit"}}}
+    end)
   end
 
   @impl true
   def terminate(reason, %__MODULE__{transport: transport} = state) do
-    code = if match?({:shutdown, {:instance_lost, _}}, reason), do: "instance lost", else: "instance closed"
-    fail_waiters(state, %HostError{code: code, detail: inspect(reason)})
+    {code, detail} =
+      case reason do
+        {:shutdown, :trapped} -> {"instance trapped", inspect(Process.get(:north_talk_fault))}
+        {:shutdown, {:instance_lost, _}} -> {"instance lost", inspect(reason)}
+        _ -> {"instance closed", inspect(reason)}
+      end
+
+    fail_waiters(state, %HostError{code: code, detail: detail})
     for {_, {:task, pid, _}} <- state.calls, do: Process.exit(pid, :kill)
     Transport.stop(transport)
   end
 
   @impl true
   def handle_call(:versions, _from, state), do: {:reply, state.versions, state}
+
+  def handle_call(:memory, _from, state),
+    do: {:reply, %{linear: Transport.memory_bytes(state.transport), host: :erlang.memory(:total)}, state}
 
   def handle_call({:release, %NorthTalk.Function{id: id}}, _from, state) do
     :ets.delete(state.functions, id)
@@ -135,9 +190,8 @@ defmodule NorthTalk.Owner do
       {group, groups} ->
         if group.timer, do: Process.cancel_timer(group.timer)
         :ets.match_delete(state.functions, {:_, g, :_})
-        {closed, waiters} = Map.split_with(state.waiters, fn {{wg, _}, _} -> wg == g end)
-        for {_, from} <- closed, do: GenServer.reply(from, {:error, %HostError{code: "group closed", detail: g}})
-        {:reply, :ok, %{state | groups: groups, waiters: waiters}}
+        state = fail_group_waiters(state, g, %HostError{code: "group closed", detail: g})
+        {:reply, :ok, %{state | groups: groups}}
     end
   end
 
@@ -197,12 +251,14 @@ defmodule NorthTalk.Owner do
   def handle_call({:load, %Group{name: g}, name, source, opts}, _from, state) do
     grants = Map.new(Keyword.get(opts, :grants, %{}))
 
-    with :ok <- own_grants(grants) do
+    with :ok <- own_grants(grants),
+         {:ok, limits} <- limits(Keyword.get(opts, :limits, [])) do
       fields = %{
         "group" => g,
         "name" => name,
         "source" => source,
-        "grants" => Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end)
+        "grants" => Map.new(grants, fn {k, %Grant{handle: h}} -> {k, h} end),
+        "limits" => Map.merge(state.limits, limits)
       }
 
       case exchange(state, "load", fields) do
@@ -405,8 +461,11 @@ defmodule NorthTalk.Owner do
 
   def handle_info({:pump, g}, state) do
     state = update_in(state.groups[g], &%{&1 | queued: false, timer: nil, unsettled: MapSet.new()})
-    {_, state} = pump(state, g, Clock.format(Clock.now(state.clock)), state.fuel_slice)
-    {:noreply, state}
+
+    case pump(state, g, Clock.format(Clock.now(state.clock)), state.fuel_slice) do
+      {{:ok, _}, state} -> {:noreply, state}
+      {{:error, error}, state} -> {:noreply, fail_group_waiters(state, g, error)}
+    end
   end
 
   # A suspending callback's Task finished.
@@ -904,8 +963,22 @@ defmodule NorthTalk.Owner do
 
   defp failure(other), do: raise(HostError, code: "invalid value", detail: "#{inspect(other)} is not a failure")
 
-  # terminate/2 fails the waiting requests.
+  # terminate/2 fails the waiting requests. A trap or a timeout poisons the
+  # instance; nothing is retried, so a caller restores from its own save.
+  defp lost(_state, reason) when reason == :timeout or elem(reason, 0) == :trap do
+    Process.put(:north_talk_fault, reason)
+    exit({:shutdown, :trapped})
+  end
+
   defp lost(_state, reason), do: exit({:shutdown, {:instance_lost, reason}})
+
+  # A failed automatic Pump, such as one out of memory under `:memory_cap`,
+  # would otherwise leave the Group's requests waiting for good.
+  defp fail_group_waiters(state, g, error) do
+    {failed, waiters} = Map.split_with(state.waiters, fn {{wg, _}, _} -> wg == g end)
+    for {_, from} <- failed, do: GenServer.reply(from, {:error, error})
+    %{state | waiters: waiters}
+  end
 
   defp fail_waiters(state, error) do
     for {_, from} <- state.waiters, do: GenServer.reply(from, {:error, error})
