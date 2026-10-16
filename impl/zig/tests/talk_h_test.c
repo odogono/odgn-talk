@@ -1209,6 +1209,61 @@ static int object_path_test(void) {
     return bad;
 }
 
+/* Function Value calls follow talk.go and talk.ts (#1028): a Host call is
+ * refused, with its records, for an override that loosens the Home Script's
+ * limits or a full Home mailbox; a Script's call to a full Home raises
+ * `mailbox full`, and one to a stopped Home `function gone`. */
+static int function_call_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *home_source = "on exported\n  return given: 5\nend exported\non ping\nend ping\n";
+    const char *caller_source = "on go callback\n  try\n    callback() and wait\n  catch e\n    return the code of e\n  end try\nend go\n";
+    talk_limits shallow = {0};
+    shallow.mailbox_depth = 1;
+    shallow.fuel_per_run = 60;
+    talk_load_options home_load = {"home", 4, home_source, strlen(home_source), NULL, 0, false, NULL, NULL, 0, &shallow};
+    talk_load_options caller_load = {"caller", 6, caller_source, strlen(caller_source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *home = NULL, *caller = NULL;
+    int bad = talk_load(group, &caller_load, &caller) != TALK_OK;
+    bad |= talk_load(group, &home_load, &home) != TALK_OK;
+    talk_message exported = {"exported", 8, NULL, 0, NULL};
+    talk_pending *made = NULL;
+    bad |= talk_script_request(home, &exported, NULL, &made) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_value *fn = NULL;
+    bad |= talk_pending_result(made, &fn) != TALK_OK || fn == NULL;
+    talk_limit_override loose = {TALK_OVERRIDE_FUEL_PER_RUN, 61, 0, 0, 0};
+    talk_limit_override negative = {TALK_OVERRIDE_FUEL_PER_RUN, -1, 0, 0, 0};
+    talk_pending *refused = NULL;
+    bad |= talk_group_call(group, fn, NULL, 0, &loose, NULL, &refused) != TALK_INVALID_VALUE || refused != NULL;
+    bad |= talk_group_call(group, fn, NULL, 0, &negative, NULL, &refused) != TALK_INVALID_VALUE || refused != NULL;
+    talk_message ping = {"ping", 4, NULL, 0, NULL};
+    bad |= talk_script_deliver(home, &ping, NULL) != TALK_OK;
+    bad |= talk_group_call(group, fn, NULL, 0, NULL, NULL, &refused) != TALK_ERR_MAILBOX_FULL || refused != NULL;
+    talk_value *args[] = {fn};
+    talk_message go = {"go", 2, args, 1, NULL};
+    bad |= talk_script_deliver(caller, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_script_stop(home, "closed", 6) != TALK_OK;
+    bad |= talk_script_deliver(caller, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_value_release(fn);
+    bad |= strstr(trace, "> call-value fn=<function home:2:10> limits={fuelPerRun: 61}\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "> call-value fn=<function home:2:10> limits={fuelPerRun: -1}\nrefused code=\"invalid value\"\n") == NULL;
+    bad |= strstr(trace, "> call-value fn=<function home:2:10>\nrefused code=\"mailbox full\"\n") == NULL;
+    bad |= strstr(trace, "raise caller/r1 code=\"mailbox full\"") == NULL;
+    bad |= strstr(trace, "raise caller/r2 code=\"function gone\"") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop Script: a waiting Run is discarded with no finally, a later Delivery
  * is dropped, and a Group whose Scripts are all stopped pumps as stopped. */
 static int stop_test(void) {
@@ -2246,6 +2301,7 @@ int main(void) {
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
+    expect(function_call_test() == 0, "Function Value calls refuse loose overrides and full or stopped Homes as talk.go does");
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
     expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");

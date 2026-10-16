@@ -83,6 +83,8 @@ const GroupEntry = struct {
     traced: bool,
     /// Whether `run end` reports carry `climbed` (`climb-v1`).
     climb: bool = false,
+    /// Whether Pump replies list stale Function Value calls (`function-gone-v1`).
+    gone: bool = false,
     /// Trace lines not yet carried by a reply, from the sink.
     pending_trace: std.ArrayList([]u8) = .empty,
     /// Whether the last value read held another Group's Function Value.
@@ -271,6 +273,8 @@ pub const Session = struct {
     crossing_trace: bool = false,
     /// `climb-v1`: a `run end` whose message climbed says so.
     climb: bool = false,
+    /// `function-gone-v1`: a Pump reply lists stale Function Value calls.
+    gone: bool = false,
     reply_error: bool = false,
     release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -1398,6 +1402,19 @@ fn needReply(s: *Session, ref: i64) []u8 {
 /// The Reports a Pump made, taken from the Group, as chapter 9 encodes them.
 fn writeReports(o: *Out, entry: *GroupEntry) Allocator.Error!void {
     o.climbed = entry.climb;
+    // Stale Function Value calls rejected `function gone` with no report.
+    const gone = &entry.group.group.gone_calls;
+    defer gone.clearRetainingCapacity();
+    if (entry.gone) {
+        try o.raw(",\"gone\":[");
+        for (gone.items, 0..) |id, i| {
+            if (i > 0) try o.raw(",");
+            try o.raw("\"d");
+            try o.int(id);
+            try o.raw("\"");
+        }
+        try o.raw("]");
+    }
     // The accounting tail first, as talk.h's report calls write it: its
     // rows for ended Runs are held in the reports being taken.
     entry.group.group.accountingTail();
@@ -1948,7 +1965,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\"]") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2110,6 +2127,7 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         .group = undefined,
         .traced = asBool(field(msg, "trace")) orelse false,
         .climb = s.climb,
+        .gone = s.gone,
     };
     var group: ?*talk.Group = null;
     // No physical cap below the runtime's: over WASI the Host's store
@@ -3104,7 +3122,7 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     entry.* = .{ .gpa = s.gpa, .name = s.gpa.dupe(u8, handle_name) catch {
         s.gpa.destroy(entry);
         return hostError(s.gpa, ref, .out_of_memory);
-    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .climb = s.climb };
+    }, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false, .climb = s.climb, .gone = s.gone };
     var group: ?*talk.Group = null;
     var result: ?*talk.RestoreResult = null;
     const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
@@ -3244,7 +3262,20 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
         }
     }
     var override_slot: talk.LimitOverride = undefined;
-    const override = overrideOf(field(msg, "limits"), &override_slot) catch return hostError(s.gpa, ref, .invalid_value);
+    const override = overrideOf(field(msg, "limits"), &override_slot) catch {
+        // The sentinel for an override the binding can't represent.
+        var refused: ?machine.RefusedOverride = null;
+        if (field(msg, "limits")) |raw| {
+            refused = .{};
+            if (raw == .object) {
+                inline for (machine.override_fields) |fl| {
+                    if (raw.object.get(fl.ts)) |x| @field(refused.?, fl.field) = asInt(x);
+                }
+            }
+        }
+        entry.group.group.refuseCall(f, args.items, refused, "invalid value");
+        return hostError(s.gpa, ref, .invalid_value);
+    };
     var id: talk.Buffer = .{};
     var pending: ?*talk.Pending = null;
     const code = Direct.call(entry.group, f, args.items.ptr, args.items.len, override, &id, &pending);
@@ -3563,6 +3594,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var early = s.early_abandoned;
             var crossing_trace = s.crossing_trace;
             var climb = s.climb;
+            var gone = s.gone;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -3571,11 +3603,14 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     crossing_trace = true;
                 } else if (std.mem.eql(u8, name, "climb-v1")) {
                     climb = true;
+                } else if (std.mem.eql(u8, name, "function-gone-v1")) {
+                    gone = true;
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
             s.climb = climb;
+            s.gone = gone;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
