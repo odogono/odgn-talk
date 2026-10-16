@@ -1,0 +1,60 @@
+name: Benchmark Suite
+
+# The smoke pass (#319): each Benchmark once at its smoke size, on every Core
+# and Peer Language that runs on Linux, checking output and Fuel parity. It
+# times nothing and saves nothing. AppleScript runs only on macOS.
+on:
+  pull_request:
+    paths:
+      - 'impl/ts/**'
+      - 'impl/go/**'
+      - 'impl/zig/**'
+      - 'bench/scripts/**'
+      - 'bench/ts/**'
+      - 'bench/go/**'
+      - 'bench/zig/host.c'
+      - 'bench/peers/**'
+      - 'spec/data/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/bench.yml'
+      - '.github/actions/setup-ts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'impl/ts/**'
+      - 'impl/go/**'
+      - 'impl/zig/**'
+      - 'bench/scripts/**'
+      - 'bench/ts/**'
+      - 'bench/go/**'
+      - 'bench/zig/host.c'
+      - 'bench/peers/**'
+      - 'spec/data/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/bench.yml'
+      - '.github/actions/setup-ts/**'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      # Upgrading Zig is its own PR (#625).
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      # Installs the CPython pinned in bench/peers/python/.python-version.
+      - uses: astral-sh/setup-uv@v6
+      - uses: ./.github/actions/setup-ts
+      - name: The Go modules are tidy
+        run: |
+          for m in bench/go bench/peers/go; do (cd "$m" && go mod tidy -diff); done
+      - run: bun test tests
+        working-directory: bench/ts
+      - run: bun run bench --smoke

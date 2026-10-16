@@ -273,7 +273,7 @@ const results: Results = {
     ...(runners.includes('zig')
       ? {
           zig: run(['zig', 'version'], benchDir),
-          'zig build': 'native safe; C Host -O2',
+          'zig build': 'native safe; C Host zig cc -O2',
         }
       : {}),
     'cost model': versions.costModel,

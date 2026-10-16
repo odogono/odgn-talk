@@ -9,7 +9,10 @@ require (
 	go.starlark.net v0.0.0-20261005163335-bcb1a1a55bf9
 )
 
-require golang.org/x/sys v0.42.0 // indirect
+require (
+	github.com/tetratelabs/wazero v1.12.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+)
 
 replace (
 	github.com/odogono/odgn-talk/bench/peers/go => ../peers/go
