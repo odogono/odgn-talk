@@ -63,6 +63,17 @@ type FunctionData struct {
 	Captures        []Pair
 }
 
+// WireFunction is the CodeState of a Function Value another Core made and
+// the Message Layer carried: its Code is the opaque token, and Display its
+// whole display form. Saves never hold one.
+type WireFunction struct{ Display string }
+
+// WireDisplay is a carried Function Value's display form, if it is one.
+func (f *FunctionData) WireDisplay() (string, bool) {
+	w, ok := f.CodeState.(WireFunction)
+	return w.Display, ok
+}
+
 // IteratorData is private machine state retained by an internal value.
 // Advancement copies it before rebinding the iterator.
 type IteratorData struct {

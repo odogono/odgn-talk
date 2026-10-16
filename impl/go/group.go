@@ -414,25 +414,26 @@ func (g *Group) admit(s *Script, m Message, ctx context.Context, request bool, d
 		return "", nil, &HostError{code, detail}
 	}
 	if g.backend != nil {
-		if address.function != nil {
-			return "", nil, backendUnsupported("Function Values")
-		}
 		// The guest knows only this Group's handles, so ownership is checked
 		// here, in the native order; the guest admits everything else.
 		if address.path && (address.target == nil || address.target.group != g) {
 			return refused(WrongGroup, "Object does not belong to Group")
 		}
-		if !broadcast && !address.path && (s == nil || s.group != g) {
+		if !broadcast && !address.path && address.function == nil && (s == nil || s.group != g) {
 			return refused(WrongGroup, "receiver does not belong to Group")
 		}
-		if syntax.ValidMessageSelector(m.Name, len(m.Args)) {
+		if address.function != nil || syntax.ValidMessageSelector(m.Name, len(m.Args)) {
 			for _, v := range m.Args {
 				if !validGroup(v.inner, g) {
 					return refused(WrongGroup, "argument belongs to another Group")
 				}
 			}
 		}
-		return g.backend.queue(s, address.target, m, ctx, name, decision)
+		var fn *Value
+		if address.function != nil {
+			fn = &Value{*address.function}
+		}
+		return g.backend.queue(s, address.target, fn, m, ctx, name, decision)
 	}
 	g.mu.Lock()
 	var target *Object

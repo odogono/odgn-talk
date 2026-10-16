@@ -194,11 +194,7 @@ func TestZigBackendUnsupportedCapabilityDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := core.DefineCapability("function", talk.Operation{Name: "read", Result: talk.FunctionShape, Do: plain.Do})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, def := range []*talk.CapabilityDef{segment, function} {
+	for _, def := range []*talk.CapabilityDef{segment} {
 		g := core.NewGroup(talk.GroupOptions{})
 		_, err := g.Load(talk.LoadOptions{Name: "s", Source: "", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
 		if err == nil || !strings.HasPrefix(err.Error(), "experimental Zig backend:") || g.Script("s") != nil {
@@ -313,39 +309,6 @@ func TestZigBackendReadySettlementStillCancelsBeforeFollowingCallback(t *testing
 	}
 	if !observed {
 		t.Fatal("following callback did not execute")
-	}
-}
-
-func TestZigBackendUnsupportedCallbackArgumentClosesConversation(t *testing.T) {
-	core := talk.New()
-	def, err := core.DefineCapability("api", talk.Operation{Name: "read", Args: []talk.Shape{talk.ValueShape}, Do: func(*talk.Call, []talk.Value) (talk.Value, error) {
-		t.Fatal("Function reached data-only Host")
-		return talk.Nothing, nil
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	g := core.NewGroup(talk.GroupOptions{})
-	s, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\n ask api to read (given: 1)\nend go", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.Deliver(talk.Message{Name: "go"})
-	result, err := g.Pump(bridgeNow, talk.PumpOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, r := range result.Reports {
-		if r, ok := r.(*talk.CallFailed); ok {
-			found = strings.Contains(r.Detail, "experimental Zig backend:")
-		}
-	}
-	if !found {
-		t.Fatal(result)
-	}
-	if _, err = g.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
-		t.Fatal("unsupported argument left worker paused", err)
 	}
 }
 

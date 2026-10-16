@@ -43,8 +43,14 @@ func JSONString(s string, plain bool) string {
 	return out.String()
 }
 func Encode(v Value, plain bool) ([]byte, error) {
+	return EncodeWire(v, plain, nil)
+}
+
+// EncodeWire is the Value Encoding with Function Values written by
+// function, as the Message Layer carries them; nil refuses them.
+func EncodeWire(v Value, plain bool, function func(*FunctionData) (string, error)) ([]byte, error) {
 	var out strings.Builder
-	err := encode(&out, v, plain)
+	err := encode(&out, v, plain, function)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +70,7 @@ type encodingStep struct {
 	path  *encodingPath
 }
 
-func encode(out *strings.Builder, root Value, plain bool) error {
+func encode(out *strings.Builder, root Value, plain bool, function func(*FunctionData) (string, error)) error {
 	stack := []encodingStep{{value: root}}
 	for len(stack) > 0 {
 		step := stack[len(stack)-1]
@@ -133,8 +139,17 @@ func encode(out *strings.Builder, root Value, plain bool) error {
 			stack = append(stack, encodingStep{value: v.Items()[1], path: step.path})
 			text(",")
 			stack = append(stack, encodingStep{value: v.Items()[0], path: step.path})
+		case Function:
+			if function == nil || plain {
+				return encodingFailure(v.Kind, step.path)
+			}
+			s, err := function(v.Function())
+			if err != nil {
+				return err
+			}
+			out.WriteString(s)
 		default:
-			if (plain && v.Kind != Nothing && v.Kind != Boolean && v.Kind != Number && v.Kind != Text) || v.Kind == Function {
+			if plain && v.Kind != Nothing && v.Kind != Boolean && v.Kind != Number && v.Kind != Text {
 				return encodingFailure(v.Kind, step.path)
 			}
 			if err := encodeLeaf(out, v, plain); err != nil {
@@ -211,16 +226,26 @@ type jsonReader struct {
 	members  bool
 	resolve  func(string, string) (Value, error)
 	function func(string) (Value, error)
+	wire     func(Value) (Value, error)
 }
 
 func Decode(b []byte, tagged bool, resolve func(string, string) (Value, error)) (Value, error) {
 	return DecodeWithFunctions(b, tagged, resolve, nil)
 }
 func DecodeWithFunctions(b []byte, tagged bool, resolve func(string, string) (Value, error), function func(string) (Value, error)) (Value, error) {
+	return decodeWith(jsonReader{tagged: tagged, resolve: resolve, function: function}, b)
+}
+
+// DecodeWire also accepts the Message Layer's {"$function": [home, display,
+// token]}, which wire turns into a Function Value from the payload list.
+func DecodeWire(b []byte, resolve func(string, string) (Value, error), wire func(Value) (Value, error)) (Value, error) {
+	return decodeWith(jsonReader{tagged: true, resolve: resolve, wire: wire}, b)
+}
+func decodeWith(r jsonReader, b []byte) (Value, error) {
 	if !utf8.Valid(b) {
 		return Value{}, fmt.Errorf("invalid UTF-8 JSON")
 	}
-	r := jsonReader{text: string(b), tagged: tagged, resolve: resolve, function: function}
+	r.text = string(b)
 	v, e := r.value()
 	if e != nil {
 		return Value{}, e
@@ -497,6 +522,11 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 	v := p.Val
 	bad := func() (Value, error) { return Value{}, fmt.Errorf("invalid %s tag", p.Key) }
 	switch p.Key {
+	case "$function":
+		if v.Kind != List || r.wire == nil {
+			return bad()
+		}
+		return r.wire(v)
 	case "$sessionFunction":
 		if v.Kind != Text || r.function == nil {
 			return bad()

@@ -74,7 +74,7 @@ func (v Value) Display() string {
 		case Range:
 		case Function:
 			f := *v.Function()
-			if len(f.Captures) == 0 {
+			if _, wire := f.WireDisplay(); len(f.Captures) == 0 || wire {
 				out.WriteString(v.displayLeaf())
 				return
 			}
@@ -171,6 +171,9 @@ func (v Value) displayLeaf() string {
 	case Object:
 		return "<object " + v.Object().Kind + " " + DisplayText(v.Object().ID) + ">"
 	case Function:
+		if shown, wire := v.Function().WireDisplay(); wire {
+			return shown
+		}
 		place := v.Function().Home + ":" + v.Function().Code
 		// Named functions retain extension code identity internally, while
 		// their display names the Home Script and declaration.

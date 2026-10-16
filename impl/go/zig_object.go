@@ -211,14 +211,48 @@ func propertyFailureDetail(e *ScriptError) string {
 	return ""
 }
 
-// zigEncoded encodes a Host-supplied Value, refusing Function Values and
-// handles from another Group before they reach the guest.
+// zigEncoded encodes a Host-supplied Value as the Message Layer carries it,
+// refusing handles and Function Values from another Group first.
 func (b *zigGroup) zigEncoded(v Value) (json.RawMessage, error) {
 	if err := b.zigDataOnly(v); err != nil {
 		return nil, err
 	}
-	raw, err := EncodeValue(v)
-	return json.RawMessage(raw), err
+	raw, err := corevalue.EncodeWire(v.inner, false, func(f *corevalue.FunctionData) (string, error) {
+		return `{"$function":[` + corevalue.JSONString(f.Home, false) + "," + corevalue.JSONString(wireDisplay(f), false) + "," + corevalue.JSONString(f.Code, false) + "]}", nil
+	})
+	if err != nil {
+		return nil, &HostError{InvalidValue, err.Error()}
+	}
+	return json.RawMessage(raw), nil
+}
+
+func wireDisplay(f *corevalue.FunctionData) string {
+	shown, _ := f.WireDisplay()
+	return shown
+}
+
+// decodeValue reads a Value Encoding from the guest. A Function Value
+// becomes an opaque value of this Group: its Code is the guest's token, so
+// equal tokens are equal values, and its display is the guest's.
+func (b *zigGroup) decodeValue(raw []byte) (Value, error) {
+	resolve := func(kind, id string) (corevalue.Value, error) {
+		o, ok := b.resolve(kind, id)
+		if !ok {
+			return corevalue.Value{}, fmt.Errorf("object not resolved")
+		}
+		return o.Value().inner, nil
+	}
+	v, err := corevalue.DecodeWire(raw, resolve, func(payload corevalue.Value) (corevalue.Value, error) {
+		parts := payload.Items()
+		if len(parts) != 3 || parts[0].Kind != corevalue.Text || parts[1].Kind != corevalue.Text || parts[2].Kind != corevalue.Text {
+			return corevalue.Value{}, fmt.Errorf("invalid $function tag")
+		}
+		return corevalue.Fields{Kind: corevalue.Function, Function: &corevalue.FunctionData{Home: parts[0].Text(), CodeState: corevalue.WireFunction{Display: parts[1].Text()}, Code: parts[2].Text(), Group: b.group}}.Value(), nil
+	})
+	if err != nil {
+		return Nothing, &HostError{InvalidValue, err.Error()}
+	}
+	return Value{v}, nil
 }
 func (b *zigGroup) zigScriptFailure(e *ScriptError) (map[string]any, error) {
 	if !utf8.ValidString(e.Code) || !utf8.ValidString(e.Message) {
