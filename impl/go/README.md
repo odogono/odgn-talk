@@ -100,6 +100,18 @@ and records, its context cancelling the call, and the adapter negotiates
 `function-gone-v1`, so a call found stale at the drain rejects with `send
 failed`, reason `function gone`, as natively.
 
+`Core.CompileLibrary` checks a Library in a guest the Core owns, not with the
+Go compiler, and the returned Library keeps its source, imports and Grant
+declarations with the guest's identity and `Needs()`. Each Group's guest
+compiles a Library, after its imports, the first time `AddLibrary` or
+`ReplaceLibrary` names it, and checks the identity matches. Diagnostics, the
+add and replace refusals and Trace records are the guest's. `ReplaceLibrary`
+returns the typed Reports and settles discarded futures; Grant release hooks
+run with reason `reload` before the importers are reloaded. A Lambda in a
+Library constant is still stale in its callers (#1036), and two checks only
+native Go makes, a Library calling its importer's Handler and a transitive name
+cycle, are decided in #1037.
+
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,
 declared costs, MaxPending and optional error catalogues. Call identity,
@@ -128,7 +140,7 @@ compatibility gate. Input admission during a non-yielding WASM export also
 remains open: serialized exports and paused-crossing tests do not establish it.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
-existing signature has no error result: Libraries,
+existing signature has no error result:
 Reload/Extend, Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
 name in one Group, and a Kind first defined inside a Host callback, are refused.
 Capability attachments with scoped or Segment lifecycle hooks, Standard
