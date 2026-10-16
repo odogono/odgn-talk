@@ -1010,7 +1010,12 @@ Function Values nested in Library Constants and parameter defaults bind to
 each importing or calling Script's Home, including through transitive imports.
 The compiled Library holds unbound code templates, reusable across Groups;
 binding preserves Library code positions and captures without changing the
-shared Constant. Bound values survive full Group Save/Restore.
+shared Constant. Each Home Script caches a Library's bound definitions on
+first access, so later Constant reads and defaulted calls retain the cached
+values without walking their contents. Reload and Library replacement discard
+the old generation's cache; extensions keep their own initialised definitions.
+Bound values survive full Group Save/Restore, and the derived caches rebuild
+on first access after Restore without changing the Save format.
 
 The trusted stdlib loader alone lowers private `map:restrictedCall` to
 `call-restricted`. Its inherited frame restriction rejects live Script state,
