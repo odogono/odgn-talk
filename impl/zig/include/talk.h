@@ -350,6 +350,10 @@ typedef struct talk_operation {
     const char *const *examples;
     const size_t *examples_lens;
     size_t examples_len;
+    /* Also callable as a Host Command, by its name alone (ADR 0094);
+     * refused on a Reserved Word. Last, so positional initialisers that
+     * stop before it leave it false. */
+    bool command;
 } talk_operation;
 
 /* A Segment Coordinator's hooks report one of these
@@ -1390,13 +1394,16 @@ typedef struct talk_library_source {
     const char *source;
     size_t source_len;
 } talk_library_source;
-/* An Operation's compile-time mode and argument Shapes, by its name. */
+/* An Operation's compile-time mode and argument Shapes, by its name, and
+ * whether it is a Host Command, which a Library's Command Calls resolve
+ * against. */
 typedef struct talk_operation_check {
     const char *name;
     size_t name_len;
     talk_mode mode;
     const talk_shape *const *args;
     size_t args_len;
+    bool command;
 } talk_operation_check;
 /* One Grant's Operation checks, by the name the source uses for the Grant.
  * An array of them is talk.go's GrantDecls. */

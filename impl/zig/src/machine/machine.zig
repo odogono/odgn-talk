@@ -785,7 +785,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         const declared = try kept.alloc(capabilities.GrantDecls, named.len);
         for (named, declared) |n, *k| {
             const checks = try kept.alloc(capabilities.OperationCheck, n.operations.len);
-            for (n.operations, checks) |o, *x| x.* = .{ .name = try kept.dupe(u8, o.name), .mode = o.mode, .args = try kept.dupe(*capabilities.Shape, o.args) };
+            for (n.operations, checks) |o, *x| x.* = .{ .name = try kept.dupe(u8, o.name), .mode = o.mode, .args = try kept.dupe(*capabilities.Shape, o.args), .command = o.command };
             k.* = .{ .name = try kept.dupe(u8, n.name), .operations = checks };
         }
         for (declared) |k| for (k.operations) |o| for (o.args) |x| {

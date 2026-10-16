@@ -148,7 +148,7 @@ static int capability_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -185,7 +185,7 @@ static int capability_test(void) {
     bad |= talk_capability_def_checks(def, NULL, 0) != 1 || talk_capability_def_checks(def, checks, 2) != 1;
     bad |= checks[0].name_len != 5 || memcmp(checks[0].name, "twice", 5) != 0 || checks[0].mode != TALK_IMMEDIATE || checks[0].args_len != 1;
     const talk_shape *number_args[] = {talk_number_shape()};
-    talk_operation_check by_hand[] = {{"twice", 5, TALK_IMMEDIATE, number_args, 1}};
+    talk_operation_check by_hand[] = {{"twice", 5, TALK_IMMEDIATE, number_args, 1, false}};
     talk_grant_decls from_def[] = {{"echo", 4, checks, 1}};
     talk_grant_decls handwritten[] = {{"echo", 4, by_hand, 1}};
     const char *lib_text = "function shout s\n  ask echo to twice \"a\"\n  return it\nend shout\n";
@@ -196,6 +196,77 @@ static int capability_test(void) {
     lib_src.name_len = 7;
     bad |= talk_compile_library(core, &lib_src, NULL, 0, handwritten, 1, &lib, NULL) != TALK_LOAD_REFUSED;
     if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+/* Whether bytes hold a text. */
+static bool holds(const talk_owned_bytes *b, const char *text) {
+    size_t n = strlen(text);
+    for (size_t i = 0; b->data != NULL && i + n <= b->len; i++) {
+        if (memcmp(b->data + i, text, n) == 0) return true;
+    }
+    return false;
+}
+
+/* A Host Command (ADR 0094): an Operation declared `command`, called by its
+ * name alone as the `ask` it stands for. A Reserved Word can't be one. The
+ * flag reaches a Library's checks and the Host Manifest. */
+static int host_command_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const talk_shape *args[] = {talk_text_shape()};
+    talk_operation reserved[] = {{"if", 2, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, true}};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "bad", 3, reserved, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, true}};
+    bad |= talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
+    if (bad) return bad;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"echo", 4, grant}};
+    const char *source = "script variable said\non go s\n  twice s\n  put it into said\nend go\n";
+    talk_load_options load = {"caller", 6, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_value *text = NULL;
+    talk_text("ab", 2, &text);
+    talk_value *message_args[] = {text};
+    talk_message message = {"go", 2, message_args, 1, NULL};
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    talk_value_release(text);
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_inspect(group, NULL);
+    bad |= strstr(trace, "call caller/r1.c1 op=echo.twice args=[\"ab\"] result=\"abab\" charged=3\n") == NULL;
+    bad |= strstr(trace, "vars caller said=\"abab\"\n") == NULL;
+    /* Checked at load as the `ask` it stands for. */
+    const char *wrong_source = "on go\n  twice 5\nend go\n";
+    talk_load_options wrong = {"wrong", 5, wrong_source, strlen(wrong_source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *refused = NULL;
+    bad |= talk_load(group, &wrong, &refused) != TALK_LOAD_REFUSED;
+    bad |= strstr(trace, "diag wrong code=\"wrong argument\" pos=2:9\n") == NULL;
+    /* A Library resolves it against its declarations, and needs it. */
+    talk_operation_check checks[1];
+    bad |= talk_capability_def_checks(def, checks, 1) != 1 || !checks[0].command;
+    talk_grant_decls from_def[] = {{"echo", 4, checks, 1}};
+    const char *lib_text = "function shout s\n  twice \"a\"\n  return it\nend shout\n";
+    talk_library_source lib_src = {"shouts", 6, "1", 1, lib_text, strlen(lib_text)};
+    talk_library *lib = NULL;
+    bad |= talk_compile_library(core, &lib_src, NULL, 0, from_def, 1, &lib, NULL) != TALK_OK;
+    talk_manifest_spec spec = {"demo", 4, "1", 1, grants, 1, &lib, 1, NULL, 0, NULL, 0, NULL, 0};
+    talk_owned_bytes written = {0};
+    bad |= talk_export_manifest(&spec, &written) != TALK_OK;
+    const char *flagged = "\"cost\":{\"fuel\":7,\"alloc\":0},\"command\":true}";
+    const char *needs = "\"needs\":[{\"capability\":\"echo\",\"operation\":\"twice\"}]";
+    bad |= !holds(&written, flagged) || !holds(&written, needs);
+    if (bad) fprintf(stderr, "%s\n%.*s\n", trace, (int)written.len, written.data);
+    talk_owned_bytes_release(&written);
     talk_group_release(group);
     talk_core_release(core);
     return bad;
@@ -239,7 +310,7 @@ static int revoke_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
     /* One release hook, given with the definition. */
     talk_capability_option none[] = {talk_with_release_hook(NULL, NULL)};
@@ -315,33 +386,33 @@ static int scope_test(void) {
     int bad = 0;
     /* An opener whose abandonment Operation is missing, takes arguments,
      * closes another scope or disagrees with another opener's. */
-    talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation missing[] = {{"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     bad |= talk_define_capability(core, "a", 1, missing, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation with_args[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"close", 5, one, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
     };
     bad |= talk_define_capability(core, "b", 1, with_args, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
     talk_operation disagreeing[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"reopen", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens_lock, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"unlock", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
     };
     bad |= talk_define_capability(core, "c", 1, disagreeing, 4, NULL, 0, &def) != TALK_INVALID_VALUE;
     /* A suspending lifecycle Operation, and a Segment-bound one with no
      * Segment Coordinator. */
     talk_operation suspending[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
     };
     bad |= talk_define_capability(core, "d", 1, suspending, 2, NULL, 0, &def) != TALK_INVALID_VALUE;
-    talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation bound[] = {{"change", 6, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     bad |= talk_define_capability(core, "e", 1, bound, 1, NULL, 0, &def) != TALK_INVALID_VALUE;
 
     talk_operation ops[] = {
-        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0},
-        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0},
+        {"open", 4, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &opens, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
+        {"close", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, &closes, false, NULL, 0, NULL, 0, NULL, NULL, 0, false},
     };
     bad |= talk_define_capability(core, "files", 5, ops, 2, NULL, 0, &def) != TALK_OK;
     /* A Grant keeps an opener's abandonment Operation. */
@@ -410,14 +481,14 @@ static int segment_test(void) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
-    talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
     int bad = 0;
     /* A coordinator without all three hooks, and a suspending Segment-bound
      * Operation. */
     talk_segment_lifecycle partial = {begin_hook, commit_hook, NULL, NULL};
     bad |= talk_define_segment_capability(core, "a", 1, ops, 1, &partial, NULL, 0, &def) != TALK_INVALID_VALUE;
-    talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation suspending[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_SUSPENDING, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     bad |= talk_define_segment_capability(core, "b", 1, suspending, 1, &shared_lifecycle, NULL, 0, &def) != TALK_INVALID_VALUE;
     bad |= talk_define_coordinated_capability(core, "db", 2, ops, 1, coordinator_of, NULL, NULL, 0, &def) != TALK_OK;
     talk_grant *refused = NULL, *one = NULL, *two = NULL;
@@ -1630,7 +1701,7 @@ static int suspension_test(void) {
     talk_group *group = NULL;
     talk_group_options options = {"g", 1, record, NULL, NULL, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
-    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "feed", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
@@ -1710,7 +1781,7 @@ static int object_test(void) {
     talk_shape *lamp_shape = NULL;
     bad |= talk_object_shape(lamp, &lamp_shape) != TALK_OK;
     const talk_shape *see_args[] = {lamp_shape};
-    talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0}};
+    talk_operation see_ops[] = {{"see", 3, see_args, 1, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, unused, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *probe = NULL;
     bad |= talk_define_capability(core, "probe", 5, see_ops, 1, NULL, 0, &probe) != TALK_OK;
     talk_shape_release(lamp_shape);
@@ -1767,14 +1838,14 @@ static int manifest_test(void) {
     const talk_shape *args[] = {talk_text_shape()};
     const char *examples[] = {"ask echo to twice \"ab\""};
     const size_t examples_lens[] = {22};
-    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, "Doubles a text.", 15, examples, examples_lens, 1}};
+    talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, "Doubles a text.", 15, examples, examples_lens, 1, false}};
     talk_capability_def *def = NULL;
     int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, (void *)1, &grant) != TALK_OK;
     /* `say` is console's write, which a Library must be told about. */
     const talk_shape *write_args[] = {talk_value_shape()};
-    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1}};
+    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1, false}};
     talk_grant_decls console_decls[] = {{"console", 7, write_check, 1}};
     const char *says_source = "function shout\n  say \"a\"\nend shout\n";
     talk_library_source says_src = {"says", 4, "1", 1, says_source, strlen(says_source)};
@@ -1924,7 +1995,7 @@ static int library_test(void) {
      * is console's write. */
     /* `say` is console's write, which a Library must be told about. */
     const talk_shape *write_args[] = {talk_value_shape()};
-    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1}};
+    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1, false}};
     talk_grant_decls console_decls[] = {{"console", 7, write_check, 1}};
     const char *says_source = "function shout\n  say \"a\"\n  say \"b\"\nend shout\n";
     talk_library_source says_src = {"says", 4, "1", 1, says_source, strlen(says_source)};
@@ -2394,6 +2465,7 @@ int main(void) {
     expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
     expect(library_constant_functions_test() == 0, "Library Constants and defaults bind Function Values to each caller and Group");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
+    expect(host_command_test() == 0, "a Host Command is called by its name, checked as its ask, refused on a Reserved Word, and declared to Libraries and the Host Manifest");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
     return failures == 0 ? 0 : 1;

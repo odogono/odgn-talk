@@ -173,6 +173,28 @@ unit's initialiser raises, which leaves no Script in the Group, or no compiled
 Library. `import cycle` is never raised: `talk_compile_library` takes a
 Library's imports already compiled, so a cycle can't be built.
 
+**Host Commands** ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)):
+an Operation declared `command` (`talk_operation.command`, the Message Layer's
+`"command": true`, `case.toml`'s `command = true`) may be called by its name
+alone. The checker resolves an unlabelled Command Call that names no Handler of
+the unit, local, imported or from an earlier Extend, to the one Operation the
+Context's Grants offer as `command`, and records it in `Result.commands` by its
+name token: a fire-and-forget one without `and wait` as `tell`, any other as
+`ask`. It is then checked as a `tell` block's line is, with `wrong mode` and
+`wrong argument count` at its name and `wrong argument` at the argument, and
+joins the `needs`, so GrantsAsUsed and an importer's `missing grant` see an
+ordinary Operation call. Two Grants offering the called command are `name
+clash` at the call; an Import named like any offered command is `name clash`
+at its name in the `use` line, called or not. `and wait` on one stays `not in
+a join` and `not in a timeout`. A Library's resolve against its compilation
+declarations (`talk_operation_check.command`). `DefineCapability` refuses
+`command` on a Reserved Word with `invalid value`, and the Message Layer
+refuses a non-Boolean. The flag is in the Operation Data: the Host Manifest,
+the Group Fingerprint and restore matching write `"command":true` after
+`segmentBound`, only when true. The Zig Core keeps no compile cache, so a
+resolution never outlives the Grants it was made against; the code identity is
+unchanged.
+
 ## Lowering
 
 `lower.lower` turns a unit that checks clean into a code unit: its constant
@@ -200,7 +222,9 @@ handler's dispatch slots start above every slot the protected body used.
 Every inlined copy of a `finally` block, and the exit after it, is cut out of
 the spans of the `try`s it leaves, so an entry split by copies becomes one
 entry per span. The Operation modes that pick `ask`, `ask-wait`, `join-ask`
-or `tell` come from the Context's Grants.
+or `tell` come from the Context's Grants. A Host Command lowers to exactly the
+instructions of the `tell` or `ask` the checker chose: `tell`, or `ask` or
+`ask-wait` and a `store 0`, with no opcode of its own.
 
 ## Building and testing
 

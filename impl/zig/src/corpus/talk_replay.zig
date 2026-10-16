@@ -1064,6 +1064,7 @@ fn defineCapabilities(a: std.mem.Allocator, core: ?*c.talk_core, all: []const ca
                 .segment_bound = segment_bound,
                 .metering = if (case_setup.field(t, "metering")) |m| m.string.ptr else null,
                 .metering_len = if (case_setup.field(t, "metering")) |m| m.string.len else 0,
+                .command = if (case_setup.field(t, "command")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false,
             });
         }
         var def: ?*c.talk_capability_def = null;

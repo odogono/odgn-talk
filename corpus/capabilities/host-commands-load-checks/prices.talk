@@ -3,3 +3,7 @@
 on price sku
   return 1
 end price
+
+on cost sku
+  return 2
+end cost

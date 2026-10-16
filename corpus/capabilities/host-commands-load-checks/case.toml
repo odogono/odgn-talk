@@ -5,7 +5,8 @@
 # a Script's Grants offering the same command, here one Capability granted
 # twice under two names, make a call to it a `name clash` at the call. An
 # Import named like a Host Command is a `name clash` at its name in the `use`
-# line, as an Import named like a Handler is.
+# line, as an Import named like a Handler is, and an Import renamed to one
+# clashes at its new name.
 
 kind = "trace"
 
@@ -54,4 +55,9 @@ grants = { till = { ops = "all" }, spare = { capability = "till", ops = ["price"
 [[scripts]]
 name = "importer"
 source = "importer.talk"
+grants = { till = { ops = ["price"] } }
+
+[[scripts]]
+name = "alias"
+source = "alias.talk"
 grants = { till = { ops = ["price"] } }

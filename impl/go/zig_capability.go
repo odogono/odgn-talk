@@ -91,6 +91,9 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 			args[i] = encoded
 		}
 		fields := map[string]any{"name": name, "args": args, "mode": modeName(op.Mode), "cost": map[string]any{"fuel": op.Cost.Fuel, "alloc": op.Cost.Alloc}, "maxPending": op.MaxPending.Milliseconds()}
+		if op.Command {
+			fields["command"] = true
+		}
 		if op.Result.inner.Kind != "" {
 			encoded, err := zigShape(op.Result.inner, 0)
 			if err != nil {

@@ -8,6 +8,7 @@ const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const units = @import("../units.zig");
 const check = @import("../check/check.zig");
+const grammar = @import("../generated/grammar.zig").grammar;
 const Value = model.Value;
 
 pub const Mode = check.Mode;
@@ -456,6 +457,12 @@ pub const Scope = union(enum) {
 
 pub const Metering = enum { read_only, segment_bound };
 
+/// Whether a word is a Reserved Word (chapter 1).
+fn reservedWord(word: []const u8) bool {
+    for (grammar.reserved) |r| if (std.mem.eql(u8, r, word)) return true;
+    return false;
+}
+
 pub const Operation = struct {
     name: []const u8,
     args: []*Shape,
@@ -473,6 +480,8 @@ pub const Operation = struct {
     /// Whether its effects join the Segment's participant, deferred to the
     /// Segment's outcome.
     segment_bound: bool = false,
+    /// Also callable as a Host Command, by its name alone (ADR 0094).
+    command: bool = false,
     metering: ?Metering = null,
     /// For the Host Manifest only: plain text, and source texts that each
     /// call the Operation. Empty is none.
@@ -600,9 +609,12 @@ pub const Capability = struct {
     /// Operation is immediate and names an identifier word, and each
     /// opener's abandonment Operation is one of this Capability's that
     /// closes the same scope, takes no arguments and returns Nothing, the
-    /// same one for every opener of that scope.
+    /// same one for every opener of that scope. No Operation that is a
+    /// Reserved Word is a Host Command, since a Command Call can't start
+    /// with one (ADR 0094).
     pub fn validScopes(c: *const Capability) bool {
         for (c.operations) |op| {
+            if (op.command and reservedWord(op.name)) return false;
             if (op.segment_bound and op.mode != .immediate) return false;
             if (op.metering) |metering| switch (metering) {
                 .read_only => if (op.mode == .fire_and_forget or op.segment_bound or op.scope != .none) return false,
@@ -881,14 +893,14 @@ pub fn checkOperations(a: Allocator, g: *const Grant) ![]check.Operation {
     var out: std.ArrayList(check.Operation) = .empty;
     for (g.capability.operations, g.operations, 0..) |op, kept, i| {
         if (!kept) continue;
-        try out.append(a, .{ .name = op.name, .mode = op.mode, .required = op.required(), .total = op.args.len, .accepts = .{ .context = &g.capability.operations[i], .call = acceptsLiteral } });
+        try out.append(a, .{ .name = op.name, .mode = op.mode, .required = op.required(), .total = op.args.len, .accepts = .{ .context = &g.capability.operations[i], .call = acceptsLiteral }, .command = op.command });
     }
     return out.items;
 }
 
 /// An Operation's compile-time mode and argument Shapes, which a Library's
 /// Capability calls are checked and lowered against.
-pub const OperationCheck = struct { name: []const u8, mode: Mode, args: []const *Shape };
+pub const OperationCheck = struct { name: []const u8, mode: Mode, args: []const *Shape, command: bool = false };
 /// A Grant's declarations, by the name the source uses.
 pub const GrantDecls = struct { name: []const u8, operations: []const OperationCheck };
 
@@ -898,7 +910,7 @@ pub fn declaredOperations(a: Allocator, checks: []const OperationCheck) ![]check
     for (checks, out) |*c, *x| {
         var required = c.args.len;
         while (required > 0 and c.args[required - 1].omittable()) required -= 1;
-        x.* = .{ .name = c.name, .mode = c.mode, .required = required, .total = c.args.len, .accepts = .{ .context = c, .call = acceptsDeclared } };
+        x.* = .{ .name = c.name, .mode = c.mode, .required = required, .total = c.args.len, .accepts = .{ .context = c, .call = acceptsDeclared }, .command = c.command };
     }
     return out;
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/decimal"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
@@ -237,12 +236,7 @@ func (g *Group) Load(o LoadOptions) (*Script, error) {
 		declarations[name] = map[string]check.OperationCheck{}
 		for op := range template.operations {
 			bound.operations[op] = true
-			d := template.definition.ops[op]
-			args := make([]shape.Shape, len(d.Args))
-			for i, s := range d.Args {
-				args[i] = s.inner
-			}
-			declarations[name][op] = check.OperationCheck{Mode: modeName(d.Mode), Args: args}
+			declarations[name][op] = operationCheck(template.definition.ops[op])
 		}
 		grants[name] = bound
 	}

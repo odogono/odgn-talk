@@ -73,7 +73,11 @@ func (b *zigGroup) compileLibrary(l *Library) (Value, error) {
 					}
 					args[i] = shape
 				}
-				declared[op] = map[string]any{"mode": modeName(check.Mode), "args": args}
+				decl := map[string]any{"mode": modeName(check.Mode), "args": args}
+				if check.Command {
+					decl["command"] = true
+				}
+				declared[op] = decl
 			}
 			decls[grant] = declared
 		}

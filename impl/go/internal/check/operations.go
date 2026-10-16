@@ -12,6 +12,8 @@ import (
 type OperationCheck struct {
 	Mode string
 	Args []shape.Shape
+	// Command also makes the Operation a Host Command (ADR 0094).
+	Command bool `json:",omitempty"`
 }
 
 // OperationUse keeps the original call for rechecking it against an importing
@@ -52,6 +54,7 @@ func (u *Unit) checkOperations() {
 	if u.Options.Grants == nil {
 		return
 	}
+	u.lowerHostCommands()
 	ResolveLines(u.Tree, u.Options.Grants)
 	reported := map[syntax.Position]bool{}
 	for _, site := range OperationUses(u.Tree, "") {
@@ -95,6 +98,85 @@ func (u *Unit) checkOperations() {
 			}
 		}
 	}
+}
+
+// resolveHostCommands finds each unlabelled Command Call that names no
+// Handler of the unit, local, imported or from an earlier Extend, and that
+// exactly one Grant offers as an Operation declared `command` (ADR 0094). A
+// labelled call's Selector is never a single word, so it never matches. A
+// call two Grants offer is a `name clash` at the call, and so is an Import
+// named like a Host Command, at its name in the `use` line. It runs after the
+// declarations are collected and before validation, so a Library's Host
+// Commands aren't `not in a library`, while the call stays a Command Call
+// for the Join and Timeout Block checks.
+func (u *Unit) resolveHostCommands() {
+	offered := map[string][]string{}
+	for grant, ops := range u.Options.Grants {
+		for op, d := range ops {
+			if d.Command {
+				offered[op] = append(offered[op], grant)
+			}
+		}
+	}
+	if len(offered) == 0 {
+		return
+	}
+	u.hostCommands = map[*syntax.Node]string{}
+	for _, decl := range u.Tree.Declarations {
+		if decl.Kind == "use" {
+			library, ok := u.Options.Imports[decl.Text]
+			if !ok {
+				continue
+			}
+			for _, param := range decl.Params {
+				if _, ok := library[param.Text]; !ok {
+					continue
+				}
+				local := param
+				if len(decl.Children) > 0 {
+					local = decl.Children[0]
+				}
+				if offered[local.Text] != nil {
+					u.add("name clash", local.Pos())
+				}
+			}
+			continue
+		}
+		syntax.Walk(decl, func(n *syntax.Node) bool {
+			if n.Kind != "command" || n.Text == "say" {
+				return true
+			}
+			if _, ok := u.Handlers[n.Text]; ok {
+				return true
+			}
+			switch grants := offered[n.Text]; len(grants) {
+			case 0:
+			case 1:
+				u.hostCommands[n] = grants[0]
+			default:
+				u.add("name clash", n.Pos())
+			}
+			return true
+		})
+	}
+}
+
+// lowerHostCommands makes each resolved Host Command the one-line call it
+// stands for: a `tell` when its Operation is fire-and-forget and it has no
+// `and wait`, and otherwise an `ask` (ADR 0094). It then checks, lowers and
+// counts as that call, for `needs`, GrantsAsUsed and an importer's recheck,
+// whose result never changes it.
+func (u *Unit) lowerHostCommands() {
+	for n, grant := range u.hostCommands {
+		name := n.Token
+		n.NameToken = &name
+		n.Params = []*syntax.Node{{Kind: "name", Text: grant, Token: syntax.Token{Kind: syntax.Word, Raw: grant, Pos: n.Token.Pos}}}
+		n.Kind = "ask"
+		if u.Options.Grants[grant][n.Text].Mode == "fire-and-forget" && !syntax.HasFlag(n, "and") {
+			n.Kind = "tell"
+		}
+	}
+	u.hostCommands = nil
 }
 
 // ResolveLines makes each `tell` block line whose Operation is

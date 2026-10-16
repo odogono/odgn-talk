@@ -1274,6 +1274,14 @@ const Frame = struct {
         for (c.args) |arg| try f.expr(arg);
         const n: i64 = @intCast(c.args.len);
         const waits = c.wait != null;
+        if (l.checked.commands.get(c.name)) |hc| {
+            // A Host Command is the `tell` or `ask` the checker chose (ADR
+            // 0094): the same instructions.
+            const operands: []const Operand = &.{ .{ .text = try l.a.dupe(u8, hc.grant) }, .{ .text = try l.a.dupe(u8, hc.operation) }, .{ .int = n } };
+            if (hc.told) return f.emit(.tell, operands, first, "");
+            try f.emit(if (waits) .ask_wait else .ask, operands, first, "");
+            return f.store(0, first);
+        }
         if (l.checked.suspends.contains(name) or l.importedHandler(l.text(c.name))) {
             try f.emit(if (waits) .call_handler_wait else .call_handler, &.{ .{ .text = name }, .{ .int = n } }, first, "");
             try f.store(0, first);
@@ -2999,6 +3007,41 @@ test "every corpus unit that checks clean lowers, with every label placed" {
         }
     };
     try testing.expect(lowered > 300);
+}
+
+test "a Host Command lowers to the same instructions as its tell or ask" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const till = [_]check.Operation{
+        .{ .name = "fetch", .mode = .suspending, .required = 1, .total = 1, .command = true },
+        .{ .name = "note", .mode = .fire_and_forget, .required = 1, .total = 1, .command = true },
+        .{ .name = "price", .mode = .immediate, .required = 1, .total = 1, .command = true },
+    };
+    const context: check.Context = .{ .grants = &.{.{ .name = "till", .operations = &till }} };
+    var units: [2]Unit = undefined;
+    for ([_][]const u8{
+        "on go\n  price \"a\"\n  note \"b\"\n  fetch \"c\" and wait\nend go\n",
+        "on go\n  ask till to price \"a\"\n  tell till to note \"b\"\n  ask till to fetch \"c\" and wait\nend go\n",
+    }, &units) |source, *unit| {
+        const parsed = try parser.parse(a, source);
+        const checked = try check.check(a, &parsed.tree, context);
+        try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+        unit.* = try lower(a, &parsed.tree, &checked, .{ .name = "s", .context = context });
+    }
+    try testing.expectEqual(units[1].code.len, units[0].code.len);
+    var calls: usize = 0;
+    for (units[0].code, units[1].code) |x, y| {
+        try testing.expectEqual(y.op, x.op);
+        try testing.expectEqual(y.operands.len, x.operands.len);
+        for (x.operands, y.operands) |p, q| switch (q) {
+            .text => |t| try testing.expectEqualStrings(t, p.text),
+            .int => |n| try testing.expectEqual(n, p.int),
+            else => {},
+        };
+        if (x.op == .ask or x.op == .tell or x.op == .ask_wait) calls += 1;
+    }
+    try testing.expectEqual(@as(usize, 3), calls);
 }
 
 test "parenthesized Containers and calls through a Constant lower" {

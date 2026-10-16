@@ -2448,6 +2448,7 @@ pub const Operation = extern struct {
     examples: ?[*]const ?[*]const u8 = null,
     examples_lens: ?[*]const usize = null,
     examples_len: usize = 0,
+    command: bool = false,
 };
 
 /// A C Host function and its context, behind the Core's Host function.
@@ -2563,6 +2564,7 @@ fn operationOf(c: *Core, o: Operation) !caps.Operation {
             .closes => |n| .{ .closes = try gpa.dupe(u8, n) },
         },
         .segment_bound = o.segment_bound,
+        .command = o.command,
         .metering = metering,
         .description = description,
         .examples = try examples.toOwnedSlice(gpa),
@@ -2780,7 +2782,7 @@ export fn talk_capability_def_checks(d: *const caps.Capability, out: ?[*]Operati
             .immediate => .immediate,
             .suspending => .suspending,
             .fire_and_forget => .fire_and_forget,
-        }, .args = @ptrCast(op.args.ptr), .args_len = op.args.len };
+        }, .args = @ptrCast(op.args.ptr), .args_len = op.args.len, .command = op.command };
     };
     return d.operations.len;
 }
@@ -3584,7 +3586,7 @@ pub const LibrarySource = extern struct {
 /// Compiles a Library once per process. imports must hold every Library
 /// its `use` lines name, besides the stdlib's; anything that fails to parse
 /// or check is TALK_LOAD_REFUSED. The Library lives as long as the Core.
-pub const OperationCheck = extern struct { name: ?[*]const u8, name_len: usize, mode: Mode, args: ?[*]const *const Shape, args_len: usize };
+pub const OperationCheck = extern struct { name: ?[*]const u8, name_len: usize, mode: Mode, args: ?[*]const *const Shape, args_len: usize, command: bool = false };
 pub const GrantDecls = extern struct { name: ?[*]const u8, name_len: usize, operations: ?[*]const OperationCheck, operations_len: usize };
 
 /// The declarations as the Core reads them, borrowing the caller's bytes and
@@ -3600,7 +3602,7 @@ fn grantDecls(a: std.mem.Allocator, given: []const GrantDecls) ![]caps.GrantDecl
                 .immediate => .immediate,
                 .suspending => .suspending,
                 .fire_and_forget => .fire_and_forget,
-            }, .args = @ptrCast(args) };
+            }, .args = @ptrCast(args), .command = o.command };
         }
         x.* = .{ .name = try bytes(g.name, g.name_len), .operations = ops };
     }

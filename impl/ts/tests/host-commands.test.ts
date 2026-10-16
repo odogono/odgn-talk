@@ -268,6 +268,29 @@ describe('load checks', () => {
     }
   });
 
+  test('an aliased Import clashes at its local name', () => {
+    const g = newGroup({ name: 'g' });
+    g.addLibrary(
+      compileLibrary({
+        name: 'lib',
+        version: '1',
+        source: 'on total\n  return 1\nend total',
+      }),
+    );
+    try {
+      g.load({
+        name: 's',
+        source: 'use total from lib as count',
+        grants: all(),
+      });
+      throw new Error('loaded');
+    } catch (error) {
+      expect(
+        (error as LoadError).diagnostics.map(d => [d.code, d.line, d.col]),
+      ).toEqual([['name clash', 1, 23]]);
+    }
+  });
+
   test('Grants as used keep a Host Command', () => {
     const g = newGroup({ name: 'g' });
     g.load({

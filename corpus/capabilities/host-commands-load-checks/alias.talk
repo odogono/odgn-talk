@@ -1,0 +1,3 @@
+-- alias.talk: an Import renamed to a Host Command's name.
+
+use cost from prices as price

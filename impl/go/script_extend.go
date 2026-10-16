@@ -8,7 +8,6 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/lower"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
@@ -78,12 +77,7 @@ func (s *Script) compileOptions() (check.Options, map[string][32]byte) {
 			if !kept {
 				continue
 			}
-			d := grant.definition.ops[op]
-			args := make([]shape.Shape, len(d.Args))
-			for i, arg := range d.Args {
-				args[i] = arg.inner
-			}
-			declarations[name][op] = check.OperationCheck{Mode: modeName(d.Mode), Args: args}
+			declarations[name][op] = operationCheck(grant.definition.ops[op])
 		}
 	}
 	objects := []string{}

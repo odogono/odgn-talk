@@ -1116,6 +1116,7 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
     if (name.len == 0) return error.InvalidValue;
     for ([_][]const u8{ "ask", "tell", "send", "wait", "end" }) |refused| if (std.mem.eql(u8, name, refused)) return error.InvalidValue;
     const segment_bound = if (j.object.get("segmentBound")) |b| asBool(b) orelse return error.InvalidValue else false;
+    const command = if (j.object.get("command")) |b| asBool(b) orelse return error.InvalidValue else false;
     const mode = try modeOf(j.object.get("mode"));
     const metering: ?caps.Metering = if (j.object.get("metering")) |v| blk: {
         const m = asText(v) orelse return error.InvalidValue;
@@ -1258,6 +1259,7 @@ fn operationOf(s: *Session, capability: []const u8, j: Json) (Allocator.Error ||
         .examples = examples,
         .scope = scope,
         .segment_bound = segment_bound,
+        .command = command,
         .metering = metering,
         .host = .{ .call = opCall, .context = oc },
     };
@@ -2625,6 +2627,7 @@ fn compileLibraryReply(s: *Session, msg: Json, ref: i64) []u8 {
             const ops = a.alloc(talk.OperationCheck, ops_json.object.count()) catch return hostError(s.gpa, ref, .out_of_memory);
             for (ops_json.object.keys(), ops_json.object.values(), ops) |op, decl, *slot| {
                 const mode = modeOf(field(decl, "mode")) catch return hostError(s.gpa, ref, .invalid_value);
+                const command = if (field(decl, "command")) |b| asBool(b) orelse return hostError(s.gpa, ref, .invalid_value) else false;
                 const args_json = field(decl, "args") orelse Json{ .array = .init(a) };
                 if (args_json != .array) return hostError(s.gpa, ref, .invalid_value);
                 const args = a.alloc(*const caps.Shape, args_json.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
@@ -2636,7 +2639,7 @@ fn compileLibraryReply(s: *Session, msg: Json, ref: i64) []u8 {
                     };
                     arg.* = shape;
                 }
-                slot.* = .{ .name = op.ptr, .name_len = op.len, .mode = std.meta.stringToEnum(talk.Mode, @tagName(mode)).?, .args = args.ptr, .args_len = args.len };
+                slot.* = .{ .name = op.ptr, .name_len = op.len, .mode = std.meta.stringToEnum(talk.Mode, @tagName(mode)).?, .args = args.ptr, .args_len = args.len, .command = command };
             }
             g.* = .{ .name = grant.ptr, .name_len = grant.len, .operations = ops.ptr, .operations_len = ops.len };
         }
@@ -4695,6 +4698,33 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "a Host Command's `command` flag is declared, validated and called through frames" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{0}));
+    // Only a Boolean, and never on a Reserved Word.
+    for ([_][]const u8{ "{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\",\"command\":\"yes\"}", "{\"name\":\"if\",\"mode\":\"immediate\",\"result\":\"number\",\"command\":true}" }) |op| {
+        const refused = try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"bad\",\"ops\":[{s}]}}", .{ 1, op });
+        try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    }
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\",\"command\":true}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n read\\n return it\\nend go\"}}", .{ 4, grant.object.get("grant").?.integer }));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+    const pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6});
+    _ = pumped.object.get("need") orelse return unexpected(pumped);
+    const end = try runEnd(try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"result\":7}}", .{}));
+    try std.testing.expectEqual(@as(i64, 7), end.object.get("result").?.integer);
+    // A Library resolves it against its declarations, which carry the flag.
+    const frame = "{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"{s}\",\"version\":\"1\",\"source\":\"function f\\n  read\\n  return it\\nend f\\n\",\"declarations\":{{\"api\":{{\"read\":{{\"mode\":\"immediate\",\"command\":{s}}}}}}}}}";
+    _ = try okOf(try c.send(frame, .{ 7, "util", "true" }));
+    const bad = try c.send(frame, .{ 8, "other", "1" });
+    try std.testing.expectEqualStrings("invalid value", bad.object.get("err").?.object.get("code").?.string);
 }
 
 test "export-manifest writes the Host Manifest's bytes, the same each time" {
