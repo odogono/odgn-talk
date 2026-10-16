@@ -11,6 +11,8 @@ mix deps.get
 mix test          # uses .cache/zig-wasi/bin/talk.wasm
 ```
 
+[`examples/shop`](examples/shop/) is a runnable OTP application and the getting-started guide: Elixir calls a Handler, which calls Elixir and Erlang functions, and a deferred Operation is settled later by another process.
+
 ## Using it
 
 An Instance Owner is one process holding one reactor instance. It conducts every exchange with that instance, and can drive several Script Groups.
@@ -68,6 +70,7 @@ This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the
 - **Host Objects** are not supported yet: a property need is refused, and every saved Host Object restores disposed.
 - **Function Values** come with the full value set in [#993](https://github.com/odogono/odgn-talk/issues/993). They hold only a token, so nothing about them is durable on the Host's side.
 - **Standard Capabilities** are not offered. The `sqlite` factory isn't offered through the Message Layer by any Host.
+- **Paused-crossing inputs** (`paused-inputs-v1`, #884) aren't offered: nothing a callback sends the owner is admitted before its own result. A suspending callback's calls are handled after the exchange it belongs to ends. [#1007](https://github.com/odogono/odgn-talk/issues/1007) tracks it.
 - **Revoke, cancellation, Broadcasts, Decisions, inspection, Fingerprints, Store Notification checkpoints, metering and the Host Manifest** have no Elixir API yet.
 
 ## The reactor
@@ -89,11 +92,24 @@ The test configuration points at the repository's `.cache/` build.
 - **Limits:** `:memory_cap` bounds guest linear memory, `:timeout` bounds each reactor call, and `:limits` sets the Script limits each `load/4` starts from, which its own `limits:` may override. `NorthTalk.memory/1` reports linear memory apart from the BEAM's own. A Group out of memory under the cap fails its waiting requests with `out of memory`.
 - **Traps and timeouts** poison the instance: the owner fails every waiting request with `instance trapped` and stops with `{:shutdown, :trapped}`. Effects are never retried. To carry on, start a new owner and `restore/4` a save kept from before. Other owners are unaffected.
 
+## Measurements
+
+On an Apple M5 at `aa32a4d8`, through `NorthTalk` with the pinned reactor, from [the benchmark Host's `api` section](../../bench/results/2026-10-16-aa32a4d8-message-layer-elixir-darwin-arm64-apple-m5.md):
+
+| Path | p50 | p99 |
+| --- | --- | --- |
+| `request/5` of an empty Handler | 112 µs | 143 µs |
+| One immediate callback, inside a Run | 64 µs | 90 µs |
+| `request/5` waiting on a deferred Operation | 320 µs | 395 µs |
+
+Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process heap after one Request. The raw-frame transport figures are in the same report: the owner and its callback Tasks add to them.
+
 ## Layout
 
 | Path | Contents |
 | --- | --- |
 | [`lib/north_talk.ex`](lib/north_talk.ex) | The public API. |
+| [`examples/shop/`](examples/shop/) | The OTP example and getting-started guide. |
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
 | [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, and a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s. |
