@@ -147,7 +147,8 @@ defmodule TalkHost.Measure do
     s
   end
 
-  defp runs(opts, sample) do
+  @doc false
+  def runs(opts, sample) do
     runs =
       Enum.map(1..opts[:runs], fn _ ->
         :erlang.garbage_collect()

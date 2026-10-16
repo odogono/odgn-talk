@@ -150,7 +150,7 @@ defmodule TalkHost.Report do
     ## Verdict
 
     #{verdict_tables(r["verdicts"])}
-    #{latency_md(r["latency"])}#{containment_md(r["containment"])}#{faults_md(r["faults"])}
+    #{latency_md(r["latency"])}#{api_md(r["api"])}#{containment_md(r["containment"])}#{faults_md(r["faults"])}
     """
   end
 
@@ -208,6 +208,33 @@ defmodule TalkHost.Report do
     | Transport | median | max | instances |
     | --- | --- | --- | --- |
     #{Enum.join(memory, "\n")}
+    """
+  end
+
+  defp api_md(nil), do: ""
+
+  defp api_md(api) do
+    rows =
+      for {label, key} <- [{"Request", "request"}, {"Callback", "callback"}, {"Deferred Request", "deferred"}] do
+        s = api[key]
+        runs = Enum.map_join(s["runs"], ", ", &us(&1["p50"]))
+
+        "| #{label} | #{us(s["p50"])} | #{us(s["p99"])} | #{us(s["mean"])} | #{us(s["min"])} | #{us(s["max"])} | #{s["n"]} | #{runs} |"
+      end
+
+    m = api["memory"]
+
+    """
+
+    ## Through the Elixir API
+
+    The same reactor over Wasmex, driven through `NorthTalk` (impl/elixir) instead of raw frames, so these include the Instance Owner, value conversion and callback Tasks. A Request is `request/5` of an empty Handler with automatic driving, from the call to its result. A Callback is the time from one immediate callback starting to the next, inside one Request of 100 calls, each in its own Task. A Deferred Request waits on a suspending Operation whose callback returns `{:defer, ref}`, answered by `answer/3` from another process. These have no #532 threshold.
+
+    | Figure | p50 | p99 | mean | min | max | n | p50 of each run |
+    | --- | --- | --- | --- | --- | --- | --- | --- |
+    #{Enum.join(rows, "\n")}
+
+    Per owner, after one Request, over #{m["owners"]} owners: #{mib(m["linearMedianBytes"])} of guest linear memory and #{mib(m["processMedianBytes"])} of owner process heap, median.
     """
   end
 

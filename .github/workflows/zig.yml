@@ -97,6 +97,23 @@ jobs:
       - run: mix test
         working-directory: impl/elixir
 
+  # The OTP example as a consumer builds it: no Zig, Go or sidecar, and the
+  # pinned reactor release fetched at compile time.
+  elixir-example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28'
+          elixir-version: '1.19'
+      - run: mix deps.get
+        working-directory: impl/elixir/examples/shop
+      - run: mix format --check-formatted
+        working-directory: impl/elixir/examples/shop
+      - run: mix test
+        working-directory: impl/elixir/examples/shop
+
   sidecar-elixir:
     runs-on: ubuntu-latest
     steps:

@@ -4,7 +4,7 @@ defmodule Mix.Tasks.Talk.Measure do
   Measures the Zig Message Layer reactor over Wasmex and the Zig native
   sidecar on an Erlang Port, against the thresholds set in #532.
 
-      mix talk.measure [--quick] [--only latency,containment,faults] [--transports wasmex,sidecar,c]
+      mix talk.measure [--quick] [--only latency,api,containment,faults] [--transports wasmex,sidecar,c]
                        [--no-save] [--build]
       mix talk.measure --render bench/results/<file>.json
 
@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Talk.Measure do
   alias NorthTalk.Transport.Wasi
 
   @mib 1024 * 1024
-  @sections ~w(latency containment faults)
+  @sections ~w(latency api containment faults)
 
   # spec: https://github.com/odogono/odgn-talk/issues/532#issuecomment-6095554407
   @thresholds %{
@@ -107,6 +107,7 @@ defmodule Mix.Tasks.Talk.Measure do
       }
       |> Map.put("payload", payload())
       |> maybe("latency" in sections and transports != [], "latency", fn -> latency(transports, sizes) end)
+      |> maybe("api" in sections, "api", fn -> api(sizes) end)
       |> maybe("containment" in sections, "containment", fn -> containment(chosen, sizes) end)
       |> maybe("faults" in sections, "faults", fn -> faults(transports, bridge?, sizes) end)
 
@@ -163,6 +164,17 @@ defmodule Mix.Tasks.Talk.Measure do
       end
 
     Map.put(figures, "compileMs", compile)
+  end
+
+  defp api(sizes) do
+    IO.puts(:stderr, "api: wasmex")
+
+    %{
+      "request" => TalkHost.Api.request(sizes),
+      "callback" => TalkHost.Api.callback(sizes),
+      "deferred" => TalkHost.Api.deferred(sizes),
+      "memory" => TalkHost.Api.memory(sizes[:memory])
+    }
   end
 
   defp containment(chosen, sizes) do
@@ -243,7 +255,9 @@ defmodule Mix.Tasks.Talk.Measure do
     {zig, 0} = System.cmd("zig", ["version"])
     {commit, 0} = System.cmd("git", ["-C", TalkHost.Artifacts.root(), "rev-parse", "--short", "HEAD"])
     sidecar = TalkHost.Artifacts.sidecar()
-    sidecar_sha = if File.regular?(sidecar), do: :crypto.hash(:sha256, File.read!(sidecar)) |> Base.encode16(case: :lower)
+
+    sidecar_sha =
+      if File.regular?(sidecar), do: :crypto.hash(:sha256, File.read!(sidecar)) |> Base.encode16(case: :lower)
 
     docker =
       case System.cmd(
