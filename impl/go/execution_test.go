@@ -224,7 +224,13 @@ func TestSliceDebtAndPumpRoundRobin(t *testing.T) {
 
 func TestCancellationCleanupAndNestedFaultLocation(t *testing.T) {
 	var trace lines
-	g := New().NewGroup(GroupOptions{Trace: &trace})
+	ready := make(chan struct{}, 1)
+	g := New().NewGroup(GroupOptions{Trace: &trace, OnReady: func() {
+		select {
+		case ready <- struct{}{}:
+		default:
+		}
+	}})
 	s, e := g.Load(LoadOptions{Name: "s", Limits: Limits{CleanupBudget: 1}, Source: "script variable x = 0\non go\n try\n  put 1 into x\n  repeat forever\n  end repeat\n finally\n  put 2 + 3 into x\n end try\nend go\nfunction makeList\n return [1,2,3]\nend makeList\non allocate\n return makeList()\nend allocate\n"})
 	if e != nil {
 		t.Fatal(e)
@@ -236,15 +242,17 @@ func TestCancellationCleanupAndNestedFaultLocation(t *testing.T) {
 	}
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	g.Pump(now, PumpOptions{FuelSlice: 10})
+	// Discard admission's notification, then wait for cancellation admission
+	// through the public OnReady contract, without inspecting a native queue.
+	select {
+	case <-ready:
+	default:
+	}
 	cancel()
-	for j := 0; j < 1000; j++ {
-		g.mu.Lock()
-		n := len(g.inputs)
-		g.mu.Unlock()
-		if n > 0 {
-			break
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancellation did not notify OnReady")
 	}
 	result, e := g.Pump(now, PumpOptions{})
 	if e != nil {

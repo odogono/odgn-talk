@@ -329,7 +329,11 @@ func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fue
 		if err != nil {
 			panic(err)
 		}
-		fields["error"] = encoded
+		// An envelope collision is a malformed failure, retained as a broken
+		// settlement until resumption. Its input Trace must still contain a map.
+		if len(hostFailureValue(e).Entries()) != 0 {
+			fields["error"] = encoded
+		}
 	}
 	if _, err := b.send(kind, fields); err != nil {
 		panic(err)

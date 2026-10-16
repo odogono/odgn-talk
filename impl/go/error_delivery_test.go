@@ -157,7 +157,14 @@ func TestErrorMessagesDoNotChainOrReportInternalUnhandled(t *testing.T) {
 
 func TestFullMailboxDropsErrorWithoutReservingCapacity(t *testing.T) {
 	var trace lines
-	g := New().NewGroup(GroupOptions{Trace: &trace})
+	var record func(string)
+	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
+		if record != nil {
+			record(line)
+		} else {
+			trace.Record(line)
+		}
+	})})
 	s, err := g.Load(LoadOptions{Name: "s", Limits: Limits{MailboxDepth: 1}, Source: `on fail
  throw "first"
 end fail
@@ -174,12 +181,12 @@ end error
 	// This any-goroutine input is accepted during the Pump, before the error
 	// message is queued. Reserved input capacity counts toward mailbox depth.
 	var deliveryError error
-	g.options.Trace = traceFunc(func(line string) {
+	record = func(line string) {
 		trace.Record(line)
 		if strings.HasPrefix(line, "run s/r1 ") {
 			_, deliveryError = s.Deliver(Message{Name: "next"})
 		}
-	})
+	}
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	if err != nil || deliveryError != nil || len(operationalReports(result.Reports)) != 1 {
 		t.Fatal(result, err, deliveryError)

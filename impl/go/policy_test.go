@@ -227,14 +227,14 @@ end work
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "work", Args: []Value{Int(1)}})
-	id, p, err := s.Request(nil, Message{Name: "work", Args: []Value{Int(2)}})
+	_, _, err = s.Request(nil, Message{Name: "work", Args: []Value{Int(2)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Deliver(Message{Name: "work", Args: []Value{Int(3)}})
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	g.Pump(now, PumpOptions{})
-	g.cancelDelivery(delivery{id: id, script: s, pending: p})
+	s.CancelRun(g.Inspect().Scripts[0].Runs[1].ID)
 	r, err := g.Pump(now, PumpOptions{})
 	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled {
 		t.Fatal(r, err)
