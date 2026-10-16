@@ -1192,3 +1192,65 @@ test('a message the Host answers is completed, documented and checked unless the
     'message-argument-count',
   );
 });
+
+test('a Host Command is completed, documented, checked at load and Linted when shadowed', () => {
+  const host = {
+    ...manifest,
+    grants: [
+      ...manifest.grants,
+      {
+        name: 'folio',
+        capability: 'folio',
+        operations: [
+          {
+            name: 'hide',
+            mode: 'fire-and-forget',
+            args: ['text'],
+            cost: { fuel: 0, alloc: 0 },
+            command: true,
+            description: 'Hides a part.',
+          },
+        ],
+      },
+    ],
+  };
+  const { sent, request } = setup(
+    'on demo\n  hide "a"\n  hide\nend demo',
+    host,
+  );
+  const hover = request('textDocument/hover', at(1, 3)) as {
+    contents: { value: string };
+  };
+  expect(hover.contents.value).toContain('Hides a part.');
+  expect(hover.contents.value).toContain('Host Command');
+  const items = request('textDocument/completion', at(2, 3)) as {
+    documentation?: unknown;
+    label: string;
+  }[];
+  expect(JSON.stringify(items.find(i => i.label === 'hide'))).toContain(
+    'Hides a part.',
+  );
+  const published = sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(published.diagnostics.map(d => d.code)).toContain(
+    'wrong argument count',
+  );
+
+  const own = setup('on hide x\nend hide\non demo\n  hide "a"\nend demo', host);
+  const ownDiagnostics = own.sent
+    .filter(m => m.method === 'textDocument/publishDiagnostics')
+    .at(-1)!.params as Published;
+  expect(ownDiagnostics.diagnostics.map(d => d.code)).toContain(
+    'shadowed-host-command',
+  );
+  // The Script's own Handler is the one completed.
+  const ownItems = own.request('textDocument/completion', at(3, 3)) as {
+    documentation?: unknown;
+    label: string;
+  }[];
+  expect(ownItems.filter(i => i.label === 'hide')).toHaveLength(1);
+  expect(JSON.stringify(ownItems.find(i => i.label === 'hide'))).not.toContain(
+    'Hides a part.',
+  );
+});

@@ -86,28 +86,29 @@ test('in Edit, a failing command changes nothing and read-only refuses', async (
   expect(project).toEqual(before);
 });
 
-test('HyperTalk-style hide and show come from the folio Library', async () => {
+test('hide and show are Host Commands, whose errors name the command line', async () => {
   const play = new PlaySession(fixture());
   expect(await run(play, 'hide button1')).toEqual({ text: undefined });
   expect(play.page.elements[0]!.visible).toBe(false);
   expect(await run(play, 'show button1')).toEqual({ text: undefined });
   expect(play.page.elements[0]!.visible).toBe(true);
-  expect(await run(play, 'put 1 / 0 into y')).toEqual({
-    error: 'line 1: Division by zero',
+  expect(await run(play, 'hide 42')).toEqual({
+    error: 'line 1: wrong argument',
   });
+  const failed = await run(
+    play,
+    'put 1 into target\nhide target\nhide button1',
+  );
+  expect(failed.error).toMatch(/^line 2: Expected/u);
+  expect(play.page.elements[0]!.visible).toBe(true);
+  expect(play.problems).toEqual([]);
 });
 
-test('an authored Script can import the folio commands', async () => {
+test('in Edit, hide is one undoable authored edit', async () => {
   const project = fixture();
-  project.pages[0]!.elements[0]!.script =
-    'use hide from folio\non click\n hide me\nend click';
-  const play = new PlaySession(project);
-  play.send(play.page.elements[0]!, 'click');
-  for (let i = 0; i < 20; i++) {
-    if (play.pump(0n).state !== 'sliced') {
-      break;
-    }
-  }
-  expect(play.problems).toEqual([]);
-  expect(play.page.elements[0]!.visible).toBe(false);
+  const editor = new StackEditor(project);
+  expect(await runInEdit(editor, 'hide button1')).toEqual({ text: undefined });
+  expect(project.pages[0]!.elements[0]!.visible).toBe(false);
+  editor.undo();
+  expect(project.pages[0]!.elements[0]!.visible).toBe(true);
 });

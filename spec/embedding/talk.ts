@@ -189,6 +189,8 @@ interface OpBase {
   result?: Shape;
   cost: Cost;
   errors?: ErrorDecl[];
+  /** Also callable as a Host Command by its name alone; refused on a Reserved Word. */
+  command?: boolean;
   /** Plain text for tooling only: the Host Manifest carries these, and nothing else reads them. */
   description?: string;
   examples?: string[]; // NorthTalk source, each calling this Operation

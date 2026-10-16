@@ -85,10 +85,11 @@ type opData struct {
 	Errors       *[]errorData `json:"errors,omitempty"`
 	Scope        any          `json:"scope,omitempty"`
 	SegmentBound bool         `json:"segmentBound,omitempty"`
+	Command      bool         `json:"command,omitempty"`
 }
 
 func operationData(op Operation) opData {
-	out := opData{Name: op.Name, Mode: modeName(op.Mode), Args: []any{}, SegmentBound: op.SegmentBound}
+	out := opData{Name: op.Name, Mode: modeName(op.Mode), Args: []any{}, SegmentBound: op.SegmentBound, Command: op.Command}
 	for _, arg := range op.Args {
 		out.Args = append(out.Args, shapeData(arg.inner))
 	}

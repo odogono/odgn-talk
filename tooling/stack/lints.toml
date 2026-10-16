@@ -203,3 +203,11 @@ beginner = "hint"
 standard = "off"
 message = "This adds a list as one element. Consider ... before the list expression to append its items instead."
 status = "implemented"
+
+[[lint]]
+id = "shadowed-host-command"
+flags = "a Script's Handler whose Selector names a Host Command that one of its Grants in the Host Manifest offers, so the Script's own calls never reach the Operation"
+beginner = "warning"
+standard = "hint"
+message = "This Handler answers this Script's {name} calls, so they never call the Host Command {name} of {grant}."
+status = "implemented"

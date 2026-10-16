@@ -1,0 +1,10 @@
+-- command.talk: the host-commands case's Host Commands.
+
+script variable total = 0
+
+on ring sku
+  price sku
+  note "rang " & sku & " at " & it
+  fetch sku and wait
+  add it to total
+end ring

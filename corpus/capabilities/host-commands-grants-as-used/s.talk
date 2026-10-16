@@ -1,0 +1,8 @@
+-- s.talk: calls one Host Command.
+
+script variable seen = []
+
+on go
+  price "tea"
+  put it after seen
+end go

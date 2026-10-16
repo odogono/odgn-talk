@@ -1,0 +1,19 @@
+# Unblessed: Host Commands (#1019); first blessing awaits human review.
+# host-commands-library: s rings "tea" through the Library; bare doesn't load.
+
+> add-library register identity=d85f25c4ba6ea950a8cfe3dd8202c80e7c4c650042d3e1a4c80e16f496d34804
+> load s identity=bbf074633703758e987a0f0491be00dfdf055d96e76edea8001f104312aea8e3
+> load bare identity=a23060b31ec093a6be978f4f75720e71f5407a6b2b9b842505b2842e03a1b63f
+diag bare code="missing grant" pos=3:1
+diag bare code="missing grant" pos=3:1
+> stub till.price value=2
+> deliver d1 to=s message=go args=["tea"]
+> pump clock=2026-09-30T09:00:00Z
+call s/r1.c1 op=till.price args=["tea"] result=2
+call s/r1.c2 op=till.note args=["rang tea at 2"]
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=88 alloc=113 state=16 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=88 alloc=113
+pumped state=idle fuel=88
+
+> vars
+vars s total=2

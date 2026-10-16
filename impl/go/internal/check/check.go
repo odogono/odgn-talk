@@ -62,6 +62,9 @@ type Unit struct {
 	Definitions, Variables []string
 	Bodies                 map[*syntax.Node]*Body
 	Diagnostics            []Diagnostic
+	// hostCommands holds each Command Call resolved to a Host Command, by
+	// its Grant name, until checkOperations makes it that call.
+	hostCommands map[*syntax.Node]string
 }
 
 func Builtin(name string) (generated.BuiltinsTableBuiltinEntry, bool) {
@@ -236,6 +239,7 @@ func Check(tree *syntax.Tree, options Options) *Unit {
 			}
 		}
 	}
+	u.resolveHostCommands()
 	initExpressions := []*syntax.Node{}
 	for _, n := range tree.Declarations {
 		if n.Kind == "constant" || n.Kind == "variable" {
@@ -1082,7 +1086,7 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 	case "build":
 		u.bits(n)
 	case "command":
-		if u.Options.Library && n.Text != "say" {
+		if _, host := u.hostCommands[n]; u.Options.Library && n.Text != "say" && !host {
 			if symbol, ok := u.Callee(b, n); !ok || symbol.Kind != "handler" {
 				u.add("not in a library", n.Pos())
 			}

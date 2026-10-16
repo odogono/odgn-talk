@@ -146,6 +146,7 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation, docu
         },
     }
     if (op.segment_bound) try w.writeAll(",\"segmentBound\":true");
+    if (op.command) try w.writeAll(",\"command\":true");
     if (op.metering) |m| {
         try w.writeAll(",\"metering\":");
         try writeString(w, if (m == .read_only) "read-only" else "segment-bound");

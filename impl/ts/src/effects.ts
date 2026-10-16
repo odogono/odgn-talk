@@ -6,6 +6,7 @@
 import { acceptsArgumentCount, type Shape } from './capabilities';
 import type { Report } from './control';
 import {
+  hostCommands,
   toldLines,
   type SemanticElement,
   type SemanticName,
@@ -19,7 +20,12 @@ export type OperationMode = 'immediate' | 'suspending' | 'fire-and-forget';
 export type GrantDecls = Readonly<
   Record<
     string,
-    Readonly<Record<string, { args: readonly Shape[]; mode: OperationMode }>>
+    Readonly<
+      Record<
+        string,
+        { args: readonly Shape[]; command?: boolean; mode: OperationMode }
+      >
+    >
   >
 >;
 
@@ -155,7 +161,8 @@ const fits = (l: Literal, s: Shape): boolean => {
 
 /**
  * A Capability call: a one-line `ask` or `tell`, a line of a `tell` block,
- * whose Grant is the block's receiver (ADR 0063), or `say`.
+ * whose Grant is the block's receiver (ADR 0063), a Host Command (ADR 0094),
+ * or `say`.
  */
 export type EffectUse = {
   capability: string;
@@ -179,7 +186,16 @@ export const operationUses = (root: SemanticNode): EffectUse[] => {
     }
     if (node.rule === 'SimpleStatement') {
       const head = node.children[0];
-      if (head?.kind === 'name' && head.text === 'say') {
+      const command = hostCommands.get(node);
+      if (command && head?.kind === 'name') {
+        found.push({
+          capability: command.grant,
+          operation: command.operation,
+          node,
+          grant: head,
+          op: head,
+        });
+      } else if (head?.kind === 'name' && head.text === 'say') {
         found.push({
           capability: 'console',
           operation: 'write',
@@ -228,8 +244,11 @@ export const checkEffectCall = (
   report: Report,
 ) => {
   const { node, grant, op } = use;
-  const say = node.rule === 'SimpleStatement';
-  const line = node.rule === 'OperationLine';
+  // A Host Command is checked as the `tell` or `ask` it stands for, called
+  // as its checker chose, as a `tell` block's line is.
+  const command = hostCommands.has(node);
+  const say = node.rule === 'SimpleStatement' && !command;
+  const line = node.rule === 'OperationLine' || command;
   const ops = Object.hasOwn(grants, use.capability)
     ? grants[use.capability]
     : null;
@@ -269,6 +288,84 @@ export const checkEffectCall = (
       report('wrong argument', firstLeaf(arg)!);
     }
   });
+};
+
+/**
+ * Resolve each Command Call that names no Handler of the unit, local or
+ * imported, to a Host Command: an Operation its Grants declare `command`
+ * (ADR 0094). Only an unlabelled call's Selector is a single word, so a
+ * labelled one never matches. A fire-and-forget one without `and wait` is
+ * called as `tell`, and any other as `ask`, decided here once, so an
+ * importer's recheck never changes it. An Import named like a Host Command,
+ * or a call that two Grants offer, is a `name clash`. Gives each resolved
+ * call for the compile cache key.
+ */
+export const resolveHostCommands = (
+  root: SemanticNode,
+  grants: GrantDecls,
+  report: Report,
+): string[] => {
+  const offered = new Map<string, { grant: string; mode: OperationMode }[]>();
+  for (const [grant, ops] of Object.entries(grants)) {
+    for (const [operation, decl] of Object.entries(ops)) {
+      if (decl.command) {
+        offered.set(operation, [
+          ...(offered.get(operation) ?? []),
+          { grant, mode: decl.mode },
+        ]);
+      }
+    }
+  }
+  const commands: { at: number; key: string }[] = [];
+  const work: SemanticElement[] = offered.size ? [root] : [];
+  while (work.length) {
+    const element = work.pop()!;
+    if (element.kind === 'name') {
+      // An Import's local name, bound to what it imports.
+      if (
+        element.role === 'import' &&
+        element.binding?.importedFrom &&
+        offered.has(element.text)
+      ) {
+        report('name clash', element);
+      }
+      continue;
+    }
+    if (element.kind !== 'node') {
+      continue;
+    }
+    work.push(...element.children);
+    const head = element.children[0];
+    if (
+      element.rule !== 'SimpleStatement' ||
+      head?.kind !== 'name' ||
+      head.role !== 'command' ||
+      head.binding?.kind === 'handler' ||
+      head.text === 'say'
+    ) {
+      continue;
+    }
+    const found = offered.get(head.text);
+    if (!found) {
+      continue;
+    }
+    if (found.length > 1) {
+      report('name clash', head);
+      continue;
+    }
+    const { grant, mode } = found[0]!;
+    hostCommands.set(element, { grant, operation: head.text });
+    const told =
+      mode === 'fire-and-forget' && !nodesOf(element, 'AndWait').length;
+    if (told) {
+      toldLines.add(element);
+    }
+    commands.push({
+      at: element.span.start,
+      key: `${element.span.start} ${grant}.${head.text} ${told ? 'tell' : 'ask'}`,
+    });
+  }
+  return commands.sort((a, b) => a.at - b.at).map(c => c.key);
 };
 
 /**

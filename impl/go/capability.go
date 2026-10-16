@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/odogono/odgn-talk/impl/go/internal/check"
+	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
@@ -38,6 +40,7 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl
 	SegmentBound bool
+	Command      bool     // also a Host Command, callable by its name alone (ADR 0094)
 	Description  string   // tooling only; nothing in the Core reads it (ADR 0076)
 	Examples     []string // tooling only
 	Do           func(c *Call, args []Value) (Value, error)
@@ -188,6 +191,10 @@ func (c *Core) defineCapability(name string, lifecycle *SegmentLifecycle, coordi
 		}
 		if _, ok := d.ops[op.Name]; ok {
 			return invalid("duplicate Operation name")
+		}
+		// A Command Call can't start with a Reserved Word (ADR 0094).
+		if op.Command && slices.Contains(generated.Grammar.Reserved, op.Name) {
+			return invalid(op.Name + " is a Reserved Word, so it can't be a command")
 		}
 		if op.Cost.Fuel < 0 || op.Cost.Alloc < 0 || op.Cost.Fuel > 9007199254740991 || op.Cost.Alloc > 9007199254740991 {
 			return invalid("invalid Operation cost")
@@ -435,6 +442,16 @@ func (s *Script) Revoke(grantName string) {
 }
 
 func modeName(m Mode) string { return []string{"immediate", "suspending", "fire-and-forget"}[m] }
+
+// operationCheck is an Operation's mode, argument Shapes and `command` flag,
+// for the load checks and Host Command resolution.
+func operationCheck(d Operation) check.OperationCheck {
+	args := make([]shape.Shape, len(d.Args))
+	for i, s := range d.Args {
+		args[i] = s.inner
+	}
+	return check.OperationCheck{Mode: modeName(d.Mode), Args: args, Command: d.Command}
+}
 
 // Answer queues a suspending call's settlement for the next Pump.
 func (c *Call) Answer(v Value) { c.AnswerWithCost(v, 0) }

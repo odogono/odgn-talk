@@ -1,0 +1,46 @@
+# Unblessed: Host Commands (#1019); first blessing awaits human review.
+# host-commands: d1 and d2 ring "tea" through each form, and both fetches are
+# answered with 3. d3 and d4 ring "cake", whose price fails, so each Run
+# raises `no price` at its call, `ask` in oneline and `price` in command, and
+# neither makes its `note` call.
+
+> load oneline identity=0f7b75a38f837accebdd10f12cff416d2b95d3535ab91d79a34876f9ab117c56
+> load command identity=9bfc9da976ca452c138a0b1d339f07a585801da8aa526394f14c2022e137e90c
+> stub till.price value=2
+> stub till.price value=2
+> stub till.price error={code: "no price"}
+> stub till.price error={code: "no price"}
+> deliver d1 to=oneline message=ring args=["tea"]
+> deliver d2 to=command message=ring args=["tea"]
+> deliver d3 to=oneline message=ring args=["cake"]
+> deliver d4 to=command message=ring args=["cake"]
+> pump clock=2026-09-30T09:00:00Z
+call oneline/r1.c1 op=till.price args=["tea"] result=2
+call oneline/r1.c2 op=till.note args=["rang tea at 2"]
+call oneline/r1.c3 op=till.fetch args=["tea"]
+seg oneline/r1 start delivery=d1 handler=ring clause=1 fuel=89 alloc=97 state=343 end=ask-wait
+call command/r1.c1 op=till.price args=["tea"] result=2
+call command/r1.c2 op=till.note args=["rang tea at 2"]
+call command/r1.c3 op=till.fetch args=["tea"]
+seg command/r1 start delivery=d2 handler=ring clause=1 fuel=89 alloc=97 state=343 end=ask-wait
+call oneline/r2.c1 op=till.price args=["cake"] error={code: "no price"}
+raise oneline/r2 code="no price" at=oneline:5 pos=6:3
+seg oneline/r2 start delivery=d3 handler=ring clause=1 fuel=30 alloc=16 state=291 end=error
+run oneline/r2 outcome=errored delivery=d3 handler=ring error={code: "no price", capability: "till", operation: "price", at: {unit: "oneline", handler: "ring", line: 6, column: 3}} fuel=30 alloc=16
+call command/r2.c1 op=till.price args=["cake"] error={code: "no price"}
+raise command/r2 code="no price" at=command:5 pos=6:3
+seg command/r2 start delivery=d4 handler=ring clause=1 fuel=30 alloc=16 state=291 end=error
+run command/r2 outcome=errored delivery=d4 handler=ring error={code: "no price", capability: "till", operation: "price", at: {unit: "command", handler: "ring", line: 6, column: 3}} fuel=30 alloc=16
+pumped state=idle fuel=238 next=2026-09-30T09:00:05Z
+> answer oneline/r1.c3 value=3
+> answer command/r1.c3 value=3
+> pump clock=2026-09-30T09:00:01Z
+seg oneline/r1 resume fuel=15 alloc=32 state=16 end=return
+run oneline/r1 outcome=completed delivery=d1 handler=ring fuel=104 alloc=129
+seg command/r1 resume fuel=15 alloc=32 state=16 end=return
+run command/r1 outcome=completed delivery=d2 handler=ring fuel=104 alloc=129
+pumped state=idle fuel=30
+
+> vars
+vars oneline total=3
+vars command total=3

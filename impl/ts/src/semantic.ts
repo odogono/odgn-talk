@@ -87,7 +87,21 @@ export type SemanticElement = SemanticNode | SemanticName | SemanticToken;
  * Operation is fire-and-forget (ADR 0063). Every other line is an `ask`.
  */
 export const toldLines = new WeakSet<SemanticNode>();
+/**
+ * The Command Calls the checker resolved to Host Commands, by their
+ * `SimpleStatement`, with the Grant and Operation each calls (ADR 0094). One
+ * that is also in `toldLines` is called as `tell`; any other as `ask`.
+ */
+export const hostCommands = new WeakMap<
+  SemanticNode,
+  { grant: string; operation: string }
+>();
 export type SemanticTree = {
+  /**
+   * Each Host Command call, as `offset grant.operation tell|ask`, in source
+   * order. Resolution depends on the Grants, so it joins the compile cache key.
+   */
+  commands?: readonly string[];
   /** Each top-level declaration's Declaration Documentation, in source order. */
   docs?: readonly string[];
   /** The unit's Handlers that may suspend (chapter 5, Suspension Points). */

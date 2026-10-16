@@ -317,6 +317,7 @@ type Operation struct {
 	Errors       []ErrorDecl
 	Scope        *ScopeDecl // immediate only
 	SegmentBound bool       // immediate only; false by default
+	Command      bool       // also callable as a Host Command by its name alone; refused on a Reserved Word
 	Description  string     // plain text for tooling; only the Host Manifest carries it
 	Examples     []string   // NorthTalk source, each calling this Operation; manifest only
 
@@ -746,10 +747,11 @@ type TraceSink interface{ Record(line string) }
 // Libraries (ADR 0020; #71)
 // ---------------------------------------------------------------------------
 
-// GrantDecls gives compile-time modes and argument Shapes by the Grant name in source.
+// GrantDecls gives compile-time modes, argument Shapes and `command` flags by the Grant name in source.
 type OperationCheck struct {
-	Mode Mode
-	Args []Shape
+	Mode    Mode
+	Args    []Shape
+	Command bool // also a Host Command (ADR 0094)
 }
 type GrantDecls map[string]map[string]OperationCheck
 

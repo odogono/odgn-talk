@@ -7,7 +7,6 @@ import (
 
 	"github.com/odogono/odgn-talk/impl/go/internal/check"
 	"github.com/odogono/odgn-talk/impl/go/internal/machine"
-	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
@@ -85,12 +84,7 @@ func (s *Script) prepareReload(source string, carry CarryOver) (*machine.State, 
 			if !kept {
 				continue
 			}
-			op := grant.definition.ops[opName]
-			args := make([]shape.Shape, len(op.Args))
-			for n, arg := range op.Args {
-				args[n] = arg.inner
-			}
-			declarations[name][opName] = check.OperationCheck{Mode: modeName(op.Mode), Args: args}
+			declarations[name][opName] = operationCheck(grant.definition.ops[opName])
 		}
 	}
 	objects := make([]string, 0, len(s.state.Objects))

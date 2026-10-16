@@ -110,6 +110,9 @@ const facts = (op: ManifestOperation): string[] => {
   if (op.segmentBound) {
     out.push('Segment-bound: commits or rolls back with the Segment');
   }
+  if (op.command) {
+    out.push(`Host Command: also callable as \`${op.name}\` alone`);
+  }
   return out;
 };
 

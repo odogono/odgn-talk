@@ -2094,5 +2094,14 @@ pub const corpus: CorpusTable = .{
                 "disassembly",
             },
         },
+        .{
+            .table = "operations",
+            .key = "command",
+            .is = "optional boolean, false by default; true also makes the Operation a Host Command, callable by its name alone, and is refused on an Operation named by a Reserved Word",
+            .kinds = &.{
+                "trace",
+                "disassembly",
+            },
+        },
     },
 };

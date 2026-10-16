@@ -1,0 +1,44 @@
+# host-commands-library: a Host Command in a Library resolves when it is
+# compiled, against its compilation declarations, after its own Handlers and
+# imports, and joins its `needs` (ADR 0094; spec chapter 7, Grants and
+# `needs`). The runner compiles a Library with each Capability's
+# declarations under its own name. `s` holds `till` and rings through the
+# Library. `bare` holds no Grant, so its load reports `missing grant` at its
+# `use` line, once for each Operation the Library needs.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 10 }
+command = true
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+command = true
+
+[[libraries]]
+name = "register"
+version = "1"
+source = "register.talk"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+grants = { till = { ops = "all" } }
+
+[[scripts]]
+name = "bare"
+source = "s.talk"

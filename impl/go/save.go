@@ -71,6 +71,8 @@ type savedOperation struct {
 	Errors       []savedError
 	Scope        *ScopeDecl
 	SegmentBound bool
+	// Command is omitted when false, so earlier snapshots read unchanged.
+	Command bool `json:",omitempty"`
 }
 type savedError struct {
 	Code   string
@@ -93,10 +95,10 @@ func saveOperation(op Operation) savedOperation {
 			es = append(es, savedError{e.Code, fs})
 		}
 	}
-	return savedOperation{op.Name, args, op.Result.inner, op.Cost, op.Mode, op.MaxPending, es, op.Scope, op.SegmentBound}
+	return savedOperation{op.Name, args, op.Result.inner, op.Cost, op.Mode, op.MaxPending, es, op.Scope, op.SegmentBound, op.Command}
 }
 func (s savedOperation) operation() Operation {
-	op := Operation{Name: s.Name, Result: Shape{s.Result}, Cost: s.Cost, Mode: s.Mode, MaxPending: s.MaxPending, Scope: s.Scope, SegmentBound: s.SegmentBound}
+	op := Operation{Name: s.Name, Result: Shape{s.Result}, Cost: s.Cost, Mode: s.Mode, MaxPending: s.MaxPending, Scope: s.Scope, SegmentBound: s.SegmentBound, Command: s.Command}
 	for _, a := range s.Args {
 		op.Args = append(op.Args, Shape{a})
 	}

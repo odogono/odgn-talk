@@ -16,11 +16,12 @@ const (
 )
 
 type OperationCheck struct {
-	Mode Mode
-	Args []Shape
+	Mode    Mode
+	Args    []Shape
+	Command bool // also a Host Command (ADR 0094)
 }
 
-// GrantDecls supplies compile-time modes and argument Shapes by source Grant name.
+// GrantDecls supplies compile-time modes, argument Shapes and `command` flags by source Grant name.
 type GrantDecls map[string]map[string]OperationCheck
 type LibrarySource struct {
 	Name    string
@@ -108,7 +109,7 @@ func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Lib
 		for op, d := range ops {
 			args := make([]Shape, len(d.Args))
 			copy(args, d.Args)
-			decl := check.OperationCheck{Mode: modeName(d.Mode)}
+			decl := check.OperationCheck{Mode: modeName(d.Mode), Command: d.Command}
 			for _, arg := range args {
 				decl.Args = append(decl.Args, arg.inner)
 			}
@@ -120,6 +121,9 @@ func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Lib
 	if rejected != nil {
 		return nil, rejected
 	}
+	// The checked tree holds the calls as this compilation resolved them,
+	// Host Commands included (ADR 0094), even when the unit was cached.
+	tree = unit.Checked().Tree
 	state, err := machine.InitializeLinked(unit, nil, states)
 	if err != nil {
 		pos := err.(*machine.InitError).Instruction.Pos

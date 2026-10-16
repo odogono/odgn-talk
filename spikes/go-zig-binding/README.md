@@ -120,6 +120,26 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Host Commands artifact refresh, 2026-10-16
+
+[Raw output](measurements-host-commands.txt) records three repetitions with
+artifact source `dbf0547e`, SHA-256
+`2ae692b4daec1b2dce2709a9a12fd1f0e0171b01907a3b7e337952842a8c4590`,
+and public-adapter/native-Go revision `3c363a66`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.663 µs native Go vs 31.171 µs probe (8.5×)**,
+cold compile/runtime/close **616.1 ms**, cached instantiation/close **126.1 µs**.
+This is the same independent immediate-call workload; it does not measure Host
+Command calls.
+
+The adapter passes an Operation's `command` flag to the Zig Core in
+`define-capability` and `compile-library` declarations. Six new public
+scenarios compare Host Command calls, shadowing, load checks, Libraries,
+`GrantsAsUsed` and the Reserved Word refusal against a separately compiled
+native-Go Host. The experimental selection adds the two native Host Command
+tests that pass under the tag; the Fingerprint and restore one waits for Save
+(#884).
+
 ## Reload/Extend artifact refresh, 2026-10-16
 
 [Raw output](measurements-reload.txt) records three repetitions with artifact

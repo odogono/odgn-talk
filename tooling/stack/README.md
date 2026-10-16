@@ -118,6 +118,7 @@ Reachability is conservative: an earlier unguarded clause must cover the later c
 - `key-shadows-property` checks map literal keys against the generated Built-in property list, including quoted keys. Destructuring keys are not map literal keys.
 - `store-race` follows one Handler in source order, without entering nested Lambdas. An `ask G to get K` taints `it`, a `put` of a tainted expression taints its target, chunk writes included, and a later `ask` or waiting `send` replaces `it`. An `ask G to set K` whose value reads a tainted binding is flagged at `set` when `G` is the same Grant name and `K` is the same literal text, or the same binding with no write in between. Branches and loops are read as straight-line code, so this is a hint about likely lost updates, not a proof.
 - `interpolated-sql` flags the SQL argument of a `query` or `change` called through a Grant, in an `ask` or a `tell` block, when it holds Interpolated Text or is built with `&` from anything but literals and Constants. A backtick literal with a hole is flagged even when the hole holds a Constant, while plain and raw-fenced literals and Constants are left alone. With a manifest, only Grants of `sqlite` are checked. A local that holds SQL is not followed to where it was built (ADR 0070).
+- `shadowed-host-command` flags a Script Handler whose Selector is a Host Command one of the manifest's Grants offers, since the Script's own calls then never reach the Operation (ADR 0094). `message-argument-count` leaves such a command to the Core's Operation checks.
 - `unconvertible-literal` delegates literal Civil Date/Instant conversion to the Core's pure `canConvert` helper. It does not evaluate arbitrary expressions or earlier conversions.
 
 A standalone `-- lint: ignore <id>` comment on the preceding physical line suppresses that id there, without changing parsing. It suppresses neither other ids nor later lines. Suppression uses lossless comment trivia, so directive-looking text literals do not count.
@@ -185,13 +186,17 @@ Declarations by `@odgn/northtalk-tooling/dictionary`
 is the call its mode allows (`tell g to …`, `ask g to …` or `ask g to … and
 wait`, with argument Shapes as placeholders), then its mode and how long a
 suspending one waits, result Shape, per-call cost, declared errors, Capability
-Scope and whether it is Segment-bound. Hover on an Operation name shows it,
+Scope, whether it is Segment-bound and whether it is a Host Command. Hover on
+an Operation name shows it, as does hover on a Command Call that no Handler
+answers and exactly one Grant offers as a Host Command. It is shown
 as Markdown when the client's `hover.contentFormat` includes it; hover on a
 Grant's name shows its whole section of the dictionary. With no manifest
 loaded, or one that lacks the Grant or Operation, hover on either name says
 so instead of showing nothing. Completion
 after `tell g to` offers only fire-and-forget Operations, after `ask g to` only
-the others, and on a `tell g` block's line every Operation; the entry is each
+the others, and on a `tell g` block's line every Operation. At the start of a
+statement it also offers each Host Command the Grants offer, unless the
+Script has a Handler of that name. The entry is each
 item's documentation and its call is the detail. A suspending Operation's item
 inserts `and wait` unless the line already has it after the cursor; with
 arguments this needs the client's `snippetSupport`, and without it the item

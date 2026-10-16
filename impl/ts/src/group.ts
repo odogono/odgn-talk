@@ -91,6 +91,7 @@ import { checkDecisionCalls } from './decisions';
 import {
   codeIdentity,
   codeOf,
+  compileKey,
   replacementLibraries,
   identityOf,
   linksOf,
@@ -544,7 +545,8 @@ type QueuedInput = {
   urgent?: boolean;
 };
 
-// Each granted Operation's mode and argument Shapes, for the load checks.
+// Each granted Operation's mode, argument Shapes and `command` flag, for the
+// load checks and Host Command resolution.
 const declarationsOf = (
   grants: ReadonlyMap<string, Grant<unknown>>,
 ): GrantDecls =>
@@ -554,7 +556,14 @@ const declarationsOf = (
       Object.fromEntries(
         [...grant.ops].map(op => {
           const decl = grant.capability.operations.get(op)!;
-          return [op, { mode: decl.mode, args: decl.args ?? [] }];
+          return [
+            op,
+            {
+              mode: decl.mode,
+              args: decl.args ?? [],
+              ...(decl.command ? { command: true } : {}),
+            },
+          ];
         }),
       ),
     ]),
@@ -2306,7 +2315,10 @@ export class Group {
       }
       // An extension's lowering also depends on all earlier definitions and
       // variable slots, so cache it under the complete extended Script identity.
-      const identity = existing?.identity ?? p.identity;
+      const identity = compileKey(
+        existing?.identity ?? p.identity,
+        p.checked.tree!,
+      );
       let unit = compiledScripts.get(identity);
       if (!unit) {
         unit = loadOrReject(name, () =>

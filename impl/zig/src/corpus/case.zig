@@ -186,7 +186,8 @@ pub fn fromTables(a: Allocator, all: []const Table) Error!Setup {
         if (std.mem.eql(u8, t.header, "[[operations]]")) {
             const args = if (field(t, "args")) |v| (if (v == .array) v.array else &.{}) else &.{};
             const n = arity(args);
-            try declared.append(a, .{ .capability = string(t, "capability"), .operation = .{ .name = string(t, "name"), .mode = parseMode(string(t, "mode")), .required = n.required, .total = n.total } });
+            const command = if (field(t, "command")) |b| b == .raw and std.mem.eql(u8, b.raw, "true") else false;
+            try declared.append(a, .{ .capability = string(t, "capability"), .operation = .{ .name = string(t, "name"), .mode = parseMode(string(t, "mode")), .required = n.required, .total = n.total, .command = command } });
         } else if (std.mem.eql(u8, t.header, "[[standard]]")) {
             const capability = string(t, "capability");
             for (stdlib.operation) |o| if (std.mem.eql(u8, o.capability, capability)) {

@@ -1,0 +1,3 @@
+-- importer.talk: an Import named like a Host Command.
+
+use price from prices

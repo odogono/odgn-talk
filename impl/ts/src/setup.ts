@@ -32,6 +32,8 @@ export type ShapeSpec =
 export type OperationSpec = {
   args?: ShapeSpec[];
   capability: string;
+  /** Also callable as a Host Command (ADR 0094). */
+  command?: boolean;
   cost?: { alloc?: number; fuel?: number };
   errors?: {
     code: string;
@@ -98,13 +100,20 @@ export const operationDeclarations = (
 ): GrantDecls => {
   const declarations: Record<
     string,
-    Record<string, { args: Shape[]; mode: OperationSpec['mode'] }>
+    Record<
+      string,
+      { args: Shape[]; command?: boolean; mode: OperationSpec['mode'] }
+    >
   > = Object.create(null);
   for (const [name, capability] of capabilities) {
     declarations[name] = Object.fromEntries(
       [...capability.operations].map(([operation, op]) => [
         operation,
-        { args: op.args ?? [], mode: op.mode },
+        {
+          args: op.args ?? [],
+          mode: op.mode,
+          ...(op.command ? { command: true } : {}),
+        },
       ]),
     );
   }
@@ -195,6 +204,7 @@ export const capabilityOperations = (
       mode: op.mode,
       args: (op.args ?? []).map(shapeSpec),
       cost: { ...op.cost },
+      ...(op.command ? { command: true } : {}),
       ...(op.result ? { result: shapeSpec(op.result) } : {}),
       ...(op.errors
         ? {

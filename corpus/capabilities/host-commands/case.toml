@@ -1,0 +1,52 @@
+# host-commands: an Operation declared `command` may be called as a Command
+# Call by its name alone, as the `tell` or `ask` its mode allows would call it
+# (ADR 0094; spec chapter 5, Calling a Handler by name). `oneline` and
+# `command` make the same calls, so their Runs have the same calls, answers,
+# Fuel, allocation and Persistent State. `price` is immediate, so it leaves
+# its answer in `it`; `note` is fire-and-forget, so `it` keeps it; and `fetch`
+# suspends, so it is written `and wait`. A failure is raised at the calling
+# line, and stops the caller there.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[operations]]
+capability = "till"
+name = "price"
+mode = "immediate"
+args = ["text"]
+result = "number"
+cost = { fuel = 10 }
+errors = [{ code = "no price" }]
+command = true
+
+[[operations]]
+capability = "till"
+name = "note"
+mode = "fire-and-forget"
+args = ["text"]
+cost = { fuel = 5 }
+command = true
+
+[[operations]]
+capability = "till"
+name = "fetch"
+mode = "suspending"
+args = ["text"]
+result = "number"
+cost = { fuel = 20 }
+maxPending = 5000
+command = true
+
+[[scripts]]
+name = "oneline"
+source = "oneline.talk"
+grants = { till = { ops = "all" } }
+
+[[scripts]]
+name = "command"
+source = "command.talk"
+grants = { till = { ops = "all" } }

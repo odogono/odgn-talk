@@ -1,0 +1,18 @@
+# Unblessed: Host Commands (#1019); first blessing awaits human review.
+# host-commands-grants-as-used: the trimmed Operations are unknown to
+# Extend, and `price` is still called.
+
+> load s identity=2939049178f9a5af4cb5bd4e3a327f699763d24e9590104239e79bef9d9c70f7
+> extend s source="on extra" & newline & "  tell till to note " & quote & "x" & quote & newline & "  ask clock to now" & newline & "end extra" identity=d18c07dfe9eccf1a76315a60635b01f2611e99ac2001f2ca46c5b436c65d90c7
+diag s+1 code="unknown operation" pos=2:16
+diag s+1 code="unknown operation" pos=3:7
+> stub till.price value=7
+> deliver d1 to=s message=go
+> pump clock=2026-09-30T10:00:00Z
+call s/r1.c1 op=till.price args=["tea"] result=7
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=39 alloc=40 state=40 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=39 alloc=40
+pumped state=idle fuel=39
+
+> vars
+vars s seen=[7]

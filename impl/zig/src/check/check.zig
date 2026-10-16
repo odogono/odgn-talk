@@ -147,6 +147,8 @@ pub const Operation = struct {
     /// Whether the argument at an index takes a literal; null when the
     /// Shapes aren't known.
     accepts: ?Accepts = null,
+    /// Also callable as a Host Command, by its name alone (ADR 0094).
+    command: bool = false,
 };
 
 /// A literal argument, as the loader sees it: its kind, a Quantity's Unit,
@@ -254,10 +256,17 @@ pub fn needProblem(n: Need, grants: []const Grant) ?Code {
     return if (ok) null else .wrong_mode;
 }
 
+/// A Command Call the checker resolved to a Host Command (ADR 0094): the
+/// Grant and Operation it calls, and whether it is called as `tell` (a
+/// fire-and-forget one without `and wait`) rather than `ask`.
+pub const HostCommand = struct { grant: []const u8, operation: []const u8, told: bool };
+
 pub const Result = struct {
     diagnostics: []const Diagnostic,
     /// Every Capability call, in source order.
     needs: []const Need = &.{},
+    /// The Command Calls that are Host Commands, by their name token.
+    commands: std.AutoHashMapUnmanaged(Tok, HostCommand) = .empty,
     /// Every Name operand, call name and Container root, by token.
     refs: std.AutoHashMapUnmanaged(Tok, Ref),
     bodies: []const Body,
@@ -285,7 +294,7 @@ pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocato
         if (out.items.len > 0 and out.items[out.items.len - 1].code == d.code and out.items[out.items.len - 1].offset == d.offset) continue;
         try out.append(arena, d);
     }
-    return .{ .diagnostics = out.items, .needs = c.needs.items, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
+    return .{ .diagnostics = out.items, .needs = c.needs.items, .commands = c.commands, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
 }
 
 /// What a checked Library exports: every top-level definition that isn't
@@ -464,6 +473,7 @@ const Checker = struct {
     context: Context,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     needs: std.ArrayList(Need) = .empty,
+    commands: std.AutoHashMapUnmanaged(Tok, HostCommand) = .empty,
     refs: std.AutoHashMapUnmanaged(Tok, Ref) = .empty,
     bodies: std.ArrayList(Body) = .empty,
     suspends: std.StringHashMapUnmanaged(bool) = .empty,
@@ -584,6 +594,9 @@ const Checker = struct {
                         if (entry.found_existing) {
                             try c.report(.name_clash, local);
                         } else entry.value_ptr.* = .{ .decl = index, .name = local, .export_ = ex };
+                        // As an Import named like a Handler is, whether or
+                        // not it is called.
+                        if (c.offered(c.text(local)) > 0) try c.report(.name_clash, local);
                     }
                 },
             }
@@ -1333,8 +1346,51 @@ const Checker = struct {
             if (waits) try c.report(.needless_and_wait, cmd.name);
             return;
         }
-        // Sent up the Message Path: `send … and wait` with `and wait`.
+        // Only an unlabelled call's Selector is a single word.
+        if (cmd.labels.len == 0) try c.hostCommand(cmd);
+        // Sent up the Message Path, or a suspending Host Command: `and wait`
+        // is a Suspension Point.
         if (waits) try c.intrinsic(s, first, w);
+    }
+
+    /// How many of the Script's Grants offer `name` as a Host Command.
+    fn offered(c: *Checker, name: []const u8) usize {
+        const grants = c.context.grants orelse return 0;
+        var n: usize = 0;
+        for (grants) |g| for (g.operations) |o| {
+            if (o.command and std.mem.eql(u8, o.name, name)) n += 1;
+        };
+        return n;
+    }
+
+    /// Resolves a Command Call that names no Handler to the one Operation
+    /// its Grants declare `command` (ADR 0094), and checks it as the `tell`
+    /// or `ask` it stands for, as a `tell` block's line is. Two Grants
+    /// offering it are a `name clash` at the call.
+    fn hostCommand(c: *Checker, cmd: ast.Command) Allocator.Error!void {
+        const name = c.text(cmd.name);
+        const n = c.offered(name);
+        if (n == 0) return;
+        if (n > 1) return c.report(.name_clash, cmd.name);
+        const g, const o = for (c.context.grants.?) |g| {
+            const o = for (g.operations) |o| {
+                if (o.command and std.mem.eql(u8, o.name, name)) break o;
+            } else continue;
+            break .{ g, o };
+        } else unreachable;
+        const waits = cmd.wait != null;
+        const told = o.mode == .fire_and_forget and !waits;
+        try c.commands.put(c.a, cmd.name, .{ .grant = g.name, .operation = o.name, .told = told });
+        const literals = try c.a.alloc(?Literal, cmd.args.len);
+        for (cmd.args, literals) |arg, *l| l.* = try c.literal(arg);
+        try c.needs.append(c.a, .{ .grant = g.name, .operation = o.name, .ask = !told, .line = false, .waits = waits, .args = cmd.args.len, .literals = literals });
+        if (cmd.args.len < o.required or cmd.args.len > o.total) {
+            try c.report(.wrong_argument_count, cmd.name);
+        } else if (o.accepts) |accepts| for (cmd.args, literals, 0..) |arg, lit, i| {
+            const l = lit orelse continue;
+            if (!accepts.call(accepts.context, i, l)) try c.report(.wrong_argument, arg.pos);
+        };
+        if (waits != (o.mode == .suspending)) try c.report(.wrong_mode, cmd.name);
     }
 
     fn importByName(c: *Checker, name: []const u8) ?Import {
@@ -2426,6 +2482,84 @@ test "Capability calls against the Script's Grants" {
     , .{ .grants = &grants }, "wrong mode at 3:3\nwrong mode at 5:3\nwrong argument count at 6:16\nunknown operation at 7:7\nunknown operation at 8:15\nunknown operation at 9:3\n");
 }
 
+test "Host Commands resolve after the unit's Handlers and are checked as Operation calls" {
+    const till = [_]Operation{
+        .{ .name = "fetch", .mode = .suspending, .required = 1, .total = 1, .command = true },
+        .{ .name = "note", .mode = .fire_and_forget, .required = 1, .total = 1, .command = true },
+        .{ .name = "price", .mode = .immediate, .required = 1, .total = 1, .command = true },
+        .{ .name = "plain", .mode = .immediate, .required = 0, .total = 0 },
+    };
+    const grants = [_]Grant{.{ .name = "till", .operations = &till }};
+    // A local Handler shadows `price`; a labelled call and an Operation not
+    // declared `command` stay Command Calls; `and wait` stays refused in a
+    // Join, which it doesn't join.
+    try expectDiagnostics(
+        \\on go
+        \\  price "a"
+        \\  note "a"
+        \\  note "a" to "b"
+        \\  plain
+        \\  fetch "a" and wait
+        \\  fetch "a"
+        \\  note "a" and wait
+        \\  note
+        \\  wait for all
+        \\    fetch "a" and wait
+        \\  end wait
+        \\end go
+        \\on price sku
+        \\  return 1
+        \\end price
+    , .{ .grants = &grants }, "wrong mode at 7:3\nwrong mode at 8:3\nwrong argument count at 9:3\nempty join at 10:3\nnot in a join at 11:5\n");
+    // Without Grants nothing resolves.
+    try expectDiagnostics("on go\n  fetch \"a\"\nend go\n", .{}, "");
+    // Two Grants offering one command clash at a call, not otherwise; an
+    // Import named like one clashes at its name, called or not.
+    const twice = [_]Grant{ .{ .name = "till", .operations = &till }, .{ .name = "spare", .operations = till[2..3] } };
+    const libraries = [_]Library{.{ .name = "prices", .exports = &.{.{ .name = "price", .kind = .handler }} }};
+    try expectDiagnostics(
+        \\on go
+        \\  note "a"
+        \\  price "a"
+        \\end go
+    , .{ .grants = &twice }, "name clash at 3:3\n");
+    try expectDiagnostics("use price from prices\n", .{ .grants = &grants, .libraries = &libraries }, "name clash at 1:5\n");
+    try expectDiagnostics("use price from prices\n", .{ .libraries = &libraries }, "");
+}
+
+test "a resolved Host Command records its Grant, form and need" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const till = [_]Operation{
+        .{ .name = "fetch", .mode = .suspending, .required = 1, .total = 1, .command = true },
+        .{ .name = "note", .mode = .fire_and_forget, .required = 1, .total = 1, .command = true },
+        .{ .name = "price", .mode = .immediate, .required = 1, .total = 1, .command = true },
+    };
+    const grants = [_]Grant{.{ .name = "till", .operations = &till }};
+    const source = "on go\n  price \"a\"\n  note \"b\"\n  fetch \"c\" and wait\nend go\n";
+    const tree = switch (try parser.parse(a, source)) {
+        .tree => |t| t,
+        .failure => return error.TestUnexpectedResult,
+    };
+    const result = try check(a, &tree, .{ .grants = &grants });
+    try testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+    try testing.expectEqual(@as(u32, 3), result.commands.count());
+    var told: usize = 0;
+    var it = result.commands.valueIterator();
+    while (it.next()) |hc| {
+        try testing.expectEqualStrings("till", hc.grant);
+        if (hc.told) {
+            told += 1;
+            try testing.expectEqualStrings("note", hc.operation);
+        }
+    }
+    try testing.expectEqual(@as(usize, 1), told);
+    try testing.expectEqual(@as(usize, 3), result.needs.len);
+    for (result.needs) |n| try testing.expect(needProblem(n, &grants) == null);
+    try testing.expectEqual(Code.missing_grant, needProblem(result.needs[0], &.{}).?);
+}
+
 test "both sides of otherwise and an optional read's operands are checked" {
     // An unselected fallback's call is still `not in a guard`.
     try expectDiagnostics("function f x\nreturn x\nend\non t x where true otherwise f(x)\nend\n", .{}, "not in a guard at 4:29\n");
@@ -2544,7 +2678,8 @@ test "every corpus unit gives the diagnostics its case expects" {
             "text-patterns/pattern-size-literal-limit", "capabilities/effect-reload-carry",           "capabilities/effect-replace-library",
             "capabilities/load-checks",                 "capabilities/revoke-in-flight",              "libraries/caller-capabilities",
             "libraries/needs-transitive",               "reload/replacement-transitive",              "tell-block/library",
-            "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets",
+            "examples/tenants-globex",                  "load-diagnostics/implicit-property-targets", "capabilities/host-commands-library",
+            "capabilities/host-commands-load-checks",
         })) continue;
         const toml = try dir.readFileAlloc(io, entry.path, a, .unlimited);
         const trace = dir.readFileAlloc(io, try std.fmt.allocPrint(a, "{s}/case.trace", .{case}), a, .unlimited) catch "";

@@ -59,6 +59,11 @@ capabilities/effect-segment-roundtrip
 capabilities/effect-suspension-commit-failed
 capabilities/effect-unrelated-abandon-failed
 capabilities/grants-as-used
+capabilities/host-commands
+capabilities/host-commands-grants-as-used
+capabilities/host-commands-library
+capabilities/host-commands-load-checks
+capabilities/host-commands-shadowing
 capabilities/host-failures
 capabilities/load-checks
 capabilities/optional-args

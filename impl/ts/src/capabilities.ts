@@ -19,6 +19,7 @@ import {
 } from './values';
 import { unitKinds } from './generated/syntax';
 import type { Group } from './group';
+import { RESERVED } from './lexer';
 
 export type Shape =
   | { k: 'any' }
@@ -1009,6 +1010,8 @@ export type Cost = { alloc?: number; fuel: number };
 export type ErrorDecl = { code: string; fields?: Record<string, FieldShape> };
 type OpBase = {
   args?: Shape[];
+  /** Also callable as a Host Command, by its name alone (ADR 0094). */
+  command?: boolean;
   cost: Cost;
   /** Plain-text documentation, carried only by the Host Manifest. */
   description?: string;
@@ -1133,6 +1136,13 @@ export const defineCapability = <B = void>(
   const scopes = new Map<string, string>();
   const scopeEffects = new Map<string, boolean>();
   for (const [opName, op] of Object.entries(ops)) {
+    if (op.command !== undefined && typeof op.command !== 'boolean') {
+      invalidValue('command must be Boolean');
+    }
+    // A Command Call can't start with a Reserved Word (ADR 0094).
+    if (op.command && RESERVED.has(opName)) {
+      invalidValue(`${opName} is a Reserved Word, so it can't be a command`);
+    }
     if (op.description !== undefined && typeof op.description !== 'string') {
       invalidValue('description must be text');
     }

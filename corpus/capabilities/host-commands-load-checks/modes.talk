@@ -1,0 +1,10 @@
+-- modes.talk: one load diagnostic for each call but the last.
+
+on go
+  price "a" and wait
+  fetch "a"
+  note "a" and wait
+  note
+  note 1
+  fetch "a" and wait
+end go

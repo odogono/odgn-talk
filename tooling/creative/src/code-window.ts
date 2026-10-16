@@ -1,5 +1,5 @@
 // What every NorthTalk editing window shares: a floating, resizable window,
-// a language-server worker that knows the `folio` Library, and the shared
+// a language-server worker configured with the Host Manifest, and the shared
 // editor. Script windows and the Message Box are both built from these.
 import { type Extension } from '@codemirror/state';
 import { EditorView, type KeyBinding } from '@codemirror/view';
@@ -9,7 +9,6 @@ import {
 } from '@odgn/northtalk-editor/editor';
 import { LspClient } from '@odgn/northtalk-editor/lsp-client';
 import { floatingWindow, type FloatingWindow } from './windows';
-import { FOLIO_LIBRARY_NAME, FOLIO_LIBRARY_SOURCE } from './folio-library';
 import { type scriptManifest } from './script-manifest';
 
 type HostManifest = ReturnType<typeof scriptManifest>;
@@ -33,15 +32,12 @@ export const showCodeWindow = (win: CodeWindow): void => {
   win.node.dispatchEvent(new Event('script-window-opened', { bubbles: true }));
 };
 
-/** A language-server worker for one editor, which knows `folio`. */
+/** A language-server worker for one editor. */
 export type LanguageServer = {
   configure(manifest: HostManifest): void;
   dispose(): void;
   lsp: LspClient;
 };
-
-// The tooling's URI for a Library's source.
-const FOLIO_LIBRARY_URI = `northtalk-library:///${FOLIO_LIBRARY_NAME}.talk`;
 
 export const languageServer = (): LanguageServer => {
   const worker = new Worker('./lsp.worker.js', { type: 'module' });
@@ -53,16 +49,7 @@ export const languageServer = (): LanguageServer => {
       const key = JSON.stringify(manifest);
       if (key !== configured) {
         configured = key;
-        lsp.configure({
-          manifest,
-          sources: [
-            {
-              library: FOLIO_LIBRARY_NAME,
-              uri: FOLIO_LIBRARY_URI,
-              text: FOLIO_LIBRARY_SOURCE,
-            },
-          ],
-        });
+        lsp.configure({ manifest });
       }
     },
     dispose() {

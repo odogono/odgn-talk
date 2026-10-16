@@ -83,15 +83,16 @@ List files with `rg --files tooling/creative` before opening one by name.
   [sounds.browser.ts](tests/sounds.browser.ts).
 - First check: `bun test tooling/creative/tests/images.test.ts tooling/creative/tests/sounds.test.ts`.
 
-## The folio Library and hide/show
+## The folio Grant and hide/show
 
-- [folio-library.ts](src/folio-library.ts): `hide` and `show`, their
-  Manifest messages, and the Message Box's import of them.
-- [play.ts](src/play.ts) loads the Library as the hidden object's Script
-  above the Project. This is interim: [ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)
-  makes Host Commands that never climb the Message Path, and
-  [#1019](https://github.com/odogono/odgn-talk/issues/1019) moves Folio to a
-  `folio` Capability.
+- [script-manifest.ts](src/script-manifest.ts): `FOLIO_COMMANDS`, the `hide`
+  and `show` Operations' documentation, and the `folio` Grant in each Script's
+  Manifest, both marked `command`.
+- [play.ts](src/play.ts) defines the `folio` Capability and grants it to every
+  Script; [message-script.ts](src/message-script.ts) builds the Message Box's
+  wrapper Script. They are Host Commands
+  ([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)),
+  so they never climb the Message Path.
 - Tests: `hide`/`show` cases in [play.test.ts](tests/play.test.ts),
   [scripts.test.ts](tests/scripts.test.ts) and
   [message.test.ts](tests/message.test.ts).

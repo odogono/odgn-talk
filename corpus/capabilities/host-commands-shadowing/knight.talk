@@ -1,0 +1,14 @@
+-- knight.talk: the host-commands-shadowing case's caller.
+
+script variable seen = nothing
+
+on go
+  price "e4"
+  put it into seen
+  note "moved"
+  note "moved" to "rook"
+end go
+
+on price sku
+  return 1
+end price
