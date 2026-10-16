@@ -103,6 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check the Zig save format against the Elixir pin
+        run: impl/elixir/scripts/check-save-format.sh
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '28'
