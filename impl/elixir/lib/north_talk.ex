@@ -139,6 +139,86 @@ defmodule NorthTalk do
   """
   def pump(%Group{owner: owner} = group, opts \\ []), do: GenServer.call(owner, {:pump, group, opts})
 
+  @doc """
+  Stops a Script, as a queued Host Input: its Runs are discarded at the next
+  Pump, its Grants released, and it takes no more messages.
+  """
+  def stop(%Group{owner: owner} = group, script, reason \\ "stopped"),
+    do: GenServer.call(owner, {:stop, group, script, reason})
+
+  @doc """
+  Replaces a Script's code: its Runs are discarded, without `finally`, its
+  live scopes abandoned and its Segment participant rolled back, its Grants
+  released with reason `:reload`, then the new code takes over. Returns the
+  reports for the Runs it discarded. A `NorthTalk.LoadError` leaves the
+  Script unchanged.
+
+  Options:
+
+    * `:variables` - `:carry` (the default) carries over the Script Variables
+      both versions declare; `:reset` starts from the new initialiser's.
+    * `:keep_mailbox` - keeps the Script's queued messages for the new code.
+  """
+  def reload(%Group{owner: owner} = group, script, source, opts \\ []),
+    do: GenServer.call(owner, {:reload, group, script, source, opts})
+
+  @doc "Adds new Handlers, functions and Script Variables to a Script, leaving its running code alone."
+  def extend(%Group{owner: owner} = group, script, source),
+    do: GenServer.call(owner, {:extend, group, script, source})
+
+  @doc """
+  Replaces a Library in a Group with a newer compiled version, reloading
+  every Script that imports it as `reload/4` does, all at once or not at
+  all. Takes `reload/4`'s `:variables` option, and returns the reports.
+  """
+  def replace_library(%Group{owner: owner} = group, %Library{} = library, opts \\ []),
+    do: GenServer.call(owner, {:replace_library, group, library, opts})
+
+  @doc """
+  Saves a Group, as bytes only a Zig Core reads. A save holds no Grant
+  bindings, callbacks or waiting requests, and is refused with
+  `effects pending` while a Capability Scope or Segment participant is live.
+  """
+  def save(%Group{owner: owner} = group), do: GenServer.call(owner, {:save, group})
+
+  @doc """
+  Restores a save as a new Group of this owner, named `name`. Returns a
+  `NorthTalk.Restored`.
+
+  Options:
+
+    * `:grants` - each Script's Grants, as a map from `{script, grant name}`
+      to a `NorthTalk.Grant` of this owner, or a function of the two names
+      returning one or `nil`. A Grant not given restores revoked.
+    * `:libraries` - the compiled `NorthTalk.Library` values the save uses.
+    * `:mismatch` - `:reject` (the default) refuses a save whose versions,
+      Libraries or Grants don't match with `save mismatch`;
+      `:variables_only` keeps only its Script Variables.
+    * `:trace` - records the new Group's Trace.
+
+  Host Objects don't resolve yet, so each restores disposed.
+
+  An automatic owner doesn't Pump the Group until every pending call is
+  settled with `settle/3`, since its first Pump fails each call still
+  unsettled with `call lost`. Requests waiting on the saved Group aren't
+  carried over: `:reports_to` receives their Runs' reports.
+  """
+  def restore(owner, name, save, opts \\ []), do: GenServer.call(owner, {:restore, name, save, opts})
+
+  @doc """
+  Settles a restored Group's pending call, before its first Pump, with one of:
+
+    * `{:answer, value}` or `{:fail, failure}` - as if the call had settled.
+    * `:reissue` - calls the Operation's callback again, with the saved
+      arguments, at the first Pump.
+    * `{:adopt, ref}` - the Host still has the call in progress, and settles
+      it later with `answer/3` or `fail/3` under `ref`.
+
+  Settling a call that isn't pending, or settling twice, is `unknown call`.
+  """
+  def settle(%Group{owner: owner} = group, call, settlement),
+    do: GenServer.call(owner, {:settle_restored, group, call, settlement})
+
   for {name, arity} <- [
         define_capability: 2,
         grant: 2,
@@ -149,7 +229,14 @@ defmodule NorthTalk do
         add_library: 2,
         deliver: 4,
         request: 5,
-        pump: 2
+        pump: 2,
+        stop: 3,
+        reload: 4,
+        extend: 3,
+        replace_library: 3,
+        save: 1,
+        restore: 4,
+        settle: 3
       ] do
     args = Macro.generate_arguments(arity, __MODULE__)
 
