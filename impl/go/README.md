@@ -174,6 +174,34 @@ impl/go/zig-experimental-check.sh -race
 go -C impl/go vet -tags talk_zig_experimental .
 ```
 
+`TestZigBackendCapabilityParity` builds an untagged test binary, runs its
+`TestCapabilityBridge` with `TALK_BRIDGE_OBSERVATIONS` set, and diffs that
+native JSON against the Zig adapter's observations. To inspect the native side
+alone:
+
+```sh
+TALK_BRIDGE_OBSERVATIONS=/tmp/native.json go -C impl/go test -run '^TestCapabilityBridge$' .
+go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .
+```
+
+`build-artifact.py` refuses uncommitted Core/spec changes. To try an
+uncommitted Zig change, build it and swap the embedded copy by hand; the
+digest in `artifact.json` must match, or `NewEngine` refuses the artifact:
+
+```sh
+(cd impl/zig && zig build -Dtarget=wasm32-wasi -Doptimize=safe)
+cp impl/zig/zig-out/bin/talk.wasm impl/go/internal/zigwasm/talk.wasm
+# then set "sha256" in impl/go/internal/zigwasm/artifact.json to:
+shasum -a 256 impl/go/internal/zigwasm/talk.wasm
+```
+
+Never commit these hand-built files. Restore them with
+`git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
+committed, run `build-artifact.py` and commit its output. If a test panics
+mid-suite, compile once and run tests singly:
+`go -C impl/go test -c -tags talk_zig_experimental -o /tmp/adapter.test .`, then
+`(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
+
 The same selection executes in CI on Linux amd64/arm64 and macOS arm64, with
 separate pure-Go cross-builds. It includes unchanged public-interface Go tests
 and dedicated adapter tests, rather than asserting the whole native suite

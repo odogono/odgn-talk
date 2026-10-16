@@ -18,7 +18,9 @@ Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/a
 
 ### Implementation navigation
 
-For implementation work, start with [the layout](README.md#layout), then the [Go task map](impl/go/NAVIGATION.md), [Zig task map](impl/zig/NAVIGATION.md) or [TS and tooling task map](impl/ts/NAVIGATION.md).
+On a fresh worktree, run `bun install --frozen-lockfile && bun run unicode:check` before any test, lint or push.
+
+For implementation work, start with [the layout](README.md#layout), then the task map: [Go](impl/go/NAVIGATION.md), [Zig](impl/zig/NAVIGATION.md), [TS and tooling](impl/ts/NAVIGATION.md), [Elixir](impl/elixir/NAVIGATION.md) or [Folio](tooling/creative/NAVIGATION.md).
 
 ### Review
 
