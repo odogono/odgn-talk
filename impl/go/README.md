@@ -98,9 +98,7 @@ variables and Capability arguments and results, including Function Shapes.
 `Group.Call` goes through the guest's `call` with the native admission checks
 and records, its context cancelling the call, and the adapter negotiates
 `function-gone-v1`, so a call found stale at the drain rejects with `send
-failed`, reason `function gone`, as natively. A queued Object-addressed message is dropped
-when its owner is disposed in the same drain, as talk.ts does; native Go
-re-routes it (#1023).
+failed`, reason `function gone`, as natively.
 
 Ordinary immediate, suspending and fire-and-forget Capability Operations attach through the public
 Grant API. Declarations retain argument/result Shapes, allowed Operations,

@@ -1,0 +1,6 @@
+on hold
+  wait 1 s
+end hold
+on ping
+  return "child"
+end ping

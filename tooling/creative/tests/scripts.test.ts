@@ -25,7 +25,7 @@ const fixture = () => {
   return { project, page, other };
 };
 
-test('each owner gets its scoped names, typed properties and three Grants', () => {
+test('each owner gets its scoped names, typed properties and four Grants', () => {
   const { project, page } = fixture();
   for (const owner of [project, page, ...page.elements]) {
     const manifest = readManifest(scriptManifest(project, owner));
@@ -39,7 +39,18 @@ test('each owner gets its scoped names, typed properties and three Grants', () =
             'project',
           ],
     );
-    expect([...manifest.grants.keys()]).toEqual(['pages', 'elements', 'sound']);
+    expect([...manifest.grants.keys()]).toEqual([
+      'pages',
+      'elements',
+      'sound',
+      'user',
+    ]);
+    expect([...manifest.grants.get('user')!.keys()]).toEqual([
+      'confirm',
+      'choose',
+      'enter',
+      'notify',
+    ]);
     expect([...manifest.grants.get('elements')!.keys()]).toEqual([
       'create',
       'clone',
@@ -55,6 +66,18 @@ test('each owner gets its scoped names, typed properties and three Grants', () =
     );
     expect(manifest.objectKinds.get('text')!.props.has('editable')).toBe(true);
   }
+});
+
+test('user calls check cleanly against the manifest', () => {
+  const { project, page } = fixture();
+  const source = `on click
+  ask user to confirm "Again?" and wait
+  ask user to choose ["a", "b"], {prompt: "Pick", multiple: true} and wait
+  ask user to enter "Name", {default: "Ada"} and wait
+  tell user to notify "Saved", {title: "Folio"}
+end click`;
+  const { diagnostics } = language(scriptManifest(project, page), source);
+  expect(diagnostics().filter(d => d.severity === 1)).toEqual([]);
 });
 
 const language = (manifest: unknown, text: string) => {

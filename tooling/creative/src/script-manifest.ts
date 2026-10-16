@@ -55,6 +55,25 @@ const operation = (name: string, args: unknown[], result?: unknown) => ({
   ...(result === undefined ? {} : { result }),
 });
 
+const suspending = (name: string, args: unknown[], result: unknown) => ({
+  name,
+  args,
+  mode: 'suspending',
+  result,
+  maxPending: 2_147_483_647,
+  errors: [{ code: 'user busy', fields: [] }],
+});
+// An Optional closed map whose every key is Optional.
+const options = (fields: Record<string, string>) => ({
+  optional: {
+    map: Object.entries(fields).map(([key, shape]) => ({
+      key,
+      shape: { optional: shape },
+      optional: true,
+    })),
+  },
+});
+
 // Shared by every Script's manifest.
 const objectKinds = [
   { name: 'project', props: props({ name: 'text' }) },
@@ -94,6 +113,23 @@ const grants = [
       operation('play', ['text']),
       operation('loop', ['text']),
       operation('stop', [{ optional: 'text' }]),
+    ],
+  },
+  {
+    // Chapter 7's `user` Standard Capability, as the Play Session offers it.
+    name: 'user',
+    capability: 'user',
+    operations: [
+      suspending('confirm', ['text'], 'boolean'),
+      suspending(
+        'choose',
+        [{ list: 'text' }, options({ prompt: 'text', multiple: 'boolean' })],
+        { optional: { oneOf: ['text', { list: 'text' }] } },
+      ),
+      suspending('enter', ['text', options({ default: 'text' })], {
+        optional: 'text',
+      }),
+      operation('notify', ['text', options({ title: 'text' })]),
     ],
   },
 ];
