@@ -17,10 +17,6 @@ defmodule Mix.Tasks.Compile.NorthTalkReactor do
       Artifact.override() ->
         {:noop, []}
 
-      is_nil(Artifact.sha256()) ->
-        Mix.shell().info("north_talk: no reactor is pinned yet; set NORTH_TALK_WASM")
-        {:noop, []}
-
       File.regular?(path) and Artifact.digest(File.read!(path)) == Artifact.sha256() ->
         {:noop, []}
 
