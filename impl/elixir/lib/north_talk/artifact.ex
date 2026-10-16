@@ -14,10 +14,9 @@ defmodule NorthTalk.Artifact do
   only hashed, to key the compiled-module cache.
   """
 
-  # Set by the release that CI's `Elixir reactor` workflow publishes. While
-  # `@sha256` is nil, no reactor is pinned and one must be given by override.
+  # The release CI's `Elixir reactor` workflow published, and its digest.
   @release "reactor-v0.1.0"
-  @sha256 nil
+  @sha256 "719e3398793424a60e5f78b13d5951f10a5cb52671eeed6b524f0477e0ed7f3a"
   @repository "odogono/odgn-talk"
 
   # What this Host reads: the save format it was written against, and the
