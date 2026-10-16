@@ -5,6 +5,7 @@ import { scriptNameProblems } from './script-names';
 import { text } from '@odgn/northtalk';
 import { byId, h } from './dom';
 import { ErrorsWindow } from './errors';
+import { mountMessageWindow } from './message-window';
 import { type Element, type TextElement } from './model';
 import { PlaySession } from './play';
 import { ReaderTextHistory } from './play-text';
@@ -471,6 +472,10 @@ export const mountPlay = (shell: StackShell): void => {
     } else {
       draw();
     }
+  });
+  mountMessageWindow(shell, {
+    session: () => session,
+    ran: () => schedule(),
   });
   window.addEventListener('resize', draw);
   window.addEventListener('pagehide', stopPlay);

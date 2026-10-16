@@ -57,6 +57,8 @@
           <button type="button" data-command="backward">Send backward</button>
           <button type="button" data-command="front">Bring to front</button>
           <button type="button" data-command="back">Send to back</button>
+          <hr />
+          <button id="show-message" type="button">Message Box…</button>
         </div>
       </details>
       <span id="project-title"></span>
@@ -267,6 +269,35 @@
           <button id="back-to-latest" type="button">Back to latest</button>
         </p>
         <ul id="version-list"></ul>
+      </div>
+    </section>
+    <section
+      id="message-window"
+      class="window"
+      aria-labelledby="message-title"
+      data-left="160"
+      data-top="560"
+      hidden
+    >
+      <div class="bar">
+        <button
+          id="close-message"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
+        <span id="message-title">Message Box</span>
+      </div>
+      <div id="message-panel">
+        <ol id="message-log" aria-live="polite"></ol>
+        <input
+          id="message-input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="NorthTalk command"
+          placeholder="set the visible of button1 to false"
+        />
       </div>
     </section>
     <section

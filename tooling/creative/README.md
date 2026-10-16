@@ -457,6 +457,19 @@ are ignored. Script names that cannot be bound are listed there instead of
 starting a session. The list outlasts the session and is cleared by **Clear**,
 by the next session or by opening another Project.
 
+**Message Box…** in the Edit menu opens a one-line NorthTalk prompt, as in
+HyperCard. Press Enter to run a command, such as
+`set the visible of button1 to false`, or an expression, such as
+`the label of button1`, whose value is printed; Up and Down recall earlier
+lines. While browsing, commands run in the Play Session with the showing
+Page's names and every Grant, and their effects are Play State. In Edit, the
+command runs in a session copied from the Project that sends no events; when
+it finishes, its changes become one undoable authored edit, Script windows
+stay attached, and a navigation moves the editor to that Page. A failing
+command changes nothing and prints its error and line; waits only run while
+browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
+DOM.
+
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element
 Scripts are stopped. Its visual changes remain for this Play Session.

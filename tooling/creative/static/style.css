@@ -347,6 +347,37 @@ button:disabled {
   background: var(--accent);
   color: white;
 }
+#message-window {
+  width: 26rem;
+}
+#message-panel {
+  padding: 0.5rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+#message-log {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  max-height: 9rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+#message-log .command {
+  color: var(--muted);
+}
+#message-log .command::before {
+  content: '› ';
+}
+#message-log .error {
+  color: var(--error);
+}
+#message-input {
+  width: 100%;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border: 1.5px solid var(--line);
+}
 #errors-window {
   width: 24rem;
 }
@@ -683,6 +714,7 @@ button:disabled {
 .playing #projects-window,
 .playing #versions-window,
 .playing #errors-window,
+.playing #message-window,
 .playing #about-window,
 .playing #file-menu,
 .playing #edit-menu,
