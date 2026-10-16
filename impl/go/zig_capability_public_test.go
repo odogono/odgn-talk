@@ -342,6 +342,8 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runLibraryBridgeCases(t)...)
 	observations = append(observations, runReloadBridgeCases(t)...)
 	observations = append(observations, runHostCommandBridgeCases(t)...)
+	observations = append(observations, runInputOrderBridgeCases(t)...)
+	t.Run("concurrent input order", func(t *testing.T) { observations = append(observations, runConcurrentInputBridgeCase(t)) })
 	return observations
 }
 func isReentrant(err error) bool {

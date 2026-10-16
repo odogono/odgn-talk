@@ -53,20 +53,32 @@ func NewEngine(ctx context.Context) (*Engine, error) {
 }
 func (e *Engine) Close(ctx context.Context) error { return e.runtime.Close(ctx) }
 func (e *Engine) Instantiate(ctx context.Context) (*Reactor, error) {
-	m, err := e.runtime.InstantiateModule(ctx, e.compiled, wazero.NewModuleConfig().WithName("").WithStartFunctions("_initialize"))
+	return e.InstantiateObserved(ctx, nil)
+}
+
+func (e *Engine) InstantiateObserved(ctx context.Context, observer func([]byte) ([]byte, error)) (*Reactor, error) {
+	config := wazero.NewModuleConfig().WithName("").WithStartFunctions("_initialize")
+	var inline *inlineIO
+	if observer != nil {
+		inline = &inlineIO{event: observer}
+		config = config.WithStdin(inline).WithStdout(inline)
+	}
+	m, err := e.runtime.InstantiateModule(ctx, e.compiled, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Reactor{module: m}, nil
+	return &Reactor{module: m, inline: inline}, nil
 }
 
 // Reactor serializes exports, including buffer copies and Close. The caller
 // must also serialize complete need/result exchanges; a mutex per frame does
-// not make an interleaved Message Layer conversation valid. No Host callback
-// runs under this lock. Returned bytes are owned by Go and survive memory.grow.
+// not make an interleaved Message Layer conversation valid. Inline I/O services
+// admission on the active export's stack; Host sink jobs use the adapter queue
+// and must not call Reactor exports. Returned bytes survive memory.grow.
 type Reactor struct {
 	mu     sync.Mutex
 	module api.Module
+	inline *inlineIO
 }
 
 func (r *Reactor) Close(ctx context.Context) error {
@@ -96,6 +108,9 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 		return nil, fmt.Errorf("input buffer outside guest memory")
 	}
 	result, err := r.module.ExportedFunction("talk_send").Call(ctx, uint64(len(frame)))
+	if r.inline != nil && r.inline.err != nil {
+		return nil, r.inline.err
+	}
 	if err != nil {
 		return nil, err
 	}
