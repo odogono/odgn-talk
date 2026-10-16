@@ -523,6 +523,84 @@ end click`;
   };
 };
 
+export const runUserBrowserTests = async () => {
+  const project = createProject('User prompts');
+  const button = createElement('button', 'button1');
+  button.script = `on click
+ ask user to confirm "Carry on?" and wait
+ put it into carry
+ ask user to choose ["Red", "Blue"], {prompt: "Colour"} and wait
+ put it into colour
+ ask user to enter "Name", {default: "Ada"} and wait
+ set the label of me to carry & " " & colour & " " & it
+ tell user to notify "Saved", {title: "Folio"}
+end click`;
+  const waiter = createElement('button', 'waiter');
+  waiter.top = 110;
+  waiter.script =
+    'on click\n ask user to confirm "Pending?" and wait\n set the label of me to "Late"\nend click';
+  project.pages[0]!.elements.push(button, waiter);
+  const shell = mountStack(project);
+  mountPlay(shell);
+  const toggle = document.querySelector<HTMLButtonElement>(
+    '#menu [aria-pressed]',
+  )!;
+  const element = (name: string) =>
+    document.querySelector<HTMLElement>(`#reader [data-element="${name}"]`)!;
+  const dialog = () =>
+    document.querySelector<HTMLFormElement>('#reader .play-prompt');
+  const title = () => dialog()?.querySelector('p')?.textContent;
+  toggle.click();
+  element('button1').click();
+  await until(() => title() === 'Carry on?');
+  assert(
+    dialog()!.contains(document.activeElement),
+    'Prompt did not take focus',
+  );
+  dialog()!.requestSubmit();
+  await until(() => title() === 'Colour');
+  dialog()!.querySelectorAll<HTMLInputElement>('input')[1]!.click();
+  dialog()!.requestSubmit();
+  await until(() => title() === 'Name');
+  const field = dialog()!.querySelector<HTMLInputElement>('input')!;
+  assert(field.value === 'Ada', 'enter default missing');
+  field.value = 'Grace';
+  dialog()!.requestSubmit();
+  await until(() => element('button1').textContent === 'true Blue Grace');
+  await until(() =>
+    Boolean(
+      document.querySelector('#reader .play-notice')?.textContent ===
+      'FolioSaved',
+    ),
+  );
+  // Escape in a prompt answers it rather than leaving Play.
+  element('button1').click();
+  await until(() => title() === 'Carry on?');
+  dialog()!.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  await until(() => title() === 'Colour');
+  assert(toggle.getAttribute('aria-pressed') === 'true', 'Escape left Play');
+  dialog()!.querySelector<HTMLButtonElement>('button[type="button"]')!.click();
+  await until(() => title() === 'Name');
+  dialog()!.querySelector<HTMLButtonElement>('button[type="button"]')!.click();
+  await until(() => !dialog());
+  // Stop takes a pending prompt down.
+  element('waiter').click();
+  await until(() => title() === 'Pending?');
+  toggle.click();
+  assert(!dialog(), 'Prompt survived Stop');
+  return {
+    passed: true,
+    checks: [
+      'confirm, choose and enter answers',
+      'notice with title',
+      'Escape and Cancel dismiss',
+      'Stop takes the prompt down',
+    ],
+  };
+};
+
 export const runMessageBoxBrowserTests = async () => {
   const project = createProject('Message Box');
   const welcome = createElement('text', 'welcomeText');

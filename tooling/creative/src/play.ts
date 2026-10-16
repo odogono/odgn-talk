@@ -4,13 +4,17 @@ import {
   bool,
   defineObjectKind,
   defineCapability,
+  list,
   LoadError,
   MailboxFull,
   newGroup,
+  nothing,
   num,
   ScriptError,
   shape,
   text,
+  userCapability,
+  type Call,
   type HostObject,
   type ReleaseHook,
   type ObjectKind,
@@ -61,6 +65,23 @@ const MESSAGE_SCRIPT = 'message:';
 // The built-in commands' Script, owned by a hidden object above the Project
 // so it ends every Message Path.
 const FOLIO_SCRIPT = 'folio';
+
+/** A `user` prompt the reader hasn't answered yet (chapter 7). */
+export type UserPrompt =
+  | { kind: 'confirm'; message: string }
+  | {
+      items: readonly string[];
+      kind: 'choose';
+      multiple: boolean;
+      prompt: string;
+    }
+  | { fallback: string; kind: 'enter'; message: string };
+/** A shown prompt; its answer is ignored once the prompt is taken down. */
+export type PendingPrompt = UserPrompt & {
+  answer(value: boolean | string | readonly string[] | undefined): void;
+  readonly script: string;
+};
+export type UserNotice = { message: string; title: string };
 
 /** A Message Box command: its result, or why it could not run. */
 export type MessageOutcome =
@@ -262,6 +283,79 @@ export class PlaySession {
     undefined,
     releaseSounds,
   );
+
+  /** Unanswered prompts, oldest first; the Play view shows the first. */
+  readonly prompts: PendingPrompt[] = [];
+  /** Notices not yet shown; the Play view takes them. */
+  readonly notices: UserNotice[] = [];
+  #user = userCapability(
+    {
+      confirm: (call, message) => this.#ask(call, { kind: 'confirm', message }),
+      choose: (call, items, prompt, multiple) =>
+        this.#ask(call, { kind: 'choose', items, prompt, multiple }),
+      enter: (call, message, fallback) =>
+        this.#ask(call, { kind: 'enter', message, fallback }),
+      notify: (_call, message, title) => {
+        if (!this.stopped) {
+          this.notices.push({ message, title });
+          this.changed = true;
+        }
+      },
+    },
+    Object.fromEntries(
+      ['confirm', 'choose', 'enter', 'notify'].map(name => [name, { fuel: 1 }]),
+    ),
+  );
+
+  // One prompt per Script at a time; prompts from different Scripts queue.
+  // An abandoned call (Stop, leaving the Page, a timeout) takes its prompt
+  // down.
+  #ask(call: Call<unknown>, prompt: UserPrompt): void {
+    if (this.prompts.some(p => p.script === call.scriptName)) {
+      throw new ScriptError(
+        'user busy',
+        'Another prompt is waiting for an answer',
+      );
+    }
+    const remove = () => {
+      const at = this.prompts.indexOf(pending);
+      if (at >= 0) {
+        this.prompts.splice(at, 1);
+        this.changed = true;
+      }
+    };
+    const pending: PendingPrompt = {
+      ...prompt,
+      script: call.scriptName,
+      answer: value => {
+        if (!this.prompts.includes(pending)) {
+          return;
+        }
+        remove();
+        call.answer(
+          value === undefined
+            ? nothing
+            : typeof value === 'boolean'
+              ? bool(value)
+              : typeof value === 'string'
+                ? text(value)
+                : list(...value.map(item => text(item))),
+        );
+      },
+    };
+    this.prompts.push(pending);
+    this.changed = true;
+    call.signal.addEventListener('abort', remove);
+  }
+
+  #grants() {
+    return {
+      pages: this.#pages.grant(['show'], undefined),
+      elements: this.#elements.grant('all', undefined),
+      sound: this.#sound.grant('all', this.sounds),
+      user: this.#user.grant('all', undefined),
+    };
+  }
 
   #playSound(owner: string, value: Value, loop: boolean): void {
     const name = value.asText()!;
@@ -475,11 +569,7 @@ export class PlaySession {
       name,
       source,
       objects,
-      grants: {
-        pages: this.#pages.grant(['show'], undefined),
-        elements: this.#elements.grant('all', undefined),
-        sound: this.#sound.grant('all', this.sounds),
-      },
+      grants: this.#grants(),
     });
     return name;
   }
@@ -523,11 +613,7 @@ export class PlaySession {
           source: owner.script,
           owner: this.objects.get(owner),
           objects,
-          grants: {
-            pages: this.#pages.grant(['show'], undefined),
-            elements: this.#elements.grant('all', undefined),
-            sound: this.#sound.grant('all', this.sounds),
-          },
+          grants: this.#grants(),
         });
       } catch (error) {
         if (!(error instanceof LoadError)) {
@@ -753,6 +839,7 @@ export class PlaySession {
     // Stop silences every sound at once, before Scripts are asked to stop
     // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();
+    this.notices.length = 0;
     this.#closing?.cancel.abort();
     this.#closing = undefined;
     this.#requestedPage = undefined;

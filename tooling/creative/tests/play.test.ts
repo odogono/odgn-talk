@@ -670,3 +670,108 @@ test('a built-in command error is reported against the Script that called it', (
     { owner: project.pages[0]!.elements[0] },
   ]);
 });
+
+test('user prompts resume their Run with the reader’s answer', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = `on click
+  ask user to confirm "Again?" and wait
+  put it into again
+  ask user to choose ["a", "b", "c"], {prompt: "Pick", multiple: true} and wait
+  put it into picked
+  ask user to enter "Name", {default: "Ada"} and wait
+  set the label of me to again & " " & picked & " " & it
+  tell user to notify "Done", {title: "Folio"}
+end click`;
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  await advance(play);
+  expect(play.prompts).toMatchObject([{ kind: 'confirm', message: 'Again?' }]);
+  play.prompts[0]!.answer(true);
+  await advance(play);
+  expect(play.prompts).toMatchObject([
+    { kind: 'choose', items: ['a', 'b', 'c'], prompt: 'Pick', multiple: true },
+  ]);
+  play.prompts[0]!.answer(['a', 'c']);
+  await advance(play);
+  expect(play.prompts).toMatchObject([
+    { kind: 'enter', message: 'Name', fallback: 'Ada' },
+  ]);
+  play.prompts[0]!.answer('Grace');
+  await advance(play);
+  expect(play.problems).toEqual([]);
+  expect(play.prompts).toEqual([]);
+  expect(play.page.elements[0]).toHaveProperty(
+    'label',
+    'true ["a", "c"] Grace',
+  );
+  expect(play.notices).toEqual([{ message: 'Done', title: 'Folio' }]);
+});
+
+test('cancelling choose or enter gives Nothing', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = `on click
+  ask user to choose ["a"] and wait
+  put it is nothing into first
+  ask user to enter "Name" and wait
+  set the label of me to first & " " & (it is nothing)
+end click`;
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  await advance(play);
+  play.prompts[0]!.answer(undefined);
+  await advance(play);
+  play.prompts[0]!.answer(undefined);
+  await advance(play);
+  expect(play.problems).toEqual([]);
+  expect(play.page.elements[0]).toHaveProperty('label', 'true true');
+});
+
+test('a Script’s second prompt is user busy; other Scripts’ prompts queue', async () => {
+  const project = fixture();
+  const [button, other] = project.pages[0]!.elements;
+  button!.script = `on click
+  wait for all
+    ask user to confirm "One?" and wait
+    ask user to confirm "Two?" and wait
+  end
+end click`;
+  other!.script = 'on click\n ask user to confirm "Other?" and wait\nend click';
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  play.send(play.page.elements[1]!, 'click');
+  await advance(play);
+  expect(play.prompts.map(p => p.kind === 'confirm' && p.message)).toEqual([
+    'Other?',
+  ]);
+  expect(play.problems).toMatchObject([
+    { owner: button, message: 'Another prompt is waiting for an answer' },
+  ]);
+});
+
+test('leaving the Page and Stop take down pending prompts', async () => {
+  const project = fixture();
+  project.pages.push(createPage('page2'));
+  project.script =
+    'on startPlay\n ask user to confirm "Project?" and wait\nend startPlay';
+  const [button, other] = project.pages[0]!.elements;
+  button!.script = 'on click\n ask user to confirm "Page?" and wait\nend click';
+  other!.script = 'on click\n tell pages to show page2\nend click';
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  await advance(play);
+  expect(play.prompts.map(p => p.kind === 'confirm' && p.message)).toEqual([
+    'Project?',
+    'Page?',
+  ]);
+  const page = play.prompts[1]!;
+  play.send(play.page.elements[1]!, 'click');
+  await advance(play);
+  expect(play.page.name).toBe('page2');
+  expect(play.prompts.map(p => p.kind === 'confirm' && p.message)).toEqual([
+    'Project?',
+  ]);
+  page.answer(true);
+  play.stop(0n);
+  expect(play.prompts).toEqual([]);
+  expect(play.problems).toEqual([]);
+});
