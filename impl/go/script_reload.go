@@ -38,7 +38,7 @@ func (*Stop) isReport() {}
 // rolling back their participants.
 func (s *Script) Reload(source string, carry CarryOver, o ...ReloadOptions) ([]Report, error) {
 	if s.group.backend != nil {
-		return nil, backendUnsupported("Reload")
+		return s.group.backend.reload(s, source, carry, len(o) > 0 && o[0].KeepMailbox)
 	}
 	g := s.group
 	addStandardLibraries(g.libraries, usedNamesIn(source)...)
