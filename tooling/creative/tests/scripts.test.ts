@@ -25,7 +25,7 @@ const fixture = () => {
   return { project, page, other };
 };
 
-test('each owner gets its scoped names, typed properties and four Grants', () => {
+test('each owner gets its scoped names, typed properties and five Grants', () => {
   const { project, page } = fixture();
   for (const owner of [project, page, ...page.elements]) {
     const manifest = readManifest(scriptManifest(project, owner));
@@ -44,6 +44,12 @@ test('each owner gets its scoped names, typed properties and four Grants', () =>
       'elements',
       'sound',
       'user',
+      'folio',
+    ]);
+    const folio = manifest.grants.get('folio')!;
+    expect([...folio.values()].map(op => [op.name, op.command])).toEqual([
+      ['hide', true],
+      ['show', true],
     ]);
     expect([...manifest.grants.get('user')!.keys()]).toEqual([
       'confirm',
@@ -157,7 +163,7 @@ constant example = "on fake"
   }
 });
 
-test('built-in hide and show are completed, documented and checked, unless the Script answers them', () => {
+test('Host Commands hide and show are completed, documented and checked, unless the Script answers them', () => {
   const { project, page } = fixture();
   const owner = page.elements.find(e => e.kind === 'button')!;
   const request = (
@@ -181,7 +187,7 @@ test('built-in hide and show are completed, documented and checked, unless the S
     scriptManifest(project, owner),
     source,
   );
-  const items: { label: string }[] = request(
+  const items: { documentation?: unknown; label: string }[] = request(
     server,
     sent,
     uri,
@@ -189,7 +195,9 @@ test('built-in hide and show are completed, documented and checked, unless the S
     1,
     4,
   );
-  expect(items.map(i => i.label)).toContain('hide');
+  expect(JSON.stringify(items.find(i => i.label === 'hide'))).toContain(
+    'Hides an Element',
+  );
   const hover: { contents: { value: string } } = request(
     server,
     sent,
@@ -199,14 +207,19 @@ test('built-in hide and show are completed, documented and checked, unless the S
     3,
   );
   expect(hover.contents.value).toContain('Hides an Element');
+  // Checked at load as the Operation call it is, at the command's name.
   expect(
     diagnostics()
-      .filter(d => d.code === 'message-argument-count')
+      .filter(d => d.code === 'wrong argument count')
       .map(d => d.range.start.line),
   ).toEqual([2]);
-  expect(diagnostics().filter(d => d.code === 'unknown-message')).toEqual([]);
+  expect(
+    diagnostics().filter(d =>
+      ['message-argument-count', 'unknown-message'].includes(String(d.code)),
+    ),
+  ).toEqual([]);
 
-  // A Script's own `on hide` answers first, in hover and argument checks.
+  // A Script's own `on hide` takes its calls; the shadowing is Linted.
   owner.script = 'on hide\nend hide\non click\n  hide\nend click\n';
   const own = language(scriptManifest(project, owner), owner.script);
   const ownHover: { contents: { value: string } } = request(
@@ -218,9 +231,10 @@ test('built-in hide and show are completed, documented and checked, unless the S
     3,
   );
   expect(ownHover.contents.value).not.toContain('Hides an Element');
+  expect(own.diagnostics().filter(d => d.severity === 1)).toEqual([]);
   expect(
-    own.diagnostics().filter(d => d.code === 'message-argument-count'),
-  ).toEqual([]);
+    own.diagnostics().filter(d => d.code === 'shadowed-host-command'),
+  ).toHaveLength(1);
 });
 
 test('LSP diagnoses misspelt names and refreshes after renames on each Page', () => {

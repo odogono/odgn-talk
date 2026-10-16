@@ -60,7 +60,7 @@ Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
 also binds every Page name. The Manifests describe the `pages`, `elements` and `sound` Grants
-from ADR 0084, and the `user` Standard Capability; all four are available during Play (see [Sounds](#sounds) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
+from ADR 0084, the `user` Standard Capability, and the `folio` Grant of `hide` and `show` (see [Play](#play)); all five are available during Play (see [Sounds](#sounds) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -476,17 +476,22 @@ editor has the same completion (⌃Space), hover and diagnostics for the Page's
 names. The editor holds the whole Script a command runs as, with the lines
 around the command hidden and protected.
 
-HyperTalk-style `hide welcomeText` and `show welcomeText` are built in, as in
-HyperCard: every Script can call them without an import. They come from Folio's
-`folio` Library ([`src/folio-library.ts`](src/folio-library.ts)), which a Play
-Session loads as the Script of a hidden object above the Project, so they end
-every Message Path. An Element, Page or Project Script can answer `on hide`
-itself, and `pass hide` to let Folio carry it out. An error in a built-in
-command, such as `hide 42`, is reported against the Script that called it, on
-line 1. The ownerless Message Box imports the Library instead. Each Script's
-Manifest declares both as messages with their documentation, so the Script
-editor completes them, hovers their documentation and flags a `hide` without
-its argument, unless the Script answers `on hide` itself.
+HyperTalk-style `hide welcomeText` and `show welcomeText` are Host Commands
+([ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)):
+the `hide` and `show` Operations of the `folio` Grant, marked `command`, which
+every Script and every Message Box command gets, so any of them can call
+them by name without an import, as `tell folio to hide welcomeText` would.
+Each takes one Element and sets its `visible`, as a fire-and-forget call in
+the caller's Run that costs 1 Fuel and leaves `it` unchanged. An argument
+that isn't an Element, as in `hide 42`, is an error at the calling line: a
+literal is refused when the Script loads, and any other value fails the call
+and stops the calling Handler, reported on that line in Errors or in the
+Message Box. A Script's own `on hide` Handler takes that Script's `hide`
+calls, and the editor Lints it as `shadowed-host-command`, but an Element's
+`hide` never reaches its Page or Project Script, so they can't intercept it.
+Each Script's Manifest declares the `folio` Grant with both Operations'
+documentation, so the Script editor completes them, hovers their
+documentation and checks their arguments as the Core does.
 
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element

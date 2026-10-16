@@ -35,17 +35,12 @@ import {
   type Project,
 } from './model';
 import {
+  FOLIO_COMMANDS,
   scriptManifest,
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
-import {
-  FOLIO_LIBRARY_SOURCE,
-  folioLibrary,
-  MESSAGE_FIRST_LINE,
-  messageNames,
-  messageSource,
-} from './folio-library';
+import { MESSAGE_FIRST_LINE, messageSource } from './message-script';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
 export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
@@ -62,9 +57,6 @@ export type PlayMessage =
 // Each Message Box command loads as a fresh ownerless Script under this
 // prefix: the Core cannot unload Scripts, and the names change by Page.
 const MESSAGE_SCRIPT = 'message:';
-// The built-in commands' Script, owned by a hidden object above the Project
-// so it ends every Message Path.
-const FOLIO_SCRIPT = 'folio';
 
 /** A `user` prompt the reader hasn't answered yet (chapter 7). */
 export type UserPrompt =
@@ -106,8 +98,6 @@ export class PlaySession {
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
   #unhandledSender: string | undefined;
-  // Built-in command Runs and the Runs that sent them, for their errors.
-  #builtInSenders = new Map<string, string>();
   readonly problems: PlayProblem[] = [];
   readonly objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
   readonly authored = new Map<ScriptOwner, ScriptOwner>();
@@ -225,6 +215,37 @@ export class PlaySession {
     this.group.setParent(object, this.objects.get(page)!);
     this.changed = true;
     return object;
+  }
+
+  // Folio's Host Commands (ADR 0094): `hide x` is an Operation call in the
+  // caller's Run, so a bad argument fails at the calling line.
+  #folio = defineCapability('folio', {
+    hide: {
+      mode: 'fire-and-forget',
+      command: true,
+      args: [elementShape],
+      cost: { fuel: 1 },
+      ...FOLIO_COMMANDS.hide,
+      examples: [...FOLIO_COMMANDS.hide.examples],
+      fire: (_call, value) => this.#setVisible(value!, false),
+    },
+    show: {
+      mode: 'fire-and-forget',
+      command: true,
+      args: [elementShape],
+      cost: { fuel: 1 },
+      ...FOLIO_COMMANDS.show,
+      examples: [...FOLIO_COMMANDS.show.examples],
+      fire: (_call, value) => this.#setVisible(value!, true),
+    },
+  });
+
+  #setVisible(value: Value, visible: boolean): void {
+    const { element } = this.#element(value);
+    if (element.visible !== visible) {
+      element.visible = visible;
+      this.changed = true;
+    }
   }
 
   #requestedPage: number | undefined;
@@ -354,6 +375,7 @@ export class PlaySession {
       elements: this.#elements.grant('all', undefined),
       sound: this.#sound.grant('all', this.sounds),
       user: this.#user.grant('all', undefined),
+      folio: this.#folio.grant('all', undefined),
     };
   }
 
@@ -384,9 +406,6 @@ export class PlaySession {
     public pageIndex = 0,
     options: { events?: boolean; soundBackend?: SoundBackend } = {},
   ) {
-    // Every session holds the `folio` Library, for the Message Box and any
-    // authored Script that imports it.
-    this.group.addLibrary(folioLibrary);
     this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
       const owner = this.owners.get(sound.owner);
       if (owner) {
@@ -494,17 +513,6 @@ export class PlaySession {
         );
       }
     }
-    const folio = this.group.object(
-      defineObjectKind<ScriptOwner>({ name: 'folio', props: {} }),
-      FOLIO_SCRIPT,
-      this.project,
-    );
-    this.group.setParent(this.objects.get(this.project)!, folio);
-    this.group.load({
-      name: FOLIO_SCRIPT,
-      source: FOLIO_LIBRARY_SOURCE,
-      owner: folio,
-    });
     this.#load([this.project, this.page, ...this.page.elements]);
     // A session that only runs Message Box commands sends no events.
     if (options.events !== false) {
@@ -524,8 +532,8 @@ export class PlaySession {
     }
     let first: string | undefined;
     for (const source of [
-      messageSource(command, messageNames(this.project, this.page)),
-      messageSource(`return ${command}`, messageNames(this.project, this.page)),
+      messageSource(command),
+      messageSource(`return ${command}`),
     ]) {
       try {
         const name = this.#loadMessage(source);
@@ -660,9 +668,6 @@ export class PlaySession {
       const sender = / from=(\S+)/u.exec(line)?.[1];
       if (sender) {
         this.#senders.set(run, sender);
-        if (run.startsWith(`${FOLIO_SCRIPT}/`)) {
-          this.#builtInSenders.set(run, sender);
-        }
       }
       for (const message of this.#pendingWarnings) {
         this.#warn(run, message);
@@ -687,12 +692,8 @@ export class PlaySession {
     }
   }
 
-  #runOwner(run: string | undefined): ScriptOwner | undefined {
-    return run ? this.owners.get(run.replace(/\/r\d+.*$/u, '')) : undefined;
-  }
-
   #warn(run: string, message: string): void {
-    const owner = this.#runOwner(run);
+    const owner = this.owners.get(run.replace(/\/r\d+.*$/u, ''));
     if (owner) {
       this.problems.push({
         owner: this.authored.get(owner)!,
@@ -751,7 +752,7 @@ export class PlaySession {
         report.script.startsWith(MESSAGE_SCRIPT) &&
         (report.outcome === 'errored' || report.outcome === 'limit fault')
       ) {
-        // The command sits below its imports and wrapping Handler.
+        // The command sits below its wrapping Handler's first line.
         const line =
           (report.at?.line ?? MESSAGE_FIRST_LINE) - MESSAGE_FIRST_LINE + 1;
         this.#messageErrors.set(
@@ -765,22 +766,10 @@ export class PlaySession {
         // A command's errors go back to the Message Box.
         !report.script.startsWith(MESSAGE_SCRIPT)
       ) {
-        // A built-in command's error belongs to the line that called it,
-        // which only the Script that sent it knows; report that Script.
-        const builtIn = report.script === FOLIO_SCRIPT;
-        const sender =
-          builtIn && report.run
-            ? this.#builtInSenders.get(report.run)
-            : undefined;
-        if (report.run) {
-          this.#builtInSenders.delete(report.run);
-        }
-        const owner = builtIn
-          ? (this.#runOwner(sender) ?? this.project)
-          : this.owners.get(report.script)!;
+        const owner = this.owners.get(report.script)!;
         this.problems.push({
           owner: this.authored.get(owner)!,
-          line: builtIn ? 1 : (report.at?.line ?? 1),
+          line: report.at?.line ?? 1,
           message: report.error?.message ?? `${report.limit} limit reached`,
         });
       }

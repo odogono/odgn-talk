@@ -6,7 +6,6 @@ import {
   syntaxSelector,
   type SyntaxNode,
 } from '@odgn/northtalk';
-import { FOLIO_COMMAND_MESSAGES } from './folio-library';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = Project | Page | Element;
@@ -48,6 +47,25 @@ const specific: Record<Element['kind'], Record<string, string>> = {
   ellipse: { fill: 'text', stroke: 'text' },
   line: { stroke: 'text', thickness: 'number' },
 };
+/**
+ * Folio's Host Commands (ADR 0094): Operations of the `folio` Grant that any
+ * Script calls by name alone, as `hide welcomeText`.
+ */
+export const FOLIO_COMMANDS = {
+  hide: {
+    description:
+      "Hides an Element: sets its visible to false. A Host Command, so any Script can call it by name; a Script's own `on hide` takes its calls instead.",
+    examples: ['hide welcomeText'],
+  },
+  show: {
+    description:
+      "Shows an Element: sets its visible to true. A Host Command, so any Script can call it by name; a Script's own `on show` takes its calls instead.",
+    examples: ['show welcomeText'],
+  },
+} as const;
+// Any Element, as the `folio` and `elements` Operations take one.
+const elementShape = { oneOf: ELEMENT_KINDS.map(kind => ({ object: kind })) };
+
 const operation = (name: string, args: unknown[], result?: unknown) => ({
   name,
   args,
@@ -132,6 +150,16 @@ const grants = [
       operation('notify', ['text', options({ title: 'text' })]),
     ],
   },
+  {
+    name: 'folio',
+    capability: 'folio',
+    operations: Object.entries(FOLIO_COMMANDS).map(([name, docs]) => ({
+      ...operation(name, [elementShape]),
+      command: true,
+      ...docs,
+      examples: [...docs.examples],
+    })),
+  },
 ];
 const messages = [
   'click',
@@ -142,10 +170,7 @@ const messages = [
   'closePage',
   'startPlay',
   'textChanged',
-]
-  .map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }))
-  // Folio answers its built-in commands at the end of every Message Path.
-  .concat(FOLIO_COMMAND_MESSAGES);
+].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
 
 // Folio also delivers messages authored Scripts send to each other. Declare
 // an owner's named Handlers alongside the built-in events; the Host event
