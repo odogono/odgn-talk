@@ -139,8 +139,29 @@ context cancellation, outside transport locks. Panics cannot refuse release.
 Hook-generated inputs and OnReady obey the same worker boundary; repeated Stop
 or Revoke does not repeat its release. GrantsAsUsed trims unused hooks.
 
+Scope declarations and Segment-bound Operations run through the guest's lifecycle
+needs. Calls retain their Scope name, automatic flag, Run and Segment identity,
+and the Go binding. Automatic abandonment uses a fresh context and rejects
+budget and settlement calls. Coordinator pointers map to guest names per Group:
+aliases of a coordinated Grant share enrollment, while plain Segment Grants
+receive separate coordinators. Hooks see every enrolled binding in order.
+Commit/rollback outcomes, disabled Grants, provisional Script Variables and
+typed `EffectFailure` Reports follow the guest's lifecycle; Host-only details
+stay in Go. Cancellation abandons participating scopes before rollback and
+unrelated scopes after Script cleanup. Reload validates before abandonment.
+
+Calendar, Locale, Store, sqlite and user factory argument checks run in the
+guest before charging; result and failure refinements run at return or
+asynchronous resumption. The
+adapter forwards the original arguments to Go's factory wrappers, which retain
+default resolution, SQL parameter/result conversion and per-row charging.
+Locale default tags and sqlite row caps are copied to guest bindings; Host
+implementation and coordinator identity stay in Go. Ordinary declarations with
+the same public name do not acquire factory checks or catalogue failures.
+
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1`, `climb-v1` and `function-gone-v1`. The last feature publishes an Operation's call record and
+`crossing-trace-v1`, `climb-v1`, `function-gone-v1` and
+`standard-refinements-v1`. Crossing Trace support publishes an Operation's call record and
 held refusal records before crossing controls land, so a Trace sink can queue
 Stop at that boundary. Error replies publish their available refusal/diagnostic
 records before returning the error. Other Script-execution Trace records can
@@ -151,9 +172,10 @@ remains open: serialized exports and paused-crossing tests do not establish it.
 Unsupported calls return an `experimental Zig backend` error, or panic when the
 existing signature has no error result: Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
 name in one Group, and a Kind first defined inside a Host callback, are refused.
-Capability attachments with scoped or Segment lifecycle hooks, Standard
-factory refinements or Shapes nested beyond 32 levels
-are explicitly refused. They do not fall back to native Go language execution.
+Shapes nested beyond 32 levels are also refused. These three declaration limits
+are deliberate experimental limits, retained by the maintainer's decision on
+[#1050](https://github.com/odogono/odgn-talk/issues/1050).
+Unsupported calls do not fall back to native Go language execution.
 Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go
 facilities pending their own adapter acceptance.
 
@@ -185,6 +207,14 @@ alone:
 TALK_BRIDGE_OBSERVATIONS=/tmp/native.json go -C impl/go test -run '^TestCapabilityBridge$' .
 go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .
 ```
+
+The shared Hosts include scoped completion/error/Stop/cancellation/Reload,
+automatic cleanup failures, coordinator conflicts and shared enrollment,
+definite/unknown effect outcomes, and Standard precharge/result/failure checks.
+The unchanged Scope, Segment, coordinator and factory tests join the tagged
+selection. `TestCoordinatorMappingHoldsAcrossReloadAndRestore` still needs
+Save/Restore; `TestEffectUncertaintyStopsEveryScriptAndCannotReload` reads native
+private Script state, so public Host scenarios cover fatal outcomes instead.
 
 `build-artifact.py` refuses uncommitted Core/spec changes. To try an
 uncommitted Zig change, build it and swap the embedded copy by hand; the
