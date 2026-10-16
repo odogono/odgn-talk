@@ -435,7 +435,7 @@ export const builtins = [
     "kind": "function"
   },
   {
-    "name": "nanosecond",
+    "name": "microsecond",
     "kind": "function"
   },
   {

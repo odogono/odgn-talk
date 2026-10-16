@@ -48,8 +48,8 @@ test('Trace Clock readings drive stepping over a deadline wait', () => {
       grants: { clock: clockCapability({ now: { fuel: 0 } }).grant('all') },
     })
     .deliver({ name: 'go' });
-  group.pump(1_000_000_000n);
-  group.pump(2_000_000_000n);
+  group.pump(1_000_000n);
+  group.pump(2_000_000n);
   const debug = new ReplayDebugger(
     {
       scripts: [

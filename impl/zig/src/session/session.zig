@@ -21,18 +21,18 @@ const check = northtalk.check;
 
 pub const Instant = struct {
     seconds: i64,
-    nanos: i32,
+    micros: i32,
 
-    fn ns(i: Instant) i128 {
-        return @as(i128, i.seconds) * std.time.ns_per_s + i.nanos;
+    fn us(i: Instant) i128 {
+        return @as(i128, i.seconds) * std.time.us_per_s + i.micros;
     }
 
-    fn fromNs(n: i128) Instant {
-        return .{ .seconds = @intCast(@divFloor(n, std.time.ns_per_s)), .nanos = @intCast(@mod(n, std.time.ns_per_s)) };
+    fn fromMicros(n: i128) Instant {
+        return .{ .seconds = @intCast(@divFloor(n, std.time.us_per_s)), .micros = @intCast(@mod(n, std.time.us_per_s)) };
     }
 
     fn before(x: Instant, y: Instant) bool {
-        return x.ns() < y.ns();
+        return x.us() < y.us();
     }
 };
 
@@ -751,7 +751,7 @@ pub const Session = struct {
         s.trace_lines.clearRetainingCapacity();
         s.queued = false;
         var result: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
-        const code = c.talk_pump(s.group, at.seconds, at.nanos, null, &result);
+        const code = c.talk_pump(s.group, at.seconds, at.micros, null, &result);
         defer c.talk_reports_release(result.reports);
         s.last = at;
         if (code != c.TALK_OK) return error.HostError;
@@ -762,7 +762,7 @@ pub const Session = struct {
     }
 
     fn deadlineOf(s: *Session, result: c.talk_pump_result) void {
-        s.next_deadline = if (result.has_next_deadline) .{ .seconds = result.next_deadline_seconds, .nanos = result.next_deadline_nanos } else null;
+        s.next_deadline = if (result.has_next_deadline) .{ .seconds = result.next_deadline_seconds, .micros = result.next_deadline_micros } else null;
     }
 
     /// When the session next pumps by itself, under a real Clock: the last
@@ -783,7 +783,7 @@ pub const Session = struct {
             s.admitted = false;
             s.trace_lines.clearRetainingCapacity();
             var result: c.talk_pump_result = std.mem.zeroes(c.talk_pump_result);
-            const code = c.talk_pump(s.group, at.seconds, at.nanos, null, &result);
+            const code = c.talk_pump(s.group, at.seconds, at.micros, null, &result);
             defer c.talk_reports_release(result.reports);
             if (code != c.TALK_OK) return error.HostError;
             s.deadlineOf(result);
@@ -1620,7 +1620,7 @@ pub const Session = struct {
 
     fn instantText(s: *Session, i: Instant) []const u8 {
         var v: ?*c.talk_value = null;
-        if (c.talk_instant(i.seconds, i.nanos, &v) != c.TALK_OK) return "";
+        if (c.talk_instant(i.seconds, i.micros, &v) != c.TALK_OK) return "";
         defer c.talk_value_release(v);
         return s.display(v);
     }
@@ -1645,7 +1645,7 @@ pub const Session = struct {
                 if (c.talk_parse_display(args[1].ptr, args[1].len, &v) != c.TALK_OK) return s.say("! bad arguments");
                 defer c.talk_value_release(v);
                 var i: Instant = undefined;
-                if (!c.talk_value_as_instant(v, &i.seconds, &i.nanos)) return s.say("! bad arguments");
+                if (!c.talk_value_as_instant(v, &i.seconds, &i.micros)) return s.say("! bad arguments");
                 break :blk i;
             } else s.last orelse return s.say("! bad arguments");
             if (s.last) |l| if (at.before(l)) return s.say("! clock backwards");
@@ -1659,14 +1659,14 @@ pub const Session = struct {
                 .real => return s.say("! clock is real"),
             };
             const by = exactDuration(std.mem.trim(u8, rest["advance".len..], " \t")) orelse return s.say("! bad arguments");
-            s.clock = .{ .virtual = Instant.fromNs(virtual.ns() + by) };
+            s.clock = .{ .virtual = Instant.fromMicros(virtual.us() + by) };
             _ = try s.pump();
             return;
         }
         s.say("! bad arguments");
     }
 
-    /// An exact, non-negative duration in nanoseconds, from a Quantity in
+    /// An exact, non-negative duration in microseconds, from a Quantity in
     /// the display form.
     fn exactDuration(shown: []const u8) ?i128 {
         var v: ?*c.talk_value = null;
@@ -1682,7 +1682,7 @@ pub const Session = struct {
         const base = q.unit.toBase(arena.allocator(), q.number) catch return null;
         if (base.negative and base.coefficient != 0) return null;
         var n: i128 = std.math.cast(i128, base.coefficient) orelse return null;
-        var e: i32 = base.exponent + 9;
+        var e: i32 = base.exponent + 6;
         while (e > 0) : (e -= 1) n = std.math.mul(i128, n, 10) catch return null;
         while (e < 0) : (e += 1) {
             if (@mod(n, 10) != 0) return null;
@@ -1767,7 +1767,7 @@ pub const Session = struct {
                 try line.print(s.alloc(), "{s} {s} {s}", .{ r.id[0..r.id_len], status, r.handler[0..r.handler_len] });
                 if (r.status == c.TALK_SUSPENDED) {
                     try line.print(s.alloc(), " {s}", .{r.wait[0..r.wait_len]});
-                    if (r.has_until) try line.print(s.alloc(), " until {s}", .{s.instantText(.{ .seconds = r.until_seconds, .nanos = r.until_nanos })});
+                    if (r.has_until) try line.print(s.alloc(), " until {s}", .{s.instantText(.{ .seconds = r.until_seconds, .micros = r.until_micros })});
                     for (r.calls[0..r.calls_len]) |id| try line.print(s.alloc(), " {s}", .{id.data[0..id.len]});
                 }
                 s.say(line.items);

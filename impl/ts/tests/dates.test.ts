@@ -45,7 +45,7 @@ const date = (y: number, m: number, d: number): CivilRef => ({
   year: y,
   month: m,
   day: d,
-  ns: null,
+  us: null,
 });
 
 describe('the calendar', () => {
@@ -81,7 +81,7 @@ describe('Host values', () => {
         day: 27,
         hour: 14,
         minute: 30,
-        nanosecond: 500_000_000,
+        microsecond: 500_000,
       }).toString(),
     ).toBe('2026-09-27T14:30:00.5');
     expect(civilDate('2024-02-29').asCivilDate()).toEqual({
@@ -89,14 +89,14 @@ describe('Host values', () => {
       month: 2,
       day: 29,
     });
-    expect(civilDate('2026-09-27T01:02:03.000000004').asCivilDate()).toEqual({
+    expect(civilDate('2026-09-27T01:02:03.000004').asCivilDate()).toEqual({
       year: 2026,
       month: 9,
       day: 27,
       hour: 1,
       minute: 2,
       second: 3,
-      nanosecond: 4,
+      microsecond: 4,
     });
     for (const bad of [
       { year: 2026, month: 2, day: 29 },
@@ -104,6 +104,9 @@ describe('Host values', () => {
       { year: 2026, month: 13, day: 1 },
       { year: 2026, month: 1, day: 1, hour: 24 },
       { year: 2026, month: 1, day: 1.5 },
+      { year: 2026, month: 1, day: 1, hour: 0, microsecond: 1_000_000 },
+      { year: 2026, month: 1, day: 1, hour: 0, microsecond: -1 },
+      { year: 2026, month: 1, day: 1, hour: 0, microsecond: 0.5 },
     ]) {
       expect(() => civilDate(bad)).toThrow(HostError);
     }
@@ -112,16 +115,21 @@ describe('Host values', () => {
       '2026-09-27Z',
       '0000-01-01',
       '2026-09-27T14:30',
+      '2026-09-27T14:30:00.1234567',
     ]) {
       expect(() => civilDate(bad)).toThrow(HostError);
     }
     expect(instant(0n).toString()).toBe('1970-01-01T00:00:00Z');
-    expect(instant(-1n).toString()).toBe('1969-12-31T23:59:59.999999999Z');
+    expect(instant(-1n).toString()).toBe('1969-12-31T23:59:59.999999Z');
     expect(instant(5n).asInstant()).toBe(5n);
     expect(() => instant(0 as unknown as bigint)).toThrow(HostError);
     expect(() =>
-      instant(parseInstant('9999-12-31T23:59:59.999999999Z') + 1n),
+      instant(parseInstant('9999-12-31T23:59:59.999999Z') + 1n),
     ).toThrow(HostError);
+    expect(instant(1_500_000n).toString()).toBe('1970-01-01T00:00:01.5Z');
+    expect(() => parseInstant('2026-09-27T14:30:00.1234567Z')).toThrow(
+      HostError,
+    );
     expect(formatInstant(parseInstant('0001-01-01T00:00:00Z'))).toBe(
       '0001-01-01T00:00:00Z',
     );
@@ -134,8 +142,8 @@ describe('Host values', () => {
       ['2026-09-27T14:30:00.5', '{"$date":"2026-09-27T14:30:00.5"}'],
       ['2026-09-27T13:30:00Z', '{"$instant":"2026-09-27T13:30:00Z"}'],
       [
-        '2026-09-27T13:30:00.000000001Z',
-        '{"$instant":"2026-09-27T13:30:00.000000001Z"}',
+        '2026-09-27T13:30:00.000001Z',
+        '{"$instant":"2026-09-27T13:30:00.000001Z"}',
       ],
       [
         '[2026-09-27, {at: 2026-09-27T13:30:00Z}]',
@@ -152,6 +160,7 @@ describe('Host values', () => {
   test('readers refuse dates not in their display form', () => {
     for (const display of [
       '2026-09-27T14:30:00.50',
+      '2026-09-27T14:30:00.1234567Z',
       '2026-02-30',
       '2026-09-27T14:30:00+01:00',
       '2026-09-27T',
@@ -163,6 +172,8 @@ describe('Host values', () => {
       '{"$instant":"2026-09-27T14:30:00+01:00"}',
       '{"$date":"2026-09-27T13:30:00Z"}',
       '{"$date":"2026-09-27T13:30:00.10"}',
+      '{"$instant":"2026-09-27T13:30:00.1234567Z"}',
+      '{"$date":"2026-09-27T13:30:00.1234567"}',
     ]) {
       expect(() => decodeValue(encoding, () => null)).toThrow(HostError);
     }
@@ -184,10 +195,16 @@ describe("chapter 3's date arithmetic", () => {
     [`${c('2026-01-31')} - 1 day`, '2026-01-30'],
     [`${c('2026-09-27T23:30:00')} + 1 hr`, '2026-09-28T00:30:00'],
     [`${c('2026-09-27T14:30:00')} + 1.5 s`, '2026-09-27T14:30:01.5'],
-    [`${c('2026-09-27T14:30:00')} + 0.0000000005 s`, '2026-09-27T14:30:00'],
+    [`${c('2026-09-27T14:30:00')} + 0.0000005 s`, '2026-09-27T14:30:00'],
+    [`${c('2026-09-27T14:30:00')} + 0.0000015 s`, '2026-09-27T14:30:00.000002'],
     [
-      `${c('2026-09-27T14:30:00')} + 0.0000000015 s`,
-      '2026-09-27T14:30:00.000000002',
+      `${i('2026-09-27T14:30:00Z')} + 0.0000025 s`,
+      '2026-09-27T14:30:00.000002Z',
+    ],
+    [`${i('2026-09-27T14:30:00Z')} - 0.0000005 s`, '2026-09-27T14:30:00Z'],
+    [
+      `${i('2026-09-28T09:00:00.000001Z')} - ${i('2026-09-28T09:00:00Z')}`,
+      '0.000001 s',
     ],
     [`${i('2026-09-28T09:00:00Z')} - ${i('2026-09-28T08:58:30Z')}`, '90 s'],
     [
@@ -297,10 +314,7 @@ describe('conversion', () => {
     ['" 2026-09-27 " as civil date', '2026-09-27'],
     ['"2026-09-27T14:30:00.500" as civil date', '2026-09-27T14:30:00.5'],
     ['"2026-09-27T14:30:00-05:30" as instant', '2026-09-27T20:00:00Z'],
-    [
-      '"2026-09-27T14:30:00.123456789Z" as instant',
-      '2026-09-27T14:30:00.123456789Z',
-    ],
+    ['"2026-09-27T14:30:00.123456Z" as instant', '2026-09-27T14:30:00.123456Z'],
     [`${c('2026-09-27T14:30:00')} as text`, '"2026-09-27T14:30:00"'],
     [`${i('2026-09-27T14:30:00Z')} & ""`, '"2026-09-27T14:30:00Z"'],
     [`${c('2026-09-27')} as civil date`, '2026-09-27'],
@@ -342,6 +356,14 @@ describe('conversion', () => {
       'error code: "can\'t convert", value: "2026-09-27T14:30:00.1234567890Z", to: "instant"',
     ],
     [
+      '"2026-09-27T14:30:00.1234567Z" as instant',
+      'error code: "can\'t convert", value: "2026-09-27T14:30:00.1234567Z", to: "instant"',
+    ],
+    [
+      '"2026-09-27T14:30:00.1234567" as civil date',
+      'error code: "can\'t convert", value: "2026-09-27T14:30:00.1234567", to: "civil date"',
+    ],
+    [
       '"0000-01-01" as civil date',
       'error code: "out of range", field: "year", value: 0',
     ],
@@ -368,7 +390,7 @@ describe('the date Built-ins', () => {
     [`hour(${d})`, '14'],
     [`minute(${d})`, '30'],
     [`second(${d})`, '5'],
-    [`nanosecond(${d})`, '250000000'],
+    [`microsecond(${d})`, '250000'],
     [`weekday(${d})`, '7'],
     [`dayOfYear(${c('2024-12-31')})`, '366'],
     [`isoWeek(${c('2021-01-03')})`, '53'],
@@ -390,8 +412,8 @@ describe('the date Built-ins', () => {
       'error code: "out of domain", function: "hour", value: 2026-09-27',
     ],
     [
-      `nanosecond(${c('2026-09-27')})`,
-      'error code: "out of domain", function: "nanosecond", value: 2026-09-27',
+      `microsecond(${c('2026-09-27')})`,
+      'error code: "out of domain", function: "microsecond", value: 2026-09-27',
     ],
     [
       `year(${i('2026-09-28T09:00:00Z')})`,

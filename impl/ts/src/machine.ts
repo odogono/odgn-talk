@@ -64,7 +64,7 @@ import {
   setKey,
   splice,
   textForm,
-  waitNs,
+  waitUs,
   wrongKind,
 } from './operations';
 import { readDisplay } from './readers';
@@ -439,20 +439,17 @@ type Replacement = {
 type Item = Value | Iterator | Replacement | Reader | Receiver | Deadline;
 /**
  * A Timeout Block's deadline, kept on the stack below its body: the Instant
- * in Clock nanoseconds, and the block's duration in `ms` (ADR 0073).
+ * in Clock microseconds, and the block's duration in `ms` (ADR 0073).
  */
 export type Deadline = { after: Value; at: bigint; k: 'deadline' };
-// A duration in nanoseconds as a Quantity in `ms`, with no more decimal
+// A duration in microseconds as a Quantity in `ms`, with no more decimal
 // places than it needs.
-const msOf = (ns: bigint): Value => {
-  const sign = ns < 0n ? '-' : '';
-  const n = ns < 0n ? -ns : ns;
-  const fraction = (n % 1_000_000n)
-    .toString()
-    .padStart(6, '0')
-    .replace(/0+$/, '');
+const msOf = (us: bigint): Value => {
+  const sign = us < 0n ? '-' : '';
+  const n = us < 0n ? -us : us;
+  const fraction = (n % 1000n).toString().padStart(3, '0').replace(/0+$/, '');
   return quantity(
-    dec(`${sign}${n / 1_000_000n}${fraction ? `.${fraction}` : ''}`),
+    dec(`${sign}${n / 1000n}${fraction ? `.${fraction}` : ''}`),
     'ms',
   );
 };
@@ -697,7 +694,7 @@ type CallContext = {
 };
 /** Why a Run suspended, which its Group waits on (chapter 5, Suspension Points). */
 export type Suspension = (
-  | { k: 'wait'; ns: bigint }
+  | { k: 'wait'; us: bigint }
   | { abort: AbortController; call: CallContext; k: 'ask'; ms: number }
   | { args: Value[]; id: string; k: 'send'; message: string; to: string }
   | { args: Value[]; fn: Value; id: string; k: 'call-value'; to: string }
@@ -713,7 +710,7 @@ export type Suspension = (
  * each branch numbered from 1 in source order.
  */
 export type WaitFor = {
-  afters: { branch: number; ns: bigint }[];
+  afters: { branch: number; us: bigint }[];
   any: boolean;
   code: Code;
   k: 'wait-for';
@@ -3917,7 +3914,7 @@ export class Run {
           call: ctx,
           abort,
           ms,
-          at: this.host!.now + BigInt(ms) * 1_000_000n,
+          at: this.host!.now + BigInt(ms) * 1000n,
         });
       } else {
         // The Host has consumed the operands. Retain the call, not another
@@ -4698,12 +4695,12 @@ export class Run {
         return next();
       }
       case Op.Wait: {
-        const ns = waitNs(this.peek());
+        const us = waitUs(this.peek());
         this.checkDeadline();
         this.checkScopeBoundary();
         this.pay(rate);
         this.pop();
-        this.suspend({ k: 'wait', ns });
+        this.suspend({ k: 'wait', us });
         return;
       }
       case Op.AskWait: {
@@ -4735,7 +4732,7 @@ export class Run {
         };
         entry.branches.forEach((br, n) => {
           if (br.kind === 'after') {
-            sus.afters.push({ branch: n + 1, ns: waitNs(items[i++] as Value) });
+            sus.afters.push({ branch: n + 1, us: waitUs(items[i++] as Value) });
             return;
           }
           let from: string | Value | null = null;
@@ -4765,7 +4762,7 @@ export class Run {
           i += br.captures;
         });
         if (entry.timeout) {
-          sus.timeout = waitNs(items[i++] as Value);
+          sus.timeout = waitUs(items[i++] as Value);
         }
         this.checkDeadline();
         this.checkScopeBoundary();
@@ -4928,7 +4925,7 @@ export class Run {
             call: null,
             abort: null,
             ms: this.limits.maxWaitMs,
-            at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1_000_000n,
+            at: this.host!.now + BigInt(this.limits.maxWaitMs) * 1000n,
           });
           return next();
         }
@@ -5192,15 +5189,15 @@ export class Run {
       case Op.TimeoutStart: {
         // The Pump's Clock reading plus `d`, unless an enclosing block's
         // deadline is no later (ADR 0073).
-        const ns = waitNs(this.peek());
+        const us = waitUs(this.peek());
         const enclosing = this.blockDeadline();
-        const at = this.host!.now + ns;
+        const at = this.host!.now + us;
         this.pay(rate);
         this.pop();
         frame.stack.push(
           enclosing && enclosing.at <= at
             ? { ...enclosing }
-            : { k: 'deadline', at, after: msOf(ns) },
+            : { k: 'deadline', at, after: msOf(us) },
         );
         return next();
       }

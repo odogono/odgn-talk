@@ -21,7 +21,7 @@ import {
   shape,
   text,
   timerCapability,
-  waitNs,
+  waitUs,
   type Call,
   type CapabilityDef,
   type Grant,
@@ -761,15 +761,15 @@ class TestRun {
         maxPendingMs: FOREVER_MS,
         cost: { fuel: 0 },
         start: (call, duration) => {
-          const ns = waitNs(duration!);
-          if (ns < 0n) {
+          const us = waitUs(duration!);
+          if (us < 0n) {
             throw new ScriptError(
               'out of domain',
               '',
               map([['value', duration!]]),
             );
           }
-          this.advances.push({ call, to: this.now + ns });
+          this.advances.push({ call, to: this.now + us });
         },
       },
     });

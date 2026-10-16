@@ -111,7 +111,7 @@ func TestValueEquality(t *testing.T) {
 	}
 }
 func TestDateValidationAndInstants(t *testing.T) {
-	for _, s := range []string{"2026-09-27", "2026-09-27T14:30:00.500000000", "0001-01-01", "9999-12-31"} {
+	for _, s := range []string{"2026-09-27", "2026-09-27T14:30:00.500000", "0001-01-01", "9999-12-31"} {
 		v, e := ParseCivilDate(s)
 		if e != nil {
 			t.Fatal(s, e)
@@ -122,7 +122,7 @@ func TestDateValidationAndInstants(t *testing.T) {
 			t.Fatal(v)
 		}
 	}
-	for _, s := range []string{"0000-01-01", "2026-02-30", "2026-09-27T23:59:60", "2026-09-27T14:30:00Z", "2026-09-27T14:30:00.1234567890"} {
+	for _, s := range []string{"0000-01-01", "2026-02-30", "2026-09-27T23:59:60", "2026-09-27T14:30:00Z", "2026-09-27T14:30:00.1234567890", "2026-09-27T14:30:00.1234567"} {
 		if _, e := ParseCivilDate(s); e == nil {
 			t.Fatal("accepted", s)
 		}
@@ -131,13 +131,13 @@ func TestDateValidationAndInstants(t *testing.T) {
 		t.Fatal("time without HasTime")
 	}
 	if _, e := Instant(0, -1); e == nil {
-		t.Fatal("negative nanos")
+		t.Fatal("negative micros")
 	}
-	if _, e := Instant(0, 1e9); e == nil {
-		t.Fatal("large nanos")
+	if _, e := Instant(0, 1e6); e == nil {
+		t.Fatal("large micros")
 	}
-	v, e := Instant(-1, 999999999)
-	if e != nil || v.String() != "1969-12-31T23:59:59.999999999Z" {
+	v, e := Instant(-1, 999999)
+	if e != nil || v.String() != "1969-12-31T23:59:59.999999Z" {
 		t.Fatal(v, e)
 	}
 	stamp := time.Date(2026, 9, 27, 14, 30, 0, 500000000, time.FixedZone("offset", 3600))
@@ -172,5 +172,35 @@ func TestLargeQuantitiesRemainComparable(t *testing.T) {
 	unit := quantity(t, "1", "m^2147483647")
 	if !unit.Equal(unit) {
 		t.Fatal("large unit exponent")
+	}
+}
+
+func TestMicrosecondBuildersAndTimeTruncation(t *testing.T) {
+	for _, micros := range []int32{-1, 1e6, 999999999} {
+		if _, e := Instant(0, micros); e == nil {
+			t.Fatal("accepted micros", micros)
+		}
+	}
+	for _, us := range []int{-1, 1e6} {
+		if _, e := CivilDate(DateFields{Year: 2026, Month: 1, Day: 1, HasTime: true, Microsecond: us}); e == nil {
+			t.Fatal("accepted Microsecond", us)
+		}
+	}
+	for _, tc := range []struct {
+		t    time.Time
+		want string
+	}{
+		{time.Unix(0, 123456789), "1970-01-01T00:00:00.123456Z"},
+		{time.Unix(0, -1), "1969-12-31T23:59:59.999999Z"},
+		{time.Unix(-1, 999), "1969-12-31T23:59:59Z"},
+		{time.Unix(-2, 1500), "1969-12-31T23:59:58.000001Z"},
+	} {
+		v := InstantFromTime(tc.t)
+		if v.String() != tc.want {
+			t.Fatalf("%v: got %s; want %s", tc.t, v, tc.want)
+		}
+		if s, us, ok := v.AsInstant(); !ok || us < 0 || us > 999999 || time.Unix(s, int64(us)*1000).After(tc.t) {
+			t.Fatal(s, us, ok)
+		}
 	}
 }

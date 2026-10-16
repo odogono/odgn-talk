@@ -44,7 +44,7 @@ type DateFields struct {
 	Year, Month, Day     int
 	HasTime              bool
 	Hour, Minute, Second int
-	Nanosecond           int
+	Microsecond          int
 }
 type Decimal struct{ inner decimal.Number }
 
@@ -90,14 +90,14 @@ func CivilDate(f DateFields) (Value, error) {
 	return hostValue(corevalue.NewCivil(corevalue.DateFields(f)))
 }
 func ParseCivilDate(s string) (Value, error) { return hostValue(corevalue.ParseCivil(s)) }
-func Instant(seconds int64, nanos int32) (Value, error) {
-	return hostValue(corevalue.NewInstant(seconds, nanos))
+func Instant(seconds int64, micros int32) (Value, error) {
+	return hostValue(corevalue.NewInstant(seconds, micros))
 }
 
 // InstantFromTime has no error result in talk.go. Like other Go conversions
 // that cannot report failure, an out-of-model time is refused with a panic.
 func InstantFromTime(t time.Time) Value {
-	v, e := Instant(t.Unix(), int32(t.Nanosecond()))
+	v, e := hostValue(corevalue.InstantFromTime(t))
 	if e != nil {
 		panic(e)
 	}
@@ -150,11 +150,11 @@ func (v Value) AsCivilDate() (DateFields, bool) {
 	}
 	return DateFields(v.inner.Date()), true
 }
-func (v Value) AsInstant() (seconds int64, nanos int32, ok bool) {
+func (v Value) AsInstant() (seconds int64, micros int32, ok bool) {
 	if v.Kind() != KindInstant {
 		return 0, 0, false
 	}
-	return v.inner.Seconds(), v.inner.Nanos(), true
+	return v.inner.Seconds(), v.inner.Micros(), true
 }
 func (v Value) AsBytes() ([]byte, bool) {
 	if v.Kind() != KindBytes {

@@ -1,0 +1,40 @@
+-- micro.talk: the microsecond-resolution case.
+use makeDateTime, formatDate, parseDate from date
+
+script variable fields
+script variable texts
+script variable rounded
+script variable caught
+
+on go
+  put "2026-09-27T14:30:00.123456" as civil date into d
+  put [microsecond(d), microsecond("2026-09-27T14:30:00.5" as civil date)] into fields
+  put makeDateTime(2026, 9, 27, 14, 30, 0, 999999) into last
+  put [last, formatDate(d, "${year}-${month:2}-${day:2} ${hour:2}:${minute:2}:${second:2}.${fraction:6}"), parseDate("2026-09-27 14:30:00.000001", "${year}-${month}-${day} ${hour}:${minute}:${second}.${fraction:6}")] into texts
+  put "2026-09-27T14:30:00Z" as instant into t
+  put [t + 0.0000005 s, t + 0.0000015 s, t + 0.0000025 s, (t + 0.000001 s) - t] into rounded
+end go
+
+on invalid
+  put [] into caught
+  try
+    get "2026-09-27T14:30:00.1234567" as civil date
+  catch e
+    put e after caught
+  end try
+  try
+    get "2026-09-27T14:30:00.0000001Z" as instant
+  catch e
+    put e after caught
+  end try
+  try
+    get makeDateTime(2026, 9, 27, 14, 30, 0, 1000000)
+  catch e
+    put e after caught
+  end try
+  try
+    get formatDate("2026-09-27T14:30:00" as civil date, "${year}-${month}-${day} ${hour}:${minute}.${fraction:7}")
+  catch e
+    put e after caught
+  end try
+end invalid

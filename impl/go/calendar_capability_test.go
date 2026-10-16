@@ -152,7 +152,7 @@ func TestCalendarFactoryOperationsUseCallerAndCopiedCosts(t *testing.T) {
 		t.Fatalf("%+v %v", end, names)
 	}
 	for i, c := range calls {
-		if c.ScriptName() != "s" || c.GrantName() != "cal" || c.Binding() != "default-zone" || c.Group() != g || !c.Now().Equal(now) {
+		if c.ScriptName() != "s" || c.GrantName() != "cal" || c.Binding() != "default-zone" || c.Group() != g || !c.Now().Equal(now.Truncate(time.Microsecond)) {
 			t.Fatalf("call %d %+v", i, c)
 		}
 	}

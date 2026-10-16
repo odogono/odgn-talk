@@ -2,12 +2,12 @@
 # Text keys retain spaces/punctuation; inserted placeholders are not reparsed.
 # Bare braces, dollar doubling, widths, fractional seconds and NFC are pinned.
 # Invalid templates retain their error fields and caller source positions.
-> load templates identity=f2e586eb5bd69bd6f4667ef58b647bf13032b011055f3141ef9ba14a4517880a
+> load templates identity=d576cd4c29730f9d05b814e41beb4ad633e73434e22a6a2a3ad78d32165442db
 > deliver d1 to=templates message=go
 > deliver d2 to=templates message=invalid
 > pump clock=2026-10-04T09:00:00Z
-seg templates/r1 start delivery=d1 handler=go clause=1 fuel=40590 alloc=90395 state=401 end=return
-run templates/r1 outcome=completed delivery=d1 handler=go fuel=40590 alloc=90395
+seg templates/r1 start delivery=d1 handler=go clause=1 fuel=40575 alloc=90374 state=401 end=return
+run templates/r1 outcome=completed delivery=d1 handler=go fuel=40575 alloc=90374
 raise templates/r2 code="out of domain" at=text:1313 pos=347:3
 raise templates/r2 code="out of domain" at=text:1313 pos=347:3
 raise templates/r2 code="out of domain" at=date:1345 pos=324:3
@@ -15,6 +15,6 @@ raise templates/r2 code="out of domain" at=date:1345 pos=324:3
 raise templates/r2 code="can't convert" at=date:1141 pos=263:3
 seg templates/r2 start delivery=d2 handler=invalid clause=1 fuel=7023 alloc=17592 state=3148 end=return
 run templates/r2 outcome=completed delivery=d2 handler=invalid fuel=7023 alloc=17592
-pumped state=idle fuel=47613
+pumped state=idle fuel=47598
 > vars
 vars templates texts=["Ann owes 2.50 GBP; ${literal} {old} $", "7/${missing} $$", "$Ann", "{name}", "é"] dates=["${year} {old} $ 2026-09-27", 2026-09-27, "2026-09-27 14:05:09.123", 2026-09-27T14:05:09.123] caught=[{code: "out of domain", function: "format", value: "${name", at: {unit: "templates", handler: "invalid", line: 20, column: 9}}, {code: "out of domain", function: "format", value: "missing", at: {unit: "templates", handler: "invalid", line: 25, column: 9}}, {code: "out of domain", function: "formatDate", value: "{year}-{month}-{day}", at: {unit: "templates", handler: "invalid", line: 30, column: 9}}, {code: "out of domain", function: "formatDate", value: "${year}-${month:0}-${day}", at: {unit: "templates", handler: "invalid", line: 35, column: 9}}, {code: "can't convert", value: "2026/09/27", to: "civil date", format: "${year}-${month}-${day}", offset: 5, at: {unit: "templates", handler: "invalid", line: 40, column: 9}}]

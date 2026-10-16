@@ -544,7 +544,7 @@ func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) {
 	if g.backend != nil {
 		return g.backend.pump(now, o)
 	}
-	now = now.Round(0).UTC()
+	now = now.Round(0).UTC().Truncate(time.Microsecond)
 	// Format the Host input without constructing a Value: refused Clocks can
 	// fall outside the Instant range, and must not panic while being traced.
 	fields := map[string]string{"clock": now.Format(time.RFC3339Nano)}

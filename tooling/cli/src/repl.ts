@@ -23,8 +23,8 @@ const help = [
   'Run waiting at the prompt, and Ctrl-D or :quit ends the session.',
 ];
 
-// A real Clock reading, in epoch nanoseconds.
-const now = () => BigInt(Date.now()) * 1_000_000n;
+// A real Clock reading, in epoch microseconds.
+const now = () => BigInt(Date.now()) * 1000n;
 
 export const repl = ({
   transcript,

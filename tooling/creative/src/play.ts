@@ -572,7 +572,7 @@ export class PlaySession {
       );
       const closing = {
         target,
-        deadline: now + 1_000_000_000n,
+        deadline: now + 1_000_000n,
         id: request.id,
         cancel,
         done: false,

@@ -254,7 +254,7 @@ or Bun globals, and the browser smoke page's LSP fixtures.
 
 `@odgn/northtalk-tooling/debug` exports `LiveDebugger`, source breakpoint and
 result types, `renderDebugView` and `copyDebugVar`. It works in Bun, Node and browser workers;
-the Host supplies the Group, its Grants and lifecycle, and epoch nanoseconds.
+the Host supplies the Group, its Grants and lifecycle, and epoch microseconds.
 
 ```ts
 import { compileSource, newGroup } from '@odgn/northtalk';
@@ -264,7 +264,7 @@ const source = 'on go\n put 1 into n\n return n\nend';
 const group = newGroup({ name: 'demo', trace: line => console.log(line) });
 const script = group.load({ name: 'main', source });
 const debug = new LiveDebugger(group, {
-  now: () => BigInt(Date.now()) * 1_000_000n,
+  now: () => BigInt(Date.now()) * 1_000n,
 });
 debug.registerSource(compileSource(source, { name: 'main' }).unit!, 'main');
 debug.setBreakpoints([{ unit: 'main', script: 'main', line: 2 }]);

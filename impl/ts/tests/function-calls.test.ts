@@ -146,7 +146,7 @@ describe('Function Value calls', () => {
     const requested = group.call(fn, [num(7)]);
     group.pump(clock);
     expect(group.inspect().scripts[0]!.runs[0]!.status).toBe('suspended');
-    group.pump(clock + 1_000_000_000n);
+    group.pump(clock + 1_000_000n);
     expect((await requested.result).toString()).toBe('21');
   });
 });
@@ -278,9 +278,7 @@ describe('Function call lifecycle', () => {
     group.pump(clock);
     await expectSendFailed(requested.result, 'cancelled');
     expect(lines).toContain('abandon caller/r1.c1');
-    const reports = operationalReports(
-      group.pump(clock + 1_000_000_000n).reports,
-    );
+    const reports = operationalReports(group.pump(clock + 1_000_000n).reports);
     expect(reports).toContainEqual(
       expect.objectContaining({ script: 'home', outcome: 'completed' }),
     );
@@ -296,12 +294,12 @@ describe('Function call lifecycle', () => {
     });
     const requested = script.request({ name: 'go', args: [fn] });
     group.pump(clock);
-    const reports = operationalReports(group.pump(clock + 10_000_000n).reports);
+    const reports = operationalReports(group.pump(clock + 10_000n).reports);
     await expectSendFailed(requested.result, 'errored');
     const report = reports.find(r => r.kind === 'run end');
     expect(report?.kind === 'run end' && report.error?.code).toBe('timeout');
     expect(lines).toContain('abandon caller/r1.c1');
-    group.pump(clock + 1_000_000_000n);
+    group.pump(clock + 1_000_000n);
     expect(group.inspect().scripts[0]!.vars[0]![1].toString()).toBe('7');
   });
 
@@ -357,7 +355,7 @@ describe('Function call lifecycle', () => {
     const b = group.call(fn, [num(2)]);
     group.pump(clock);
     expect(group.inspect().scripts[0]!.runs).toHaveLength(3);
-    group.pump(clock + 1_000_000_000n);
+    group.pump(clock + 1_000_000n);
     expect((await a.result).toString()).toBe('1');
     expect((await b.result).toString()).toBe('2');
   });
@@ -369,7 +367,7 @@ describe('Function call lifecycle', () => {
     const restored = restore(group.save(), restoreOptions([]));
     expect(restored.result.pending).toEqual([]);
     const reports = operationalReports(
-      restored.group.pump(clock + 1_000_000_000n).reports,
+      restored.group.pump(clock + 1_000_000n).reports,
     );
     expect(
       reports
@@ -741,7 +739,7 @@ test('Host Call MaxWait overrides apply to foreign callbacks', async () => {
   const callback = report?.kind === 'run end' ? report.result! : undefined!;
   const request = group.call(fn, [callback], { limits: { maxWaitMs: 10 } });
   group.pump(clock);
-  const reports = operationalReports(group.pump(clock + 10_000_000n).reports);
+  const reports = operationalReports(group.pump(clock + 10_000n).reports);
   expect(reports).toContainEqual(
     expect.objectContaining({
       kind: 'run end',

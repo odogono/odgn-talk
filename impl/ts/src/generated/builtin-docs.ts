@@ -176,9 +176,9 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
     "call": "second(d)",
     "gives": "The whole seconds of the date-time `d`, from 0 to 59"
   },
-  "nanosecond": {
-    "call": "nanosecond(d)",
-    "gives": "The fraction of a second of the date-time `d`, in whole nanoseconds from 0 to 999999999"
+  "microsecond": {
+    "call": "microsecond(d)",
+    "gives": "The fraction of a second of the date-time `d`, in whole microseconds from 0 to 999999"
   },
   "weekday": {
     "call": "weekday(d)",

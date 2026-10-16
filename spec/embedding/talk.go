@@ -131,8 +131,8 @@ func Dec(s string) (Value, error)                    // the `as number` grammar;
 func Quantity(n Decimal, unit string) (Value, error) // unit as spelled in a Script ("kg", "GBP"); normalised (ADR 0022)
 func CivilDate(f DateFields) (Value, error)
 func ParseCivilDate(s string) (Value, error) // the `as civil date` grammar
-func Instant(seconds int64, nanos int32) (Value, error)
-func InstantFromTime(t time.Time) Value // drops the monotonic reading and the zone
+func Instant(seconds int64, micros int32) (Value, error) // micros from 0 to 999999, or refused
+func InstantFromTime(t time.Time) Value // drops the monotonic reading and the zone, truncating toward the past to the microsecond
 func Bytes(b []byte) Value              // copied in
 func List(vs ...Value) Value
 
@@ -155,7 +155,7 @@ type DateFields struct {
 	Year, Month, Day     int
 	HasTime              bool
 	Hour, Minute, Second int
-	Nanosecond           int
+	Microsecond          int
 }
 
 type Kind int
@@ -183,7 +183,7 @@ func (v Value) AsText() (string, bool) // always NFC
 func (v Value) AsDec() (Decimal, bool)
 func (v Value) AsQuantity() (Decimal, string, bool) // number and canonical unit
 func (v Value) AsCivilDate() (DateFields, bool)
-func (v Value) AsInstant() (seconds int64, nanos int32, ok bool)
+func (v Value) AsInstant() (seconds int64, micros int32, ok bool)
 func (v Value) AsBytes() ([]byte, bool) // a copy
 func (v Value) AsObject() (*Object, bool)
 func (v Value) AsRange() (from, to Value, ok bool)
@@ -918,7 +918,7 @@ type PumpOptions struct {
 // Group is Quiescent when it returns. A reading earlier than the previous
 // Pump's is "clock backwards". A game pauses by not pumping, and freezes time
 // by passing the same now.
-func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error)
+func (g *Group) Pump(now time.Time, o PumpOptions) (PumpResult, error) // now is truncated toward the past to the microsecond
 
 type PumpResult struct {
 	State        GroupState

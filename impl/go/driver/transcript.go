@@ -65,7 +65,7 @@ func ParseTranscript(source string) ([]session.Item, error) {
 			if err != nil || v.Kind != value.Instant {
 				return fail("an instant after @")
 			}
-			items = append(items, session.Item{Kind: "clock", At: time.Unix(v.Seconds(), int64(v.Nanos())).UTC()})
+			items = append(items, session.Item{Kind: "clock", At: v.Time()})
 		case '~':
 			s, ok := rest("~")
 			call, answer, hasAnswer := strings.Cut(s, " ")
@@ -131,7 +131,7 @@ func WriteTranscript(items []session.Item) string {
 	return b.String()
 }
 func formatInstant(t time.Time) string {
-	v, _ := value.NewInstant(t.Unix(), int32(t.Nanosecond()))
+	v, _ := value.InstantFromTime(t)
 	return v.Display()
 }
 

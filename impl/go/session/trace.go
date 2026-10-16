@@ -81,7 +81,7 @@ func parseTime(s string) time.Time {
 	if v.Kind != value.Instant {
 		panic("Clock reading is not an Instant")
 	}
-	return time.Unix(v.Seconds(), int64(v.Nanos())).UTC()
+	return v.Time()
 }
 func formatTime(t time.Time) string { return talk.InstantFromTime(t).String() }
 

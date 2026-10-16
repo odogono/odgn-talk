@@ -6,15 +6,15 @@
 
 import { invalidValue } from './errors';
 
-export const NS_PER_SECOND = 1_000_000_000n;
-export const NS_PER_DAY = 86_400n * NS_PER_SECOND;
+export const US_PER_SECOND = 1_000_000n;
+export const US_PER_DAY = 86_400n * US_PER_SECOND;
 
-/** A Civil Date: a date, and a time of day as nanoseconds since midnight, or null. */
+/** A Civil Date: a date, and a time of day as microseconds since midnight, or null. */
 export type CivilRef = {
   readonly day: number;
   readonly month: number;
-  /** Nanoseconds since midnight, for a date-time; null for a date-only value. */
-  readonly ns: bigint | null;
+  /** Microseconds since midnight, for a date-time; null for a date-only value. */
+  readonly us: bigint | null;
   readonly year: number;
 };
 
@@ -65,24 +65,24 @@ const inRange = (year: bigint): number => {
 };
 
 /** The Civil Date of a day number and an optional time of day, in range. */
-export const civilOfDays = (days: bigint, ns: bigint | null): CivilRef => {
+export const civilOfDays = (days: bigint, us: bigint | null): CivilRef => {
   const [y, month, day] = civilFromDays(days);
-  return { year: inRange(y), month, day, ns };
+  return { year: inRange(y), month, day, us };
 };
 /** A Civil Date's day number since 1970-01-01. */
 export const civilDays = (c: CivilRef): bigint =>
   daysFromCivil(BigInt(c.year), c.month, c.day);
-/** A date-time as nanoseconds on a timeline with every day 86400 s long. */
-export const civilNs = (c: CivilRef): bigint =>
-  civilDays(c) * NS_PER_DAY + (c.ns ?? 0n);
-export const civilOfNs = (ns: bigint): CivilRef => {
-  const days = floorDiv(ns, NS_PER_DAY);
-  return civilOfDays(days, ns - days * NS_PER_DAY);
+/** A date-time as microseconds on a timeline with every day 86400 s long. */
+export const civilUs = (c: CivilRef): bigint =>
+  civilDays(c) * US_PER_DAY + (c.us ?? 0n);
+export const civilOfUs = (us: bigint): CivilRef => {
+  const days = floorDiv(us, US_PER_DAY);
+  return civilOfDays(days, us - days * US_PER_DAY);
 };
-/** An Instant, as epoch nanoseconds, checked against the range in UTC. */
-export const checkInstant = (ns: bigint): bigint => {
-  civilOfNs(ns);
-  return ns;
+/** An Instant, as epoch microseconds, checked against the range in UTC. */
+export const checkInstant = (us: bigint): bigint => {
+  civilOfUs(us);
+  return us;
 };
 
 const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n);
@@ -91,9 +91,9 @@ const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n);
 export const civilFromFields = (f: {
   day: number;
   hour?: number;
+  microsecond?: number;
   minute?: number;
   month: number;
-  nanosecond?: number;
   second?: number;
   year: number;
 }): CivilRef | string => {
@@ -109,9 +109,9 @@ export const civilFromFields = (f: {
   if (f.day < 1 || f.day > daysIn(f.year, f.month)) {
     return `that month has no day ${f.day}`;
   }
-  const time = [f.hour, f.minute, f.second, f.nanosecond];
+  const time = [f.hour, f.minute, f.second, f.microsecond];
   if (time.every(t => t === undefined)) {
-    return { year: f.year, month: f.month, day: f.day, ns: null };
+    return { year: f.year, month: f.month, day: f.day, us: null };
   }
   const [h = 0, mi = 0, s = 0, n = 0] = time;
   if (
@@ -123,40 +123,40 @@ export const civilFromFields = (f: {
     s < 0 ||
     s > 59 ||
     n < 0 ||
-    n > 999_999_999
+    n > 999_999
   ) {
-    return 'a time of day is from 00:00:00 to 23:59:59.999999999';
+    return 'a time of day is from 00:00:00 to 23:59:59.999999';
   }
   return {
     year: f.year,
     month: f.month,
     day: f.day,
-    ns: BigInt(h * 3600 + mi * 60 + s) * NS_PER_SECOND + BigInt(n),
+    us: BigInt(h * 3600 + mi * 60 + s) * US_PER_SECOND + BigInt(n),
   };
 };
 
 /** A Civil Date's fields, as the Host reads them. */
 export const civilFields = (c: CivilRef) => {
   const base = { year: c.year, month: c.month, day: c.day };
-  if (c.ns === null) {
+  if (c.us === null) {
     return base;
   }
-  const seconds = Number(c.ns / NS_PER_SECOND);
+  const seconds = Number(c.us / US_PER_SECOND);
   return {
     ...base,
     hour: Math.floor(seconds / 3600),
     minute: Math.floor(seconds / 60) % 60,
     second: seconds % 60,
-    nanosecond: Number(c.ns % NS_PER_SECOND),
+    microsecond: Number(c.us % US_PER_SECOND),
   };
 };
 
 const two = (n: number) => String(n).padStart(2, '0');
-const timeText = (ns: bigint) => {
-  const seconds = Number(ns / NS_PER_SECOND);
-  const fraction = (ns % NS_PER_SECOND)
+const timeText = (us: bigint) => {
+  const seconds = Number(us / US_PER_SECOND);
+  const fraction = (us % US_PER_SECOND)
     .toString()
-    .padStart(9, '0')
+    .padStart(6, '0')
     .replace(/0+$/, '');
   return `${two(Math.floor(seconds / 3600))}:${two(Math.floor(seconds / 60) % 60)}:${two(seconds % 60)}${fraction ? `.${fraction}` : ''}`;
 };
@@ -166,17 +166,17 @@ const dateText = (y: number, m: number, d: number) =>
 /** A Civil Date's text form: `2026-09-27`, or `2026-09-27T14:30:00.5`. */
 export const civilText = (c: CivilRef): string =>
   dateText(c.year, c.month, c.day) +
-  (c.ns === null ? '' : `T${timeText(c.ns)}`);
+  (c.us === null ? '' : `T${timeText(c.us)}`);
 
 /** An Instant's text form, always in UTC: `2026-09-27T13:30:00Z`. */
-export const formatInstant = (ns: bigint): string => {
-  const days = floorDiv(ns, NS_PER_DAY);
+export const formatInstant = (us: bigint): string => {
+  const days = floorDiv(us, US_PER_DAY);
   const [y, m, d] = civilFromDays(days);
-  return `${dateText(Number(y), m, d)}T${timeText(ns - days * NS_PER_DAY)}Z`;
+  return `${dateText(Number(y), m, d)}T${timeText(us - days * US_PER_DAY)}Z`;
 };
 
 const civilPattern =
-  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?)?/;
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?)?/;
 
 // The date and time a text starts with, and the rest; undefined when the
 // fields don't name a date and time that exist. Year 0 is a range error.
@@ -199,7 +199,7 @@ const readCivil = (s: string): { c: CivilRef; rest: string } | undefined => {
           hour: Number(m[4]),
           minute: Number(m[5]),
           second: Number(m[6]),
-          nanosecond: Number((m[7] ?? '').padEnd(9, '0')),
+          microsecond: Number((m[7] ?? '').padEnd(6, '0')),
         };
   const c = civilFromFields(fields);
   return typeof c === 'string' ? undefined : { c, rest: s.slice(m[0].length) };
@@ -217,7 +217,7 @@ export const parseCivil = (s: string): CivilRef | undefined => {
  */
 export const parseInstantText = (s: string): bigint | undefined => {
   const read = readCivil(s);
-  if (!read || read.c.ns === null) {
+  if (!read || read.c.us === null) {
     return undefined;
   }
   let offset = 0n;
@@ -229,22 +229,22 @@ export const parseInstantText = (s: string): bigint | undefined => {
     offset =
       (m[1] === '-' ? -1n : 1n) *
       BigInt(Number(m[2]) * 3600 + Number(m[3]) * 60) *
-      NS_PER_SECOND;
+      US_PER_SECOND;
   }
-  return checkInstant(civilNs(read.c) - offset);
+  return checkInstant(civilUs(read.c) - offset);
 };
 
-/** An Instant's display form as epoch nanoseconds, for the Host and the Trace. */
+/** An Instant's display form as epoch microseconds, for the Host and the Trace. */
 export const parseInstant = (s: string): bigint => {
-  let ns: bigint | undefined;
+  let us: bigint | undefined;
   try {
-    ns = s.endsWith('Z') ? parseInstantText(s) : undefined;
+    us = s.endsWith('Z') ? parseInstantText(s) : undefined;
   } catch (error) {
     if (!(error instanceof DateRangeError)) {
       throw error;
     }
   }
-  return ns ?? invalidValue(`Not an Instant: ${s}`);
+  return us ?? invalidValue(`Not an Instant: ${s}`);
 };
 
 /** Months since year 0, and back, for calendar arithmetic. */
@@ -253,7 +253,7 @@ export const addMonths = (c: CivilRef, months: bigint): CivilRef => {
   const year = floorDiv(total, 12n);
   const month = Number(total - year * 12n) + 1;
   const y = inRange(year);
-  return { year: y, month, day: Math.min(c.day, daysIn(y, month)), ns: c.ns };
+  return { year: y, month, day: Math.min(c.day, daysIn(y, month)), us: c.us };
 };
 
 /** ISO 8601: 1 for Monday to 7 for Sunday. 1970-01-01 was a Thursday. */

@@ -31,7 +31,7 @@ test('a replacement paused before payment cancels its owner only after paying', 
     }
     debug.clearBreaks();
     debug.resume();
-    group.pump(1_000_000_000n);
+    group.pump(1_000_000n);
     const owner = trace.filter(line => line.startsWith('run s/r1 '));
     expect(owner).toHaveLength(1);
     expect(owner[0]).toContain(
@@ -156,7 +156,7 @@ test('step over a suspension follows the same Run past its resumption', () => {
   group.pump(0n);
   debug.clearBreaks();
   expect(debug.stepOver()?.state).toBe('idle');
-  group.pump(1_000_000_000n);
+  group.pump(1_000_000n);
   expect(debug.current?.line).toBe(3);
   debug.resume();
 });

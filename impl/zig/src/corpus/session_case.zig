@@ -99,7 +99,7 @@ fn instant(shown: []const u8) ?session.Instant {
     if (c.talk_parse_display(shown.ptr, shown.len, &v) != c.TALK_OK) return null;
     defer c.talk_value_release(v);
     var i: session.Instant = undefined;
-    if (!c.talk_value_as_instant(v, &i.seconds, &i.nanos)) return null;
+    if (!c.talk_value_as_instant(v, &i.seconds, &i.micros)) return null;
     return i;
 }
 

@@ -206,7 +206,7 @@ class DisplayReader extends Reader {
       );
     }
     const date = this.match(
-      /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z?)?(?![\w.:-])/y,
+      /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z?)?(?![\w.:-])/y,
     );
     if (date !== undefined) {
       return dateValue(date, this.fail.bind(this));

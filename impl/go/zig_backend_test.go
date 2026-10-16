@@ -312,7 +312,7 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 }
 
 func TestZigBackendDataValues(t *testing.T) {
-	const encoded = `[null,true,-3,{"$dec":"3.0"},{"$dec":"9007199254740992"},"é<>\u000a",{"$quantity":["2.50","GBP"]},{"$bytes":"DQo="},{"$range":[3,7]},{"$date":"2026-09-27T14:30:00.5"},{"$instant":"1969-12-31T23:59:59.999999999Z"},{"$pattern":"<\"a\">"},{"$map":[["$ref",1],["é",[null,true]]]}]`
+	const encoded = `[null,true,-3,{"$dec":"3.0"},{"$dec":"9007199254740992"},"é<>\u000a",{"$quantity":["2.50","GBP"]},{"$bytes":"DQo="},{"$range":[3,7]},{"$date":"2026-09-27T14:30:00.5"},{"$instant":"1969-12-31T23:59:59.999999Z"},{"$pattern":"<\"a\">"},{"$map":[["$ref",1],["é",[null,true]]]}]`
 	value, err := talk.DecodeValue([]byte(encoded), nil)
 	if err != nil {
 		t.Fatal(err)

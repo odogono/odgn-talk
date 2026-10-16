@@ -1055,7 +1055,8 @@ func compared(a, b value.Value, folded bool) int64 {
 	return value.NewComparer(folded).Scanned(a, b)
 }
 
-// waitNanos accepts exact durations and rounds to whole nanoseconds, half even.
+// waitNanos accepts exact durations, rounds them to whole microseconds, half
+// even, and returns nanoseconds.
 func waitNanos(v value.Value) (*big.Int, *value.Value) {
 	fail := func(e value.Value) (*big.Int, *value.Value) { return nil, &e }
 	if v.Kind != value.Quantity {
@@ -1069,7 +1070,8 @@ func waitNanos(v value.Value) (*big.Int, *value.Value) {
 	if err != nil {
 		return fail(failure(err.(*decimal.Error).Code))
 	}
-	return roundInteger(new(big.Rat).Mul(n.Rat(), big.NewRat(1e9, 1))), nil
+	us := roundInteger(new(big.Rat).Mul(n.Rat(), big.NewRat(1e6, 1)))
+	return us.Mul(us, big.NewInt(1000)), nil
 }
 
 var arithmeticOps = map[string]string{"add": "+", "subtract": "-", "multiply": "*", "divide": "/", "div": "div", "mod": "mod", "power": "^"}

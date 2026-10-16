@@ -169,7 +169,7 @@ export class PlaygroundSession {
   private readonly libraries = new Map<string, string>();
   private breakpoints: TabBreakpoint[] = [];
   private faults: Faults = { error: false, limitFault: false };
-  private pausedNs = 0n;
+  private pausedUs = 0n;
   private pausedSince: number | null = null;
   // The tab sources the last breakpoint sync saw, for mapping positions back.
   private tabs: Tabs = { script: '', libraries: [] };
@@ -255,7 +255,7 @@ export class PlaygroundSession {
 
   /** A real Clock reading less the time the debugger held the session paused. */
   now(): bigint {
-    return this.env.now() - this.pausedNs;
+    return this.env.now() - this.pausedUs;
   }
 
   get started(): boolean {
@@ -773,8 +773,8 @@ export class PlaygroundSession {
   /** Continues a paused Pump; its lines print once it completes. */
   continueDebug(action: DebugAction): string[] {
     if (this.pausedSince !== null) {
-      this.pausedNs += BigInt(
-        Math.floor((this.env.monotonic() - this.pausedSince) * 1_000_000),
+      this.pausedUs += BigInt(
+        Math.floor((this.env.monotonic() - this.pausedSince) * 1000),
       );
       this.pausedSince = null;
     }

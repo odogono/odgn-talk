@@ -37,7 +37,7 @@ const Value = model.Value;
 
 /// Something on a frame's operand stack: a Script value, or one of the
 /// internal values only instructions see.
-/// A Timeout Block's deadline, in nanoseconds, and its duration in ms.
+/// A Timeout Block's deadline, in microseconds, and its duration in ms.
 pub const Deadline = struct { at: i128, ms: u64 };
 
 pub const Slot = union(enum) {
@@ -411,7 +411,7 @@ pub const Resume = union(enum) {
 
 pub const Failure = struct { code: []const u8, message: ?[]const u8, data: ?*Value };
 
-/// A suspended Run's wait, with its deadline in nanoseconds: a suspending
+/// A suspended Run's wait, with its deadline in microseconds: a suspending
 /// Capability call or a `wait`.
 /// Marks a Capability call whose wait ends without its answer abandoned.
 fn abandonCall(p: *const Pending) void {
@@ -1412,7 +1412,7 @@ pub const Group = struct {
     /// being unwound, which its failed continuation keeps.
     failing_operands: u64 = 0,
     /// The last Pump's Clock reading, which a Capability call reads.
-    clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 },
+    clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 },
     /// No lower bound until the first Pump; Restore supplies its saved bound.
     observed_clock: ?model.dates.Instant = null,
     /// The waits with deadlines, and how many have been set.
@@ -3465,7 +3465,7 @@ pub const Group = struct {
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
         try g.checkWorker();
         const previous = g.observed_clock orelse if (g.restored) |r| r.clock else null;
-        if (previous) |last| if (clock.seconds < last.seconds or (clock.seconds == last.seconds and clock.nanos < last.nanos)) {
+        if (previous) |last| if (clock.seconds < last.seconds or (clock.seconds == last.seconds and clock.micros < last.micros)) {
             g.refusePump(clock, @intCast(slice), @intCast(cap));
             return error.ClockBackwards;
         };
@@ -3839,7 +3839,7 @@ pub const Group = struct {
         }
         // Due timers, in deadline order, then the order they were set; a
         // Rewind drained returns at once.
-        const now = nanos(g.clock);
+        const now = micros(g.clock);
         while (!g.rewound) {
             var first: ?usize = null;
             for (g.pending.items, 0..) |p, i| {
@@ -3986,7 +3986,7 @@ pub const Group = struct {
         };
         g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.rewound) "rewound" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
         if (g.next()) |deadline| {
-            const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
+            const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) };
             const text = try model.dates.string(g.scratch.allocator(), model.dates.fields(at), true);
             g.write(" next={s}", .{text});
         }
@@ -4797,7 +4797,7 @@ pub const Group = struct {
             }
             name = v.data.text;
         }
-        if (waits and !member) if (blockDeadline(frame)) |b| if (b.at <= nanos(g.clock)) {
+        if (waits and !member) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
             m.uncharged = true;
             return g.raiseDeadline(b, null);
         };
@@ -4877,10 +4877,10 @@ pub const Group = struct {
         try g.post(dest, d);
         if (!waits) return .next;
         if (member) {
-            try g.startMember(run, .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+            try g.startMember(run, .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
             return .next;
         }
-        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
         return .suspended;
     }
 
@@ -4945,7 +4945,7 @@ pub const Group = struct {
             return g.refuseOpenScope(run);
         }
         // Each `from` names a Script, and each duration is exact.
-        const now = nanos(g.clock);
+        const now = micros(g.clock);
         var deadline: i128 = never;
         var fires: u32 = 0;
         var at: usize = 0;
@@ -5765,7 +5765,7 @@ pub const Group = struct {
                 display.writeTrace(out, outcome.vetoed) catch {};
             }
             if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
-                const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(p.deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(p.deadline, std.time.ns_per_s)) };
+                const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(p.deadline, std.time.us_per_s)), .micros = @intCast(@mod(p.deadline, std.time.us_per_s)) };
                 const text = model.dates.string(g.scratch.allocator(), model.dates.fields(at), true) catch "";
                 out.print(" until={s}", .{text}) catch {};
             };
@@ -6508,7 +6508,7 @@ pub const Group = struct {
             d.waits = true;
             d.function = fv.retain();
             try g.post(home, d);
-            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = nanos(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.ns_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
             return .suspended;
         }
         try g.callFunction(run, code.library, code.body, args);
@@ -8165,7 +8165,7 @@ pub const Group = struct {
                 const d = pop(frame);
                 defer d.release();
                 const ns = waitMillis(d) orelse return g.notDuration(d);
-                const own: Deadline = .{ .at = nanos(g.clock) + ns, .ms = @intCast(@max(@divTrunc(ns, std.time.ns_per_ms), 0)) };
+                const own: Deadline = .{ .at = micros(g.clock) + ns, .ms = @intCast(@max(@divTrunc(ns, std.time.us_per_ms), 0)) };
                 // An enclosing block's deadline that is no later stays.
                 const deadline = if (blockDeadline(frame)) |outer| (if (outer.at <= own.at) outer else own) else own;
                 try frame.stack.append(gpa, .{ .deadline = deadline });
@@ -8182,7 +8182,7 @@ pub const Group = struct {
             },
             .join_end => {
                 const join = run.join.?;
-                if (blockDeadline(frame)) |d| if (d.at <= nanos(g.clock)) {
+                if (blockDeadline(frame)) |d| if (d.at <= micros(g.clock)) {
                     // Already past: abandon the members, then raise.
                     m.uncharged = true;
                     g.abandonJoin(run);
@@ -8257,11 +8257,11 @@ pub const Group = struct {
                     m.uncharged = true;
                     return g.refuseOpenScope(run);
                 }
-                if (blockDeadline(frame)) |b| if (b.at <= nanos(g.clock)) {
+                if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
                     m.uncharged = true;
                     return g.raiseDeadline(b, null);
                 };
-                try g.suspendRun(run, "wait", .{ .run = run, .deadline = nanos(g.clock) + ns, .order = 0 });
+                try g.suspendRun(run, "wait", .{ .run = run, .deadline = micros(g.clock) + ns, .order = 0 });
                 return .suspended;
             },
             .get_key, .get_key_computed => {
@@ -8937,7 +8937,7 @@ pub const Group = struct {
     }
 
     /// `+` and `-` with a date (chapter 3, Date arithmetic): an exact
-    /// duration in whole nanoseconds, or a calendar one in whole months, or
+    /// duration in whole microseconds, or a calendar one in whole months, or
     /// the difference of two dates of one kind.
     fn dateArithmetic(g: *Group, subtract: bool, x: *Value, y: *Value) !*Value {
         const gpa = g.gpa;
@@ -8960,17 +8960,17 @@ pub const Group = struct {
                 if (subtract) ns = -ns;
                 switch (x.data) {
                     .instant => |t| {
-                        const total = @as(i128, t.seconds) * std.time.ns_per_s + t.nanos + ns;
-                        const out: model.dates.Instant = .{ .seconds = @intCast(@divFloor(total, std.time.ns_per_s)), .nanos = @intCast(@mod(total, std.time.ns_per_s)) };
-                        model.dates.validateInstant(out) catch return g.dateOutOfRange(@divFloor(total, std.time.ns_per_s));
+                        const total = @as(i128, t.seconds) * std.time.us_per_s + t.micros + ns;
+                        const out: model.dates.Instant = .{ .seconds = @intCast(@divFloor(total, std.time.us_per_s)), .micros = @intCast(@mod(total, std.time.us_per_s)) };
+                        model.dates.validateInstant(out) catch return g.dateOutOfRange(@divFloor(total, std.time.us_per_s));
                         return model.scalar(gpa, .{ .instant = out });
                     },
                     else => {
                         const f = x.data.civil_date;
-                        if (date_only and @mod(ns, std.time.ns_per_day) != 0) return g.incompatible("day", q.unit);
-                        const total = @as(i128, model.dates.seconds(f)) * std.time.ns_per_s + f.nanosecond + ns;
-                        if (total < -62135596800 * @as(i128, std.time.ns_per_s) or total >= 253402300800 * @as(i128, std.time.ns_per_s)) return g.dateOutOfRange(@divFloor(total, std.time.ns_per_s));
-                        var out = model.dates.fields(.{ .seconds = @intCast(@divFloor(total, std.time.ns_per_s)), .nanos = @intCast(@mod(total, std.time.ns_per_s)) });
+                        if (date_only and @mod(ns, std.time.us_per_day) != 0) return g.incompatible("day", q.unit);
+                        const total = @as(i128, model.dates.seconds(f)) * std.time.us_per_s + f.microsecond + ns;
+                        if (total < -62135596800 * @as(i128, std.time.us_per_s) or total >= 253402300800 * @as(i128, std.time.us_per_s)) return g.dateOutOfRange(@divFloor(total, std.time.us_per_s));
+                        var out = model.dates.fields(.{ .seconds = @intCast(@divFloor(total, std.time.us_per_s)), .micros = @intCast(@mod(total, std.time.us_per_s)) });
                         out.has_time = f.has_time;
                         return model.scalar(gpa, .{ .civil_date = out });
                     },
@@ -8984,9 +8984,9 @@ pub const Group = struct {
                     const days = @divFloor(model.dates.seconds(x.data.civil_date) - model.dates.seconds(y.data.civil_date), 86400);
                     return model.scalar(gpa, .{ .quantity = .{ .number = model.Decimal.fromInt(days), .unit = units.Unit.parse("day") catch unreachable } });
                 }
-                const ns = instantNanos(x) - instantNanos(y);
+                const ns = instantMicros(x) - instantMicros(y);
                 // Exact, with no more places than it needs.
-                var n: model.Decimal = .{ .coefficient = @intCast(@abs(ns)), .exponent = -9, .negative = ns < 0 };
+                var n: model.Decimal = .{ .coefficient = @intCast(@abs(ns)), .exponent = -6, .negative = ns < 0 };
                 while (n.exponent < 0 and n.coefficient % 10 == 0) {
                     n.coefficient /= 10;
                     n.exponent += 1;
@@ -8998,10 +8998,10 @@ pub const Group = struct {
         }
     }
 
-    fn instantNanos(v: *const Value) i128 {
+    fn instantMicros(v: *const Value) i128 {
         return switch (v.data) {
-            .instant => |t| @as(i128, t.seconds) * std.time.ns_per_s + t.nanos,
-            else => @as(i128, model.dates.seconds(v.data.civil_date)) * std.time.ns_per_s + v.data.civil_date.nanosecond,
+            .instant => |t| @as(i128, t.seconds) * std.time.us_per_s + t.micros,
+            else => @as(i128, model.dates.seconds(v.data.civil_date)) * std.time.us_per_s + v.data.civil_date.microsecond,
         };
     }
 
@@ -9173,7 +9173,7 @@ pub const Group = struct {
             return g.raiseMismatch(bad, position, &where);
         }
 
-        if (ins.op == .ask_wait) if (blockDeadline(frame)) |b| if (b.at <= nanos(g.clock)) {
+        if (ins.op == .ask_wait) if (blockDeadline(frame)) |b| if (b.at <= micros(g.clock)) {
             m.uncharged = true;
             return g.raiseDeadline(b, &where);
         };
@@ -9386,7 +9386,7 @@ pub const Group = struct {
             // abandon it, without committing the Segment first.
             if (pending) {
                 const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
-                const wait: Pending = .{ .run = run, .deadline = nanos(g.clock) + @as(i128, after_ms) * std.time.ns_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms };
+                const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms };
                 if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
@@ -9990,12 +9990,12 @@ pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, l
 
 /// MaxWait's default, for a suspending call whose Operation sets no
 /// `maxPending`, until step 4 brings per-Script limits.
-/// An Instant in nanoseconds since the epoch.
-fn nanos(t: model.dates.Instant) i128 {
-    return @as(i128, t.seconds) * std.time.ns_per_s + t.nanos;
+/// An Instant in microseconds since the epoch.
+fn micros(t: model.dates.Instant) i128 {
+    return @as(i128, t.seconds) * std.time.us_per_s + t.micros;
 }
 
-/// An exact duration in nanoseconds, rounded half to even, or null for
+/// An exact duration in microseconds, rounded half to even, or null for
 /// anything else.
 fn waitMillis(d: *const Value) ?i128 {
     if (d.data != .quantity) return null;
@@ -10006,7 +10006,7 @@ fn waitMillis(d: *const Value) ?i128 {
     defer arena.deinit();
     const base = q.unit.toBase(arena.allocator(), q.number) catch return null;
     var n: i128 = @intCast(base.coefficient);
-    var e: i32 = base.exponent + 9;
+    var e: i32 = base.exponent + 6;
     const cap: i128 = std.math.maxInt(i96);
     while (e > 0) : (e -= 1) n = if (n > @divTrunc(cap, 10)) cap else n * 10;
     if (e < 0) {

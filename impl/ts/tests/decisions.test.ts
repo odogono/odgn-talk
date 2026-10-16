@@ -53,11 +53,11 @@ describe('Decisions', () => {
     const pump = group.pump(now);
     expect(operationalReports(pump.reports)).toHaveLength(1);
     expect(await d.decided).toMatchObject({ verdict: 'allowed' });
-    expect(
-      operationalReports(group.pump(1_000_000_000n).reports)[0],
-    ).toMatchObject({
-      outcome: 'errored',
-    });
+    expect(operationalReports(group.pump(1_000_000n).reports)[0]).toMatchObject(
+      {
+        outcome: 'errored',
+      },
+    );
   });
 
   test('pass carries the open Verdict to a parent; veto ends the path', async () => {

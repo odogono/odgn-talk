@@ -325,7 +325,7 @@ Store cases and the changed `sessions/store-bindings` restore Fingerprint await
 human review in the [review package](../docs/reviews/store-watch-blessings/README.md).
 Current support is in the [TS](../impl/ts/README.md) and [Go](../impl/go/README.md) guides.
 
-The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover nanosecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
+The `standard-clock`, `standard-timer` and `standard-clock-fuel` cases use fixed Standard Capability declarations. They cover microsecond-accurate Pump readings without Stubs, Host timer calls and ordinary Deliveries, Library needs, and rollback when a call's declared cost exhausts Fuel. Go and TS reproduce all three reviewed traces unchanged; Go protects them with a required-case acceptance test and its passing gate.
 
 The `standard-console`, `standard-console-cancel` and `standard-console-timeout`
 cases cover Console calls through fixed declarations: a Library's `say` of

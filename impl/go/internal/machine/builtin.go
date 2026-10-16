@@ -30,7 +30,7 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		return text(out), nil
 	case "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32":
 		return builtinNumber(name, args)
-	case "year", "month", "day", "hour", "minute", "second", "nanosecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant":
+	case "year", "month", "day", "hour", "minute", "second", "microsecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant":
 		return builtinDate(name, args)
 
 	case "fromCodePoint":

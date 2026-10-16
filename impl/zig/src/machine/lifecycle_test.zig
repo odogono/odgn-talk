@@ -70,7 +70,7 @@ fn replacementTrace(deferred: bool, status: caps.EffectStatus, fail_at: usize, f
     const b_identity = b.identity;
     _ = try g.deliver("a", "go", &.{}, false);
     _ = try g.deliver("b", "go", &.{}, false);
-    try g.pumpWith(.{ .seconds = 1790000000, .nanos = 0 }, 40, 0);
+    try g.pumpWith(.{ .seconds = 1790000000, .micros = 0 }, 40, 0);
     var result = try g.replaceLibrary(fresh, true, gpa);
     if (!finish) {
         try testing.expect(result == .paused);
@@ -97,7 +97,7 @@ fn replacementTrace(deferred: bool, status: caps.EffectStatus, fail_at: usize, f
         try testing.expect(!std.mem.eql(u8, &b_identity, &b.identity));
         try testing.expect(a.stopped == null and b.stopped == null);
         const requested = try g.deliver("a", "value", &.{}, true);
-        try g.pump(.{ .seconds = 1790000000, .nanos = 0 });
+        try g.pump(.{ .seconds = 1790000000, .micros = 0 });
         const three = try model.scalar(gpa, .{ .number = .fromInt(3) });
         defer three.release();
         try testing.expect(try three.equal(g.results.get(requested).?));

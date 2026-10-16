@@ -34,7 +34,7 @@ const scope = self as unknown as {
   postMessage(message: FromSession): void;
 };
 
-const now = () => BigInt(Date.now()) * 1_000_000n;
+const now = () => BigInt(Date.now()) * 1000n;
 // The page's Store slots: it sends them at `open`, and keeps each one
 // `:store save` writes.
 const slots = new Map<string, string>();

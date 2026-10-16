@@ -179,16 +179,16 @@ func floorDiv(n, d *big.Int) *big.Int {
 }
 func civilTime(v value.Value) time.Time {
 	f := v.Date()
-	return time.Date(f.Year, time.Month(f.Month), f.Day, f.Hour, f.Minute, f.Second, f.Nanosecond, time.UTC)
+	return time.Date(f.Year, time.Month(f.Month), f.Day, f.Hour, f.Minute, f.Second, f.Microsecond*1000, time.UTC)
 }
-func instantNanos(v value.Value) *big.Int {
-	seconds, nanos := v.Seconds(), v.Nanos()
+func instantMicros(v value.Value) *big.Int {
+	seconds, micros := v.Seconds(), v.Micros()
 	if v.Kind == value.CivilDate {
 		t := civilTime(v)
-		seconds, nanos = t.Unix(), int32(t.Nanosecond())
+		seconds, micros = t.Unix(), int32(t.Nanosecond()/1000)
 	}
-	n := new(big.Int).Mul(big.NewInt(seconds), big.NewInt(1e9))
-	return n.Add(n, big.NewInt(int64(nanos)))
+	n := new(big.Int).Mul(big.NewInt(seconds), big.NewInt(1e6))
+	return n.Add(n, big.NewInt(int64(micros)))
 }
 func yearAtDays(days *big.Int) *big.Int {
 	cycles := floorDiv(days, big.NewInt(146097))
@@ -221,8 +221,8 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 		if a.Kind != b.Kind || a.Kind == value.CivilDate && a.Date().HasTime != b.Date().HasTime {
 			return bad(wrong(value.KindNames[a.Kind], b))
 		}
-		n := new(big.Int).Sub(instantNanos(a), instantNanos(b))
-		r := new(big.Rat).SetFrac(n, big.NewInt(1e9))
+		n := new(big.Int).Sub(instantMicros(a), instantMicros(b))
+		r := new(big.Rat).SetFrac(n, big.NewInt(1e6))
 		unit := "s"
 		if a.Kind == value.CivilDate && !a.Date().HasTime {
 			r.Quo(r, big.NewRat(86400, 1))
@@ -287,25 +287,25 @@ func dateArithmetic(op string, a, b value.Value) (value.Value, *value.Value) {
 			return incompatible()
 		}
 	}
-	delta := roundInteger(new(big.Rat).Mul(seconds, big.NewRat(1e9, 1)))
+	delta := roundInteger(new(big.Rat).Mul(seconds, big.NewRat(1e6, 1)))
 	if op == "-" {
 		delta.Neg(delta)
 	}
-	ns := new(big.Int).Add(instantNanos(a), delta)
-	sec := floorDiv(ns, big.NewInt(1e9))
-	nano := new(big.Int).Sub(ns, new(big.Int).Mul(sec, big.NewInt(1e9))).Int64()
+	us := new(big.Int).Add(instantMicros(a), delta)
+	sec := floorDiv(us, big.NewInt(1e6))
+	micro := new(big.Int).Sub(us, new(big.Int).Mul(sec, big.NewInt(1e6))).Int64()
 	if sec.Cmp(big.NewInt(-62135596800)) < 0 || sec.Cmp(big.NewInt(253402300799)) > 0 {
 		days := floorDiv(new(big.Int).Add(sec, big.NewInt(62135596800)), big.NewInt(86400))
 		return value.Value{}, yearError(yearAtDays(days))
 	}
 	if a.Kind == value.Instant {
-		v, _ := value.NewInstant(sec.Int64(), int32(nano))
+		v, _ := value.NewInstant(sec.Int64(), int32(micro))
 		return v, nil
 	}
-	t := time.Unix(sec.Int64(), nano).UTC()
+	t := time.Unix(sec.Int64(), micro*1000).UTC()
 	f := a.Date()
 	f.Year, f.Month, f.Day = t.Year(), int(t.Month()), t.Day()
-	f.Hour, f.Minute, f.Second, f.Nanosecond = t.Hour(), t.Minute(), t.Second(), t.Nanosecond()
+	f.Hour, f.Minute, f.Second, f.Microsecond = t.Hour(), t.Minute(), t.Second(), t.Nanosecond()/1000
 	v, _ := value.NewCivil(f)
 	return v, nil
 }

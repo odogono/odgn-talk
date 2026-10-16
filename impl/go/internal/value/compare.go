@@ -120,7 +120,7 @@ func (c *Comparer) equalNodes(v, w Value) bool {
 	case CivilDate:
 		return v.Date() == w.Date()
 	case Instant:
-		return v.Seconds() == w.Seconds() && v.Nanos() == w.Nanos()
+		return v.Seconds() == w.Seconds() && v.Micros() == w.Micros()
 	case Object:
 		return v.Object() != nil && w.Object() != nil && v.Object().Handle == w.Object().Handle
 	case Function:
@@ -200,11 +200,11 @@ func (c *Comparer) Compare(v, w Value) (int, error) {
 			}
 			return 1, nil
 		}
-		return cmpInt(int(v.Nanos()), int(w.Nanos())), nil
+		return cmpInt(int(v.Micros()), int(w.Micros())), nil
 	case CivilDate:
 		if v.Date().HasTime == w.Date().HasTime {
 			a, b := v.Date(), w.Date()
-			for _, p := range [][2]int{{a.Year, b.Year}, {a.Month, b.Month}, {a.Day, b.Day}, {a.Hour, b.Hour}, {a.Minute, b.Minute}, {a.Second, b.Second}, {a.Nanosecond, b.Nanosecond}} {
+			for _, p := range [][2]int{{a.Year, b.Year}, {a.Month, b.Month}, {a.Day, b.Day}, {a.Hour, b.Hour}, {a.Minute, b.Minute}, {a.Second, b.Second}, {a.Microsecond, b.Microsecond}} {
 				if n := cmpInt(p[0], p[1]); n != 0 {
 					return n, nil
 				}

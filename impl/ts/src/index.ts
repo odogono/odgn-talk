@@ -143,7 +143,7 @@ export {
   type Outcome,
   type RunRecord,
 } from './machine';
-export { canConvert, NotImplementedError, waitNs } from './operations';
+export { canConvert, NotImplementedError, waitUs } from './operations';
 export {
   disassemble,
   type Body,

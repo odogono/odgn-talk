@@ -1045,7 +1045,7 @@ fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) o
         .capability = &.{},
         .operation = &.{},
         .scope = &.{},
-        .now = .{ .seconds = 0, .nanos = 0 },
+        .now = .{ .seconds = 0, .micros = 0 },
         .args = &.{},
         .object_kind = gpa.dupe(u8, o.kind.name) catch return .broken,
         .object_id = gpa.dupe(u8, o.id) catch return .broken,
@@ -1688,7 +1688,7 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     o.text(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle") catch {};
     o.raw(",\"nextDeadline\":") catch {};
     if (mg.next()) |deadline| {
-        const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.ns_per_s)), .nanos = @intCast(@mod(deadline, std.time.ns_per_s)) };
+        const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) };
         o.instant(s.gpa, at) catch return oomReply();
     } else o.raw("null") catch {};
     o.raw(",\"fuelUsed\":") catch {};
@@ -1831,7 +1831,7 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
             s.work_paused = false;
             return runWork(s, ref, entry, .resumed);
         }
-        return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+        return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
     }
     if (s.exchange_entry) |e| e.group.group.release_pause = false;
     if (s.paused_ref == null) s.exchange_entry = null;
@@ -2729,7 +2729,7 @@ fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
         s.work_paused = false;
         return runWork(s, ref, entry, .resumed);
     }
-    return runPump(s, ref, entry, true, .{ .seconds = 0, .nanos = 0 }, 0, 0);
+    return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
 }
 
 /// `talk.ts`'s CarryOver text.
@@ -2792,7 +2792,7 @@ fn writeInspection(o: *Out, gpa: Allocator, i: *const talk.Inspection) (Allocato
                 try o.text(r.wait[0..r.wait_len]);
                 if (r.has_until) {
                     try o.raw(",\"until\":");
-                    try o.instant(gpa, .{ .seconds = r.until_seconds, .nanos = r.until_nanos });
+                    try o.instant(gpa, .{ .seconds = r.until_seconds, .micros = r.until_micros });
                 }
                 try o.raw(",\"calls\":[");
                 for (r.calls[0..r.calls_len], 0..) |c, m| {
@@ -3795,12 +3795,14 @@ test "backwards Pump preserves queued work and the first Clock may predate Unix"
     _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{2}));
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\n return 7\\nend go\\n\"}}", .{3}));
     _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"0001-01-01T00:00:00Z\"}}", .{4}));
-    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000002Z\"}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000002Z\"}}", .{5}));
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{6}));
-    const refused = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000001Z\"}}", .{7});
+    const seven = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.0000030Z\"}}", .{9});
+    try std.testing.expectEqualStrings("invalid value", seven.object.get("err").?.object.get("code").?.string);
+    const refused = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000001Z\"}}", .{7});
     try std.testing.expectEqualStrings("host error", try errKind(refused));
     try std.testing.expectEqualStrings("clock backwards", refused.object.get("err").?.object.get("code").?.string);
-    const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000000002Z\"}}", .{8});
+    const done = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T00:00:00.000002Z\"}}", .{8});
     try std.testing.expectEqual(@as(i64, 7), (try runEnd(done)).object.get("result").?.integer);
     const lines = (try okOf(done)).object.get("trace").?.array.items;
     try std.testing.expectEqualStrings("refused code=\"clock backwards\"", lines[1].string);

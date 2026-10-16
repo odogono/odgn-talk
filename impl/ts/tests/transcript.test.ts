@@ -139,13 +139,13 @@ describe('Recording', () => {
     host.input('on nap\n  wait 2 s\n  say "rested"\nend nap');
     host.input('nap and wait');
     expect(host.waiting.k).toBe('deadline');
-    now += 2_000_000_000n;
+    now += 2_000_000n;
     host.tick();
     host.input(
       'on echo\n  ask console to read and wait\n  say "got " & it\nend echo',
     );
     host.input('echo and wait');
-    now += 1_000_000_000n;
+    now += 1_000_000n;
     host.read('');
     host.input(':clock virtual');
     host.input('say "> virtual"');

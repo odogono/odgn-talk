@@ -646,7 +646,7 @@ pub const costs: CostsTable = .{
             .fuel = "3",
         },
         .{
-            .key = "builtin.nanosecond",
+            .key = "builtin.microsecond",
             .fuel = "3",
         },
         .{

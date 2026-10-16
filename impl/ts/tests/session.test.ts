@@ -117,7 +117,7 @@ const incomplete = (source: string) => {
   return r.error ? r.incomplete : null;
 };
 const advance = (clock: { now: bigint }, seconds: number) => {
-  clock.now += BigInt(seconds) * 1_000_000_000n;
+  clock.now += BigInt(seconds) * 1_000_000n;
 };
 
 describe('Entries', () => {
@@ -363,7 +363,7 @@ describe('The Session Host', () => {
     expect(host.input('nap and wait')).toEqual([]);
     expect(host.waiting).toEqual({
       k: 'deadline',
-      at: start + 2_000_000_000n,
+      at: start + 2_000_000n,
     });
     advance(clock, 2);
     expect(host.tick()).toEqual(['done']);

@@ -95,36 +95,36 @@ test('the mystery plays end to end: clues, dynamic trapdoor, and the Project Scr
   expect(play.page.name).toBe('lighthouse');
   expect(play.sounds.playing()).toEqual([]);
   expect(text(play, 'lampNote')).toBe('The lamp is dark and cold.');
-  await advance(play, 2_000_000_000n);
+  await advance(play, 2_000_000n);
   expect(text(play, 'lampNote')).toContain('swings in a draught');
 
   // A stray click is not the trapdoor and reveals nothing.
-  await click(play, 'keyText', 2_000_000_000n);
+  await click(play, 'keyText', 2_000_000n);
   expect(element(play, 'keyText').visible).toBe(false);
 
   // The Page Script creates the trapdoor; its click reaches the Page
   // handler, reveals clue 2, and the trapdoor removes itself.
-  await click(play, 'searchButton', 2_000_000_000n);
+  await click(play, 'searchButton', 2_000_000n);
   expect(element(play, 'searchButton').visible).toBe(false);
   expect(element(play, 'trapdoor')).toHaveProperty(
     'label',
     'Open the trapdoor',
   );
-  await click(play, 'trapdoor', 2_000_000_000n);
+  await click(play, 'trapdoor', 2_000_000n);
   expect(element(play, 'keyText').visible).toBe(true);
   expect(play.page.elements.map(e => e.name)).not.toContain('trapdoor');
 
   // Revisiting keeps the changed visuals, restarts the Page Script and
   // keeps the Project Script's clues.
-  await click(play, 'backToHarbour', 2_000_000_000n);
+  await click(play, 'backToHarbour', 2_000_000n);
   expect(element(play, 'clueText').visible).toBe(true);
-  await click(play, 'toLighthouse', 2_000_000_000n);
-  await advance(play, 4_000_000_000n);
+  await click(play, 'toLighthouse', 2_000_000n);
+  await advance(play, 4_000_000n);
   expect(element(play, 'keyText').visible).toBe(true);
   expect(text(play, 'lampNote')).toContain('swings in a draught');
 
-  await click(play, 'toEnding', 4_000_000_000n);
-  await click(play, 'solveButton', 4_000_000_000n);
+  await click(play, 'toEnding', 4_000_000n);
+  await click(play, 'solveButton', 4_000_000n);
   expect(text(play, 'verdict')).toContain('Mystery solved');
   expect(play.problems).toEqual([]);
 
@@ -140,8 +140,8 @@ test('leaving the lamp room early cancels its wait with no late write', async ()
   const play = new PlaySession(project);
   await advance(play);
   await click(play, 'toLighthouse');
-  await click(play, 'backToHarbour', 500_000_000n);
-  await advance(play, 5_000_000_000n);
+  await click(play, 'backToHarbour', 500_000n);
+  await advance(play, 5_000_000n);
   const lamp = play.project.pages[1]!.elements.find(
     e => e.name === 'lampNote',
   )! as TextElement;

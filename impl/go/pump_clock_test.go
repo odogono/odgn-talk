@@ -80,7 +80,7 @@ func TestPumpAcceptsClockBoundariesAndRefusesDecrease(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err := g.Pump(time.Date(9999, 12, 31, 23, 59, 59, 999999998, time.UTC), PumpOptions{})
+	_, err := g.Pump(time.Date(9999, 12, 31, 23, 59, 59, 999998999, time.UTC), PumpOptions{})
 	var host *HostError
 	if !errors.As(err, &host) || host.Code != ClockBackwards {
 		t.Fatal(err)

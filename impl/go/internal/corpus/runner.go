@@ -335,7 +335,7 @@ func constructWith(v value.Value, resolve func(value.Value) (talk.Value, error))
 	case value.CivilDate:
 		return talk.CivilDate(talk.DateFields(v.Date()))
 	case value.Instant:
-		return talk.Instant(v.Seconds(), v.Nanos())
+		return talk.Instant(v.Seconds(), v.Micros())
 	case value.List, value.Range:
 		items := make([]talk.Value, len(v.Items()))
 		for i, item := range v.Items() {

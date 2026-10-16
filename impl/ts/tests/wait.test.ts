@@ -14,7 +14,7 @@ import {
 import { num } from '../src/values';
 
 const t0 = parseInstant('2026-09-30T09:00:00Z');
-const at = (s: number) => t0 + BigInt(s) * 1_000_000_000n;
+const at = (s: number) => t0 + BigInt(s) * 1_000_000n;
 
 test('event tests pay their instructions without a Handler Clause charge', () => {
   const g = newGroup({ name: 'g' });

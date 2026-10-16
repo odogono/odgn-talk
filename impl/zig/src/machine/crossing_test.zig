@@ -5,7 +5,7 @@ const caps = @import("capabilities.zig");
 const objects = @import("objects.zig");
 const model = @import("../value.zig");
 const t = std.testing;
-pub const clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 };
+pub const clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 };
 pub const Crossing = enum { immediate, suspending, get, set };
 pub const Control = enum { none, stop, cancel, rewind };
 pub const Return = enum { value, wrong_shape, failure, invalid_failure, duplicate_failure, broken, started, refused };

@@ -28,7 +28,7 @@ test "Text growth keeps exact accounting and old Values through Save/Restore" {
     if (loaded != .loaded) std.debug.print("{s}\n", .{out.written()});
     try std.testing.expect(loaded == .loaded);
     const requested = try g.deliver("s", "go", &.{}, true);
-    const clock: @import("../dates.zig").Instant = .{ .seconds = 0, .nanos = 0 };
+    const clock: @import("../dates.zig").Instant = .{ .seconds = 0, .micros = 0 };
     for (0..1000) |_| {
         const fingerprint = try g.groupFingerprint();
         const bytes = try snapshot.save(&g, a, fingerprint);

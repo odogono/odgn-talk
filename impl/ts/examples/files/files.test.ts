@@ -25,7 +25,7 @@ afterEach(() => {
   try {
     for (const group of groups.splice(0)) {
       group.script('writer')!.stop('test cleanup');
-      group.pump(now + 1_000_000n);
+      group.pump(now + 1000n);
     }
   } finally {
     for (const host of hosts.splice(0)) {
@@ -343,7 +343,7 @@ test('a new Segment may stage a new destination after publication', () => {
   group.pump(now);
   expect(readFileSync(path, 'utf8')).toBe('new bytes');
   expect(existsSync(join(host.directory, 'other.txt'))).toBe(false);
-  expect(group.pump(now + 1_000_000n).reports).toContainEqual(
+  expect(group.pump(now + 1000n).reports).toContainEqual(
     expect.objectContaining({ outcome: 'completed' }),
   );
   expect(readFileSync(join(host.directory, 'other.txt'), 'utf8')).toBe(

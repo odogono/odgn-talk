@@ -181,7 +181,7 @@ test('actual suspension commits and resumes in a new Segment', () => {
   );
   group.pump(now);
   expect(host.events.at(-1)).toBe('commit:s/r1.s1');
-  group.pump(now + 1_000_000n);
+  group.pump(now + 1000n);
   expect(host.events.slice(-3)).toEqual([
     'begin:s/r1.s2',
     'change:s/r1.s2',

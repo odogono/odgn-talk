@@ -9,9 +9,9 @@ pub const Fields = extern struct {
     hour: c_int = 0,
     minute: c_int = 0,
     second: c_int = 0,
-    nanosecond: c_int = 0,
+    microsecond: c_int = 0,
 };
-pub const Instant = struct { seconds: i64, nanos: i32 };
+pub const Instant = struct { seconds: i64, micros: i32 };
 const Error = error{InvalidValue};
 fn leap(y: i32) bool {
     return @mod(y, 4) == 0 and (@mod(y, 100) != 0 or @mod(y, 400) == 0);
@@ -22,8 +22,8 @@ fn monthLength(y: i32, m: i32) i32 {
 }
 pub fn validate(f: Fields) Error!void {
     if (f.year < 1 or f.year > 9999 or f.month < 1 or f.month > 12 or f.day < 1 or f.day > monthLength(f.year, f.month)) return error.InvalidValue;
-    if (f.hour < 0 or f.hour > 23 or f.minute < 0 or f.minute > 59 or f.second < 0 or f.second > 59 or f.nanosecond < 0 or f.nanosecond >= 1_000_000_000) return error.InvalidValue;
-    if (!f.has_time and (f.hour != 0 or f.minute != 0 or f.second != 0 or f.nanosecond != 0)) return error.InvalidValue;
+    if (f.hour < 0 or f.hour > 23 or f.minute < 0 or f.minute > 59 or f.second < 0 or f.second > 59 or f.microsecond < 0 or f.microsecond >= 1_000_000) return error.InvalidValue;
+    if (!f.has_time and (f.hour != 0 or f.minute != 0 or f.second != 0 or f.microsecond != 0)) return error.InvalidValue;
 }
 fn number(s: []const u8) Error!i32 {
     for (s) |c| if (c < '0' or c > '9') return error.InvalidValue;
@@ -40,9 +40,9 @@ pub fn parseCivil(input: []const u8) Error!Fields {
         f.minute = try number(s[14..16]);
         f.second = try number(s[17..19]);
         if (s.len > 19) {
-            if (s[19] != '.' or s.len < 21 or s.len > 29) return error.InvalidValue;
-            f.nanosecond = try number(s[20..]);
-            for (s.len - 20..9) |_| f.nanosecond *= 10;
+            if (s[19] != '.' or s.len < 21 or s.len > 26) return error.InvalidValue;
+            f.microsecond = try number(s[20..]);
+            for (s.len - 20..6) |_| f.microsecond *= 10;
         }
     }
     try validate(f);
@@ -59,7 +59,7 @@ pub fn seconds(f: Fields) i64 {
     return day * 86400 + @as(i64, f.hour) * 3600 + f.minute * 60 + f.second;
 }
 pub fn validateInstant(t: Instant) Error!void {
-    if (t.seconds < -62135596800 or t.seconds > 253402300799 or t.nanos < 0 or t.nanos >= 1_000_000_000) return error.InvalidValue;
+    if (t.seconds < -62135596800 or t.seconds > 253402300799 or t.micros < 0 or t.micros >= 1_000_000) return error.InvalidValue;
 }
 pub fn fields(t: Instant) Fields {
     const day = @divFloor(t.seconds, 86400) + daysBeforeYear(1970);
@@ -73,7 +73,7 @@ pub fn fields(t: Instant) Fields {
     var m: i32 = 1;
     while (remaining >= monthLength(low, m)) : (m += 1) remaining -= monthLength(low, m);
     const time = @mod(t.seconds, 86400);
-    return .{ .year = low, .month = m, .day = @intCast(remaining + 1), .has_time = true, .hour = @intCast(@divTrunc(time, 3600)), .minute = @intCast(@divTrunc(@mod(time, 3600), 60)), .second = @intCast(@mod(time, 60)), .nanosecond = t.nanos };
+    return .{ .year = low, .month = m, .day = @intCast(remaining + 1), .has_time = true, .hour = @intCast(@divTrunc(time, 3600)), .minute = @intCast(@divTrunc(@mod(time, 3600), 60)), .second = @intCast(@mod(time, 60)), .microsecond = t.micros };
 }
 pub fn parseInstant(input: []const u8) Error!Instant {
     const s = decimal.trim(input);
@@ -90,7 +90,7 @@ pub fn parseInstant(input: []const u8) Error!Instant {
     }
     const f = try parseCivil(s[0..end]);
     if (!f.has_time) return error.InvalidValue;
-    const t: Instant = .{ .seconds = seconds(f) - offset, .nanos = f.nanosecond };
+    const t: Instant = .{ .seconds = seconds(f) - offset, .micros = f.microsecond };
     try validateInstant(t);
     return t;
 }
@@ -107,10 +107,10 @@ fn write(writer: *std.Io.Writer, f: Fields, instant: bool) !void {
     try writer.print("{d:0>4}-{d:0>2}-{d:0>2}", .{ @as(u32, @intCast(f.year)), @as(u32, @intCast(f.month)), @as(u32, @intCast(f.day)) });
     if (f.has_time) {
         try writer.print("T{d:0>2}:{d:0>2}:{d:0>2}", .{ @as(u32, @intCast(f.hour)), @as(u32, @intCast(f.minute)), @as(u32, @intCast(f.second)) });
-        if (f.nanosecond != 0) {
-            var fraction: [9]u8 = undefined;
-            _ = try std.fmt.bufPrint(&fraction, "{d:0>9}", .{@as(u32, @intCast(f.nanosecond))});
-            var len: usize = 9;
+        if (f.microsecond != 0) {
+            var fraction: [6]u8 = undefined;
+            _ = try std.fmt.bufPrint(&fraction, "{d:0>6}", .{@as(u32, @intCast(f.microsecond))});
+            var len: usize = 6;
             while (fraction[len - 1] == '0') len -= 1;
             try writer.writeByte('.');
             try writer.writeAll(fraction[0..len]);
@@ -121,10 +121,16 @@ fn write(writer: *std.Io.Writer, f: Fields, instant: bool) !void {
 test "date validation, negative epoch and offset normalization" {
     try std.testing.expectError(error.InvalidValue, parseCivil("2026-02-30"));
     try std.testing.expectError(error.InvalidValue, parseCivil("2026-09-27T23:59:60"));
-    const t = try parseInstant("1969-12-31T23:59:59.999999999Z");
+    const t = try parseInstant("1969-12-31T23:59:59.999999Z");
     try std.testing.expectEqual(@as(i64, -1), t.seconds);
     const s = try string(std.testing.allocator, fields(t), true);
     defer std.testing.allocator.free(s);
-    try std.testing.expectEqualStrings("1969-12-31T23:59:59.999999999Z", s);
+    try std.testing.expectEqualStrings("1969-12-31T23:59:59.999999Z", s);
     try std.testing.expectEqual(@as(i64, 0), (try parseInstant("1970-01-01T01:00:00+01:00")).seconds);
+}
+test "fractions take one to six digits" {
+    try std.testing.expectEqual(@as(i32, 500000), (try parseInstant("1970-01-01T00:00:00.5Z")).micros);
+    try std.testing.expectError(error.InvalidValue, parseInstant("1970-01-01T00:00:00.1234567Z"));
+    try std.testing.expectError(error.InvalidValue, parseCivil("2026-09-27T14:30:00.000000000"));
+    try std.testing.expectError(error.InvalidValue, validateInstant(.{ .seconds = 0, .micros = 1_000_000 }));
 }

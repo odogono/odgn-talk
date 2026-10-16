@@ -20,7 +20,7 @@ test "a Command Call's clause is charged with its body's first instruction" {
     // that faults, so that clause is never charged: 4 + 199 * 8 + 198 * 4.
     try testing.expect(try g.load("s", "on spin\n  spin\nend spin\n", .{}) == .loaded);
     _ = try g.deliver("s", "spin", &.{}, false);
-    try g.pump(.{ .seconds = 1790000000, .nanos = 0 });
+    try g.pump(.{ .seconds = 1790000000, .micros = 0 });
     const trace = out.written();
     if (std.mem.indexOf(u8, trace, "run s/r1 outcome=limit-fault delivery=d1 handler=spin limit=depth fuel=2388 alloc=0") == null) {
         std.debug.print("{s}\n", .{trace});

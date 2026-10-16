@@ -43,7 +43,7 @@ import {
 } from '../group';
 import { defaultLimits } from '../machine';
 import { compileLibrary, type Library } from '../library';
-import { textForm, waitNs } from '../operations';
+import { textForm, waitUs } from '../operations';
 import { parseEntry, parseSource } from '../parser';
 import { functionDoc, leadingDoc } from '../documentation';
 import {
@@ -94,7 +94,7 @@ export type SessionEnvironment = {
   /** Fresh, deterministic immediate Host capabilities, also supplied during replay.
    * They must not perform external I/O; their state belongs to this session. */
   capabilities?(): readonly CapabilityDef<unknown>[];
-  /** A real Clock reading, in epoch nanoseconds. */
+  /** A real Clock reading, in epoch microseconds. */
   now(): bigint;
   /** Initial bindings and all later objects/actions use the recording adapter. */
   objects?(context: SessionObjects): Record<string, HostObject>;
@@ -1491,16 +1491,16 @@ export class SessionHost {
       if (this.virtual === null) {
         refuse('clock is real');
       }
-      let ns: bigint;
+      let us: bigint;
       try {
-        ns = waitNs(display(arg));
+        us = waitUs(display(arg));
       } catch {
         return refuse('bad arguments');
       }
-      if (ns < 0n) {
+      if (us < 0n) {
         refuse('bad arguments');
       }
-      this.virtual! += ns;
+      this.virtual! += us;
       return this.pump();
     }
     return refuse('bad arguments');

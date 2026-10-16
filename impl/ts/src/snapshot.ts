@@ -18,7 +18,7 @@ import { lowerTree } from './lowering';
 import { codeDoc } from './documentation';
 import { functionHead } from './code-unit';
 
-export const saveFormatVersion = 7;
+export const saveFormatVersion = 8;
 
 type Atom = boolean | number | string | null | [string, (string | number)?];
 type Node = { data: unknown; kind: string };

@@ -105,7 +105,7 @@ class Host:
 
     def pump(self, group, seconds):
         # talk_pump_result: state, has_next_deadline, next_deadline_seconds
-        # at 8, next_deadline_nanos at 16, fuel_used at 24, reports at 32.
+        # at 8, next_deadline_micros at 16, fuel_used at 24, reports at 32.
         result = self.out(40)
         code = self.call("talk_pump", group, seconds, 0, 0, result)
         fuel = struct.unpack("<q", self.read(result + 24, 8))[0]

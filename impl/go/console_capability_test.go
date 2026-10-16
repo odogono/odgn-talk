@@ -88,7 +88,7 @@ func TestConsoleFactoryLibraryWriteAndQueuedReadUseCaller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 10, 2, 12, 0, 0, 123456789, time.UTC)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 123456000, time.UTC)
 	first, err := g.Pump(now, PumpOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestConsoleFactoryReadDeadlineAndCancellation(t *testing.T) {
 			if !first.NextDeadline.Equal(deadline) {
 				t.Fatal(first)
 			}
-			if _, err = g.Pump(deadline.Add(-time.Nanosecond), PumpOptions{}); err != nil {
+			if _, err = g.Pump(deadline.Add(-time.Microsecond), PumpOptions{}); err != nil {
 				t.Fatal(err)
 			}
 			select {

@@ -961,7 +961,7 @@ Save refuses a preempted Run with live scope slots without abandoning them.
 ### Clock and Timer Standard Capabilities
 
 `Core.ClockCapability(Costs)` supplies the fixed immediate `now` Operation. It
-returns the Pump's Clock reading as an Instant, including nanoseconds, through
+returns the Pump's Clock reading as an Instant, truncated to whole microseconds, through
 an ordinary named Grant. It never reads the Host's wall clock.
 
 `Core.TimerCapability(TimerImpl, Costs)` supplies the fixed fire-and-forget
@@ -1245,7 +1245,7 @@ exact costs, movement order, Targets, Stop reports and Verdicts.
 
 Duration waits retain heap frames and release the Script to run other queued
 work. Their deadlines use the Pump's Clock reading plus an exact duration,
-rounded to whole nanoseconds, half even. Due timers enter the work queue after
+rounded to whole microseconds, half even. Due timers enter the work queue after
 Host inputs, ordered by deadline and then creation. Zero and negative waits
 resume only in a later Pump. `NextDeadline` reports the earliest retained timer.
 Inspection lists suspended and ready Runs in start order; Persistent State
@@ -1559,7 +1559,7 @@ shrink the gate. Five reviewed Core-error cases also pin retained error-map
 sizes, and two new error-delivery regressions agree on both Cores. Four
 reviewed wait cases pin zero waits, deadlines, rollback and nested frames.
 Two new suspension regressions also agree on both Cores, covering work ordering,
-cap-held resumptions, nanosecond rounding and long durations. The maintainer
+cap-held resumptions, duration rounding and long durations. The maintainer
 approved the first blessings of these four regressions on 2026-10-05; see the
 [step-3 approval record](../../docs/reviews/step-three-blessings/README.md). The reviewed Queueing Policy case also passes; two new
 policy regressions agree on both Cores before blessing, covering selected
@@ -1651,7 +1651,7 @@ test requires all four in the gate.
 
 Three reviewed Standard Capability cases pass unchanged: `standard-clock`,
 `standard-clock-fuel` and `standard-timer` under `capabilities/`. A separate
-acceptance test requires them in the gate, pinning nanosecond readings through
+acceptance test requires them in the gate, pinning microsecond readings through
 Library calls, declared cost rollback, Timer Host charges and ordinary Deliveries.
 
 The reviewed `standard-console`, `standard-console-timeout` and

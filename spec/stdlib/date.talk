@@ -18,31 +18,31 @@ function makeDate y, m, d
   return (dateText(y, m, d)) as civil date
 end makeDate
 
---| The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `ns` nanoseconds
-function makeDateTime y, m, d, h, mi, s = 0, ns = 0
+--| The date-time `y`-`m`-`d` at `h`:`mi`:`s` and `us` microseconds
+function makeDateTime y, m, d, h, mi, s = 0, us = 0
   needNumber(y)
   needNumber(m)
   needNumber(d)
   needNumber(h)
   needNumber(mi)
   needNumber(s)
-  needNumber(ns)
+  needNumber(us)
   checkDate(y, m, d)
-  checkTime(h, mi, s, ns)
+  checkTime(h, mi, s, us)
   put dateText(y, m, d) & "T" & two(h) & ":" & two(mi) & ":" & two(s) into written
-  if ns > 0 then put "." & padLeft(truncate(ns) as text, 9, "0") after written
+  if us > 0 then put "." & padLeft(truncate(us) as text, 6, "0") after written
   return written as civil date
 end makeDateTime
 
---| The date-time on the date of `d` at `h`:`mi`:`s` and `ns` nanoseconds
-function atTime d, h, mi, s = 0, ns = 0
+--| The date-time on the date of `d` at `h`:`mi`:`s` and `us` microseconds
+function atTime d, h, mi, s = 0, us = 0
   needCivil(d)
   needNumber(h)
   needNumber(mi)
   needNumber(s)
-  needNumber(ns)
+  needNumber(us)
   if hasTime(d) then outOfDomain("atTime", d)
-  return makeDateTime(year(d), month(d), day(d), h, mi, s, ns)
+  return makeDateTime(year(d), month(d), day(d), h, mi, s, us)
 end atTime
 
 --| The date of the Civil Date `d`, without its time of day
@@ -70,11 +70,11 @@ private function checkDate y, m, d
   checkField("day", d, 1, monthLength(y, m))
 end checkDate
 
-private function checkTime h, mi, s, ns
+private function checkTime h, mi, s, us
   checkField("hour", h, 0, 23)
   checkField("minute", mi, 0, 59)
   checkField("second", s, 0, 59)
-  checkField("nanosecond", ns, 0, 999999999)
+  checkField("microsecond", us, 0, 999999)
 end checkTime
 
 -- A field that isn't an integer in its range raises `out of range`, and is
@@ -112,7 +112,7 @@ function formatDate d, template
     if piece is a text then
       put piece after parts
     else if the token of piece = "fraction" then
-      put characters 1..(the width of piece) of padLeft(nanosecond(d) as text, 9, "0") after parts
+      put characters 1..(the width of piece) of padLeft(microsecond(d) as text, 6, "0") after parts
     else
       put fieldOf(d, the token of piece) as text into digits
       if the width of piece is not nothing then put padLeft(digits, the width of piece, "0") into digits
@@ -151,7 +151,7 @@ function parseDate t, template
       if the width of piece is not nothing and the length of digits < the width of piece then noMatch(t, template, i)
       if the token of piece = "weekday" then put start into weekdayAt
       if the token of piece = "fraction" then
-        put (digits as number) * 10 ^ (9 - the width of piece) into the nanosecond of found
+        put (digits as number) * 10 ^ (6 - the width of piece) into the microsecond of found
       else if the length of digits > 34 then
         outOfRange(the token of piece, digits)
       else
@@ -165,9 +165,9 @@ function parseDate t, template
   else
     put 0 into s
     if the second of found is not nothing then put the second of found into s
-    put 0 into ns
-    if the nanosecond of found is not nothing then put the nanosecond of found into ns
-    put makeDateTime(the year of found, the month of found, the day of found, the hour of found, the minute of found, s, ns) into result
+    put 0 into us
+    if the microsecond of found is not nothing then put the microsecond of found into us
+    put makeDateTime(the year of found, the month of found, the day of found, the hour of found, the minute of found, s, us) into result
   end if
   if weekdayAt > 0 and weekday(result) <> the weekday of found then noMatch(t, template, weekdayAt)
   return result
@@ -206,7 +206,7 @@ private function readTemplate template, fn
       end if
       if token is not in ["year", "month", "day", "hour", "minute", "second", "weekday", "fraction"] then outOfDomain(fn, template)
       if token is in seen then outOfDomain(fn, template)
-      if token = "fraction" and (width is nothing or width > 9) then outOfDomain(fn, template)
+      if token = "fraction" and (width is nothing or width > 6) then outOfDomain(fn, template)
       put token after seen
       if literal is not empty then put literal after pieces
       put "" into literal

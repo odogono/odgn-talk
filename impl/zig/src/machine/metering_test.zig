@@ -6,7 +6,7 @@ const model = @import("../value.zig");
 const snapshot = @import("snapshot.zig");
 const fingerprint = @import("fingerprint.zig");
 const t = std.testing;
-const clock: model.dates.Instant = .{ .seconds = 0, .nanos = 0 };
+const clock: model.dates.Instant = .{ .seconds = 0, .micros = 0 };
 const source = "script variable committed = 0\non go\n  put 1 into committed\n  ask api to fetch and wait\n  return it\nend go\n";
 
 const Host = struct {
@@ -213,7 +213,7 @@ test "accepted charge then due timeout is paid and not refunded" {
     _ = try g.deliver("s", "go", &.{}, false);
     try g.pump(clock);
     const q = try g.requestCharge(h.calls.items[0].id, 31);
-    try g.pump(.{ .seconds = 1, .nanos = 0 });
+    try g.pump(.{ .seconds = 1, .micros = 0 });
     try t.expectEqual(caps.ChargeStatus.accepted, q.status);
     try t.expect(q.done.load(.acquire));
     try t.expect(h.calls.items[0].abandoned.load(.acquire));

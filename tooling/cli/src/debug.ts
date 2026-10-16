@@ -46,7 +46,7 @@ export const debugScript = async (
   });
   const script = group.load({ name, source });
   const debug = new LiveDebugger(group, {
-    now: () => BigInt(Date.now()) * 1_000_000n,
+    now: () => BigInt(Date.now()) * 1000n,
   });
   debug.registerSource(compileSource(source, { name }).unit!, name);
   const rl = createInterface({

@@ -17,7 +17,7 @@ func (c *Core) ClockCapability(costs Costs) (*CapabilityDef, error) {
 	return c.DefineCapability("clock", Operation{
 		Name: "now", Mode: Immediate, Result: InstantShape, Cost: cost, Errors: []ErrorDecl{},
 		Do: func(call *Call, _ []Value) (Value, error) {
-			return Instant(call.Now().Unix(), int32(call.Now().Nanosecond()))
+			return Instant(call.Now().Unix(), int32(call.Now().Nanosecond()/1000))
 		},
 	})
 }

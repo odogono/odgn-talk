@@ -464,7 +464,7 @@ pub fn parse(a: std.mem.Allocator, input: []const u8, resolver: Resolver) model.
 }
 test "every data kind display round trips, hidden scalars and quoted keys" {
     const a = std.testing.allocator;
-    for ([_][]const u8{ "nothing", "true", "false", "7.50", "2.50 GBP", "3 days", "<<0x0D, 0x0A>>", "[nothing, {a: 1, \"offer\": 2}]", "3 m..7 cm", "2026-09-27T14:30:00.5", "1969-12-31T23:59:59.999999999Z", "\"say \" & quote & \"hi\" & quote", "{\"\" & quote: newline & tab & fromCodePoint(13)}" }) |s| {
+    for ([_][]const u8{ "nothing", "true", "false", "7.50", "2.50 GBP", "3 days", "<<0x0D, 0x0A>>", "[nothing, {a: 1, \"offer\": 2}]", "3 m..7 cm", "2026-09-27T14:30:00.5", "1969-12-31T23:59:59.999999Z", "\"say \" & quote & \"hi\" & quote", "{\"\" & quote: newline & tab & fromCodePoint(13)}" }) |s| {
         const v = try parse(a, s, .{});
         defer v.release();
         const rendered = try string(a, v);

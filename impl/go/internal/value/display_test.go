@@ -7,7 +7,7 @@ import (
 )
 
 func TestDisplayRoundTrips(t *testing.T) {
-	for _, s := range []string{`nothing`, `true`, `2.50`, `"a" & newline & quote & fromCodePoint(8206)`, `"C:\new"`, `{if: true, "" & quote: 1, "unit price": 2.50 GBP}`, `<<0x0D, 0x0A>>`, `[1, "a", [nothing]]`, `3 m/s..7 m/s`, `2026-09-27T14:30:00.5`, `1969-12-31T23:59:59.999999999Z`, `<"ID-", 4 digits>`, `< <4 digits>, "x">`, `<last: word, ", ", first: word>`} {
+	for _, s := range []string{`nothing`, `true`, `2.50`, `"a" & newline & quote & fromCodePoint(8206)`, `"C:\new"`, `{if: true, "" & quote: 1, "unit price": 2.50 GBP}`, `<<0x0D, 0x0A>>`, `[1, "a", [nothing]]`, `3 m/s..7 m/s`, `2026-09-27T14:30:00.5`, `1969-12-31T23:59:59.999999Z`, `<"ID-", 4 digits>`, `< <4 digits>, "x">`, `<last: word, ", ", first: word>`} {
 		v, e := ParseDisplay(s, nil)
 		if e != nil {
 			t.Fatal(s, e)

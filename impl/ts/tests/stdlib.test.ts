@@ -214,7 +214,7 @@ describe('the stdlib Libraries', () => {
     // date
     [
       '[makeDate(2026, 9, 27), makeDateTime(2026, 9, 27, 14, 5), atTime(makeDate(2026, 1, 1), 9, 30, 15, 500)]',
-      '[2026-09-27, 2026-09-27T14:05:00, 2026-01-01T09:30:15.0000005]',
+      '[2026-09-27, 2026-09-27T14:05:00, 2026-01-01T09:30:15.0005]',
     ],
     [
       'makeDate(2026, 2, 30)',
@@ -245,7 +245,7 @@ describe('the stdlib Libraries', () => {
       '"27/09/2026 14:05"',
     ],
     [
-      'formatDate(makeDateTime(2026, 1, 1, 1, 2, 3, 123456789), "${year}${month}${day}${hour}${minute}${second}.${fraction:3} ${weekday}")',
+      'formatDate(makeDateTime(2026, 1, 1, 1, 2, 3, 123456), "${year}${month}${day}${hour}${minute}${second}.${fraction:3} ${weekday}")',
       '"202611123.123 4"',
     ],
     [

@@ -131,6 +131,7 @@ counters/lifetime
 counters/variables-only
 dates/civil-arithmetic
 dates/instants-and-offsets
+dates/microsecond-resolution
 dates/value-encoding
 decisions/allow-at-the-first-suspension-point
 decisions/broadcast-decision-reports-every-veto

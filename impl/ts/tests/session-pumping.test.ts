@@ -17,7 +17,7 @@ const bellSession = () => {
   let reads = 0;
   let clock = 0n;
   const host = new SessionHost({
-    now: () => (clock += 1_000_000_000n),
+    now: () => (clock += 1_000_000n),
     record: i => items.push(i),
     objects: c => {
       const kind = c.defineKind({
@@ -84,7 +84,7 @@ test('Notifications pump again at the same Clock reading until a Pump leaves non
   const items: TranscriptItem[] = [];
   let clock = 0n;
   const host = new SessionHost({
-    now: () => (clock += 1_000_000_000n),
+    now: () => (clock += 1_000_000n),
     record: i => items.push(i),
   });
   host.input(':grant n store');

@@ -69,7 +69,7 @@ export type SessionDriverOptions = {
    * other way. `:help` leaves `:quit` out.
    */
   noQuit?: string;
-  /** The Host's Clock reading, in epoch nanoseconds. */
+  /** The Host's Clock reading, in epoch microseconds. */
   now(): bigint;
   /** Timers for the sleeping Foreground Run and for background deadlines. */
   timer: DriverTimer;
@@ -337,7 +337,7 @@ export class SessionDriver {
   }
 
   private wake(at: bigint, fired: () => void): () => void {
-    const ms = Math.max(0, Number((at - this.options.now()) / 1_000_000n));
+    const ms = Math.max(0, Number((at - this.options.now()) / 1000n));
     return this.options.timer(ms, () => {
       fired();
       this.output(this.session.tick());

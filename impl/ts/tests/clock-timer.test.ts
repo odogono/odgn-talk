@@ -19,7 +19,7 @@ import {
   type Value,
 } from '../src/index';
 
-const now = parseInstant('2026-10-02T10:00:00.123456789Z');
+const now = parseInstant('2026-10-02T10:00:00.123456Z');
 const timerCosts = { schedule: { fuel: 10, alloc: 3 }, cancel: { fuel: 2 } };
 const noTimers: TimerImpl = { schedule: () => {}, cancel: () => {} };
 const codes = (work: () => unknown) => {
@@ -84,8 +84,8 @@ test('clock.now returns each Pump Clock through an ordinary Grant and costs its 
   expect(first.fuel - base.fuel).toBe(7);
   expect(first.alloc - base.alloc).toBe(2);
   expect(lines.filter(line => line.startsWith('call '))).toEqual([
-    'call s/r1.c1 op=stamp.now args=[] result=2026-10-02T10:00:00.123456789Z',
-    'call s/r2.c1 op=stamp.now args=[] result=2026-10-02T10:00:00.12345679Z',
+    'call s/r1.c1 op=stamp.now args=[] result=2026-10-02T10:00:00.123456Z',
+    'call s/r2.c1 op=stamp.now args=[] result=2026-10-02T10:00:00.123457Z',
   ]);
 });
 

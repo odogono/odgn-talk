@@ -12,7 +12,7 @@ const start = parseInstant('2026-09-30T10:00:00Z');
 // A Session Host and its driver over a fake Clock and fake timers.
 const driven = (options: Partial<SessionDriverOptions> = {}) => {
   let ms = 0;
-  const now = () => start + BigInt(ms) * 1_000_000n;
+  const now = () => start + BigInt(ms) * 1000n;
   const timers: { at: number; fire: () => void }[] = [];
   const host = new SessionHost({ now });
   const events: DriverEvent[] = [];

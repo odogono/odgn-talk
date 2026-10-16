@@ -67,7 +67,7 @@ describe('autoDrive', () => {
   });
 
   test('a supplied clock and deadline scheduler replace the defaults', async () => {
-    let now = 1_000_000_000_000n;
+    let now = 1_000_000_000n;
     let fire: (() => void) | undefined;
     let at: bigint | undefined;
     const { drive, lines, script } = driven(
@@ -84,7 +84,7 @@ describe('autoDrive', () => {
     const result = script.request({ name: 'go', args: [] }).result;
     await drive.idle();
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(at).toBe(now + 1_000_000_000n);
+    expect(at).toBe(now + 1_000_000n);
     now = at!;
     fire!();
     expect((await result).toString()).toBe('7');
@@ -92,7 +92,7 @@ describe('autoDrive', () => {
   });
 
   test('readings never go backwards', async () => {
-    let now = 2_000_000_000_000n;
+    let now = 2_000_000_000n;
     const errors: unknown[] = [];
     const { drive, lines, script } = driven('on go\nend go', {
       clock: () => now,
@@ -100,7 +100,7 @@ describe('autoDrive', () => {
     });
     script.deliver({ name: 'go', args: [] });
     await drive.idle();
-    now -= 1_000_000_000n;
+    now -= 1_000_000n;
     script.deliver({ name: 'go', args: [] });
     await new Promise(resolve => setTimeout(resolve, 0));
     await drive.idle();

@@ -59,8 +59,8 @@ describe('save and full restore', () => {
     expect(copy.fingerprint()).toEqual(g.fingerprint());
     original.length = 0;
     resumed.length = 0;
-    g.pump(3_000_000_000n);
-    copy.pump(3_000_000_000n);
+    g.pump(3_000_000n);
+    copy.pump(3_000_000n);
     expect(output(resumed)).toEqual(output(original));
     expect(copy.script('s')!.deliver({ name: 'go' })).toBe(
       g.script('s')!.deliver({ name: 'go' }),
@@ -170,7 +170,7 @@ describe('pending calls after restore', () => {
     expect(() => copy.settle('shop/r1.c1', { adopt: true })).toThrow(
       'unknown call',
     );
-    copy.pump(60_000_000_000n);
+    copy.pump(60_000_000n);
     expect(copy.inspect().scripts[0]!.vars[0]![1].toString()).toBe(
       '["out of stock", 12, "call lost"]',
     );
@@ -208,11 +208,11 @@ describe('pending calls after restore', () => {
     const adopted = copy.settle('s/r2.c1', { adopt: true })!;
     expect(adopted.id).toBe('s/r2.c1');
     expect(calls).toHaveLength(2);
-    expect(copy.pump(5_000_000_000n).fuelUsed).toBe(0);
+    expect(copy.pump(5_000_000n).fuelUsed).toBe(0);
     expect(calls[2]!.id).toBe('s/r1.c1');
-    expect(calls[2]!.now).toBe(5_000_000_000n);
+    expect(calls[2]!.now).toBe(5_000_000n);
     adopted.answer(num(7));
-    const r = operationalReports(copy.pump(6_000_000_000n).reports)[0]!;
+    const r = operationalReports(copy.pump(6_000_000n).reports)[0]!;
     expect(r).toMatchObject({ delivery: 'd2', outcome: 'completed' });
   });
 });
@@ -613,6 +613,10 @@ test('checksummed malformed graphs and unsupported formats are invalid saves', (
     (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
       s.format = 4;
     },
+    // Format 7 held nanosecond Instants and Civil Dates (ADR 0091).
+    (s: { format: number; graph: { nodes: { data: unknown }[] } }) => {
+      s.format = 7;
+    },
   ]) {
     const outer = JSON.parse(new TextDecoder().decode(bytes));
     const saved = JSON.parse(outer.payload);
@@ -748,7 +752,7 @@ test('Stop inside reissue lands after its crossing and before due waits run', ()
   });
   stopping.group = copy;
   copy.settle('s/r1.c1', { reissue: true });
-  copy.pump(2_000_000_000n);
+  copy.pump(2_000_000n);
   expect(lines.some(line => line.startsWith('seg s/r2 resume'))).toBe(false);
   const crossing = lines.findIndex(line => line.startsWith('call s/r1.c1'));
   expect(lines[crossing + 1]).toBe('> stop s reason="done"');
@@ -775,7 +779,7 @@ test('a backwards restored Pump records its refusal and keeps queued work', () =
   copy.script('s')!.deliver({ name: 'go' });
   expect(() => copy.pump(4n)).toThrow('clock backwards');
   expect(lines.slice(-2)).toEqual([
-    '> pump clock=1970-01-01T00:00:00.000000004Z',
+    '> pump clock=1970-01-01T00:00:00.000004Z',
     'refused code="clock backwards"',
   ]);
   expect(operationalReports(copy.pump(5n).reports)[0]).toMatchObject({

@@ -72,7 +72,7 @@ describe('Broadcast and cancellation', () => {
     expect(await sealed.decided).toMatchObject({ verdict: 'allowed' });
     const before = trace.length;
     sealedAbort.abort();
-    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000n).reports)).toMatchObject([
       { outcome: 'completed' },
     ]);
     expect(
@@ -189,7 +189,7 @@ describe('Broadcast and cancellation', () => {
     ]);
     await expectSendFailed(request.result, 'stopped');
     s.deliver({ name: 'go' });
-    expect(g.pump(2_000_000_000n).state).toBe('stopped');
+    expect(g.pump(2_000_000n).state).toBe('stopped');
     expect(vars(g)).toEqual([['n', '0']]);
     expect(trace.some(l => l.startsWith('run '))).toBe(false);
   });
@@ -231,8 +231,8 @@ describe('Queueing Policies', () => {
       ['s/r1', 'suspended'],
       ['s/r2', 'parked'],
     ]);
-    g.pump(1_000_000_000n);
-    g.pump(2_000_000_000n);
+    g.pump(1_000_000n);
+    g.pump(2_000_000n);
     expect(vars(g)).toEqual([['got', '[9, 1, 2]']]);
     expect(
       trace.some(l => l.startsWith('seg s/r2 start') && l.endsWith('end=park')),
@@ -523,7 +523,7 @@ describe('cancellation boundaries', () => {
     ]);
     await expectSendFailed(request.result, 'cancelled');
     expect(trace).toContain('abandon front/r1.c1');
-    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000n).reports)).toMatchObject([
       { script: 'back', outcome: 'completed' },
     ]);
     expect(vars(g, 1)).toEqual([['n', '1']]);
@@ -592,7 +592,7 @@ describe('cancellation boundaries', () => {
     s.deliver({ name: 'go', args: [num(2)] });
     s.deliver({ name: 'call' });
     expect(operationalReports(g.pump(0n).reports)).toEqual([]);
-    g.pump(1_000_000_000n);
+    g.pump(1_000_000n);
     expect(vars(g)).toEqual([['n', '8']]);
   });
 
@@ -710,7 +710,7 @@ describe('cancellation boundaries', () => {
       verdict: 'undecided',
       undecided: [{ script: 'b', run: 'b/r1', outcome: 'cancelled' }],
     });
-    expect(operationalReports(g.pump(1_000_000_000n).reports)).toMatchObject([
+    expect(operationalReports(g.pump(1_000_000n).reports)).toMatchObject([
       { outcome: 'completed', script: 'a' },
     ]);
     expect(vars(g)).toEqual([['n', '1']]);
@@ -796,8 +796,8 @@ describe('cancellation boundaries', () => {
       'suspended',
       'parked',
     ]);
-    g.pump(1_000_000_000n);
-    g.pump(2_000_000_000n);
+    g.pump(1_000_000n);
+    g.pump(2_000_000n);
     expect(vars(g)).toEqual([['n', '32']]);
   });
 

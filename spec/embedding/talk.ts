@@ -6,7 +6,7 @@
 // This file mirrors talk.go call for call. The differences are idiom only
 // (ADR 0015): exceptions instead of error values, an optional
 // Promise-returning `run` beside `start`/`answer`, AbortSignal instead of
-// context, bigint epoch nanoseconds instead of time.Time, and maps built from
+// context, bigint epoch microseconds instead of time.Time, and maps built from
 // Map or record() instead of pairs. None of them can be observed by a Script.
 // Chapter 9 of the spec (09-embedding.md) holds the Host error catalogue and
 // the Operation naming guide.
@@ -85,7 +85,7 @@ export declare class Value {
   asDecimal(): Decimal | undefined;
   asQuantity(): { number: Decimal; unit: string } | undefined;
   asCivilDate(): DateFields | undefined;
-  asInstant(): bigint | undefined; // epoch nanoseconds
+  asInstant(): bigint | undefined; // epoch microseconds
   asBytes(): Uint8Array | undefined; // a copy
   asObject(): HostObject | undefined;
   asRange(): { from: Value; to: Value } | undefined;
@@ -116,7 +116,7 @@ export declare class Decimal {
 
 export interface DateFields {
   year: number; month: number; day: number;
-  hour?: number; minute?: number; second?: number; nanosecond?: number;
+  hour?: number; minute?: number; second?: number; microsecond?: number;
 }
 
 export declare const nothing: Value;
@@ -126,7 +126,7 @@ export declare function num(n: number | bigint): Value; // shortest round-trip; 
 export declare function dec(s: string): Value;     // the `as number` grammar
 export declare function quantity(n: Decimal, unit: string): Value;
 export declare function civilDate(f: DateFields | string): Value; // fields, or the `as civil date` grammar
-export declare function instant(epochNanos: bigint): Value;       // JS Date is never accepted
+export declare function instant(epochMicros: bigint): Value;       // JS Date is never accepted
 export declare function bytes(b: Uint8Array): Value;              // copied in
 export declare function list(...vs: Value[]): Value;
 /** Two numbers, or two Quantities of one dimension, kept as given (ADR 0034). */
@@ -616,7 +616,7 @@ export interface Group {
   decideBroadcast(m: Message, o?: { signal?: AbortSignal }): Deciding;
   /** Queued. A Host call of a Function Value, shaped like request. */
   call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
-  /** Worker. Synchronous. now is epoch nanoseconds; earlier than the last Pump's throws. */
+  /** Worker. Synchronous. now is epoch microseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
   /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
   save(): Uint8Array;

@@ -1052,7 +1052,7 @@ export const builtins = [
     }
   },
   {
-    "name": "nanosecond",
+    "name": "microsecond",
     "kind": "function",
     "contract": {
       "required": 1,

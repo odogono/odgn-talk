@@ -1,0 +1,14 @@
+# microsecond-resolution: times are whole microseconds (spec chapter 3, Dates
+# and times; ADR 0091). The microsecond field, six-digit fractions, half-even
+# rounding of durations, and the refusals of a seventh fraction digit, a
+# seventh ${fraction:n} digit and a microsecond out of range.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "micro"
+source = "micro.talk"
