@@ -60,7 +60,7 @@ Each window has a separate language-server workspace with a live Host Manifest
 from [`src/script-manifest.ts`](src/script-manifest.ts). Page and Element
 Scripts bind that Page's Elements, `thisPage` and `project`; every Script
 also binds every Page name. The Manifests describe the `pages`, `elements` and `sound` Grants
-from ADR 0084; all three are available during Play (see [Sounds](#sounds)). Renames refresh open windows' Manifests and diagnostics. Problems
+from ADR 0084, and the `user` Standard Capability; all four are available during Play (see [Sounds](#sounds) and [Asking the reader](#asking-the-reader)). Renames refresh open windows' Manifests and diagnostics. Problems
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
@@ -466,8 +466,8 @@ Page's names and every Grant, and their effects are Play State. In Edit, the
 command runs in a session copied from the Project that sends no events; when
 it finishes, its changes become one undoable authored edit, Script windows
 stay attached, and a navigation moves the editor to that Page. A failing
-command changes nothing and prints its error and line; waits only run while
-browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
+command changes nothing and prints its error and line; waits and `user`
+prompts only run while browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
 DOM.
 
 The Message Box is a code window like a Script's, built from the same parts in
@@ -557,6 +557,37 @@ handlers, Page cancellation and Project continuity. The browser checks below
 exercise visible delayed writes and cancellation through navigation, Stop
 and Escape with the real scheduler.
 
+### Asking the reader
+
+Every Script, and every Message Box command while browsing, gets Chapter 7's
+`user` Grant ([#1026](https://github.com/odogono/odgn-talk/issues/1026)):
+
+```talk
+on click
+  ask user to confirm "Start again?" and wait
+  if not it then return
+  ask user to choose ["Red", "Blue"], {prompt: "Pick a colour"} and wait
+  if it is nothing then return
+  set the fill of me to it
+  ask user to enter "Your name", {default: "Reader"} and wait
+  tell user to notify "Hello, " & it, {title: "Welcome"}
+end click
+```
+
+`confirm`, `choose` and `enter` show a dialog over the Page and suspend only
+the Run that asked. OK answers; Cancel or Escape gives `false` to `confirm`
+and Nothing to `choose` and `enter`, and Escape in a dialog doesn't leave
+Play. `choose` shows radio buttons, or checkboxes with `multiple: true`.
+`notify` shows a notice at the top of the Page for a few seconds and waits for
+nobody.
+
+One Script can have one prompt waiting: its next `confirm`, `choose` or
+`enter` fails with `user busy`. Prompts from different Scripts queue and are
+shown oldest first. A prompt whose Run ends without an answer, by a Timeout
+Block, leaving its Page, Stop, Escape or Back to Edit, is taken down. The
+prompts live on the Play Session in [`src/play.ts`](src/play.ts), tested
+without a DOM, and the dialog in [`src/play-prompts.ts`](src/play-prompts.ts).
+
 ### Browser checks
 
 Browser regression checks run on a dedicated page without `main.js`:
@@ -571,6 +602,8 @@ Open `/play-test.html` and run
 Reload before repeating; the result must have `passed: true`. After another
 reload, run `await import('/play.browser.js').then(m => m.runElementsBrowserTests())`
 for dynamic creation, cloned Scripts, deletion, name reuse and Edit restoration.
+After another reload, run `await import('/play.browser.js').then(m => m.runUserBrowserTests())`
+for `user` prompts, notices, Escape and Cancel, and Stop taking a prompt down.
 
 Reader text unit tests cover formatting, `textChanged`, isolation, undo/redo,
 Script replacements and disabled input. The browser suite also checks real

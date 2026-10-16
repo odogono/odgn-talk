@@ -8,6 +8,7 @@ import { ErrorsWindow } from './errors';
 import { mountMessageWindow } from './message-window';
 import { type Element, type TextElement } from './model';
 import { PlaySession } from './play';
+import { mountPlayPrompts } from './play-prompts';
 import { ReaderTextHistory } from './play-text';
 import { browserSoundBackend } from './sounds';
 import { renderElement, type PlayMode, type StackShell } from './stack';
@@ -67,6 +68,8 @@ export const mountPlay = (shell: StackShell): void => {
   // the scaled Page fits its width (as the editor's stage does).
   const scaler = h('div', { class: 'play-scale' }, pageNode);
   reader.append(scaler);
+  // `user` prompts cover the Page, unscaled, and answering resumes Play.
+  const prompts = mountPlayPrompts(scaler, () => schedule());
   const toolbar = byId('text-toolbar').cloneNode(true) as HTMLElement;
   toolbar.id = 'play-text-toolbar';
   toolbar.hidden = true;
@@ -271,6 +274,7 @@ export const mountPlay = (shell: StackShell): void => {
         node.setAttribute('role', 'button');
       }
     }
+    prompts.draw(play);
     play.changed = false;
   };
   const showProblems = () => {
@@ -345,6 +349,7 @@ export const mountPlay = (shell: StackShell): void => {
     session = undefined;
     mode = undefined;
     histories.clear();
+    prompts.clear();
     reader.hidden = true;
     pageNode.replaceChildren();
     drawModes();
@@ -422,7 +427,8 @@ export const mountPlay = (shell: StackShell): void => {
     }
   });
   document.addEventListener('keydown', event => {
-    if (!session) {
+    // A prompt's keys, Escape included, answer the prompt.
+    if (!session || prompts.contains(event.target as Node)) {
       return;
     }
     // While browsing, Esc in a Script window or menu stays with it.
