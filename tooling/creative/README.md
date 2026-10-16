@@ -470,6 +470,18 @@ command changes nothing and prints its error and line; waits only run while
 browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
 DOM.
 
+The Message Box is a code window like a Script's, built from the same parts in
+[`src/code-window.ts`](src/code-window.ts): it resizes from its corner, and its
+editor has the same completion (⌃Space), hover and diagnostics for the Page's
+names. The editor holds the whole Script a command runs as, with the lines
+around the command hidden and protected.
+
+HyperTalk-style `hide welcomeText` and `show welcomeText` come from Folio's
+`folio` Library ([`src/folio-library.ts`](src/folio-library.ts)), which every
+Play Session holds and the Message Box imports. An authored Script can use them
+with `use hide, show from folio`; Script windows' language servers know the
+Library too.
+
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element
 Scripts are stopped. Its visual changes remain for this Play Session.

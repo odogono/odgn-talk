@@ -348,35 +348,35 @@ button:disabled {
   color: white;
 }
 #message-window {
-  width: 26rem;
+  width: min(28rem, 100vw);
+  height: 14rem;
+  min-height: min(8rem, calc(100dvh - var(--window-top, 140px) - 8px));
 }
-#message-panel {
-  padding: 0.5rem;
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-}
-#message-log {
+#message-window .message-log {
+  flex: 1 1 4rem;
+  min-height: 2rem;
   list-style: none;
-  margin: 0 0 0.4rem;
-  padding: 0;
-  max-height: 9rem;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
   overflow-y: auto;
+  font:
+    0.8rem ui-monospace,
+    monospace;
   white-space: pre-wrap;
 }
-#message-log .command {
+#message-window .message-log .command {
   color: var(--muted);
 }
-#message-log .command::before {
+#message-window .message-log .command::before {
   content: '› ';
 }
-#message-log .error {
+#message-window .message-log .error {
   color: var(--error);
 }
-#message-input {
-  width: 100%;
-  font: inherit;
-  padding: 0.25rem 0.4rem;
-  border: 1.5px solid var(--line);
+#message-window .code-editor {
+  flex: 0 1 auto;
+  max-height: 40%;
+  border-top: 1px solid var(--line);
 }
 #errors-window {
   width: 24rem;
@@ -476,7 +476,12 @@ button:disabled {
 #info .suggestion button {
   font-family: ui-monospace, monospace;
 }
-.script-window {
+.code-window[hidden] {
+  display: none;
+}
+/* Script windows and the Message Box: resizable from the bottom-right
+   corner, with the editor taking the space the window gives it. */
+.code-window {
   display: flex;
   flex-direction: column;
   width: min(28rem, 100vw);
@@ -488,19 +493,19 @@ button:disabled {
   overflow: auto;
   resize: both;
 }
-.script-window > * {
+.code-window > * {
   flex-shrink: 0;
 }
-.script-editor {
+.code-editor {
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
-.script-editor .cm-editor {
+.code-editor .cm-editor {
   height: 100%;
   font-size: 13px;
 }
-.script-editor .cm-scroller {
+.code-editor .cm-scroller {
   overflow: auto;
 }
 .cm-scroller {

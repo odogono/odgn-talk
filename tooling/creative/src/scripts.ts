@@ -2,11 +2,14 @@
 // has its owner's Host Manifest, so unrelated Pages never leak names.
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
+import { diagnosticsSpec } from '@odgn/northtalk-editor/editor';
 import {
-  diagnosticsSpec,
-  northtalkEditor,
-} from '@odgn/northtalk-editor/editor';
-import { LspClient } from '@odgn/northtalk-editor/lsp-client';
+  codeEditor,
+  codeWindow,
+  languageServer,
+  showCodeWindow,
+  type LanguageServer,
+} from './code-window';
 import { h } from './dom';
 import { openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
@@ -24,17 +27,16 @@ export const bringWindowForward = (window: HTMLElement): void => {
 
 type OpenScript = {
   addAction: HTMLButtonElement;
-  configure: string;
   editing: Compartment;
-  lsp: LspClient;
+  manifest: string;
   node: HTMLElement;
   owner: ScriptOwner;
   path: HTMLElement;
   recipes: HTMLElement;
+  server: LanguageServer;
   title: HTMLElement;
   uri: string;
   view: EditorView;
-  worker: Worker;
 };
 
 export class ScriptWindows {
@@ -74,8 +76,8 @@ export class ScriptWindows {
       return;
     }
     this.#windows.delete(id);
-    win.lsp.close(win.uri);
-    win.worker.terminate();
+    win.server.lsp.close(win.uri);
+    win.server.dispose();
     win.view.destroy();
     win.node.remove();
   }
@@ -104,19 +106,21 @@ export class ScriptWindows {
       return;
     }
     const uri = `creative:///script-${id}.talk`;
-    const worker = new Worker('./lsp.worker.js', { type: 'module' });
-    const lsp = new LspClient(worker);
-    const title = h('span');
-    const close = h('button', {
-      type: 'button',
-      class: 'close',
-      'aria-label': 'Close Script',
+    const server = languageServer();
+    const { lsp } = server;
+    const { node, title, close } = codeWindow({
+      id: `script-window-${id}`,
+      className: 'script-window',
+      closeLabel: 'Close Script',
+      label: 'Script',
+      left: 140 + this.#windows.size * 24,
+      top: 140 + this.#windows.size * 24,
     });
     const path = h('nav', {
       class: 'message-path',
       'aria-label': 'Message Path',
     });
-    const parent = h('div', { class: 'script-editor' });
+    const parent = h('div', { class: 'code-editor script-editor' });
     const recipes = h('div');
     const addAction = h(
       'button',
@@ -134,62 +138,42 @@ export class ScriptWindows {
       { class: 'script-problems', role: 'status' },
       'Checking…',
     );
-    const node = h(
-      'section',
-      {
-        id: `script-window-${id}`,
-        class: 'window script-window',
-        'aria-label': 'Script',
-        'data-left': 140 + this.#windows.size * 24,
-        'data-top': 140 + this.#windows.size * 24,
-      },
-      h('div', { class: 'bar' }, close, title),
-      path,
-      addAction,
-      recipes,
-      parent,
-      problems,
-    );
-    document.body.append(node);
+    node.append(path, addAction, recipes, parent, problems);
     const editing = new Compartment();
-    const view = new EditorView({
+    const view = codeEditor({
       parent,
-      state: EditorState.create({
-        doc: owner.script ?? '',
-        extensions: [
-          lineNumbers(),
-          editing.of(EditorState.readOnly.of(this.editor.readOnly)),
-          ...northtalkEditor(
-            uri,
-            lsp,
-            {
-              changed: text => {
-                if (this.#syncing || this.editor.readOnly) {
-                  return;
-                }
-                const current = this.#owners().get(id);
-                if (!current) {
-                  return;
-                }
-                this.editor.edit(() => {
-                  current.script = text;
-                });
-                lsp.change(uri, text);
-                this.redraw();
-              },
-              goTo() {},
-              references(lines) {
-                problems.textContent = lines.join('\n');
-              },
-            },
-            [
-              { key: 'Mod-z', run: () => this.#history() },
-              { key: 'Mod-Shift-z', run: () => this.#history(true) },
-              { key: 'Mod-y', run: () => this.#history(true) },
-            ],
-          ),
-        ],
-      }),
+      doc: owner.script ?? '',
+      uri,
+      lsp,
+      extensions: [
+        lineNumbers(),
+        editing.of(EditorState.readOnly.of(this.editor.readOnly)),
+      ],
+      hooks: {
+        changed: text => {
+          if (this.#syncing || this.editor.readOnly) {
+            return;
+          }
+          const current = this.#owners().get(id);
+          if (!current) {
+            return;
+          }
+          this.editor.edit(() => {
+            current.script = text;
+          });
+          lsp.change(uri, text);
+          this.redraw();
+        },
+        goTo() {},
+        references(lines) {
+          problems.textContent = lines.join('\n');
+        },
+      },
+      bindings: [
+        { key: 'Mod-z', run: () => this.#history() },
+        { key: 'Mod-Shift-z', run: () => this.#history(true) },
+        { key: 'Mod-y', run: () => this.#history(true) },
+      ],
     });
     lsp.onDiagnostics = (target, diagnostics) => {
       if (target !== uri || !this.#windows.has(id)) {
@@ -207,23 +191,22 @@ export class ScriptWindows {
         : '✓ No problems';
     };
     this.#windows.set(id, {
-      configure: '',
+      manifest: '',
       owner,
       recipes,
       addAction,
       editing,
-      lsp,
+      server,
       node,
       path,
       title,
       uri,
       view,
-      worker,
     });
     close.addEventListener('click', () => this.close(id));
+    showCodeWindow({ node, title, close });
     this.sync();
     lsp.open(uri, owner.script ?? '');
-    node.dispatchEvent(new Event('script-window-opened', { bubbles: true }));
     this.#goTo(view, line ?? 1);
   }
 
@@ -303,10 +286,10 @@ export class ScriptWindows {
         }
         const manifest = scriptManifest(project, owner);
         const configure = JSON.stringify(manifest);
-        if (configure !== win.configure) {
+        if (configure !== win.manifest) {
           win.recipes.replaceChildren();
-          win.configure = configure;
-          win.lsp.configure({ manifest });
+          win.manifest = configure;
+          win.server.configure(manifest);
         }
         if (win.view.state.readOnly !== this.editor.readOnly) {
           win.view.dispatch({
@@ -320,7 +303,7 @@ export class ScriptWindows {
           win.view.dispatch({
             changes: { from: 0, to: win.view.state.doc.length, insert: text },
           });
-          win.lsp.change(win.uri, text);
+          win.server.lsp.change(win.uri, text);
         }
       }
     } finally {

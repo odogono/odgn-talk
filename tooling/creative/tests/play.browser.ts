@@ -522,3 +522,115 @@ end click`;
     ],
   };
 };
+
+export const runMessageBoxBrowserTests = async () => {
+  const project = createProject('Message Box');
+  const welcome = createElement('text', 'welcomeText');
+  project.pages[0]!.elements.push(welcome);
+  const shell = mountStack(project);
+  mountPlay(shell);
+  document.querySelector<HTMLButtonElement>('#show-message')!.click();
+  const win = document.querySelector<HTMLElement>('#message-window')!;
+  assert(win && !win.hidden, 'Message Box did not open');
+  assert(
+    win.classList.contains('code-window') &&
+      getComputedStyle(win).resize === 'both',
+    'Message Box is not a resizable code window',
+  );
+  const view = EditorView.findFromDOM(win.querySelector('.cm-editor')!)!;
+  const log = () =>
+    [...win.querySelectorAll('.message-log li')].map(li => li.textContent);
+  const type = (text: string) =>
+    view.dispatch({
+      changes: { from: view.state.selection.main.head, insert: text },
+    });
+  const enter = () =>
+    view.contentDOM.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+  assert(view.contentDOM.innerText.trim() === '', 'Wrapper lines are visible');
+
+  // Ctrl-Space completes the Page's names from the language server.
+  type('hide wel');
+  assert(
+    view.state.doc.toString().includes('hide wel'),
+    `Typing was refused at ${view.state.selection.main.head} in ${JSON.stringify(view.state.doc.toString())}`,
+  );
+  // Ask once the language server has the document, then wait for the list.
+  await new Promise(resolve => setTimeout(resolve, 300));
+  view.contentDOM.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+  );
+  await until(() =>
+    [...document.querySelectorAll('.cm-tooltip-autocomplete li')].some(li =>
+      li.textContent?.includes('welcomeText'),
+    ),
+  );
+
+  // The wrapper cannot be edited away.
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length } });
+  assert(
+    view.state.doc.toString().includes('on runMessage'),
+    'Typing removed the hidden wrapper',
+  );
+
+  // In Edit, `hide` changes the authored Element as one undoable edit.
+  view.dispatch({
+    changes: {
+      from: view.state.selection.main.head,
+      to: view.state.selection.main.head,
+    },
+  });
+  const { from, to } = (() => {
+    const doc = view.state.doc;
+    return { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+  })();
+  view.dispatch({
+    changes: { from, to, insert: 'hide welcomeText' },
+    selection: { anchor: from + 'hide welcomeText'.length },
+  });
+  // Close completion so Enter runs.
+  view.contentDOM.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  enter();
+  await until(() => !welcome.visible);
+  assert(shell.editor.canUndo, 'hide was not undoable');
+
+  // While browsing, `show` changes only the session.
+  document.querySelector<HTMLButtonElement>('#tool-modes button')!.click();
+  const set = (text: string) => {
+    const doc = view.state.doc;
+    const range = { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+    view.dispatch({
+      changes: { ...range, insert: text },
+      selection: { anchor: range.from + text.length },
+    });
+  };
+  set('show welcomeText');
+  enter();
+  await until(
+    () =>
+      document.querySelector<HTMLElement>(
+        '#reader [data-element="welcomeText"]',
+      )?.hidden === false,
+  );
+  assert(!welcome.visible, 'Browsing changed the authored Element');
+  set('the visible of welcomeText');
+  enter();
+  await until(() => log().at(-1) === 'true');
+  return {
+    passed: true,
+    checks: [
+      'resizable code window with hidden, protected wrapper lines',
+      'Ctrl-Space completes Page names from the language server',
+      'hide in Edit is one undoable authored edit',
+      'show while browsing changes only the session; expressions print',
+    ],
+  };
+};
