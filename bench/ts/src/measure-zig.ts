@@ -18,7 +18,10 @@ const exec = (args: string[], cwd = root) => {
 };
 exec(['zig', 'build'], join(root, 'impl/zig'));
 const binary = join(output, 'host');
+// zig cc supplies the compiler runtime libtalk.a calls into, which the
+// system cc doesn't link on Linux.
 exec([
+  'zig',
   'cc',
   '-std=c11',
   '-O2',
@@ -28,9 +31,6 @@ exec([
   '-Iimpl/zig/include',
   'bench/zig/host.c',
   'impl/zig/zig-out/lib/libtalk.a',
-  // libtalk.a isn't position-independent, and Linux toolchains link PIE by
-  // default.
-  ...(process.platform === 'linux' ? ['-no-pie'] : []),
   '-o',
   binary,
 ]);
