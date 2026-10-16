@@ -111,7 +111,12 @@ test('Host Manifests sort declarations, preserve Shape order and omit executable
     libraries: [library],
     messages: [
       { name: 'z', args: [shape.any], receivers: [zone, actor] },
-      { name: 'a' },
+      {
+        name: 'a',
+        description: 'Wakes the actor.',
+        examples: ['send a to z'],
+      },
+      { name: 'b', description: '', examples: [] },
     ],
     objectKinds: [zone, actor],
     objects: { z: zone, a: actor },
@@ -180,7 +185,14 @@ test('Host Manifests sort declarations, preserve Shape order and omit executable
     },
   ]);
   expect(data.messages).toEqual([
-    { name: 'a', args: [], receivers: [] },
+    {
+      name: 'a',
+      args: [],
+      receivers: [],
+      description: 'Wakes the actor.',
+      examples: ['send a to z'],
+    },
+    { name: 'b', args: [], receivers: [] },
     { name: 'z', args: ['any'], receivers: ['actor', 'zone'] },
   ]);
   expect(data.objectKinds).toEqual([

@@ -9,6 +9,9 @@ import { compareText } from './text';
 
 export type MessageDecl = {
   args?: readonly Shape[];
+  description?: string;
+  /** NorthTalk source, each sending this message. */
+  examples?: readonly string[];
   name: string;
   receivers?: readonly ObjectKind[];
 };
@@ -154,6 +157,8 @@ export const exportManifest = (m: ManifestSpec): string =>
       name: message.name,
       args: (message.args ?? []).map(shapeData),
       receivers: byName(message.receivers ?? []).map(kind => kind.name),
+      ...(message.description ? { description: message.description } : {}),
+      ...(message.examples?.length ? { examples: message.examples } : {}),
     })),
     objectKinds: byName(m.objectKinds ?? []).map(kind => ({
       name: kind.name,

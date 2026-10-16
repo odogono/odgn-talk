@@ -22,6 +22,13 @@ export type ManifestOperation = {
   scope?: { abandon: string; opens: string } | { closes: string };
   segmentBound: boolean;
 };
+/** A message a Script may receive, or send to a Host that answers it. */
+export type ManifestMessage = {
+  args: Shape[];
+  description?: string;
+  examples?: string[];
+  name: string;
+};
 export type ManifestObjectKind = {
   name: string;
   props: Map<string, { readOnly: boolean; shape: Shape }>;
@@ -31,6 +38,8 @@ export type HostManifest = {
   capabilities: Map<string, string>;
   grants: Map<string, Map<string, ManifestOperation>>;
   libraries: { name: string; source: string }[];
+  /** Each message's declaration, by name. */
+  messageDecls: Map<string, ManifestMessage>;
   messages: string[];
   objectKinds: Map<string, ManifestObjectKind>;
   /** The well-known objects' names. */
@@ -201,18 +210,31 @@ export const readManifest = (value: unknown): HostManifest => {
       return [string(object.name), string(object.kind)] as const;
     }),
   );
+  const messageDecls = new Map<string, ManifestMessage>();
+  for (const value of array(data.messages)) {
+    const message = record(value);
+    const name = string(message.name);
+    const args = array(message.args ?? []);
+    if (!validMessageSelector(name, args.length)) {
+      throw new Error(`Invalid message Selector ${name}`);
+    }
+    messageDecls.set(name, {
+      name,
+      args: args.map(v => shape(v)),
+      ...(message.description === undefined
+        ? {}
+        : { description: string(message.description) }),
+      ...(message.examples === undefined
+        ? {}
+        : { examples: array(message.examples).map(string) }),
+    });
+  }
   return {
     capabilities,
     grants,
     libraries,
-    messages: array(data.messages).map(v => {
-      const message = record(v);
-      const name = string(message.name);
-      if (!validMessageSelector(name, array(message.args).length)) {
-        throw new Error(`Invalid message Selector ${name}`);
-      }
-      return name;
-    }),
+    messageDecls,
+    messages: [...messageDecls.keys()],
     objectKinds,
     objects: [...objectsKinds.keys()],
     objectsKinds,

@@ -1,10 +1,22 @@
 // Tooling fixtures, outside the Conformance Corpus (ADR 0028).
 import type { LintId, LintOptions } from '../src/lint';
+import type { ManifestMessage } from '../src/lsp/manifest';
 export const fixtureManifest = {
   capabilities: new Map(),
   grants: new Map(),
   libraries: [],
-  messages: ['demo'],
+  messageDecls: new Map<string, ManifestMessage>([
+    ['demo', { name: 'demo', args: [] }],
+    [
+      'hide',
+      {
+        name: 'hide',
+        args: [{ k: 'value' }, { k: 'optional', of: { k: 'value' } }],
+        description: 'Hides an object.',
+      },
+    ],
+  ]),
+  messages: ['demo', 'hide'],
   objectKinds: new Map(),
   objects: [],
   objectsKinds: new Map(),
@@ -98,6 +110,18 @@ export const fixtures: readonly {
     id: 'unknown-message',
     positive: 'on other\nend other',
     negative: 'on demo\nend demo',
+    options: { manifest: fixtureManifest },
+  },
+  {
+    id: 'message-argument-count',
+    positive: script('hide'),
+    negative: script('hide 1, 2'),
+    options: { manifest: fixtureManifest },
+  },
+  {
+    id: 'message-argument-count',
+    positive: script('hide 1, 2, 3'),
+    negative: 'on hide x\nend hide\n' + script('hide'),
     options: { manifest: fixtureManifest },
   },
   {

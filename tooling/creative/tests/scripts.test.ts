@@ -134,6 +134,72 @@ constant example = "on fake"
   }
 });
 
+test('built-in hide and show are completed, documented and checked, unless the Script answers them', () => {
+  const { project, page } = fixture();
+  const owner = page.elements.find(e => e.kind === 'button')!;
+  const request = (
+    server: ReturnType<typeof language>['server'],
+    sent: RpcMessage[],
+    uri: string,
+    method: string,
+    line: number,
+    character: number,
+  ) => {
+    server.handle({
+      jsonrpc: '2.0',
+      id: 2,
+      method,
+      params: { textDocument: { uri }, position: { line, character } },
+    });
+    return sent.at(-1)!.result as never;
+  };
+  const source = 'on click\n  hi\n  hide\n  show text1\nend click\n';
+  const { server, sent, uri, diagnostics } = language(
+    scriptManifest(project, owner),
+    source,
+  );
+  const items: { label: string }[] = request(
+    server,
+    sent,
+    uri,
+    'textDocument/completion',
+    1,
+    4,
+  );
+  expect(items.map(i => i.label)).toContain('hide');
+  const hover: { contents: { value: string } } = request(
+    server,
+    sent,
+    uri,
+    'textDocument/hover',
+    2,
+    3,
+  );
+  expect(hover.contents.value).toContain('Hides an Element');
+  expect(
+    diagnostics()
+      .filter(d => d.code === 'message-argument-count')
+      .map(d => d.range.start.line),
+  ).toEqual([2]);
+  expect(diagnostics().filter(d => d.code === 'unknown-message')).toEqual([]);
+
+  // A Script's own `on hide` answers first, in hover and argument checks.
+  owner.script = 'on hide\nend hide\non click\n  hide\nend click\n';
+  const own = language(scriptManifest(project, owner), owner.script);
+  const ownHover: { contents: { value: string } } = request(
+    own.server,
+    own.sent,
+    own.uri,
+    'textDocument/hover',
+    3,
+    3,
+  );
+  expect(ownHover.contents.value).not.toContain('Hides an Element');
+  expect(
+    own.diagnostics().filter(d => d.code === 'message-argument-count'),
+  ).toEqual([]);
+});
+
 test('LSP diagnoses misspelt names and refreshes after renames on each Page', () => {
   const { project, page, other } = fixture();
   const source =

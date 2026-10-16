@@ -1287,9 +1287,11 @@ type ManifestSpec struct {
 
 // MessageDecl is tooling-only: the Core never checks a Delivery against it.
 type MessageDecl struct {
-	Name      string
-	Args      []Shape
-	Receivers []*ObjectKind // the kinds of object it is delivered to; empty for a Script-addressed message
+	Name        string
+	Args        []Shape
+	Receivers   []*ObjectKind // the kinds of object it is delivered to; empty for a Script-addressed message
+	Description string        // plain text, for tooling
+	Examples    []string      // NorthTalk source, each sending this message
 }
 
 // ExportManifest writes the Host Manifest as deterministic JSON (09-embedding.md).

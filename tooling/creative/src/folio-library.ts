@@ -11,6 +11,32 @@ export const FOLIO_LIBRARY_NAME = 'folio';
 /** The Library's Handlers, in the order the Message Box imports them. */
 export const FOLIO_COMMANDS = ['hide', 'show'] as const;
 
+/**
+ * The built-in commands as Script windows' language servers describe them:
+ * Host Manifest messages, answered at the end of every Message Path.
+ */
+export const FOLIO_COMMAND_MESSAGES: {
+  args: string[];
+  description: string;
+  examples: string[];
+  name: (typeof FOLIO_COMMANDS)[number];
+}[] = [
+  {
+    name: 'hide',
+    args: ['object'],
+    description:
+      "Hides an Element: sets its visible to false. Built into Folio, so any Script can send it; a Script's own `on hide` answers first.",
+    examples: ['hide welcomeText'],
+  },
+  {
+    name: 'show',
+    args: ['object'],
+    description:
+      "Shows an Element: sets its visible to true. Built into Folio, so any Script can send it; a Script's own `on show` answers first.",
+    examples: ['show welcomeText'],
+  },
+];
+
 export const FOLIO_LIBRARY_SOURCE = `on hide target
   set the visible of target to false
 end hide

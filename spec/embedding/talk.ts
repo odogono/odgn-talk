@@ -812,6 +812,8 @@ export interface MessageDecl {
   name: string;
   args?: Shape[];
   receivers?: ObjectKind[];
+  description?: string;
+  examples?: string[]; // NorthTalk source, each sending this message
 }
 export interface ManifestSpec {
   kind: string;

@@ -1693,7 +1693,7 @@ export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settle
 }
 
 const manifest = @import("machine/manifest.zig");
-pub const MessageDecl = extern struct { name: ?[*]const u8, name_len: usize, args: ?[*]const *const Shape, args_len: usize, receivers: ?[*]const *const objects.Kind, receivers_len: usize };
+pub const MessageDecl = extern struct { name: ?[*]const u8, name_len: usize, args: ?[*]const *const Shape, args_len: usize, receivers: ?[*]const *const objects.Kind, receivers_len: usize, description: ?[*]const u8 = null, description_len: usize = 0, examples: ?[*]const ?[*]const u8 = null, examples_lens: ?[*]const usize = null, examples_len: usize = 0 };
 pub const ManifestObject = extern struct { name: ?[*]const u8, name_len: usize, kind: *const objects.Kind };
 pub const ManifestSpec = extern struct {
     kind: ?[*]const u8,
@@ -1727,7 +1727,13 @@ fn exportManifest(a: std.mem.Allocator, m: *const ManifestSpec) ![]u8 {
     const messages = try t.alloc(manifest.Message, given_messages.len);
     for (given_messages, messages) |x, *y| {
         const args = try listOf(*const Shape, x.args, x.args_len);
-        y.* = .{ .name = try bytes(x.name, x.name_len), .args = @ptrCast(args), .receivers = try listOf(*const objects.Kind, x.receivers, x.receivers_len) };
+        const examples = try t.alloc([]const u8, x.examples_len);
+        if (x.examples_len > 0) {
+            const texts = x.examples orelse return error.InvalidValue;
+            const lens = x.examples_lens orelse return error.InvalidValue;
+            for (examples, 0..) |*e, i| e.* = try bytes(texts[i], lens[i]);
+        }
+        y.* = .{ .name = try bytes(x.name, x.name_len), .args = @ptrCast(args), .receivers = try listOf(*const objects.Kind, x.receivers, x.receivers_len), .description = try bytes(x.description, x.description_len), .examples = examples };
     }
     const given_objects = try listOf(ManifestObject, m.objects, m.objects_len);
     const named = try t.alloc(manifest.Object, given_objects.len);

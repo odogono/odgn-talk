@@ -3233,7 +3233,8 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
 }
 
 /// `export-manifest`: `kind`, `version`, `grants` (`{name: handle}`),
-/// `libraries` (identities), `messages` (`[{name, args, receivers}]`),
+/// `libraries` (identities), `messages` (`[{name, args, receivers,
+/// description?, examples?}]`),
 /// `objectKinds` (names) and `objects` (`{name: kind}`), replying the
 /// Host Manifest's bytes.
 fn exportManifestReply(s: *Session, msg: Json, ref: i64) []u8 {
@@ -3295,7 +3296,17 @@ fn manifestSpecOf(s: *Session, a: Allocator, msg: Json, shapes: *std.ArrayList(*
             if (receivers_json != .array) return error.InvalidValue;
             const receivers = try a.alloc(*const objects.Kind, receivers_json.array.items.len);
             for (receivers_json.array.items, receivers) |r, *x| x.* = kindNamed(s, asText(r) orelse return error.InvalidValue) orelse return error.InvalidValue;
-            slot.* = .{ .name = name.ptr, .name_len = name.len, .args = args.ptr, .args_len = args.len, .receivers = receivers.ptr, .receivers_len = receivers.len };
+            const description = if (field(item, "description")) |d| asText(d) orelse return error.InvalidValue else "";
+            const examples_json = field(item, "examples") orelse Json{ .array = .init(a) };
+            if (examples_json != .array) return error.InvalidValue;
+            const examples = try a.alloc(?[*]const u8, examples_json.array.items.len);
+            const examples_lens = try a.alloc(usize, examples_json.array.items.len);
+            for (examples_json.array.items, examples, examples_lens) |e, *x, *n| {
+                const text = asText(e) orelse return error.InvalidValue;
+                x.* = text.ptr;
+                n.* = text.len;
+            }
+            slot.* = .{ .name = name.ptr, .name_len = name.len, .args = args.ptr, .args_len = args.len, .receivers = receivers.ptr, .receivers_len = receivers.len, .description = description.ptr, .description_len = description.len, .examples = examples.ptr, .examples_lens = examples_lens.ptr, .examples_len = examples.len };
         }
     }
     var kinds: []*const objects.Kind = &.{};
@@ -4625,7 +4636,7 @@ test "export-manifest writes the Host Manifest's bytes, the same each time" {
     const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
     _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"room\",\"props\":[]}}", .{3}));
     const lib = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"util\",\"version\":\"1\",\"source\":\"function one\\n  return 1\\nend one\\n\"}}", .{4}))).object.get("identity").?.object.get("$bytes").?.string;
-    const frame = "{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"grants\":{{\"api\":{d}}},\"libraries\":[{{\"$bytes\":\"{s}\"}}],\"messages\":[{{\"name\":\"open\",\"args\":[\"text\"],\"receivers\":[\"room\"]}}],\"objectKinds\":[\"room\"],\"objects\":{{\"here\":\"room\"}}}}";
+    const frame = "{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"grants\":{{\"api\":{d}}},\"libraries\":[{{\"$bytes\":\"{s}\"}}],\"messages\":[{{\"name\":\"open\",\"args\":[\"text\"],\"receivers\":[\"room\"],\"description\":\"Opens the door.\",\"examples\":[\"open \\\"now\\\"\"]}}],\"objectKinds\":[\"room\"],\"objects\":{{\"here\":\"room\"}}}}";
     const first = (try okOf(try c.send(frame, .{ 5, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
     const second = (try okOf(try c.send(frame, .{ 6, grant, lib }))).object.get("manifest").?.object.get("$bytes").?.string;
     try std.testing.expectEqualStrings(first, second);
@@ -4644,6 +4655,9 @@ test "export-manifest writes the Host Manifest's bytes, the same each time" {
     try std.testing.expectEqualStrings("room", m.get("objectKinds").?.array.items[0].object.get("name").?.string);
     try std.testing.expectEqualStrings("here", m.get("objects").?.array.items[0].object.get("name").?.string);
     try std.testing.expect(std.mem.indexOf(u8, raw, "Doubles.") != null);
+    const open = m.get("messages").?.array.items[0].object;
+    try std.testing.expectEqualStrings("Opens the door.", open.get("description").?.string);
+    try std.testing.expectEqualStrings("open \"now\"", open.get("examples").?.array.items[0].string);
     const unknown = try c.send("{{\"m\":\"export-manifest\",\"ref\":{d},\"kind\":\"door\",\"version\":\"2\",\"objectKinds\":[\"nowhere\"]}}", .{7});
     try std.testing.expectEqualStrings("host error", try errKind(unknown));
 }

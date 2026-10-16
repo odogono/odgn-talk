@@ -33,6 +33,7 @@ import {
   dictionaryOf,
   dictionaryOperation,
   grantText,
+  messageText,
   operationText,
 } from '../dictionary';
 
@@ -434,6 +435,25 @@ const item = (label: string, kind: number, detail?: string) => ({
   kind,
   ...(detail ? { detail } : {}),
 });
+// A manifest message, with its documentation when the Host wrote any.
+const messageItem = (
+  manifest: HostManifest,
+  name: string,
+  client: ClientFeatures,
+) => {
+  const message = manifest.messageDecls.get(name);
+  const documented = message?.description || message?.examples?.length;
+  return {
+    ...item(messagePhrase(name), 3),
+    ...(message && documented
+      ? {
+          documentation: client.markdown
+            ? { kind: 'markdown', value: messageText(message, 'markdown') }
+            : messageText(message, 'plaintext'),
+        }
+      : {}),
+  };
+};
 // An Operation's completion inserts `and wait` exactly when its mode needs it,
 // unless the line already has it after the cursor.
 const operationItem = (
@@ -564,7 +584,7 @@ export const completion = (
     const legacySend = /\bsend\s+[\p{L}\p{N}_]*$/u.test(line);
     return (manifest?.messages ?? [])
       .filter(name => !legacySend || !name.includes(':'))
-      .map(name => item(messagePhrase(name), 3));
+      .map(name => messageItem(manifest!, name, client));
   }
   const use = /^\s*use\s+[^\n]*$/.test(line);
   if (use) {
@@ -661,7 +681,7 @@ export const completion = (
   const messages = commandPosition
     ? (manifest?.messages ?? [])
         .filter(name => name.startsWith(partial))
-        .map(name => item(messagePhrase(name), 3))
+        .map(name => messageItem(manifest!, name, client))
     : [];
   const bindings = analysis.checked.tree.scopes
     .filter(s => scopes.has(s.id))
@@ -815,6 +835,19 @@ export const hover = (
     }
   }
   const name = nameAt(analysis, offset);
+  // A command no Handler in reach answers may be one the Host answers at
+  // the end of the Message Path; a Script's own Handler takes precedence.
+  const message =
+    name?.role === 'command' && !resolvedBinding(analysis, name)
+      ? manifest?.messageDecls.get(name.text)
+      : undefined;
+  if (name && message) {
+    const format = client.markdown ? 'markdown' : 'plaintext';
+    return {
+      contents: { kind: format, value: messageText(message, format) },
+      range: rangeAt(analysis.document.text, name.span.start, name.span.end),
+    };
+  }
   const target = definition(all, analysis, offset);
   const home = target ? all.get(target.uri) : analysis;
   let binding = name ? resolvedBinding(analysis, name) : null;

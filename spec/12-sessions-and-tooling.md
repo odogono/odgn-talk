@@ -344,6 +344,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 > | `serialised-self-join` | a Join that sends to `me` for a message whose clauses all opt out of concurrency | warning / warning |
 > | `key-shadows-property` | a map literal key that shadows a Built-in property | warning / warning |
 > | `unknown-message` | a Handler for a message the Host Manifest doesn't declare | hint / hint |
+> | `message-argument-count` | a command no Handler in the Script answers, giving a different number of arguments than the Host Manifest declares for its message | warning / warning |
 > | `fallback-routes-known` | a Fallback Handler clause that compares the message's name with a Selector the Script has named clauses for, which runs only when those clauses fail | hint / hint |
 > | `ambiguous-ignoring-case` | a trailing `ignoring case` after an `and` or `or` chain, which binds only to the nearest comparison | warning / hint |
 > | `shadows-builtin` | a Script name that shadows a Built-in Constant or function | warning / hint |
@@ -383,7 +384,7 @@ The Beginner Surface and the Advanced Constructs are a tooling view over one lan
 
 ### The Host Manifest
 
-Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, with any `description` and `examples` the Host wrote for them, the Libraries a Script may import, the messages it may receive with their argument Shapes, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). The Core never reads it, so a stale manifest can only mislead tooling. The Playground builds its manifest from its own Grants.
+Tooling learns what a Host offers from the Host Manifest it exports for each kind of Script: its Grants and their Operation Declarations, with any `description` and `examples` the Host wrote for them, the Libraries a Script may import, the messages it may receive with their argument Shapes and any documentation, and the Host Object kinds and well-known objects ([chapter 9](09-embedding.md#the-host-manifest-format)). The Core never reads it, so a stale manifest can only mislead tooling. The Playground builds its manifest from its own Grants.
 
 ### The Playground
 

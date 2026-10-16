@@ -16,7 +16,8 @@ const writeString = fingerprint.writeString;
 pub const Grant = struct { name: []const u8, grant: *const capabilities.Grant };
 /// A message tooling may expect. `receivers` is empty for a message
 /// addressed to a Script.
-pub const Message = struct { name: []const u8, args: []const *capabilities.Shape, receivers: []const *const objects.Kind };
+/// `description` and `examples` are documentation, written only when present.
+pub const Message = struct { name: []const u8, args: []const *capabilities.Shape, receivers: []const *const objects.Kind, description: []const u8 = "", examples: []const []const u8 = &.{} };
 /// A well-known name bound at load, and its object's kind.
 pub const Object = struct { name: []const u8, kind: *const objects.Kind };
 pub const Spec = struct {
@@ -130,7 +131,20 @@ fn writeAll(a: Allocator, w: *std.Io.Writer, spec: Spec, grants: []const Grant, 
             if (j > 0) try w.writeByte(',');
             try writeString(w, k.name);
         }
-        try w.writeAll("]}");
+        try w.writeByte(']');
+        if (m.description.len > 0) {
+            try w.writeAll(",\"description\":");
+            try writeString(w, m.description);
+        }
+        if (m.examples.len > 0) {
+            try w.writeAll(",\"examples\":[");
+            for (m.examples, 0..) |e, j| {
+                if (j > 0) try w.writeByte(',');
+                try writeString(w, e);
+            }
+            try w.writeByte(']');
+        }
+        try w.writeByte('}');
     }
     try w.writeAll("],\"objectKinds\":[");
     for (kinds, 0..) |k, i| {
