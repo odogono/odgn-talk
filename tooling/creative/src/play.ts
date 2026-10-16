@@ -613,7 +613,7 @@ export class PlaySession {
     }
     this.stopped = true;
     // Stop silences every sound at once, before Scripts are asked to stop
-    // (ADR 0086); Back to Edit reaches here through the Play view's leave.
+    // (ADR 0086); the Play view's Stop and Escape reach here as they leave.
     this.sounds.stopAll();
     this.#closing?.cancel.abort();
     this.#closing = undefined;

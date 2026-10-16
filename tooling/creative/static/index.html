@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#2f5d8a" />
     <meta
@@ -18,10 +21,25 @@
   </head>
   <body>
     <header id="menu">
-      <h1>Folio <span>made with NorthTalk</span></h1>
-      <details id="edit-menu">
+      <details id="folio-menu" class="menu">
+        <summary><h1>Folio</h1></summary>
+        <div class="menu-commands" aria-label="Folio commands">
+          <button id="show-about" type="button">About Folio</button>
+        </div>
+      </details>
+      <details id="file-menu" class="menu">
+        <summary>File</summary>
+        <div class="menu-commands" aria-label="File commands">
+          <button id="new-project" type="button">New Project</button>
+          <button id="import-project" type="button">Import Project…</button>
+          <hr id="save-file-rule" hidden />
+          <button id="save-file" type="button" hidden>Save</button>
+          <button id="save-file-as" type="button" hidden>Save As…</button>
+        </div>
+      </details>
+      <details id="edit-menu" class="menu">
         <summary>Edit</summary>
-        <div class="edit-commands" aria-label="Editing commands">
+        <div class="menu-commands" aria-label="Editing commands">
           <button type="button" data-command="undo">Undo <kbd>⌘Z</kbd></button>
           <button type="button" data-command="redo">Redo <kbd>⇧⌘Z</kbd></button>
           <hr />
@@ -40,8 +58,6 @@
       </details>
       <span id="project-title"></span>
       <span id="save-status" class="muted" role="status"></span>
-      <button id="save-file" type="button" hidden>Save</button>
-      <button id="save-file-as" type="button" hidden>Save As…</button>
       <button id="show-projects" type="button">Projects</button>
       <button id="show-versions" type="button">Earlier versions</button>
       <span id="core" class="muted"></span>
@@ -90,8 +106,8 @@
       </div>
       <div id="offline-banner" class="banner" role="status" hidden>
         <span
-          >You&rsquo;re offline. Folio keeps working here, and your work
-          is saved in this browser.</span
+          >You&rsquo;re offline. Folio keeps working here, and your work is
+          saved in this browser.</span
         >
       </div>
     </div>
@@ -200,23 +216,20 @@
       </div>
       <div id="projects-panel">
         <ul id="project-list"></ul>
-        <button id="new-project" type="button">New Project</button>
         <button id="open-sample" type="button">
           Open sample: The Lighthouse Mystery
         </button>
         <p class="muted">
-          The sample is a short illustrated mystery to play, pull apart and
-          make your own. Opening it adds a fresh copy; your Projects are
-          never overwritten.
+          The sample is a short illustrated mystery to play, pull apart and make
+          your own. Opening it adds a fresh copy; your Projects are never
+          overwritten.
         </p>
         <div id="storage-status">
           <p id="persist-status"></p>
           <p id="storage-use" class="muted"></p>
           <p id="install-status"></p>
           <p>
-            <button id="install-app" type="button" hidden>
-              Install Folio
-            </button>
+            <button id="install-app" type="button" hidden>Install Folio</button>
           </p>
           <p id="file-access-status" class="muted"></p>
           <p id="export-reminder" hidden>
@@ -253,6 +266,57 @@
           <button id="back-to-latest" type="button">Back to latest</button>
         </p>
         <ul id="version-list"></ul>
+      </div>
+    </section>
+    <section
+      id="errors-window"
+      class="window"
+      aria-labelledby="errors-title"
+      data-left="160"
+      data-top="420"
+      hidden
+    >
+      <div class="bar">
+        <button
+          id="close-errors"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
+        <span id="errors-title">Errors</span>
+      </div>
+      <div id="errors-panel">
+        <p id="errors-empty" class="muted">
+          No errors. Script errors from browsing or presenting appear here.
+        </p>
+        <ol id="error-list"></ol>
+        <button id="clear-errors" type="button">Clear</button>
+      </div>
+    </section>
+    <section
+      id="about-window"
+      class="window"
+      aria-labelledby="about-title"
+      data-left="40"
+      data-top="56"
+      hidden
+    >
+      <div class="bar">
+        <button
+          id="close-about"
+          type="button"
+          class="close"
+          title="Close"
+        ></button>
+        <span id="about-title">About Folio</span>
+      </div>
+      <div id="about-panel">
+        <h2>Folio</h2>
+        <p>
+          Make illustrated interactive stories, small games and personal tools,
+          with Scripts in NorthTalk.
+        </p>
+        <p id="about-core" class="muted"></p>
       </div>
     </section>
     <script type="module" src="./main.js"></script>

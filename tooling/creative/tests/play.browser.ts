@@ -305,13 +305,11 @@ export const runBrowserTests = async () => {
   button.script =
     'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\nend click';
   const waitingOriginal = structuredClone(project);
-  for (const action of ['Stop', 'Escape', 'Edit']) {
+  for (const action of ['Stop', 'Escape']) {
     toggle.click();
     readerButton().click();
     await until(() => readerButton().textContent === 'Waiting');
-    if (action === 'Edit') {
-      toggle.click();
-    } else if (action === 'Escape') {
+    if (action === 'Escape') {
       const editing = document.querySelector<HTMLElement>(
         '#reader [data-element="input1"]',
       )!;
@@ -323,41 +321,22 @@ export const runBrowserTests = async () => {
       document
         .querySelector<HTMLElement>('#reader [data-element="input1"]')!
         .focus();
-      [...document.querySelectorAll<HTMLButtonElement>('#menu button')]
-        .find(b => b.textContent === 'Stop')!
-        .click();
-    }
-    await new Promise(resolve => setTimeout(resolve, 300));
-    if (action === 'Edit') {
-      assert(!shell.readOnly, 'Wait blocked return to Edit');
-      assert(
-        document.querySelector<HTMLElement>('#reader')!.hidden,
-        'Play visible',
-      );
-      assert(
-        document.querySelector('#page [data-element="button1"]')!
-          .textContent === 'Button',
-        'Wait changed Edit after returning',
-      );
-    } else {
-      assert(toolbar.hidden, `${action} left reader formatting active`);
-      assert(
-        document.querySelector<HTMLElement>('#reader [data-element="input1"]')!
-          .contentEditable === 'false',
-        `${action} left reader typing active`,
-      );
-      assert(
-        readerButton().textContent === 'Waiting',
-        `${action} leaked Element wait`,
-      );
-      const page = document.querySelector<HTMLElement>('#reader .page')!;
-      assert(page.style.height !== '999px', `${action} leaked Project wait`);
-      assert(
-        page.style.background !== 'rgb(1, 2, 3)',
-        `${action} leaked Page wait`,
-      );
+      assert(toggle.textContent === 'Stop', 'Play button is not Stop');
       toggle.click();
     }
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert(toolbar.hidden, `${action} left reader formatting active`);
+    assert(!shell.readOnly, `Wait blocked ${action} returning to Edit`);
+    assert(
+      document.querySelector<HTMLElement>('#reader')!.hidden,
+      `${action} left Play visible`,
+    );
+    assert(toggle.textContent === 'Present', `${action} left the Stop button`);
+    assert(
+      document.querySelector('#page [data-element="button1"]')!.textContent ===
+        'Button',
+      `${action} let a wait change Edit`,
+    );
     assert(
       JSON.stringify(project) === JSON.stringify(waitingOriginal),
       `${action} allowed a wait to change authored data`,
@@ -373,19 +352,16 @@ export const runBrowserTests = async () => {
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
   );
   assert(
-    [...document.querySelectorAll('#menu button')].some(
-      b => b.textContent === 'Stopped',
-    ),
+    document.querySelector<HTMLElement>('#reader')!.hidden,
     'Esc did not stop',
   );
-  toggle.click();
   assert(!shell.readOnly, 'Runaway blocked Edit');
   button.script = 'on click\n put missing into x\nend click';
   toggle.click();
   const errorLink = [
-    ...document.querySelectorAll<HTMLButtonElement>('.banner button'),
+    ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
   ].find(b => b.textContent?.includes('unknown name'))!;
-  assert(errorLink, 'Load error banner missing');
+  assert(errorLink, 'Load error missing from the Errors window');
   errorLink.click();
   const view = EditorView.findFromDOM(
     document.querySelector('.script-window .cm-editor')!,
@@ -395,6 +371,66 @@ export const runBrowserTests = async () => {
     'Error link did not select line',
   );
   assert(view.state.readOnly, 'Script editor allows authored changes in Play');
+  toggle.click();
+  assert(
+    document.querySelectorAll('#error-list li').length === 1 &&
+      !document.querySelector<HTMLElement>('#errors-window')!.hidden,
+    'Stop discarded the Errors window',
+  );
+
+  // Browsing plays in place beside the windows; Scripts stay editable and
+  // apply to the next session.
+  const mode = (name: string) =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>('#tool-modes button'),
+    ].find(b => b.textContent?.includes(name))!;
+  mode('Browse').click();
+  assert(
+    document.body.classList.contains('browsing') &&
+      document.querySelector('#desk #reader') &&
+      getComputedStyle(document.querySelector('#tools-window')!).display !==
+        'none',
+    'Browse did not play in place',
+  );
+  assert(
+    document.querySelectorAll('#error-list li').length === 1,
+    'Browse did not start with fresh errors',
+  );
+  assert(!view.state.readOnly, 'Script editor read-only while browsing');
+  button.script = 'on click\n set the label of me to "Fixed"\nend click';
+  readerButton().click();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(
+    readerButton().textContent !== 'Fixed',
+    'A Script edit changed the running session',
+  );
+  document
+    .querySelector('#reader')!
+    .dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+  assert(
+    !document.body.classList.contains('browsing') &&
+      document.querySelector<HTMLElement>('#reader')!.hidden,
+    'Esc did not leave Browse',
+  );
+  mode('Browse').click();
+  assert(
+    !document.querySelectorAll('#error-list li').length,
+    'Fixed Script still reported',
+  );
+  readerButton().click();
+  await until(() => readerButton().textContent === 'Fixed');
+  document
+    .querySelector<HTMLButtonElement>('#tools [data-kind="text"]')!
+    .click();
+  assert(
+    !document.body.classList.contains('browsing') &&
+      project.pages[0]!.elements.length > 2,
+    'An Element tool did not return to Edit and add',
+  );
+  shell.editor.undo();
+  shell.redraw();
   shell.setReadOnly(true);
   toggle.click();
   assert(shell.readOnly, 'Returning to Edit lost external read-only state');
@@ -410,10 +446,11 @@ export const runBrowserTests = async () => {
       'fresh session',
       'wait resumes visibly without blocking reader input or other Scripts',
       'navigation cancels Page and Element waits while Project waits continue',
-      'Stop, Esc and Back to Edit cancel waits without late effects',
-      'Esc stops runaway',
-      'return to Edit',
-      'error link selects Script line',
+      'Stop and Esc cancel waits and return to Edit without late effects',
+      'Esc stops runaway and returns to Edit',
+      'Errors window links to the Script line and outlasts Stop',
+      'Browse plays in place, with Scripts editable for the next session',
+      'Esc and Element tools return from Browse to Edit',
       'read-only state preserved',
     ],
   };

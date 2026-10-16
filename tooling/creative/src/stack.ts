@@ -291,6 +291,8 @@ const pageIndexOf = (event: Event) => {
 /** A refused name: what the author typed, and why it was refused. */
 type Refusal = { attempted: string; check: NameCheck & { ok: false } };
 
+export type PlayMode = 'browse' | 'present';
+
 /** The mounted shell: the editor, a redraw, and read-only switching. */
 export type StackShell = {
   editor: StackEditor;
@@ -299,7 +301,12 @@ export type StackShell = {
   openScript(owner: ScriptOwner, line?: number): void;
   readOnly: boolean;
   redraw(): void;
-  setPlaying(playing: boolean): void;
+  /**
+   * Starts or ends a Play Session. Browsing keeps the Tools and Script
+   * windows, and Scripts stay editable for the next session; presenting
+   * hides the editor and makes it read-only.
+   */
+  setPlaying(mode: PlayMode | undefined): void;
   setReadOnly(readOnly: boolean): void;
 };
 
@@ -324,7 +331,7 @@ export const mountStack = (
     }
   });
   let readOnly = options.readOnly ?? false;
-  let playing = false;
+  let playing: PlayMode | undefined;
   editor.readOnly = readOnly;
   const desk = byId('desk');
   const stage = byId('stage');
@@ -1416,22 +1423,23 @@ export const mountStack = (
       redrawListeners.add(listener);
     },
     openScript: (owner, line) => scripts.open(owner, line),
-    setPlaying(value) {
+    setPlaying(mode) {
       finishFieldEdit();
       stopPreview();
       closeText();
-      playing = value;
-      editor.readOnly = readOnly || playing;
+      byId('edit-menu').removeAttribute('open');
+      playing = mode;
+      editor.readOnly = readOnly || playing === 'present';
       draw();
     },
     setReadOnly(value: boolean) {
       readOnly = value;
-      if ((value || playing) === editor.readOnly) {
+      if ((value || playing === 'present') === editor.readOnly) {
         return;
       }
       finishFieldEdit();
       closeText();
-      editor.readOnly = value || playing;
+      editor.readOnly = value || playing === 'present';
       draw();
     },
   };

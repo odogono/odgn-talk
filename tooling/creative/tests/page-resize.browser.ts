@@ -107,9 +107,9 @@ export const runBrowserTests = () => {
     shell.setReadOnly(true);
     assert(!handle('s'), 'Read-only hides handles');
     shell.setReadOnly(false);
-    shell.setPlaying(true);
+    shell.setPlaying('present');
     assert(!handle('s'), 'Play hides handles');
-    shell.setPlaying(false);
+    shell.setPlaying(undefined);
     assert(handle('s'), 'Edit restores handles');
   });
   for (const [name, dx, dy] of [

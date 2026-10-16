@@ -1,12 +1,15 @@
 // Browser driving and reader input stay outside the testable Play Session.
+// Browsing plays the Project in place on the desk, beside the Tools and
+// Script windows; presenting plays it full-window with the editor hidden.
 import { scriptNameProblems } from './script-names';
 import { text } from '@odgn/northtalk';
 import { byId, h } from './dom';
+import { ErrorsWindow } from './errors';
 import { type Element, type TextElement } from './model';
 import { PlaySession } from './play';
 import { ReaderTextHistory } from './play-text';
 import { browserSoundBackend } from './sounds';
-import { renderElement, type StackShell } from './stack';
+import { renderElement, type PlayMode, type StackShell } from './stack';
 import { InPlaceTextEditor } from './text-editor';
 
 const now = () =>
@@ -16,12 +19,42 @@ export const mountPlay = (shell: StackShell): void => {
   const toggle = h(
     'button',
     { type: 'button', 'aria-pressed': 'false' },
-    'Play',
+    'Present',
   );
-  const stop = h('button', { type: 'button', hidden: true }, 'Stop');
-  byId('menu').append(toggle, stop);
-  const reader = h('main', {
+  byId('menu').append(toggle);
+  // Browse and Edit head the Tools window, as HyperCard's browse tool did.
+  const browseTool = h(
+    'button',
+    {
+      type: 'button',
+      'aria-pressed': 'false',
+      title: 'Browse: try the Project here',
+    },
+    h('span', { 'aria-hidden': 'true' }, '☞'),
+    'Browse',
+  );
+  const editTool = h(
+    'button',
+    {
+      type: 'button',
+      'aria-pressed': 'true',
+      title: 'Edit: select and change',
+    },
+    h('span', { 'aria-hidden': 'true' }, '↖'),
+    'Edit',
+  );
+  byId('tools').before(
+    h(
+      'div',
+      { id: 'tool-modes', role: 'group', 'aria-label': 'Mode' },
+      browseTool,
+      editTool,
+    ),
+  );
+  const errors = new ErrorsWindow(shell);
+  const reader = h('div', {
     id: 'reader',
+    role: 'region',
     hidden: true,
     tabindex: '-1',
     'aria-label': 'Play Session',
@@ -39,9 +72,8 @@ export const mountPlay = (shell: StackShell): void => {
   delete toolbar.dataset.scope;
   toolbar.setAttribute('aria-label', 'Reader text formatting');
   document.body.append(toolbar, reader);
-  const problems = h('div', { class: 'banner', hidden: true, role: 'status' });
-  byId('banners').append(problems);
   let session: PlaySession | undefined;
+  let mode: PlayMode | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let generation = 0;
   let problemCount = 0;
@@ -96,7 +128,7 @@ export const mountPlay = (shell: StackShell): void => {
         node.blur();
         schedule();
       },
-      { escape: () => stopPlay(), selectAll: false },
+      { escape: () => leave(), selectAll: false },
     );
   };
 
@@ -113,7 +145,11 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const scale = Math.min(
       1,
-      Math.max(0.1, (reader.clientWidth - 32) / play.project.designWidth),
+      Math.max(
+        0.1,
+        (reader.clientWidth - (mode === 'present' ? 32 : 0)) /
+          play.project.designWidth,
+      ),
     );
     Object.assign(scaler.style, {
       width: `${play.project.designWidth * scale}px`,
@@ -240,21 +276,8 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session || problemCount === session.problems.length) {
       return;
     }
+    errors.add(session.problems.slice(problemCount));
     problemCount = session.problems.length;
-    problems.hidden = false;
-    problems.replaceChildren(
-      ...session.problems.slice(-10).map(problem => {
-        const button = h(
-          'button',
-          { type: 'button' },
-          `${problem.owner.name}, line ${problem.line}: ${problem.message}`,
-        );
-        button.addEventListener('click', () =>
-          shell.openScript(problem.owner, problem.line),
-        );
-        return button;
-      }),
-    );
   };
   const schedule = (delay = 0) => {
     if (!session || session.stopped) {
@@ -301,55 +324,93 @@ export const mountPlay = (shell: StackShell): void => {
     clearTimeout(timer);
     timer = undefined;
     session.stop(now());
-    stop.disabled = true;
-    stop.textContent = 'Stopped';
-    draw();
-    showProblems();
   };
+  const drawModes = () => {
+    toggle.textContent = mode === 'present' ? 'Stop' : 'Present';
+    toggle.setAttribute('aria-pressed', String(mode === 'present'));
+    browseTool.setAttribute('aria-pressed', String(mode === 'browse'));
+    editTool.setAttribute('aria-pressed', String(mode === undefined));
+    document.body.classList.toggle('playing', mode === 'present');
+    document.body.classList.toggle('browsing', mode === 'browse');
+  };
+  /** Ends Play, discarding Play State; browsing leaves Edit on its Page. */
   const leave = () => {
+    if (!session) {
+      return;
+    }
+    const pageName = session.page.name;
+    const browsed = mode === 'browse';
     stopPlay();
     session = undefined;
+    mode = undefined;
     histories.clear();
     reader.hidden = true;
     pageNode.replaceChildren();
-    problems.hidden = true;
-    stop.hidden = true;
-    toggle.textContent = 'Play';
-    toggle.setAttribute('aria-pressed', 'false');
-    document.body.classList.remove('playing');
-    shell.setPlaying(false);
-  };
-  toggle.addEventListener('click', () => {
-    if (session) {
-      leave();
-      return;
+    drawModes();
+    const index = shell.editor.project.pages.findIndex(
+      p => p.name === pageName,
+    );
+    if (browsed && index >= 0 && index !== shell.editor.pageIndex) {
+      shell.editor.goToPage(index);
     }
+    shell.setPlaying(undefined);
+  };
+  let errorsGeneration = shell.editor.generation;
+  const start = (next: PlayMode) => {
+    leave();
+    errors.clear();
+    errorsGeneration = shell.editor.generation;
     const names = scriptNameProblems(shell.editor.project);
     if (names.length) {
-      problems.hidden = false;
-      problems.replaceChildren(...names.map(p => h('p', {}, p.message)));
+      errors.add(names);
       return;
     }
-    shell.setPlaying(true);
+    mode = next;
+    shell.setPlaying(mode);
     generation = shell.editor.generation;
     session = new PlaySession(shell.editor.project, shell.editor.pageIndex, {
       soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
     });
     histories.clear();
     problemCount = 0;
-    document.body.classList.add('playing');
+    if (mode === 'browse') {
+      byId('desk').append(toolbar, reader);
+    } else {
+      document.body.append(toolbar, reader);
+    }
     reader.hidden = false;
-    stop.hidden = false;
-    stop.disabled = false;
-    stop.textContent = 'Stop';
-    toggle.textContent = 'Back to Edit';
-    toggle.setAttribute('aria-pressed', 'true');
+    drawModes();
     draw();
     showProblems();
     schedule();
     reader.focus();
+  };
+  toggle.addEventListener('click', () => {
+    if (mode === 'present') {
+      leave();
+    } else {
+      start('present');
+    }
   });
-  stop.addEventListener('click', stopPlay);
+  browseTool.addEventListener('click', () => {
+    if (mode !== 'browse') {
+      start('browse');
+    }
+  });
+  editTool.addEventListener('click', leave);
+  // Choosing an Element tool while browsing returns to Edit to add it.
+  byId('tools').addEventListener(
+    'click',
+    event => {
+      if (
+        mode === 'browse' &&
+        (event.target as HTMLElement).closest('button')
+      ) {
+        leave();
+      }
+    },
+    { capture: true },
+  );
   toolbar.addEventListener('focusout', event => {
     if (
       !toolbar.contains(event.relatedTarget as Node | null) &&
@@ -363,9 +424,14 @@ export const mountPlay = (shell: StackShell): void => {
     if (!session) {
       return;
     }
-    if (event.key === 'Escape') {
+    // While browsing, Esc in a Script window or menu stays with it.
+    if (
+      event.key === 'Escape' &&
+      (mode === 'present' ||
+        !(event.target as HTMLElement).closest('.window, #menu'))
+    ) {
       event.preventDefault();
-      stopPlay();
+      leave();
       return;
     }
     if (!reader.contains(event.target as Node)) {
@@ -392,6 +458,11 @@ export const mountPlay = (shell: StackShell): void => {
     schedule();
   });
   shell.onRedraw(() => {
+    // Another Project's errors no longer point at anything here.
+    if (errorsGeneration !== shell.editor.generation) {
+      errorsGeneration = shell.editor.generation;
+      errors.clear();
+    }
     if (!session) {
       return;
     }

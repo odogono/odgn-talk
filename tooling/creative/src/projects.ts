@@ -180,6 +180,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     const saveAs = byId('save-file-as') as HTMLButtonElement;
     save.hidden = !disk.save;
     saveAs.hidden = !disk.save;
+    byId('save-file-rule').hidden = !disk.save;
     // Only the editing tab writes a Project's file; a read-only copy
     // could be older than the one being edited. Export still downloads.
     save.disabled = !lock.editing || !!preview;
@@ -682,9 +683,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     );
     picker.click();
   };
-  const importButton = h('button', { type: 'button' }, 'Import Project…');
-  byId('new-project').after(importButton);
-  importButton.addEventListener('click', () => {
+  byId('import-project').addEventListener('click', () => {
     if (!disk.open) {
       openInputPicker();
       return;
@@ -897,7 +896,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         id,
       );
       notice(
-        `Opened a fresh copy of “${SAMPLE_PROJECT_NAME}”. Press Play to try it, then make it your own.`,
+        `Opened a fresh copy of “${SAMPLE_PROJECT_NAME}”. Choose Browse in Tools to try it, then make it your own.`,
       );
     } catch (error) {
       notice(`Couldn't open the sample Project: ${String(error)}`);

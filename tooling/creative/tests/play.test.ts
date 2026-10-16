@@ -604,7 +604,7 @@ end click`;
     { owner: 'project', name: 'rain', loop: true },
   ]);
   expect(play.problems).toEqual([]);
-  // Stop — and with it Back to Edit, which stops first — silences the rest.
+  // Stop silences the rest.
   play.stop(0n);
   expect(play.sounds.playing()).toEqual([]);
 });

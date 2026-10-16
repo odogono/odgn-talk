@@ -2,7 +2,7 @@
 
 Folio is the browser creative tool specified in [#154](https://github.com/odogono/odgn-talk/issues/154): a HyperCard-inspired tool for making illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk. It is named in [ADR 0087](../../docs/adr/0087-the-creative-tool-is-folio-and-projects-save-as-folio-files.md); the package and folder keep their `creative` names.
 
-The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
+The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -20,7 +20,8 @@ The Page stays horizontally centred with its top fixed; there are no top
 resize handles. Existing Elements keep their positions and sizes.
 The minimum is 240 pixels wide and 160 pixels high, in both handles and Info.
 Each drag is one undoable edit and autosaves with the Project. Handles are
-hidden while an Element is selected, in read-only Projects and during Play.
+hidden while an Element is selected, in read-only Projects and during a Play
+Session.
 Focused handles also accept arrow keys, with Shift for ten pixels.
 
 Browser regression checks cover handles, pointer and keyboard resizing,
@@ -63,7 +64,7 @@ from ADR 0084; all three are available during Play (see [Sounds](#sounds)). Rena
 show their lines below the editor and in its gutter. Completion and hover use
 the Manifest; property completion for a named receiver uses its Object Kind.
 The Manifest cannot yet describe `me`'s kind, so it cannot offer `me`'s
-properties. Scripts execute only in Play.
+properties. Scripts execute only in a Play Session (see [Play](#play)).
 The Manifests include built-in events and each Script's authored message
 handlers, so custom messages between Scripts do not produce unknown-message
 hints. Editing handlers refreshes the Manifest alongside the source.
@@ -166,8 +167,8 @@ If the browser won't keep data at all, a banner says so and editing still
 works in memory. Export now downloads a `.folio` Project file and reports
 its size. Import reads the content, not the name, so `.zip` files exported
 before the app was named still open.
-**Import Project…** in Projects opens a file picker; dropping a Project file
-onto that window also imports it. Import always creates a fresh Project,
+**Import Project…** in the File menu opens a file picker; dropping a Project
+file onto the Projects window also imports it. Import always creates a fresh Project,
 including when a copy already exists. Damaged files and newer formats report
 why they cannot open and leave the current Project intact.
 
@@ -224,7 +225,7 @@ opens a Project file from the operating system (desktop Chrome and
 Edge; the file handlers API is theirs today). Such a file imports like
 any other, as a fresh Project that never overwrites the one on the
 desk, and keeps its handle: where the browser has the File System
-Access pickers, the header offers **Save** and **Save As…**. Save
+Access pickers, the File menu offers **Save** and **Save As…**. Save
 writes back to the opened file — or to the file Save As chose — asking
 for permission again when the browser kept only a prompt, and
 refusing, with Save As suggested, when the file changed on disk since
@@ -330,7 +331,7 @@ A sound belongs to the Script that started it (#735), and `stop` reaches
 only that Script's sounds — with no name, all of them. Playing a name the
 Project has no sound for is an error against the Script and line. Leaving a
 Page stops its Page and Element Scripts' sounds; the Project Script's sounds
-carry on across navigation. Stop, Escape and Back to Edit stop all audio at
+carry on across navigation. Stop and Escape stop all audio at
 once (ADR 0086), as does deleting an Element whose Script started a sound.
 Replaying a name restarts that Script's voice for it. Script Recipes offer
 **Play a sound**, **Loop a sound** and **Stop a sound** for every owner.
@@ -411,7 +412,11 @@ bun test tooling/creative/tests
 
 ## Play
 
-Choose **Play** to start on the selected Page. Each session uses a fresh Core
+There are two ways to run a Project, both on the Page being edited
+([ADR 0093](../../docs/adr/0093-folio-browses-in-place.md)). **Browse**, at
+the top of the Tools window, plays the Page in place on the desk with the
+Tools, Script and Errors windows still open, as HyperCard's browse tool did.
+**Present**, in the header, plays it full-window with the editor hidden. Each session uses a fresh Core
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
@@ -426,19 +431,31 @@ Clipboard HTML uses the same supported marks and paragraphs as authored text;
 unsupported content is discarded.
 
 Reader text and its undo history belong only to the Play Session. Navigation
-retains the text and formatting; Back to Edit restores the authored content and
-formatting exactly, and another Play starts fresh. Script replacements reset
-that Element's reader undo history. Stop or Escape also freezes reader typing
-and hides the toolbar. Script property writes update the reader view; setting
+retains the text and formatting; Stop restores the authored content and
+formatting exactly, and another session starts fresh. Script replacements reset
+that Element's reader undo history. Script property writes update the reader view; setting
 `text` clears mixed formatting.
 
-**Stop** or Escape stops every Script and stays in Play. Execution uses the
-Core's default limits with small Pump slices between browser turns. Errors
-appear as non-blocking links to the authored Script and line; other handlers
+Choosing **Edit** in Tools, choosing an Element tool, or pressing Escape on
+the desk ends browsing; while presenting, the header's **Present** button
+becomes **Stop**, and Stop or Escape ends it. Either way every Script and
+sound stops, Play State is discarded and Edit returns with the authored
+Project and history restored. Browsing returns to the Page the session
+reached; presenting restores the selection too. Execution uses the
+Core's default limits with small Pump slices between browser turns.
+Autosave and export use authored content only.
+
+Script windows stay editable while browsing. An edit changes the authored
+Project immediately and applies from the next session; the running session
+keeps the Scripts it loaded. Escape inside a Script window stays with the
+editor. Script windows are read-only while presenting.
+
+Problems go to the **Errors** window, which opens when the first one arrives.
+Each names its owner and line and opens that authored Script; other handlers
 continue. Script-sent unhandled messages warn, while unhandled Host messages
-are ignored. **Back to Edit** discards Play State and restores the authored
-Project, selection and history. Autosave and export use authored content only.
-Script windows are read-only during Play.
+are ignored. Script names that cannot be bound are listed there instead of
+starting a session. The list outlasts the session and is cleared by **Clear**,
+by the next session or by opening another Project.
 
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element
@@ -447,7 +464,8 @@ Revisiting reloads those Scripts with fresh variables and sends `openPage`;
 the Project Script keeps running and retains its variables. Showing the current
 Page does nothing. While a Page is closing, reader messages and further
 navigation requests are ignored. Requests in one Pump before closing begins
-use the last destination. The Pages strip stays hidden during Play.
+use the last destination. The Pages strip and Info window stay hidden during a
+Play Session.
 
 Only the current Page's and its Elements' Scripts run alongside the Project
 Script. Sounds a Page's Scripts started stop when the reader leaves that
@@ -479,7 +497,7 @@ Element. `find` requires the Page and reports an error when the name is missing.
 Names are bound when Scripts load; use `find` or the returned handle to reach
 new Elements. Creating, cloning and deleting each consume a Pump's Fuel budget
 so Core parent/disposal changes land before execution continues. All changes
-are temporary Play State: Back to Edit restores the authored Elements exactly.
+are temporary Play State: Stop restores the authored Elements exactly.
 
 ### Delays with `wait`
 
@@ -508,8 +526,8 @@ than their deadline.
 
 Play unit tests use an explicit Clock to check exact deadlines, concurrent
 handlers, Page cancellation and Project continuity. The browser checks below
-exercise visible delayed writes and cancellation through navigation, Stop,
-Escape and Back to Edit with the real scheduler.
+exercise visible delayed writes and cancellation through navigation, Stop
+and Escape with the real scheduler.
 
 ### Browser checks
 
@@ -533,8 +551,8 @@ Stop while editing and the exact authored rich-text restore.
 
 At narrower widths the reader scales the Page to fit and scrolls only
 vertically: a scaler element carries the scaled size, as the editor's
-stage does, and the Play header drops its Edit-only controls so Back to
-Edit and Stop stay reachable on a phone.
+stage does, and the presenting header drops its Edit-only controls so Stop
+stays reachable on a phone.
 
 ## The sample Project
 

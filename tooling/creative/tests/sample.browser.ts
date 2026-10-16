@@ -1,7 +1,7 @@
 // Run on a dedicated page without main.js, as described in README.md.
 // The sample Project (#824) in a real browser: its assets decode, touch
 // taps play it at a narrow width with the Page scaled to fit and only
-// vertical scrolling, the journal is reader-editable, and Back to Edit
+// vertical scrolling, the journal is reader-editable, and Stop
 // restores the authored Project exactly.
 import { importImage } from '../src/images';
 import { mountPlay } from '../src/play-view';
@@ -82,8 +82,8 @@ export const runBrowserTests = async () => {
   );
   reader.scrollTop = reader.scrollHeight;
   assert(reader.scrollTop > 0, 'Reader does not scroll vertically');
-  // Edit-only header controls leave the header in Play, so Back to Edit
-  // and Stop stay reachable on a phone-width screen.
+  // Edit-only header controls leave the header in Play, so Stop stays
+  // reachable on a phone-width screen.
   assert(
     getComputedStyle(document.querySelector('#save-file')!).display ===
       'none' &&
@@ -125,7 +125,7 @@ export const runBrowserTests = async () => {
     'Navigation lost the journal note',
   );
 
-  // Back to Edit restores the authored Project exactly: no trapdoor, no
+  // Stop restores the authored Project exactly: no trapdoor, no
   // reader note, clues hidden again.
   toggle.click();
   assert(JSON.stringify(project) === authored, 'Play mutated authored data');
