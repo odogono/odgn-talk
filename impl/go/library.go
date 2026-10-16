@@ -37,6 +37,9 @@ type Library struct {
 	state   *machine.State
 	needs   []OperationRef
 	calls   []check.OperationUse
+	// decls are the Grant declarations it was compiled against, which the
+	// experimental Zig backend gives each Group's guest.
+	decls GrantDecls
 }
 
 func (l *Library) Name() string          { return l.source.Name }
@@ -60,8 +63,13 @@ func libraryOptions(libraries map[string]*Library) (map[string]map[string]check.
 // CompileLibrary checks immutable code; imports may also name the ambient stdlib.
 // Calls are rechecked against the importing Script's own Grants at load.
 func (c *Core) CompileLibrary(src LibrarySource, imports []*Library, declarations GrantDecls) (*Library, error) {
-	if experimentalGroupFactory != nil {
-		return nil, backendUnsupported("Libraries")
+	if experimentalCompileLibrary != nil {
+		for _, l := range imports {
+			if l == nil {
+				return nil, &HostError{InvalidValue, "nil Library"}
+			}
+		}
+		return experimentalCompileLibrary(c, src, imports, declarations)
 	}
 	available := map[string]*Library{}
 	addStandardLibraries(available, usedNamesIn(src.Source)...)
@@ -195,11 +203,11 @@ func (c *Core) compileLibraryParsed(src LibrarySource, available map[string]*Lib
 
 // AddLibrary registers code only after every direct dependency identity matches.
 func (g *Group) AddLibrary(l *Library) error {
-	if g.backend != nil {
-		return backendUnsupported("Libraries")
-	}
 	if l == nil {
 		return &HostError{InvalidValue, "nil Library"}
+	}
+	if g.backend != nil {
+		return g.backend.addLibrary(l)
 	}
 	fields := map[string]string{"identity": fmt.Sprintf("%x", l.id)}
 	if err := g.beginWorker(); err != nil {

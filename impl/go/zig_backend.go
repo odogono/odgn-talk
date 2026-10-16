@@ -82,6 +82,8 @@ type zigGroup struct {
 	decisions map[string]*Deciding
 	// Property crossings' Host details, in crossing order, for this Pump.
 	propertyDetails []string
+	librariesMu     sync.Mutex
+	libraries       map[[32]byte]bool
 	kindsMu         sync.Mutex
 	kinds           map[string]*ObjectKind
 	runs            map[RunID]DeliveryID
@@ -97,7 +99,7 @@ func newZigGroup(g *Group) groupBackend {
 	if err != nil {
 		panic(err)
 	}
-	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1"}})
 	if err == nil {
 		features := hello.Get("features")

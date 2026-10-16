@@ -10,6 +10,7 @@ import (
 // this seam in the existing API lets the same Host tests exercise both Cores.
 var experimentalGroupFactory func(*Group) groupBackend
 var experimentalVersions func() Versions
+var experimentalCompileLibrary func(*Core, LibrarySource, []*Library, GrantDecls) (*Library, error)
 
 type groupBackend interface {
 	load(LoadOptions) (*Script, error)
@@ -20,6 +21,8 @@ type groupBackend interface {
 	object(*ObjectKind, string) error
 	setParent(o, parent *Object) error
 	dispose(*Object) error
+	addLibrary(*Library) error
+	replaceLibrary(*Library, CarryOver) ([]Report, error)
 	pump(time.Time, PumpOptions) (PumpResult, error)
 	inspect() Inspection
 	counters(*Script) Counters

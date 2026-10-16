@@ -282,12 +282,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 		name string
 		call func() error
 	}{
-		{"library", func() error {
-			_, e := core.CompileLibrary(talk.LibrarySource{Name: "l", Source: "constant a = 1"}, nil, nil)
-			return e
-		}},
-		{"registration", func() error { return g.AddLibrary(nil) }},
-		{"replacement", func() error { _, e := g.ReplaceLibrary(nil, talk.ResetVariables); return e }},
 		{"save", func() error { _, e := g.Save(); return e }},
 		{"restore", func() error { _, _, e := core.Restore(nil, talk.RestoreOptions{}); return e }},
 		{"reload", func() error { _, e := s.Reload("", talk.ResetVariables); return e }},

@@ -11,11 +11,11 @@ import (
 
 // ReplaceLibrary validates every transitive dependent before stopping any Run.
 func (g *Group) ReplaceLibrary(l *Library, carry CarryOver) ([]Report, error) {
-	if g.backend != nil {
-		return nil, backendUnsupported("Library replacement")
-	}
 	if l == nil {
 		return nil, &HostError{InvalidValue, "nil Library"}
+	}
+	if g.backend != nil {
+		return g.backend.replaceLibrary(l, carry)
 	}
 	fields := map[string]string{"identity": fmt.Sprintf("%x", l.id), "source": corevalue.DisplayText(l.Source()), "carry": "no"}
 	if carry == CarryVariables {
