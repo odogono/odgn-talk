@@ -10,11 +10,14 @@ defmodule NorthTalk.Owner do
     Call,
     Capability,
     Clock,
+    Effect,
     Grant,
     Group,
     HostError,
     Library,
     LoadError,
+    Release,
+    Restored,
     Result,
     ScriptError,
     Transport,
@@ -43,7 +46,9 @@ defmodule NorthTalk.Owner do
     # monitor ref, or their deferred ref, each indexed back to the call.
     calls: %{},
     monitors: %{},
-    deferred: %{}
+    deferred: %{},
+    # While a restore asks for Grants: how the caller rebinds them.
+    restoring: nil
   ]
 
   def start_link(opts) do
@@ -119,7 +124,7 @@ defmodule NorthTalk.Owner do
 
     case exchange(state, "new-group", fields) do
       {{:ok, _}, state} ->
-        state = put_in(state.groups[name], %{timer: nil, queued: false})
+        state = put_in(state.groups[name], group_entry())
         {:reply, {:ok, %Group{owner: self(), name: name}}, state}
 
       {error, state} ->
@@ -129,7 +134,11 @@ defmodule NorthTalk.Owner do
 
   def handle_call({:define_capability, capability}, _from, state) do
     capability = Capability.resolve(capability)
-    fields = %{"name" => capability.name, "ops" => Capability.declarations(capability)}
+
+    fields =
+      %{"name" => capability.name, "ops" => Capability.declarations(capability)}
+      |> then(&if(capability.effect, do: Map.put(&1, "segmentLifecycle", true), else: &1))
+      |> then(&if(capability.release, do: Map.put(&1, "release", true), else: &1))
 
     case exchange(state, "define-capability", fields) do
       {{:ok, _}, state} -> {:reply, :ok, put_in(state.capabilities[capability.name], capability)}
@@ -210,6 +219,113 @@ defmodule NorthTalk.Owner do
     {:reply, ok(reply, fn _ -> :ok end), state}
   end
 
+  def handle_call({:replace_library, %Group{name: g}, %Library{} = library, opts}, _from, state) do
+    fields = %{"group" => g, "identity" => identity(library), "carry" => carry(opts)}
+    {reply, state} = work(state, g, exchange(state, "replace-library", fields))
+    {:reply, reply, state}
+  end
+
+  def handle_call({:reload, %Group{name: g}, script, source, opts}, _from, state) do
+    fields = %{
+      "group" => g,
+      "script" => script,
+      "source" => source,
+      "carry" => carry(opts),
+      "keepMailbox" => Keyword.get(opts, :keep_mailbox, false)
+    }
+
+    {reply, state} = work(state, g, exchange(state, "reload", fields))
+    {:reply, reply, state}
+  end
+
+  def handle_call({:extend, %Group{name: g}, script, source}, _from, state) do
+    {reply, state} = exchange(state, "extend", %{"group" => g, "script" => script, "source" => source})
+    {:reply, done(reply), state}
+  end
+
+  def handle_call({:stop, %Group{name: g}, script, reason}, _from, state) do
+    {reply, state} = exchange(state, "stop", %{"group" => g, "script" => script, "reason" => reason})
+    {:reply, done(reply), schedule_pump(state, g)}
+  end
+
+  def handle_call({:save, %Group{name: g}}, _from, state) do
+    {reply, state} = exchange(state, "save", %{"group" => g})
+    {:reply, ok(reply, &Base.decode64!(&1["save"]["$bytes"])), state}
+  end
+
+  def handle_call({:restore, name, save, opts}, _from, state) do
+    fields = %{
+      "group" => name,
+      "name" => name,
+      "save" => %{"$bytes" => Base.encode64(save)},
+      "libraries" => Enum.map(Keyword.get(opts, :libraries, []), &identity/1),
+      "mismatch" => if(opts[:mismatch] == :variables_only, do: "variables only", else: "reject"),
+      "trace" => Keyword.get(opts, :trace, false)
+    }
+
+    state = %{state | restoring: Keyword.get(opts, :grants, %{})}
+    {reply, state} = exchange(state, "restore", fields)
+    state = %{state | restoring: nil}
+
+    case reply do
+      {:ok, ok} ->
+        pending = Enum.map(ok["pending"], &pending_call/1)
+        entry = %{group_entry() | unsettled: MapSet.new(pending, & &1.call)}
+        state = put_in(state.groups[name], entry)
+        state = Enum.reduce(Enum.map(ok["reports"] || [], &report/1), state, &settle(&2, name, &1))
+
+        restored = %Restored{
+          group: %Group{owner: self(), name: name},
+          variables_only: ok["variablesOnly"],
+          pending: pending,
+          disposed: plain(ok["disposed"]),
+          discarded_runs: plain(ok["discardedRuns"]),
+          dropped_messages: plain(ok["droppedMessages"]),
+          abandoned_calls: plain(ok["abandonedCalls"])
+        }
+
+        {:reply, {:ok, restored}, release_held(state, name)}
+
+      error ->
+        # Bindings the resolve recorded belong to no Group.
+        {:reply, error, %{state | bindings: Map.reject(state.bindings, &match?({{^name, _, _}, _}, &1))}}
+    end
+  end
+
+  def handle_call({:settle_restored, %Group{name: g}, call, settlement}, _from, state) do
+    {fields, adopt} =
+      case settlement do
+        {:answer, value} -> {%{"answer" => Value.encode(value)}, nil}
+        {:fail, failure} -> {%{"fail" => failure(failure)}, nil}
+        :reissue -> {%{"reissue" => true}, nil}
+        {:adopt, ref} -> {%{"adopt" => true}, ref}
+      end
+
+    if adopt != nil and Map.has_key?(state.deferred, adopt) do
+      {:reply, {:error, %HostError{code: "invalid value", detail: "ref #{inspect(adopt)} is already in use"}}, state}
+    else
+      case exchange(state, "settle", %{"group" => g, "call" => call, "settlement" => fields}) do
+        {{:ok, _}, state} ->
+          state =
+            if adopt != nil,
+              do: %{
+                state
+                | calls: Map.put(state.calls, {g, call}, {:deferred, adopt}),
+                  deferred: Map.put(state.deferred, adopt, {g, call})
+              },
+              else: state
+
+          state = update_in(state.groups[g].unsettled, &MapSet.delete(&1, call))
+          {:reply, :ok, release_held(state, g)}
+
+        {error, state} ->
+          {:reply, error, state}
+      end
+    end
+  rescue
+    error in HostError -> {:reply, {:error, error}, state}
+  end
+
   def handle_call({:send, kind, %Group{name: g}, to, name, args}, from, state) do
     fields = %{"group" => g, "to" => target(to), "message" => %{"name" => name, "args" => Value.encode(args)}}
 
@@ -240,7 +356,7 @@ defmodule NorthTalk.Owner do
 
   @impl true
   def handle_info({:pump, g}, state) do
-    state = update_in(state.groups[g], &%{&1 | queued: false, timer: nil})
+    state = update_in(state.groups[g], &%{&1 | queued: false, timer: nil, unsettled: MapSet.new()})
     {_, state} = pump(state, g, Clock.format(Clock.now(state.clock)), state.fuel_slice)
     {:noreply, state}
   end
@@ -343,9 +459,8 @@ defmodule NorthTalk.Owner do
   defp pump(state, g, now, fuel_slice) do
     case exchange(state, "pump", %{"group" => g, "now" => now, "fuelSlice" => fuel_slice}) do
       {{:ok, ok}, state} ->
-        reports = Enum.map(ok["reports"], &report/1)
-        state = abandon(state, g, ok["abandoned"] || [])
-        state = Enum.reduce(reports, state, &settle(&2, g, &1))
+        state = update_in(state.groups[g], &%{&1 | unsettled: MapSet.new()})
+        {reports, state} = reports(state, g, ok)
 
         state =
           cond do
@@ -359,7 +474,7 @@ defmodule NorthTalk.Owner do
           state: ok["state"],
           next_deadline: ok["nextDeadline"],
           fuel_used: ok["fuelUsed"],
-          reports: Enum.map(reports, &elem(&1, 0))
+          reports: reports
         }
 
         {{:ok, result}, state}
@@ -367,6 +482,49 @@ defmodule NorthTalk.Owner do
       other ->
         other
     end
+  end
+
+  # The final reply of a Pump, Reload or Library replacement: the calls the
+  # Core abandoned, then its reports, in order.
+  defp reports(state, g, ok) do
+    reports = Enum.map(ok["reports"] || [], &report/1)
+    state = abandon(state, g, ok["abandoned"] || [])
+    state = Enum.reduce(reports, state, &settle(&2, g, &1))
+    {Enum.map(reports, &elem(&1, 0)), state}
+  end
+
+  # A Reload or Library replacement ends Runs, whose reports settle waiting
+  # requests; the reloaded code takes new messages at once.
+  defp work(_state, g, {{:ok, ok}, state}) do
+    {reports, state} = reports(state, g, ok)
+    {{:ok, reports}, schedule_pump(state, g)}
+  end
+
+  defp work(_state, _g, {error, state}), do: {error, state}
+
+  defp carry(opts) do
+    case Keyword.get(opts, :variables, :carry) do
+      :carry -> "carry variables"
+      :reset -> "reset variables"
+    end
+  end
+
+  defp group_entry, do: %{timer: nil, queued: false, unsettled: MapSet.new()}
+
+  # A restored Group isn't pumped automatically until every pending call is
+  # settled, since its first Pump fails each one still unsettled.
+  defp release_held(state, g) do
+    if MapSet.size(state.groups[g].unsettled) == 0, do: schedule_pump(state, g), else: state
+  end
+
+  defp pending_call(p) do
+    %NorthTalk.PendingCall{
+      call: p["call"],
+      script: p["script"],
+      grant: p["grant"],
+      operation: p["operation"],
+      args: Value.decode(p["args"])
+    }
   end
 
   defp report(r) do
@@ -384,14 +542,36 @@ defmodule NorthTalk.Owner do
   defp settle(state, g, {report, value}) do
     if pid = state.reports_to, do: send(pid, {:north_talk, %Group{owner: self(), name: g}, report})
 
-    with "run end" <- report["kind"],
-         {from, waiters} when from != nil <- Map.pop(state.waiters, {g, report["delivery"]}) do
-      GenServer.reply(from, outcome(report, value))
-      %{state | waiters: waiters}
-    else
-      _ -> state
+    case report["kind"] do
+      "run end" ->
+        reply(state, g, report["delivery"], outcome(report, value))
+
+      # A stopped or reloaded Script's Runs end with no `run end`, and the
+      # messages in its mailbox are dropped.
+      "run discarded" ->
+        reply(state, g, report["rootDelivery"], {:error, discarded(report, report["rootDelivery"])})
+
+      "stop" ->
+        Enum.reduce(report["droppedMessages"] || [], state, &reply(&2, g, &1, {:error, discarded(report, &1)}))
+
+      _ ->
+        state
     end
   end
+
+  defp reply(state, g, delivery, reply) do
+    case Map.pop(state.waiters, {g, delivery}) do
+      {nil, _} ->
+        state
+
+      {from, waiters} ->
+        GenServer.reply(from, reply)
+        %{state | waiters: waiters}
+    end
+  end
+
+  defp discarded(report, delivery),
+    do: %ScriptError{outcome: "discarded", error: %{"code" => report["reason"]}, delivery: delivery, report: report}
 
   defp outcome(%{"outcome" => "completed"} = report, value),
     do: {:ok, %Result{value: value, delivery: report["delivery"], report: report}}
@@ -407,9 +587,13 @@ defmodule NorthTalk.Owner do
         state
 
       group ->
-        if group.timer, do: Process.cancel_timer(group.timer)
-        send(self(), {:pump, g})
-        put_in(state.groups[g], %{group | queued: true, timer: nil})
+        if MapSet.size(group.unsettled) > 0 do
+          state
+        else
+          if group.timer, do: Process.cancel_timer(group.timer)
+          send(self(), {:pump, g})
+          put_in(state.groups[g], %{group | queued: true, timer: nil})
+        end
     end
   end
 
@@ -466,35 +650,124 @@ defmodule NorthTalk.Owner do
     end
   end
 
-  # Host Objects and lifecycle hooks answer their needs in later slices of
-  # #963; until then each is refused safely.
   defp answer(state, g, %{"m" => "op"} = need, args) do
     {result, state} = operation(state, g, need, args)
     {Map.merge(%{"m" => "op-result", "charged" => 0}, result), state}
   end
 
-  defp answer(state, _g, need, _args), do: {answer(need), state}
+  defp answer(state, g, %{"m" => "effect"} = need, _args),
+    do: {Map.put(effect(state, g, need), "m", "effect-result"), state}
 
-  defp answer(need) do
-    case need["m"] do
-      "prop" ->
-        %{"m" => "prop-result", "hostError" => %{"detail" => "no Host Objects"}}
+  defp answer(state, g, %{"m" => "release"} = need, _args) do
+    release(state, g, need)
+    {%{"m" => "release-result"}, state}
+  end
 
-      "effect" ->
-        %{"m" => "effect-result", "status" => "unknown", "detail" => "no lifecycle hooks"}
+  defp answer(state, g, %{"m" => "resolve"} = need, _args) do
+    grants = Enum.map(need["grants"] || [], fn [script, name] -> {script, name, rebind(state, script, name)} end)
+    bindings = for {script, name, %Grant{} = grant} <- grants, into: %{}, do: {{g, script, name}, grant}
 
-      "release" ->
-        %{"m" => "release-result"}
+    # Host Objects come in a later slice of #963, so none resolves.
+    answer = %{
+      "m" => "resolve-result",
+      "grants" => Enum.map(grants, fn {_, _, grant} -> grant && grant.handle end),
+      "objects" => Enum.map(need["objects"] || [], fn _ -> false end)
+    }
 
-      "resolve" ->
-        %{
-          "m" => "resolve-result",
-          "grants" => Enum.map(need["grants"] || [], fn _ -> nil end),
-          "objects" => Enum.map(need["objects"] || [], fn _ -> false end)
-        }
+    {answer, %{state | bindings: Map.merge(state.bindings, bindings)}}
+  end
 
-      m ->
-        %{"m" => "#{m}-result"}
+  # Host Objects come in a later slice of #963; until then a property is
+  # refused safely.
+  defp answer(state, _g, %{"m" => "prop"}, _args),
+    do: {%{"m" => "prop-result", "hostError" => %{"detail" => "no Host Objects"}}, state}
+
+  defp answer(state, _g, need, _args), do: {%{"m" => "#{need["m"]}-result"}, state}
+
+  # A restore's Grant for one Script's name, or nil to restore it revoked.
+  defp rebind(state, script, name) do
+    me = self()
+
+    grant =
+      case state.restoring do
+        fun when is_function(fun, 2) -> fun.(script, name)
+        %{} = grants -> grants[{script, name}]
+        _ -> nil
+      end
+
+    with %Grant{owner: ^me} <- grant, do: grant, else: (_ -> nil)
+  end
+
+  @phases %{"begin" => :begin, "commit" => :commit, "rollback" => :rollback}
+  @statuses [:ok, :failed, :unknown]
+
+  # A Segment lifecycle crossing goes to the first enrolled Grant's
+  # Capability. Anything but a status it returns is `unknown`.
+  defp effect(state, g, need) do
+    script = need["script"]
+    grants = Enum.map(need["grants"] || [need["grant"]], &{&1, state.bindings[{g, script, &1}]})
+
+    with %Grant{} = grant <- state.bindings[{g, script, need["grant"]}],
+         %Capability{effect: hook} = capability when hook != nil <- state.capabilities[grant.capability] do
+      effect = %Effect{
+        group: %Group{owner: self(), name: g},
+        script: script,
+        run: need["run"],
+        segment: need["segment"],
+        phase: @phases[need["phase"]],
+        grant: need["grant"],
+        binding: grant.binding,
+        grants: Enum.map(grants, fn {name, grant} -> {name, grant && grant.binding} end),
+        coordinator: need["coordinator"],
+        now: need["now"]
+      }
+
+      case hook(state, hook, [effect.phase, effect], capability.timeout) do
+        {:ok, status} when status in @statuses ->
+          %{"status" => Atom.to_string(status)}
+
+        {:ok, {status, detail}} when status in @statuses ->
+          %{"status" => Atom.to_string(status), "detail" => to_string(detail)}
+
+        {:ok, other} ->
+          %{"status" => "unknown", "detail" => "unexpected result #{inspect(other)}"}
+
+        {:error, detail} ->
+          %{"status" => "unknown", "detail" => detail}
+      end
+    else
+      _ -> %{"status" => "unknown", "detail" => "no lifecycle hooks for #{need["grant"]}"}
+    end
+  end
+
+  @reasons %{"stop" => :stop, "reload" => :reload, "revoke" => :revoke, "disable" => :disable}
+
+  # Releasing can't be refused, so the hook's result and failures are ignored.
+  defp release(state, g, need) do
+    with %Grant{} = grant <- state.bindings[{g, need["script"], need["grant"]}],
+         %Capability{release: hook} = capability when hook != nil <- state.capabilities[grant.capability] do
+      release = %Release{
+        group: %Group{owner: self(), name: g},
+        script: need["script"],
+        grant: need["grant"],
+        binding: grant.binding,
+        reason: @reasons[need["reason"]],
+        now: need["now"]
+      }
+
+      hook(state, hook, [release], capability.timeout)
+    end
+  end
+
+  # A lifecycle hook runs in a Task, like a callback, and the owner waits
+  # for it.
+  defp hook(state, hook, args, timeout) do
+    task = Task.Supervisor.async_nolink(state.tasks, Capability, :hook, [hook, args])
+
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> {:ok, result}
+      {:exit, reason} -> {:error, Exception.format_exit(reason)}
+      nil -> {:error, "timed out after #{timeout} ms"}
     end
   end
 
@@ -516,7 +789,11 @@ defmodule NorthTalk.Owner do
         capability: grant.capability,
         operation: need["operation"],
         mode: op.mode,
-        now: need["now"]
+        now: need["now"],
+        run: need["run"],
+        segment: need["segment"],
+        scope: need["scope"],
+        automatic: need["automatic"] == true
       }
 
       run(state, capability, op, Value.decode(args), call)
@@ -586,6 +863,9 @@ defmodule NorthTalk.Owner do
       kind -> %HostError{code: kind}
     end
   end
+
+  defp done({:ok, _}), do: :ok
+  defp done(error), do: error
 
   defp ok({:ok, ok}, fun), do: {:ok, fun.(ok)}
   defp ok(error, _), do: error

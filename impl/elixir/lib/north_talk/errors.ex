@@ -26,7 +26,10 @@ defmodule NorthTalk.ScriptError do
   @moduledoc """
   A Run that ended without completing. `outcome` is the `run end` report's,
   such as `"errored"`, `"unhandled"`, `"cancelled"` or `"faulted"`; `error` is
-  its error, if any. `report` is the whole `run end` report.
+  its error, if any. `report` is the whole `run end` report. A Run discarded
+  by a Stop or a Reload, or a message dropped from the stopped Script's
+  mailbox, has outcome `"discarded"`, the reason as its error's `code`, and
+  the `run discarded` or `stop` report.
   """
   defexception [:outcome, :error, :delivery, :report]
 

@@ -32,7 +32,26 @@ defmodule NorthTalk.Capability do
       before the Core times the call out.
     * `:errors` - the declared failures, as `%{code: c, fields: [...]}`.
       Omitted, any code may be raised.
+    * `:scope` - a Capability Scope this immediate Operation opens,
+      `%{opens: name, abandon: op}`, or closes, `%{closes: name}`.
+    * `:segment_bound` - `true` for an immediate Operation whose effects
+      belong to the Segment's participant.
     * `:description`, `:examples` - documentation for tooling.
+
+  ## Lifecycle hooks
+
+  A Capability with Segment-bound Operations defines `effect/2`, the
+  Segment participant's `begin`, `commit` and `rollback` hooks. It gets the
+  phase, `:begin`, `:commit` or `:rollback`, and a `NorthTalk.Effect`, and
+  returns `:ok`, `:failed` or `:unknown`, optionally as
+  `{status, detail}`. A raise, an exit, a timeout or anything else is
+  `:unknown`, which stops the Group.
+
+  A Capability may define `release/1`, its Grant release hook. It gets a
+  `NorthTalk.Release` when one Script's named Grant stops being effective,
+  and drops what it holds for it. Its result and any failure are ignored.
+
+  `from_functions/3` takes them as the `:effect` and `:release` options.
 
   ## Results
 
@@ -65,7 +84,7 @@ defmodule NorthTalk.Capability do
   """
 
   @enforce_keys [:name]
-  defstruct [:name, timeout: 5_000, operations: %{}]
+  defstruct [:name, :effect, :release, timeout: 5_000, operations: %{}]
 
   @type failure :: String.t() | %{required(:code) => String.t(), optional(atom) => term}
   @type result :: {:ok, term} | {:error, failure} | :noreply | {:defer, term}
@@ -102,6 +121,11 @@ defmodule NorthTalk.Capability do
       end
     end
 
+    hooks =
+      [effect: 2, release: 1]
+      |> Enum.filter(fn {hook, arity} -> Module.defines?(env.module, {hook, arity}) end)
+      |> Enum.map(fn {hook, _} -> {hook, {env.module, hook}} end)
+
     quote do
       @doc false
       def __capability__ do
@@ -111,7 +135,7 @@ defmodule NorthTalk.Capability do
             fun = Keyword.get(op_opts, :function, String.to_atom(name))
             {name, op_opts, {__MODULE__, fun}}
           end,
-          unquote(Keyword.delete(opts, :name))
+          unquote(Keyword.delete(opts, :name) ++ hooks)
         )
       end
     end
@@ -120,7 +144,8 @@ defmodule NorthTalk.Capability do
   @doc """
   A Capability from plain functions, for tests and quick experiments.
   `operations` maps each Operation's name to `{declaration, fun}`, where `fun`
-  takes the arguments and a `NorthTalk.Call`.
+  takes the arguments and a `NorthTalk.Call`. `:effect` and `:release` are
+  the lifecycle hooks, as functions of arity 2 and 1.
   """
   def from_functions(name, operations, opts \\ []) do
     build(name, Enum.map(operations, fn {op, {decl, fun}} when is_function(fun, 2) -> {op, decl, fun} end), opts)
@@ -133,7 +158,13 @@ defmodule NorthTalk.Capability do
         {op, %{mode: Keyword.get(decl, :mode, :immediate), declaration: declaration(op, decl), fun: fun}}
       end)
 
-    %__MODULE__{name: name, timeout: Keyword.get(opts, :timeout, 5_000), operations: ops}
+    %__MODULE__{
+      name: name,
+      timeout: Keyword.get(opts, :timeout, 5_000),
+      operations: ops,
+      effect: opts[:effect],
+      release: opts[:release]
+    }
   end
 
   @doc "The Capability a module or a `from_functions/3` value stands for."
@@ -147,6 +178,10 @@ defmodule NorthTalk.Capability do
   def invoke(%{fun: {module, fun}}, args, call), do: apply(module, fun, [args, call])
   def invoke(%{fun: fun}, args, call), do: fun.(args, call)
 
+  @doc false
+  def hook({module, fun}, args), do: apply(module, fun, args)
+  def hook(fun, args) when is_function(fun), do: apply(fun, args)
+
   defp declaration(name, decl) do
     mode = Keyword.get(decl, :mode, :immediate)
     unless Map.has_key?(@modes, mode), do: raise(ArgumentError, "unknown mode #{inspect(mode)}")
@@ -159,6 +194,8 @@ defmodule NorthTalk.Capability do
       {"cost", cost(Keyword.get(decl, :cost, 0))},
       {"maxPending", decl[:max_pending]},
       {"errors", decl[:errors] && Enum.map(decl[:errors], &error_decl/1)},
+      {"scope", decl[:scope] && scope(decl[:scope])},
+      {"segmentBound", if(decl[:segment_bound], do: true)},
       {"description", decl[:description]},
       {"examples", decl[:examples]}
     ]
@@ -169,6 +206,9 @@ defmodule NorthTalk.Capability do
   defp cost(fuel) when is_integer(fuel), do: %{"fuel" => fuel}
   defp cost(%{} = c), do: %{"fuel" => c[:fuel] || 0, "alloc" => c[:alloc] || 0}
 
+  defp scope(%{opens: opens, abandon: abandon}), do: %{"opens" => opens, "abandon" => abandon}
+  defp scope(%{closes: closes}), do: %{"closes" => closes}
+
   defp error_decl(%{code: code} = e), do: %{"code" => code, "fields" => Map.get(e, :fields, [])}
 end
 
@@ -177,9 +217,48 @@ defmodule NorthTalk.Call do
   One Operation call, as its callback sees it: the call `id`, unique within
   its Group, the `group` and `script` making it, the `grant` name the Script
   used and that Grant's `binding`, the `capability` and `operation`, the
-  `mode`, and `now`, the Pump's Clock reading as `$instant` text.
+  `mode`, and `now`, the Pump's Clock reading as `$instant` text. `run` and
+  `segment` identify where it was made, `scope` names the Capability Scope a
+  lifecycle Operation opens or closes, and `automatic` is `true` for the
+  Core's own abandonment of a scope left open.
   """
-  defstruct [:id, :owner, :group, :script, :grant, :binding, :capability, :operation, :mode, :now]
+  defstruct [
+    :id,
+    :owner,
+    :group,
+    :script,
+    :grant,
+    :binding,
+    :capability,
+    :operation,
+    :mode,
+    :now,
+    :run,
+    :segment,
+    :scope,
+    automatic: false
+  ]
+end
+
+defmodule NorthTalk.Effect do
+  @moduledoc """
+  One Segment lifecycle crossing, as a Capability's `effect/2` sees it: the
+  `group`, `script`, `run` and `segment`, the `phase`, the first enrolled
+  Grant's name and binding as `grant` and `binding`, every enrolled Grant as
+  `grants`, `[{name, binding}]` in enrollment order, the `coordinator` name if
+  any, and `now`, the Group's last Clock reading.
+  """
+  defstruct [:group, :script, :run, :segment, :phase, :grant, :binding, :coordinator, :now, grants: []]
+end
+
+defmodule NorthTalk.Release do
+  @moduledoc """
+  A Grant that stopped being effective for one Script, as a Capability's
+  `release/1` sees it: the `group`, `script`, `grant` name and its `binding`,
+  the `reason`, `:stop`, `:reload`, `:revoke` or `:disable`, and `now`, the
+  Group's last Clock reading.
+  """
+  defstruct [:group, :script, :grant, :binding, :reason, :now]
 end
 
 defmodule NorthTalk.Grant do
