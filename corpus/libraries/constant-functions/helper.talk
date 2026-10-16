@@ -1,0 +1,14 @@
+constant box = {f: given x: x + 1}
+constant nested = [{box: box}]
+constant factory = given n: given x: x + n
+constant supplier = given: box
+function apply x, callbacks = box
+  put the f of callbacks into f
+  return f(x)
+end apply
+function twice x, f = given n: n * 2
+  return f(x)
+end twice
+function read
+  return nested
+end read

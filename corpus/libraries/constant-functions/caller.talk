@@ -1,0 +1,29 @@
+use box, nested, factory, supplier, apply, twice, read from helper
+use forwarded, through, readThrough from bridge
+script variable saved = box
+script variable functions
+script variable results
+on go
+  put the f of saved into f
+  put the f of the box of item 1 of nested into nestedF
+  put the f of item 1 of forwarded into forwardedF
+  put factory(10) into captured
+  put supplier() into supplied
+  put the f of supplied into suppliedF
+  put read() into readBack
+  put the f of the box of item 1 of readBack into readF
+  put readThrough() into throughBack
+  put the f of item 1 of throughBack into throughF
+  put [f, nestedF, forwardedF, captured, suppliedF, readF, throughF] into functions
+  put [f(2), nestedF(3), forwardedF(4), captured(5), suppliedF(6), readF(7), throughF(8), apply(9), twice(5), through(10), f = nestedF, f = forwardedF] into results
+end go
+on share
+  put the f of saved into f
+  send foreign with f to b and wait
+  put it after results
+end share
+on foreign callback
+  callback(20) and wait
+  put it after results
+  return it
+end foreign

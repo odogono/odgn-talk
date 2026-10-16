@@ -1,0 +1,32 @@
+# Unblessed: Library Constant/default Function Values bind to each caller (#1036); first blessing awaits human review.
+
+> add-library helper identity=40bab842ff1c29109f79ece9d1e7f235095966602ab3b75491ea710f75db0f29
+> add-library bridge identity=7ae16bc8eecf1bed3c29e53133c97b3ae80395cfdca63fda5dbec10f72183694
+> load a identity=8a363ada4f86ed15fc80a55723e9b37eb9caf876b7da2cd98d958f6e3ca81b10
+> load b identity=47b237c8a8d1d8c20ae5ca83870a90e6147d7be08126ab7706d5945979677faa
+> deliver d1 to=a message=go
+> deliver d2 to=b message=go
+> pump clock=2026-09-30T09:00:00Z
+seg a/r1 start delivery=d1 handler=go clause=1 fuel=398 alloc=1186 state=673 end=return
+run a/r1 outcome=completed delivery=d1 handler=go fuel=398 alloc=1186
+seg b/r1 start delivery=d2 handler=go clause=1 fuel=398 alloc=1186 state=673 end=return
+run b/r1 outcome=completed delivery=d2 handler=go fuel=398 alloc=1186
+pumped state=idle fuel=796
+
+> deliver d3 to=a message=share
+> pump clock=2026-09-30T09:00:01Z
+send a/r2.c1 to=b message=foreign args=[<function a:helper:1:20>] wait=yes
+seg a/r2 start delivery=d3 handler=share clause=1 fuel=33 alloc=64 state=953 end=send-wait
+send b/r2.c1 to=a fn=<function a:helper:1:20> args=[20] wait=yes
+seg b/r2 start from=a/r2.c1 handler=foreign clause=1 fuel=14 alloc=0 state=953 end=call-value-wait
+seg a/r3 start from=b/r2.c1 fn=<function a:helper:1:20> fuel=8 alloc=16 state=953 end=return
+run a/r3 outcome=completed fn=<function a:helper:1:20> value=21 fuel=8 alloc=16
+seg b/r2 resume fuel=13 alloc=24 state=697 end=return
+run b/r2 outcome=completed handler=foreign value=21 fuel=27 alloc=24
+seg a/r2 resume fuel=13 alloc=24 state=697 end=return
+run a/r2 outcome=completed delivery=d3 handler=share fuel=46 alloc=88
+pumped state=idle fuel=81
+
+> vars
+vars a saved={f: <function a:helper:1:20>} functions=[<function a:helper:1:20>, <function a:helper:1:20>, <function a:helper:1:20>, <function a:helper:3:29 {n: 10}>, <function a:helper:1:20>, <function a:helper:1:20>, <function a:helper:1:20>] results=[3, 4, 5, 15, 7, 8, 9, 10, 10, 11, true, true, 21]
+vars b saved={f: <function b:helper:1:20>} functions=[<function b:helper:1:20>, <function b:helper:1:20>, <function b:helper:1:20>, <function b:helper:3:29 {n: 10}>, <function b:helper:1:20>, <function b:helper:1:20>, <function b:helper:1:20>] results=[3, 4, 5, 15, 7, 8, 9, 10, 10, 11, true, true, 21]

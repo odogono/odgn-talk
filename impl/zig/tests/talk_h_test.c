@@ -1831,6 +1831,42 @@ static int manifest_test(void) {
     return bad;
 }
 
+/* A compiled Library is reusable across Groups and callers. Its nested
+ * Function Values, including defaults, acquire each calling Script's Home. */
+static int library_constant_functions_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    const char *lib_source = "constant box = {f: given x: x + 1}\nfunction apply x, callbacks = box\n put the f of callbacks into f\n return f(x)\nend apply\n";
+    talk_library_source lib_src = {"helper", 6, "1", 1, lib_source, strlen(lib_source)};
+    talk_library *lib = NULL;
+    int bad = talk_compile_library(core, &lib_src, NULL, 0, NULL, 0, &lib, NULL) != TALK_OK;
+    for (int i = 0; i < 2 && !bad; i++) {
+        trace_len = 0;
+        memset(trace, 0, sizeof trace);
+        talk_group *group = NULL;
+        talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+        bad |= talk_new_group(core, &options, &group) != TALK_OK;
+        bad |= talk_add_library(group, lib) != TALK_OK;
+        const char *source = "use box, apply from helper\nscript variable got\non go\n put the f of box into f\n put [f(2), apply(4)] into got\nend go\n";
+        const char *names[] = {"a", "b"};
+        for (size_t j = 0; j < 2 && !bad; j++) {
+            talk_load_options load = {names[j], 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+            talk_script *script = NULL;
+            bad |= talk_load(group, &load, &script) != TALK_OK;
+            talk_message message = {"go", 2, NULL, 0, NULL};
+            bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+        }
+        bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+        talk_inspect(group, NULL);
+        bad |= strstr(trace, "vars a got=[3, 5]\n") == NULL;
+        bad |= strstr(trace, "vars b got=[3, 5]\n") == NULL;
+        if (bad) fprintf(stderr, "%s", trace);
+        talk_group_release(group);
+    }
+    talk_core_release(core);
+    return bad;
+}
+
 static int library_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
@@ -2356,6 +2392,7 @@ int main(void) {
     expect(host_list_memory_test() == 0, "growing a Host List uses the Group allocator and obeys its physical cap");
     expect(collecting_versions_test() == 0, "collecting and item writes preserve versions and Host inputs");
     expect(snapshot_growth_test() == 0, "appending constant-size List snapshots stays fast with unchanged charges and values");
+    expect(library_constant_functions_test() == 0, "Library Constants and defaults bind Function Values to each caller and Group");
     expect(library_test() == 0, "Libraries register in import order, run in the caller's Run and import the stdlib");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");

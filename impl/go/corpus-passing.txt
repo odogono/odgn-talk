@@ -181,6 +181,7 @@ functions/host-cancellation
 functions/queued-host-cancellation
 libraries/caller-capabilities
 libraries/calls
+libraries/constant-functions
 libraries/errors
 libraries/needs-suspending
 libraries/needs-transitive

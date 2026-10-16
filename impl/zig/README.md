@@ -1004,6 +1004,12 @@ and the Core adds its `message`. Loading a Script checks the `needs` of every
 Library it imports against its Grants, at the `use` line, and `grantsAsUsed`
 keeps the Operations those `needs` call.
 
+Function Values nested in Library Constants and parameter defaults bind to
+each importing or calling Script's Home, including through transitive imports.
+The compiled Library holds unbound code templates, reusable across Groups;
+binding preserves Library code positions and captures without changing the
+shared Constant. Bound values survive full Group Save/Restore.
+
 The trusted stdlib loader alone lowers private `map:restrictedCall` to
 `call-restricted`. Its inherited frame restriction rejects live Script state,
 Host effects and recovery-context access before acting, and survives catches,

@@ -692,6 +692,8 @@ pub const Library = struct {
     definitions: []*Value,
     /// The Libraries its `use` lines import, in the order first named.
     imports: []*Library,
+    /// Unbound code records held by Constants/defaults, never Group handles.
+    constant_functions: std.ArrayList(*FunctionCode) = .empty,
     exports: []const check.Export,
     /// Every Capability call it makes, through its imports too.
     needs: []const check.Need,
@@ -711,6 +713,8 @@ pub const Library = struct {
         releaseDeclarations(l.declarations);
         for (l.definitions) |v| v.release();
         l.gpa.free(l.definitions);
+        for (l.constant_functions.items) |f| f.destroy(l.gpa);
+        l.constant_functions.deinit(l.gpa);
         for (l.unit.values) |v| if (v == .value) v.value.release();
         var arena = l.arena;
         l.gpa.destroy(l);
@@ -842,6 +846,7 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
     // literals, Constants and Built-ins, run once.
     var group: Group = .init(gpa, null);
     defer group.deinit();
+    group.compiling_library = true;
     l.definitions = try group.newValues(unit.definitions.len, unit.definitions, imports);
     var host: Script = .{ .name = own_name, .identity = l.identity, .arena = .init(gpa), .code = .init(gpa), .unit = unit, .variables = &.{}, .definitions = l.definitions };
     var run: Run = .{ .id = "", .script = &host, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
@@ -865,6 +870,14 @@ pub fn compileLibrary(gpa: Allocator, name: []const u8, label: []const u8, sourc
         },
         else => {},
     }
+    // Values retain these identities after the temporary Group goes away.
+    // Their code stays immutable and gains a real Home only in a caller.
+    l.constant_functions = group.functions;
+    group.functions = .empty;
+    for (l.constant_functions.items) |f| if (f.library == null) {
+        f.library = l;
+        f.unit = l.identity;
+    };
     return .{ .library = l };
 }
 
@@ -935,6 +948,15 @@ pub const FunctionCode = struct {
     /// The code identity of the unit that defines it, which a Host's tooling
     /// finds its source and documentation by, stale or not.
     unit: [32]u8 = @splat(0),
+    /// The named function or Lambda position used by a compiled template.
+    where: []const u8 = "",
+
+    fn destroy(f: *FunctionCode, gpa: Allocator) void {
+        gpa.free(f.home);
+        gpa.free(f.name);
+        gpa.free(f.where);
+        gpa.destroy(f);
+    }
 };
 
 /// The messages waiting in a Script's mailbox; its Runs don't count.
@@ -1446,6 +1468,9 @@ pub const Group = struct {
     libraries: std.ArrayList(*Library) = .empty,
     /// The code of each Function Value made, by identity.
     functions: std.ArrayList(*FunctionCode) = .empty,
+    /// Set while a Library compiles: its Function Values are templates,
+    /// left unbound until a caller reads them.
+    compiling_library: bool = false,
     /// The code generations given out, so that each is new.
     generations: u64 = 0,
     /// The save attempts made, which number them `s1`, `s2`, …
@@ -1556,11 +1581,7 @@ pub const Group = struct {
         for (g.objects.items) |o| o.destroy(g.gpa);
         g.objects.deinit(g.gpa);
         g.libraries.deinit(g.gpa);
-        for (g.functions.items) |f| {
-            g.gpa.free(f.home);
-            g.gpa.free(f.name);
-            g.gpa.destroy(f);
-        }
+        for (g.functions.items) |f| f.destroy(g.gpa);
         g.functions.deinit(g.gpa);
         for (g.charge_requests.items) |q| {
             g.gpa.free(q.id);
@@ -1982,6 +2003,12 @@ pub const Group = struct {
     /// Runs a unit's initialiser once, uncharged: false, with its
     /// `initialiser failed` diagnostic under `label`, when it raises.
     fn initialise(g: *Group, s: *Script, library: ?*Library, label: []const u8) !bool {
+        const definitions = if (library) |l| l.definitions else s.definitions;
+        for (definitions) |*v| {
+            const bound = try g.bindLibraryValue(s, library, v.*);
+            v.*.release();
+            v.* = bound;
+        }
         // It runs between Pumps, so no Fuel Slice or Fuel cap preempts it.
         const slice = g.slice;
         const cap = g.cap;
@@ -6596,6 +6623,7 @@ pub const Group = struct {
     /// Lambda's position.
     fn functionValue(g: *Group, run: *Run, library: ?*Library, body: u32, where: []const u8, captures: *Value) !*Value {
         const f = try g.functionCode(run.script, library, body);
+        if (g.compiling_library and f.where.len == 0) f.where = try g.gpa.dupe(u8, where);
         var shown: std.Io.Writer.Allocating = .init(g.scratch.allocator());
         // An extension's Lambda is placed by the extension's unit name; its
         // named functions, like the Script's own, by the Script's.
@@ -6616,6 +6644,94 @@ pub const Group = struct {
             error.OutOfMemory => error.OutOfMemory,
             else => g.raise("too deep", &.{}),
         };
+    }
+
+    /// Bind only compiled Library templates. Already-bound and stale Function
+    /// Values keep their identities. Walk containers/captures iteratively and
+    /// memoise shared children, so value depth never consumes the native stack.
+    /// Templates come from `library` and its imports, or the Script's imports.
+    fn bindLibraryValue(g: *Group, home: *Script, library: ?*Library, value: *Value) !*Value {
+        if (g.compiling_library) return value.retain();
+        switch (value.data) {
+            .list, .map, .function => {},
+            else => return value.retain(),
+        }
+        const a = g.gpa;
+        var libraries: std.ArrayList(*Library) = .empty;
+        defer libraries.deinit(a);
+        try libraries.appendSlice(a, if (library) |l| &.{l} else home.imports);
+        var codes: std.AutoHashMapUnmanaged(usize, *FunctionCode) = .empty;
+        defer codes.deinit(a);
+        var i: usize = 0;
+        while (i < libraries.items.len) : (i += 1) {
+            const l = libraries.items[i];
+            for (l.constant_functions.items) |f| try codes.put(a, @intFromPtr(f), f);
+            for (l.imports) |im| if (std.mem.indexOfScalar(*Library, libraries.items, im) == null) try libraries.append(a, im);
+        }
+        if (codes.count() == 0) return value.retain();
+
+        const Visit = struct { value: *Value, ready: bool = false };
+        var pending: std.ArrayList(Visit) = .empty;
+        defer pending.deinit(a);
+        var bound: std.AutoHashMapUnmanaged(*Value, *Value) = .empty;
+        defer {
+            var values = bound.valueIterator();
+            while (values.next()) |v| v.*.release();
+            bound.deinit(a);
+        }
+        try pending.append(a, .{ .value = value });
+        while (pending.pop()) |visit| {
+            const v = visit.value;
+            if (bound.contains(v)) continue;
+            if (!visit.ready) {
+                try pending.append(a, .{ .value = v, .ready = true });
+                switch (v.data) {
+                    .list => |items| for (items) |child| try pending.append(a, .{ .value = child }),
+                    .map => |pairs| for (0..pairs.len) |j| try pending.append(a, .{ .value = pairs.at(j).value }),
+                    .function => |f| try pending.append(a, .{ .value = f.captures }),
+                    else => {},
+                }
+                continue;
+            }
+            const result = switch (v.data) {
+                .list => |items| blk: {
+                    const children = try a.alloc(*Value, items.len);
+                    defer a.free(children);
+                    var changed_value = false;
+                    for (items, children) |child, *out| {
+                        out.* = bound.get(child).?;
+                        changed_value = changed_value or out.* != child;
+                    }
+                    break :blk if (changed_value) try model.list(a, children) else v.retain();
+                },
+                .map => |pairs| blk: {
+                    const children = try a.alloc(model.Pair, pairs.len);
+                    defer a.free(children);
+                    var changed_value = false;
+                    for (children, 0..) |*out, j| {
+                        const p = pairs.at(j);
+                        out.* = .{ .key = p.key, .value = bound.get(p.value).? };
+                        changed_value = changed_value or out.value != p.value;
+                    }
+                    if (!changed_value) break :blk v.retain();
+                    const m = try model.map(a, children);
+                    m.core_message = v.core_message;
+                    m.script_name = v.script_name;
+                    break :blk m;
+                },
+                .function => |f| blk: {
+                    const template = codes.get(f.identity) orelse break :blk v.retain();
+                    var run: Run = .{ .id = "", .script = home, .delivery = .{ .id = 0, .message = "", .args = &.{}, .request = false } };
+                    break :blk try g.functionValue(&run, template.library, template.body, template.where, bound.get(f.captures).?);
+                },
+                else => v.retain(),
+            };
+            bound.put(a, v, result) catch |e| {
+                result.release();
+                return e;
+            };
+        }
+        return bound.get(value).?.retain();
     }
 
     /// `call-value` and `call-value-wait`: a Function Value whose Home
@@ -6693,8 +6809,9 @@ pub const Group = struct {
         for (params[args.len..], args.len + 1..) |p, slot| {
             const eq = std.mem.indexOf(u8, p, " = ") orelse continue;
             const def = std.fmt.parseInt(usize, p[eq + 3 ..], 10) catch continue;
+            const bound = try g.bindLibraryValue(run.script, library, definitionsOf(run, callee)[def]);
             callee.locals[slot].release();
-            callee.locals[slot] = definitionsOf(run, callee)[def].retain();
+            callee.locals[slot] = bound;
         }
     }
 
@@ -7944,7 +8061,7 @@ pub const Group = struct {
             },
             .load_definition => {
                 const i = definitionIndex(unit, ops[0].text);
-                try g.push(frame, definitionsOf(run, frame)[i].retain());
+                try g.push(frame, try g.bindLibraryValue(run.script, frame.library, definitionsOf(run, frame)[i]));
             },
             .store_definition => {
                 const i = definitionIndex(unit, ops[0].text);

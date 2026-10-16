@@ -1,0 +1,25 @@
+# Library Constants/defaults bind nested Function Values to each caller,
+# including transitive imports and values saved before their first call (#1036).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[libraries]]
+name = "helper"
+version = "1"
+source = "helper.talk"
+
+[[libraries]]
+name = "bridge"
+version = "1"
+source = "bridge.talk"
+
+[[scripts]]
+name = "a"
+source = "caller.talk"
+
+[[scripts]]
+name = "b"
+source = "caller.talk"
