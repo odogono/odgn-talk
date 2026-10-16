@@ -476,11 +476,14 @@ editor has the same completion (⌃Space), hover and diagnostics for the Page's
 names. The editor holds the whole Script a command runs as, with the lines
 around the command hidden and protected.
 
-HyperTalk-style `hide welcomeText` and `show welcomeText` come from Folio's
-`folio` Library ([`src/folio-library.ts`](src/folio-library.ts)), which every
-Play Session holds and the Message Box imports. An authored Script can use them
-with `use hide, show from folio`; Script windows' language servers know the
-Library too.
+HyperTalk-style `hide welcomeText` and `show welcomeText` are built in, as in
+HyperCard: every Script can call them without an import. They come from Folio's
+`folio` Library ([`src/folio-library.ts`](src/folio-library.ts)), which a Play
+Session loads as the Script of a hidden object above the Project, so they end
+every Message Path. An Element, Page or Project Script can answer `on hide`
+itself, and `pass hide` to let Folio carry it out. An error in a built-in
+command, such as `hide 42`, is reported against the Script that called it, on
+line 1. The ownerless Message Box imports the Library instead.
 
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element

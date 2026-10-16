@@ -627,3 +627,46 @@ end pointerEnter`;
   expect(play.sounds.playing()).toEqual([]);
   expect(play.page.elements.map(e => e.name)).toEqual(['text1']);
 });
+
+const clickButton = (
+  projectScript = '',
+  buttonScript = 'on click\n hide text1\nend click',
+) => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = buttonScript;
+  project.script = projectScript;
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  return play;
+};
+
+test('hide and show are built in: an unhandled call ends at Folio, below any override', () => {
+  const plain = clickButton();
+  expect(plain.problems).toEqual([]);
+  expect(plain.page.elements[1]!.visible).toBe(false);
+
+  const overridden = clickButton('on hide t\nend hide');
+  expect(overridden.page.elements[1]!.visible).toBe(true);
+
+  const passed = clickButton('on hide t\n pass hide\nend hide');
+  expect(passed.problems).toEqual([]);
+  expect(passed.page.elements[1]!.visible).toBe(false);
+
+  const shown = clickButton(
+    '',
+    'on click\n hide text1\n show text1\nend click',
+  );
+  expect(shown.page.elements[1]!.visible).toBe(true);
+});
+
+test('a built-in command error is reported against the Script that called it', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = 'on click\n hide 42\nend click';
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.problems).toMatchObject([
+    { owner: project.pages[0]!.elements[0] },
+  ]);
+});
