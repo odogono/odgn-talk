@@ -118,6 +118,34 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Reload/Extend artifact refresh, 2026-10-16
+
+[Raw output](measurements-reload.txt) records three repetitions with artifact
+source `143a5c9d`, SHA-256
+`43b939a4658e63be6b9fdad2f986ac6ba4ca5f093062f2e6ab3315b09761ee45`,
+and public-adapter/native-Go revision `5e1766ae`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.833 µs native Go vs 32.073 µs probe (8.4×)**,
+cold compile/runtime/close **626.7 ms**, cached instantiation/close **122.8 µs**.
+This is the same independent immediate-call workload; it does not measure
+Reload latency or an accepted retirement limit.
+
+The public comparison now covers 141 callback/input scenarios. Thirteen new
+Reload and Extend scenarios compare exact Trace, Fuel, typed Reports, futures
+and inspected state against a separately compiled native-Go Host: reset and
+carried variables, refusals, `state too large`, keeping the mailbox, a stopped
+Script, release hooks, stale Function Values, Libraries, reentrancy, Extend and
+its refusals, and a waiting Run kept across Extend. A survey of every native
+test under the tag adds 149 now-passing tests to the experimental selection,
+which holds 271. Of the 115 still excluded, 80 wait for Segment effects and
+scopes, Save/Restore/Fingerprint or Standard Capability refinements; the rest
+are triaged in #884. The Zig correction is tracked in #1041.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C tests, all 431 ordinary
+and deferred Corpus cases and both WASI checks pass locally. Independent pure-Go
+adapter/probe cross-builds cover Linux amd64/arm64 and macOS arm64. This
+revision still needs CI execution on the other required runners.
+
 ## Library artifact refresh, 2026-10-16
 
 [Raw output](measurements-libraries.txt) records three repetitions with artifact

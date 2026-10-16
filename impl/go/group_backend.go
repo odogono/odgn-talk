@@ -23,6 +23,8 @@ type groupBackend interface {
 	dispose(*Object) error
 	addLibrary(*Library) error
 	replaceLibrary(*Library, CarryOver) ([]Report, error)
+	reload(s *Script, source string, carry CarryOver, keepMailbox bool) ([]Report, error)
+	extend(s *Script, source string) error
 	pump(time.Time, PumpOptions) (PumpResult, error)
 	inspect() Inspection
 	counters(*Script) Counters

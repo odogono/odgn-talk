@@ -982,7 +982,9 @@ also `unknown name`. `talk_compile_library` with NULL declarations declares no
 Grants, so a Library's direct Capability call, `say` included, is `unknown
 operation`. A Join in a Library is `not in a library`. A Library replacement
 whose importers hold Grants with release hooks waits for each Script's
-releases, then reloads it against the new Library.
+releases, then reloads it against the new Library. Over the Message Layer, a
+refused `reload` or `extend` publishes its records to a `crossing-trace-v1`
+Host, as a refused Load does.
 
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are

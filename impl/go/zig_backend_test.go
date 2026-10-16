@@ -274,8 +274,7 @@ func TestZigBackendOwnedDeepValuesAndIndependentGroups(t *testing.T) {
 func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 	core := talk.New()
 	g := core.NewGroup(talk.GroupOptions{})
-	s, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nend go\n"})
-	if err != nil {
+	if _, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nend go\n"}); err != nil {
 		t.Fatal(err)
 	}
 	checks := []struct {
@@ -284,8 +283,6 @@ func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
 	}{
 		{"save", func() error { _, e := g.Save(); return e }},
 		{"restore", func() error { _, _, e := core.Restore(nil, talk.RestoreOptions{}); return e }},
-		{"reload", func() error { _, e := s.Reload("", talk.ResetVariables); return e }},
-		{"extend", func() error { return s.Extend("") }},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
