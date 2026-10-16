@@ -35,6 +35,8 @@ defmodule NorthTalk.Owner do
     :fuel_slice,
     :reports_to,
     :tasks,
+    # The tokens of Function Values held by the Host, by handle id.
+    :functions,
     ref: 0,
     groups: %{},
     waiters: %{},
@@ -68,6 +70,7 @@ defmodule NorthTalk.Owner do
          state = %__MODULE__{
            transport: transport,
            tasks: tasks,
+           functions: :ets.new(:north_talk_functions, [:protected]),
            drive: Keyword.get(opts, :drive, :auto),
            clock: Clock.start(),
            fuel_slice: Keyword.get(opts, :fuel_slice, @default_fuel_slice),
@@ -118,6 +121,38 @@ defmodule NorthTalk.Owner do
 
   @impl true
   def handle_call(:versions, _from, state), do: {:reply, state.versions, state}
+
+  def handle_call({:release, %NorthTalk.Function{id: id}}, _from, state) do
+    :ets.delete(state.functions, id)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:close_group, %Group{name: g}}, _from, state) do
+    case Map.pop(state.groups, g) do
+      {nil, _} ->
+        {:reply, {:error, no_group(g)}, state}
+
+      {group, groups} ->
+        if group.timer, do: Process.cancel_timer(group.timer)
+        :ets.match_delete(state.functions, {:_, g, :_})
+        {closed, waiters} = Map.split_with(state.waiters, fn {{wg, _}, _} -> wg == g end)
+        for {_, from} <- closed, do: GenServer.reply(from, {:error, %HostError{code: "group closed", detail: g}})
+        {:reply, :ok, %{state | groups: groups, waiters: waiters}}
+    end
+  end
+
+  def handle_call({:load, %Group{name: g}, _, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:call, %Group{name: g}, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({m, %Group{name: g}, _}, _from, state)
+      when m in [:add_library, :pump] and not is_map_key(state.groups, g),
+      do: {:reply, {:error, no_group(g)}, state}
+
+  def handle_call({:send, _, %Group{name: g}, _, _, _}, _from, state) when not is_map_key(state.groups, g),
+    do: {:reply, {:error, no_group(g)}, state}
 
   def handle_call({:new_group, name, opts}, _from, state) do
     fields = %{"group" => name, "name" => name, "trace" => Keyword.get(opts, :trace, false)}
@@ -269,10 +304,10 @@ defmodule NorthTalk.Owner do
 
     case reply do
       {:ok, ok} ->
-        pending = Enum.map(ok["pending"], &pending_call/1)
+        pending = Enum.map(ok["pending"], &pending_call(state, name, &1))
         entry = %{group_entry() | unsettled: MapSet.new(pending, & &1.call)}
         state = put_in(state.groups[name], entry)
-        state = Enum.reduce(Enum.map(ok["reports"] || [], &report/1), state, &settle(&2, name, &1))
+        state = Enum.reduce(Enum.map(ok["reports"] || [], &report(state, name, &1)), state, &settle(&2, name, &1))
 
         restored = %Restored{
           group: %Group{owner: self(), name: name},
@@ -295,7 +330,7 @@ defmodule NorthTalk.Owner do
   def handle_call({:settle_restored, %Group{name: g}, call, settlement}, _from, state) do
     {fields, adopt} =
       case settlement do
-        {:answer, value} -> {%{"answer" => Value.encode(value)}, nil}
+        {:answer, value} -> {%{"answer" => encode(state, g, value)}, nil}
         {:fail, failure} -> {%{"fail" => failure(failure)}, nil}
         :reissue -> {%{"reissue" => true}, nil}
         {:adopt, ref} -> {%{"adopt" => true}, ref}
@@ -327,23 +362,16 @@ defmodule NorthTalk.Owner do
   end
 
   def handle_call({:send, kind, %Group{name: g}, to, name, args}, from, state) do
-    fields = %{"group" => g, "to" => target(to), "message" => %{"name" => name, "args" => Value.encode(args)}}
+    fields = %{"group" => g, "to" => target(to), "message" => %{"name" => name, "args" => encode(state, g, args)}}
+    queue(state, kind, g, fields, from)
+  rescue
+    error in HostError -> {:reply, {:error, error}, state}
+  end
 
-    case exchange(state, kind, fields) do
-      {{:ok, ok}, state} ->
-        delivery = ok["delivery"]
-
-        state =
-          if kind == "request",
-            do: put_in(state.waiters[{g, delivery}], from),
-            else: state
-
-        state = schedule_pump(state, g)
-        if kind == "request", do: {:noreply, state}, else: {:reply, {:ok, delivery}, state}
-
-      {error, state} ->
-        {:reply, error, state}
-    end
+  # A Function Value call has the shape of a request.
+  def handle_call({:call, %Group{name: g}, fun, args}, from, state) do
+    fields = %{"group" => g, "fn" => encode(state, g, fun), "args" => encode(state, g, args)}
+    queue(state, "call", g, fields, from)
   rescue
     error in HostError -> {:reply, {:error, error}, state}
   end
@@ -354,7 +382,27 @@ defmodule NorthTalk.Owner do
     {:reply, reply, state}
   end
 
+  defp queue(state, kind, g, fields, from) do
+    case exchange(state, kind, fields) do
+      {{:ok, ok}, state} ->
+        delivery = ok["delivery"]
+
+        state =
+          if kind == "deliver",
+            do: state,
+            else: put_in(state.waiters[{g, delivery}], from)
+
+        state = schedule_pump(state, g)
+        if kind == "deliver", do: {:reply, {:ok, delivery}, state}, else: {:noreply, state}
+
+      {error, state} ->
+        {:reply, error, state}
+    end
+  end
+
   @impl true
+  def handle_info({:pump, g}, state) when not is_map_key(state.groups, g), do: {:noreply, state}
+
   def handle_info({:pump, g}, state) do
     state = update_in(state.groups[g], &%{&1 | queued: false, timer: nil, unsettled: MapSet.new()})
     {_, state} = pump(state, g, Clock.format(Clock.now(state.clock)), state.fuel_slice)
@@ -408,7 +456,7 @@ defmodule NorthTalk.Owner do
   defp settle_call(state, {g, call}, settlement) do
     fields =
       case settlement do
-        {:answer, value} -> %{"group" => g, "call" => call, "value" => Value.encode(value)}
+        {:answer, value} -> %{"group" => g, "call" => call, "value" => encode(state, g, value)}
         {:fail, failure} -> %{"group" => g, "call" => call, "error" => failure(failure)}
       end
 
@@ -487,7 +535,7 @@ defmodule NorthTalk.Owner do
   # The final reply of a Pump, Reload or Library replacement: the calls the
   # Core abandoned, then its reports, in order.
   defp reports(state, g, ok) do
-    reports = Enum.map(ok["reports"] || [], &report/1)
+    reports = Enum.map(ok["reports"] || [], &report(state, g, &1))
     state = abandon(state, g, ok["abandoned"] || [])
     state = Enum.reduce(reports, state, &settle(&2, g, &1))
     {Enum.map(reports, &elem(&1, 0)), state}
@@ -517,23 +565,23 @@ defmodule NorthTalk.Owner do
     if MapSet.size(state.groups[g].unsettled) == 0, do: schedule_pump(state, g), else: state
   end
 
-  defp pending_call(p) do
+  defp pending_call(state, g, p) do
     %NorthTalk.PendingCall{
       call: p["call"],
       script: p["script"],
       grant: p["grant"],
       operation: p["operation"],
-      args: Value.decode(p["args"])
+      args: decode(state, g, p["args"])
     }
   end
 
-  defp report(r) do
+  defp report(state, g, r) do
     plain = plain(r)
 
     value =
       case r["result"] do
         nil -> nil
-        v -> Value.decode(v)
+        v -> decode(state, g, v)
       end
 
     {plain, value}
@@ -796,7 +844,7 @@ defmodule NorthTalk.Owner do
         automatic: need["automatic"] == true
       }
 
-      run(state, capability, op, Value.decode(args), call)
+      run(state, capability, op, decode(state, g, args), call)
     else
       _ -> {host_error("no Capability answers #{need["capability"]}.#{need["operation"]} for #{need["grant"]}"), state}
     end
@@ -821,7 +869,7 @@ defmodule NorthTalk.Owner do
     result =
       try do
         case Task.yield(task, capability.timeout) || Task.shutdown(task, :brutal_kill) do
-          {:ok, {:ok, value}} when op.mode == :immediate -> %{"result" => Value.encode(value)}
+          {:ok, {:ok, value}} when op.mode == :immediate -> %{"result" => encode(state, call.group.name, value)}
           {:ok, :noreply} when op.mode == :fire_and_forget -> %{"done" => true}
           {:ok, {:error, failure}} -> %{"fail" => failure(failure)}
           {:ok, other} -> host_error("unexpected result #{inspect(other)}")
@@ -834,6 +882,13 @@ defmodule NorthTalk.Owner do
 
     {result, state}
   end
+
+  # Values crossing for Group g: its Function Values become handles here.
+  defp ctx(state, g), do: %{owner: self(), group: g, table: state.functions}
+  defp encode(state, g, term), do: Value.encode(term, ctx(state, g))
+  defp decode(state, g, term), do: Value.decode(term, ctx(state, g))
+
+  defp no_group(g), do: %HostError{code: "group closed", detail: "no open Group #{g}"}
 
   defp host_error(detail), do: %{"hostError" => %{"detail" => detail}}
 

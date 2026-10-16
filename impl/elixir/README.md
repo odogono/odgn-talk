@@ -1,6 +1,6 @@
 # NorthTalk for Elixir
 
-An Elixir embedding of NorthTalk, backed by the Zig Core's `wasm32-wasi` reactor in [Wasmex](https://hex.pm/packages/wasmex). It speaks the [Message Layer](../../spec/09-embedding.md#the-message-layer) and needs neither Go nor a sidecar. [#963](https://github.com/odogono/odgn-talk/issues/963) tracks the rest of the application-facing API: the full value set and Function Values (#993), a verified reactor release and fault recovery (#995).
+An Elixir embedding of NorthTalk, backed by the Zig Core's `wasm32-wasi` reactor in [Wasmex](https://hex.pm/packages/wasmex). It speaks the [Message Layer](../../spec/09-embedding.md#the-message-layer) and needs neither Go nor a sidecar. [#963](https://github.com/odogono/odgn-talk/issues/963) tracks the rest of the application-facing API: a verified reactor release and fault recovery (#995).
 
 It supports Elixir 1.17 or later on OTP 27 or later, with Wasmex 0.15.1.
 
@@ -26,7 +26,15 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 
 - **Results:** each call returns `{:ok, _}` or `{:error, error}`, where `error` is a `NorthTalk.HostError`, `NorthTalk.LoadError` or `NorthTalk.ScriptError`. The `!` variants raise it instead. `deliver/4` returns once the message is accepted. `request/5` returns once its Run ends, with the `run end` report and its Fuel.
 - **Driving:** by default the owner Pumps a Group after each delivery, one Fuel Slice per Pump. Each slice is a separate message to the owner, so other work interleaves. It Pumps again at the Group's next deadline. With `drive: :manual`, the caller calls `pump/2` with its own Clock readings.
-- **Values:** see `NorthTalk.Value`. Numbers are integers or `Decimal`s, and floats are refused. Text is UTF-8, normalised to NFC. A map is a `NorthTalk.Map`, in order; a plain map with at most one key is accepted on input.
+- **Values:** see `NorthTalk.Value`. Numbers are integers or `Decimal`s, and floats are refused. Text is a UTF-8 binary, normalised to NFC, and Bytes are `NorthTalk.Bytes`. A map is a `NorthTalk.Map`, in order; a plain map with at most one key is accepted on input ([ADR 0092](../../docs/adr/0092-the-elixir-host-represents-bytes-and-ordered-maps-as-structs.md)). Quantities, ranges, Instants, Civil Dates, Patterns and Host Objects are `NorthTalk.*` structs, and `DateTime`, `Date` and `NaiveDateTime` are accepted on input. Decoding refuses any form the encoder wouldn't write, and never creates atoms.
+- **Function Values** a Script returns, or passes to a callback, are `NorthTalk.Function` handles bound to their Group and owner. `call/4` calls one through its Group as `request/5` sends a message, and one can be passed back into the same Group. A handle is held until `release/1`, or until `close_group/1` or the owner closes; there are no finalisers. Using one after that, or through another Group, is a `HostError`: `function released`, `group closed`, `instance closed` or `wrong group`. `close_group/1` acts on the Host's side only, since the Core has no message that frees a Group.
+
+  ```elixir
+  {:ok, %NorthTalk.Result{value: add2}} = NorthTalk.request(group, "pricing", "adder", [2])
+  {:ok, %NorthTalk.Result{value: 5}} = NorthTalk.call(group, add2, [3])
+  :ok = NorthTalk.release(add2)
+  ```
+
 - **Capabilities:** a module that uses `NorthTalk.Capability` declares Operations, each answered by a function of the same name. `define_capability/2` gives it to an owner, `grant/3` grants some or all of its Operations with a binding, and `load/4` takes the Grants under the names the Script uses. Calls dispatch through the Script's Grant, so Operations of the same name in different Capabilities never collide.
 
   ```elixir
@@ -81,6 +89,7 @@ The test configuration points at the repository's `.cache/` build.
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
 | [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, and a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s. |
 | [`lib/north_talk/value.ex`](lib/north_talk/value.ex) | Value conversion. |
+| [`lib/north_talk/types.ex`](lib/north_talk/types.ex) | The value structs, and `NorthTalk.Function` handles. |
 | [`lib/north_talk/transport.ex`](lib/north_talk/transport.ex) | The transport behaviour: one frame in, one frame out. |
 | [`lib/north_talk/transport/wasi.ex`](lib/north_talk/transport/wasi.ex) | The reactor in Wasmex: compiling, instantiating, guest linear memory and `talk_buffer`/`talk_send`. |
 | [`lib/north_talk/artifact.ex`](lib/north_talk/artifact.ex) | Where the reactor is found. |
