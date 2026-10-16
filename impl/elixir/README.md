@@ -81,7 +81,7 @@ This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the
 2. `config :north_talk, wasm_path: ...`.
 3. The package's `priv/talk.wasm`.
 
-The package pins one reactor release by tag and SHA-256 in [`artifact.ex`](lib/north_talk/artifact.ex). `mix compile` fetches it into `priv/` and verifies it, unless an override is set, so a consumer needs neither Go nor Zig. The [Elixir reactor workflow](../../.github/workflows/elixir-reactor.yml) publishes a release when a `reactor-v*` tag is pushed, and its digest is then pinned here.
+The package pins one reactor release by tag and SHA-256 in [`artifact.ex`](lib/north_talk/artifact.ex). `mix compile` fetches it into `priv/` and verifies it, unless an override is set, so a consumer needs neither Go nor Zig. The [Elixir reactor workflow](../../.github/workflows/elixir-reactor.yml) publishes a release when a `reactor-v*` tag is pushed, and its digest is then pinned here. CI fails when the Zig Core's save format differs from the pinned `@save_format`: a PR that changes it sets the new format, tags that commit, and pins the release in the same PR.
 
 The compiled module is cached in `:persistent_term` per SHA-256. Before an owner makes any Group, `hello` must report the save format this package reads and its required features, or the owner refuses to start with `incompatible core`.
 
