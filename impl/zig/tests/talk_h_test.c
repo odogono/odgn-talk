@@ -1264,6 +1264,39 @@ static int function_call_test(void) {
     return bad;
 }
 
+/* Library checks talk.go and talk.ts share (#1033): a Join is not in a
+ * Library, NULL declarations declare no Grants, and an unknown import binds
+ * nothing, so its uses are unknown names. */
+static int library_check_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    const char *join_source = "on hold\n  wait for all\n    ask io to pause and wait\n  end wait\nend hold\n";
+    const char *ask_source = "function read\n  ask db to read\n  return it\nend read\n";
+    const char *missing_source = "use bump from maths\nfunction f\n  return bump(1)\nend f\n";
+    const char *sources[] = {join_source, ask_source, missing_source};
+    const char *codes[][2] = {{"not in a library", NULL}, {"unknown operation", NULL}, {"unknown import", "unknown name"}};
+    int bad = 0;
+    for (size_t i = 0; i < 3; i++) {
+        talk_library_source src = {"lib", 3, "1", 1, sources[i], strlen(sources[i])};
+        talk_library *lib = NULL;
+        talk_load_error *refused = NULL;
+        bad |= talk_compile_library(core, &src, NULL, 0, NULL, 0, &lib, &refused) != TALK_LOAD_REFUSED || refused == NULL;
+        if (refused == NULL) continue;
+        for (size_t j = 0; j < 2; j++) {
+            if (codes[i][j] == NULL) continue;
+            bool found = false;
+            for (size_t k = 0; k < refused->diagnostics_len; k++) {
+                const talk_diagnostic *d = &refused->diagnostics[k];
+                found |= d->code_len == strlen(codes[i][j]) && memcmp(d->code, codes[i][j], d->code_len) == 0;
+            }
+            bad |= !found;
+        }
+        talk_load_error_release(refused);
+    }
+    talk_core_release(core);
+    return bad;
+}
+
 /* Stop Script: a waiting Run is discarded with no finally, a later Delivery
  * is dropped, and a Group whose Scripts are all stopped pumps as stopped. */
 static int stop_test(void) {
@@ -1739,10 +1772,14 @@ static int manifest_test(void) {
     int bad = talk_define_capability(core, "echo", 4, ops, 1, NULL, 0, &def) != TALK_OK;
     talk_grant *grant = NULL;
     bad |= talk_capability_def_grant_all(def, (void *)1, &grant) != TALK_OK;
+    /* `say` is console's write, which a Library must be told about. */
+    const talk_shape *write_args[] = {talk_value_shape()};
+    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1}};
+    talk_grant_decls console_decls[] = {{"console", 7, write_check, 1}};
     const char *says_source = "function shout\n  say \"a\"\nend shout\n";
     talk_library_source says_src = {"says", 4, "1", 1, says_source, strlen(says_source)};
     talk_library *says = NULL;
-    bad |= talk_compile_library(core, &says_src, NULL, 0, NULL, 0, &says, NULL) != TALK_OK;
+    bad |= talk_compile_library(core, &says_src, NULL, 0, console_decls, 1, &says, NULL) != TALK_OK;
     talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, NULL, NULL, {2, 0}, {0, 0}}};
     const char *parents[] = {"room"};
     const size_t parents_lens[] = {4};
@@ -1849,10 +1886,14 @@ static int library_test(void) {
     }
     /* `needs` is each Operation once, sorted, through imports too, and say
      * is console's write. */
+    /* `say` is console's write, which a Library must be told about. */
+    const talk_shape *write_args[] = {talk_value_shape()};
+    talk_operation_check write_check[] = {{"write", 5, TALK_IMMEDIATE, write_args, 1}};
+    talk_grant_decls console_decls[] = {{"console", 7, write_check, 1}};
     const char *says_source = "function shout\n  say \"a\"\n  say \"b\"\nend shout\n";
     talk_library_source says_src = {"says", 4, "1", 1, says_source, strlen(says_source)};
     talk_library *says = NULL, *loud = NULL;
-    bad |= talk_compile_library(core, &says_src, NULL, 0, NULL, 0, &says, NULL) != TALK_OK;
+    bad |= talk_compile_library(core, &says_src, NULL, 0, console_decls, 1, &says, NULL) != TALK_OK;
     const char *loud_source = "use shout from says\nfunction twice\n  shout()\n  shout()\nend twice\n";
     talk_library_source loud_src = {"loud", 4, "1", 1, loud_source, strlen(loud_source)};
     bad |= talk_compile_library(core, &loud_src, &says, 1, NULL, 0, &loud, NULL) != TALK_OK;
@@ -2301,6 +2342,7 @@ int main(void) {
     expect(limits_test() == 0, "a Script's limits fault and roll back a Run, a loosening override is refused, and a full mailbox refuses a Delivery");
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
+    expect(library_check_test() == 0, "Library checks refuse Joins, undeclared Grants and unknown imports' names as talk.go does");
     expect(function_call_test() == 0, "Function Value calls refuse loose overrides and full or stopped Homes as talk.go does");
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");

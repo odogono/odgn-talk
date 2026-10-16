@@ -1277,7 +1277,9 @@ fn finishOk(s: *Session, o: *Out, entry: ?*GroupEntry) []u8 {
         const lines = takeTrace(e);
         defer freeTrace(s.gpa, lines);
         if (e.traced and lines.len > 0) {
-            o.raw(",\"trace\":[") catch {};
+            // An `ok` with no other fields has just opened its brace.
+            const so_far = o.buf.written();
+            o.raw(if (so_far.len > 0 and so_far[so_far.len - 1] == '{') "\"trace\":[" else ",\"trace\":[") catch {};
             for (lines, 0..) |line, i| {
                 if (i > 0) o.raw(",") catch {};
                 o.text(line) catch {};
@@ -2759,6 +2761,8 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
 }
 
 fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
+    // As a refused Load: the error reply publishes its diagnostic records.
+    if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
     const lines = takeTrace(entry);
     defer freeTrace(s.gpa, lines);
     return loadError(s.gpa, ref, lines);
@@ -4870,6 +4874,31 @@ test "a reload's lifecycle crossings reach the Host as needs before its reply" {
     // The new code runs, its Variable carried.
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
     try std.testing.expectEqual(@as(i64, 0), (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-02T00:00:00Z\"}}", .{10}))).object.get("result").?.integer);
+}
+
+test "Library replacement finishes after the importer's release hook" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"release\":true,\"ops\":[{{\"name\":\"touch\",\"mode\":\"immediate\",\"result\":\"nothing\"}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    const old = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"user\",\"source\":\"function one\\nreturn 1\\nend one\\n\"}}", .{3}))).object.get("identity").?.object.get("$bytes").?.string;
+    const fresh = (try okOf(try c.send("{{\"m\":\"compile-library\",\"ref\":{d},\"name\":\"user\",\"source\":\"function one\\nreturn 2\\nend one\\n\"}}", .{4}))).object.get("identity").?.object.get("$bytes").?.string;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"add-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}}}}", .{ 6, old }));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"use one from user\\non go\\nask api to touch\\nreturn one()\\nend go\\n\"}}", .{ 7, grant }));
+    const reply = try c.send("{{\"m\":\"replace-library\",\"ref\":{d},\"group\":\"g\",\"identity\":{{\"$bytes\":\"{s}\"}},\"carry\":\"reset variables\"}}", .{ 8, fresh });
+    try std.testing.expectEqualStrings("release", reply.object.get("need").?.object.get("m").?.string);
+    try std.testing.expectEqualStrings("reload", reply.object.get("need").?.object.get("reason").?.string);
+    const done = try okOf(try c.sendRef(8, "{{\"m\":\"release-result\",\"ref\":{d}}}", .{8}));
+    try std.testing.expect(done.object.get("reports").? == .array);
+    // The importer was reloaded against the new Library, not left stopped.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{9}));
+    var pumped = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
+    try std.testing.expectEqualStrings("touch", pumped.object.get("need").?.object.get("operation").?.string);
+    pumped = try c.sendRef(10, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":null}}", .{10});
+    try std.testing.expectEqual(@as(i64, 2), (try runEnd(pumped)).object.get("result").?.integer);
 }
 
 test "fatal Library replacement waits for release and returns effect state unknown" {

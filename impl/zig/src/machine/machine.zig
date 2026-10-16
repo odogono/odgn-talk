@@ -2570,6 +2570,13 @@ pub const Group = struct {
                 }
                 return e;
             };
+            // A Grant release hook waits for the Host before the next
+            // Script stops, and before any code is published.
+            if (g.release_pause) {
+                g.paused_work = .{ .replace = .{ .rebuilt = rebuilt, .next = i + 1, .made = made, .libraries = libraries } };
+                paused = true;
+                return .paused;
+            }
             if (g.fatal) break;
         }
         if (g.fatal) {

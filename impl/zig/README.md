@@ -977,6 +977,13 @@ names the value's display form as its Handler, and a limit fault in it the
 function's body. With `function-gone-v1`, a Pump reply's `gone` lists the Host
 calls found stale at the drain, which end with no report.
 
+A `use` naming an unknown Library binds nothing, so each use of its names is
+also `unknown name`. `talk_compile_library` with NULL declarations declares no
+Grants, so a Library's direct Capability call, `say` included, is `unknown
+operation`. A Join in a Library is `not in a library`. A Library replacement
+whose importers hold Grants with release hooks waits for each Script's
+releases, then reloads it against the new Library.
+
 Libraries are compiled once per Core with `talk_compile_library`, against the
 Libraries they import and the Grant declarations their Capability calls are
 checked and lowered against: each Operation's mode and argument Shapes, as

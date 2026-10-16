@@ -36,6 +36,9 @@ type Core struct {
 	objectKinds map[string]*ObjectKind
 	// Each comparable StoreImpl's one Segment Coordinator (ADR 0069).
 	storeCoordinators map[StoreImpl]*SegmentLifecycle
+	// libraryChecker is the experimental Zig backend's Group whose guest
+	// checks CompileLibrary's Libraries.
+	libraryChecker *Group
 }
 
 type compileKey struct {

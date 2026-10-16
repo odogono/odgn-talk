@@ -571,10 +571,11 @@ const Checker = struct {
                     if (!known) try c.report(.unknown_import, u.library);
                     for (u.names) |n| {
                         const name = c.text(n);
-                        const ex = if (known) libraryExport(c.context, library, name) else null;
-                        // A name the Library doesn't export binds nothing, so
-                        // its uses are unknown names.
-                        if (known and ex == null) {
+                        // An unknown Library, or a name it doesn't export,
+                        // binds nothing, so its uses are unknown names.
+                        if (!known) continue;
+                        const ex = libraryExport(c.context, library, name);
+                        if (ex == null) {
                             try c.report(.unknown_import, n);
                             continue;
                         }
@@ -1164,6 +1165,7 @@ const Checker = struct {
                 }
             },
             .join => |j| {
+                if (c.context.library) try c.report(.not_in_a_library, first);
                 if (w.join != null) try c.report(.not_in_a_join, first);
                 try c.intrinsic(s, first, w);
                 var inner = w;

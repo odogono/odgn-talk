@@ -118,6 +118,34 @@ recorded artifact. Current early-abandonment artifact execution is verified
 locally on Darwin/arm64; its own matrix must pass before extending that claim.
 A passing sidecar matrix does not prove embedded-wazero execution.
 
+## Library artifact refresh, 2026-10-16
+
+[Raw output](measurements-libraries.txt) records three repetitions with artifact
+source `a7e04657`, SHA-256
+`37f055f95ff353cc9aacda1a4a4b493ec8abb771f6b9a1d0b3e5fd02c000d191`,
+and public-adapter/native-Go revision `fd37dba7`.
+On Darwin/arm64 Apple M5, Go 1.27.2, wazero 1.12.0 and `CGO_ENABLED=0`, median
+immediate-call run averages are **3.797 µs native Go vs 33.266 µs probe (8.8×)**,
+cold compile/runtime/close **626.4 ms**, cached instantiation/close **127.8 µs**.
+This is the same independent immediate-call workload; it does not measure
+Library compilation or replacement latency, or an accepted retirement limit.
+
+The public comparison now covers 128 callback/input scenarios. Eleven new
+Library scenarios compare exact Trace, Fuel, typed Reports, futures,
+diagnostics, identities, needs and inspected state against a separately
+compiled native-Go Host: use, imports, the Standard Library, compile errors,
+add refusals, replacement with and without carried variables, a refused
+replacement, replacement of a waiting Library Handler, Grant declarations and
+needs, and replacement with a Grant release hook. Twenty-two existing native
+Library, accounting and release tests join the experimental selection. Zig
+corrections are tracked in #1035; open differences in #1036 and #1037.
+
+Native Go, adapter/probe pure-Go/race/vet, Zig unit/C/Message Layer tests, all
+431 ordinary and deferred Corpus cases and both WASI checks pass locally.
+Independent pure-Go adapter/probe cross-builds cover Linux amd64/arm64 and
+macOS arm64. This revision still needs CI execution on the other required
+runners.
+
 ## Function Value artifact refresh, 2026-10-16
 
 [Raw output](measurements-functions.txt) records three repetitions with artifact

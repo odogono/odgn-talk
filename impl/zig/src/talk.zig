@@ -3619,7 +3619,8 @@ export fn talk_compile_library(c: *Core, src: *const LibrarySource, imports: ?[*
     var scratch: std.heap.ArenaAllocator = .init(c.gpa);
     defer scratch.deinit();
     const named = grantDecls(scratch.allocator(), declared) catch |err| return status(err);
-    const compiled = machine.compileLibrary(c.gpa, name, label, source, given, if (declarations == null) null else named) catch |err| return status(err);
+    // NULL declares no Grants: a direct Capability call is then unknown.
+    const compiled = machine.compileLibrary(c.gpa, name, label, source, given, named) catch |err| return status(err);
     switch (compiled) {
         .refused => |diags| {
             defer c.gpa.free(diags);
