@@ -1,48 +1,224 @@
 # TS and tooling task navigation
 
-Start with the row for your task, then read the linked rules and tests. Read the
+Find your task's heading (`rg -n '^## ' impl/ts/NAVIGATION.md` lists them), then read the linked rules and tests. Read the
 [implementation guide](README.md) when you need feature details or limitations.
 List paths with `rg --files` in the relevant directory before opening files by
 name. For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
 [ADR index](../../docs/adr/README.md).
 
-All commands below run from the repository root. On a fresh worktree, run
-`bun install --frozen-lockfile` and `bun run unicode:check` before focused tests;
-the Unicode check prepares and verifies the pinned test data. See the
+All commands below run from the repository root. See the
 [Spec change-impact guide](../../docs/agents/spec-changes.md) when changing Data
 Files, grammar, or lowering.
 
-| Task | Implementation | Rules | Tests and cases | First check |
-| --- | --- | --- | --- | --- |
-| Parsing and name/binding checks | [parser](src/parser.ts), [syntax tree](src/syntax.ts), [Selectors](src/selectors.ts), [checker](src/checker.ts) | [grammar](../../spec/02-grammar.md) | [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts) | `bun test impl/ts/tests/parser.test.ts impl/ts/tests/checker.test.ts` |
-| Lowering and execution | [lowering](src/lowering.ts), [machine](src/machine.ts) | [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [lowering tests](tests/lowering.test.ts), [disassembly cases](../../corpus/disassembly/) | `bun test impl/ts/tests/lowering.test.ts` |
-| Built-ins and instruction charging | `builtin` and its measures in [operations.ts](src/operations.ts), instruction payment in [machine.ts](src/machine.ts), generated evaluators in [costs.ts](src/costs.ts) | [charging](../../spec/08-the-abstract-machine-and-the-cost-model.md#charging), [Built-in rates](../../spec/08-the-abstract-machine-and-the-cost-model.md#built-in-rates), [cost data](../../spec/data/costs.toml) | [Cost Model parity tests](tests/costs.test.ts), [Built-in cases](../../corpus/builtins/), [lowering tests](tests/lowering.test.ts) | `bun test impl/ts/tests/costs.test.ts && bun run corpus:run builtins` |
-| Recovery, cancellation cleanup and retained state | `Run.size` in [machine.ts](src/machine.ts), [recovery state](src/recovery.ts) | [pending cleanup state](../../spec/08-the-abstract-machine-and-the-cost-model.md#pending-cleanup-state) | [cancellation state tests](tests/recovery-cancellation-state.test.ts), [nested accounting tests](tests/recovery-nested-accounting.test.ts), [snapshot tests](tests/recovery-snapshot.test.ts), [Recovery Offer cases](../../corpus/recovery-offers/) | `bun test impl/ts/tests/recovery-cancellation-state.test.ts impl/ts/tests/recovery-nested-accounting.test.ts impl/ts/tests/recovery-snapshot.test.ts` |
-| Values and collections | [values](src/values.ts), [List storage](src/list-storage.ts), [Map storage](src/map-storage.ts), code-point ordering in `compareText` ([text.ts](src/text.ts)) | [Lists and maps](../../spec/03-values.md#lists-and-maps), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md) | [value tests](tests/values.test.ts), [persistent collection tests](tests/persistent-collections.test.ts) | `bun test impl/ts/tests/values.test.ts impl/ts/tests/persistent-collections.test.ts` |
-| Value Encoding | [`encodeValue`](src/encoding.ts), [`decodeValue`](src/readers.ts) | [JSON and the Value Encoding](../../spec/09-embedding.md#json-and-the-value-encoding), [encoding cases](../../spec/11-the-trace-and-conformance.md#value-encoding-cases) | [value tests](tests/values.test.ts), `corpus/*/value-encoding/` cases | `bun test impl/ts/tests/values.test.ts` |
-| Scheduling and Capabilities | [Group](src/group.ts), [Capabilities](src/capabilities.ts) | [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md) | [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts) | `bun test impl/ts/tests/group.test.ts impl/ts/tests/capabilities.test.ts` |
-| Capability Scopes, Segment-bound effects and Coordinators | [Segment participants and Coordinators](src/machine.ts), [Scope declarations and Coordinator mapping](src/capabilities.ts) | [Scopes and Segment-bound effects](../../spec/09-embedding.md#capability-scopes-and-segment-bound-effects), [worked examples](../../spec/embedding/scoped-effects.md) | [Segment effect tests](tests/segment-effects.test.ts), [Coordinator tests](tests/segment-coordinators.test.ts), [Scope conformance](tests/scoped-conformance.test.ts), [`effect-*` Capability cases](../../corpus/capabilities/) | `bun test impl/ts/tests/segment-effects.test.ts impl/ts/tests/segment-coordinators.test.ts` |
-| Script lifecycle and Grant release | Stop, revocation and Reload in [Group](src/group.ts), Run teardown in [machine](src/machine.ts) | [Cancellation and Stop](../../spec/06-errors-and-limits.md#cancellation-and-stop), [Reload](../../spec/10-save-and-restore.md#reload), [Grant release hooks](README.md#grant-release-hooks) | [release tests](tests/grant-release.test.ts), [Reload tests](tests/reload.test.ts), [cancellation tests](tests/cancellation.test.ts), [Reload cases](../../corpus/reload/) | `bun test impl/ts/tests/grant-release.test.ts impl/ts/tests/reload.test.ts` |
-| Public embedding API | [declarations](../../spec/embedding/talk.ts), exported from [index.ts](src/index.ts) | [Embedding](../../spec/09-embedding.md), [Public values](README.md#public-values) | No automated check compares the TS exports with `talk.ts`; keep them in step by hand, as the Go [API comparison](../go/internal/apicheck/api_test.go) does for `talk.go` | `bun run typecheck` |
-| Stores | [`store` factory and `add`](src/store-capability.ts), [Store engine and backends](src/store/), [SQLite Store](src/sqlite/database.ts) and [its example](examples/store-sqlite/) | [`store`](../../spec/07-libraries-and-the-standard-library.md#store), [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md) | [store tests](tests/store.test.ts), [store test kit](../../corpus/store-kit/) and [its runner](tools/store-kit.ts), [Session Store tests](tests/session-store.test.ts) | `bun test impl/ts/tests/store.test.ts impl/ts/tests/store-kit.test.ts` |
-| `sqlite` | [`sqlite` factory and conversions](src/sqlite-capability.ts), [`node:sqlite` implementation and its Stores](src/sqlite/), [corpus runner Stubs](src/replay.ts) | [`sqlite`](../../spec/07-libraries-and-the-standard-library.md#sqlite), [the factory](../../spec/09-embedding.md#the-sqlite-factory), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs) | [factory tests](tests/sqlite-capability.test.ts), [`standard-sqlite*` cases](../../corpus/capabilities/), [sqlite test kit](../../corpus/sqlite-kit/) and [its runner](tools/sqlite-kit.ts), [Group tests](tests/sqlite-host.test.ts), [Node runs](tests/sqlite-runtimes.test.ts) | `bun test impl/ts/tests/sqlite-capability.test.ts impl/ts/tests/sqlite-kit.test.ts` |
-| `user` | [`user` factory and `choose` answer rule](src/user-capability.ts), [corpus runner Stubs](src/replay.ts) | [`user`](../../spec/07-libraries-and-the-standard-library.md#user), [the factory](../../spec/09-embedding.md#the-user-factory) | [factory tests](tests/user-capability.test.ts), [`standard-user*` cases](../../corpus/capabilities/) | `bun test impl/ts/tests/user-capability.test.ts` |
-| Notification router | [router](src/notify/router.ts), [`Group.scriptNames`](src/group.ts) | [Store Notifications](../../spec/09-embedding.md#the-notification-router), [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md) | [router kit](../../corpus/notify-kit/) and [its runner](tools/notify-kit.ts), [kit tests](tests/notify-kit.test.ts), [Node runs](tests/notify-runtimes.test.ts), [real-Group tests](tests/notify.test.ts) | `bun test impl/ts/tests/notify-kit.test.ts impl/ts/tests/notify.test.ts` |
-| Real file cleanup and publication | [File Example Host](examples/files/) | [file lifecycle examples](../../spec/embedding/scoped-effects.md#file-handle-cleanup) | [Temporary-file integration tests](examples/files/files.test.ts) | `bun test impl/ts/examples/files/files.test.ts` |
-| `autoDrive` and the webhook rules Example Host | [driver](src/driver.ts), [Example Host](examples/webhooks/) | [Threads and the input queue](../../spec/09-embedding.md#threads-and-the-input-queue), [Example Hosts](../../spec/appendix-b-implementation-order.md#milestone-2-the-example-hosts) | [driver tests](tests/driver.test.ts), [Host and server tests](examples/webhooks/webhooks.test.ts), [`webhooks` case](../../corpus/examples/webhooks/) | `bun test impl/ts/tests/driver.test.ts impl/ts/examples/webhooks` |
-| Save and restore | [snapshot and `saveFormatVersion`](src/snapshot.ts), [Group](src/group.ts) | [save and restore](../../spec/10-save-and-restore.md) | [save/restore tests](tests/save-restore.test.ts) | `bun test impl/ts/tests/save-restore.test.ts` |
-| Sessions, Transcripts and CLI | [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [CLI](../../tooling/cli/) | [sessions and tooling](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md) | [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [Session corpus](../../corpus/sessions/) | `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts` |
-| Formatting source | [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts) | [formatter](../../spec/12-sessions-and-tooling.md#the-formatter) | [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/) | `bun test tooling/stack/tests/format.test.ts` |
-| Lints and CLI advice | [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/) | [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints) | [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts) | `bun test tooling/stack/tests/lint.test.ts` |
-| Editor language server | [LSP entry](../../tooling/stack/src/lsp.ts), [features](../../tooling/stack/src/lsp/features.ts), [workspace analysis](../../tooling/stack/src/lsp/workspace.ts), [senders and implementors](../../tooling/stack/src/lsp/messages.ts), [Manifest](../../tooling/stack/src/lsp/manifest.ts), [Operation dictionary](../../tooling/stack/src/dictionary.ts), [stdio CLI](../../tooling/cli/src/lsp.ts) | [LSP](../../spec/12-sessions-and-tooling.md#the-lsp), [Host Manifest](../../spec/09-embedding.md#the-host-manifest-format) | [Language-feature tests](../../tooling/stack/tests/lsp.test.ts), [stdio fixture workspace](../../tooling/cli/tests/lsp-runtime.test.ts) | `bun test tooling/stack/tests/lsp.test.ts` |
-| VS Code and Cursor extension | [grammar generator](../../tooling/vscode/tools/grammar.ts) → [TextMate grammar](../../tooling/vscode/syntaxes/northtalk.tmLanguage.json), [LSP client](../../tooling/vscode/src/extension.ts) | [extension guide](../../tooling/vscode/README.md), [LSP](../../spec/12-sessions-and-tooling.md#the-lsp) | [grammar tests](../../tooling/vscode/tests/grammar.test.ts) | `bun test tooling/vscode/tests` |
-| Testing user Scripts | [Test runner](../../tooling/cli/src/test.ts) over the public Group API | [Testing Scripts](../../tooling/cli/README.md#testing-scripts), [ADR 0056](../../docs/adr/0056-user-scripts-are-tested-by-a-black-box-test-script.md) | [CLI tests](../../tooling/cli/tests/cli.test.ts) | `bun test tooling/cli/tests/cli.test.ts` |
-| Live debugging | [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Core hooks](README.md#tooling-debug-hooks) | [Live debugger tests](../../tooling/stack/tests/debug.test.ts), [Trace parity](../../tooling/stack/tests/debug-corpus.test.ts), [CLI tests](../../tooling/cli/tests/debug.test.ts) | `bun test tooling/stack/tests/debug.test.ts` |
-| Trace replay debugging | [Shared replay driver](src/replay.ts), [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug-replay.ts) | [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs) | [Navigation tests](../../tooling/stack/tests/replay-debug.test.ts), [Trace and Transcript parity](../../tooling/stack/tests/replay-debug-corpus.test.ts) | `bun test tooling/stack/tests/replay-debug.test.ts` |
-| The Playground | [shared editor](../../tooling/editor/), [declaration Apply](../../tooling/playground/src/declarations.ts), [session](../../tooling/playground/src/session.ts), [workers](../../tooling/playground/src/session.worker.ts), [page](../../tooling/playground/src/main.ts) | [The Playground](../../spec/12-sessions-and-tooling.md#the-playground), [ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md) | [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser) | `bun test tooling/playground/tests` |
-| The creative tool | [Play Session](../../tooling/creative/src/play.ts) and [reader input](../../tooling/creative/src/play-view.ts), [Project model](../../tooling/creative/src/model.ts), [image intake and assets](../../tooling/creative/src/images.ts), [sound intake and playback](../../tooling/creative/src/sounds.ts), [Project file](../../tooling/creative/src/project-file.ts) over its [zip reader and writer](../../tooling/creative/src/zip.ts), [editing state](../../tooling/creative/src/editing.ts) and the [Stack editor shell](../../tooling/creative/src/stack.ts) and [rich-text editor](../../tooling/creative/src/text-editor.ts) over its [text edits](../../tooling/creative/src/rich-text.ts) and [DOM reading and writing](../../tooling/creative/src/rich-text-dom.ts), [IndexedDB storage](../../tooling/creative/src/storage.ts) with its [autosave](../../tooling/creative/src/autosave.ts), [edit lock](../../tooling/creative/src/edit-lock.ts) and [Project windows](../../tooling/creative/src/projects.ts), [Script Recipes](../../tooling/creative/src/recipes.ts) and their [picker](../../tooling/creative/src/recipe-picker.ts), [Script windows](../../tooling/creative/src/scripts.ts) with [per-Script Host Manifests](../../tooling/creative/src/script-manifest.ts), [page](../../tooling/creative/src/main.ts) on the [shared editor](../../tooling/editor/src/editor.ts), [LSP client](../../tooling/editor/src/lsp-client.ts) and [worker](../../tooling/editor/src/lsp.worker.ts) | [#154](https://github.com/odogono/odgn-talk/issues/154), [#748](https://github.com/odogono/odgn-talk/issues/748), [#749](https://github.com/odogono/odgn-talk/issues/749), [#750](https://github.com/odogono/odgn-talk/issues/750), [#751](https://github.com/odogono/odgn-talk/issues/751), [#752](https://github.com/odogono/odgn-talk/issues/752), [#753](https://github.com/odogono/odgn-talk/issues/753), [#822](https://github.com/odogono/odgn-talk/issues/822), [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md) | [editor tests](../../tooling/editor/tests/), [creative tool tests](../../tooling/creative/tests/) | `bun test tooling/editor/tests tooling/creative/tests` |
-| Differential fuzzing | [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts), with the [Go worker](../go/cmd/fuzzworker/) | [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [research](../../docs/research/differential-fuzzing.md) | [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts) | `bun test tooling/fuzz/tests` |
-| Generated tables | [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/) | [Data File index](../../spec/README.md#data-files) | [syntax fixtures](tests/syntax-fixtures.test.ts), [Cost Model compiler tests](../../tools/costs/compile.test.ts), [Unicode tests](tests/unicode.test.ts) | `bun run syntax:check` |
+## Parsing and name/binding checks
+
+- Implementation: [parser](src/parser.ts), [syntax tree](src/syntax.ts), [Selectors](src/selectors.ts), [checker](src/checker.ts)
+- Rules: [grammar](../../spec/02-grammar.md)
+- Tests and cases: [parser tests](tests/parser.test.ts), [checker tests](tests/checker.test.ts)
+- First check: `bun test impl/ts/tests/parser.test.ts impl/ts/tests/checker.test.ts`
+
+## Lowering and execution
+
+- Implementation: [lowering](src/lowering.ts), [machine](src/machine.ts)
+- Rules: [Abstract Machine and costs](../../spec/08-the-abstract-machine-and-the-cost-model.md)
+- Tests and cases: [lowering tests](tests/lowering.test.ts), [disassembly cases](../../corpus/disassembly/)
+- First check: `bun test impl/ts/tests/lowering.test.ts`
+
+## Built-ins and instruction charging
+
+- Implementation: `builtin` and its measures in [operations.ts](src/operations.ts), instruction payment in [machine.ts](src/machine.ts), generated evaluators in [costs.ts](src/costs.ts)
+- Rules: [charging](../../spec/08-the-abstract-machine-and-the-cost-model.md#charging), [Built-in rates](../../spec/08-the-abstract-machine-and-the-cost-model.md#built-in-rates), [cost data](../../spec/data/costs.toml)
+- Tests and cases: [Cost Model parity tests](tests/costs.test.ts), [Built-in cases](../../corpus/builtins/), [lowering tests](tests/lowering.test.ts)
+- First check: `bun test impl/ts/tests/costs.test.ts && bun run corpus:run builtins`
+
+## Recovery, cancellation cleanup and retained state
+
+- Implementation: `Run.size` in [machine.ts](src/machine.ts), [recovery state](src/recovery.ts)
+- Rules: [pending cleanup state](../../spec/08-the-abstract-machine-and-the-cost-model.md#pending-cleanup-state)
+- Tests and cases: [cancellation state tests](tests/recovery-cancellation-state.test.ts), [nested accounting tests](tests/recovery-nested-accounting.test.ts), [snapshot tests](tests/recovery-snapshot.test.ts), [Recovery Offer cases](../../corpus/recovery-offers/)
+- First check: `bun test impl/ts/tests/recovery-cancellation-state.test.ts impl/ts/tests/recovery-nested-accounting.test.ts impl/ts/tests/recovery-snapshot.test.ts`
+
+## Values and collections
+
+- Implementation: [values](src/values.ts), [List storage](src/list-storage.ts), [Map storage](src/map-storage.ts), code-point ordering in `compareText` ([text.ts](src/text.ts))
+- Rules: [Lists and maps](../../spec/03-values.md#lists-and-maps), [costs](../../spec/08-the-abstract-machine-and-the-cost-model.md)
+- Tests and cases: [value tests](tests/values.test.ts), [persistent collection tests](tests/persistent-collections.test.ts)
+- First check: `bun test impl/ts/tests/values.test.ts impl/ts/tests/persistent-collections.test.ts`
+
+## Value Encoding
+
+- Implementation: [`encodeValue`](src/encoding.ts), [`decodeValue`](src/readers.ts)
+- Rules: [JSON and the Value Encoding](../../spec/09-embedding.md#json-and-the-value-encoding), [encoding cases](../../spec/11-the-trace-and-conformance.md#value-encoding-cases)
+- Tests and cases: [value tests](tests/values.test.ts), `corpus/*/value-encoding/` cases
+- First check: `bun test impl/ts/tests/values.test.ts`
+
+## Scheduling and Capabilities
+
+- Implementation: [Group](src/group.ts), [Capabilities](src/capabilities.ts)
+- Rules: [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md)
+- Tests and cases: [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts), [Scope tests](tests/scopes.test.ts)
+- First check: `bun test impl/ts/tests/group.test.ts impl/ts/tests/capabilities.test.ts`
+
+## Capability Scopes, Segment-bound effects and Coordinators
+
+- Implementation: [Segment participants and Coordinators](src/machine.ts), [Scope declarations and Coordinator mapping](src/capabilities.ts)
+- Rules: [Scopes and Segment-bound effects](../../spec/09-embedding.md#capability-scopes-and-segment-bound-effects), [worked examples](../../spec/embedding/scoped-effects.md)
+- Tests and cases: [Segment effect tests](tests/segment-effects.test.ts), [Coordinator tests](tests/segment-coordinators.test.ts), [Scope conformance](tests/scoped-conformance.test.ts), [`effect-*` Capability cases](../../corpus/capabilities/)
+- First check: `bun test impl/ts/tests/segment-effects.test.ts impl/ts/tests/segment-coordinators.test.ts`
+
+## Script lifecycle and Grant release
+
+- Implementation: Stop, revocation and Reload in [Group](src/group.ts), Run teardown in [machine](src/machine.ts)
+- Rules: [Cancellation and Stop](../../spec/06-errors-and-limits.md#cancellation-and-stop), [Reload](../../spec/10-save-and-restore.md#reload), [Grant release hooks](README.md#grant-release-hooks)
+- Tests and cases: [release tests](tests/grant-release.test.ts), [Reload tests](tests/reload.test.ts), [cancellation tests](tests/cancellation.test.ts), [Reload cases](../../corpus/reload/)
+- First check: `bun test impl/ts/tests/grant-release.test.ts impl/ts/tests/reload.test.ts`
+
+## Public embedding API
+
+- Implementation: [declarations](../../spec/embedding/talk.ts), exported from [index.ts](src/index.ts)
+- Rules: [Embedding](../../spec/09-embedding.md), [Public values](README.md#public-values)
+- Tests and cases: No automated check compares the TS exports with `talk.ts`; keep them in step by hand, as the Go [API comparison](../go/internal/apicheck/api_test.go) does for `talk.go`
+- First check: `bun run typecheck`
+
+## Host Manifest export
+
+- Implementation: `exportManifest` and Operation data in [manifest.ts](src/manifest.ts), exported from [index.ts](src/index.ts)
+- Rules: [Host Manifest format](../../spec/09-embedding.md#the-host-manifest-format)
+- Tests and cases: [Manifest tests](tests/manifest.test.ts)
+- First check: `bun test impl/ts/tests/manifest.test.ts`
+
+## Stores
+
+- Implementation: [`store` factory and `add`](src/store-capability.ts), [Store engine and backends](src/store/), [SQLite Store](src/sqlite/database.ts) and [its example](examples/store-sqlite/)
+- Rules: [`store`](../../spec/07-libraries-and-the-standard-library.md#store), [ADR 0062](../../docs/adr/0062-a-store-key-is-reserved-while-a-segment-holds-an-uncommitted-write.md)
+- Tests and cases: [store tests](tests/store.test.ts), [store test kit](../../corpus/store-kit/) and [its runner](tools/store-kit.ts), [Session Store tests](tests/session-store.test.ts)
+- First check: `bun test impl/ts/tests/store.test.ts impl/ts/tests/store-kit.test.ts`
+
+## `sqlite`
+
+- Implementation: [`sqlite` factory and conversions](src/sqlite-capability.ts), [`node:sqlite` implementation and its Stores](src/sqlite/), [corpus runner Stubs](src/replay.ts)
+- Rules: [`sqlite`](../../spec/07-libraries-and-the-standard-library.md#sqlite), [the factory](../../spec/09-embedding.md#the-sqlite-factory), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs)
+- Tests and cases: [factory tests](tests/sqlite-capability.test.ts), [`standard-sqlite*` cases](../../corpus/capabilities/), [sqlite test kit](../../corpus/sqlite-kit/) and [its runner](tools/sqlite-kit.ts), [Group tests](tests/sqlite-host.test.ts), [Node runs](tests/sqlite-runtimes.test.ts)
+- First check: `bun test impl/ts/tests/sqlite-capability.test.ts impl/ts/tests/sqlite-kit.test.ts`
+
+## `user`
+
+- Implementation: [`user` factory and `choose` answer rule](src/user-capability.ts), [corpus runner Stubs](src/replay.ts)
+- Rules: [`user`](../../spec/07-libraries-and-the-standard-library.md#user), [the factory](../../spec/09-embedding.md#the-user-factory)
+- Tests and cases: [factory tests](tests/user-capability.test.ts), [`standard-user*` cases](../../corpus/capabilities/)
+- First check: `bun test impl/ts/tests/user-capability.test.ts`
+
+## Notification router
+
+- Implementation: [router](src/notify/router.ts), [`Group.scriptNames`](src/group.ts)
+- Rules: [Store Notifications](../../spec/09-embedding.md#the-notification-router), [ADR 0061](../../docs/adr/0061-host-notifications-share-routing-and-are-scoped-by-grant-bindings.md)
+- Tests and cases: [router kit](../../corpus/notify-kit/) and [its runner](tools/notify-kit.ts), [kit tests](tests/notify-kit.test.ts), [Node runs](tests/notify-runtimes.test.ts), [real-Group tests](tests/notify.test.ts)
+- First check: `bun test impl/ts/tests/notify-kit.test.ts impl/ts/tests/notify.test.ts`
+
+## Real file cleanup and publication
+
+- Implementation: [File Example Host](examples/files/)
+- Rules: [file lifecycle examples](../../spec/embedding/scoped-effects.md#file-handle-cleanup)
+- Tests and cases: [Temporary-file integration tests](examples/files/files.test.ts)
+- First check: `bun test impl/ts/examples/files/files.test.ts`
+
+## `autoDrive` and the webhook rules Example Host
+
+- Implementation: [driver](src/driver.ts), [Example Host](examples/webhooks/)
+- Rules: [Threads and the input queue](../../spec/09-embedding.md#threads-and-the-input-queue), [Example Hosts](../../spec/appendix-b-implementation-order.md#milestone-2-the-example-hosts)
+- Tests and cases: [driver tests](tests/driver.test.ts), [Host and server tests](examples/webhooks/webhooks.test.ts), [`webhooks` case](../../corpus/examples/webhooks/)
+- First check: `bun test impl/ts/tests/driver.test.ts impl/ts/examples/webhooks`
+
+## Save and restore
+
+- Implementation: [snapshot and `saveFormatVersion`](src/snapshot.ts), [Group](src/group.ts)
+- Rules: [save and restore](../../spec/10-save-and-restore.md)
+- Tests and cases: [save/restore tests](tests/save-restore.test.ts)
+- First check: `bun test impl/ts/tests/save-restore.test.ts`
+
+## Sessions, Transcripts and CLI
+
+- Implementation: [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [CLI](../../tooling/cli/)
+- Rules: [sessions and tooling](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
+- Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [Session corpus](../../corpus/sessions/)
+- First check: `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts`
+
+## Formatting source
+
+- Implementation: [Tooling formatter](../../tooling/stack/src/format.ts), [CLI](../../tooling/cli/src/format.ts)
+- Rules: [formatter](../../spec/12-sessions-and-tooling.md#the-formatter)
+- Tests and cases: [Formatter tests and invariants](../../tooling/stack/tests/), [CLI tests](../../tooling/cli/tests/)
+- First check: `bun test tooling/stack/tests/format.test.ts`
+
+## Lints and CLI advice
+
+- Implementation: [Lint engine](../../tooling/stack/), [CLI](../../tooling/cli/)
+- Rules: [Layers and Lints](../../spec/12-sessions-and-tooling.md#layers-and-lints)
+- Tests and cases: [Lint fixtures](../../tooling/stack/tests/lint.test.ts), [CLI tests](../../tooling/cli/tests/cli.test.ts)
+- First check: `bun test tooling/stack/tests/lint.test.ts`
+
+## Editor language server
+
+- Implementation: [LSP entry](../../tooling/stack/src/lsp.ts), [features](../../tooling/stack/src/lsp/features.ts), [workspace analysis](../../tooling/stack/src/lsp/workspace.ts), [senders and implementors](../../tooling/stack/src/lsp/messages.ts), [Manifest](../../tooling/stack/src/lsp/manifest.ts), [Operation dictionary](../../tooling/stack/src/dictionary.ts), [stdio CLI](../../tooling/cli/src/lsp.ts)
+- Rules: [LSP](../../spec/12-sessions-and-tooling.md#the-lsp), [Host Manifest](../../spec/09-embedding.md#the-host-manifest-format)
+- Tests and cases: [Language-feature tests](../../tooling/stack/tests/lsp.test.ts), [stdio fixture workspace](../../tooling/cli/tests/lsp-runtime.test.ts)
+- First check: `bun test tooling/stack/tests/lsp.test.ts`
+
+## VS Code and Cursor extension
+
+- Implementation: [grammar generator](../../tooling/vscode/tools/grammar.ts) → [TextMate grammar](../../tooling/vscode/syntaxes/northtalk.tmLanguage.json), [LSP client](../../tooling/vscode/src/extension.ts)
+- Rules: [extension guide](../../tooling/vscode/README.md), [LSP](../../spec/12-sessions-and-tooling.md#the-lsp)
+- Tests and cases: [grammar tests](../../tooling/vscode/tests/grammar.test.ts)
+- First check: `bun test tooling/vscode/tests`
+
+## Testing user Scripts
+
+- Implementation: [Test runner](../../tooling/cli/src/test.ts) over the public Group API
+- Rules: [Testing Scripts](../../tooling/cli/README.md#testing-scripts), [ADR 0056](../../docs/adr/0056-user-scripts-are-tested-by-a-black-box-test-script.md)
+- Tests and cases: [CLI tests](../../tooling/cli/tests/cli.test.ts)
+- First check: `bun test tooling/cli/tests/cli.test.ts`
+
+## Live debugging
+
+- Implementation: [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug.ts)
+- Rules: [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Core hooks](README.md#tooling-debug-hooks)
+- Tests and cases: [Live debugger tests](../../tooling/stack/tests/debug.test.ts), [Trace parity](../../tooling/stack/tests/debug-corpus.test.ts), [CLI tests](../../tooling/cli/tests/debug.test.ts)
+- First check: `bun test tooling/stack/tests/debug.test.ts`
+
+## Trace replay debugging
+
+- Implementation: [Shared replay driver](src/replay.ts), [Tooling API](../../tooling/stack/src/debug.ts), [Bun CLI](../../tooling/cli/src/debug-replay.ts)
+- Rules: [Debugger](../../spec/12-sessions-and-tooling.md#the-debugger), [Stubs](../../spec/11-the-trace-and-conformance.md#stubs)
+- Tests and cases: [Navigation tests](../../tooling/stack/tests/replay-debug.test.ts), [Trace and Transcript parity](../../tooling/stack/tests/replay-debug-corpus.test.ts)
+- First check: `bun test tooling/stack/tests/replay-debug.test.ts`
+
+## The Playground
+
+- Implementation: [shared editor](../../tooling/editor/), [declaration Apply](../../tooling/playground/src/declarations.ts), [session](../../tooling/playground/src/session.ts), [workers](../../tooling/playground/src/session.worker.ts), [page](../../tooling/playground/src/main.ts)
+- Rules: [The Playground](../../spec/12-sessions-and-tooling.md#the-playground), [ADR 0051](../../docs/adr/0051-the-playgrounds-script-tab-is-the-session-source.md)
+- Tests and cases: [Playground tests](../../tooling/playground/tests/), [browser corpus page](../../tooling/playground/README.md#the-corpus-in-a-browser)
+- First check: `bun test tooling/playground/tests`
+
+## Folio (`tooling/creative`)
+
+- Implementation: [Folio task map](../../tooling/creative/NAVIGATION.md): Play Session, Project model, assets, Message Box, windows, Host Manifests, offline; on the [shared editor](../../tooling/editor/src/editor.ts) and its [LSP worker](../../tooling/editor/src/lsp.worker.ts)
+- Rules: [Folio guide](../../tooling/creative/README.md), [#154](https://github.com/odogono/odgn-talk/issues/154), [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md)
+- Tests and cases: [editor tests](../../tooling/editor/tests/), [Folio tests](../../tooling/creative/tests/), [browser suites](../../tooling/creative/README.md#browser-test-suites)
+- First check: `bun test tooling/editor/tests tooling/creative/tests`
+
+## Differential fuzzing
+
+- Implementation: [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts), with the [Go worker](../go/cmd/fuzzworker/)
+- Rules: [ADR 0009](../../docs/adr/0009-twin-cores-held-to-bit-for-bit-parity.md), [research](../../docs/research/differential-fuzzing.md)
+- Tests and cases: [Fuzzer tests](../../tooling/fuzz/tests/), [replay Host tests](tests/replay-host.test.ts)
+- First check: `bun test tooling/fuzz/tests`
+
+## Generated tables
+
+- Implementation: [syntax generator](../../tools/syntax/generate.ts), [Unicode generator](../../tools/unicode/generate.ts) → [generated TS](src/generated/)
+- Rules: [Data File index](../../spec/README.md#data-files)
+- Tests and cases: [syntax fixtures](tests/syntax-fixtures.test.ts), [Cost Model compiler tests](../../tools/costs/compile.test.ts), [Unicode tests](tests/unicode.test.ts)
+- First check: `bun run syntax:check`
 
 The parsers and compiler under root `tools/` check the Spec; the Core implementation is under `impl/ts/src/`. Follow the table's Spec links for rules and each chapter's ADR links for rationale. Generated tables are updated through their generators.
 

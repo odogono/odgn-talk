@@ -22,6 +22,7 @@ go -C impl/go run ./cmd/corpus recovery-offers/cleanup-restore recovery-offers/c
 (cd impl/zig && zig build corpus -- recovery-offers)
 go -C impl/go run ./cmd/corpus --check-passing
 (cd impl/zig && zig build corpus)
+(cd impl/zig && zig build corpus -- --defer-crossings) # CI's deferred-crossing pass
 ```
 
 For a Go category, discover its case directories rather than passing the category
@@ -42,7 +43,9 @@ support and limitations belong in the [TS](../impl/ts/README.md),
 
 - **Trace Case:** replay `case.trace` normally and with save/restore between
   Pumps. The runners perform these two modes automatically; no extra CLI flag
-  or separate invocation is needed.
+  or separate invocation is needed for them. Zig CI also runs a third pass,
+  `zig build corpus -- --defer-crossings`, which defers each eligible crossing
+  once and must leave every Trace unchanged.
 - **Session Transcript:** drive the Session Host with `session.transcript` and
   compare both printed output and the emitted `case.trace`, as the
   [conformance requirement](../spec/11-the-trace-and-conformance.md#conformance)
@@ -74,8 +77,9 @@ bun run corpus:run text-model/chunk-write-padding   # replays a named case, bles
 A new case passes CI only when all of these hold:
 
 - **Unblessed header:** each expectation file (`case.trace`, and `session.transcript` for a Session case) starts with `# Unblessed: <what> (#issue); first blessing awaits human review.`; a Disassembly case carries it in `case.toml`. The reviewer removes it at first-blessing approval.
+- **States its loads:** `case.toml` supplies each Script's source and options, but nothing loads until the Trace's own `> load <script>` line; Scripts load in the order of those lines ([sources](../spec/11-the-trace-and-conformance.md#running-a-case)). Write every `> load` and `> add-library` input explicitly; bless fills in their identities.
 - **Ends with `> vars`:** a hand-written `case.trace` ends with `> vars` and a `vars` record per Script ([running a case](../spec/11-the-trace-and-conformance.md#running-a-case)); `corpus:check` rejects it otherwise.
-- **Passes on Go:** `--check-passing` fails on every case Go cannot run, listed or not, so a case written against the TS Core alone fails the Go job. Add each case to [`corpus-passing.txt`](../impl/go/corpus-passing.txt) when the gate reports `NEW PASS`; Session Transcripts must be listed.
+- **Passes on Go:** `--check-passing` fails on every case Go cannot run, listed or not, so a case written against the TS Core alone fails the Go job. When the gate reports `NEW PASS` for a case, add its name (relative to `corpus/`, one per line) to [`corpus-passing.txt`](../impl/go/corpus-passing.txt) and rerun the gate. The gate itself still exits 0 on `NEW PASS`, but `go -C impl/go test ./internal/corpus` fails until the case is listed. Session Transcripts must be listed too.
 - **Passes on Zig:** `zig build corpus` runs every case and fails on any the Zig Core can't run or doesn't pass. It has no passing list.
 - **Blessed by agreement:** write expectations with `bun run corpus:bless <case> …`, not the TS runner's `--bless`.
 
@@ -89,8 +93,9 @@ must explain the corresponding baseline edit. Keep Go's passing list current.
 
 Before pushing, run `bun run corpus:check`,
 `go -C impl/go test ./internal/corpus` and
-`go -C impl/go run ./cmd/corpus --check-passing` and
-`(cd impl/zig && zig build corpus)`.
+`go -C impl/go run ./cmd/corpus --check-passing`,
+`(cd impl/zig && zig build corpus)` and
+`(cd impl/zig && zig build corpus -- --defer-crossings)`.
 
 [`tools/corpus/check.ts`](../tools/corpus/check.ts) reads each `case.toml` and `case.trace` against [`corpus.toml`](../spec/data/corpus.toml) and the display form. It doesn't run anything, so a case that passes it can still be wrong ([ADR 0028](../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 

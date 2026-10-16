@@ -245,7 +245,20 @@ zig fmt --check .
 ```
 
 The build has no `-Dtest-filter` option: run `zig build test` for unit and C
-tests, or select a Corpus case with `zig build corpus -- <case>`.
+tests, or select a Corpus case with `zig build corpus -- <case>`. Output from
+`std.debug.print` in a passing test appears only on the run that executes it;
+an unchanged rerun is cached and prints nothing, so save the first
+`zig build test 2>&1` to a file.
+
+Link a C Host against `libtalk.a` with `zig cc`, as the
+[benchmark Host](../../bench/ts/src/measure-zig.ts) does in the bench smoke job.
+The library isn't position-independent and calls Zig's compiler runtime
+(`__zig_probe_stack`), so the system `cc` fails to link it on Linux, and
+`-no-pie` alone doesn't help. From the root, after `zig build`:
+
+```sh
+zig cc -std=c11 -O2 -Iimpl/zig/include host.c impl/zig/zig-out/lib/libtalk.a -o host
+```
 
 Every build is `-Doptimize=safe` (ReleaseSafe) unless told otherwise, so bounds
 and integer overflow stay checked while the Core reads hostile input.

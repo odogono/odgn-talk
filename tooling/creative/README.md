@@ -2,6 +2,8 @@
 
 Folio is the browser creative tool specified in [#154](https://github.com/odogono/odgn-talk/issues/154): a HyperCard-inspired tool for making illustrated interactive stories, small games and personal tools, with Scripts in NorthTalk. It is named in [ADR 0087](../../docs/adr/0087-the-creative-tool-is-folio-and-projects-save-as-folio-files.md); the package and folder keep their `creative` names.
 
+Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio and its tests, see [Running it](#running-it).
+
 The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box and Errors, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
@@ -25,12 +27,9 @@ Session.
 Focused handles also accept arrow keys, with Shift for ten pixels.
 
 Browser regression checks cover handles, pointer and keyboard resizing,
-centering, minimums, history and read-only states. With the server running:
+centering, minimums, history and read-only states.
 
-```sh
-bun build tooling/creative/tests/page-resize.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/page-resize-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/page-resize-test.html` and run
 `await import('/page-resize.browser.js').then(m => m.runBrowserTests())`.
@@ -104,12 +103,9 @@ source (see [Delays with `wait`](#delays-with-wait)).
 
 Recipe unit tests check source, literal values, target filtering, placement,
 names and execution through the Play Host. Browser checks cover Info, previews,
-explicit placement, selection, undo/redo, stale previews and read-only windows:
+explicit placement, selection, undo/redo, stale previews and read-only windows.
 
-```sh
-bun build tooling/creative/tests/recipes.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/recipes-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/recipes-test.html` and run
 `await import('/recipes.browser.js').then(m => m.runBrowserTests())`.
@@ -117,12 +113,9 @@ Every result must have `passed: true`; reload before repeating.
 
 Unit tests cover each owner's Manifest and language-server diagnostics and
 completion. Browser regression checks exercise real editor windows, workers,
-history, IndexedDB and portable files. With the server running:
+history, IndexedDB and portable files.
 
-```sh
-bun build tooling/creative/tests/scripts.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/scripts-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/scripts-test.html` and run
 `await import('/scripts.browser.js').then(m => m.runBrowserTests())`.
@@ -183,14 +176,12 @@ trimming and freeing unused assets never read whole models. All but the windows 
 without a DOM against `tests/fake-indexeddb.ts`, a small in-memory
 IndexedDB whose transactions stage and discard writes like the real ones;
 `tests/storage.browser.ts` checks the same behaviour against the real
-IndexedDB, Web Locks and BroadcastChannel:
+IndexedDB, Web Locks and BroadcastChannel.
 
-```sh
-bun build tooling/creative/tests/storage.browser.ts --outdir tooling/creative/dist --target browser
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Then run `await import('/storage.browser.js').then(m => m.runBrowserTests())`
-in the browser console on the creative tool page. Every result must have
+in the browser console on Folio's page, `/`. Every result must have
 `passed: true`. As with the rich-text bundle below, rebuild it after the
 watch server rebuilds the app.
 
@@ -247,14 +238,12 @@ and save checks. Their logic takes the browser objects it uses as
 arguments, so unit tests drive it with fakes: precaching, updates
 waiting, offline serving, permission prompts and refusals. The build
 test checks the manifest, icons and stamped worker. Browser checks use
-the real worker, cache and manifest, on the normal page:
+the real worker, cache and manifest, on the normal page.
 
-```sh
-bun build tooling/creative/tests/offline.browser.ts --outdir tooling/creative/dist --target browser
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Then run `await import('/offline.browser.js').then(m => m.runBrowserTests())`
-in the browser console on the creative tool page. Every result must have
+in the browser console on Folio's page, `/`. Every result must have
 `passed: true`. Accepting an actual update, tapping Install, opening a
 `.folio` file from the OS and granting save permission still need a
 person at a real browser — the checks above cannot press those for you.
@@ -287,13 +276,10 @@ repaired.
 [`src/editing.ts`](src/editing.ts) records the authored image edits. Unit tests
 cover detection, decode rejection, size boundaries, deduplication and undo.
 Browser checks exercise real decoders, the picker and drop handlers, and an
-export/delete/import round trip. Run the server, then create a dedicated test
-page without the normal app boot (the suite mounts the real UI itself):
+export/delete/import round trip, on a test page without the normal app boot
+(the suite mounts the real UI itself).
 
-```sh
-bun build tooling/creative/tests/images.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/images-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/images-test.html` and run
 `await import('/images.browser.js').then(m => m.runBrowserTests())`.
@@ -342,12 +328,9 @@ the Grant in [`src/play.ts`](src/play.ts), stopping each owner's voices with
 its Scripts. Unit tests cover sniffing, decode refusal, size limits,
 ownership, the Page-leave, Stop and delete lifecycle, Recipes and the
 export/import round trip. Browser checks exercise the real decoder and
-picker with a WAV made in memory:
+picker with a WAV made in memory.
 
-```sh
-bun build tooling/creative/tests/sounds.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/sounds-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/sounds-test.html` and run
 `await import('/sounds.browser.js').then(m => m.runBrowserTests())`.
@@ -389,14 +372,12 @@ Play Host uses for `the text of`. Info's plain text field also
 clears mixed formatting when its text is changed.
 
 Browser regression checks use the real DOM, including clipboard HTML, selections,
-IME composition and the toolbar. With the creative tool server running, build:
+IME composition and the toolbar.
 
-```sh
-bun build tooling/creative/tests/rich-text.browser.ts --outdir tooling/creative/dist --target browser
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Then run `await import('/rich-text.browser.js').then(m => m.runBrowserTests())`
-in the browser console on the creative tool page. Every result must have
+in the browser console on Folio's page, `/`. Every result must have
 `passed: true`. Rebuild this test bundle after the watch server rebuilds the app.
 
 ## Running it
@@ -404,11 +385,41 @@ in the browser console on the creative tool page. Every result must have
 From the repository root, with Bun 1.4.2:
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run creative                       # serves at http://127.0.0.1:3928/ and rebuilds on change
+bun run --cwd tooling/creative start   # serves one minified build, never rebuilt
 bun run --cwd tooling/creative build   # a static dist/ any web server can host
 bun test tooling/creative/tests
 ```
+
+### Browser test suites
+
+With the server running, one command rebuilds the app and every
+`tests/*.browser.ts` suite into `dist/`, with a `<suite>-test.html` page
+without `main.js` for each suite that mounts the UI itself:
+
+```sh
+bun run --cwd tooling/creative build:browser-tests
+```
+
+It prints each suite's page: `/<suite>-test.html`, or `/` for `offline`,
+`rich-text` and `storage`. The watch server empties `dist/` whenever it
+rebuilds the app, so run it again after an app rebuild.
+
+Once `/` has loaded, the [service worker](#offline-installing-and-files-on-disk)
+controls the whole origin, test pages included: it answers every
+navigation with its cached `index.html` and serves the shell, `main.js`
+included, from the build it cached. Before running a suite, unregister it
+and clear its caches from the console of any page on the origin, then open
+the suite's page in a fresh tab, one tab per suite:
+
+```js
+for (const r of await navigator.serviceWorker.getRegistrations())
+  await r.unregister();
+for (const name of await caches.keys()) await caches.delete(name);
+```
+
+Running a suite on `/` registers the worker again.
 
 ## Play
 
@@ -487,6 +498,11 @@ line 1. The ownerless Message Box imports the Library instead. Each Script's
 Manifest declares both as messages with their documentation, so the Script
 editor completes them, hovers their documentation and flags a `hide` without
 its argument, unless the Script answers `on hide` itself.
+This hidden-object mechanism is interim:
+[ADR 0094](../../docs/adr/0094-host-commands-are-command-call-spellings-of-granted-operations.md)
+specifies Host Commands that never climb the Message Path, and
+[#1019](https://github.com/odogono/odgn-talk/issues/1019) tracks moving Folio
+to a `folio` Capability.
 
 Use `tell pages to show page2` to navigate. The departing Page receives
 `closePage` and has up to one second to finish before its Page and Element
@@ -593,12 +609,9 @@ without a DOM, and the dialog in [`src/play-prompts.ts`](src/play-prompts.ts).
 
 ### Browser checks
 
-Browser regression checks run on a dedicated page without `main.js`:
+Browser regression checks run on a dedicated page without `main.js`.
 
-```sh
-bun build tooling/creative/tests/play.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/play-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/play-test.html` and run
 `await import('/play.browser.js').then(m => m.runBrowserTests())`.
@@ -607,6 +620,8 @@ reload, run `await import('/play.browser.js').then(m => m.runElementsBrowserTest
 for dynamic creation, cloned Scripts, deletion, name reuse and Edit restoration.
 After another reload, run `await import('/play.browser.js').then(m => m.runUserBrowserTests())`
 for `user` prompts, notices, Escape and Cancel, and Stop taking a prompt down.
+After another reload, run `await import('/play.browser.js').then(m => m.runMessageBoxBrowserTests())`
+for the Message Box.
 
 Reader text unit tests cover formatting, `textChanged`, isolation, undo/redo,
 Script replacements and disabled input. The browser suite also checks real
@@ -639,12 +654,9 @@ Unit tests play the mystery end to end against the Play Host —
 including that the ending stays locked without both clues, that
 leaving the lamp room early cancels its `wait`, and that the exported
 file reopens and plays — and browser checks play it by touch taps at a
-phone width:
+phone width.
 
-```sh
-bun build tooling/creative/tests/sample.browser.ts --outdir tooling/creative/dist --target browser
-sed '/src=".\/main.js"/d' tooling/creative/dist/index.html > tooling/creative/dist/sample-test.html
-```
+Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
 Open `/sample-test.html` and run
 `await import('/sample.browser.js').then(m => m.runBrowserTests())`.

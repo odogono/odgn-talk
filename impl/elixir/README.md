@@ -2,7 +2,7 @@
 
 An Elixir embedding of NorthTalk, backed by the Zig Core's `wasm32-wasi` reactor in [Wasmex](https://hex.pm/packages/wasmex). It speaks the [Message Layer](../../spec/09-embedding.md#the-message-layer) and needs neither Go nor a sidecar. [#963](https://github.com/odogono/odgn-talk/issues/963) tracks the rest of the application-facing API.
 
-It supports Elixir 1.17 or later on OTP 27 or later, with Wasmex 0.15.1.
+It supports Elixir 1.17 or later on OTP 27 or later, with Wasmex 0.15.1. To change this package, start with the [task map](NAVIGATION.md).
 
 ```sh
 cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi

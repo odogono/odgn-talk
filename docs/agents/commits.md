@@ -13,7 +13,10 @@ type(scope)!: Sentence-case imperative description (#issue)
   - `fix`: a behavior that was wrong.
   - `perf`: the same behavior, faster or smaller.
   - `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert`: no change a user would notice.
-- **scope**, optional, one of `spec`, `ts`, `cli`, `tools`, `corpus`, `repo`.
+- **scope**, optional, one of `spec`, `ts`, `cli`, `tools`, `corpus`, `repo`. There is no scope per Core or app:
+  - `repo` covers the Go, Zig and Elixir Cores and embeddings, CI and workspace changes.
+  - `tools` covers `tooling/` (Folio, the Playground, the LSP, the formatter and Lints) and `tools/`.
+  - `ts` covers the TS Core in `impl/ts/`.
 - **!**, before the colon, marks a breaking change. A `BREAKING CHANGE: ...` line in the PR body does too.
 - The description starts with a capital letter and doesn't end with a full stop. End it with the issue it closes, as `(#131)`.
 

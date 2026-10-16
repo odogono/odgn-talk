@@ -3,6 +3,8 @@
 // a hidden object above the Project, so an unhandled `hide x` from any Script
 // ends there, as HyperCard's built-in commands did; a Script can still answer
 // `on hide` itself or `pass hide`. The ownerless Message Box imports it.
+// Interim until #1019 moves Folio to a `folio` Capability, whose Host
+// Commands never climb the Message Path (docs/adr/0094-*.md).
 import { compileLibrary } from '@odgn/northtalk';
 import { type Page, type Project } from './model';
 
