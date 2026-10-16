@@ -2,6 +2,7 @@
 import { EditorView } from '@codemirror/view';
 import { createElement, createPage, createProject } from '../src/model';
 import { mountStack } from '../src/stack';
+import { MESSAGE_FIRST_LINE } from '../src/message-script';
 import { mountPlay } from '../src/play-view';
 import {
   readRichText,
@@ -666,7 +667,10 @@ export const runMessageBoxBrowserTests = async () => {
   });
   const { from, to } = (() => {
     const doc = view.state.doc;
-    return { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+    return {
+      from: doc.line(MESSAGE_FIRST_LINE).from,
+      to: doc.line(doc.lines).from - 1,
+    };
   })();
   view.dispatch({
     changes: { from, to, insert: 'hide welcomeText' },
@@ -684,7 +688,10 @@ export const runMessageBoxBrowserTests = async () => {
   document.querySelector<HTMLButtonElement>('#tool-modes button')!.click();
   const set = (text: string) => {
     const doc = view.state.doc;
-    const range = { from: doc.line(3).from, to: doc.line(doc.lines).from - 1 };
+    const range = {
+      from: doc.line(MESSAGE_FIRST_LINE).from,
+      to: doc.line(doc.lines).from - 1,
+    };
     view.dispatch({
       changes: { ...range, insert: text },
       selection: { anchor: range.from + text.length },

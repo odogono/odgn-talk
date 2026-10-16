@@ -1193,7 +1193,7 @@ test('a message the Host answers is completed, documented and checked unless the
   );
 });
 
-test('a Host Command is documented, checked at load and Linted when shadowed', () => {
+test('a Host Command is completed, documented, checked at load and Linted when shadowed', () => {
   const host = {
     ...manifest,
     grants: [
@@ -1223,6 +1223,13 @@ test('a Host Command is documented, checked at load and Linted when shadowed', (
   };
   expect(hover.contents.value).toContain('Hides a part.');
   expect(hover.contents.value).toContain('Host Command');
+  const items = request('textDocument/completion', at(2, 3)) as {
+    documentation?: unknown;
+    label: string;
+  }[];
+  expect(JSON.stringify(items.find(i => i.label === 'hide'))).toContain(
+    'Hides a part.',
+  );
   const published = sent
     .filter(m => m.method === 'textDocument/publishDiagnostics')
     .at(-1)!.params as Published;
@@ -1236,5 +1243,14 @@ test('a Host Command is documented, checked at load and Linted when shadowed', (
     .at(-1)!.params as Published;
   expect(ownDiagnostics.diagnostics.map(d => d.code)).toContain(
     'shadowed-host-command',
+  );
+  // The Script's own Handler is the one completed.
+  const ownItems = own.request('textDocument/completion', at(3, 3)) as {
+    documentation?: unknown;
+    label: string;
+  }[];
+  expect(ownItems.filter(i => i.label === 'hide')).toHaveLength(1);
+  expect(JSON.stringify(ownItems.find(i => i.label === 'hide'))).not.toContain(
+    'Hides a part.',
   );
 });

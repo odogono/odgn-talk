@@ -194,7 +194,9 @@ Grant's name shows its whole section of the dictionary. With no manifest
 loaded, or one that lacks the Grant or Operation, hover on either name says
 so instead of showing nothing. Completion
 after `tell g to` offers only fire-and-forget Operations, after `ask g to` only
-the others, and on a `tell g` block's line every Operation; the entry is each
+the others, and on a `tell g` block's line every Operation. At the start of a
+statement it also offers each Host Command the Grants offer, unless the
+Script has a Handler of that name. The entry is each
 item's documentation and its call is the detail. A suspending Operation's item
 inserts `and wait` unless the line already has it after the cursor; with
 arguments this needs the client's `snippetSupport`, and without it the item
