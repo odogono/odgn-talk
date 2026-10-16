@@ -2258,7 +2258,11 @@ pub const Group = struct {
     /// the Script with reason `reload` and replaces its code and every
     /// extension at once. A refusal leaves the Script unchanged.
     pub fn reload(g: *Group, s: *Script, source: []const u8, carry: bool, keep_mailbox: bool) !ReloadResult {
-        try g.checkCodeChange();
+        try g.checkWorker();
+        if (g.fatal) {
+            g.refuseWorkerWithCode(.{ .reload = .{ .script = s, .source = source, .carry = carry, .keep_mailbox = keep_mailbox } }, "effect state unknown");
+            return error.EffectStateUnknown;
+        }
         const fresh = try g.newCode(s);
         // A paused Reload keeps its built code until it resumes.
         var owned = true;
@@ -6152,6 +6156,12 @@ pub const Group = struct {
         // Every Run's rollback first, which may defer while draining:
         // nothing else changes until they complete.
         for (runs.items) |r| try g.cleanupLifecycle(r);
+        // Discovering uncertainty during this Stop switches to Group-wide
+        // termination before publishing any stopped record, in load order.
+        if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
+            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == s) running else null, .{});
+            return;
+        }
         s.stopped = try g.gpa.dupe(u8, reason);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);

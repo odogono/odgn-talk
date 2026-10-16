@@ -224,3 +224,41 @@ test "cancellation abandons participating scopes before rollback and unrelated s
     const close_u = std.mem.indexOf(u8, trace, "op=u.close").?;
     try testing.expect(close_b < close_a and close_a < rollback and rollback < close_u);
 }
+
+test "fatal rollback during Stop publishes Scripts in load order and traces refused Reload (#1074)" {
+    const a = testing.allocator;
+    const nothing = try caps.Shape.kind(a, .nothing);
+    defer nothing.release();
+    const Failed = struct {
+        fn hook(_: ?*anyopaque, phase: caps.Phase, _: *const caps.SegmentContext) caps.EffectStatus {
+            return if (phase == .rollback) .failed else .ok;
+        }
+    };
+    var ops = [_]caps.Operation{.{ .name = "write", .args = &.{}, .result = nothing, .mode = .immediate, .segment_bound = true, .host = .{ .call = ScopeHost.open } }};
+    var capability: caps.Capability = .{ .name = "resource", .operations = &ops };
+    var allowed = [_]bool{true};
+    var grant: caps.Grant = .{ .capability = &capability, .operations = &allowed, .coordinator = .{ .identity = 1, .hook = Failed.hook, .context = null } };
+    var out: std.Io.Writer.Allocating = .init(a);
+    defer out.deinit();
+    var g: machine.Group = .init(a, &out.writer);
+    defer g.deinit();
+    const waiting = "on go\nwait 1 s\nend go";
+    try testing.expect((try g.load("before", waiting, .{})) == .loaded);
+    const active = try g.load("s", "on go\nask r to write\nrepeat forever\nend repeat\nend go", .{ .grants = &.{.{ .name = "r", .grant = &grant }} });
+    try testing.expect(active == .loaded);
+    try testing.expect((try g.load("after", waiting, .{})) == .loaded);
+    for ([_][]const u8{ "before", "s", "after" }) |name| _ = try g.deliver(name, "go", &.{}, true);
+    try g.pumpWith(.{ .seconds = 0, .micros = 0 }, 100, 0);
+    try g.stopInput("s", "requested");
+    try g.pump(.{ .seconds = 0, .micros = 0 });
+    const trace = out.written();
+    const before = std.mem.indexOf(u8, trace, "stopped before").?;
+    const middle = std.mem.indexOf(u8, trace, "stopped s").?;
+    const after = std.mem.indexOf(u8, trace, "stopped after").?;
+    try testing.expect(before < middle and middle < after);
+    const start = trace.len;
+    try testing.expectError(error.EffectStateUnknown, g.reload(active.loaded, waiting, true, false));
+    const refusal = out.written()[start..];
+    try testing.expect(std.mem.indexOf(u8, refusal, "> reload s carry=yes") != null);
+    try testing.expect(std.mem.indexOf(u8, refusal, "refused code=\"effect state unknown\"") != null);
+}

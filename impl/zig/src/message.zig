@@ -2791,7 +2791,10 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
         s.pumping_entry = null;
     }
     const outcome: machine.Group.Resumed = switch (work) {
-        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| return hostError(s.gpa, ref, talk.status(e)) },
+        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| {
+            entry.group.flush();
+            return workError(s, ref, entry, talk.status(e));
+        } },
         .replace => |x| blk: {
             // Room for every Library it could recompile, which the Core
             // owns once the Group uses them.
