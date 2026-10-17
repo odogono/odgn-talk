@@ -215,6 +215,48 @@ describe('pending calls after restore', () => {
     const r = operationalReports(copy.pump(6_000_000n).reports)[0]!;
     expect(r).toMatchObject({ delivery: 'd2', outcome: 'completed' });
   });
+  test("answered calls leave a long-lived Run's save, and its pending call keeps its arguments", () => {
+    const calls: Call<void>[] = [];
+    const started: string[] = [];
+    const capability = defineCapability('keys', {
+      poll: {
+        mode: 'suspending',
+        args: [shape.number],
+        result: shape.number,
+        cost: { fuel: 1 },
+        start: (call, n) => {
+          calls.push(call);
+          started.push(`${call.id} ${n}`);
+        },
+      },
+    });
+    const grant = capability.grant('all', undefined);
+    const g = newGroup({ name: 'g' });
+    g.load({
+      name: 's',
+      source:
+        'on begin\n  put 0 into n\n  repeat forever\n    add 1 to n\n    ask keys to poll n and wait\n  end repeat\nend begin',
+      grants: { keys: grant },
+    });
+    g.script('s')!.deliver({ name: 'begin' });
+    const sizes = new Map<number, number>();
+    for (let i = 10; i <= 90; i++) {
+      calls.at(-1)?.answer(num(0));
+      g.pump(BigInt(i) * 1_000_000n);
+      sizes.set(i, g.save().length);
+    }
+    expect(sizes.get(90)! - sizes.get(30)!).toBeLessThan(64);
+    const { group: copy, result } = restore(g.save(), {
+      ...options([]),
+      grants: () => grant,
+    });
+    expect(result.pending.map(p => [p.id, p.args.map(String)])).toEqual([
+      ['s/r1.c81', ['81']],
+    ]);
+    copy.settle('s/r1.c81', { answer: num(0) });
+    copy.pump(91_000_000n);
+    expect(started.at(-1)).toBe('s/r1.c82 82');
+  });
 });
 
 describe('restore compatibility and durable values', () => {
