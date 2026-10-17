@@ -17,6 +17,7 @@ const chunks = @import("chunks.zig");
 const scratch_arena = @import("scratch.zig");
 pub const costs = @import("costs.zig");
 const builtins = @import("builtins.zig");
+const random_gen = @import("random.zig");
 const binary = @import("binary.zig");
 const conversions = @import("convert.zig");
 const matcher = @import("matcher.zig");
@@ -1484,6 +1485,10 @@ pub const Group = struct {
     generations: u64 = 0,
     /// The save attempts made, which number them `s1`, `s2`, …
     saves: u64 = 0,
+    /// The generator `random` draws from (chapter 7, Random numbers), and
+    /// the state a draw leaves until its instruction is charged.
+    random_state: u64 = random_gen.seedState(0),
+    random_pending: ?u64 = null,
     /// Whether a Pump is running: a Stop, CancelRun or RewindRun made then
     /// lands at its next Host crossing, or at its end, rather than waiting
     /// for the next Pump (chapter 9, Threads and the input queue).
@@ -1561,6 +1566,11 @@ pub const Group = struct {
 
     pub fn init(gpa: Allocator, trace: ?*std.Io.Writer) Group {
         return .{ .gpa = gpa, .trace = trace, .scratch = .init(gpa), .keep = .init(gpa), .reports = .init(gpa) };
+    }
+
+    /// Seeds the generator `random` draws from, at the Group's creation.
+    pub fn seed(g: *Group, s: u64) void {
+        g.random_state = random_gen.seedState(s);
     }
 
     /// Worker calls cannot reenter a Pump or code-change lifecycle callback.
@@ -7085,6 +7095,7 @@ pub const Group = struct {
             defer held.release(g.gpa);
             frame.pc += 1;
             var charge: costs.Measures = .{};
+            g.random_pending = null;
             const done = g.instruction(run, frame, ins, &charge) catch |e| switch (e) {
                 error.Raised => blk: {
                     const err = g.completeError(run, pc, ins) catch |other| {
@@ -7198,6 +7209,8 @@ pub const Group = struct {
                 }
             }
             charge.release();
+            if (g.random_pending) |state| g.random_state = state;
+            g.random_pending = null;
             switch (done) {
                 .crossing => unreachable,
                 .next => {},
@@ -9113,6 +9126,20 @@ pub const Group = struct {
                     try g.push(frame, r);
                     return .next;
                 }
+                if (std.mem.eql(u8, ops[0].text, "random")) {
+                    var raised: builtins.Raised = .{};
+                    m.builtin = "random";
+                    m.args = args;
+                    const d = builtins.random(gpa, args[0], g.random_state, &raised) catch |e| switch (e) {
+                        error.Raised => return g.raiseBuiltin(raised),
+                        else => |other| return other,
+                    };
+                    // The draw is kept only once its Fuel is paid.
+                    g.random_pending = d.state;
+                    m.result = d.value.retain();
+                    try g.push(frame, d.value);
+                    return .next;
+                }
                 if (std.mem.eql(u8, ops[0].text, "offerAvailable")) {
                     const r = try g.offerAvailable(run, args, m);
                     m.result = r.retain();
@@ -10244,7 +10271,7 @@ pub const Group = struct {
 fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     return switch (ins.op) {
         .load_var, .store_var, .store_definition, .load_object, .me, .target, .set_property, .set_property_computed, .ask, .ask_wait, .tell, .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .send_up, .send_up_wait, .wait, .wait_for, .wait_for_any, .join_start, .join_ask, .join_send, .join_send_named, .join_send_spread, .join_end, .timeout_start, .timeout_end, .call_value_wait, .call_handler_wait, .veto, .pass, .choose_offer => true,
-        .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable"),
+        .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable") or std.mem.eql(u8, ins.operands[0].text, "random"),
         .get_key, .get_key_computed => blk: {
             const stack = frame.stack.items;
             if (stack[stack.len - 1].value.data != .object) break :blk false;

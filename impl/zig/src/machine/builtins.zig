@@ -1,6 +1,7 @@
 //! The Built-in functions and Constants that need no Handler, Library or
 //! Capability machinery (chapter 7), with their errors.
 const std = @import("std");
+const random_gen = @import("random.zig");
 const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const unicode = @import("../unicode/unicode.zig");
@@ -62,6 +63,17 @@ pub fn constant(gpa: Allocator, name: []const u8) !*Value {
         return model.scalar(gpa, .{ .number = model.Decimal.parse(b.call) catch unreachable });
     }
     unreachable;
+}
+
+/// `random(n)`: the next draw from a Group's generator `state`, and the
+/// state after it (chapter 7, Random numbers).
+pub fn random(gpa: Allocator, x: *Value, state: u64, raised: *Raised) Error!struct { value: *Value, state: u64 } {
+    if (x.data != .number) return wrongKind(raised, gpa, "number", x);
+    const n = x.data.number.integer(i64) catch 0;
+    if (n < 1 or n > random_gen.limit) return fill(raised, gpa, "out of domain", &.{.{ "function", "random" }}, x);
+    const d = random_gen.next(state, @intCast(n));
+    const v = model.scalar(gpa, .{ .number = model.Decimal.fromInt(@as(i64, @intCast(d.value))) }) catch return error.OutOfMemory;
+    return .{ .value = v, .state = d.state };
 }
 
 /// Calls a Built-in function.

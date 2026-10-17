@@ -1186,7 +1186,8 @@ func (u *Unit) constant(n *syntax.Node, available map[string]bool) {
 			disallowed = !ok || s.Kind != "builtin-constant" && !available[x.Text] && s.Import == ""
 		case "call":
 			s, ok := u.Resolve(nil, x.Text)
-			disallowed = !ok || s.Kind != "builtin"
+			// `random` draws from the Group, so it has an effect.
+			disallowed = !ok || s.Kind != "builtin" || x.Text == "random"
 		}
 		if disallowed {
 			u.add("not constant", x.Pos())

@@ -380,7 +380,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not constant",
-			RaisedWhen: "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins",
+			RaisedWhen: "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, or calls `random`",
 			At:         "the first token that isn't allowed",
 			Sources: []string{
 				"ADR 0035",

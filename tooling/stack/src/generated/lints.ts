@@ -411,6 +411,10 @@ export const builtins = [
     "kind": "function"
   },
   {
+    "name": "random",
+    "kind": "function"
+  },
+  {
     "name": "fromFloat64",
     "kind": "function"
   },

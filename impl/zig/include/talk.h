@@ -724,6 +724,9 @@ typedef struct talk_group_options {
      * logical budgets, so a Core defect becomes TALK_OUT_OF_MEMORY rather
      * than a crash; 0, 256 MiB. */
     size_t memory_cap;
+    /* Seeds the generator `random` draws from; 0 when the Host has no seed
+     * (chapter 7, Random numbers). */
+    uint64_t seed;
 } talk_group_options;
 
 /* C only: what a Group's allocator holds now, the most it has held, its

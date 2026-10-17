@@ -427,6 +427,22 @@ func (r *Run) evaluate(f *Frame, t *frameTrial, i lower.Instruction) (Measures, 
 		effect = func() { r.EventWait = w; r.Status = Suspended }
 	case generated.OpCallBuiltin:
 		m.Args = take(idx(1))
+		if name(0) == "random" {
+			n, e := randomBound(m.Args[0])
+			if e == nil && r.Random == nil {
+				err := failure("restricted operation", value.Pair{Key: "instruction", Val: text("call-builtin random")})
+				e = &err
+			}
+			if e != nil {
+				bad(*e)
+				break
+			}
+			// The draw is kept only once its Fuel is paid.
+			state, drawn := nextRandom(*r.Random, n)
+			push(integer(int64(drawn)))
+			effect = func() { *r.Random = state }
+			break
+		}
 		if name(0) == "offerAvailable" {
 			v := m.Args[0]
 			if v.Kind != value.Text {

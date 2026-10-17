@@ -552,6 +552,7 @@ func (g *Group) runPump(o PumpOptions, inputs []delivery) (PumpResult, error) {
 				}
 				r.PersistentBase = s.retainedOutside(x)
 				r.ClockNS = clockNanos(g.clock)
+				r.Random = &g.random
 				if r.Expired != nil {
 					r.ResumeExpired()
 					g.writeRaises(x, raised)

@@ -2234,6 +2234,15 @@ export const costModel = {
       ]
     },
     {
+      "key": "builtin.random",
+      "fuel": [
+        [0, 0, 4, 1]
+      ],
+      "alloc": [
+        [1, 2, 1, 1]
+      ]
+    },
+    {
       "key": "builtin.fromFloat64",
       "fuel": [
         [0, 0, 8, 1]

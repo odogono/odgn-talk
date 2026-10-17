@@ -23,7 +23,7 @@ func restrictedOperation(f *Frame, i lower.Instruction) bool {
 		return true
 	case generated.OpCallBuiltin:
 		name := i.Operands()[0].Text
-		return name == "isDisposed" || name == "offerAvailable"
+		return name == "isDisposed" || name == "offerAvailable" || name == "random"
 	case generated.OpGetKey, generated.OpGetKeyComputed:
 		if f.Stack[len(f.Stack)-1].Kind != value.Object {
 			return false

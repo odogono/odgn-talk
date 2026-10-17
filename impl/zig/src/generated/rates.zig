@@ -91,6 +91,7 @@ pub const cost_rates = [_]CostRate{
     .{ .key = "builtin.offerAvailable", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 3, .divisor = 1 }, .{ .measure = 5, .subject = 4, .factor = 1, .divisor = 16 } }, .alloc = &.{}, .formula = null },
     .{ .key = "builtin.offset", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 4, .divisor = 1 }, .{ .measure = 11, .subject = 0, .factor = 1, .divisor = 1 } }, .alloc = &.{}, .formula = null },
     .{ .key = "builtin.power", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 60, .divisor = 1 }}, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }}, .formula = null },
+    .{ .key = "builtin.random", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 4, .divisor = 1 }}, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }}, .formula = null },
     .{ .key = "builtin.rangeEnd", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 2, .divisor = 1 }}, .alloc = &.{}, .formula = null },
     .{ .key = "builtin.rangeStart", .fuel = &.{.{ .measure = 0, .subject = 0, .factor = 2, .divisor = 1 }}, .alloc = &.{}, .formula = null },
     .{ .key = "builtin.round", .fuel = &.{ .{ .measure = 0, .subject = 0, .factor = 5, .divisor = 1 }, .{ .measure = 9, .subject = 2, .factor = 1, .divisor = 8 } }, .alloc = &.{.{ .measure = 1, .subject = 2, .factor = 1, .divisor = 1 }}, .formula = null },

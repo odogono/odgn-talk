@@ -67,7 +67,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case generated.OpCallBuiltin:
 		switch i.Operands()[0].Text {
-		case "offerAvailable", "upper", "lower", "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32", "year", "month", "day", "hour", "minute", "second", "microsecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant", "fromCodePoint", "codePoint", "offset", "kindOf", "conforms", "check", "explain", "objectKind", "isDisposed", "rangeStart", "rangeEnd", "abs", "min", "max", "functionArity", "functionName":
+		case "offerAvailable", "random", "upper", "lower", "floor", "ceiling", "truncate", "round", "sqrt", "exp", "ln", "log10", "power", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "fromFloat64", "fromFloat32", "toFloat64", "toFloat32", "year", "month", "day", "hour", "minute", "second", "microsecond", "weekday", "dayOfYear", "isoWeek", "isoWeekYear", "hasTime", "toCivil", "toInstant", "fromCodePoint", "codePoint", "offset", "kindOf", "conforms", "check", "explain", "objectKind", "isDisposed", "rangeStart", "rangeEnd", "abs", "min", "max", "functionArity", "functionName":
 			return true
 		}
 	}

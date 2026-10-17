@@ -67,6 +67,15 @@ fn asU64(j: ?Json) ?u64 {
     return if (n < 0) null else @intCast(n);
 }
 
+/// A Group's seed, 0 to 2^64 - 1, in chapter 9's integer encoding.
+fn asSeed(j: Json) ?u64 {
+    return switch (j) {
+        .integer => |n| std.math.cast(u64, n),
+        .number_string, .string => |t| std.fmt.parseInt(u64, t, 10) catch null,
+        else => null,
+    };
+}
+
 /// Writes an integer as chapter 9 encodes it: a JSON integer below 2^53,
 /// else its decimal text in a string.
 fn writeInt(w: *std.Io.Writer, n: i128) !void {
@@ -2440,7 +2449,12 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
     // No physical cap below the runtime's: over WASI the Host's store
     // limit is the backstop, as it is for the Go reactor, and the logical
     // budgets still charge every Run.
-    const options: talk.GroupOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .memory_cap = std.math.maxInt(usize) };
+    const seed: u64 = if (field(msg, "seed")) |j| asSeed(j) orelse {
+        s.gpa.free(entry.name);
+        s.gpa.destroy(entry);
+        return hostError(s.gpa, ref, .invalid_value);
+    } else 0;
+    const options: talk.GroupOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .memory_cap = std.math.maxInt(usize), .seed = seed };
     const code = Direct.newGroup(s.core, &options, &group);
     if (code != .ok) {
         s.gpa.free(entry.name);

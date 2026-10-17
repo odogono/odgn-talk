@@ -2097,7 +2097,8 @@ const Checker = struct {
         switch (in) {
             .guard => if (r != .builtin_function) try c.report(.not_in_a_guard, call.name),
             .whose => if (r != .builtin_function) try c.report(.not_in_a_whose, call.name),
-            .initialiser => if (r != .builtin_function) c.notConstant(call.name),
+            // `random` draws from the Group, so it has an effect.
+            .initialiser => if (r != .builtin_function or std.mem.eql(u8, name, "random")) c.notConstant(call.name),
             .normal => {},
         }
     }
@@ -2575,6 +2576,11 @@ test "both sides of otherwise and an optional read's operands are checked" {
     try expectDiagnostics("on t\nreturn 1 otherwise absent\nend\n", .{}, "unknown name at 2:20\n");
     try expectDiagnostics("on t\nreturn the optional k of absent\nend\n", .{}, "unknown name at 2:26\n");
     try expectDiagnostics("on t\nreturn the optional (absent) of nothing\nend\n", .{}, "unknown name at 2:22\n");
+}
+
+test "random is not constant" {
+    try expectDiagnostics("constant x = random(6)\n", .{}, "not constant at 1:14\n");
+    try expectDiagnostics("function f a = random(6)\nreturn a\nend\n", .{}, "not constant at 1:16\n");
 }
 
 test "an unknown name in an initialiser is also not constant" {

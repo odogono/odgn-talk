@@ -96,6 +96,12 @@ defmodule NorthTalk.Owner do
 
   # The backend is unlinked, and terminate/2 does not run when the owner is
   # killed, so a watcher closes the instance whenever the owner exits.
+
+  # A seed in chapter 9's integer encoding: text from 2^53 up.
+  defp seed_field(seed) when is_integer(seed) and seed >= 0 and seed < 9_007_199_254_740_992, do: seed
+  defp seed_field(seed) when is_integer(seed) and seed >= 0, do: Integer.to_string(seed)
+  defp seed_field(seed), do: seed
+
   defp stop_with_owner(transport) do
     owner = self()
 
@@ -210,6 +216,7 @@ defmodule NorthTalk.Owner do
 
   def handle_call({:new_group, name, opts}, _from, state) do
     fields = %{"group" => name, "name" => name, "trace" => Keyword.get(opts, :trace, false)}
+    fields = if seed = opts[:seed], do: Map.put(fields, "seed", seed_field(seed)), else: fields
 
     case exchange(state, "new-group", fields) do
       {{:ok, _}, state} ->

@@ -806,3 +806,22 @@ test('leaving the Page and Stop take down pending prompts', async () => {
   expect(play.prompts).toEqual([]);
   expect(play.problems).toEqual([]);
 });
+
+test('a seeded session repeats its random draws', () => {
+  const roll = (seed?: bigint) => {
+    const project = fixture();
+    project.pages[0]!.elements[0]!.script =
+      'on click\n set the label of me to random(6) & random(6) & random(6)\nend click';
+    const play = new PlaySession(
+      project,
+      0,
+      seed === undefined ? {} : { seed },
+    );
+    play.send(play.page.elements[0]!, 'click');
+    drain(play);
+    expect(play.problems).toEqual([]);
+    return (play.page.elements[0] as { label: string }).label;
+  };
+  expect(roll(42n)).toBe('364');
+  expect(roll()).toBe('161');
+});

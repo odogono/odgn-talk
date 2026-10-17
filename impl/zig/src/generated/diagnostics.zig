@@ -379,7 +379,7 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not constant",
-            .raised_when = "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins",
+            .raised_when = "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, or calls `random`",
             .at = "the first token that isn't allowed",
             .sources = &.{
                 "ADR 0035",

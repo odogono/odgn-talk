@@ -375,6 +375,8 @@ export const mountPlay = (shell: StackShell): void => {
     shell.setPlaying(mode);
     generation = shell.editor.generation;
     session = new PlaySession(shell.editor.project, shell.editor.pageIndex, {
+      // A different game each time (ADR 0096).
+      seed: BigInt(Date.now()),
       soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
     });
     histories.clear();

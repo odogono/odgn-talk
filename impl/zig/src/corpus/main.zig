@@ -76,6 +76,7 @@ fn metadata(s: []const u8, problem: *Problem) MetadataError!Metadata {
             continue;
         }
         const k = kind orelse return error.InvalidCaseKind;
+        if (table.len == 0 and allowed("", key, k)) continue;
         if (table.len == 0) {
             // Any other root key is a table written inline.
             problem.* = .{ .kind = k, .table = key };

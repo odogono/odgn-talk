@@ -1802,6 +1802,14 @@ pub const corpus: CorpusTable = .{
             },
         },
         .{
+            .table = "",
+            .key = "seed",
+            .is = "the seed the runner makes the Group with, a TOML integer 0 or more; 0 if absent ([chapter 7](07-libraries-and-the-standard-library.md#random-numbers))",
+            .kinds = &.{
+                "trace",
+            },
+        },
+        .{
             .table = "versions",
             .key = "language",
             .is = "the language version the case is blessed for",
