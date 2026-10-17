@@ -105,12 +105,25 @@ type zigGroup struct {
 	restoreOptions  *RestoreOptions
 	restoredCalls   map[CallID]*Call
 	paused          bool
+	// SPIKE: a guest shared with other Groups, this Group's handle on it, and
+	// whether this Group owns it for the current conversation.
+	shared   *zigShared
+	handle   string
+	holding  bool
+	needOpen bool
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
 var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1"}
 
 func newZigGroup(g *Group) groupBackend {
+	if s := zigSharedGuest(g.core); s != nil {
+		b := newZigSharedBackend(g, s)
+		if _, err := b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
+			panic(err)
+		}
+		return b
+	}
 	b := newZigBackend(g)
 	if _, err := b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
 		b.reactor.Close(context.Background())
@@ -134,22 +147,7 @@ func newZigBackend(g *Group) *zigGroup {
 		panic(err)
 	}
 	b.reactor = reactor
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
-	if err == nil {
-		features := hello.Get("features")
-		for _, required := range zigFeatures {
-			found := false
-			for i := 1; i <= features.Len(); i++ {
-				if zigText(features.Index(i)) == required {
-					found = true
-				}
-			}
-			if !found {
-				err = fmt.Errorf("embedded Zig artifact omits %s", required)
-				break
-			}
-		}
-	}
+	err = b.checkHello()
 	if err != nil {
 		reactor.Close(context.Background())
 		panic(err)
@@ -176,7 +174,7 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value)
 			b.ref++
 			ref = b.ref
 		}
-		fields["m"], fields["ref"], fields["group"] = m, ref, "g"
+		fields["m"], fields["ref"], fields["group"] = m, ref, b.groupHandle()
 		b.frameMu.Unlock()
 		packet, err := b.export(fields, receipt)
 		if err != nil {
@@ -241,6 +239,7 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	}
 	b.frameMu.Lock()
 	defer b.frameMu.Unlock()
+	b.needOpen = packet.Get("need").Kind() != KindNothing
 	if packet.Get("need").Kind() != KindNothing {
 		b.paused = true
 	} else if packet.Get("err").Kind() == KindNothing && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result") {
@@ -935,4 +934,33 @@ func zigJSON(out []byte, v any) ([]byte, error) {
 	}
 	b, err := json.Marshal(v)
 	return append(out, b...), err
+}
+
+func (b *zigGroup) groupHandle() string {
+	if b.handle == "" {
+		return "g"
+	}
+	return b.handle
+}
+
+// checkHello opens the guest's session and checks it offers every feature
+// the adapter requires.
+func (b *zigGroup) checkHello() error {
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
+	if err == nil {
+		features := hello.Get("features")
+		for _, required := range zigFeatures {
+			found := false
+			for i := 1; i <= features.Len(); i++ {
+				if zigText(features.Index(i)) == required {
+					found = true
+				}
+			}
+			if !found {
+				err = fmt.Errorf("embedded Zig artifact omits %s", required)
+				break
+			}
+		}
+	}
+	return err
 }
