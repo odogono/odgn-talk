@@ -371,7 +371,9 @@ their synchronous contract.
 Hosts may opt in to `crossing-trace-v1` to receive available Trace before
 Operation needs and a `trace` need after each ordinary Operation's call record,
 before controls land or result conversion. Its `trace-result` acknowledgement
-continues the same Pump without repeating the callback or accounting. Refusal
+continues the same Pump without repeating the callback or accounting.
+Trace observation preserves Join admission, including exactly MaxJoin members,
+with the same Fuel and Trace as without the feature. Refusal
 and Load-error replies carry outer Trace with this feature; legacy Hosts retain
 final-reply timing. This is an Operation crossing observation contract, not
 per-record suspension during arbitrary execution or non-yielding WASM admission.
