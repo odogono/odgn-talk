@@ -22,14 +22,15 @@ func TestTraceErrorMessageProvenance(t *testing.T) {
 					t.Fatal(source, rows)
 				}
 			}
-			source := "1 / 0"
-			if origin == "Script" {
+			var rows []string
+			switch origin {
+			case "Core":
+				rows = h.Input("1 / 0")
+			case "Script":
 				// Identical wording and a catalogue code must not make this a
 				// Core-generated message.
-				source = `throw {code: "division by zero", message: "Division by zero"}`
-			}
-			var rows []string
-			if origin == "Host" {
+				rows = h.Input(`throw {code: "division by zero", message: "Division by zero"}`)
+			case "Host":
 				code, _ := talk.Text("division by zero")
 				message, _ := talk.Text("Division by zero")
 				e, err := talk.Map(talk.KV("code", code), talk.KV("message", message))
@@ -40,8 +41,6 @@ func TestTraceErrorMessageProvenance(t *testing.T) {
 					t.Fatal(err)
 				}
 				rows = h.Tick()
-			} else {
-				rows = h.Input(source)
 			}
 			traced := 0
 			for _, row := range rows {
