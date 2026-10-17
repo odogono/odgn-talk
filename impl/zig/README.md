@@ -322,6 +322,12 @@ forms; returned metadata never overrides the token's defining code. Its
 `script-units` query reads the current Script, extension and transitive Library
 sources with their identities, without execution or Trace, for a Session Host
 to archive the defining documentation across code changes and Restore.
+`queued-inputs-v1` opens `queued-inputs` between worker exchanges. It returns
+whether the addressed Group has Host Inputs waiting for its next Pump, without
+execution, a vars snapshot or Trace. The Go Session uses it for callback
+Deliveries, Store Notifications and restored settlements. Runnable Runs and
+messages already in Script mailboxes do not count as queued Host Inputs.
+
 `analysis-v1` opens `analyze-entry`, `analyze-source`, `analysis-catalogue`
 and `message-name`, using the same [language analysis](src/analysis.zig)
 as the Zig Session Host. These exchanges need no Group, load no source and

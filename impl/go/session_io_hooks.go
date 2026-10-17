@@ -45,6 +45,9 @@ func init() {
 	}
 	sessionio.Queued = func(raw any) bool {
 		g := raw.(*Group)
+		if g.backend != nil {
+			return g.backend.queued()
+		}
 		g.mu.Lock()
 		defer g.mu.Unlock()
 		return len(g.inputs) > 0
