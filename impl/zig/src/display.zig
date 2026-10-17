@@ -207,6 +207,9 @@ pub const Resolver = struct {
     /// The Transcript-only `{"$sessionFunction": handle}` reference;
     /// refused outside Session replay. Returns an owned Function reference.
     session_function: ?*const fn (?*anyopaque, []const u8) model.Error!*Value = null,
+    /// The message layer's `{"$coreError": [[key, value], …]}` under
+    /// `core-message-v1`; the tag is refused without it.
+    core_error: bool = false,
 };
 /// Reads one display-form value from `input` at `pos`, leaving `pos` after it.
 pub const Reader = struct {

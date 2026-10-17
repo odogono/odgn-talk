@@ -13,8 +13,9 @@ go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$'
 # Session analysis uses the negotiated Zig interface; the remaining runtime
 # Session/Transcript gaps are tracked separately in #1053.
 go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclaration|TestPassiveAnalysisBeforeSessionStarts|TestConcurrentSessionAnalysis|TestEntryRefusesMultipleDeclarations|TestAnalysisRetainsSourceScalars|TestDeclarationDocumentationAttachesToTopLevelDeclarations|TestFunctionMetadataAcrossSessionExposuresAndRestore|TestInspectionAnonymousLambda|TestDeclarationDocumentationInTheSession|TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore|TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore)$' -count=1 "$@" ./session
-# Function metadata, defining documentation and restored Object inspection.
-go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection)$' -count=1 "$@" ./internal/corpus
+# Function metadata, defining documentation, restored Object inspection and
+# Core-raised error messages (#1095).
+go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection|observation)$' -count=1 "$@" ./internal/corpus
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
 go test -tags talk_zig_experimental -run '^(TestPool.*|TestCancelledInspectionNeedsNoReader)$' -count=1 "$@" ./driver

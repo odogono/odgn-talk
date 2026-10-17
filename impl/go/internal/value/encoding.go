@@ -47,10 +47,12 @@ func Encode(v Value, plain bool) ([]byte, error) {
 }
 
 // EncodeWire is the Value Encoding with Function Values written by
-// function, as the Message Layer carries them; nil refuses them.
+// function, as the Message Layer carries them; nil refuses them. With
+// function, a Core-raised error map is {"$coreError": [[key, value], …]}
+// (core-message-v1), so its message stays marked.
 func EncodeWire(v Value, plain bool, function func(*FunctionData) (string, error)) ([]byte, error) {
 	var out strings.Builder
-	err := encode(&out, v, plain, function)
+	err := encode(&out, v, plain, function, function != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ type encodingStep struct {
 	path  *encodingPath
 }
 
-func encode(out *strings.Builder, root Value, plain bool, function func(*FunctionData) (string, error)) error {
+func encode(out *strings.Builder, root Value, plain bool, function func(*FunctionData) (string, error), core bool) error {
 	stack := []encodingStep{{value: root}}
 	for len(stack) > 0 {
 		step := stack[len(stack)-1]
@@ -103,7 +105,12 @@ func encode(out *strings.Builder, root Value, plain bool, function func(*Functio
 					break
 				}
 			}
-			if wrapped {
+			marked := core && v.CoreMessage
+			wrapped = wrapped || marked
+			if marked {
+				out.WriteString(`{"$coreError":[`)
+				text("]}")
+			} else if wrapped {
 				out.WriteString(`{"$map":[`)
 				text("]}")
 			} else {
@@ -237,7 +244,8 @@ func DecodeWithFunctions(b []byte, tagged bool, resolve func(string, string) (Va
 }
 
 // DecodeWire also accepts the Message Layer's {"$function": [home, display,
-// token]}, which wire turns into a Function Value from the payload list.
+// token]}, which wire turns into a Function Value from the payload list,
+// and {"$coreError": [[key, value], …]}, a Core-raised error map.
 func DecodeWire(b []byte, resolve func(string, string) (Value, error), wire func(Value) (Value, error)) (Value, error) {
 	return decodeWith(jsonReader{tagged: true, resolve: resolve, wire: wire}, b)
 }
@@ -527,6 +535,27 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 			return bad()
 		}
 		return r.wire(v)
+	case "$coreError":
+		if v.Kind != List || len(v.Items()) == 0 || r.wire == nil {
+			return bad()
+		}
+		pairs := make([]Pair, len(v.Items()))
+		for i, item := range v.Items() {
+			if item.Kind != List || len(item.Items()) != 2 || item.Items()[0].Kind != Text {
+				return bad()
+			}
+			pairs[i] = Pair{item.Items()[0].Text(), item.Items()[1]}
+		}
+		m, e := NewMap(pairs)
+		if e != nil {
+			return Value{}, e
+		}
+		// Only a map with a text message has one to leave out.
+		if m.Get("message").Kind != Text {
+			return bad()
+		}
+		m.CoreMessage = true
+		return m, nil
 	case "$sessionFunction":
 		if v.Kind != Text || r.function == nil {
 			return bad()

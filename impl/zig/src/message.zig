@@ -343,6 +343,8 @@ pub const Session = struct {
     gone: bool = false,
     /// `function-metadata-v1`: Function Values carry name, arity and source identity.
     function_metadata: bool = false,
+    /// `core-message-v1`: Core-raised error maps cross as `$coreError`.
+    core_errors: bool = false,
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
     reply_error: bool = false,
@@ -470,7 +472,7 @@ const Out = struct {
         writeInt(o.w(), n) catch return error.OutOfMemory;
     }
     fn value(o: *Out, v: *const Value) (Allocator.Error || error{NotEncodable})!void {
-        const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction } else null;
+        const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction, .core_error = s.core_errors } else null;
         encoding.writeWith(o.w(), v, functions) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
     }
     /// `{"$bytes":…}`, chapter 9's byte-string encoding.
@@ -639,6 +641,7 @@ fn resolverOf(entry: ?*GroupEntry) display.Resolver {
         .context = if (entry) |e| @ptrCast(e) else null,
         .object = if (entry != null) resolveObject else null,
         .function_token = if (entry != null) resolveFunction else null,
+        .core_error = if (handling) |s| s.core_errors else false,
     };
 }
 
@@ -686,7 +689,8 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
     iw.print(",\"f\":{d},\"d\":", .{found[1]}) catch return error.OutOfMemory;
     std.json.Stringify.value(f.display, .{}, iw) catch return error.OutOfMemory;
     iw.writeAll(",\"c\":") catch return error.OutOfMemory;
-    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy });
+    // Captures always mark Core-raised errors: the token is this layer's own.
+    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy, .core_error = true });
     iw.writeAll("}") catch return error.OutOfMemory;
     const codec = std.base64.standard.Encoder;
     const token = try s.gpa.alloc(u8, codec.calcSize(inner.written().len));
@@ -736,7 +740,9 @@ fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, to
     if (index >= functions.len) return error.InvalidValue;
     const code = functions[@intCast(index)];
     const display_text = asText(field(parsed.value, "d")) orelse return error.InvalidValue;
-    const captures = try encoding.decodeParsed(gpa, field(parsed.value, "c") orelse return error.InvalidValue, resolverOf(e));
+    var captured = resolverOf(e);
+    captured.core_error = true;
+    const captures = try encoding.decodeParsed(gpa, field(parsed.value, "c") orelse return error.InvalidValue, captured);
     defer captures.release();
     return model.function(gpa, code.home, display_text, @intFromPtr(code), captures);
 }
@@ -1678,7 +1684,11 @@ fn writeReport(o: *Out, report: machine.report.Report, climbed: bool) Allocator.
             }
             if (r.err) |v| {
                 try o.raw(",\"error\":");
-                try reportValue(o, v);
+                // `error` is a plain error record, not a Value Encoding
+                // field, so `core-message-v1` leaves its own map unmarked.
+                var record = v.*;
+                record.core_message = false;
+                try reportValue(o, &record);
             }
             try optionalText(o, "limit", r.limit);
             if (r.effect) |e| {
@@ -2123,7 +2133,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -4159,6 +4169,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var climb = s.climb;
             var gone = s.gone;
             var function_metadata = s.function_metadata;
+            var core_errors = s.core_errors;
             var inline_inputs = s.inline_inputs;
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
@@ -4175,6 +4186,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     gone = true;
                 } else if (std.mem.eql(u8, name, "function-metadata-v1")) {
                     function_metadata = true;
+                } else if (std.mem.eql(u8, name, "core-message-v1")) {
+                    core_errors = true;
                 } else if (std.mem.eql(u8, name, "analysis-v1")) {
                     analyses = true;
                 } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
@@ -4192,6 +4205,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.climb = climb;
             s.gone = gone;
             s.function_metadata = function_metadata;
+            s.core_errors = core_errors;
             s.inline_inputs = inline_inputs;
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
@@ -5527,6 +5541,39 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "core-message-v1 marks Core-raised error maps as $coreError" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on raised\\n try\\n return 1 / 0\\n catch e\\n return e\\n end try\\nend raised\\non thrown\\n return {{code: \\\"x\\\", message: \\\"mine\\\"}}\\nend thrown\\non echo x\\n return x\\nend echo\"}}", .{2}));
+    const raised = "{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"raised\"}}}}";
+    const pump = "{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}";
+    _ = try okOf(try c.send(raised, .{3}));
+    const plain = (try runEnd(try c.send(pump, .{4}))).object.get("result").?;
+    try std.testing.expectEqualStrings("division by zero", plain.object.get("code").?.string);
+    try std.testing.expect(plain.object.get("message") != null);
+    const unnegotiated = try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"echo\",\"args\":[{{\"$coreError\":[[\"code\",\"x\"],[\"message\",\"m\"]]}}]}}}}", .{5});
+    try std.testing.expect(unnegotiated.object.get("err") != null);
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"core-message-v1\"]}}", .{6}));
+    _ = try okOf(try c.send(raised, .{7}));
+    const marked = (try runEnd(try c.send(pump, .{8}))).object.get("result").?.object.get("$coreError").?.array.items;
+    try std.testing.expectEqualStrings("code", marked[0].array.items[0].string);
+    try std.testing.expectEqualStrings("division by zero", marked[0].array.items[1].string);
+    // A Script's own `message` is data, so its map stays plain.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"thrown\"}}}}", .{9}));
+    const own = (try runEnd(try c.send(pump, .{10}))).object.get("result").?;
+    try std.testing.expectEqualStrings("mine", own.object.get("message").?.string);
+    // The mark survives the Host sending the map back.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"echo\",\"args\":[{{\"$coreError\":[[\"code\",\"x\"],[\"message\",\"m\"]]}}]}}}}", .{11}));
+    const echoed = (try runEnd(try c.send(pump, .{12}))).object.get("result").?;
+    try std.testing.expect(echoed.object.get("$coreError") != null);
+    // A `$coreError` without a text `message` is refused.
+    const bare = try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"echo\",\"args\":[{{\"$coreError\":[[\"code\",\"x\"]]}}]}}}}", .{13});
+    try std.testing.expect(bare.object.get("err") != null);
 }
 
 test "function-metadata-v1 adds names and arities without changing opaque tokens" {
