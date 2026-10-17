@@ -307,3 +307,38 @@ describe('errors in stdlib code (ADR 0037)', () => {
     );
   });
 });
+
+// The Fuel a Run of `go` spent.
+const fuel = (expr: string): number =>
+  Number(
+    trace(expr)
+      .find(line => line.startsWith('run '))!
+      .match(/ fuel=(\d+)/)![1],
+  );
+
+describe('the min and max Built-ins (ADR 0099)', () => {
+  test.each([
+    ['min(3, 1, 2)', '1'],
+    ['max(3, 1, 2)', '3'],
+    ['min([3, 1, 2])', '1'],
+    ['max([3, 1, 2])', '3'],
+    ['min(5)', '5'],
+    ['max("a")', '"a"'],
+    ['min([1, 2], [1, 1, 9])', '[1, 1, 9]'],
+    ['max([2], [1, 3])', '[2]'],
+    ['min([1])', '1'],
+    ['min(1 kg, 900 g, 1200 g)', '900 g'],
+    ['min([])', 'error {code: "out of domain", function: "min", value: []}'],
+    ['max(1, "a")', `error {code: "can't compare", left: "a", right: 1}`],
+    ['min([1], 2)', `error {code: "can't compare", left: 2, right: [1]}`],
+  ])('%s', (expr, expected) => {
+    expect(value(expr)).toBe(expected);
+  });
+
+  test('Fuel counts each argument scanned as a value', () => {
+    // 4 + scanned: 1 for the first value, then 1 + 1 compared pair per later value.
+    expect(fuel('min(3)') - fuel('3')).toBe(5);
+    expect(fuel('max(3, 1, 2)') - fuel('3')).toBe(9);
+    expect(fuel('max(3, 1, 2)')).toBe(fuel('min(3, 2, 1)'));
+  });
+});

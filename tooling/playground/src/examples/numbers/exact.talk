@@ -12,7 +12,7 @@ on main
   say round(2.345, 2, "half even")
   say floor(-2.5) & " " & ceiling(-2.5) & " " & truncate(-2.5)
   say sqrt(2)
-  say max([3, 9, 4]) & " " & min([3, 9, 4])
+  say max(3, 9, 4) & " " & min(3, 9, 4)
 
   try
     say 1 / 0

@@ -150,7 +150,7 @@ pub fn call(a: Allocator, gpa: Allocator, name: []const u8, args: []*Value, rais
         };
         return model.scalar(gpa, .{ .number = r }) catch error.OutOfMemory;
     }
-    if (std.mem.eql(u8, name, "min") or std.mem.eql(u8, name, "max")) return extreme(gpa, name, args[0], raised, m);
+    if (std.mem.eql(u8, name, "min") or std.mem.eql(u8, name, "max")) return extreme(gpa, name, args, raised, m);
     if (std.mem.eql(u8, name, "upper") or std.mem.eql(u8, name, "lower")) {
         const x = args[0];
         if (x.data != .text) return wrongKind(raised, gpa, "text", x);
@@ -315,11 +315,11 @@ fn rounded(d: model.Decimal, places: u32, mode: Mode) error{Overflow}!model.Deci
     return .{ .coefficient = q, .exponent = target, .negative = d.negative and q != 0 };
 }
 
-/// `min` and `max`: the first least or greatest item under `<`.
-fn extreme(gpa: Allocator, name: []const u8, xs: *Value, raised: *Raised, m: *costs.Measures) Error!*Value {
-    if (xs.data != .list) return wrongKind(raised, gpa, "list", xs);
-    const items = xs.data.list;
-    if (items.len == 0) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, xs);
+/// `min` and `max`: the first least or greatest value under `<`. A lone
+/// list argument's items are the values; otherwise the arguments are.
+fn extreme(gpa: Allocator, name: []const u8, args: []const *Value, raised: *Raised, m: *costs.Measures) Error!*Value {
+    const items: []const *Value = if (args.len == 1 and args[0].data == .list) args[0].data.list else args;
+    if (items.len == 0) return fill(raised, gpa, "out of domain", &.{.{ "function", name }}, args[0]);
     const want: std.math.Order = if (std.mem.eql(u8, name, "min")) .lt else .gt;
     var best = items[0];
     m.scanned = 1;

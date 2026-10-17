@@ -1148,7 +1148,11 @@ export const checkSyntax = (
           : undefined;
       const args = children.find(child => child.rule === 'ExpressionList');
       const count = args ? nodes(args).length : 0;
-      if (contract && (count < contract.required || count > contract.total)) {
+      if (
+        contract &&
+        (count < contract.required ||
+          (count > contract.total && !contract.variadic))
+      ) {
         report('wrong argument count', head);
       }
     } else if (element.rule === 'Function') {

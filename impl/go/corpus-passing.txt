@@ -7,6 +7,7 @@
 builtins/function-values
 builtins/kind-of
 builtins/min-max-scanned
+builtins/min-max-values
 builtins/object-kind
 builtins/shape-checks
 bytes/build-and-match

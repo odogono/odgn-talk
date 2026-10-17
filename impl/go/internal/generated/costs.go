@@ -100,6 +100,10 @@ var Costs = CostsTable{
 			Issue:  "#890",
 			Change: "The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#1132",
+			Change: "The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional",
+		},
 	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
@@ -439,12 +443,12 @@ var Costs = CostsTable{
 		CostsTableRateEntry{
 			Key:   "builtin.min",
 			Fuel:  "4 + scanned",
-			Input: "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
+			Input: "the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
 		},
 		CostsTableRateEntry{
 			Key:   "builtin.max",
 			Fuel:  "4 + scanned",
-			Input: "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
+			Input: "the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
 		},
 		CostsTableRateEntry{
 			Key:  "builtin.codePoint",

@@ -7,6 +7,7 @@ import (
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/internal/unicode"
+	"math"
 	"math/big"
 	"slices"
 	"strconv"
@@ -89,7 +90,11 @@ func (u *Unit) Resolve(body *Body, name string) (Symbol, bool) {
 		if b.Group == "constants" {
 			kind = "builtin-constant"
 		}
-		return Symbol{Kind: kind, Name: name, Required: int(b.Required), Maximum: int(b.Total)}, true
+		maximum := int(b.Total)
+		if b.Variadic {
+			maximum = math.MaxInt
+		}
+		return Symbol{Kind: kind, Name: name, Required: int(b.Required), Maximum: maximum}, true
 	}
 	return Symbol{}, false
 }

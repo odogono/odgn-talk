@@ -15,6 +15,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { checkCommands } from './commands';
+import { variadicTail } from '../grammar/function-contract';
 
 const ROOT = resolve(import.meta.dir, '../..');
 const SPEC = join(ROOT, 'spec');
@@ -570,9 +571,14 @@ const stdlibCheck = (d: Data) => {
       fail(`the call of "${e.name}" isn't \`${e.name}(…)\``);
       continue;
     }
+    // Only a Built-in may be variadic (ADR 0099).
+    const { params, variadic } = variadicTail(m[1]!);
+    if (variadic && e.library) {
+      fail(`"${e.name}" is a Library export, so it can't be variadic`);
+    }
     let optional = false;
-    for (const p of m[1]
-      ? m[1].split(/, (?=[a-z]\w* = |[a-z]\w*(?:,|$))/)
+    for (const p of params
+      ? params.split(/, (?=[a-z]\w* = |[a-z]\w*(?:,|$))/)
       : []) {
       const pm = /^([a-z]\w*)( = .+)?$/.exec(p);
       if (!pm) {

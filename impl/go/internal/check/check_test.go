@@ -69,9 +69,11 @@ func TestBuiltinArgumentCounts(t *testing.T) {
 		name, source string
 		line, column int
 	}{
-		{"constant too many", "constant x = min(1, 2)", 1, 14},
+		{"constant too many", "constant x = codePoint(\"a\", 2)", 1, 14},
 		{"too few", "on t\nreturn min()\nend", 2, 8},
-		{"too many", "on t\nreturn min(1, 2)\nend", 2, 8},
+		{"too many", "on t\nreturn codePoint(\"a\", 2)\nend", 2, 8},
+		{"variadic many", "on t\nreturn max(1, 2, 3)\nend", 0, 0},
+		{"variadic one", "on t\nreturn max(7)\nend", 0, 0},
 		{"defaults too few", "on t\nreturn round()\nend", 2, 8},
 		{"defaults too many", "on t\nreturn round(1, 2, 3, 4)\nend", 2, 8},
 		{"valid fixed count", "on t\nreturn min([1, 2])\nend", 0, 0},

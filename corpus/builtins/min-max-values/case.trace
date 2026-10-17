@@ -1,0 +1,39 @@
+# Unblessed: min and max take their values as arguments (#1132); first blessing awaits human review.
+# min-max-values: several values, a lone list or non-list, equal values,
+# list values, a value that can't be compared, and an empty lone list.
+
+> load v identity=5e9c3b73402ff819e90ecf34de805dd40b592d06c39da47aa135db6b10e17fb7
+> deliver d1 to=v message=values
+> pump clock=2026-10-17T09:00:01Z
+seg v/r1 start delivery=d1 handler=values clause=1 fuel=59 alloc=216 state=112 end=return
+run v/r1 outcome=completed delivery=d1 handler=values fuel=59 alloc=216
+pumped state=idle fuel=59
+> deliver d2 to=v message=lone
+> pump clock=2026-10-17T09:00:02Z
+seg v/r2 start delivery=d2 handler=lone clause=1 fuel=61 alloc=338 state=241 end=return
+run v/r2 outcome=completed delivery=d2 handler=lone fuel=61 alloc=338
+pumped state=idle fuel=61
+> deliver d3 to=v message=equal
+> pump clock=2026-10-17T09:00:03Z
+seg v/r3 start delivery=d3 handler=equal clause=1 fuel=36 alloc=136 state=313 end=return
+run v/r3 outcome=completed delivery=d3 handler=equal fuel=36 alloc=136
+pumped state=idle fuel=36
+> deliver d4 to=v message=lists
+> pump clock=2026-10-17T09:00:04Z
+seg v/r4 start delivery=d4 handler=lists clause=1 fuel=34 alloc=152 state=361 end=return
+run v/r4 outcome=completed delivery=d4 handler=lists fuel=34 alloc=152
+pumped state=idle fuel=34
+> deliver d5 to=v message=mixed
+> pump clock=2026-10-17T09:00:05Z
+raise v/r5 code="can't compare" at=v:83 pos=22:7
+seg v/r5 start delivery=d5 handler=mixed clause=1 fuel=19 alloc=0 state=361 end=error
+run v/r5 outcome=errored delivery=d5 handler=mixed error={code: "can't compare", left: "t", right: 2, at: {unit: "v", handler: "mixed", line: 22, column: 7}} fuel=19 alloc=0
+pumped state=idle fuel=19
+> deliver d6 to=v message=empty
+> pump clock=2026-10-17T09:00:06Z
+raise v/r6 code="out of domain" at=v:93 pos=26:7
+seg v/r6 start delivery=d6 handler=empty clause=1 fuel=14 alloc=16 state=361 end=error
+run v/r6 outcome=errored delivery=d6 handler=empty error={code: "out of domain", function: "min", value: [], at: {unit: "v", handler: "empty", line: 26, column: 7}} fuel=14 alloc=16
+pumped state=idle fuel=14
+> vars
+vars v seen=[[9, 3, 100], [9, 7, 2 m, "b"], [1, 1.0], [3]]

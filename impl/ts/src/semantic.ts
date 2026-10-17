@@ -23,6 +23,8 @@ export type ExportKind = 'constant' | 'function' | 'handler';
 export type FunctionContract = {
   required: number;
   total: number;
+  /** Takes any number of arguments past `required`. */
+  variadic?: boolean;
 };
 export type LibraryExport =
   | ExportKind

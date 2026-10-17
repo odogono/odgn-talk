@@ -100,3 +100,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0096: `random` draws from a seeded generator the Script Group holds](0096-random-draws-from-a-seeded-generator-the-script-group-holds.md)
 - [0097: Browser Hosts may run the Zig reactor through the TS embedding API](0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md)
 - [0098: The Message Layer may carry binary frames](0098-the-message-layer-may-carry-binary-frames.md)
+- [0099: `min` and `max` take their values as arguments](0099-min-and-max-take-their-values-as-arguments.md)

@@ -148,16 +148,17 @@ func builtin(name string, args []value.Value, m *Measures) (value.Value, *value.
 		}
 		return v, nil
 	case "min", "max":
-		if v.Kind != value.List {
-			return bad("list", v)
+		values := args
+		if len(args) == 1 && v.Kind == value.List {
+			if len(v.Items()) == 0 {
+				return domain(v)
+			}
+			values = v.Items()
 		}
-		if len(v.Items()) == 0 {
-			return domain(v)
-		}
-		out := v.Items()[0]
+		out := values[0]
 		m.Scanned = 1
 		comparer := value.NewComparer(false)
-		for _, x := range v.Items()[1:] {
+		for _, x := range values[1:] {
 			m.Scanned = saturatingAdd(m.Scanned, saturatingAdd(1, comparer.Scanned(x, out)))
 			c, e := comparer.Compare(x, out)
 			if e != nil {

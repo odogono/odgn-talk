@@ -99,6 +99,10 @@ pub const costs: CostsTable = .{
             .issue = "#890",
             .change = "The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional",
         },
+        .{
+            .issue = "#1132",
+            .change = "The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
@@ -438,12 +442,12 @@ pub const costs: CostsTable = .{
         .{
             .key = "builtin.min",
             .fuel = "4 + scanned",
-            .input = "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
+            .input = "the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
         },
         .{
             .key = "builtin.max",
             .fuel = "4 + scanned",
-            .input = "`scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
+            .input = "the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare`",
         },
         .{
             .key = "builtin.codePoint",

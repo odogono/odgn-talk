@@ -153,7 +153,10 @@ export class UnitLoadError extends Error {
   }
 }
 
-const builtinContracts = new Map<string, { required: number; total: number }>(
+const builtinContracts = new Map<
+  string,
+  { required: number; total: number; variadic?: boolean }
+>(
   builtins.flatMap(b =>
     'contract' in b ? [[b.name, b.contract] as const] : [],
   ),
@@ -5009,6 +5012,7 @@ export class Run {
         const defaults = builtinDefaults[a as string] ?? [];
         const required =
           (builtinContracts.get(a as string)?.total ?? n) - defaults.length;
+        // A variadic call past `total` slices past the defaults: none apply.
         const args = [...given, ...defaults.slice(given.length - required)];
         m.x = args;
         if (a === 'offerAvailable') {

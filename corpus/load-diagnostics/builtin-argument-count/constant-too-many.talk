@@ -1,1 +1,1 @@
-constant x = min(1, 2)
+constant x = codePoint("a", "b")

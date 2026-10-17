@@ -16,7 +16,8 @@
 # [[builtin]]    a Built-in function or Constant; the properties are in grammar.toml
 #   name         its name
 #   group        values, numbers, floats, dates or constants
-#   call         how it is called, with any defaults; for a Constant, its value
+#   call         how it is called, with any defaults; a trailing `…` takes any
+#                number of further arguments (ADR 0099); for a Constant, its value
 #   gives        one sentence: what it gives
 #   errors       optional: the Error Codes it raises, besides `wrong kind`
 #
@@ -47,15 +48,15 @@ optional = ["sqlite", "user"]
 [[builtin]]
 name = "min"
 group = "values"
-call = "min(xs)"
-gives = "The least item of the list `xs` under `<`, the first of equal ones"
+call = "min(x, …)"
+gives = "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items"
 errors = ["out of domain", "can't compare"]
 
 [[builtin]]
 name = "max"
 group = "values"
-call = "max(xs)"
-gives = "The greatest item of the list `xs` under `<`, the first of equal ones"
+call = "max(x, …)"
+gives = "The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items"
 errors = ["out of domain", "can't compare"]
 
 [[builtin]]

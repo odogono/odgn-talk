@@ -46,6 +46,12 @@ Recovery Offers let a caller choose an action declared inside retained Library f
 
 This chapter writes every optional argument of a stdlib function or Built-in as a default, as in `round(x, places = 0, mode = "half up")`.
 
+### Variadic Built-ins
+
+- **What it is:** a Built-in written with a trailing `…`, as in `max(x, …)`, takes its named arguments and then any number more. Only Built-ins are variadic. A Script or Library function, a Handler, a Lambda and an Operation take a fixed range ([ADR 0099](../docs/adr/0099-min-and-max-take-their-values-as-arguments.md)).
+- **Checked at load:** a call passes at least the named arguments without defaults. There is no upper bound.
+- **Not values:** a Built-in isn't a value ([chapter 4](04-expressions-and-statements.md#resolving-a-name)), so no Function Value is variadic and `functionArity` never meets one.
+
 ### What Library code may use
 
 - **Allowed:** its own definitions, the Libraries it imports, Built-ins, Capabilities through `ask` and `tell`, and `wait d`.
@@ -197,8 +203,8 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 
 | Built-in | Gives | Also raises |
 | --- | --- | --- |
-| `min(xs)` | The least item of the list `xs` under `<`, the first of equal ones | `out of domain`, `can't compare` |
-| `max(xs)` | The greatest item of the list `xs` under `<`, the first of equal ones | `out of domain`, `can't compare` |
+| `min(x, …)` | The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items | `out of domain`, `can't compare` |
+| `max(x, …)` | The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items | `out of domain`, `can't compare` |
 | `codePoint(c)` | The code point of `c`, a text of exactly one code point, as a number | `out of domain` |
 | `fromCodePoint(n)` | The text of the code point `n`, normalised to NFC | `out of domain` |
 | `upper(s)` | `s` under Unicode full default uppercase mapping, then NFC |  |
@@ -218,7 +224,10 @@ The Built-in properties are read with `the <name> of x`. Their names are listed 
 
 <!-- end -->
 
-- **`min` and `max`** compare with `<`, so they take any items that `<` orders against each other ([chapter 3](03-values.md#ordering)). The result is the item itself, with its own Unit. An empty list raises `out of domain`, and two items that can't be compared raise `can't compare`.
+- **`min` and `max`** take their values as arguments, so `max(6, 3, 9)` is `9` and `min(a, b)` is the lesser of `a` and `b` ([ADR 0099](../docs/adr/0099-min-and-max-take-their-values-as-arguments.md)).
+  - **A lone list:** with exactly one argument that is a list, the values are that list's items, so `max([6, 3, 9])` is also `9`. A single argument of any other kind is the only value, so `max(7)` is `7`. To compare lists themselves, pass two or more.
+  - **Comparing:** they compare with `<`, so they take any values that `<` orders against each other ([chapter 3](03-values.md#ordering)). The result is the value itself, with its own Unit, and the first of equal ones.
+  - **Errors:** an empty lone list raises `out of domain`, and two values that can't be compared raise `can't compare`. A call with no arguments is the load error `wrong argument count`.
 - **`codePoint(c)`** takes a text of exactly one code point. Any other text raises `out of domain`.
 - **`fromCodePoint(n)`** takes an integer from 0 to 1114111 that isn't a surrogate (55296 to 57343). Anything else raises `out of domain`. The result is normalised to NFC, so a few code points come back as a different one.
 - **`upper` and `lower`** use Unicode full default case mapping, with no Locale, so the length can change (`upper("ß")` is `"SS"`). Locale case mapping is the `locale` Capability's ([below](#standard-capabilities)).

@@ -103,19 +103,19 @@ value {kind: "function", value: <function session+10:3:5>}
 function {name: nothing, arity: 1..1, home: "session"}
 doc ""
 > :describe min
-describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(xs)"}
-doc "The least item of the list `xs` under `<`, the first of equal ones"
+describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(x, …)"}
+doc "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items"
 > put 0 into min
 > :describe min
 describe {target: {name: "min", origin: "session"}, origin: "session", declaration: "variable", signature: "script variable min"}
 doc ""
 value {kind: "number", value: 0}
 > :describe {name: "min", origin: "builtin"}
-describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(xs)"}
-doc "The least item of the list `xs` under `<`, the first of equal ones"
+describe {target: {name: "min", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "min(x, …)"}
+doc "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items"
 > :describe {origin: "builtin", name: "max"}
-describe {target: {name: "max", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "max(xs)"}
-doc "The greatest item of the list `xs` under `<`, the first of equal ones"
+describe {target: {name: "max", origin: "builtin"}, origin: "builtin", declaration: "builtin", signature: "max(x, …)"}
+doc "The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items"
 > :describe {name: "min", origin: "session", extra: "x"}
 ! bad arguments
 > :describe {name: "min", origin: "elsewhere"}
