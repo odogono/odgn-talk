@@ -10,16 +10,12 @@ selection='^(TestInline.*|TestScope.*|TestSegment.*|TestCoordinatorSharesOnePart
 # Reissue Fuel faults in open Joins remain #1068; the unsettled-call half
 # already passes.
 go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$' -count=1 "$@" .
-# Session analysis uses the negotiated Zig interface; the remaining runtime
-# Session/Transcript gaps are tracked separately in #1053.
-go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclaration|TestPassiveAnalysisBeforeSessionStarts|TestConcurrentSessionAnalysis|TestEntryRefusesMultipleDeclarations|TestAnalysisRetainsSourceScalars|TestDeclarationDocumentationAttachesToTopLevelDeclarations|TestFunctionMetadataAcrossSessionExposuresAndRestore|TestInspectionAnonymousLambda|TestDeclarationDocumentationInTheSession|TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore|TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore|TestAGetterThatQueuesADeliveryIsFollowedByOneMorePump|TestAHandlerThatReadsTheGetterAgainGetsOneMorePumpPerHostCall|TestNotificationsPumpAgainAtTheSameReadingUntilNoneIsLeft)$' -count=1 "$@" ./session
-# Function metadata, defining documentation, restored Object inspection,
-# callback Deliveries, Store Notifications, restored settlements and
-# Core-raised error messages (#1095).
-go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection|store-notifications|store-notify-host-changes|store-notify-lifecycle|store-notify-own-writes|save-restore|observation)$' -count=1 "$@" ./internal/corpus
+# The Go Session Host, REPL and every Session Transcript (#1053).
+go test -tags talk_zig_experimental -count=1 "$@" ./session
+go test -tags talk_zig_experimental -run '^(TestSessionTranscriptParity|TestSessionDecomposedSourceTraceReplaysIndependently)$' -count=1 "$@" ./internal/corpus
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
-go test -tags talk_zig_experimental -run '^(TestPool.*|TestCancelledInspectionNeedsNoReader)$' -count=1 "$@" ./driver
+go test -tags talk_zig_experimental -count=1 "$@" ./driver
 go test -tags talk_zig_experimental -count=1 "$@" ./store ./internal/storekit ./examples/tenants
 (cd sqlite && go test -tags talk_zig_experimental -count=1 "$@" ./...)
 exec go test -tags talk_zig_experimental -run "$selection" -count=1 "$@" . ./internal/zigwasm

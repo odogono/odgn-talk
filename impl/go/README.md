@@ -275,13 +275,12 @@ Trace. The Session’s private pending-input hook uses the
 negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
 Pump per Host call, Store Notifications drain at the same Clock reading, and
 restored settlements are pumped before the next Entry. The query observes the
-guest queue without execution or Trace. On the experimental backend, the
-Session tests and Transcripts unaffected by decomposed-source Trace spelling
-pass; that gap is still tracked in
-[#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
-migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
-and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these
-full selections expose those remaining gaps.
+guest queue without execution or Trace. On the experimental backend, every
+Session test and Session Transcript passes, including decomposed source, whose
+Trace keeps the source text as written
+([#1053](https://github.com/odogono/odgn-talk/issues/1053)).
+`zig-experimental-check.sh` runs `./session`, `./driver` and every
+`TestSessionTranscriptParity` case.
 
 Sharing guests is what keeps a tenant cheap. On an Apple M5 with 10 guests
 per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and
