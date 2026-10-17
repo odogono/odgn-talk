@@ -1,0 +1,14 @@
+# Unblessed: Object Element References and Element Counts lower to get-element and count-elements at their first tokens, through `set` property targets and ordinals (#1143); first blessing awaits human review.
+kind = "disassembly"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "elements"
+source = "elements.talk"
+
+[[disassembly]]
+unit = "elements"
+expected = "elements.dis"

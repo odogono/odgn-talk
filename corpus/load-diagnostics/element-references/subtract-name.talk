@@ -1,0 +1,3 @@
+on go element
+  put element - 1 into n
+end go

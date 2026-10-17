@@ -1,0 +1,38 @@
+# element-crossings: Stop and cancellation land at an Object Collection
+# callback's `prop` crossing as at a property's. The interrupted Run ends
+# there, and its cleanup still runs on its normal budget (#1143).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "page"
+elements = { shape = { object = "rect" }, countCost = { fuel = 1 }, atCost = { fuel = 1 }, findCost = { fuel = 1 } }
+
+[[objectKinds]]
+name = "rect"
+
+[[objects]]
+kind = "rect"
+id = "r1"
+
+[[objects]]
+kind = "page"
+id = "main"
+elements = [{ name = "a", object = '<object rect "r1">' }]
+
+[[objects]]
+kind = "page"
+id = "side"
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "t"
+source = "t.talk"
+objects = { thisPage = { kind = "page", id = "side" } }

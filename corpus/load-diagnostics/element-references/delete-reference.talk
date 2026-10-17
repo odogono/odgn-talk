@@ -1,0 +1,3 @@
+on go
+  delete the first element of thisPage
+end go

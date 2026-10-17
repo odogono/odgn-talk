@@ -1,0 +1,15 @@
+# Unblessed: Host failures of Object Collection callbacks (#1143); first blessing awaits human review.
+
+> load s identity=5d9f3f98ba5780b3f830171a8d36f267c72e1bfbc3bd288a015ce51a3f159cd5
+> deliver d1 to=s message=go
+> pump clock=2026-10-17T09:00:00Z
+prop s/r1 object=<object page "main"> name=elements op=find selector="a" error={code: "page locked", page: "main"}
+raise s/r1 code="page locked" at=s:6 pos=7:9
+prop s/r1 object=<object page "main"> name=elements op=at selector=1 error={}
+raise s/r1 code="host error" at=s:28 pos=12:9
+prop s/r1 object=<object page "main"> name=elements op=count value=1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=79 alloc=1077 state=1013 end=return
+run s/r1 outcome=completed delivery=d1 handler=go fuel=79 alloc=1077
+pumped state=idle fuel=79
+> vars
+vars s log=[{code: "page locked", page: "main", capability: "page", operation: "elements.find", at: {unit: "s", handler: "go", line: 7, column: 9}}, {code: "host error", capability: "page", operation: "elements.at", at: {unit: "s", handler: "go", line: 12, column: 9}}, 1]

@@ -1,0 +1,84 @@
+# element-references: Object Element References and Element Counts read Host
+# state, so they are `not in a guard`, `not constant` and never Containers;
+# `set` cannot write one, and they take no Whose Clause (#1143).
+kind = "trace"
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+[[objectKinds]]
+name = "page"
+elements = { shape = { object = "page" }, countCost = { fuel = 1 }, atCost = { fuel = 1 }, findCost = { fuel = 1 } }
+[[objects]]
+kind = "page"
+id = "main"
+
+[[scripts]]
+name = "guard-reference"
+source = "guard-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "guard-count"
+source = "guard-count.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "guard-ordinal"
+source = "guard-ordinal.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "constant-reference"
+source = "constant-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "variable-count"
+source = "variable-count.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "default-ordinal"
+source = "default-ordinal.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "set-reference"
+source = "set-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "set-ordinal"
+source = "set-ordinal.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "put-reference"
+source = "put-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "add-key-reference"
+source = "add-key-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "delete-reference"
+source = "delete-reference.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "every-whose"
+source = "every-whose.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "ordinal-whose"
+source = "ordinal-whose.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+
+[[scripts]]
+name = "subtract-name"
+source = "subtract-name.talk"
+objects = { thisPage = { kind = "page", id = "main" } }
+

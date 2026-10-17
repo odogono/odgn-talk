@@ -1,0 +1,3 @@
+on go
+  add 1 to the fill of element 3 of thisPage
+end go

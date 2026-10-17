@@ -204,5 +204,17 @@
     "name": "ordinary-call-unchanged",
     "source": "use merge from map\nscript variable state = 7\non go invoke\n return restrictedCall(callback, 4)\nend go\nfunction restrictedCall f, n\n return f(n)\nend restrictedCall\nfunction callback n\n put n into state\n return state\nend callback\n",
     "result": "4"
+  },
+  {
+    "name": "object-element",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n return element 0 of n\nend callback\n",
+    "result": "[\"restricted operation\", \"get-element\"]",
+    "object": true
+  },
+  {
+    "name": "object-element-count",
+    "source": "use merge from map\nscript variable state = 7\non go invoke, o\n try\n  invoke(callback, o)\n catch e\n  return [the code of e, the instruction of e]\n end try\nend go\nfunction callback n\n return the number of elements of n\nend callback\n",
+    "result": "[\"restricted operation\", \"count-elements\"]",
+    "object": true
   }
 ]
