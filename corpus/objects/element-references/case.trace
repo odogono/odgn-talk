@@ -41,8 +41,8 @@ raise board/r3 code="wrong kind" at=board:197 pos=31:11
 raise board/r3 code="out of domain" at=board:220 pos=37:9
 prop board/r3 object=<object page "main"> name=elements op=at selector=9 value=nothing
 raise board/r3 code="wrong kind" at=board:244 pos=42:5
-seg board/r3 start delivery=d3 handler=wrong clause=1 fuel=397 alloc=5996 state=5221 end=return
-run board/r3 outcome=completed delivery=d3 handler=wrong fuel=397 alloc=5996
-pumped state=idle fuel=397
+seg board/r3 start delivery=d3 handler=wrong clause=1 fuel=372 alloc=5996 state=5221 end=return
+run board/r3 outcome=completed delivery=d3 handler=wrong fuel=372 alloc=5996
+pumped state=idle fuel=372
 > vars
 vars board log=["red", 3, <object rect "r1">, <object rect "r2">, <object rect "r2">, <object button "b1">, nothing, nothing, nothing, nothing, nothing, nothing, <object rect "r2">, 0, nothing, {code: "wrong kind", expected: "integer", got: "number", value: 1.5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "number or text", got: "range", value: 1..2, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "number or text", got: "boolean", value: true, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "object", got: "number", value: 5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "element", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "element", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "integer", got: "number", value: 1.5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "number of elements", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 37, column: 9}}, {code: "wrong kind", expected: "object", got: "nothing", value: nothing, at: {unit: "board", handler: "wrong", line: 42, column: 5}}]
