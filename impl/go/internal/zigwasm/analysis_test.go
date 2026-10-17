@@ -2,6 +2,7 @@ package zigwasm
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -50,11 +51,7 @@ func TestEmbeddedReactorAnalysis(t *testing.T) {
 	if err := json.Unmarshal(hello["features"], &features); err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, feature := range features {
-		found = found || feature == "analysis-v1"
-	}
-	if !found {
+	if !slices.Contains(features, "analysis-v1") {
 		t.Fatal("embedded reactor does not advertise analysis-v1")
 	}
 	entry := exchange(map[string]any{"m": "analyze-entry", "source": "put 1 into total"})

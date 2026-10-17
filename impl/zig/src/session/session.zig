@@ -1054,6 +1054,15 @@ pub const Session = struct {
 
     // ------------------------------------------------------------ Entries
 
+    fn sayProblem(s: *Session, p: analysis.Problem) void {
+        s.sayf("! {s} at {d}:{d}", .{ p.code, p.line, p.column });
+    }
+
+    /// Text naming a Session Command rather than an Entry.
+    fn isCommand(text: []const u8) bool {
+        return std.mem.startsWith(u8, std.mem.trimStart(u8, text, " \t\n"), ":");
+    }
+
     fn entryText(input: transcript.Input, ea: Allocator) ![]const u8 {
         var out: std.ArrayList(u8) = .empty;
         try out.appendSlice(ea, input.first);
@@ -1087,7 +1096,7 @@ pub const Session = struct {
     /// whose value is described in rows rather than echoed.
     fn inspectExpression(s: *Session, rest: []const u8, more: []const []const u8) !void {
         const text = try entryText(.{ .first = rest, .more = more }, s.alloc());
-        if (std.mem.startsWith(u8, std.mem.trimStart(u8, text, " \t\n"), ":")) return s.say("! bad arguments");
+        if (isCommand(text)) return s.say("! bad arguments");
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
         // A Handler's name may also name a value. `:inspect` always reads
@@ -1123,7 +1132,7 @@ pub const Session = struct {
         // Its syntax and implicit bindings, in the Entry's own positions.
         const e = try analysis.executable(ta, text, expression, try s.boundNames(ta));
         if (e.problem) |p| {
-            s.sayf("! {s} at {d}:{d}", .{ p.code, p.line, p.column });
+            s.sayProblem(p);
             return .refused;
         }
         const roots = e.implicit;
@@ -1282,7 +1291,7 @@ pub const Session = struct {
         const ta = arena.allocator();
         const ds = switch (try analysis.declarations(ta, text)) {
             .declarations => |ds| ds,
-            .problem => |p| return s.sayf("! {s} at {d}:{d}", .{ p.code, p.line, p.column }),
+            .problem => |p| return s.sayProblem(p),
         };
         if (ds.len != 1) return s.say("! bad arguments");
         const decl = try s.describeDecl(ds[0], s.dupe(text), 0);
@@ -1943,7 +1952,7 @@ pub const Session = struct {
         const source = s.sourceOf(lines);
         const ds = switch (try analysis.declarations(ta, source)) {
             .declarations => |ds| ds,
-            .problem => |p| return s.sayf("! {s} at {d}:{d}", .{ p.code, p.line, p.column }),
+            .problem => |p| return s.sayProblem(p),
         };
         if (ds.len == 0) return s.say("! bad arguments");
         const run = args[0];
@@ -2060,13 +2069,6 @@ pub const Session = struct {
             const arity = d.arity orelse .{ 0, 0 };
             try out.append(s.alloc(), .{ .kind = s.dupe(d.kind), .name = s.dupe(d.name), .signature = s.dupe(d.signature), .doc = s.dupe(d.doc), .private = d.private, .required = arity[0], .total = arity[1] });
         }
-        return out.items;
-    }
-
-    fn splitLines(ta: Allocator, source: []const u8) ![]const []const u8 {
-        var out: std.ArrayList([]const u8) = .empty;
-        var it = std.mem.splitScalar(u8, source, '\n');
-        while (it.next()) |l| try out.append(ta, std.mem.trimEnd(u8, l, "\r"));
         return out.items;
     }
 
@@ -2482,20 +2484,15 @@ pub const Session = struct {
             for (s.observing.measurements.items) |*m| s.say(s.fuelRow(m));
             return;
         }
-        var text: std.ArrayList(u8) = .empty;
-        try text.appendSlice(s.alloc(), rest);
-        for (more) |l| {
-            try text.append(s.alloc(), '\n');
-            try text.appendSlice(s.alloc(), l);
-        }
-        if (std.mem.startsWith(u8, std.mem.trimStart(u8, text.items, " \t\n"), ":")) return s.say("! bad arguments");
+        const text = try entryText(.{ .first = rest, .more = more }, s.alloc());
+        if (isCommand(text)) return s.say("! bad arguments");
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
-        const e = try s.analyzeEntry(arena.allocator(), text.items);
+        const e = try s.analyzeEntry(arena.allocator(), text);
         if (e.doc != .none or e.kind == .declaration or e.kind == .empty) return s.say("! bad arguments");
         s.measuring = true;
         defer s.measuring = false;
-        _ = try s.runEntry(text.items, e.kind == .expression);
+        _ = try s.runEntry(text, e.kind == .expression);
     }
     // ------------------------------------------------------------ object crossings
 

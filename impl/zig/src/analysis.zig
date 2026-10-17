@@ -164,7 +164,7 @@ fn problem(arena: Allocator, text: []const u8, d: parser.Diagnostic, trailing: b
 /// Whether a failed parse leaves nothing to wait for: it failed after the
 /// Entry ended, or before the end of the source and not inside a fenced
 /// literal or hole (chapter 12, Fenced text in sessions and tooling).
-pub fn ended(text: []const u8, d: parser.Diagnostic, trailing: bool) bool {
+fn ended(text: []const u8, d: parser.Diagnostic, trailing: bool) bool {
     if (trailing) return true;
     switch (d.code) {
         .unterminated_interpolation => return false,
