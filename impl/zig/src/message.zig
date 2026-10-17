@@ -341,6 +341,8 @@ pub const Session = struct {
     climb: bool = false,
     /// `function-gone-v1`: a Pump reply lists stale Function Value calls.
     gone: bool = false,
+    /// `function-metadata-v1`: Function Values carry their name and arity.
+    function_metadata: bool = false,
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
     reply_error: bool = false,
@@ -651,12 +653,23 @@ fn decodeError(e: model.Error, entry: ?*GroupEntry) talk.HostErrorCode {
 /// Values' tokens.
 var handling: ?*Session = null;
 
-/// `{"$function": [home, display, token]}`. The token is the base64 of
+/// `{"$function": [home, display, token]}`, with name and arity appended
+/// under `function-metadata-v1`. The token is the base64 of
 /// `{"g": group, "f": code, "d": display, "c": captures}`: the Group's
 /// handle, the index of the value's code in it, and its captures, so
 /// reading it needs nothing the Host must release.
 fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encoding.Error!void {
     const s: *Session = @ptrCast(@alignCast(context.?));
+    return writeFunctionWith(s, w, v, s.function_metadata);
+}
+
+// Tokens keep their original representation even when captured Functions
+// cross a Session that has opted into metadata. Negotiation changes no identity.
+fn writeFunctionLegacy(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encoding.Error!void {
+    return writeFunctionWith(@ptrCast(@alignCast(context.?)), w, v, false);
+}
+
+fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: bool) encoding.Error!void {
     const f = v.data.function;
     var at: ?struct { *GroupEntry, usize } = null;
     for (s.groups.items) |e| {
@@ -673,7 +686,7 @@ fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encod
     iw.print(",\"f\":{d},\"d\":", .{found[1]}) catch return error.OutOfMemory;
     std.json.Stringify.value(f.display, .{}, iw) catch return error.OutOfMemory;
     iw.writeAll(",\"c\":") catch return error.OutOfMemory;
-    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunction });
+    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy });
     iw.writeAll("}") catch return error.OutOfMemory;
     const codec = std.base64.standard.Encoder;
     const token = try s.gpa.alloc(u8, codec.calcSize(inner.written().len));
@@ -685,6 +698,14 @@ fn writeFunction(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value) encod
     std.json.Stringify.value(f.display, .{}, w) catch return error.WriteFailed;
     w.writeAll(",") catch return error.WriteFailed;
     std.json.Stringify.value(token, .{}, w) catch return error.WriteFailed;
+    if (metadata) {
+        const code = found[0].group.group.functions.items[found[1]];
+        w.writeAll(",") catch return error.WriteFailed;
+        if (code.name.len == 0) {
+            w.writeAll("null") catch return error.WriteFailed;
+        } else std.json.Stringify.value(code.name, .{}, w) catch return error.WriteFailed;
+        w.print(",{d},{d}", .{ code.required, code.total }) catch return error.WriteFailed;
+    }
     w.writeAll("]}") catch return error.WriteFailed;
 }
 
@@ -2098,7 +2119,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -4095,6 +4116,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var crossing_trace = s.crossing_trace;
             var climb = s.climb;
             var gone = s.gone;
+            var function_metadata = s.function_metadata;
             var inline_inputs = s.inline_inputs;
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
@@ -4109,6 +4131,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     climb = true;
                 } else if (std.mem.eql(u8, name, "function-gone-v1")) {
                     gone = true;
+                } else if (std.mem.eql(u8, name, "function-metadata-v1")) {
+                    function_metadata = true;
                 } else if (std.mem.eql(u8, name, "analysis-v1")) {
                     analyses = true;
                 } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
@@ -4125,6 +4149,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.crossing_trace = crossing_trace;
             s.climb = climb;
             s.gone = gone;
+            s.function_metadata = function_metadata;
             s.inline_inputs = inline_inputs;
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
@@ -5436,6 +5461,7 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     const made = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}));
     const tag = made.object.get("result").?.object.get("$function") orelse return unexpected(made);
     const parts = tag.array.items;
+    try std.testing.expectEqual(@as(usize, 3), parts.len);
     try std.testing.expectEqualStrings("s", parts[0].string);
     try std.testing.expect(parts[2].string.len > 0);
     var fn_json: std.Io.Writer.Allocating = .init(gpa);
@@ -5457,6 +5483,59 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "function-metadata-v1 adds names and arities without changing opaque tokens" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\"}}", .{1}));
+    // The last Lambda captures a Function, so its token must also stay stable
+    // when metadata is enabled for nested Function Values.
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable fs\\nfunction double n, m = 1\\n return n * 2\\nend double\\non make\\n put double into f\\n put [f, given [x, y], z: x + y + z, given: 1, given n: f(n)] into fs\\n return fs\\nend make\\non echo x\\n return x\\nend echo\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\"}}}}", .{3}));
+    const legacy = (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}))).object.get("result").?.array.items;
+    const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"function-metadata-v1\"]}}", .{5}));
+    var advertised = false;
+    for (hello.object.get("features").?.array.items) |f| {
+        if (std.mem.eql(u8, f.string, "function-metadata-v1")) advertised = true;
+    }
+    try std.testing.expect(advertised);
+    const seen = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{6}));
+    const functions = seen.object.get("scripts").?.array.items[0].object.get("vars").?.array.items[0].array.items[1].array.items;
+    for (functions, legacy, 0..) |f, old, i| {
+        const parts = f.object.get("$function").?.array.items;
+        try std.testing.expectEqual(@as(usize, 6), parts.len);
+        try std.testing.expectEqualStrings(old.object.get("$function").?.array.items[2].string, parts[2].string);
+        if (i == 0) {
+            try std.testing.expectEqualStrings("double", parts[3].string);
+        } else try std.testing.expect(parts[3] == .null);
+        try std.testing.expectEqual(([_]i64{ 1, 2, 0, 1 })[i], parts[4].integer);
+        try std.testing.expectEqual(([_]i64{ 2, 2, 0, 1 })[i], parts[5].integer);
+    }
+    var json: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer json.deinit();
+    try json.writer.print("{f}", .{std.json.fmt(functions[0], .{})});
+    // Both the original three-item form and the extended form remain valid
+    // Host inputs.
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[3]}}", .{ 7, json.written() }));
+    const called = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{8}));
+    try std.testing.expectEqual(@as(i64, 6), called.object.get("result").?.integer);
+    const token = legacy[0].object.get("$function").?.array.items[2].string;
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"ignored\",\"{s}\"]}},\"args\":[3]}}", .{ 9, token }));
+    const original = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
+    try std.testing.expectEqual(@as(i64, 6), original.object.get("result").?.integer);
+    // Returned metadata cannot change the Function identified by a token.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"echo\",\"args\":[{{\"$function\":[\"s\",\"ignored\",\"{s}\",null,0,0]}}]}}}}", .{ 11, token }));
+    const echoed = (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{12}))).object.get("result").?.object.get("$function").?.array.items;
+    try std.testing.expectEqualStrings("double", echoed[3].string);
+    try std.testing.expectEqual(@as(i64, 1), echoed[4].integer);
+    try std.testing.expectEqual(@as(i64, 2), echoed[5].integer);
+    for ([_][]const u8{ "true,1,1", "null,-1,1", "null,2,1", "null,1.5,2", "null,1,1,1" }) |metadata| {
+        const refused = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"ignored\",\"{s}\",{s}]}}}}", .{ 13, token, metadata });
+        try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    }
 }
 
 test "a Host Command's `command` flag is declared, validated and called through frames" {

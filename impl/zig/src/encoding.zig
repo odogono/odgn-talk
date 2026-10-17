@@ -385,8 +385,16 @@ fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.
     }
     if (std.mem.eql(u8, name, "$function")) {
         const resolve = r.function_token orelse return error.InvalidValue;
-        if (payload != .array or payload.array.items.len != 3) return error.InvalidValue;
+        if (payload != .array) return error.InvalidValue;
         const parts = payload.array.items;
+        if (parts.len != 3 and parts.len != 6) return error.InvalidValue;
+        if (parts.len == 6) {
+            if (parts[3] != .null and parts[3] != .string) return error.InvalidValue;
+            // Metadata is descriptive; only the token resolves the Function.
+            const required = try functionArity(parts[4]);
+            const total = try functionArity(parts[5]);
+            if (required > total) return error.InvalidValue;
+        }
         return resolve(r.context, try string(parts[0]), try string(parts[1]), try string(parts[2]));
     }
     if (std.mem.eql(u8, name, "$sessionFunction")) {
@@ -397,6 +405,14 @@ fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.
         return canonical(a, try @import("pattern.zig").parse(a, try string(payload)), name, payload);
     }
     return error.InvalidValue;
+}
+
+fn functionArity(j: Json) model.Error!u64 {
+    return switch (j) {
+        .integer => |n| if (n >= 0) @intCast(n) else error.InvalidValue,
+        .number_string => |s| std.fmt.parseInt(u64, s, 10) catch error.InvalidValue,
+        else => error.InvalidValue,
+    };
 }
 /// Reads one Value Encoding, refusing invalid UTF-8, duplicate keys,
 /// unknown tags and any number, tag or payload

@@ -91,12 +91,16 @@ failures, with `call failed` detail kept in Go. The adapter negotiates
 `climb-v1`, so a Request whose message climbs the Message Path settles at its
 answer, not at the first Run's end.
 
-Function Values cross as the guest's `{"$function": [home, display, token]}`.
+Function Values cross with the negotiated `function-metadata-v1` feature as
+the guest's `{"$function": [home, display, token, name, required, total]}`.
 In Go each is an ordinary `function` Value of its Group, whose identity is the
 token: `HomeScript`, `String` and `Equal` behave natively, another Group's is
 refused as `wrong group` before encoding, and the storage encoding still
 refuses it. They travel in message arguments, results, Reports, Inspect
 variables and Capability arguments and results, including Function Shapes.
+The Session's passive inspection and descriptions read the declared name
+(Nothing for Lambdas) and required/total parameter counts, including defaults,
+stale Function Values and repeated Save/Restore.
 `Group.Call` goes through the guest's `call` with the native admission checks
 and records, its context cancelling the call, and the adapter negotiates
 `function-gone-v1`, so a call found stale at the drain rejects with `send
@@ -186,7 +190,7 @@ implementation and coordinator identity stay in Go. Ordinary declarations with
 the same public name do not acquire factory checks or catalogue failures.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1`, `climb-v1`, `function-gone-v1`,
+`crossing-trace-v1`, `climb-v1`, `function-gone-v1`, `function-metadata-v1`,
 `standard-refinements-v1`, `inline-inputs-v1` and
 `restore-bindings-v1`.
 The [inline transport](../../spec/embedding/inline-inputs.md) streams every
@@ -261,7 +265,7 @@ checker, compiler or generated catalogue packages.
 
 Native Session tests and all Session Transcripts pass. On the experimental
 backend, the Session tests and Transcripts unaffected by the adapter gaps pass;
-Function Value metadata, callback-queued delivery pumping, error-handler
+callback-queued delivery pumping, error-handler
 arguments, decomposed-source Trace spelling, documentation retained by runtime
 Function Values and cancelled inspection are still tracked in
 [#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis

@@ -12,7 +12,7 @@ selection='^(TestInline.*|TestScope.*|TestSegment.*|TestCoordinatorSharesOnePart
 go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$' -count=1 "$@" .
 # Session analysis uses the negotiated Zig interface; the remaining runtime
 # Session/Transcript gaps are tracked separately in #1053.
-go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclaration|TestPassiveAnalysisBeforeSessionStarts|TestConcurrentSessionAnalysis|TestEntryRefusesMultipleDeclarations|TestAnalysisRetainsSourceScalars|TestDeclarationDocumentationAttachesToTopLevelDeclarations)$' -count=1 "$@" ./session
+go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclaration|TestPassiveAnalysisBeforeSessionStarts|TestConcurrentSessionAnalysis|TestEntryRefusesMultipleDeclarations|TestAnalysisRetainsSourceScalars|TestDeclarationDocumentationAttachesToTopLevelDeclarations|TestFunctionMetadataAcrossSessionExposuresAndRestore|TestInspectionAnonymousLambda)$' -count=1 "$@" ./session
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
 go test -tags talk_zig_experimental -run '^TestPool' -count=1 "$@" ./driver
