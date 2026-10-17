@@ -102,3 +102,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0098: The Message Layer may carry binary frames](0098-the-message-layer-may-carry-binary-frames.md)
 - [0099: `min` and `max` take their values as arguments](0099-min-and-max-take-their-values-as-arguments.md)
 - [0100: Object element references use a fixed spelling and a Host collection](0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
+- [0101: Folio's editor state is an immutable value observed through signals, and its panels are Preact components](0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)
