@@ -16,13 +16,15 @@ import (
 // hostCrossing holds the Operation or property's declaration and invocation
 // state. A nil call identifies a property, which has no call-failed record.
 type hostCrossing struct {
-	script        *Script
-	execution     *execution
-	operation     OperationRef
-	call          *Call
-	op            Operation
-	checks        operationChecks
-	convert       func(corevalue.Value) bool
+	script    *Script
+	execution *execution
+	operation OperationRef
+	call      *Call
+	op        Operation
+	checks    operationChecks
+	convert   func(corevalue.Value) bool
+	// check, when set, replaces convert with a detailed result check.
+	check         func(corevalue.Value) string
 	fields        map[string]string
 	resultKey     string
 	ignoreResult  bool
@@ -186,7 +188,16 @@ func (g *Group) prepareHostResult(c *hostCrossing, result Value, err error) host
 	if c.ignoreResult {
 		return hostResult{}
 	}
-	if !validGroup(result.inner, g) || !c.convert(result.inner) {
+	if c.check != nil {
+		detail := "its member belongs to another Group"
+		if validGroup(result.inner, g) {
+			detail = c.check(result.inner)
+		}
+		if detail != "" {
+			c.fields["error"] = "{}"
+			return hostResult{detail: detail, invalid: true}
+		}
+	} else if !validGroup(result.inner, g) || !c.convert(result.inner) {
 		c.fields["error"] = "{}"
 		return hostResult{detail: "result violates its Shape or Group ownership", invalid: true}
 	}

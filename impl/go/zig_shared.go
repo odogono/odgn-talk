@@ -31,6 +31,8 @@ type zigRegistry struct {
 	libraries     map[[32]byte]bool
 	definitionsMu sync.Mutex
 	definitions   map[*CapabilityDef]string
+	// elements is whether the guest offered object-elements-v1 (#1143).
+	elements bool
 }
 
 func newZigRegistry() *zigRegistry {

@@ -19,7 +19,7 @@ func restrictedOperation(f *Frame, i lower.Instruction) bool {
 		generated.OpJoinStart, generated.OpJoinAsk, generated.OpJoinSend, generated.OpJoinSendNamed,
 		generated.OpJoinSendSpread, generated.OpJoinEnd, generated.OpTimeoutStart, generated.OpTimeoutEnd,
 		generated.OpCallValueWait, generated.OpCallHandlerWait, generated.OpVeto, generated.OpPass,
-		generated.OpChooseOffer:
+		generated.OpChooseOffer, generated.OpGetElement, generated.OpCountElements:
 		return true
 	case generated.OpCallBuiltin:
 		name := i.Operands()[0].Text

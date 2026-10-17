@@ -235,6 +235,13 @@ func (u *Unit) expression(n *syntax.Node) {
 		u.emit(pos, "get-optional-key-computed")
 	case "chunk":
 		u.chunk(n, nil, false)
+	case "element":
+		u.expression(n.Children[0])
+		u.expression(n.Children[1])
+		u.emit(pos, "get-element")
+	case "element-count":
+		u.expression(n.Children[0])
+		u.emit(pos, "count-elements")
 	case "whose":
 		u.whose(n)
 	case "delimited":

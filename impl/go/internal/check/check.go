@@ -817,6 +817,10 @@ func (u *Unit) validate(n *syntax.Node, b *Body, ctx context) {
 			u.add("not in a whose", n.Pos())
 		}
 	}
+	// Object Element References and Element Counts always read Host state (#1143).
+	if ctx.guard && (n.Kind == "element" || n.Kind == "element-count") {
+		u.add("not in a guard", n.Pos())
+	}
 	if ctx.guard && (n.Kind == "key" || n.Kind == "key-computed") {
 		base := unparen(n.Children[len(n.Children)-1])
 		s, _ := u.Resolve(b, base.Text)
@@ -1184,7 +1188,7 @@ func (u *Unit) constant(n *syntax.Node, available map[string]bool) {
 		if reported {
 			return false
 		}
-		disallowed := x.Kind == "target" || x.Kind == "literal" && (x.Text == "it" || x.Text == "me")
+		disallowed := x.Kind == "target" || x.Kind == "element" || x.Kind == "element-count" || x.Kind == "literal" && (x.Text == "it" || x.Text == "me")
 		switch x.Kind {
 		case "name":
 			s, ok := u.Resolve(nil, x.Text)

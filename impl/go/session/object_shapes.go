@@ -15,6 +15,20 @@ func decodeEnvelopeCost(raw []byte) talk.Cost {
 	}
 	return c
 }
+
+// decodeEnvelopeElements reads a kind envelope's collection declaration,
+// whose callbacks the caller supplies.
+func decodeEnvelopeElements(raw []byte) *talk.ObjectElements {
+	e := envelopeObject(raw)
+	envelopeFields(e, []string{"shape", "countCost", "atCost", "findCost"})
+	return &talk.ObjectElements{Shape: decodeEnvelopeShape(e["shape"]), CountCost: decodeEnvelopeCost(e["countCost"]), AtCost: decodeEnvelopeCost(e["atCost"]), FindCost: decodeEnvelopeCost(e["findCost"])}
+}
+
+func elementsDeclaration(e *talk.ObjectElements) json.RawMessage {
+	cost := func(c talk.Cost) json.RawMessage { return rawJSON(map[string]int64{"fuel": c.Fuel, "alloc": c.Alloc}) }
+	return json.RawMessage(writeEnvelope(Envelope{"shape": shapeDeclaration(e.Shape), "countCost": cost(e.CountCost), "atCost": cost(e.AtCost), "findCost": cost(e.FindCost)}))
+}
+
 func decodeEnvelopeShape(raw []byte) talk.Shape {
 	if len(raw) > 0 && raw[0] == '"' {
 		s := envelopeText(raw)
