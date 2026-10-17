@@ -105,3 +105,21 @@ jobs:
           CGO_ENABLED: '0'
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+      # Compile the native-Go facilities with the adapter for every target too.
+      - run: |
+          mkdir -p "$RUNNER_TEMP/facilities"
+          go test -c -tags talk_zig_experimental -o "$RUNNER_TEMP/facilities/" ./driver ./store ./internal/storekit ./examples/tenants
+          go build -tags talk_zig_experimental -o "$RUNNER_TEMP/tenants" ./examples/tenants
+        working-directory: impl/go
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+      - run: |
+          mkdir -p "$RUNNER_TEMP/sqlite"
+          go test -c -tags talk_zig_experimental -o "$RUNNER_TEMP/sqlite/" ./...
+        working-directory: impl/go/sqlite
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}

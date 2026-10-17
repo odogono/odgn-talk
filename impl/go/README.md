@@ -210,8 +210,17 @@ Shapes nested beyond 32 levels are also refused. These three declaration limits
 are deliberate experimental limits, retained by the maintainer's decision on
 [#1050](https://github.com/odogono/odgn-talk/issues/1050).
 Unsupported calls do not fall back to native Go language execution.
-Pool, Store, sqlite, Session/REPL, tenants and the full Corpus remain native-Go
-facilities pending their own adapter acceptance.
+Pool, Store and sqlite remain native-Go Host facilities and run through the
+adapter, including the unchanged tenants example and the Store and sqlite test
+kits. Session/REPL and full Corpus acceptance remain separate work.
+
+Store retains `machine.ErrorValue`, `machine.Size` and the `internal/value`
+Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module uses
+no Go Core internals directly; its `internal/sqlitekit` test helper uses
+`corpus`, `hostkit` and `value`. These helpers compute from Spec data rather than
+executing the Go Core, so they remain shared under either backend without new
+public API. See the [dependency inventory and decision](https://github.com/odogono/odgn-talk/issues/1052#issuecomment-6227978930).
+sqlite per-step charging remains [#911](https://github.com/odogono/odgn-talk/issues/911).
 
 The internal `zigwasm` package verifies the embedded artifact digest. The adapter
 checks language, Cost Model and Unicode versions before use. Compiled code is
@@ -223,6 +232,20 @@ nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
+
+Each tenant therefore pays for its own guest. The Apple M-series warm-run
+[Group measurement](https://github.com/odogono/odgn-talk/pull/1087) at `ad92dfbf`
+reported about 0.2 ms and 5.9 MB allocated per NewGroup plus one Script load,
+compared with native Go's 8 µs and 6 KB. A separate one-off `HeapInuse`
+measurement across 100 held Groups reported about 2.3 MB per adapter Group
+versus 2 KB native; its harness was not committed. These workload-specific
+figures do not establish the performance acceptance tracked in
+[#1054](https://github.com/odogono/odgn-talk/issues/1054). To repeat the committed
+benchmark, run with and without `-tags talk_zig_experimental`:
+
+```sh
+CGO_ENABLED=0 go -C impl/go test -run '^$' -bench GroupInstantiation -benchtime 200x -count 3 .
+```
 
 Run the focused public slices from the repository root:
 
@@ -296,8 +319,10 @@ and save-layout tests cannot run unchanged through a public adapter; snapshot
 round trips await Save/Restore, and Go heap-allocation ratios are not a guest
 memory measurement.
 
-The same selection executes in CI on Linux amd64/arm64 and macOS arm64, with
-separate pure-Go native Host and adapter cross-builds. It includes unchanged
+The same selection, including Pool, Store, storekit, sqlite and tenants,
+executes in CI on Linux amd64/arm64 and macOS arm64, with separate pure-Go native
+Host and adapter cross-builds. The adapter cross-builds also compile those
+facility tests and the tenants executable for every target. It includes unchanged
 public-interface Go tests and dedicated adapter tests, rather than asserting the whole native suite
 passes under this tag. Full API/Corpus, facility, concurrency and measured
 performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/issues/884).
