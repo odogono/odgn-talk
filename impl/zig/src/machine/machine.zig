@@ -314,8 +314,8 @@ pub const Run = struct {
     cleanup: ?Ending = null,
     /// Cancellation landed in a callback; its rollback may itself pause.
     crossing_cancel: bool = false,
-    /// A callback already returned, but landing another Run's control is
-    /// waiting for lifecycle acknowledgement. Replaying the instruction
+    /// A callback already returned, but Trace observation or another Run's
+    /// control landing is awaiting acknowledgement. Replaying the instruction
     /// classifies this owned return without invoking or recording it twice.
     returned_op: ?struct { outcome: capabilities.Outcome, charged: u64, valid: bool } = null,
     returned_prop: ?objects.Result = null,
@@ -8579,7 +8579,10 @@ pub const Group = struct {
             },
             .ask, .tell, .ask_wait => return g.operation(run, frame, ins, m),
             .join_ask => {
-                try g.checkJoin(run);
+                // A returned Operation has already passed admission and
+                // may have installed this member before Trace observation
+                // or deferred control landing paused the instruction.
+                if (run.returned_op == null) try g.checkJoin(run);
                 return g.operation(run, frame, ins, m);
             },
             .timeout_start => {
