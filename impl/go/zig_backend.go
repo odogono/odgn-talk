@@ -107,14 +107,12 @@ type zigGroup struct {
 	paused          bool
 	// SPIKE: a guest shared with other Groups, this Group's handle on it, and
 	// whether this Group owns it for the current conversation.
-	shared   *zigShared
-	handle   string
-	holding  bool
-	needOpen bool
+	shared *zigShared
+	handle string
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1"}
 
 func newZigGroup(g *Group) groupBackend {
 	if s := zigSharedGuest(g.core); s != nil {
@@ -222,7 +220,11 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	if err != nil {
 		return Nothing, err
 	}
-	data, err = b.reactor.Frame(context.Background(), data)
+	if b.shared != nil {
+		data, err = b.shareFrame(data)
+	} else {
+		data, err = b.reactor.Frame(context.Background(), data)
+	}
 	if err != nil {
 		return Nothing, err
 	}
@@ -239,7 +241,6 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	}
 	b.frameMu.Lock()
 	defer b.frameMu.Unlock()
-	b.needOpen = packet.Get("need").Kind() != KindNothing
 	if packet.Get("need").Kind() != KindNothing {
 		b.paused = true
 	} else if packet.Get("err").Kind() == KindNothing && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result") {

@@ -44,7 +44,6 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 	b.exporting = true
 	b.exportMethod = fields["m"].(string)
 	b.frameMu.Unlock()
-	b.acquire()
 	packet, err := b.frame(fields)
 	if req := b.inlineRequest; req != nil {
 		b.inlineRequest = nil
@@ -76,7 +75,6 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 			b.finishAdmission(next, reply, e)
 		}
 	}
-	b.releaseIdle(err != nil)
 	b.observe(packet, fields["m"].(string))
 	return packet, err
 }

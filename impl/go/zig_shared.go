@@ -4,15 +4,15 @@ package northtalk
 
 // SPIKE (#1103): Groups sharing a pool of guests instead of one guest each.
 // NORTHTALK_ZIG_SHARED=n puts every new (not restored) Group on one of its
-// Core's n guests, round-robin. Pools are never freed. A Group owns its guest from the first frame of a
-// conversation until a reply with no need, so another Group on the same guest
-// waits while it is paused at a Host callback. The guest has no way to drop a
-// Group, so a shared guest keeps every Group it ever hosted.
+// Core's n guests, round-robin. Pools are never freed. Each Group has its own exchange
+// (group-exchanges-v1), so the guest is held for one frame at a time, and a
+// collected Group is dropped from its guest.
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -77,31 +77,32 @@ func newZigSharedBackend(g *Group, s *zigShared) *zigGroup {
 	if s.helloErr != nil {
 		panic(s.helloErr)
 	}
+	runtime.AddCleanup(g, dropShared, zigDrop{s, b.handle})
 	return b
 }
 
-// acquire makes b the guest's owner for a conversation. Only an export calls it.
-func (b *zigGroup) acquire() {
-	if b.shared == nil || b.holding {
-		return
-	}
-	b.shared.mu.Lock()
-	b.shared.owner.Store(b)
-	b.holding = true
+// shareFrame sends one frame to b's shared guest. With group-exchanges-v1
+// each Group's exchange is its own, so the guest is held only for the frame,
+// and inline events during it belong to b.
+func (b *zigGroup) shareFrame(data []byte) ([]byte, error) {
+	s := b.shared
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.owner.Store(b)
+	defer s.owner.Store(nil)
+	return s.reactor.Frame(context.Background(), data)
 }
 
-// releaseIdle gives the guest up once b's conversation has no pending need.
-func (b *zigGroup) releaseIdle(failed bool) {
-	if b.shared == nil || !b.holding {
-		return
-	}
-	b.frameMu.Lock()
-	open := b.needOpen
-	b.frameMu.Unlock()
-	if open && !failed {
-		return
-	}
-	b.holding = false
-	b.shared.owner.Store(nil)
-	b.shared.mu.Unlock()
+// dropShared frees a collected Group's guest state. It must not refer to
+// the Group, or the Group would never be collected.
+func dropShared(d zigDrop) {
+	d.shared.mu.Lock()
+	defer d.shared.mu.Unlock()
+	data, _ := zigJSON(nil, map[string]any{"m": "drop-group", "ref": 0, "group": d.handle})
+	d.shared.reactor.Frame(context.Background(), data)
+}
+
+type zigDrop struct {
+	shared *zigShared
+	handle string
 }
