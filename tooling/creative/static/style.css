@@ -772,6 +772,11 @@ button:disabled {
   overflow: auto;
   flex: 1;
 }
+/* The reader takes focus only to receive the reader's keys; it is not a
+   control, so it shows no focus ring. Elements inside keep theirs. */
+#reader:focus {
+  outline: none;
+}
 /* Browsing plays the Page where it is edited, beside the windows. */
 .browsing #caption,
 .browsing #stage,
