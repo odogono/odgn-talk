@@ -181,7 +181,7 @@ test "callback controls precede rejecting Operation and property returns" {
         if (control == .stop) try contains(trace.written(), "end=stop");
         if (control == .rewind) try t.expect(g.rewound);
         if (crossing == .suspending and (result == .started or result == .value or result == .wrong_shape)) {
-            try t.expect(g.calls.items[0].abandoned.load(.acquire));
+            try t.expect(g.callById("s/r1.c1").?.abandoned.load(.acquire));
             try t.expectEqual(@as(usize, 0), g.pending.items.len);
             if (control == .stop) try contains(trace.written(), "abandoned=[s/r1.c1]");
             if (control == .cancel) try contains(trace.written(), "abandon s/r1.c1");

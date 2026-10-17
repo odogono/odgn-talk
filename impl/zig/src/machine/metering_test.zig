@@ -603,3 +603,34 @@ test "result shape failure keeps every paid increment" {
     try contains(&trace, "error={} charged=12");
     try t.expect((try endReport(&g)).fuel >= 12);
 }
+
+test "settled suspending calls leave the live list and keep only their id (#1101)" {
+    var h: Host = .{};
+    h.init(.suspending);
+    h.ops[0].metering = null;
+    defer h.deinit();
+    var g: machine.Group = .init(t.allocator, null);
+    defer g.deinit();
+    const loaded = try g.load("s", "on go\n  repeat forever\n    ask api to fetch and wait\n  end repeat\nend go\n", .{ .grants = &h.named, .limits = .{ .fuel_per_run = 1000000 } });
+    try t.expect(loaded == .loaded);
+    _ = try g.deliver("s", "go", &.{}, false);
+    try g.pump(clock);
+    const answer = try model.scalar(t.allocator, .nothing);
+    defer answer.release();
+    for (1..101) |tick| {
+        const call = h.calls.items[h.calls.items.len - 1];
+        try g.settle(call.id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
+        try g.pump(.{ .seconds = @intCast(tick), .micros = 0 });
+        // Only the call the Run waits on, and the one it last resumed
+        // from, which retires at the next Pump, stay live.
+        try t.expect(g.calls.items.len <= 2);
+    }
+    try t.expect(g.retired_calls.items.len >= 99);
+    for (g.retired_calls.items) |c| try t.expectEqual(@as(usize, 0), c.args.len);
+    // A late answer to a retired call is still known, and ignored.
+    const first = g.callById("s/r1.c1").?;
+    try t.expect(first.settlement_consumed);
+    try g.settle(first.id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
+    try g.pump(.{ .seconds = 200, .micros = 0 });
+    try t.expect(g.calls.items.len <= 2);
+}

@@ -1583,9 +1583,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
     const filled = blk: {
         r.pending = c.gpa.alloc(PendingCall, g.group.restored.?.pending.items.len) catch break :blk false;
         for (g.group.restored.?.pending.items, r.pending) |id, *p| {
-            const call = for (g.group.calls.items) |x| {
-                if (std.mem.eql(u8, x.id, id)) break x;
-            } else unreachable;
+            const call = g.group.callById(id).?;
             const operation = for (g.group.pending.items) |w| {
                 if (w.call == call) break w.operation;
             } else "";
@@ -1716,9 +1714,7 @@ export fn talk_settle(g: *Group, id: ?[*]const u8, len: usize, st: *const Settle
         error.OutOfMemory => return .out_of_memory,
     };
     if (how == .adopt) if (adopted) |a| {
-        for (g.group.calls.items) |x| if (std.mem.eql(u8, x.id, call_id)) {
-            a.* = x;
-        };
+        if (g.group.callById(call_id)) |x| a.* = x;
     };
     return .ok;
 }

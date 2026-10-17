@@ -1463,8 +1463,14 @@ pub const Group = struct {
     /// The waits with deadlines, and how many have been set.
     pending: std.ArrayList(*Pending) = .empty,
     timers: u64 = 0,
-    /// Suspending calls, which the Host may answer until the Group ends.
+    /// Suspending calls that may still be waited on or settled.
     calls: std.ArrayList(*capabilities.Call) = .empty,
+    /// Suspending calls no Run can resume, moved out of `calls` at the end
+    /// of a Pump so later exchanges don't scan them. The Host may still
+    /// answer them, which is ignored, so they stay until the Group ends.
+    retired_calls: std.ArrayList(*capabilities.Call) = .empty,
+    /// Every suspending call by id, live or retired.
+    call_index: std.StringHashMapUnmanaged(*capabilities.Call) = .empty,
     charge_counter: u64 = 0,
     charge_requests: std.ArrayList(*capabilities.ChargeRequest) = .empty,
     /// Issued eligibility, compacted into consecutive per-Run call ranges.
@@ -1625,12 +1631,14 @@ pub const Group = struct {
         // A live Run removed its own wait; any left belongs to none.
         for (g.pending.items) |p| g.destroyPending(p);
         g.pending.deinit(g.gpa);
-        for (g.calls.items) |c| {
+        g.call_index.deinit(g.gpa);
+        for ([_][]*capabilities.Call{ g.calls.items, g.retired_calls.items }) |list| for (list) |c| {
             g.gpa.free(c.id);
             releaseAll(c.args, g.gpa);
             g.gpa.destroy(c);
-        }
+        };
         g.calls.deinit(g.gpa);
+        g.retired_calls.deinit(g.gpa);
         // An error raised as an allocation was refused, never taken.
         if (g.pending_error) |e| e.release();
         var it = g.results.valueIterator();
@@ -3635,6 +3643,50 @@ pub const Group = struct {
         return g.pumpWith(clock, 0, 0);
     }
 
+    /// Records a new suspending call.
+    pub fn addCall(g: *Group, c: *capabilities.Call) Allocator.Error!void {
+        try g.calls.ensureUnusedCapacity(g.gpa, 1);
+        try g.call_index.put(g.gpa, c.id, c);
+        g.calls.appendAssumeCapacity(c);
+    }
+
+    /// The suspending call with this id, live or retired.
+    pub fn callById(g: *const Group, id: []const u8) ?*capabilities.Call {
+        return g.call_index.get(id);
+    }
+
+    /// Moves calls no Run can resume out of `calls`, releasing their
+    /// arguments, which only the answer's check and a save use (#1101).
+    fn retireCalls(g: *Group) void {
+        var kept: usize = 0;
+        for (g.calls.items) |c| {
+            const done = (c.settlement_consumed or c.abandoned.load(.acquire)) and g.starting_call != c and !g.callAwaited(c);
+            // Without room to move it, it stays and is retried next Pump.
+            if (done) if (g.retired_calls.append(g.gpa, c)) |_| {
+                releaseAll(c.args, g.gpa);
+                c.args = &.{};
+                continue;
+            } else |_| {};
+            g.calls.items[kept] = c;
+            kept += 1;
+        }
+        g.calls.shrinkRetainingCapacity(kept);
+    }
+
+    /// Whether a Run or a deadline still refers to c.
+    fn callAwaited(g: *const Group, c: *const capabilities.Call) bool {
+        for (g.pending.items) |p| if (p.call == c) return true;
+        for (g.scripts.items) |s| for (s.live.items) |r| {
+            if (r.waiting) |p| if (p.call == c) return true;
+            if (r.waited.call == c) return true;
+            if (r.join) |j| for (j.members.items) |m| {
+                if (m.waited.call == c) return true;
+                if (m.pending) |p| if (p.call == c) return true;
+            };
+        };
+        return false;
+    }
+
     /// A Pump with a Fuel Slice per Script and a Fuel cap for the Group, 0
     /// for none (chapter 5, Fuel Slices).
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
@@ -3647,6 +3699,7 @@ pub const Group = struct {
         g.observed_clock = clock;
         g.pumping = true;
         defer g.pumping = false;
+        defer g.retireCalls();
         g.rewound = false;
         g.pump_finishing = false;
         g.flushChargeRefusals();
@@ -9711,7 +9764,7 @@ pub const Group = struct {
             };
             c.group = g;
             c.at_unit = try g.keep.allocator().dupe(u8, local.at_unit);
-            g.calls.append(gpa, c) catch |err| {
+            g.addCall(c) catch |err| {
                 gpa.free(c.id);
                 gpa.destroy(c);
                 return err;
