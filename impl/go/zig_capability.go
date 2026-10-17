@@ -332,7 +332,7 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		if host, ok := out["hostError"].(string); ok {
 			detail = host
 		}
-		b.effectDetails[c.segmentID+"/abandon/"+grantName+"/"+c.scopeName] = detail
+		b.effectDetails[zigEffectKey(c.segmentID, "abandon", grantName, c.scopeName)] = detail
 	}
 	if op.Mode == Suspending && out["started"] == nil {
 		b.callsMu.Lock()
@@ -445,17 +445,21 @@ func (b *zigGroup) effect(need Value) (map[string]any, error) {
 	}
 	result := invokeEffect(hook, ctx)
 	if result.Status != EffectOK {
-		b.effectDetails[ctx.SegmentID+"/"+phase] = result.Detail
+		b.effectDetails[zigEffectKey(ctx.SegmentID, phase, "", "")] = result.Detail
 	}
 	return map[string]any{"status": string(result.Status)}, nil
 }
 
 func (b *zigGroup) effectDetail(e *EffectFailure) string {
-	key := e.Segment + "/" + e.Phase
-	if e.Phase == "abandon" {
-		key += "/" + e.Grant + "/" + e.Scope
+	return b.effectDetails[zigEffectKey(e.Segment, e.Phase, e.Grant, e.Scope)]
+}
+
+// zigEffectKey identifies an effect failure's detail; only abandonment is per Grant and Scope.
+func zigEffectKey(segment, phase, grant, scope string) string {
+	if phase != "abandon" {
+		return segment + "/" + phase
 	}
-	return b.effectDetails[key]
+	return segment + "/" + phase + "/" + grant + "/" + scope
 }
 
 func zigSegmentBound(d *CapabilityDef) bool {
