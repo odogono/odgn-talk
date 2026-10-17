@@ -370,10 +370,7 @@ func (b *zigGroup) queue(s *Script, to *Object, fn *Value, m Message, ctx contex
 			id = DeliveryID(zigText(reply.get("broadcast")))
 		}
 		cancel := func() {
-			if _, err := b.send("cancel-delivery", map[string]any{"delivery": string(id)}); err != nil {
-				panic(err)
-			}
-			b.ready()
+			b.cancelDelivery(id)
 		}
 		if how == "request" {
 			pending = &Pending{done: make(chan struct{})}
@@ -451,6 +448,13 @@ func (b *zigGroup) ready() {
 	if b.group.options.OnReady != nil {
 		b.group.options.OnReady()
 	}
+}
+
+func (b *zigGroup) cancelDelivery(id DeliveryID) {
+	if _, err := b.send("cancel-delivery", map[string]any{"delivery": string(id)}); err != nil {
+		panic(err)
+	}
+	b.ready()
 }
 
 func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) {
