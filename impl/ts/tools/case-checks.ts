@@ -2,6 +2,7 @@
 // the case's files, so `corpus:run` under Bun and the Playground's browser
 // corpus page run exactly the same checks. No file or process access here.
 import { replayTrace, same, type Setup } from '../src/replay';
+import type { CaseCore } from '../src/setup';
 import type { Group } from '../src/index';
 import {
   parseTranscript,
@@ -38,6 +39,7 @@ export const replayLines = (
   lines: readonly string[],
   options: {
     configureDebug?: (group: Group) => void;
+    core?: CaseCore;
     restoreBetweenPumps?: boolean;
   } = {},
 ): string[] => {
@@ -56,6 +58,7 @@ export const replayLines = (
 export const checkTraceCase = (
   read: ReadCaseFile,
   setup: Setup,
+  core?: CaseCore,
 ): {
   actual: string[];
   divergence?: TraceDivergence;
@@ -66,8 +69,9 @@ export const checkTraceCase = (
   if (file.at(-1) === '') {
     file.pop();
   }
-  const actual = replayLines(read, setup, file);
+  const actual = replayLines(read, setup, file, { core });
   const roundTripped = replayLines(read, setup, file, {
+    core,
     restoreBetweenPumps: true,
   });
   if (actual.join('\n') !== roundTripped.join('\n')) {

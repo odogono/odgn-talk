@@ -14,7 +14,13 @@ export const quoteJSON = (s: string): string =>
   ) +
   '"';
 
-export const encodeValue = (value: Value): string => {
+/**
+ * A Message Layer adapter's own spelling of a Function Value or a Text
+ * Pattern, which the Value Encoding doesn't hold.
+ */
+export type AdapterEncoder = (v: Value) => string;
+
+export const encodeValue = (value: Value, adapter?: AdapterEncoder): string => {
   requireValue(value);
   const pending: (Value | string)[] = [value];
   const output: string[] = [];
@@ -101,6 +107,16 @@ export const encodeValue = (value: Value): string => {
         }
         break;
       }
+      case 'function':
+      case 'pattern':
+        if (adapter) {
+          output.push(adapter(next));
+          break;
+        }
+        invalidValue(
+          `The Value Encoding of a ${next.kind} isn't implemented yet`,
+        );
+        break;
       default:
         invalidValue(
           `The Value Encoding of a ${next.kind} isn't implemented yet`,

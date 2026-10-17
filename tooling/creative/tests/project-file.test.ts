@@ -172,6 +172,22 @@ test('damaged JSON reports the path of what is wrong', async () => {
   expect((error as Error).message).toContain('damaged at');
 });
 
+test('an unknown paragraph alignment is damage', async () => {
+  const project = createProject('Aligned');
+  const text = createElement('text', 'note');
+  project.pages[0]!.elements.push(text);
+  const json = serializeProject(project) as {
+    pages: { elements: { richText: Record<string, unknown>[] }[] }[];
+  };
+  json.pages[0]!.elements[0]!.richText[0]!.align = 'middle';
+  const error = await readProjectFile(await fileWithJson(json)).catch(
+    (error_: unknown) => error_,
+  );
+  expect((error as ProjectFileError).issues!.map(i => i.path)).toEqual([
+    'pages[0].elements[0].richText[0].align',
+  ]);
+});
+
 test('invalid JSON and a missing project.json are errors, never a half-read Project', async () => {
   await expect(readProjectFile(await fileWithJson('{oops'))).rejects.toThrow(
     'project.json: not valid JSON',

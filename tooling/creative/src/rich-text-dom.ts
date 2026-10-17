@@ -1,6 +1,13 @@
 // The DOM boundary for rich text. Clipboard HTML is parsed in an inert template;
-// only text and four supported marks cross into the authored model.
-import { type RichText, type TextRun } from './model';
+// only text, four supported marks and paragraph alignment cross into the
+// authored model.
+import {
+  alignParagraph,
+  isTextAlign,
+  type RichText,
+  type TextAlign,
+  type TextRun,
+} from './model';
 import {
   normalizeRichText,
   type TextSelection,
@@ -37,6 +44,10 @@ const OMIT = new Set([
 /** Read allowed semantic tags and inline styles, discarding links, assets and all other formatting. */
 export const readRichText = (root: ParentNode): RichText => {
   const runs: TextRun[] = [];
+  // Each paragraph's alignment, by index: a block's own `text-align`.
+  const aligns: (TextAlign | undefined)[] = [];
+  const paragraphIndex = () =>
+    runs.reduce((n, r) => n + r.text.split('\n').length - 1, 0);
   const newline = () => runs.push({ text: '\n' });
   const endsInBreak = () => runs.at(-1)?.text.endsWith('\n');
   const walk = (node: Node, inherited: TextStyle) => {
@@ -78,6 +89,9 @@ export const readRichText = (root: ParentNode): RichText => {
     }
     const style = { ...inherited };
     const css = element.style;
+    if (block && isTextAlign(css.textAlign)) {
+      aligns[paragraphIndex()] = css.textAlign;
+    }
     if (['B', 'STRONG'].includes(element.tagName)) {
       style.bold = true;
     }
@@ -134,7 +148,9 @@ export const readRichText = (root: ParentNode): RichText => {
   if (runs.at(-1)?.text === '\n') {
     runs.pop();
   }
-  return normalizeRichText(runs);
+  const text = normalizeRichText(runs);
+  text.forEach((p, i) => alignParagraph(p, aligns[i]));
+  return text;
 };
 
 export const richTextFromHtml = (html: string): RichText => {
@@ -148,6 +164,7 @@ export const renderRichText = (root: HTMLElement, text: RichText): void => {
   root.replaceChildren(
     ...text.map(paragraph => {
       const p = document.createElement('p');
+      p.style.textAlign = paragraph.align ?? '';
       for (const run of paragraph.runs) {
         const span = document.createElement('span');
         span.textContent = run.text;

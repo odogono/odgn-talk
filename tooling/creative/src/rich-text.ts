@@ -1,6 +1,13 @@
 // Structured text edits and history (#751). Offsets count UTF-16 code units,
 // matching browser Ranges; a paragraph separator occupies one offset.
-import { type RichText, type TextElement, type TextRun } from './model';
+import {
+  alignParagraph,
+  isTextAlign,
+  type RichText,
+  type TextAlign,
+  type TextElement,
+  type TextRun,
+} from './model';
 
 export type TextStyle = Omit<TextRun, 'text'>;
 export const TEXT_MARKS = ['bold', 'italic', 'underline'] as const;
@@ -64,23 +71,71 @@ const slice = (text: RichText, start: number, end = Infinity): TextRun[] => {
   });
 };
 
+/** The index of the paragraph holding `offset`. */
+const paragraphAt = (text: RichText, offset: number): number => {
+  let remaining = offset;
+  for (const [i, p] of text.entries()) {
+    const length = p.runs.reduce((n, r) => n + r.text.length, 0);
+    if (remaining <= length) {
+      return i;
+    }
+    remaining -= length + 1;
+  }
+  return text.length - 1;
+};
+
+/** Gives each paragraph, in order, its alignment from `aligns`. */
+const withAligns = (
+  text: RichText,
+  aligns: readonly (TextAlign | undefined)[],
+): RichText => {
+  text.forEach((p, i) => alignParagraph(p, aligns[i]));
+  return text;
+};
+
+/**
+ * Replace a selection with runs. The paragraph the selection starts in keeps
+ * its alignment, and `middleAligns` aligns each paragraph the runs open.
+ */
 const splice = (
   text: RichText,
   selection: TextSelection,
   middle: TextRun[],
-): RichText =>
-  normalizeRichText([
-    ...slice(text, 0, selection.start),
-    ...middle,
-    ...slice(text, selection.end),
-  ]);
+  middleAligns: (TextAlign | undefined)[],
+): RichText => {
+  const first = paragraphAt(text, selection.start);
+  const last = paragraphAt(text, selection.end);
+  return withAligns(
+    normalizeRichText([
+      ...slice(text, 0, selection.start),
+      ...middle,
+      ...slice(text, selection.end),
+    ]),
+    [
+      ...text.slice(0, first + 1).map(p => p.align),
+      ...middleAligns,
+      ...text.slice(last + 1).map(p => p.align),
+    ],
+  );
+};
 
-/** Replace a selection, preserving the surrounding text's styles. */
+/**
+ * Replace a selection, preserving the surrounding text's styles. Inserted
+ * paragraphs without an alignment take the one the selection starts in.
+ */
 export const replaceTextRange = (
   text: RichText,
   selection: TextSelection,
   inserted: RichText,
-): RichText => splice(text, selection, runsOf(inserted));
+): RichText => {
+  const align = text[paragraphAt(text, selection.start)]?.align;
+  return splice(
+    text,
+    selection,
+    runsOf(inserted),
+    inserted.slice(1).map(p => p.align ?? align),
+  );
+};
 
 /** Apply or remove marks on a selection without changing its plain text. */
 export const styleTextRange = (
@@ -95,7 +150,46 @@ export const styleTextRange = (
       ...run,
       ...style,
     })),
+    text
+      .slice(
+        paragraphAt(text, selection.start) + 1,
+        paragraphAt(text, selection.end) + 1,
+      )
+      .map(p => p.align),
   );
+
+/** Align every paragraph a selection touches, the caret's when it is empty. */
+export const alignTextRange = (
+  text: RichText,
+  selection: TextSelection,
+  align: TextAlign,
+): RichText => {
+  const first = paragraphAt(text, selection.start);
+  const last = paragraphAt(text, selection.end);
+  return text.map((p, i) => {
+    const next = { ...p, runs: p.runs.map(r => ({ ...r })) };
+    if (i >= first && i <= last) {
+      alignParagraph(next, align);
+    }
+    return next;
+  });
+};
+
+/** The alignment shared by every paragraph a selection touches, if any. */
+export const rangeAlign = (
+  text: RichText,
+  selection: TextSelection,
+): TextAlign | undefined => {
+  const aligns = new Set(
+    text
+      .slice(
+        paragraphAt(text, selection.start),
+        paragraphAt(text, selection.end) + 1,
+      )
+      .map(p => p.align ?? 'left'),
+  );
+  return aligns.size === 1 ? [...aligns][0] : undefined;
+};
 
 export const rangeHasStyle = (
   text: RichText,
@@ -110,7 +204,10 @@ export const rangeHasStyle = (
 
 /** Reformats rich text from any source into the form `normalizeRichText` makes. */
 export const renormalizeRichText = (text: RichText): RichText =>
-  normalizeRichText(runsOf(text));
+  withAligns(
+    normalizeRichText(runsOf(text)),
+    text.map(p => (isTextAlign(p.align) ? p.align : undefined)),
+  );
 
 /**
  * One text Element's text edits, recorded in the Stack editor's history so

@@ -291,7 +291,7 @@ reconstructed from retained Run accounting; preserving the original Call Clock
 across later Pumps remains [#1067](https://github.com/odogono/odgn-talk/issues/1067).
 Rejected mismatches retain their mandatory Trace mode and error-reply records.
 
-The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-Core saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
+The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). A browser Host can run it through [`@odgn/northtalk/wasm`](../ts/README.md#the-zig-reactor-in-a-browser), the TS embedding API over the Message Layer ([ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md)). The native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-Core saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
 
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
 exports `talk.h`'s functions. A Host instantiates it once per instance and calls
@@ -371,7 +371,9 @@ their synchronous contract.
 Hosts may opt in to `crossing-trace-v1` to receive available Trace before
 Operation needs and a `trace` need after each ordinary Operation's call record,
 before controls land or result conversion. Its `trace-result` acknowledgement
-continues the same Pump without repeating the callback or accounting. Refusal
+continues the same Pump without repeating the callback or accounting.
+Trace observation preserves Join admission, including exactly MaxJoin members,
+with the same Fuel and Trace as without the feature. Refusal
 and Load-error replies carry outer Trace with this feature; legacy Hosts retain
 final-reply timing. This is an Operation crossing observation contract, not
 per-record suspension during arbitrary execution or non-yielding WASM admission.

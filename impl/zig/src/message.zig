@@ -5996,6 +5996,73 @@ test "callback return through another Run's rollback has native and Message Laye
     };
 }
 
+/// Replay the max-join-minimum pattern through actual Operation and Trace needs.
+/// Return all Pump records, whose order and accounting must not depend on opt-in.
+fn joinLimitTrace(observe: bool, limit: usize, members: usize) ![]u8 {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":{s}}}", .{ 0, if (observe) @as([]const u8, "[\"crossing-trace-v1\"]") else "[]" }));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"feed\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"suspending\",\"args\":[\"number\"],\"result\":\"number\"}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"feed\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"fanout\",\"limits\":{{\"maxJoin\":{d}}},\"grants\":{{\"feed\":{d}}},\"source\":\"on fan k\\n  wait for all\\n    repeat for each i in 1..k\\n      ask feed to fetch i and wait\\n    end repeat\\n  end wait\\n  return it\\nend fan\\n\"}}", .{ 4, limit, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"fanout\"}},\"message\":{{\"name\":\"fan\",\"args\":[{d}]}}}}", .{ 5, members }));
+    var out: std.Io.Writer.Allocating = .init(t.allocator);
+    defer out.deinit();
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"1970-01-01T00:00:00Z\"}}", .{6});
+    var calls: usize = 0;
+    var observations: usize = 0;
+    while (true) {
+        const body = reply.object.get("ok") orelse reply;
+        if (body.object.get("trace")) |lines| for (lines.array.items) |line| try out.writer.print("{s}\n", .{line.string});
+        const need = reply.object.get("need") orelse break;
+        if (std.mem.eql(u8, need.object.get("m").?.string, "trace")) {
+            observations += 1;
+            try t.expect(observe and observations <= calls);
+            reply = try c.sendRef(6, "{{\"m\":\"trace-result\",\"ref\":6}}", .{});
+        } else {
+            try t.expectEqualStrings("op", need.object.get("m").?.string);
+            calls += 1;
+            try t.expect(calls <= @min(limit, members));
+            try t.expectEqual(@as(i64, @intCast(calls)), need.object.get("args").?.array.items[0].integer);
+            reply = try c.sendRef(6, "{{\"m\":\"op-result\",\"ref\":6,\"started\":true}}", .{});
+        }
+    }
+    const done = try okOf(reply);
+    try t.expectEqual(@min(limit, members), calls);
+    try t.expectEqual(if (observe) calls else 0, observations);
+    if (members > limit) {
+        const end = try runEnd(reply);
+        try t.expectEqualStrings("limit fault", end.object.get("outcome").?.string);
+        try t.expectEqualStrings("join", end.object.get("limit").?.string);
+    } else {
+        for (done.object.get("reports").?.array.items) |report| {
+            if (std.mem.eql(u8, report.object.get("kind").?.string, "run end")) return unexpected(reply);
+        }
+        try t.expect(std.mem.indexOf(u8, out.written(), "end=join-end") != null);
+    }
+    // Chapter 6's conformance minimum, including the issue's Fuel figures.
+    if (limit == 256 and members >= limit) {
+        try t.expectEqual(@as(i64, if (members == limit) 3873 else 3864), done.object.get("fuelUsed").?.integer);
+    }
+    return out.toOwnedSlice();
+}
+
+test "crossing Trace observation preserves the exact Join limit" {
+    // Limit 2 covers each boundary; 256 pins the issue's Fuel figures.
+    for ([_][2]usize{ .{ 2, 1 }, .{ 2, 2 }, .{ 2, 3 }, .{ 256, 256 }, .{ 256, 257 } }) |case| {
+        const limit, const members = case;
+        const ordinary = try joinLimitTrace(false, limit, members);
+        defer std.testing.allocator.free(ordinary);
+        const observed = try joinLimitTrace(true, limit, members);
+        defer std.testing.allocator.free(observed);
+        try std.testing.expectEqualStrings(ordinary, observed);
+    }
+}
+
 test "opt-in Operation Trace observation admits controls before result conversion" {
     const s = Session.init(std.testing.allocator).?;
     defer s.deinit();

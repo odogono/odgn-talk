@@ -8,6 +8,8 @@ import {
   textOf,
 } from '../src/model';
 import {
+  alignTextRange,
+  rangeAlign,
   rangeHasStyle,
   replaceTextRange,
   styleTextRange,
@@ -173,4 +175,78 @@ test('text edits are steps in the Stack editor history, and formatting survives 
   history.undo();
   history.set(richTextFromPlainText('new'));
   expect(history.canRedo).toBe(false);
+});
+
+test('alignment belongs to paragraphs and survives styling and edits', () => {
+  const text = alignTextRange(
+    richTextFromPlainText('one\ntwo\nthree'),
+    { start: 5, end: 5 },
+    'center',
+  );
+  expect(text.map(p => p.align)).toEqual([undefined, 'center', undefined]);
+  expect(rangeAlign(text, { start: 5, end: 6 })).toBe('center');
+  expect(rangeAlign(text, { start: 0, end: 6 })).toBeUndefined();
+
+  const styled = styleTextRange(text, { start: 2, end: 10 }, { bold: true });
+  expect(styled.map(p => p.align)).toEqual([undefined, 'center', undefined]);
+
+  // A new paragraph inside a centred one is centred too.
+  const split = replaceTextRange(
+    text,
+    { start: 5, end: 5 },
+    richTextFromPlainText('\n'),
+  );
+  expect(plainTextOf(split)).toBe('one\nt\nwo\nthree');
+  expect(split.map(p => p.align)).toEqual([
+    undefined,
+    'center',
+    'center',
+    undefined,
+  ]);
+
+  // Joining paragraphs keeps the first one's alignment.
+  const joined = replaceTextRange(
+    alignTextRange(text, { start: 0, end: 0 }, 'right'),
+    { start: 2, end: 6 },
+    richTextFromPlainText(''),
+  );
+  expect(joined).toEqual([
+    { align: 'right', runs: [{ text: 'ono' }] },
+    { runs: [{ text: 'three' }] },
+  ]);
+
+  expect(alignTextRange(text, { start: 0, end: 13 }, 'left')).toEqual(
+    richTextFromPlainText('one\ntwo\nthree'),
+  );
+});
+
+test("plain text writes keep each paragraph's alignment", () => {
+  const element = sample();
+  element.richText = [
+    { align: 'right', runs: [{ text: 'a', bold: true }] },
+    { align: 'center', runs: [{ text: 'b' }] },
+  ];
+  replacePlainText(element, 'x\ny\nz');
+  expect(element.richText).toEqual([
+    { align: 'right', runs: [{ text: 'x' }] },
+    { align: 'center', runs: [{ text: 'y' }] },
+    { align: 'center', runs: [{ text: 'z' }] },
+  ]);
+});
+
+test('alignment round-trips through a Project file', async () => {
+  const project = createProject('Aligned');
+  const element = sample();
+  element.richText = [
+    { align: 'justify', runs: [{ text: 'a' }] },
+    { runs: [{ text: 'b' }] },
+  ];
+  project.pages[0]!.elements.push(element);
+  const read = await readProjectFile(
+    await writeProjectFile(project, new Map()),
+  );
+  expect(read.project.pages[0]!.elements[0]).toHaveProperty(
+    'richText',
+    element.richText,
+  );
 });

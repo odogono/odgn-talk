@@ -17,12 +17,17 @@ import {
 } from './editing';
 import {
   ELEMENT_KINDS,
+  isTextAlign,
   plainTextOf,
   replacePlainText,
+  setTextAlign,
+  TEXT_ALIGNS,
+  textAlignOf,
   type Element,
   type ElementKind,
   type Page,
   type Project,
+  type TextAlign,
   type TextElement,
   textOf,
 } from './model';
@@ -44,6 +49,12 @@ const KIND_NAMES: Record<ElementKind, string> = {
   rectangle: 'Rectangle',
   ellipse: 'Ellipse',
   line: 'Line',
+};
+const ALIGN_LABELS: Record<TextAlign, string> = {
+  left: 'Left',
+  center: 'Centre',
+  right: 'Right',
+  justify: 'Justified',
 };
 
 const KIND_ICONS: Record<ElementKind, string> = {
@@ -541,6 +552,23 @@ export const mountStack = (
               ),
             ),
           ),
+          field(
+            'Alignment (all paragraphs)',
+            h(
+              'select',
+              { 'data-field': 'textAlign' },
+              ...TEXT_ALIGNS.map(align =>
+                h(
+                  'option',
+                  {
+                    value: align,
+                    selected: align === textAlignOf(element),
+                  },
+                  ALIGN_LABELS[align],
+                ),
+              ),
+            ),
+          ),
           h(
             'div',
             { class: 'row' },
@@ -838,6 +866,10 @@ export const mountStack = (
         if (key === 'text' && element.kind === 'text') {
           if (textOf(element) !== value) {
             replacePlainText(element, String(value));
+          }
+        } else if (key === 'textAlign' && element.kind === 'text') {
+          if (isTextAlign(value)) {
+            setTextAlign(element, value);
           }
         } else {
           const sizes = key === 'width' || key === 'height';

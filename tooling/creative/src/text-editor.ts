@@ -1,7 +1,15 @@
 // In-place text editing: browser typing/IME, structured formatting and paste,
 // and explicit history shared across reopening the same Element.
-import { plainTextOf, richTextFromPlainText, type RichText } from './model';
 import {
+  plainTextOf,
+  richTextFromPlainText,
+  TEXT_ALIGNS,
+  type RichText,
+  type TextAlign,
+} from './model';
+import {
+  alignTextRange,
+  rangeAlign,
   rangeHasStyle,
   replaceTextRange,
   styleTextRange,
@@ -18,6 +26,19 @@ import {
   selectionInText,
   selectTextRange,
 } from './rich-text-dom';
+
+/** The alignment an `align-…` toolbar command names. */
+const alignCommand = (command: string | undefined): TextAlign | undefined =>
+  TEXT_ALIGNS.find(align => command === `align-${align}`);
+
+/** Press the toolbar's button for a selection's shared alignment, if any. */
+const showAlign = (toolbar: HTMLElement, current?: TextAlign): void => {
+  for (const align of TEXT_ALIGNS) {
+    toolbar
+      .querySelector(`[data-text-command="align-${align}"]`)
+      ?.setAttribute('aria-pressed', String(align === current));
+  }
+};
 
 export class InPlaceTextEditor {
   #selection: TextSelection = { start: 0, end: 0 };
@@ -161,6 +182,10 @@ export class InPlaceTextEditor {
           ),
         );
     }
+    showAlign(
+      this.toolbar,
+      rangeAlign(this.history.element.richText, this.#selection),
+    );
     const undo = this.toolbar.querySelector<HTMLButtonElement>(
       '[data-text-command="undo"]',
     )!;
@@ -203,8 +228,15 @@ export class InPlaceTextEditor {
   }
   #command(command: string): void {
     this.#selection = selectionInText(this.node) ?? this.#selection;
+    const align = alignCommand(command);
     if (command === 'paragraph') {
       this.#insert(richTextFromPlainText('\n'));
+    } else if (align) {
+      // Alignment belongs to paragraphs, so a caret aligns its own.
+      this.history.set(
+        alignTextRange(this.history.element.richText, this.#selection, align),
+      );
+      this.#render();
     } else if (command === 'undo' || command === 'redo') {
       this.history[command]();
       this.#render();
@@ -249,7 +281,7 @@ export class InPlaceTextEditor {
 
 /**
  * The formatting controls for a selected text Element that isn't being
- * edited: marks and colour apply to all of its text, as a design tool's
+ * edited: marks, colour and alignment apply to all of its text, as a design tool's
  * inspector applies them to a whole text layer.
  */
 export class ElementTextControls {
@@ -269,8 +301,11 @@ export class ElementTextControls {
       )?.dataset.textCommand;
       const all = this.#all();
       const text = history.element.richText;
+      const align = alignCommand(command);
       if (command === 'undo' || command === 'redo') {
         history[command]();
+      } else if (align) {
+        history.set(alignTextRange(text, all, align));
       } else if (command === 'clear') {
         history.set(
           styleTextRange(text, all, {
@@ -319,6 +354,10 @@ export class ElementTextControls {
           ),
         );
     }
+    showAlign(
+      this.toolbar,
+      rangeAlign(this.history.element.richText, this.#all()),
+    );
     const undo = this.toolbar.querySelector<HTMLButtonElement>(
       '[data-text-command="undo"]',
     )!;
