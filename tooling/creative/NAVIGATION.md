@@ -201,11 +201,15 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Editor shell, Page and rich text
 
-- [stack.ts](src/stack.ts): the Page on the desk, Tools and Info windows, the
-  Pages strip, Page resizing; [main.ts](src/main.ts) boots the page.
+- [stack.ts](src/stack.ts): the Page on the desk, Tools and Info windows,
+  Page resizing and strip navigation/drag events; [main.ts](src/main.ts) boots
+  the page.
 - [info-panel.tsx](src/info-panel.tsx): the Preact Page, Element and
   multi-selection Info panel, observing editor, name-refusal and sound-preview
   signals; field and action events are handled by the shell.
+- [page-strip.tsx](src/page-strip.tsx): the Preact Pages strip, keyed by
+  session-local Page ids, with memoised miniatures sharing the shell's direct
+  DOM Page renderer.
 - [project-title.tsx](src/project-title.tsx): the Preact Project title,
   observing the editor signal independently of the shell redraw.
 - [text-editor.ts](src/text-editor.ts) over [rich-text.ts](src/rich-text.ts)
@@ -217,6 +221,7 @@ List files with `rg --files tooling/creative` before opening one by name.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
   [project-title.browser.ts](tests/project-title.browser.ts),
   [info-panel.browser.ts](tests/info-panel.browser.ts),
+  [page-strip.browser.ts](tests/page-strip.browser.ts),
   [examples.test.ts](tests/examples.test.ts),
   [lighthouse.test.ts](tests/lighthouse.test.ts),
   [tetris.test.ts](tests/tetris.test.ts),

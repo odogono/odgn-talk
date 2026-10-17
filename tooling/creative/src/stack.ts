@@ -18,6 +18,7 @@ import {
   type PageHandle,
 } from './editing';
 import {
+  type Asset,
   ELEMENT_KINDS,
   hasBorder,
   isTextAlign,
@@ -41,6 +42,7 @@ import { byId, h } from './dom';
 import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
+import { mountPageStrip } from './page-strip';
 import { KIND_NAMES, mountInfoPanel, type NameRefusal } from './info-panel';
 
 const KIND_ICONS: Record<ElementKind, string> = {
@@ -145,7 +147,7 @@ const renderPage = (
   page: Immutable<Page>,
   designWidth: number,
   into: HTMLElement,
-  project: Immutable<Project>,
+  assets: Immutable<Asset[]>,
   images: ImageAssets,
 ) => {
   into.replaceChildren(
@@ -153,7 +155,7 @@ const renderPage = (
       renderElement(
         element,
         element.kind === 'image'
-          ? images.url(project.assets.find(a => a.name === element.image))
+          ? images.url(assets.find(a => a.name === element.image))
           : undefined,
       ),
     ),
@@ -164,8 +166,6 @@ const renderPage = (
     background: page.background,
   });
 };
-
-const THUMBNAIL_WIDTH = 96;
 
 type WindowPositions = Record<string, { left: number; top: number }>;
 const WINDOWS_KEY = 'northtalk-creative-windows';
@@ -301,6 +301,7 @@ export const mountStack = (
     if (!event.persisted) {
       unmountTitle();
       unmountInfo();
+      unmountStrip();
       images.dispose();
     }
   });
@@ -312,6 +313,12 @@ export const mountStack = (
   const pageNode = byId('page');
   const info = byId('info') as HTMLFormElement;
   const thumbnails = byId('thumbnails');
+  const unmountStrip = mountPageStrip(
+    thumbnails,
+    editor,
+    (page, designWidth, assets, into) =>
+      renderPage(page, designWidth, into, assets, images),
+  );
   let pointerElement: string | undefined;
   // The Edit-time sound preview: one voice, never a Script (those run in Play).
   let preview: { audio: HTMLAudioElement; name: string } | undefined;
@@ -361,7 +368,7 @@ export const mountStack = (
       editor.page,
       editor.project.designWidth,
       pageNode,
-      editor.project,
+      editor.project.assets,
       images,
     );
     const selected = editor.selected;
@@ -418,39 +425,7 @@ export const mountStack = (
     fit();
   };
 
-  const drawStrip = () => {
-    const scaleDown = THUMBNAIL_WIDTH / editor.project.designWidth;
-    thumbnails.replaceChildren(
-      ...editor.project.pages.map((page, index) => {
-        const miniature = h('div', { class: 'page' });
-        renderPage(
-          page,
-          editor.project.designWidth,
-          miniature,
-          editor.project,
-          images,
-        );
-        miniature.style.transform = `scale(${scaleDown})`;
-        const frame = h('div', { class: 'thumbnail' }, miniature);
-        frame.style.height = `${Math.min(72, page.height * scaleDown)}px`;
-        return h(
-          'li',
-          {},
-          h(
-            'button',
-            {
-              type: 'button',
-              draggable: 'true',
-              'data-page': index,
-              'aria-current': index === editor.pageIndex ? 'page' : undefined,
-              title: `Show ${page.name}; drag to reorder`,
-            },
-            frame,
-            h('span', {}, `${index + 1}. ${page.name}`),
-          ),
-        );
-      }),
-    );
+  const drawNavigation = () => {
     (byId('previous-page') as HTMLButtonElement).disabled =
       editor.pageIndex === 0;
     (byId('next-page') as HTMLButtonElement).disabled =
@@ -497,7 +472,7 @@ export const mountStack = (
     if (!activeText) {
       drawPage();
     }
-    drawStrip();
+    drawNavigation();
     drawCommands();
     drawTextControls();
     scripts.sync();
@@ -798,10 +773,7 @@ export const mountStack = (
       node,
       byId('text-toolbar'),
       historyOf(element),
-      () => {
-        drawStrip();
-        drawCommands();
-      },
+      drawCommands,
       () => {
         closeText();
         draw();
