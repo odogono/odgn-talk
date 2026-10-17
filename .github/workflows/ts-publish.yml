@@ -1,0 +1,38 @@
+name: TS publish
+
+# Publishes @northtalk/ts to npm with trusted publishing (OIDC, no stored
+# token; provenance is automatic). Bump the Core version, merge, then push a
+# matching `ts-v*` tag.
+on:
+  push:
+    tags: ['ts-v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bunx playwright install --with-deps chromium-headless-shell
+        working-directory: impl/ts
+      - run: bun run build
+        working-directory: impl/ts
+      - name: Check the tag matches the package version
+        run: |
+          version=$(node -p "require('./impl/ts/dist/package.json').version")
+          if [ "ts-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+      - run: bun run package:check
+        working-directory: impl/ts
+      - run: npm install -g npm@latest
+      - run: npm publish ./impl/ts/dist --access public
