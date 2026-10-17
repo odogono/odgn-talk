@@ -314,6 +314,14 @@ and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operati
 `reload` or `replace-library` as `effect` and `release` needs and automatic
 `op` needs, and a `grant` may name a
 shared `coordinator`; `store`'s hooks are one Coordinator's.
+`function-metadata-v1` adds the Function's declared name (Nothing for a Lambda)
+and required/total parameter counts and defining-unit identity to Core-to-Host `$function` values,
+including stale values after Save/Restore. Hosts without the opt-in keep the
+original three-item form. Tokens and Function identity stay the same in both
+forms; returned metadata never overrides the token's defining code. Its
+`script-units` query reads the current Script, extension and transitive Library
+sources with their identities, without execution or Trace, for a Session Host
+to archive the defining documentation across code changes and Restore.
 `analysis-v1` opens `analyze-entry`, `analyze-source`, `analysis-catalogue`
 and `message-name`, using the same [language analysis](src/analysis.zig)
 as the Zig Session Host. These exchanges need no Group, load no source and

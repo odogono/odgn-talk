@@ -55,9 +55,10 @@ func (h *Host) readProperties(x talk.Value) []string {
 		return h.refused(err, placement{}, 0)
 	}
 	h.lastEntry = n
+	h.harvestSources()
 	h.implicit[name] = true
 	h.units++
-	_, names := docs.Inspection(x)
+	_, names := docs.Inspection(x, h.functionDocumentation)
 	args := []talk.Value{}
 	for _, name := range names {
 		v, err := talk.Text(name)

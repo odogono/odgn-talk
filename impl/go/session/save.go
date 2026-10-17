@@ -50,6 +50,7 @@ func (h *Host) restore(name string) []string {
 	h.objectSession.attach(group)
 	h.objectSession.reports(result.Reports)
 	h.script = group.Script("session")
+	h.harvestSources()
 	h.declarations = slices.Clone(saved.declarations)
 	h.implicit = maps.Clone(saved.implicit)
 	h.placements = maps.Clone(saved.placements)
@@ -182,6 +183,7 @@ func (h *Host) library(rest string) []string {
 		h.libraryOrder = append(h.libraryOrder, name)
 	}
 	h.libraries = staged
+	h.harvestSources()
 	return h.discarded(reports)
 }
 

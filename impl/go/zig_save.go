@@ -112,7 +112,7 @@ func (b *zigGroup) restoreBindings(need zigReply) (map[string]any, error) {
 		if o.Resolve != nil {
 			native, objects[i] = o.Resolve(kind, id)
 		}
-		b.restoreObject(kind, id, native)
+		b.restoreObject(kind, id, native, !objects[i])
 	}
 	return map[string]any{"grants": grants, "objects": objects}, nil
 }
@@ -121,7 +121,7 @@ func (b *zigGroup) newRestoredScript(name string) *Script {
 	return &Script{group: b.group, name: name, grants: map[string]*Grant{}}
 }
 
-func (b *zigGroup) restoreObject(kind, id string, native any) {
+func (b *zigGroup) restoreObject(kind, id string, native any, disposed bool) {
 	key := objectKey{kind, id}
 	if b.group.objects[key] != nil {
 		return
@@ -133,7 +133,9 @@ func (b *zigGroup) restoreObject(kind, id string, native any) {
 	if definition == nil {
 		definition = &ObjectKind{name: kind, props: map[string]Prop{}}
 	}
-	b.group.objects[key] = &Object{group: b.group, kind: definition, id: id, native: native}
+	object := &Object{group: b.group, kind: definition, id: id, native: native}
+	object.disposed.Store(disposed)
+	b.group.objects[key] = object
 }
 
 func (b *zigGroup) restoreReceipt(reply zigReply, result *RestoreResult) error {
@@ -151,7 +153,9 @@ func (b *zigGroup) restoreReceipt(reply zigReply, result *RestoreResult) error {
 	b.group.scripts = scripts
 	for _, pair := range reply.get("objects").items() {
 		kind, id := zigTextPair(pair)
-		b.restoreObject(kind, id, nil)
+		// A handle not requested during resolution was already disposed in
+		// the save. Existing resolved handles retain their resolution result.
+		b.restoreObject(kind, id, nil, true)
 	}
 	// PendingCall's wire keys and Operation identity differ from its public
 	// Go representation. Run/Segment/Clock belong to the adopted Host Call.

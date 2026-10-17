@@ -219,7 +219,7 @@ func (h *Host) describeCommand(rest string) []string {
 			// One explicit snapshot, even when cached state would do.
 			for _, p := range h.Inspect().Scripts[0].Vars {
 				if p.Key == d.variable {
-					rows, _ := docs.Inspection(p.Val)
+					rows, _ := docs.Inspection(p.Val, h.functionDocumentation)
 					out = append(out, rows...)
 				}
 			}

@@ -2,6 +2,7 @@ package session
 
 import (
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
 )
 
@@ -38,5 +39,42 @@ func (h *Host) LibraryDocumentation(library, name string) []Doc {
 // Value's defining code, even when calling it would raise `function gone`.
 // A Lambda's is empty; false means the value is not a Function Value.
 func (h *Host) FunctionDocumentation(v talk.Value) (string, bool) {
-	return docs.Function(v)
+	return h.functionDocumentation(v)
+}
+
+func (h *Host) functionDocumentation(v any) (string, bool) {
+	unit, carried := docs.FunctionUnit(v)
+	if !carried {
+		return docs.Function(v)
+	}
+	name, _, _, ok := docs.FunctionHead(v)
+	return h.sources[unit][foldName(name)], ok
+}
+
+// Like the Zig Session Host, retain every defining source version across
+// Reload, Library replacement and Restore. This archive only grows during a
+// Session; restoring an earlier checkpoint must not discard later versions.
+func (h *Host) harvestSources() {
+	if docs.ScriptUnits == nil {
+		return
+	}
+	units, err := docs.ScriptUnits(h.script)
+	must(err)
+	if h.sources == nil {
+		h.sources = map[[32]byte]map[string]string{}
+	}
+	for _, unit := range units {
+		if _, known := h.sources[unit.Identity]; known {
+			continue
+		}
+		declarations, err := analysis.Source(unit.Source)
+		must(err) // These exact sources have already loaded successfully.
+		functions := map[string]string{}
+		for _, d := range declarations {
+			if d.Kind == "function" {
+				functions[foldName(d.Name)] = d.Doc
+			}
+		}
+		h.sources[unit.Identity] = functions
+	}
 }
