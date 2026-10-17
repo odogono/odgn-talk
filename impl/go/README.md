@@ -232,6 +232,10 @@ nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
+The embedded reactor supports Zig's opt-in `analysis-v1` exchanges for Entry
+and source analysis, catalogues and computed message names. The Go Session
+Host still uses Go's parser and checker for this work; switching it to these
+exchanges is tracked in [#1092](https://github.com/odogono/odgn-talk/issues/1092).
 
 Each tenant therefore pays for its own guest. The Apple M-series warm-run
 [Group measurement](https://github.com/odogono/odgn-talk/pull/1087) at `ad92dfbf`
