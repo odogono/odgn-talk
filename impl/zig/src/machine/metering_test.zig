@@ -62,6 +62,136 @@ fn endReport(g: *machine.Group) !machine.report.RunEnd {
     return error.TestExpectedEqual;
 }
 
+test "long-lived polling Runs compact issued call history" {
+    for ([_]caps.Mode{ .suspending, .immediate }) |mode| {
+        var h: Host = .{};
+        h.init(mode);
+        h.ops[0].metering = null;
+        defer h.deinit();
+        var g: machine.Group = .init(t.allocator, null);
+        defer g.deinit();
+        const text = if (mode == .suspending)
+            "on go\n  repeat forever\n    ask api to fetch and wait\n  end repeat\nend go\n"
+        else
+            "on go\n  repeat forever\n    ask api to fetch\n    wait 15 s\n  end repeat\nend go\n";
+        const loaded = try g.load("s", text, .{ .grants = &h.named, .limits = .{ .fuel_per_run = 1000000 } });
+        try t.expect(loaded == .loaded);
+        _ = try g.deliver("s", "go", &.{}, false);
+        try g.pump(clock);
+        const answer = try model.scalar(t.allocator, .nothing);
+        defer answer.release();
+        var baseline: usize = 0;
+        for (1..481) |tick| {
+            if (mode == .suspending) {
+                const call = h.calls.items[h.calls.items.len - 1];
+                try g.settle(call.id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
+            }
+            try g.pump(.{ .seconds = @intCast(tick * 15), .micros = 0 });
+            if (tick == 240 or tick == 480) {
+                const bytes = try snapshot.save(&g, t.allocator, try g.groupFingerprint());
+                defer t.allocator.free(bytes);
+                if (tick == 240) baseline = bytes.len else {
+                    std.debug.print("polling {s}: save@240={d}, save@480={d}\n", .{ @tagName(mode), baseline, bytes.len });
+                    try t.expect(bytes.len <= baseline + 32);
+                }
+                var copy: machine.Group = .init(t.allocator, null);
+                defer copy.deinit();
+                var result: snapshot.Result = .{};
+                defer result.deinit(t.allocator);
+                try t.expectEqual(snapshot.Outcome.full, try snapshot.restore(&copy, bytes, .{ .grants = .{ .context = &h, .call = rebind } }, &result));
+                const again = try snapshot.save(&copy, t.allocator, try copy.groupFingerprint());
+                defer t.allocator.free(again);
+                try t.expectEqualSlices(u8, bytes, again);
+                try t.expectError(error.InvalidValue, copy.requestCharge("s/r1.c1", 0));
+                try t.expectError(error.UnknownCall, copy.requestCharge("s/r1.c999999", 0));
+            }
+        }
+    }
+}
+
+test "compacted metering eligibility survives polling and Restore" {
+    var h: Host = .{};
+    h.init(.suspending);
+    defer h.deinit();
+    var g: machine.Group = .init(t.allocator, null);
+    defer g.deinit();
+    const loaded = try g.load("s", "on go\n  repeat forever\n    ask api to fetch and wait\n    wait 15 s\n  end repeat\nend go\n", .{ .grants = &h.named, .limits = .{ .fuel_per_run = 1000000 } });
+    try t.expect(loaded == .loaded);
+    _ = try g.deliver("s", "go", &.{}, false);
+    const answer = try model.scalar(t.allocator, .nothing);
+    defer answer.release();
+    var baseline: usize = 0;
+    for (0..480) |tick| {
+        const now: model.dates.Instant = .{ .seconds = @intCast(tick * 15), .micros = 0 };
+        try g.pump(now);
+        const c = h.calls.items[h.calls.items.len - 1];
+        try g.settle(c.id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
+        try g.pump(now);
+        if (tick == 239 or tick == 479) {
+            const bytes = try snapshot.save(&g, t.allocator, try g.groupFingerprint());
+            defer t.allocator.free(bytes);
+            if (tick == 239) baseline = bytes.len else try t.expect(bytes.len <= baseline + 32);
+            var copy: machine.Group = .init(t.allocator, null);
+            defer copy.deinit();
+            var result: snapshot.Result = .{};
+            defer result.deinit(t.allocator);
+            try t.expectEqual(snapshot.Outcome.full, try snapshot.restore(&copy, bytes, .{ .grants = .{ .context = &h, .call = rebind } }, &result));
+            // Both ends of the range are issued, even though neither call
+            // remains pending. They must still admit inactive requests.
+            const first = try copy.requestCharge("s/r1.c1", 1);
+            const last = try copy.requestCharge(c.id, 1);
+            try copy.pump(now);
+            try t.expectEqual(caps.ChargeStatus.inactive, first.status);
+            try t.expectEqual(caps.ChargeStatus.inactive, last.status);
+            try t.expectError(error.UnknownCall, copy.requestCharge("s/r1.c999999", 0));
+        }
+    }
+}
+
+test "mixed issued eligibility survives Restore without filling send id gaps" {
+    var plain: Host = .{};
+    plain.init(.immediate);
+    plain.ops[0].metering = null;
+    defer plain.deinit();
+    var metered: Host = .{};
+    metered.init(.suspending);
+    defer metered.deinit();
+    const named = [_]machine.NamedGrant{ .{ .name = "plain", .grant = &plain.grant }, .{ .name = "api", .grant = &metered.grant } };
+    var g: machine.Group = .init(t.allocator, null);
+    defer g.deinit();
+    const loaded = try g.load("s", "on go\n  ask plain to fetch\n  ask api to fetch and wait\n  send ping to me and wait\n  ask plain to fetch\n  wait 15 s\nend go\non ping\n  return nothing\nend ping\n", .{ .grants = &named });
+    try t.expect(loaded == .loaded);
+    _ = try g.deliver("s", "go", &.{}, false);
+    try g.pump(clock);
+    const answer = try model.scalar(t.allocator, .nothing);
+    defer answer.release();
+    try g.settle(metered.calls.items[0].id, .{ .answer = .{ .value = answer.retain(), .fuel = 0 } });
+    try g.pump(clock);
+    const bytes = try snapshot.save(&g, t.allocator, try g.groupFingerprint());
+    defer t.allocator.free(bytes);
+    const Binding = struct {
+        plain: *Host,
+        metered: *Host,
+        fn resolve(context: ?*anyopaque, _: []const u8, name: []const u8) ?*caps.Grant {
+            const self: *@This() = @ptrCast(@alignCast(context.?));
+            return if (std.mem.eql(u8, name, "plain")) &self.plain.grant else &self.metered.grant;
+        }
+    };
+    var binding: Binding = .{ .plain = &plain, .metered = &metered };
+    var copy: machine.Group = .init(t.allocator, null);
+    defer copy.deinit();
+    var result: snapshot.Result = .{};
+    defer result.deinit(t.allocator);
+    try t.expectEqual(snapshot.Outcome.full, try snapshot.restore(&copy, bytes, .{ .grants = .{ .context = &binding, .call = Binding.resolve } }, &result));
+    try t.expectError(error.InvalidValue, copy.requestCharge("s/r1.c1", 0));
+    const eligible = try copy.requestCharge("s/r1.c2", 0);
+    try t.expectError(error.UnknownCall, copy.requestCharge("s/r1.c3", 0));
+    try t.expectError(error.InvalidValue, copy.requestCharge("s/r1.c4", 0));
+    try t.expectError(error.UnknownCall, copy.requestCharge("s/r1.c5", 0));
+    try copy.pump(clock);
+    try t.expectEqual(caps.ChargeStatus.inactive, eligible.status);
+}
+
 test "metering validates modes/effects and participates in canonical declarations" {
     var h: Host = .{};
     h.init(.immediate);

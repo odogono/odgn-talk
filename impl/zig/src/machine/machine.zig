@@ -1467,8 +1467,8 @@ pub const Group = struct {
     calls: std.ArrayList(*capabilities.Call) = .empty,
     charge_counter: u64 = 0,
     charge_requests: std.ArrayList(*capabilities.ChargeRequest) = .empty,
-    /// Every issued id, including immediate/ineligible calls, for transport validation.
-    issued_calls: std.StringHashMapUnmanaged(bool) = .empty,
+    /// Issued eligibility, compacted into consecutive per-Run call ranges.
+    issued_calls: @import("issued_calls.zig").IssuedCalls = .{},
     /// The call ids of `send … and wait`, which waits and records name.
     ids: std.ArrayList([]u8) = .empty,
     /// The Host Objects the Group has handles for, in the order made.
@@ -1617,8 +1617,6 @@ pub const Group = struct {
             g.gpa.destroy(q);
         }
         g.charge_requests.deinit(g.gpa);
-        var issued = g.issued_calls.keyIterator();
-        while (issued.next()) |id| g.gpa.free(id.*);
         g.issued_calls.deinit(g.gpa);
         for (g.ids.items) |id| g.gpa.free(id);
         g.ids.deinit(g.gpa);
@@ -3722,16 +3720,13 @@ pub const Group = struct {
     fn registerCall(g: *Group, id: []const u8, eligible: bool) !void {
         g.input_lock.lock();
         defer g.input_lock.unlock();
-        if (g.issued_calls.contains(id)) return;
-        const own = try g.gpa.dupe(u8, id);
-        errdefer g.gpa.free(own);
-        try g.issued_calls.put(g.gpa, own, eligible);
+        try g.issued_calls.put(g.gpa, id, eligible);
     }
 
     fn unissueCall(g: *Group, id: []const u8) void {
         g.input_lock.lock();
         defer g.input_lock.unlock();
-        if (g.issued_calls.fetchRemove(id)) |entry| g.gpa.free(entry.key);
+        g.issued_calls.removeLast(g.gpa, id);
     }
 
     pub fn requestCharge(g: *Group, id: []const u8, fuel: i64) !*capabilities.ChargeRequest {
