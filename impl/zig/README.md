@@ -322,6 +322,11 @@ forms; returned metadata never overrides the token's defining code. Its
 `script-units` query reads the current Script, extension and transitive Library
 sources with their identities, without execution or Trace, for a Session Host
 to archive the defining documentation across code changes and Restore.
+`core-message-v1` wraps Core-to-Host error maps with their Core-message
+provenance, including nested Values, so Session Hosts can omit non-parity
+wording from observation rows while retaining the full Script-visible map.
+Script/Host messages and unnegotiated encodings stay unchanged. Host inputs
+and storage reject the provenance tag.
 `queued-inputs-v1` opens `queued-inputs` between worker exchanges. It returns
 whether the addressed Group has Host Inputs waiting for its next Pump, without
 execution, a vars snapshot or Trace. The Go Session uses it for callback

@@ -220,13 +220,14 @@ func jsonNumber(n decimal.Number) bool {
 }
 
 type jsonReader struct {
-	text     string
-	at       int
-	tagged   bool
-	members  bool
-	resolve  func(string, string) (Value, error)
-	function func(string) (Value, error)
-	wire     func(Value) (Value, error)
+	text         string
+	at           int
+	tagged       bool
+	members      bool
+	coreMessages bool
+	resolve      func(string, string) (Value, error)
+	function     func(string) (Value, error)
+	wire         func(Value) (Value, error)
 }
 
 func Decode(b []byte, tagged bool, resolve func(string, string) (Value, error)) (Value, error) {
@@ -237,9 +238,10 @@ func DecodeWithFunctions(b []byte, tagged bool, resolve func(string, string) (Va
 }
 
 // DecodeWire also accepts the Message Layer's {"$function": [home, display,
-// token]}, which wire turns into a Function Value from the payload list.
+// token]}, which wire turns into a Function Value from the payload list,
+// and core-message-v1's provenance wrapper around a map.
 func DecodeWire(b []byte, resolve func(string, string) (Value, error), wire func(Value) (Value, error)) (Value, error) {
-	return decodeWith(jsonReader{tagged: true, resolve: resolve, wire: wire}, b)
+	return decodeWith(jsonReader{tagged: true, resolve: resolve, wire: wire, coreMessages: true}, b)
 }
 func decodeWith(r jsonReader, b []byte) (Value, error) {
 	if !utf8.Valid(b) {
@@ -522,6 +524,12 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 	v := p.Val
 	bad := func() (Value, error) { return Value{}, fmt.Errorf("invalid %s tag", p.Key) }
 	switch p.Key {
+	case "$coreMessage":
+		if !r.coreMessages || v.Kind != Map {
+			return bad()
+		}
+		v.CoreMessage = true
+		return v, nil
 	case "$function":
 		if v.Kind != List || r.wire == nil {
 			return bad()

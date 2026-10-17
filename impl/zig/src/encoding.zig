@@ -45,6 +45,12 @@ pub fn write(w: *std.Io.Writer, root: *const Value) Error!void {
 /// Writes `v`'s Value Encoding, each Function through `functions`, or
 /// NotEncodable without it.
 pub fn writeWith(w: *std.Io.Writer, root: *const Value, functions: ?FunctionWriter) Error!void {
+    return writeWire(w, root, functions, false);
+}
+
+/// Message Layer encoding with optional Core-message provenance. Storage and
+/// ordinary Value Encoding never carry this metadata.
+pub fn writeWire(w: *std.Io.Writer, root: *const Value, functions: ?FunctionWriter, core_messages: bool) Error!void {
     const gpa = root.allocator;
     var steps: std.ArrayList(Step) = .empty;
     defer steps.deinit(gpa);
@@ -52,12 +58,12 @@ pub fn writeWith(w: *std.Io.Writer, root: *const Value, functions: ?FunctionWrit
     while (steps.pop()) |step| switch (step) {
         .punctuation => |p| try w.writeAll(p),
         .key => |k| try quoted(w, k),
-        .value => |v| try writeOne(w, v, gpa, &steps, functions),
+        .value => |v| try writeOne(w, v, gpa, &steps, functions, core_messages),
     };
 }
 
 /// Writes a scalar, or opens a container and pushes its parts last first.
-fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *std.ArrayList(Step), functions: ?FunctionWriter) Error!void {
+fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *std.ArrayList(Step), functions: ?FunctionWriter, core_messages: bool) Error!void {
     const a = v.allocator;
     switch (v.data) {
         .nothing => try w.writeAll("null"),
@@ -105,6 +111,10 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *
             }
         },
         .map => |xs| {
+            if (core_messages and v.core_message) {
+                try tag(w, "coreMessage");
+                try steps.append(gpa, .{ .punctuation = "}" });
+            }
             var escaped = false;
             for (0..xs.len) |map_index| {
                 const p = xs.at(map_index);

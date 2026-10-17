@@ -274,13 +274,13 @@ inspection after Restore. The Session’s private pending-input hook uses the
 negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
 Pump per Host call, Store Notifications drain at the same Clock reading, and
 restored settlements are pumped before the next Entry. The query observes the
-guest queue without execution or Trace. On the experimental backend, the
-Session tests and Transcripts unaffected by error-handler arguments and
-decomposed-source Trace spelling pass; those gaps are still tracked in
-[#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
-migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
-and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these
-full selections expose those remaining gaps.
+guest queue without execution or Trace. Session error-handler arguments and
+nested error Values omit Core-generated `message` wording from observation
+rows, while preserving it in the handler and keeping Script/Host messages.
+The adapter negotiates `core-message-v1` to retain that provenance through
+Value Encoding. All Session tests and Transcripts pass on the experimental
+backend. Check with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
+and the `TestSessionTranscriptParity` selection in `./internal/corpus`.
 
 Sharing guests is what keeps a tenant cheap. On an Apple M5 with 10 guests
 per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and

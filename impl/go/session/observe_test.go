@@ -2,8 +2,67 @@ package session
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
+
+func TestTraceErrorMessageProvenance(t *testing.T) {
+	for _, origin := range []string{"Core", "Script", "Host"} {
+		t.Run(origin, func(t *testing.T) {
+			h := New(Environment{})
+			for _, source := range []string{
+				"script variable caught",
+				"on error e\n put e into caught\n send seen with [e] to session\nend error",
+				"on seen x\n return x\nend seen",
+				":trace error", ":trace seen",
+			} {
+				if rows := h.Input(source); len(rows) != 0 {
+					t.Fatal(source, rows)
+				}
+			}
+			source := "1 / 0"
+			if origin == "Script" {
+				// Identical wording and a catalogue code must not make this a
+				// Core-generated message.
+				source = `throw {code: "division by zero", message: "Division by zero"}`
+			}
+			var rows []string
+			if origin == "Host" {
+				code, _ := talk.Text("division by zero")
+				message, _ := talk.Text("Division by zero")
+				e, err := talk.Map(talk.KV("code", code), talk.KV("message", message))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := h.script.Deliver(talk.Message{Name: "error", Args: []talk.Value{e}}); err != nil {
+					t.Fatal(err)
+				}
+				rows = h.Tick()
+			} else {
+				rows = h.Input(source)
+			}
+			traced := 0
+			for _, row := range rows {
+				if !strings.HasPrefix(row, "trace ") || !strings.Contains(row, `code: "division by zero"`) {
+					continue
+				}
+				traced++
+				if strings.Contains(row, "message:") != (origin != "Core") {
+					t.Fatalf("%s message provenance lost: %s", origin, row)
+				}
+			}
+			// Direct error argument, nested relay argument and nested result.
+			if traced != 3 {
+				t.Fatalf("want three error observations, got %d: %v", traced, rows)
+			}
+			if got := h.Input("the message of caught"); !reflect.DeepEqual(got, []string{`"Division by zero"`}) {
+				t.Fatalf("handler lost its full error value: %v", got)
+			}
+		})
+	}
+}
 
 func TestFuelEntryContinuesLikeAnEntry(t *testing.T) {
 	h := New(Environment{})

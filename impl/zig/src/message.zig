@@ -343,6 +343,8 @@ pub const Session = struct {
     gone: bool = false,
     /// `function-metadata-v1`: Function Values carry name, arity and source identity.
     function_metadata: bool = false,
+    /// `core-message-v1`: preserve Core-written message provenance in Values.
+    core_messages: bool = false,
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
     /// `queued-inputs-v1`: Trace-silent pending Host Input queries.
@@ -473,7 +475,8 @@ const Out = struct {
     }
     fn value(o: *Out, v: *const Value) (Allocator.Error || error{NotEncodable})!void {
         const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction } else null;
-        encoding.writeWith(o.w(), v, functions) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
+        const core_messages = if (handling) |s| s.core_messages else false;
+        encoding.writeWire(o.w(), v, functions, core_messages) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
     }
     /// `{"$bytes":…}`, chapter 9's byte-string encoding.
     fn bytesTag(o: *Out, gpa: Allocator, b: []const u8) Allocator.Error!void {
@@ -2125,7 +2128,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -4171,6 +4174,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var climb = s.climb;
             var gone = s.gone;
             var function_metadata = s.function_metadata;
+            var core_messages = s.core_messages;
             var inline_inputs = s.inline_inputs;
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
@@ -4188,6 +4192,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     gone = true;
                 } else if (std.mem.eql(u8, name, "function-metadata-v1")) {
                     function_metadata = true;
+                } else if (std.mem.eql(u8, name, "core-message-v1")) {
+                    core_messages = true;
                 } else if (std.mem.eql(u8, name, "analysis-v1")) {
                     analyses = true;
                 } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
@@ -4207,6 +4213,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.climb = climb;
             s.gone = gone;
             s.function_metadata = function_metadata;
+            s.core_messages = core_messages;
             s.inline_inputs = inline_inputs;
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
@@ -5581,6 +5588,52 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("wrong group", other.object.get("err").?.object.get("code").?.string);
     const forged = try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{{\"$function\":[\"s\",\"x\",\"bm9wZQ==\"]}}}}", .{12});
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
+}
+
+test "core-message-v1 preserves error provenance without dropping message values" {
+    for ([_]bool{ false, true }) |metadata| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":{s}}}", .{ 0, if (metadata) @as([]const u8, "[\"core-message-v1\"]") else "[]" }));
+        var advertised = false;
+        for (hello.object.get("features").?.array.items) |f| {
+            if (std.mem.eql(u8, f.string, "core-message-v1")) advertised = true;
+        }
+        try std.testing.expect(advertised);
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\"}}", .{1}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on fail\\n return 1 / 0\\nend fail\\non error e\\n return [e, {{code: \\\"division by zero\\\", message: \\\"Division by zero\\\"}}]\\nend error\"}}", .{2}));
+        _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"fail\"}}}}", .{3}));
+        const pumped = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}));
+        var checked: usize = 0;
+        for (pumped.object.get("reports").?.array.items) |r| {
+            const kind = r.object.get("kind").?.string;
+            var core: ?Json = null;
+            if (std.mem.eql(u8, kind, "run started") and std.mem.eql(u8, r.object.get("selector").?.string, "error")) {
+                core = r.object.get("args").?.array.items[0];
+            } else if (std.mem.eql(u8, kind, "run end")) {
+                if (r.object.get("error")) |err| {
+                    core = err;
+                } else if (r.object.get("result")) |result| {
+                    const xs = result.array.items;
+                    core = xs[0];
+                    try std.testing.expect(xs[1].object.get("$coreMessage") == null);
+                    try std.testing.expectEqualStrings("Division by zero", xs[1].object.get("message").?.string);
+                }
+            }
+            if (core) |v| {
+                const err = if (metadata) v.object.get("$coreMessage").? else v;
+                try std.testing.expectEqualStrings("division by zero", err.object.get("code").?.string);
+                try std.testing.expectEqualStrings("Division by zero", err.object.get("message").?.string);
+                checked += 1;
+            }
+        }
+        try std.testing.expectEqual(@as(usize, 3), checked);
+        // Host inputs cannot forge Core-message provenance.
+        const refused = try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"error\",\"args\":[{{\"$coreMessage\":{{\"code\":\"mine\",\"message\":\"keep me\"}}}}]}}}}", .{5});
+        try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    }
 }
 
 test "function-metadata-v1 adds names and arities without changing opaque tokens" {
