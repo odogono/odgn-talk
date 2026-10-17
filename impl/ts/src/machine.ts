@@ -2770,6 +2770,10 @@ export class Run {
   private getElement(selector: Value, v: Value, rate: number): Value {
     this.m.input = selector;
     this.pay(rate);
+    return paidOnce(() => this.selectElement(selector, v));
+  }
+
+  private selectElement(selector: Value, v: Value): Value {
     let index: number | null = null;
     if (selector.kind === 'number') {
       const d = decimalParts(selector.asDecimal()!);
@@ -2798,10 +2802,12 @@ export class Run {
   /** `the number of elements of o` (#1143): the Host's count, one callback. */
   private countElements(v: Value, rate: number): Value {
     this.pay(rate);
-    const { o, elements } = this.collectionOf(v, 'number of elements');
-    return this.elementCall(o, v, 'count', null, elements.countCost, () =>
-      elements.count(o.handle),
-    );
+    return paidOnce(() => {
+      const { o, elements } = this.collectionOf(v, 'number of elements');
+      return this.elementCall(o, v, 'count', null, elements.countCost, () =>
+        elements.count(o.handle),
+      );
+    });
   }
 
   // One collection callback: its declared cost first, then the call, its
@@ -5603,3 +5609,16 @@ export const callFunction = (
   }
   return new Run(script, body, args);
 };
+
+// The element instructions pay their base rate before validation, so an
+// error they raise must not be charged the rate again (#1143).
+function paidOnce(body: () => Value): Value {
+  try {
+    return body();
+  } catch (error) {
+    if (error instanceof ScriptError && !error.uncharged) {
+      throw new ScriptError(error.code, error.fields, true);
+    }
+    throw error;
+  }
+}
