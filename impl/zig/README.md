@@ -884,7 +884,9 @@ recorded and does nothing. A Capability's release hook, a
 `talk_with_release_hook` option given with its definition or `store`'s
 `release`, is called with the reason `revoke` then, and with `disable` right
 after the `effect-failure` record of a failed abandonment. Stop releases with `stop`, and Reload and Library
-replacement with `reload`, only once the new code is accepted.
+replacement with `reload`, only once the new code is accepted. An accepted
+Script Reload releases its kept Grants even when the Script was already stopped;
+resuming after a release crossing does not repeat the callbacks.
 
 Segment-bound Operations come from `talk_define_segment_capability`, which
 makes each Grant its own Segment Coordinator, or

@@ -2256,7 +2256,7 @@ pub const Group = struct {
         g.paused_work = null;
         switch (work) {
             .reload => |x| {
-                const result = g.finishReload(x.script, x.fresh, x.keep_mailbox) catch |e| {
+                const result = g.finishReload(x.script, x.fresh, x.keep_mailbox, true) catch |e| {
                     g.dropFresh(x.fresh);
                     return e;
                 };
@@ -2301,7 +2301,7 @@ pub const Group = struct {
             return .state_too_large;
         }
         // Checked, its termination may pause: the built code waits with it.
-        const result = try g.finishReload(s, fresh, keep_mailbox);
+        const result = try g.finishReload(s, fresh, keep_mailbox, false);
         if (result == .paused) owned = false;
         return result;
     }
@@ -2309,9 +2309,12 @@ pub const Group = struct {
     /// A checked Reload's termination and replacement. Paused at a
     /// lifecycle crossing, it keeps `fresh` in `paused_work`; otherwise
     /// `fresh` is the caller's to drop.
-    fn finishReload(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool) !ReloadResult {
+    fn finishReload(g: *Group, s: *Script, fresh: *Script, keep_mailbox: bool, resuming: bool) !ReloadResult {
         g.reworking = true;
         defer g.reworking = false;
+        // Stop is sticky, but each accepted Reload releases all kept Grants,
+        // even when no Runs remain to stop. On resume the release is done.
+        if (!resuming and s.stopped != null) try g.releaseScriptGrants(s, .reload);
         const replaced = g.replaceCode(s, fresh, keep_mailbox, "reload") catch |e| {
             if (e != error.Deferred) return e;
             g.paused_work = .{ .reload = .{ .script = s, .fresh = fresh, .keep_mailbox = keep_mailbox } };
@@ -3206,6 +3209,20 @@ pub const Group = struct {
     fn releaseGrant(g: *Group, s: *const Script, sg: *const ScriptGrant, reason: capabilities.ReleaseReason) void {
         const release = sg.grant.capability.release orelse return;
         release.call(release.context, &.{ .group = g, .script = s.name, .grant = sg.name, .binding = sg.grant.binding, .now = g.clock, .reason = reason });
+    }
+
+    /// Releases every kept Grant, in code-point order, even if a prior
+    /// Stop, revocation or disable already released it.
+    fn releaseScriptGrants(g: *Group, s: *const Script, reason: capabilities.ReleaseReason) !void {
+        const order = try g.gpa.alloc(*const ScriptGrant, s.grants.len);
+        defer g.gpa.free(order);
+        for (s.grants, order) |*sg, *o| o.* = sg;
+        std.mem.sort(*const ScriptGrant, order, {}, struct {
+            fn less(_: void, x: *const ScriptGrant, y: *const ScriptGrant) bool {
+                return std.mem.order(u8, x.name, y.name) == .lt;
+            }
+        }.less);
+        for (order) |sg| g.releaseGrant(s, sg, reason);
     }
 
     pub fn dispose(g: *Group, o: *objects.Object) !void {
@@ -6260,16 +6277,7 @@ pub const Group = struct {
         // The running Run's caller ends it; the rest go once their Decisions
         // settle.
         s.live.clearRetainingCapacity();
-        // Its named Grants are released, in code-point order of their names.
-        const order = try g.gpa.alloc(*const ScriptGrant, s.grants.len);
-        defer g.gpa.free(order);
-        for (s.grants, order) |*sg, *o| o.* = sg;
-        std.mem.sort(*const ScriptGrant, order, {}, struct {
-            fn less(_: void, x: *const ScriptGrant, y: *const ScriptGrant) bool {
-                return std.mem.order(u8, x.name, y.name) == .lt;
-            }
-        }.less);
-        for (order) |sg| g.releaseGrant(s, sg, how.release);
+        try g.releaseScriptGrants(s, how.release);
         // A rollback that failed leaves an effect's state unknown, which
         // stops the Group: this Script with that reason.
         const fatal = g.fatal and !std.mem.eql(u8, reason, "effect state unknown");
