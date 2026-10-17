@@ -11,3 +11,5 @@ The **Message Box**, as in HyperCard, runs one line of NorthTalk at once, and a 
 The escape path in ADR 0086 stands. Stop still silences audio first and requests sticky Core Stop for every Script before Play State is discarded, so leaving does not depend on a Script's cooperation, and late effects are dropped with the session.
 
 We considered keeping Play as a separate full-window mode with an in-place Stop, which kept one way to run a Project but meant hiding every authoring window to try one button. We also considered reloading a Script into the running session when it is edited, as close to HyperCard's fix-and-click loop as possible; running handlers, Script Variables and pending waits make the result hard to predict, so a fresh session is the boundary.
+
+Narrowed by [ADR 0101](0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md): authored Pages and Elements keep their identity through their session-local ids, not as the same objects; the written-back Project is a new value.
