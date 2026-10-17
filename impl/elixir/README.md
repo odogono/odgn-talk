@@ -67,7 +67,7 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 
 This Host speaks only part of the [Message Layer](../../spec/09-embedding.md#the-message-layer):
 
-- **Host Objects** are not supported yet: a property need is refused, and every saved Host Object restores disposed.
+- **Host Objects** are not supported yet: a property need is refused, an Object Collection's `prop` need (`op` `count`, `at` or `find`) included, and every saved Host Object restores disposed. Without Object Kind declarations this Host has no collections to declare, and doesn't ask for `object-elements-v1`.
 - **Function Values** come with the full value set in [#993](https://github.com/odogono/odgn-talk/issues/993). They hold only a token, so nothing about them is durable on the Host's side.
 - **Standard Capabilities** are not offered. The `sqlite` factory isn't offered through the Message Layer by any Host.
 - **Paused-crossing inputs** (`paused-inputs-v1`, #884) aren't offered: nothing a callback sends the owner is admitted before its own result. A suspending callback's calls are handled after the exchange it belongs to ends. [#1007](https://github.com/odogono/odgn-talk/issues/1007) tracks it.
