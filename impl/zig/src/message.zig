@@ -18,6 +18,8 @@ const machine = @import("machine/machine.zig");
 const caps = machine.capabilities;
 const objects = machine.objects;
 const talk = @import("talk.zig");
+const standard = @import("machine/standard.zig");
+const sqlite = @import("machine/sqlite.zig");
 const generated_diagnostics = @import("generated/diagnostics.zig");
 
 const Allocator = std.mem.Allocator;
@@ -306,6 +308,7 @@ pub const Session = struct {
         if (s.held) |h| gpa.free(h.frame);
         for (s.effect_contexts.items) |c| {
             if (c.coordinator) |n| gpa.free(n);
+            if (c.locale) |n| gpa.free(n);
             gpa.destroy(c);
         }
         s.effect_contexts.deinit(gpa);
@@ -359,6 +362,8 @@ const OpContext = struct {
     capability: []u8,
     operation: []u8,
     mode: caps.Mode,
+    before: @FieldType(caps.Operation, "before") = null,
+    standard: ?standard.Which = null,
 };
 
 /// A property's identity, which its `prop` need carries.
@@ -374,6 +379,9 @@ const PropContext = struct {
 const EffectContext = struct {
     session: *Session,
     coordinator: ?[]u8 = null,
+    shared: ?*EffectContext = null,
+    locale: ?[]u8 = null,
+    sqlite_binding: sqlite.Binding = .{ .database = null, .database_len = 0, .max_rows = 0 },
 };
 
 /// A Grant release the Core made, waiting to be sent as a `release` need.
@@ -941,7 +949,11 @@ fn storeCoordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordina
 
 /// Each Grant's Segment Coordinator: its named one, or its own.
 fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
-    if (g.binding) |b| return .{ .identity = @intFromPtr(b), .hook = effectHook, .context = b };
+    if (g.binding) |b| {
+        const ec: *EffectContext = @ptrCast(@alignCast(b));
+        const shared = ec.shared orelse ec;
+        return .{ .identity = @intFromPtr(shared), .hook = effectHook, .context = shared };
+    }
     return .{ .identity = @intFromPtr(g), .hook = effectHook, .context = context };
 }
 
@@ -1996,7 +2008,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -2062,17 +2074,68 @@ fn addReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
+// Adapter declarations retain their own raw-argument Host functions. Only the
+// fixed factory's precharge/result/failure refinements are borrowed.
+fn adapterBefore(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    const oc: *OpContext = @ptrCast(@alignCast(op.host.context.?));
+    var translated = binding;
+    if (binding) |b| {
+        const ec: *EffectContext = @ptrCast(@alignCast(b));
+        if (oc.standard == .locale) return standard.localeCheck(a, op, args, ec.locale orelse "und");
+        if (oc.standard == .sqlite) translated = &ec.sqlite_binding;
+    }
+    return oc.before.?(a, op, args, translated);
+}
+
+fn adapterStandardOperation(s: *Session, capability: []const u8, which: standard.Which, j: Json) (Allocator.Error || Invalid)!caps.Operation {
+    const name = asText(field(j, "name")) orelse return error.InvalidValue;
+    for (standard.operations(which)) |n| {
+        if (std.mem.eql(u8, n, name)) break;
+    } else return error.InvalidValue;
+    // Store includes the Core-only any-Quantity Shape. Other adapters retain
+    // their public factory Shapes, including optional user option values.
+    var op = if (which == .store) try standard.declare(s.core.gpa, which, name) else try operationOf(s, capability, j);
+    errdefer releaseOp(s.core.gpa, op);
+    if (which != .store) {
+        var template = try standard.declare(s.core.gpa, which, name);
+        const errors = op.errors;
+        op.errors = template.errors;
+        template.errors = errors;
+        op.before = template.before;
+        op.after = template.after;
+        op.catalogue_errors = true;
+        releaseOp(s.core.gpa, template);
+    }
+    op.cost = try costOf(field(j, "cost"));
+    op.command = asBool(field(j, "command")) orelse false;
+    const oc = if (which == .store) try newOpContext(s, capability, name) else @as(*OpContext, @ptrCast(@alignCast(op.host.context.?)));
+    oc.mode = op.mode;
+    oc.standard = which;
+    oc.before = op.before;
+    op.host = .{ .call = opCall, .context = oc };
+    if (op.before != null) op.before = adapterBefore;
+    return op;
+}
+
 fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
     const lifecycle = asBool(field(msg, "segmentLifecycle")) orelse false;
     const releasing = asBool(field(msg, "release")) orelse false;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
     if (ops_j != .array) return hostError(s.gpa, ref, .invalid_value);
+    const which: ?standard.Which = if (field(msg, "standard")) |v| std.meta.stringToEnum(standard.Which, asText(v) orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value) else null;
+    if (which) |w| {
+        switch (w) {
+            .calendar, .locale, .store, .sqlite, .user => {},
+            else => return hostError(s.gpa, ref, .invalid_value),
+        }
+        if (ops_j.array.items.len != standard.operations(w).len) return hostError(s.gpa, ref, .invalid_value);
+    }
     const a = s.core.gpa;
     const ops = a.alloc(caps.Operation, ops_j.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
     var made: usize = 0;
     for (ops_j.array.items, ops) |item, *slot| {
-        slot.* = operationOf(s, name, item) catch |e| {
+        slot.* = (if (which) |w| adapterStandardOperation(s, name, w, item) else operationOf(s, name, item)) catch |e| {
             for (ops[0..made]) |op| releaseOp(a, op);
             a.free(ops);
             return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
@@ -2116,6 +2179,21 @@ fn grantReply(s: *Session, msg: Json, ref: i64) []u8 {
         const named = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
         if (def.coordinator_of == null) return hostError(s.gpa, ref, .invalid_value);
         binding = namedCoordinator(s, named) catch return hostError(s.gpa, ref, .out_of_memory);
+    }
+    if (field(msg, "locale") != null or field(msg, "maxRows") != null) {
+        const ec = s.gpa.create(EffectContext) catch return hostError(s.gpa, ref, .out_of_memory);
+        ec.* = .{ .session = s, .shared = if (binding) |b| @ptrCast(@alignCast(b)) else null };
+        s.effect_contexts.append(s.gpa, ec) catch {
+            s.gpa.destroy(ec);
+            return hostError(s.gpa, ref, .out_of_memory);
+        };
+        if (field(msg, "locale")) |v| ec.locale = s.gpa.dupe(u8, asText(v) orelse return hostError(s.gpa, ref, .invalid_value)) catch return hostError(s.gpa, ref, .out_of_memory);
+        if (field(msg, "maxRows")) |v| {
+            const rows = asInt(v) orelse return hostError(s.gpa, ref, .invalid_value);
+            if (rows < 0 or rows > sqlite.max_whole) return hostError(s.gpa, ref, .invalid_value);
+            ec.sqlite_binding.max_rows = rows;
+        }
+        binding = ec;
     }
     var grant: ?*caps.Grant = null;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
@@ -2748,7 +2826,10 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
         s.pumping_entry = null;
     }
     const outcome: machine.Group.Resumed = switch (work) {
-        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| return hostError(s.gpa, ref, talk.status(e)) },
+        .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| {
+            entry.group.flush();
+            return workError(s, ref, entry, talk.status(e));
+        } },
         .replace => |x| blk: {
             // Room for every Library it could recompile, which the Core
             // owns once the Group uses them.
@@ -3669,6 +3750,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     gone = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
+                } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
+                    // This feature adds declaration and binding fields, with no per-Group state.
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             s.early_abandoned = early;

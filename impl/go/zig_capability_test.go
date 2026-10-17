@@ -186,23 +186,6 @@ func TestZigBackendGrantRoutingAndLoadChecks(t *testing.T) {
 	}
 }
 
-func TestZigBackendUnsupportedCapabilityDeclarations(t *testing.T) {
-	core := talk.New()
-	plain := talk.Operation{Name: "read", Do: func(*talk.Call, []talk.Value) (talk.Value, error) { return talk.Nothing, nil }}
-	lifecycle := talk.SegmentLifecycle{Begin: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }, Commit: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }, Rollback: func(talk.SegmentContext) talk.EffectResult { return talk.EffectResult{Status: talk.EffectOK} }}
-	segment, err := core.DefineSegmentCapability("segment", lifecycle, plain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, def := range []*talk.CapabilityDef{segment} {
-		g := core.NewGroup(talk.GroupOptions{})
-		_, err := g.Load(talk.LoadOptions{Name: "s", Source: "", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
-		if err == nil || !strings.HasPrefix(err.Error(), "experimental Zig backend:") || g.Script("s") != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 func TestZigBackendCapabilityShapesAndData(t *testing.T) {
 	const encoded = `[null,true,-3,{"$dec":"3.0"},{"$dec":"9007199254740992"},"é<>\u000a",{"$quantity":["2.50","GBP"]},{"$bytes":"DQo="},{"$range":[3,7]},{"$date":"2026-09-27T14:30:00.5"},{"$instant":"1969-12-31T23:59:59.999999Z"},{"$pattern":"<\"a\">"},{"$map":[["$ref",1],["é",[null,true]]]}]`
 	data, err := talk.DecodeValue([]byte(encoded), nil)
@@ -331,5 +314,86 @@ func TestZigBackendGrantNamedTrace(t *testing.T) {
 		if line == "read" {
 			t.Fatal("Grant operation was published as a Trace record")
 		}
+	}
+}
+
+// Maintainer decision on #1050: these remain explicit experimental limits.
+func TestZigBackendDeliberateDeclarationLimits(t *testing.T) {
+	core := talk.New()
+	g := core.NewGroup(talk.GroupOptions{})
+	first, err := core.DefineObjectKind(talk.ObjectKindDef{Name: "same"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Object(first, "one", nil); err != nil {
+		t.Fatal(err)
+	}
+	second, err := core.DefineObjectKind(talk.ObjectKindDef{Name: "same"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Object(second, "two", nil); err == nil || !strings.Contains(err.Error(), "two Object Kinds") {
+		t.Fatal(err)
+	}
+
+	deep := talk.TextShape
+	for range 34 {
+		deep = talk.ListOf(deep)
+	}
+	def, err := core.DefineCapability("deep", talk.Operation{Name: "read", Result: deep, Do: func(*talk.Call, []talk.Value) (talk.Value, error) { return talk.Nothing, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Load(talk.LoadOptions{Name: "deep", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}}); err == nil || !strings.Contains(err.Error(), "32 levels") {
+		t.Fatal(err)
+	}
+
+	var refusal error
+	def, err = core.DefineCapability("callback", talk.Operation{Name: "make", Result: talk.AnyShape, Do: func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
+		kind, err := core.DefineObjectKind(talk.ObjectKindDef{Name: "late"})
+		if err != nil {
+			return talk.Nothing, err
+		}
+		_, refusal = c.Group().Object(kind, "new", nil)
+		return talk.Nothing, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := g.Load(talk.LoadOptions{Name: "callback", Source: "on go\nask api to make\nend go", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Deliver(talk.Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if refusal == nil || !strings.Contains(refusal.Error(), "during a Host callback") {
+		t.Fatal(refusal)
+	}
+}
+
+func TestZigBackendUnusedSegmentLifecycle(t *testing.T) {
+	core := talk.New()
+	hook := func(talk.SegmentContext) talk.EffectResult {
+		t.Fatal("unused lifecycle ran")
+		return talk.EffectResult{}
+	}
+	def, err := core.DefineSegmentCapability("ordinary", talk.SegmentLifecycle{Begin: hook, Commit: hook, Rollback: hook}, talk.Operation{Name: "read", Result: talk.NothingShape, Do: func(*talk.Call, []talk.Value) (talk.Value, error) { return talk.Nothing, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := core.NewGroup(talk.GroupOptions{})
+	s, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nask api to read\nend go", Grants: map[string]*talk.Grant{"api": def.GrantAll(nil)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Deliver(talk.Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = g.Pump(bridgeNow, talk.PumpOptions{}); err != nil {
+		t.Fatal(err)
 	}
 }

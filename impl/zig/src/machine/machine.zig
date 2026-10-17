@@ -331,6 +331,7 @@ pub const Run = struct {
 /// A Segment end paused at a lifecycle crossing (embedding/scoped-effects.md).
 pub const Ending = struct {
     outcome: Group.Outcome,
+    participating_only: bool = false,
     stage: enum { abandon, finalize, commit_rollback, rollback } = .abandon,
     /// The first failed abandonment on a participating Grant.
     prevented: ?EffectFailure = null,
@@ -2062,7 +2063,7 @@ pub const Group = struct {
     pub fn keptView(a: Allocator, grants: []const ScriptGrant, revoked: bool) ![]check.Grant {
         var out: std.ArrayList(check.Grant) = .empty;
         for (grants) |sg| {
-            if (sg.revoked and !revoked) continue;
+            if (sg.revoked and !sg.disabled and !revoked) continue;
             const v = try out.addOne(a);
             var ops: std.ArrayList(check.Operation) = .empty;
             const all = try capabilities.checkOperations(a, sg.grant);
@@ -2271,7 +2272,11 @@ pub const Group = struct {
     /// the Script with reason `reload` and replaces its code and every
     /// extension at once. A refusal leaves the Script unchanged.
     pub fn reload(g: *Group, s: *Script, source: []const u8, carry: bool, keep_mailbox: bool) !ReloadResult {
-        try g.checkCodeChange();
+        try g.checkWorker();
+        if (g.fatal) {
+            g.refuseWorkerWithCode(.{ .reload = .{ .script = s, .source = source, .carry = carry, .keep_mailbox = keep_mailbox } }, "effect state unknown");
+            return error.EffectStateUnknown;
+        }
         const fresh = try g.newCode(s);
         // A paused Reload keeps its built code until it resumes.
         var owned = true;
@@ -2443,7 +2448,7 @@ pub const Group = struct {
         }
         // The revoked Grants the new code was checked without go.
         var kept: usize = 0;
-        for (s.grants) |sg| if (!sg.revoked) {
+        for (s.grants) |sg| if (!sg.revoked or sg.disabled) {
             s.grants[kept] = sg;
             kept += 1;
         };
@@ -3121,7 +3126,10 @@ pub const Group = struct {
         abandonReadyCalls(r);
         // Its rollback first, which may defer while draining: nothing else
         // changes until it completes.
-        if (r.continuing) try g.cleanupLifecycle(r);
+        if (r.continuing and r.participant != null) {
+            if (r.cleanup == null) r.cleanup = .{ .outcome = .stopped, .participating_only = true };
+            try g.cleanupLifecycle(r);
+        }
         if (r.resume_with) |w| g.releaseResume(w);
         const queued = r.resume_with != null or r.continuing;
         if (r.continuing) {
@@ -5680,17 +5688,23 @@ pub const Group = struct {
     /// which prevents its commit.
     fn abandonScopes(g: *Group, run: *Run) ?EffectFailure {
         var prevented: ?EffectFailure = null;
-        g.abandonScopesWith(run, false, &prevented) catch unreachable;
+        g.abandonScopesWith(run, false, false, &prevented) catch unreachable;
         return prevented;
     }
 
     /// `abandonScopes`, where each abandonment call may answer `deferred`
     /// when `deferrable`: its slot stays, and the same call is made again.
-    fn abandonScopesWith(g: *Group, run: *Run, deferrable: bool, prevented: *?EffectFailure) error{Deferred}!void {
+    fn abandonScopesWith(g: *Group, run: *Run, deferrable: bool, participating_only: bool, prevented: *?EffectFailure) error{Deferred}!void {
         const a = g.scratch.allocator();
-        while (run.scopes.items.len > 0) {
+        var index = run.scopes.items.len;
+        while (index > 0) {
+            index -= 1;
             if (deferrable and g.release_pause) return error.Deferred;
-            const slot = run.scopes.items[run.scopes.items.len - 1];
+            const slot = run.scopes.items[index];
+            if (participating_only) {
+                const pt = run.participant orelse return;
+                if (std.mem.indexOfScalar(*ScriptGrant, pt.grants.items, slot.grant) == null) continue;
+            }
             const capability = slot.grant.grant.capability;
             const op = &capability.operations[slot.abandon];
             run.calls += 1;
@@ -5706,34 +5720,49 @@ pub const Group = struct {
                 run.calls -= 1;
                 return error.Deferred;
             }
-            _ = run.scopes.pop();
-            const result: ?*Value = if (outcome == .value) outcome.value else null;
-            defer if (result) |v| v.release();
-            switch (outcome) {
+            _ = run.scopes.orderedRemove(index);
+            defer g.releaseHostOutcome(outcome);
+            var ok = false;
+            var status: []const u8 = "unknown";
+            var shown: ?*Value = null;
+            defer if (shown) |v| v.release();
+            if (!call.charge_refused) switch (outcome) {
+                .value => |v| {
+                    const checked = if (op.result) |shape| capabilities.checkValue(a, g.gpa, shape, v) catch null else null;
+                    if (checked) |c| {
+                        defer c.release();
+                        ok = c.mismatch == null;
+                    }
+                    if (ok) if (op.after) |after| {
+                        ok = after(op, &.{}, v);
+                    };
+                },
                 .failed => |f| {
-                    g.gpa.free(f.code);
-                    if (f.message) |t| g.gpa.free(t);
-                    if (f.data) |d| d.release();
+                    const malformed = if (f.data) |d| d.data != .map and d.data != .nothing else false;
+                    if (!malformed) shown = failureMap(g.gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
+                    if (shown != null and capabilities.validFailure(op.*, f.code, f.data)) status = "failed";
                 },
                 else => {},
-            }
-            const ok = result != null and !call.charge_refused;
+            };
             if (g.trace) |w| {
                 w.print("call {s} op={s}.{s} args=[]", .{ id, slot.grant.name, op.name }) catch {};
                 if (ok) {
                     w.writeAll(" result=") catch {};
-                    display.writeTrace(w, result.?) catch {};
-                } else w.writeAll(" error={}") catch {};
+                    display.writeTrace(w, outcome.value) catch {};
+                } else {
+                    w.writeAll(" error=") catch {};
+                    if (shown) |v| display.writeTrace(w, v) catch {} else w.writeAll("{}") catch {};
+                }
                 w.writeAll(" automatic=yes\n") catch {};
                 w.print("scope {s} grant={s} name={s} action={s}\n", .{ id, slot.grant.name, slot.name, if (ok) "abandoned" else "failed" }) catch {};
-                if (!ok) w.print("effect-failure {s} grant={s} segment={s} phase=abandon status=unknown scope={s}\n", .{ run.id, slot.grant.name, segment, slot.name }) catch {};
+                if (!ok) w.print("effect-failure {s} grant={s} segment={s} phase=abandon status={s} scope={s}\n", .{ run.id, slot.grant.name, segment, status, slot.name }) catch {};
             }
-            if (!ok) g.reportEffectFailure(run, slot.grant.name, segment, "abandon", "unknown", slot.name);
+            if (!ok) g.reportEffectFailure(run, slot.grant.name, segment, "abandon", status, slot.name);
             if (!ok) {
                 slot.grant.disabled = true;
                 g.releaseGrant(run.script, slot.grant, .disable);
                 const participating = if (run.participant) |pt| std.mem.indexOfScalar(*ScriptGrant, pt.grants.items, slot.grant) != null else false;
-                if (participating and prevented.* == null) prevented.* = .{ .grant = slot.grant.name, .phase = "abandon", .status = "unknown", .scope = slot.name };
+                if (participating and prevented.* == null) prevented.* = .{ .grant = slot.grant.name, .phase = "abandon", .status = status, .scope = slot.name };
             }
         }
     }
@@ -5808,7 +5837,7 @@ pub const Group = struct {
     /// Returns the failure that ends the Run `effect failed`, if one does.
     fn lifecycle(g: *Group, run: *Run, e: *Ending, deferrable: bool) error{Deferred}!?EffectFailure {
         if (e.stage == .abandon) {
-            if (e.outcome != .suspended) try g.abandonScopesWith(run, deferrable, &e.prevented);
+            if (e.outcome != .suspended) try g.abandonScopesWith(run, deferrable, e.participating_only, &e.prevented);
             e.stage = .finalize;
         }
         if (run.participant == null) return e.prevented;
@@ -6158,6 +6187,12 @@ pub const Group = struct {
         // Every Run's rollback first, which may defer while draining:
         // nothing else changes until they complete.
         for (runs.items) |r| try g.cleanupLifecycle(r);
+        // Discovering uncertainty during this Stop switches to Group-wide
+        // termination before publishing any stopped record, in load order.
+        if (g.fatal and !std.mem.eql(u8, reason, "effect state unknown")) {
+            for (g.scripts.items) |x| try g.stopScript(x, "effect state unknown", if (x == s) running else null, .{});
+            return;
+        }
         s.stopped = try g.gpa.dupe(u8, reason);
         var discarded: std.ArrayList(u8) = .empty;
         defer discarded.deinit(g.gpa);

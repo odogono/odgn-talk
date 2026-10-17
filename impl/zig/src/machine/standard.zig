@@ -75,7 +75,7 @@ const names = [_]struct { []const u8, caps.Kind }{ .{ "width", .text }, .{ "form
 
 /// The declaration of one Standard Operation, without its cost and Host
 /// function.
-fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
+pub fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
     var args: std.ArrayList(*Shape) = .empty;
     var result: ?*Shape = null;
     var mode: caps.Mode = .immediate;
@@ -297,6 +297,8 @@ fn declare(gpa: Allocator, which: Which, name: []const u8) !caps.Operation {
         .max_pending_ms = max_pending,
         .errors = decls,
         .closed_errors = true,
+        .catalogue_errors = true,
+        .failure = if (which == .store) storeFailure else null,
         .segment_bound = (which == .store and storeWrite(name)) or (which == .sqlite and !eq(name, "query")),
         // Owned, as every definition's scope names are.
         .scope = if (which != .sqlite) .none else if (eq(name, "begin"))
@@ -427,6 +429,16 @@ fn beforeSqlite(a: Allocator, op: *const caps.Operation, args: []const *Value, b
 
 /// `store`'s own checks: a nonempty key, or for the watch Operations a
 /// nonempty name and a plain Name as the effective message.
+fn storeFailure(code: []const u8, data: ?*const Value) bool {
+    const fields: []const []const u8 = if (std.mem.eql(u8, code, "incompatible units")) &.{ "left", "right" } else if (std.mem.eql(u8, code, "wrong kind")) &.{ "expected", "got" } else if (std.mem.eql(u8, code, "overflow")) &.{"operator"} else if (std.mem.eql(u8, code, "can't store")) &.{"kind"} else if (std.mem.eql(u8, code, "store full") or std.mem.eql(u8, code, "watch limit")) &.{"limit"} else if (std.mem.eql(u8, code, "store busy")) &.{"key"} else return false;
+    const d = data orelse return false;
+    for (fields) |key| {
+        const v = d.get(key) orelse return false;
+        if (v.data != .text) return false;
+    }
+    return true;
+}
+
 fn beforeStore(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
     _ = a;
     _ = binding;
@@ -447,14 +459,19 @@ fn effectiveMessage(args: []const *Value) []const u8 {
 /// `all`, and so no Selector.
 fn plainName(w: []const u8) bool {
     if (w.len == 0) return false;
-    if (!(std.ascii.isAlphabetic(w[0]) or w[0] == '_' or w[0] >= 0x80)) return false;
-    for (w) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c >= 0x80)) return false;
+    if (!(std.ascii.isAlphabetic(w[0]) or w[0] == '_')) return false;
+    for (w) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_')) return false;
     if (std.mem.eql(u8, w, "all") or std.mem.eql(u8, w, "_")) return false;
     for (grammar.reserved) |r| if (std.mem.eql(u8, r, w)) return false;
     return true;
 }
 
 fn beforeLocale(a: Allocator, op: *const caps.Operation, args: []const *Value, binding: ?*anyopaque) Allocator.Error!?caps.Problem {
+    return localeCheck(a, op, args, defaultTag(binding));
+}
+
+/// Checks a raw-argument adapter call with its length-delimited default tag.
+pub fn localeCheck(a: Allocator, op: *const caps.Operation, args: []const *Value, default_tag: []const u8) Allocator.Error!?caps.Problem {
     _ = a;
     const given = localeArgs(op, args);
     if (given.misplaced) |v| return .{ .out_of_domain = v };
@@ -470,7 +487,7 @@ fn beforeLocale(a: Allocator, op: *const caps.Operation, args: []const *Value, b
             continue;
         if (!isText(p.value, words)) return .{ .out_of_domain = p.value };
     };
-    const tag: []const u8 = if (given.tag) |t| (if (t.data == .text) t.data.text else defaultTag(binding)) else defaultTag(binding);
+    const tag: []const u8 = if (given.tag) |t| (if (t.data == .text) t.data.text else default_tag) else default_tag;
     if (!wellFormed(tag)) return .{ .bad_locale = tag };
     return null;
 }
@@ -517,8 +534,10 @@ fn afterLocale(op: *const caps.Operation, args: []const *Value, result: *const V
         }
         if (!texts(result.get("digits") orelse return false, 10)) return false;
         for ([_][]const u8{ "primaryGroup", "secondaryGroup", "minGrouping" }) |k| {
-            const n = integerOf(result.get(k) orelse return false) orelse return false;
-            if (n < 1) return false;
+            const v = result.get(k) orelse return false;
+            if (v.data != .number) return false;
+            const n = v.data.number;
+            if (n.negative or n.coefficient == 0 or (n.integer(i128) catch return false) < 1) return false;
         }
         return true;
     }
@@ -754,6 +773,37 @@ fn privateUse(ps: []const []const u8) bool {
 test "BCP 47 well-formedness" {
     for ([_][]const u8{ "en", "en-GB", "de-CH-1996", "zh-Hant-TW", "qzz-QZ", "und", "x-private", "en-US-u-co-phonebk", "i-klingon", "sr-Latn-RS", "es-419" }) |t| try std.testing.expect(wellFormed(t));
     for ([_][]const u8{ "en_US", "", "e", "en-", "toolongtag", "en-u", "x", "en-GB-x" }) |t| try std.testing.expect(!wellFormed(t));
+}
+
+test "factory catalogue failures are isolated and Store fields keep their kinds (#1058)" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var calendar = try declare(a, .calendar, "today");
+    const zone = try model.text(a, "Mars");
+    const data = try model.map(a, &.{.{ .key = "zone", .value = zone }});
+    try std.testing.expect(caps.validFailure(calendar, "unknown zone", data));
+    calendar.catalogue_errors = false;
+    try std.testing.expect(!caps.validFailure(calendar, "unknown zone", data));
+    const increment = try declare(a, .store, "increment");
+    const text = try model.text(a, "m");
+    const number = try model.scalar(a, .{ .number = .fromInt(1) });
+    const bad = try model.map(a, &.{ .{ .key = "left", .value = text }, .{ .key = "right", .value = number } });
+    try std.testing.expect(!caps.validFailure(increment, "incompatible units", bad));
+    try std.testing.expect(!plainName("élan"));
+}
+
+test "Locale grouping integers are positive whole numbers without an int64 cap (#1058)" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const op = try declare(a, .locale, "numberSymbols");
+    const text = try model.text(a, "x");
+    var digits_list: [10]*Value = @splat(text);
+    const digit_values = try model.list(a, &digits_list);
+    const large = try model.scalar(a, .{ .number = try model.Decimal.parse("9223372036854775808") });
+    const result = try model.map(a, &.{ .{ .key = "decimal", .value = text }, .{ .key = "group", .value = text }, .{ .key = "minus", .value = text }, .{ .key = "digits", .value = digit_values }, .{ .key = "primaryGroup", .value = large }, .{ .key = "secondaryGroup", .value = large }, .{ .key = "minGrouping", .value = large } });
+    try std.testing.expect(afterLocale(&op, &.{}, result));
 }
 
 test "store's Operation Declarations, as the Group Fingerprint and the Host Manifest give them" {

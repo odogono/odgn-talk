@@ -343,6 +343,8 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runReloadBridgeCases(t)...)
 	observations = append(observations, runHostCommandBridgeCases(t)...)
 	observations = append(observations, runTriageBridgeCases(t)...)
+	observations = append(observations, runEffectBridgeCases(t)...)
+	observations = append(observations, runStandardBridgeCases(t)...)
 	observations = append(observations, runInputOrderBridgeCases(t)...)
 	t.Run("concurrent input order", func(t *testing.T) { observations = append(observations, runConcurrentInputBridgeCase(t)) })
 	return observations

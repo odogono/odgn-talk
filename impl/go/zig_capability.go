@@ -3,6 +3,7 @@
 package northtalk
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -38,7 +39,11 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 		if !exists {
 			handle = fmt.Sprintf("go-capability-%d", len(b.definitions)+1)
 			ops, _ := zigDeclaration(def)
-			if _, err := b.send("define-capability", map[string]any{"name": handle, "ops": ops, "release": def.release != nil}); err != nil {
+			declaration := map[string]any{"name": handle, "ops": ops, "release": def.release != nil, "segmentLifecycle": zigSegmentBound(def)}
+			if len(def.checks) != 0 {
+				declaration["standard"] = def.name
+			}
+			if _, err := b.send("define-capability", declaration); err != nil {
 				return nil, nil, err
 			}
 			b.definitions[def] = handle
@@ -50,7 +55,29 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 			bound.operations[op] = true
 		}
 		sort.Strings(ops)
-		reply, err := b.send("grant", map[string]any{"capability": handle, "ops": ops})
+		fields := map[string]any{"capability": handle, "ops": ops}
+		if zigSegmentBound(def) && bound.coordinator != nil {
+			id, ok := b.coordinators[bound.coordinator]
+			if !ok {
+				id = fmt.Sprintf("go-coordinator-%d", len(b.coordinators)+1)
+				b.coordinators[bound.coordinator] = id
+			}
+			fields["coordinator"] = id
+		}
+		if len(def.checks) != 0 {
+			if def.name == "locale" {
+				tag, ok := g.binding.(string)
+				if !ok {
+					tag = "und"
+				}
+				fields["locale"] = tag
+			}
+			if def.name == "sqlite" {
+				binding, _ := sqliteBindingOf(g.binding)
+				fields["maxRows"] = binding.MaxRows
+			}
+		}
+		reply, err := b.send("grant", fields)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -65,12 +92,6 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 }
 
 func zigDeclaration(d *CapabilityDef) ([]any, error) {
-	if d.lifecycle != nil || d.coordinate != nil {
-		return nil, backendUnsupported("Capability Segment lifecycle hooks")
-	}
-	if len(d.checks) != 0 {
-		return nil, backendUnsupported("Standard Capability refinements")
-	}
 	names := make([]string, 0, len(d.ops))
 	for name := range d.ops {
 		names = append(names, name)
@@ -79,9 +100,6 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 	ops := make([]any, 0, len(names))
 	for _, name := range names {
 		op := d.ops[name]
-		if op.Scope != nil || op.SegmentBound {
-			return nil, backendUnsupported("scoped and Segment-bound Operations")
-		}
 		args := make([]any, len(op.Args))
 		for i, arg := range op.Args {
 			encoded, err := zigShape(arg.inner, 0)
@@ -91,6 +109,16 @@ func zigDeclaration(d *CapabilityDef) ([]any, error) {
 			args[i] = encoded
 		}
 		fields := map[string]any{"name": name, "args": args, "mode": modeName(op.Mode), "cost": map[string]any{"fuel": op.Cost.Fuel, "alloc": op.Cost.Alloc}, "maxPending": op.MaxPending.Milliseconds()}
+		if op.SegmentBound {
+			fields["segmentBound"] = true
+		}
+		if op.Scope != nil {
+			if op.Scope.Opens != "" {
+				fields["scope"] = map[string]any{"opens": op.Scope.Opens, "abandon": op.Scope.Abandon}
+			} else {
+				fields["scope"] = map[string]any{"closes": op.Scope.Closes}
+			}
+		}
 		if op.Command {
 			fields["command"] = true
 		}
@@ -176,6 +204,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	if kind == "prop" {
 		return b.property(need)
 	}
+	if kind == "effect" {
+		return b.effect(need)
+	}
 	if kind != "op" && kind != "release" {
 		return nil, backendUnsupported("Host callback " + zigText(need.Get("m")))
 	}
@@ -229,7 +260,11 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		return nil, err
 	}
 	ctx, cancel := operationContext(op.Mode)
-	c := &Call{group: b.group, scriptName: s.name, runID: RunID(zigText(need.Get("run"))), grantName: grantName, binding: grant.binding, id: CallID(zigText(need.Get("call"))), segmentID: zigText(need.Get("segment")), now: now, context: ctx, starting: true}
+	automatic, _ := need.Get("automatic").AsBool()
+	if automatic {
+		ctx = context.Background()
+	}
+	c := &Call{automatic: automatic, scopeName: zigText(need.Get("scope")), group: b.group, scriptName: s.name, runID: RunID(zigText(need.Get("run"))), grantName: grantName, binding: grant.binding, id: CallID(zigText(need.Get("call"))), segmentID: zigText(need.Get("segment")), now: now, context: ctx, starting: true}
 	var left int64
 	limited := need.Get("fuelLeft").Kind() != KindNothing
 	if limited {
@@ -254,6 +289,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	}
 	result, failure := invokeOperation(op, c, args)
 	c.finish()
+	if c.invalidAutomatic {
+		failure = &HostError{InvalidValue, "automatic abandonment attempted a budget or settlement call"}
+	}
 	out := map[string]any{}
 	if c.charged != 0 {
 		out["charged"] = c.charged
@@ -285,6 +323,16 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	}
 	if detail, ok := out["hostError"].(string); ok {
 		b.failureDetails[c.id] = detail
+	}
+	if automatic {
+		detail := "result violates its Shape or Group ownership"
+		if failure != nil {
+			detail = fmt.Sprint(failure)
+		}
+		if host, ok := out["hostError"].(string); ok {
+			detail = host
+		}
+		b.effectDetails[zigEffectKey(c.segmentID, "abandon", grantName, c.scopeName)] = detail
 	}
 	if op.Mode == Suspending && out["started"] == nil {
 		b.callsMu.Lock()
@@ -355,4 +403,70 @@ func (b *zigGroup) grantNames(s *Script) map[string][]string {
 		out[entry.Key] = ops
 	}
 	return out
+}
+
+// The guest owns enrollment and finalization; bindings and hook identity stay
+// in Go. Enrollment order comes from the need, including aliases.
+func (b *zigGroup) effect(need Value) (map[string]any, error) {
+	s := b.group.Script(zigText(need.Get("script")))
+	if s == nil {
+		return nil, fmt.Errorf("Zig effect names an unknown Script")
+	}
+	name := zigText(need.Get("grant"))
+	grant := s.grants[name]
+	if grant == nil || grant.coordinator == nil {
+		return nil, fmt.Errorf("Zig effect names an unknown Coordinator")
+	}
+	grants := []SegmentGrant{}
+	for i := 1; i <= need.Get("grants").Len(); i++ {
+		n := zigText(need.Get("grants").Index(i))
+		g := s.grants[n]
+		if g == nil || g.coordinator != grant.coordinator {
+			return nil, fmt.Errorf("Zig effect has inconsistent enrollment")
+		}
+		grants = append(grants, SegmentGrant{GrantName: n, Binding: g.binding})
+	}
+	now, err := time.Parse(time.RFC3339Nano, zigText(need.Get("now")))
+	if err != nil {
+		return nil, err
+	}
+	ctx := SegmentContext{Group: b.group, ScriptName: s.name, RunID: RunID(zigText(need.Get("run"))), GrantName: name, SegmentID: zigText(need.Get("segment")), Binding: grant.binding, Now: now, Grants: grants}
+	var hook func(SegmentContext) EffectResult
+	phase := zigText(need.Get("phase"))
+	switch phase {
+	case "begin":
+		hook = grant.coordinator.Begin
+	case "commit":
+		hook = grant.coordinator.Commit
+	case "rollback":
+		hook = grant.coordinator.Rollback
+	default:
+		return nil, fmt.Errorf("unknown Zig effect phase %q", phase)
+	}
+	result := invokeEffect(hook, ctx)
+	if result.Status != EffectOK {
+		b.effectDetails[zigEffectKey(ctx.SegmentID, phase, "", "")] = result.Detail
+	}
+	return map[string]any{"status": string(result.Status)}, nil
+}
+
+func (b *zigGroup) effectDetail(e *EffectFailure) string {
+	return b.effectDetails[zigEffectKey(e.Segment, e.Phase, e.Grant, e.Scope)]
+}
+
+// zigEffectKey identifies an effect failure's detail; only abandonment is per Grant and Scope.
+func zigEffectKey(segment, phase, grant, scope string) string {
+	if phase != "abandon" {
+		return segment + "/" + phase
+	}
+	return segment + "/" + phase + "/" + grant + "/" + scope
+}
+
+func zigSegmentBound(d *CapabilityDef) bool {
+	for _, op := range d.ops {
+		if op.SegmentBound {
+			return true
+		}
+	}
+	return false
 }

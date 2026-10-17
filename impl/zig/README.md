@@ -298,13 +298,19 @@ instance, its `hello`, Capability definition and Grants, `new-group`, `load`,
 `broadcast` and `decide`, `reload` and `extend`, `compile-library`,
 `add-library` and `replace-library`, `inspect` and `grants`, `restore`
 with its interim `resolve` need, `settle`, `$function` values and `call`, `export-manifest`,
-`standard-capability` for all but `sqlite`, which the layer doesn't offer,
+`standard-capability` for all but `sqlite`,
 `counters`, and the Host Inputs `stop`, `cancel-run`, `rewind-run`, `revoke`
 and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operations, with
 `segmentLifecycle` and `release`. Their hooks reach the Host during a Pump,
 `reload` or `replace-library` as `effect` and `release` needs and automatic
 `op` needs, and a `grant` may name a
-shared `coordinator`; `store`'s hooks are one Coordinator's. A `pump`,
+shared `coordinator`; `store`'s hooks are one Coordinator's.
+`standard-refinements-v1` additionally lets adapters attach a fixed Standard
+family to an independently named declaration, retaining raw arguments for their
+own factory wrappers. It includes sqlite, with its row cap carried separately
+from coordinator identity; the standalone `standard-capability` sqlite factory
+remains unavailable. Locale defaults are length-delimited, including invalid
+tags which must reach the guest's uncharged checks intact. A `pump`,
 `reload` or `replace-library` reply's `abandoned` lists the started calls the
 Core has abandoned since the last notification, once each. To observe cancellation
 before subsequent Host callbacks, request `features: ["abandoned-before-needs-v1"]`
@@ -1260,9 +1266,10 @@ order, its queued Delivery before its Run. A Run whose Decision already sealed
 carries on, and a cancellation drained after the whole Decision sealed does
 nothing and writes no record, since a Message Layer Host learns of the seal
 only from the Pump's reports; `, replacing` cancels through the same path. Where the cancel lands, a
-preempted Run, in the middle of its Segment, has its scopes abandoned and its
-Segment and participant rolled back, and its cleanup becomes a Segment of its
-own. Every cancelled Run's pending calls and Join Members are abandoned, and
+preempted Run, in the middle of its Segment, abandons the scopes on its
+participating Grants and rolls back that participant and its Script Variables.
+Its cleanup becomes a Segment of its own; unrelated scopes remain until that
+cleanup ends. Every cancelled Run's pending calls and Join Members are abandoned, and
 named in `abandon` records after its first cleanup Stretch. This includes a
 suspending Call cancelled at its starting callback, before any suspension
 Segment commits. Its `finally` blocks run once, innermost first, in its Script's turn, a queued Run keeping
