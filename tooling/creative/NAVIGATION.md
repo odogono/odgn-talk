@@ -14,6 +14,11 @@ List files with `rg --files tooling/creative` before opening one by name.
   Folio, the editor, the Tooling stack and the TS Core.
   `bun run --cwd tooling/creative start` builds once, minified, and never
   rebuilds. `bun run --cwd tooling/creative build` writes `dist/` only.
+- JSX: [tsconfig.json](tsconfig.json) uses Preact's automatic JSX runtime
+  for `.tsx` components. Both [build.ts](tools/build.ts) and
+  [build-browser-tests.ts](tools/build-browser-tests.ts) bundle imported
+  components with `Bun.build`. The root ESLint and Prettier checks include
+  `.tsx` files.
 - Unit tests: `bun test tooling/editor/tests tooling/creative/tests`. They
   never run `*.browser.ts`.
 - Typecheck: `bun run --cwd tooling/creative typecheck`.
@@ -198,6 +203,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [stack.ts](src/stack.ts): the Page on the desk, Tools and Info windows, the
   Pages strip, Page resizing; [main.ts](src/main.ts) boots the page.
+- [project-title.tsx](src/project-title.tsx): the Preact Project title,
+  observing the editor signal independently of the shell redraw.
 - [text-editor.ts](src/text-editor.ts) over [rich-text.ts](src/rich-text.ts)
   and [rich-text-dom.ts](src/rich-text-dom.ts): in-place text editing.
 - [examples/index.ts](src/examples/index.ts): the Example Projects listed in
@@ -205,6 +212,7 @@ List files with `rg --files tooling/creative` before opening one by name.
   builds The Lighthouse Mystery and [examples/tetris.ts](src/examples/tetris.ts)
   builds Tetris.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
+  [project-title.browser.ts](tests/project-title.browser.ts),
   [examples.test.ts](tests/examples.test.ts),
   [lighthouse.test.ts](tests/lighthouse.test.ts),
   [tetris.test.ts](tests/tetris.test.ts),

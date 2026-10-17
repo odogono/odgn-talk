@@ -16,10 +16,10 @@ export default [
   },
   ...nkzw.map(config => ({
     ...config,
-    files: config.files ?? ['**/*.ts', 'eslint.config.js'],
+    files: config.files ?? ['**/*.{ts,tsx}', 'eslint.config.js'],
   })),
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       globals: { Bun: 'readonly' },
     },

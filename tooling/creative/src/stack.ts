@@ -46,6 +46,7 @@ import { commandForKey, type EditingCommand } from './shortcuts';
 import { type Attributes, byId, h } from './dom';
 import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
+import { mountProjectTitle } from './project-title';
 
 const KIND_NAMES: Record<ElementKind, string> = {
   text: 'Text',
@@ -339,6 +340,7 @@ export const mountStack = (
   options: { readOnly?: boolean } = {},
 ): StackShell => {
   const editor = new StackEditor(initialProject);
+  const unmountTitle = mountProjectTitle(byId('project-title'), editor);
   const redrawVersion = signal(0);
   const redrawListeners = new Set<() => void>();
   const images = new ImageAssets();
@@ -346,6 +348,7 @@ export const mountStack = (
   window.addEventListener('pagehide', event => {
     stopPreview();
     if (!event.persisted) {
+      unmountTitle();
       images.dispose();
     }
   });
@@ -842,7 +845,6 @@ export const mountStack = (
     ) {
       closeText();
     }
-    byId('project-title').textContent = editor.project.name;
     pageNode.classList.toggle('edit', !editor.readOnly);
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
@@ -939,7 +941,6 @@ export const mountStack = (
     }
     drawCommands();
     if (live) {
-      byId('project-title').textContent = editor.project.name;
       drawPage();
       drawStrip();
     } else {
