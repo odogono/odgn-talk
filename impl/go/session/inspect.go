@@ -32,7 +32,8 @@ func (h *Host) inspectExpression(source string) []string {
 	return out
 }
 func (h *Host) readProperties(x talk.Value) []string {
-	ids := readerIdentifier.FindAllString(analysis.Catalogue().InspectReader, -1)
+	reader := analysis.Catalogue().InspectReader
+	ids := readerIdentifier.FindAllString(reader, -1)
 	n := h.lastEntry + 1
 	for {
 		free := true
@@ -49,7 +50,7 @@ func (h *Host) readProperties(x talk.Value) []string {
 		n++
 	}
 	name := fmt.Sprintf("entry%d", n)
-	source := readerIdentifier.ReplaceAllStringFunc(analysis.Catalogue().InspectReader, func(id string) string { return strings.Replace(id, "entry0", name, 1) })
+	source := readerIdentifier.ReplaceAllStringFunc(reader, func(id string) string { return strings.Replace(id, "entry0", name, 1) })
 	if err := h.script.Extend(source); err != nil {
 		return h.refused(err, placement{}, 0)
 	}

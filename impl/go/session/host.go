@@ -209,7 +209,8 @@ func (h *Host) Input(source string) []string {
 		} else if !documentable(entry) {
 			out = []string{"! bad arguments"}
 		} else if entry.Kind == "declaration" {
-			out = h.declare(describe(s, entry.Declarations[0]), entry.Declarations[0])
+			d := entry.Declarations[0]
+			out = h.declare(describe(s, d), d)
 		} else if entry.Kind != "empty" {
 			_, out = h.run(s, entry.Kind == "expression", entry)
 		}

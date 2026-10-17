@@ -54,15 +54,18 @@ func Source(source string) ([]Declaration, error) {
 		if i+1 < len(tree.Declarations) {
 			limit = tree.Declarations[i+1].Token.Start
 		}
+		at := sort.Search(len(tree.Tokens), func(i int) bool { return tree.Tokens[i].Start >= n.Token.Start })
 		end := n.Token.End
-		for _, t := range tree.Tokens {
-			if t.Start >= n.Token.Start && t.Start < limit && t.Kind != syntax.LineBreak && t.Kind != syntax.EOF {
+		for _, t := range tree.Tokens[at:] {
+			if t.Start >= limit {
+				break
+			}
+			if t.Kind != syntax.LineBreak && t.Kind != syntax.EOF {
 				end = max(end, t.End)
 			}
 		}
 		head := n.NameToken.End
 		if n.Kind == "function" || n.Kind == "handler" || n.Kind == "use" {
-			at := sort.Search(len(tree.Tokens), func(i int) bool { return tree.Tokens[i].Start >= n.Token.Start })
 			for k := at; k < len(tree.Tokens) && tree.Tokens[k].Kind != syntax.LineBreak && tree.Tokens[k].Kind != syntax.EOF; k++ {
 				head = tree.Tokens[k].End
 			}

@@ -272,14 +272,11 @@ func (h *Host) apropos(rest string) []string {
 	for _, b := range analysis.Catalogue().Builtins {
 		add(found{target: target{name: b.Name, origin: "builtin"}, origin: "builtin", available: !h.has(b.Name), docs: builtinDeclared(b.Name)})
 	}
-	libraries := slices.Sorted(func(yield func(string) bool) {
-		for _, l := range analysis.Catalogue().Libraries {
-			name := l.Name
-			if !yield(name) {
-				return
-			}
-		}
-	})
+	var libraries []string
+	for _, l := range analysis.Catalogue().Libraries {
+		libraries = append(libraries, l.Name)
+	}
+	slices.Sort(libraries)
 	libraries = append(libraries, h.libraryOrder...)
 	for _, library := range libraries {
 		for _, name := range h.libraryExports(library) {
