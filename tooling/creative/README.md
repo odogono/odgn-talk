@@ -532,15 +532,20 @@ Page; sounds the Project Script started keep playing (see [Sounds](#sounds)).
 
 ### Dynamic Elements
 
-Computed-name and numbered `element ... of thisPage` references and
-`the number of elements of thisPage` are
-[specified](../../spec/embedding/object-elements.md), but Folio doesn't
-declare a Page collection yet. Use the existing load-time names or `elements.find` below
-for now.
+A Script can reach a Page's Elements by computed name or position, and
+count them, without a Grant:
+
+```talk
+set the fill of element ("cell_" & r & "_" & c) of thisPage to "red"
+put the number of elements of thisPage into n
+put the last element of thisPage into frontmost
+```
+
+A missing name or position gives Nothing.
 
 #### Element references
 
-This is Folio's target policy for the
+This is Folio's policy for the
 [Object Collection](../../spec/embedding/object-elements.md).
 Folio declares the collection only on `page`. It contains all live Elements
 on that Page, including hidden Elements and Elements with no Script, in
@@ -570,9 +575,8 @@ The `elements` Grant remains available and independent: `create`, `clone`
 and `delete` still mutate through it, and `find` keeps its existing missing-name
 error. Static load-time Element bindings still catch misspellings and keep
 their existing lifetime. Computed references resolve against current Play
-State each time; they do not add new bindings. Tetris can paint a computed
-cell directly and remove its `findCells` startup cache, subject to measured
-Pump/Fuel performance in implementation.
+State each time; they do not add new bindings. Tetris paints each computed
+cell directly, with no startup cache of cell handles.
 
 Every Script can use `elements` during Play:
 

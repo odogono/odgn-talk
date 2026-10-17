@@ -60,9 +60,7 @@ constant boxSizes = [4, 2, 3, 3, 3, 3, 3]
 constant linePoints = [100, 300, 500, 800]
 
 script variable board = []
-script variable cells = []
 script variable shown = []
-script variable previewCells = []
 script variable kind = 0
 script variable squares = []
 script variable pieceTop = 0
@@ -77,31 +75,8 @@ script variable playing = false
 script variable changed = false
 
 on openPage
-  findCells
   restart
 end openPage
-
--- Look up every rectangle once, so painting can reach them by position.
-on findCells
-  put [] into cells
-  repeat for each r in 1..rows
-    put [] into row
-    repeat for each c in 1..columns
-      ask elements to find "cell_" & r & "_" & c, thisPage
-      put it into item c of row
-    end repeat
-    put row into item r of cells
-  end repeat
-  put [] into previewCells
-  repeat for each r in 1..4
-    put [] into row
-    repeat for each c in 1..4
-      ask elements to find "next_" & r & "_" & c, thisPage
-      put it into item c of row
-    end repeat
-    put row into item r of previewCells
-  end repeat
-end findCells
 
 -- A list of lists, height rows by width columns, all holding value.
 on grid height, width, value
@@ -341,7 +316,7 @@ on paint
     repeat for each c in 1..columns
       put colourOf(item c of item r of view) into colour
       if colour is not item c of item r of shown then
-        set the fill of item c of item r of cells to colour
+        set the fill of element ("cell_" & r & "_" & c) of thisPage to colour
         put colour into item c of item r of shown
       end if
     end repeat
@@ -351,11 +326,11 @@ end paint
 on showPreview
   repeat for each r in 1..4
     repeat for each c in 1..4
-      set the fill of item c of item r of previewCells to emptyColour
+      set the fill of element ("next_" & r & "_" & c) of thisPage to emptyColour
     end repeat
   end repeat
   repeat for each [r, c] in item nextKind of shapes
-    set the fill of item c of item r of previewCells to item nextKind of colours
+    set the fill of element ("next_" & r & "_" & c) of thisPage to item nextKind of colours
   end repeat
 end showPreview
 

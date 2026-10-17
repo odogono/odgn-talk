@@ -19,6 +19,7 @@ import {
   type Group,
   type HostObject,
   type ReleaseHook,
+  type ObjectElements,
   type ObjectKind,
   type PropDef,
   type Value,
@@ -139,6 +140,26 @@ export class PlaySession {
   // Each `frame` Script's last delivery time, and whether its Run is pending.
   #frames = new Map<string, { busy: boolean; last: bigint | undefined }>();
   #pendingClones: Element[] = [];
+  // Each Page's Elements by name, for `element "x" of aPage` and the
+  // `elements` Grant's `find`; kept in step with create, clone and delete.
+  #names = new Map<Page, Map<string, Element>>();
+  // The Page Object Collection (#1143): every live Element in z-order.
+  #pageElements: ObjectElements<ScriptOwner> = {
+    shape: elementShape,
+    count: ({ native }) => num((native as Page).elements.length),
+    at: ({ native }, index) => {
+      const { elements } = native as Page;
+      const element = elements[index > 0 ? index - 1 : elements.length + index];
+      return element ? this.objects.get(element)!.value : nothing;
+    },
+    find: ({ native }, name) => {
+      const element = this.#names.get(native as Page)!.get(name);
+      return element ? this.objects.get(element)!.value : nothing;
+    },
+    countCost: { fuel: 1, alloc: 0 },
+    atCost: { fuel: 1, alloc: 0 },
+    findCost: { fuel: 1, alloc: 0 },
+  };
   #elements = defineCapability('elements', {
     create: {
       mode: 'immediate',
@@ -189,6 +210,7 @@ export class PlaySession {
       fire: (_call, value) => {
         const { page, element } = this.#element(value!);
         page.elements.splice(page.elements.indexOf(element), 1);
+        this.#names.get(page)!.delete(element.name);
         for (const [name, owner] of this.owners) {
           if (owner === element) {
             this.sounds.stopOwner(name);
@@ -207,7 +229,7 @@ export class PlaySession {
       cost: { fuel: 1 },
       do: (_call, name, value) => {
         const page = this.#elementPage(value!);
-        const element = page.elements.find(e => e.name === name!.asText());
+        const element = this.#names.get(page)!.get(name!.asText()!);
         if (!element) {
           throw new ScriptError('out of domain', 'Element not found');
         }
@@ -247,6 +269,7 @@ export class PlaySession {
     this.objects.set(element, object);
     this.authored.set(element, this.authored.get(page)!);
     page.elements.push(element);
+    this.#names.get(page)!.set(element.name, element);
     this.group.setParent(object, this.objects.get(page)!);
     this.changed = true;
     return object;
@@ -548,7 +571,11 @@ export class PlaySession {
         }
         return [
           def.name,
-          defineObjectKind<ScriptOwner>({ name: def.name, props }),
+          defineObjectKind<ScriptOwner>({
+            name: def.name,
+            props,
+            ...(def.name === 'page' ? { elements: this.#pageElements } : {}),
+          }),
         ];
       }),
     );
@@ -566,6 +593,7 @@ export class PlaySession {
       );
     }
     for (const page of this.project.pages) {
+      this.#names.set(page, new Map(page.elements.map(e => [e.name, e])));
       this.group.setParent(
         this.objects.get(page)!,
         this.objects.get(this.project)!,
@@ -774,6 +802,11 @@ export class PlaySession {
 
   get page() {
     return this.project.pages[this.pageIndex]!;
+  }
+
+  /** The Object Kind this session declared under `name`. */
+  objectKind(name: string): ObjectKind<ScriptOwner> | undefined {
+    return this.#kinds.get(name);
   }
 
   /** Whether a message sent to `owner` meets a Handler on its Message Path. */
