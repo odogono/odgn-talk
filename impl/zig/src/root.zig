@@ -9,6 +9,7 @@ pub const display = @import("display.zig");
 pub const encoding = @import("encoding.zig");
 pub const syntax = @import("syntax/syntax.zig");
 pub const check = @import("check/check.zig");
+pub const analysis = @import("analysis.zig");
 pub const lower = @import("lower/lower.zig");
 pub const machine = @import("machine/machine.zig");
 pub const corpus_trace = @import("corpus/trace.zig");
@@ -54,6 +55,7 @@ test {
     _ = encoding;
     _ = syntax;
     _ = check;
+    _ = analysis;
     _ = lower;
     _ = machine;
     _ = @import("machine/chunks.zig");

@@ -21,6 +21,7 @@ const talk = @import("talk.zig");
 const standard = @import("machine/standard.zig");
 const sqlite = @import("machine/sqlite.zig");
 const generated_diagnostics = @import("generated/diagnostics.zig");
+const analysis = @import("analysis.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -284,6 +285,8 @@ pub const Session = struct {
     climb: bool = false,
     /// `function-gone-v1`: a Pump reply lists stale Function Value calls.
     gone: bool = false,
+    /// `analysis-v1`: the language analysis exchanges are open.
+    analysis: bool = false,
     reply_error: bool = false,
     release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
@@ -2018,7 +2021,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -2045,6 +2048,176 @@ fn kindName(v: *const Value) []const u8 {
 
 /// `add`: the `+` rules outside a Run. A failure is `fail` inside `ok`;
 /// a value that does not decode is a host error.
+// ------------------------------------------------------------ analysis-v1
+
+/// Text names a frame lists, or an empty list for an absent field.
+fn textNames(a: Allocator, j: ?Json) error{ OutOfMemory, InvalidValue }![]const []const u8 {
+    const v = j orelse return &.{};
+    if (v != .array) return error.InvalidValue;
+    const out = try a.alloc([]const u8, v.array.items.len);
+    for (v.array.items, out) |x, *name| name.* = asText(x) orelse return error.InvalidValue;
+    return out;
+}
+
+fn writeProblem(o: *Out, p: analysis.Problem) Allocator.Error!void {
+    try o.raw("{\"code\":");
+    try o.text(p.code);
+    try o.raw(",\"line\":");
+    try o.int(p.line);
+    try o.raw(",\"col\":");
+    try o.int(p.column);
+    try o.raw(if (p.incomplete) ",\"incomplete\":true" else ",\"incomplete\":false");
+    try o.raw(if (p.trailing) ",\"trailing\":true}" else ",\"trailing\":false}");
+}
+
+fn writeDeclarations(o: *Out, ds: []const analysis.Declared) Allocator.Error!void {
+    try o.raw("[");
+    for (ds, 0..) |d, i| {
+        if (i > 0) try o.raw(",");
+        try o.raw("{\"kind\":");
+        try o.text(d.kind);
+        try o.raw(",\"name\":");
+        try o.text(d.name);
+        if (d.word) |x| {
+            try o.raw(",\"word\":");
+            try o.text(x);
+        }
+        try o.raw(if (d.private) ",\"private\":true" else ",\"private\":false");
+        try o.raw(",\"span\":{\"start\":");
+        try o.int(d.start);
+        try o.raw(",\"end\":");
+        try o.int(d.end);
+        try o.raw(",\"line\":");
+        try o.int(d.line);
+        try o.raw(",\"endLine\":");
+        try o.int(d.end_line);
+        try o.raw("},\"signature\":");
+        try o.text(d.signature);
+        try o.raw(",\"doc\":");
+        try o.text(d.doc);
+        if (d.arity) |x| {
+            try o.raw(",\"arity\":[");
+            try o.int(x[0]);
+            try o.raw(",");
+            try o.int(x[1]);
+            try o.raw("]");
+        }
+        if (d.initializer) |x| {
+            try o.raw(",\"initializer\":");
+            try o.text(x);
+        }
+        if (std.mem.eql(u8, d.kind, "use")) {
+            try o.raw(",\"imports\":[");
+            for (d.imports, 0..) |u, j| {
+                if (j > 0) try o.raw(",");
+                try o.raw("{\"name\":");
+                try o.text(u.name);
+                try o.raw(",\"local\":");
+                try o.text(u.local);
+                try o.raw("}");
+            }
+            try o.raw("]");
+        }
+        try o.raw("}");
+    }
+    try o.raw("]");
+}
+
+fn analyzeEntryReply(s: *Session, msg: Json, ref: i64) []u8 {
+    var arena: std.heap.ArenaAllocator = .init(s.gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const handlers = textNames(a, field(msg, "handlers")) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    const bound = textNames(a, field(msg, "bound")) catch |e| return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
+    const e = analysis.entry(a, source, handlers, bound) catch return hostError(s.gpa, ref, .out_of_memory);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    writeEntry(&o, ref, e) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
+fn writeEntry(o: *Out, ref: i64, e: analysis.Entry) Allocator.Error!void {
+    try beginOk(o, ref);
+    try o.raw("\"kind\":");
+    try o.text(@tagName(e.kind));
+    try o.raw(",\"doc\":");
+    try o.text(@tagName(e.doc));
+    if (e.problem) |p| {
+        try o.raw(",\"problem\":");
+        try writeProblem(o, p);
+    }
+    try o.raw(",\"declarations\":");
+    try writeDeclarations(o, e.declarations);
+    try o.raw(",\"implicit\":");
+    try textList(o, e.implicit);
+}
+
+fn analyzeSourceReply(s: *Session, msg: Json, ref: i64) []u8 {
+    var arena: std.heap.ArenaAllocator = .init(s.gpa);
+    defer arena.deinit();
+    const source = asText(field(msg, "source")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const r = analysis.declarations(arena.allocator(), source) catch return hostError(s.gpa, ref, .out_of_memory);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    switch (r) {
+        .declarations => |ds| {
+            o.raw("\"declarations\":") catch return oomReply();
+            writeDeclarations(&o, ds) catch return oomReply();
+        },
+        .problem => |p| {
+            o.raw("\"problem\":") catch return oomReply();
+            writeProblem(&o, p) catch return oomReply();
+        },
+    }
+    return finishOk(s, &o, null);
+}
+
+fn analysisCatalogueReply(s: *Session, ref: i64) []u8 {
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    writeCatalogue(&o, ref) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
+fn writeCatalogue(o: *Out, ref: i64) Allocator.Error!void {
+    try beginOk(o, ref);
+    try o.raw("\"builtins\":[");
+    for (analysis.builtins, 0..) |b, i| {
+        if (i > 0) try o.raw(",");
+        try o.raw("{\"name\":");
+        try o.text(b.name);
+        try o.raw(",\"call\":");
+        try o.text(b.call);
+        try o.raw(",\"gives\":");
+        try o.text(b.gives);
+        try o.raw("}");
+    }
+    try o.raw("],\"libraries\":[");
+    for (analysis.libraries, 0..) |l, i| {
+        if (i > 0) try o.raw(",");
+        try o.raw("{\"name\":");
+        try o.text(l.name);
+        try o.raw(",\"source\":");
+        try o.text(l.source);
+        try o.raw("}");
+    }
+    try o.raw("],\"inspectReader\":");
+    try o.text(analysis.inspect_reader);
+}
+
+fn messageNameReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const arity = asInt(field(msg, "arity")) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (arity < 0) return hostError(s.gpa, ref, .invalid_value);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw(if (analysis.validMessageName(name, @intCast(arity))) "\"valid\":true" else "\"valid\":false") catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 fn addReply(s: *Session, msg: Json, ref: i64) []u8 {
     const gpa = s.gpa;
     const aj = field(msg, "a") orelse return hostError(gpa, ref, .invalid_value);
@@ -3810,6 +3983,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var climb = s.climb;
             var gone = s.gone;
             var inline_inputs = s.inline_inputs;
+            var analyses = s.analysis;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -3820,6 +3994,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     climb = true;
                 } else if (std.mem.eql(u8, name, "function-gone-v1")) {
                     gone = true;
+                } else if (std.mem.eql(u8, name, "analysis-v1")) {
+                    analyses = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
@@ -3831,10 +4007,19 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.climb = climb;
             s.gone = gone;
             s.inline_inputs = inline_inputs;
+            s.analysis = analyses;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
         return addReply(s, msg, ref);
+    } else if (s.analysis and std.mem.eql(u8, m, "analyze-entry")) {
+        return analyzeEntryReply(s, msg, ref);
+    } else if (s.analysis and std.mem.eql(u8, m, "analyze-source")) {
+        return analyzeSourceReply(s, msg, ref);
+    } else if (s.analysis and std.mem.eql(u8, m, "analysis-catalogue")) {
+        return analysisCatalogueReply(s, ref);
+    } else if (s.analysis and std.mem.eql(u8, m, "message-name")) {
+        return messageNameReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "define-capability")) {
         return defineCapabilityReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "grant")) {
@@ -5831,4 +6016,35 @@ test "inline input admission observes complete records before the producer advan
     const late = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"late\",\"source\":\"\",\"refuseWorker\":true}}", .{6});
     try std.testing.expectEqualStrings("reentrant call", late.object.get("err").?.object.get("code").?.string);
     try std.testing.expect(Direct.groupScript(s.groupNamed("g").?.group, "late", 4) == null);
+}
+
+test "analysis-v1 serves Session language analysis after opt-in" {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    // Closed until the Host asks for it.
+    try t.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"1\"}}", .{0})));
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"analysis-v1\"]}}", .{1}));
+    const put = try okOf(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"greet total\",\"handlers\":[\"greet\"],\"bound\":[]}}", .{2}));
+    try t.expectEqualStrings("statement", put.object.get("kind").?.string);
+    try t.expectEqualStrings("none", put.object.get("doc").?.string);
+    const roots = try okOf(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"put 1 into total\",\"bound\":[\"count\"]}}", .{3}));
+    try t.expectEqualStrings("total", roots.object.get("implicit").?.array.items[0].string);
+    const open = try okOf(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"--| Doubles.\\nfunction double x\"}}", .{4}));
+    try t.expectEqualStrings("attached", open.object.get("doc").?.string);
+    try t.expect(open.object.get("problem").?.object.get("incomplete").?.bool);
+    const decls = try okOf(try c.send("{{\"m\":\"analyze-source\",\"ref\":{d},\"source\":\"--| Doubles.\\nfunction double x\\n  return x * 2\\nend double\\n\"}}", .{5}));
+    const d = decls.object.get("declarations").?.array.items[0].object;
+    try t.expectEqualStrings("function double x", d.get("signature").?.string);
+    try t.expectEqualStrings("Doubles.", d.get("doc").?.string);
+    try t.expectEqual(@as(i64, 4), d.get("span").?.object.get("endLine").?.integer);
+    const catalogue = try okOf(try c.send("{{\"m\":\"analysis-catalogue\",\"ref\":{d}}}", .{6}));
+    try t.expect(catalogue.object.get("builtins").?.array.items.len > 0);
+    try t.expect(catalogue.object.get("libraries").?.array.items.len > 0);
+    try t.expect(std.mem.indexOf(u8, catalogue.object.get("inspectReader").?.string, "entry0") != null);
+    const named = try okOf(try c.send("{{\"m\":\"message-name\",\"ref\":{d},\"name\":\"move:to:\",\"arity\":2}}", .{7}));
+    try t.expect(named.object.get("valid").?.bool);
+    try t.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"1\",\"bound\":[1]}}", .{8})));
 }

@@ -134,7 +134,7 @@ it; cached reruns print nothing, so save the first `zig build test 2>&1` to a fi
 
 ## The Session Host, the REPL and Session Transcripts
 
-- Implementation: [Session Host](src/session/session.zig), [Transcripts](src/session/transcript.zig), [REPL](src/repl/main.zig), [Transcript cases](src/corpus/session_case.zig)
+- Implementation: [Session Host](src/session/session.zig), [language analysis](src/analysis.zig) (also the Message Layer's `analysis-v1`), [Transcripts](src/session/transcript.zig), [REPL](src/repl/main.zig), [Transcript cases](src/corpus/session_case.zig)
 - Rules: [chapter 12](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md), [`session.toml`](../../spec/data/session.toml)
 - Tests and cases: `corpus/sessions/`
 - First check: `cd impl/zig && zig build corpus -- sessions`

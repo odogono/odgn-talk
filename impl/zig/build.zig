@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) void {
     });
     // Lets the tests hold talk.zig's enums to talk.h's.
     core.addAnonymousImport("talk.h", .{ .root_source_file = b.path("include/talk.h") });
+    // The normative `:inspect` reader, from the Spec, which the Session
+    // Host and the Message Layer's `analysis-v1` share.
+    core.addAnonymousImport("inspect-reader", .{ .root_source_file = b.path("../../spec/session/inspect-reader.talk") });
 
     if (target.result.os.tag == .wasi) {
         // A WASI reactor: no `_start`, and the `talk_*` exports kept. It
@@ -76,8 +79,6 @@ pub fn build(b: *std.Build) void {
     });
     session_module.addImport("northtalk", core);
     session_module.addImport("talk-c", c_module);
-    // The normative `:inspect` reader, from the Spec.
-    session_module.addAnonymousImport("inspect-reader", .{ .root_source_file = b.path("../../spec/session/inspect-reader.talk") });
     corpus_module.addImport("session", session_module);
     const corpus = b.addExecutable(.{ .name = "talk-corpus", .root_module = corpus_module });
     const run_corpus = b.addRunArtifact(corpus);
