@@ -41,6 +41,22 @@ defmodule NorthTalk.OwnerTest do
     assert fuel > 0
   end
 
+  test "random draws from the Group's seed", %{owner: owner} do
+    source = "on roll\n  return [random(6), random(6), random(6)]\nend roll\n"
+
+    roll = fn seed ->
+      group = NorthTalk.new_group!(owner, "dice-#{System.unique_integer([:positive])}", seed: seed)
+      "dice" = NorthTalk.load!(group, "dice", source, [])
+      {:ok, %Result{value: value}} = NorthTalk.request(group, "dice", "roll")
+      value
+    end
+
+    assert roll.(42) == [3, 6, 4]
+    assert roll.(0) == [1, 6, 1]
+    assert roll.(18_446_744_073_709_551_615) == roll.(18_446_744_073_709_551_615)
+    assert {:error, %HostError{code: "invalid value"}} = NorthTalk.new_group(owner, "bad", seed: -1)
+  end
+
   test "a Run that errors is a ScriptError", %{group: group} do
     assert {:error, %ScriptError{outcome: "errored", error: %{"code" => "division by zero"}}} =
              NorthTalk.request(group, "s", "boom")

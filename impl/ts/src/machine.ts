@@ -66,6 +66,7 @@ import {
   textForm,
   waitUs,
   wrongKind,
+  randomBound,
 } from './operations';
 import { readDisplay } from './readers';
 import { validComputedMessageName } from './selectors';
@@ -4111,7 +4112,8 @@ export class Run {
       case Op.CallBuiltin:
         return (
           ins.operands[0] === 'isDisposed' ||
-          ins.operands[0] === 'offerAvailable'
+          ins.operands[0] === 'offerAvailable' ||
+          ins.operands[0] === 'random'
         );
       case Op.GetKey:
       case Op.GetKeyComputed:
@@ -5027,6 +5029,14 @@ export class Run {
           frame.stack.length -= n;
           frame.stack.push(bool(!!('offer' in found && found.offer)));
           frame.pc++;
+          return;
+        }
+        if (a === 'random') {
+          // The draw is kept only once its Fuel is paid.
+          const draw = this.host!.group.drawRandom(randomBound(args[0]!));
+          m.result = integerValue(draw.value);
+          this.replace(n, rate);
+          draw.commit();
           return;
         }
         const out = builtin(a as string, args, m);

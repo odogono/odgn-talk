@@ -602,6 +602,11 @@ pub const costs: CostsTable = .{
             .alloc = "size(result)",
         },
         .{
+            .key = "builtin.random",
+            .fuel = "4",
+            .alloc = "size(result)",
+        },
+        .{
             .key = "builtin.fromFloat64",
             .fuel = "8",
             .alloc = "size(result)",

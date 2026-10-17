@@ -94,6 +94,7 @@ type Run struct {
 	// `wait` or `wait for`, raised when the Run resumes (ADR 0073).
 	Expired        *value.Value
 	ClockNS        *big.Int // Group Clock; nil for standalone execution
+	Random         *uint64  // the Group's `random` generator; nil for standalone execution
 	PolicyDispatch bool     // a Delivery's entry clause, not a local Handler call
 	Vetoed         bool
 	Passed         bool

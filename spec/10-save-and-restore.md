@@ -30,7 +30,7 @@ A Session Host saves its observation state alongside the Group: filters, latched
 
 A save holds all of [the machine's state](08-the-abstract-machine-and-the-cost-model.md#the-machines-state), as plain data:
 
-- **The Group:** its name, its Scripts in load order, the identity of each of its Libraries, the last Clock reading, and the counters that assign delivery ids, Broadcast ids, run ids, call ids and Trace save ids.
+- **The Group:** its name, its Scripts in load order, the identity of each of its Libraries, the last Clock reading, the state of its [`random` generator](07-libraries-and-the-standard-library.md#random-numbers), and the counters that assign delivery ids, Broadcast ids, run ids, call ids and Trace save ids.
 - **The input queue:** every Host Input queued since the last Pump, in call order, with the delivery id each was given. A Host Input only a Host function could make, such as `Answer` from one, is saved like any other.
 - **Each Broadcast in progress:** its id, its recipients, and for a Broadcast Decision, which recipients have sealed and the vetoes so far ([chapter 5](05-handlers-messages-and-scheduling.md#decisions)).
 - **The versions:** the language version, the Cost Model version, the save-format version and the Group Fingerprint ([chapter 9](09-embedding.md#the-pump-and-the-group-fingerprint)).
@@ -156,7 +156,7 @@ A variables-only restore rebuilds each Script from its saved source and then eac
 - **Reported:** these lists are the report, as a `stop` report's are, so no discarded Run has a `run end`. The one exception is a Decision: the first Pump gives a `decided` report for each open Decision that was discarded or dropped, with each unsealed recipient undecided, `cancelled`, naming its Script and its Run if it had begun. A Broadcast keeps already sealed ballots and aggregates them by the ordinary Verdict rule; a dropped Broadcast not yet given recipients is undecided with empty lists. These deferred reports are saved if the Host saves again before the first Pump ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **Function Values** are kept, but they are stale: calling one raises `function gone` ([chapter 3](03-values.md#function-values)).
 - **Failing as a whole:** if any Script no longer loads, the restore fails with its `LoadError`. If any Script's carried-over Script Variables would exceed its Persistent State cap, the restore fails with the Host error `state too large`. Either way, nothing is made.
-- **Id counters** carry over, so no delivery id, run id or call id is reused.
+- **Id counters** carry over, so no delivery id, run id or call id is reused, and so does the `random` generator's state, so its draws go on where they were.
 - **The Clock** rule still applies, since the last Clock reading is kept.
 
 ## Reload and extend

@@ -113,6 +113,7 @@ import {
   Value,
 } from './values';
 import { compareText } from './text';
+import { nextRandom, seedState } from './random';
 import type { CodeUnit } from './code-unit';
 
 // Process-wide compiled code. Checks and initialisation still happen for every
@@ -126,6 +127,11 @@ export type GroupOptions = {
    * Inputs queued during a Pump notify in a microtask after it returns.
    */
   onReady?(): void;
+  /**
+   * Seeds the generator `random` draws from, a whole number 0 to 2^64 - 1;
+   * 0 when absent (chapter 7, Random numbers).
+   */
+  seed?: bigint;
   /** Receives each Trace line, without its LF. */
   trace?: (line: string) => void;
 };
@@ -692,6 +698,7 @@ export class Group {
   private broadcasts = 0;
   private saves = 0;
   private lastClock: bigint | null = null;
+  private randomState = seedState(0n);
   private pumping = false;
   private cleaning = false;
   private effectStateUnknown = false;
@@ -704,6 +711,20 @@ export class Group {
   private drainingTrace: string[] | null = null;
   private debugController: DebugController | null = null;
   private debugPump: Generator<DebugPause, PumpResult> | null = null;
+
+  /**
+   * The next `random(n)` draw from the Group's generator; `commit` advances
+   * the generator past it (chapter 7, Random numbers).
+   */
+  drawRandom(n: bigint): { commit(): void; value: bigint } {
+    const next = nextRandom(this.randomState, n);
+    return {
+      value: next.value,
+      commit: () => {
+        this.randomState = next.state;
+      },
+    };
+  }
 
   private ancestry(d: Delivery): RunAncestry {
     if (!d.ancestry) {
@@ -1007,6 +1028,7 @@ export class Group {
       broadcasts: this.broadcasts,
       timerSeq: this.timerSeq,
       lastClock: this.lastClock,
+      randomState: this.randomState,
       discardedDecisions: this.discardedDecisions,
     };
     const saved: SavedGroup = {
@@ -1295,6 +1317,7 @@ export class Group {
     group.deliveries = state.deliveries;
     group.broadcasts = state.broadcasts;
     group.lastClock = state.lastClock;
+    group.randomState = state.randomState;
     group.timerSeq = state.timerSeq;
     group.saves = Number(saved.id.slice(1));
     for (const [i, runtime] of state.scripts.entries()) {
@@ -2104,6 +2127,15 @@ export class Group {
   constructor(options: GroupOptions) {
     this.name = options.name;
     this.onReady = options.onReady;
+    if (options.seed !== undefined) {
+      if (options.seed < 0n || options.seed > 0xff_ff_ff_ff_ff_ff_ff_ffn) {
+        throw new HostError(
+          'invalid value',
+          'A seed is a whole number 0 to 2^64 - 1',
+        );
+      }
+      this.randomState = seedState(options.seed);
+    }
     this.trace = line => {
       if (this.drainingTrace) {
         this.drainingTrace.push(line);
@@ -5270,6 +5302,7 @@ type SavedState = {
   inputs: { action: InputAction; line?: string; urgent?: boolean }[];
   lastClock: bigint | null;
   pending: Map<string, Pending>;
+  randomState: bigint;
   scripts: SavedScriptState[];
   timers: Timer[];
   timerSeq: number;

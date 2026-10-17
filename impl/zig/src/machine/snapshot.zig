@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 8;
+pub const format_version: u32 = 9;
 
 pub const Error = error{
     InvalidSave,
@@ -933,6 +933,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.timers);
     try o.int(g.run_order);
     try o.int(g.charge_counter);
+    try o.int(g.random_state);
     try o.int(g.issued_calls.count());
     var issued: std.ArrayList([]const u8) = .empty;
     defer issued.deinit(gpa);
@@ -2192,6 +2193,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.timers = try i.int();
     g.run_order = try i.int();
     g.charge_counter = try i.int();
+    g.random_state = try i.wide();
     const issued_count = try i.count();
     for (0..issued_count) |_| {
         const id = try a.dupe(u8, try i.str());

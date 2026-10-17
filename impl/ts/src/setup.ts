@@ -87,6 +87,8 @@ export type Setup = {
     source: string;
     text?: string;
   }[];
+  /** The seed the Group's `random` generator starts from; 0 if absent. */
+  seed?: number | bigint;
   sessionObjects?: readonly TranscriptItem[];
   standard?: {
     capability: string;
@@ -261,7 +263,11 @@ export const buildSetupGroup = (
     withCoordinator?<T>(name: string | undefined, make: () => T): T;
   },
 ): SetupGroup => {
-  const group = newGroup({ name: options.name, trace: options.trace });
+  const group = newGroup({
+    name: options.name,
+    trace: options.trace,
+    ...(setup.seed === undefined ? {} : { seed: BigInt(setup.seed) }),
+  });
   const readSource =
     options.readSource ??
     ((file: string): string => {

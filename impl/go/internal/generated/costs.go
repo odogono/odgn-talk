@@ -603,6 +603,11 @@ var Costs = CostsTable{
 			Alloc: "size(result)",
 		},
 		CostsTableRateEntry{
+			Key:   "builtin.random",
+			Fuel:  "4",
+			Alloc: "size(result)",
+		},
+		CostsTableRateEntry{
 			Key:   "builtin.fromFloat64",
 			Fuel:  "8",
 			Alloc: "size(result)",

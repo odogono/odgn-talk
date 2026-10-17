@@ -159,6 +159,22 @@ const outOfDomain = (fn: string, value: Value) =>
   ]);
 
 const decOfValue = (v: Value): Dec => decimalParts(v.asDecimal()!);
+
+/**
+ * `random(n)`'s bound: a whole number 1 to 2^32, or `wrong kind` or
+ * `out of domain` (chapter 7, Random numbers).
+ */
+export const randomBound = (v: Value): bigint => {
+  if (v.kind !== 'number') {
+    throw wrongKind('number', v);
+  }
+  const d = decOfValue(v);
+  const n = isInteger(d) ? integerOf(d) : 0n;
+  if (n < 1n || n > 1n << 32n) {
+    throw outOfDomain('random', v);
+  }
+  return n;
+};
 // Arithmetic results already fit the limits, so they skip `dec`'s re-parse.
 export const numberValue = (d: Dec): Value =>
   withinLimits(d) ? canonicalNumber(d) : dec(formatDec(d));
