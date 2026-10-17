@@ -10,6 +10,8 @@ import {
   MIN_PAGE_WIDTH,
   MIN_PAGE_HEIGHT,
   labelSuggestion,
+  pageOf,
+  selectedOf,
   StackEditor,
   type Edit,
   type Gesture,
@@ -338,16 +340,7 @@ export const mountStack = (
 ): StackShell => {
   const editor = new StackEditor(initialProject);
   const redrawVersion = signal(0);
-  /** Runs `listener` after every state, history, read-only or forced change. */
-  const onRedraw = (listener: () => void) =>
-    effect(() => {
-      void editor.state.value;
-      void editor.canUndo;
-      void editor.canRedo;
-      void editor.readOnly;
-      void redrawVersion.value;
-      untracked(listener);
-    });
+  const redrawListeners = new Set<() => void>();
   const images = new ImageAssets();
   const scripts = new ScriptWindows(editor, () => draw());
   window.addEventListener('pagehide', event => {
@@ -865,6 +858,9 @@ export const mountStack = (
     drawCommands();
     drawTextControls();
     scripts.sync();
+    for (const listener of redrawListeners) {
+      listener();
+    }
   };
 
   /** Applies an edit, forgetting any refused name, then redraws. */
@@ -906,11 +902,9 @@ export const mountStack = (
           : target.value;
     fieldEdit ??= editor.startEdit();
     fieldEdit.change(draft => {
-      const project = draft.project;
-      const page = project.pages[draft.pageIndex]!;
-      const [element] = page.elements.filter(e =>
-        draft.selection.includes(e.name),
-      );
+      const { project } = draft;
+      const page = pageOf(draft);
+      const [element] = selectedOf(draft);
       if (element && editor.selection.length === 1) {
         if (key === 'text' && element.kind === 'text') {
           if (textOf(element) !== value) {
@@ -1503,7 +1497,15 @@ export const mountStack = (
   new ResizeObserver(fit).observe(desk);
   mountWindows();
   floatWindows();
-  onRedraw(drawNow);
+  // The one redraw effect: every state, history, read-only or forced change.
+  effect(() => {
+    void editor.state.value;
+    void editor.canUndo;
+    void editor.canRedo;
+    void editor.readOnly;
+    void redrawVersion.value;
+    untracked(drawNow);
+  });
   return {
     editor,
     images,
@@ -1512,7 +1514,7 @@ export const mountStack = (
     },
     redraw: draw,
     onRedraw: listener => {
-      onRedraw(listener);
+      redrawListeners.add(listener);
     },
     openScript: (owner, line) => scripts.open(owner, line),
     setPlaying(mode) {

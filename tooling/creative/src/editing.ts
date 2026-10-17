@@ -197,8 +197,9 @@ export type EditorState = {
 };
 type Root = Immutable<EditorState>;
 type HistoryEntry = { after: Root; before: Root };
-const pageOf = (state: EditorState) => state.project.pages[state.pageIndex]!;
-const selectedOf = (state: EditorState) =>
+export const pageOf = (state: EditorState) =>
+  state.project.pages[state.pageIndex]!;
+export const selectedOf = (state: EditorState) =>
   pageOf(state).elements.filter(e => state.selection.includes(e.name));
 const elementOf = (state: EditorState, name: string) =>
   pageOf(state).elements.find(e => e.name === name);

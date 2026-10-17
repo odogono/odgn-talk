@@ -323,10 +323,16 @@ const withoutIds = <T extends Page | Element>(owner: Immutable<T>): T => {
 };
 
 /** An independent copy of a Project without the editor's session ids. */
-export const projectWithoutIds = (project: Immutable<Project>): Project => ({
-  ...castDraft(structuredClone(project)),
-  pages: project.pages.map(page => withoutIds<Page>(page)),
-});
+export const projectWithoutIds = (project: Immutable<Project>): Project => {
+  const copy = castDraft(structuredClone(project));
+  for (const page of copy.pages) {
+    delete page.id;
+    for (const element of page.elements) {
+      delete element.id;
+    }
+  }
+  return copy;
+};
 
 /**
  * An independent copy of an Element with a fresh name. Changing the copy
