@@ -711,9 +711,13 @@ Arrow keys move, Up and Z turn, Down drops faster and Space drops. Pieces
 come from a 7-bag. Gravity starts at one row a second and speeds up by 75 ms
 each level, down to 100 ms; the level rises every ten lines, and one to four
 lines score 100, 300, 500 or 800 times the level. There are no wall kicks,
-hold or ghost piece. Until `random` lands
-([#1111](https://github.com/odogono/odgn-talk/issues/1111)), the Script picks
-pieces with its own small generator, stirred by frame times.
+hold or ghost piece. Pieces come from `random`.
+
+It is dressed as a game on a colour Macintosh running System 7: a menu bar on
+a periwinkle desktop, a platinum window with a pinstriped title bar and close
+box, Chicago and Geneva type where the browser has them, pieces in the
+classic 16-colour palette, and a bomb alert for Game Over. All of it is
+ordinary rectangles, lines and text.
 
 Unit tests drive the game on an explicit clock through `frame` and `keyDown`:
 spawning, moving, turning, gravity, drops, a four-line clear, a level-up and
