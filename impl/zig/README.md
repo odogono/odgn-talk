@@ -371,6 +371,10 @@ before their following records, with pending Calls already cancelled. See the
 [inline contract](../../spec/embedding/inline-inputs.md) and the
 [Go adapter guide](../go/README.md#experimental-zig-backend) for acceptance and
 limitations. The ordinary sidecar retains its existing framing and timing.
+Hosts may opt in to `group-exchanges-v1` to host many Groups in one Session:
+the `Exchange` a Pump, Reload or library replacement pauses in is parked on its
+Group's entry while frames for another Group run, and `drop-group` frees an idle
+Group. See the [contract](../../spec/embedding/group-exchanges.md).
 The [contract](../../spec/embedding/paused-crossing-inputs.md#operation-trace-observation-at-a-paused-crossing)
 describes the supported boundary. Message Layer `answer.fuel` now reaches the
 settlement-cost API. A queued settlement remains tracked until consumed, so a
