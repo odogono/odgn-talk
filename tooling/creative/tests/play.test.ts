@@ -894,3 +894,24 @@ test('a seeded session repeats its random draws', () => {
   expect(roll(42n)).toBe('364');
   expect(roll()).toBe('161');
 });
+
+test('Scripts read and set textAlign, which keeps through plain text writes', () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = [
+    'on click',
+    ' set the label of me to the textAlign of text1',
+    ' set the textAlign of text1 to "center"',
+    ' set the text of text1 to "One"',
+    ' set the textAlign of text1 to "middle"',
+    'end click',
+  ].join('\n');
+  const play = new PlaySession(project);
+  play.send(play.page.elements[0]!, 'click');
+  drain(play);
+  expect(play.page.elements[0]).toHaveProperty('label', 'left');
+  const text = play.page.elements[1]!;
+  expect(text.kind === 'text' && text.richText).toEqual([
+    { align: 'center', runs: [{ text: 'One' }] },
+  ]);
+  expect(play.problems[0]).toMatchObject({ line: 5 });
+});

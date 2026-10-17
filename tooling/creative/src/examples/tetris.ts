@@ -9,6 +9,7 @@ import {
   DEFAULT_DESIGN_WIDTH,
   type Element,
   type Page,
+  type Paragraph,
   type TextElement,
 } from '../model';
 import { type ExampleContent } from './index';
@@ -410,7 +411,12 @@ const label = (
   left: number,
   top: number,
   width: number,
-  options: { bold?: boolean; font?: string; size?: number } = {},
+  options: {
+    align?: Paragraph['align'];
+    bold?: boolean;
+    font?: string;
+    size?: number;
+  } = {},
 ): TextElement => {
   const size = options.size ?? 12;
   return place(createElement('text', name) as TextElement, {
@@ -421,9 +427,10 @@ const label = (
     textSize: size,
     textColor: INK,
     font: options.font ?? CHICAGO,
-    richText: text
-      .split('\n')
-      .map(line => ({ runs: [{ text: line, bold: options.bold ?? false }] })),
+    richText: text.split('\n').map(line => ({
+      ...(options.align ? { align: options.align } : {}),
+      runs: [{ text: line, bold: options.bold ?? false }],
+    })),
   });
 };
 
@@ -489,10 +496,10 @@ const windowFrame = (title: string): Element[] => {
     label(
       'windowTitle',
       title,
-      WINDOW_LEFT + (WINDOW_WIDTH - titleWidth) / 2 + 8,
+      WINDOW_LEFT + (WINDOW_WIDTH - titleWidth) / 2,
       WINDOW_TOP + 1,
       titleWidth,
-      { size: 13, bold: true },
+      { size: 13, bold: true, align: 'center' },
     ),
     rule(
       'titleRule',

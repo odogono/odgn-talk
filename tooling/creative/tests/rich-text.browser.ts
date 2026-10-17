@@ -243,5 +243,65 @@ export const runBrowserTests = () => {
       toolbar.remove();
     }
   });
+  test('alignment is set from the toolbar and survives typing and paste', () => {
+    const element = createElement('text', 'aligned') as TextElement;
+    element.richText = richTextFromPlainText('one\ntwo');
+    const history = historyFor(element);
+    const node = document.createElement('div');
+    const toolbar = document
+      .querySelector('#text-toolbar')!
+      .cloneNode(true) as HTMLElement;
+    toolbar.removeAttribute('id');
+    document.body.append(node, toolbar);
+    renderRichText(node, history.element.richText);
+    const editor = new InPlaceTextEditor(
+      node,
+      toolbar,
+      history,
+      () => {},
+      () => {},
+      { selectAll: false },
+    );
+    const button = (align: string) =>
+      toolbar.querySelector<HTMLButtonElement>(
+        `[data-text-command="align-${align}"]`,
+      )!;
+    try {
+      selectTextRange(node, { start: 5, end: 5 });
+      document.dispatchEvent(new Event('selectionchange'));
+      equal(button('left').getAttribute('aria-pressed'), 'true');
+      button('center').click();
+      equal(
+        history.element.richText.map(p => p.align),
+        [undefined, 'center'],
+      );
+      equal(button('center').getAttribute('aria-pressed'), 'true');
+      equal((node.children[1] as HTMLElement).style.textAlign, 'center');
+      // Typing is read back from the DOM, which carries the alignment.
+      node.children[1]!.querySelector('span')!.textContent = 'twox';
+      node.dispatchEvent(new InputEvent('input'));
+      equal(history.element.richText[1], {
+        align: 'center',
+        runs: [{ text: 'twox' }],
+      });
+      equal(
+        readRichText(node).map(p => p.align),
+        [undefined, 'center'],
+      );
+      equal(
+        richTextFromHtml(
+          '<p style="text-align:right">a</p><p style="text-align:start">b</p>',
+        ),
+        [{ align: 'right', runs: [{ text: 'a' }] }, { runs: [{ text: 'b' }] }],
+      );
+      button('right').click();
+      history.undo();
+      equal(history.element.richText[1]!.align, 'center');
+    } finally {
+      editor.destroy();
+      node.remove();
+      toolbar.remove();
+    }
+  });
   return results;
 };

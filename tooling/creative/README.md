@@ -350,7 +350,10 @@ colour. Clicking an active mark
 removes it; **Clear** removes
 all selection marks so the Element's colour applies again. **Paragraph** inserts
 a paragraph break at the selection, as Enter does. Formatting requires a text
-selection. Font, size, whole-Element colour and **Reader can edit** remain in Info;
+selection, except alignment: the left, centre, right and justify buttons align
+every paragraph the selection or caret touches, and a new paragraph keeps the
+alignment of the one it was split from. Alignment belongs to each paragraph, so
+one Element can mix them; Info's **Alignment** sets every paragraph at once. Font, size, whole-Element colour and **Reader can edit** remain in Info;
 the reader flag allows rich-text input during Play Sessions (see [Play](#play)).
 
 **Done**, Escape, selecting another Element or changing Page finishes editing.
@@ -358,8 +361,9 @@ The toolbar's Undo and Redo, or ⌘/Ctrl-Z and ⌘/Ctrl-Shift-Z (also Ctrl-Y), a
 the Edit menu's: each text change or formatting step is one entry in the same
 history as every other authored edit.
 
-Pasting HTML keeps paragraphs, bold, italic, underline and text colours from
-semantic tags and inline styles. Links become text; images, scripts, embedded
+Pasting HTML keeps paragraphs, bold, italic, underline, text colours and
+paragraph alignment (`text-align` on a block) from semantic tags and inline
+styles. Links become text; images, scripts, embedded
 content, stylesheet/class formatting, fonts, sizes and backgrounds are dropped.
 Plain text paste keeps its paragraph breaks. Dragging external content into text
 is disabled. The authored model holds paragraphs of styled runs, and the Project
@@ -367,8 +371,12 @@ file round-trip preserves them; the editor never stores raw HTML.
 
 The model's `textOf(element)` reads paragraphs joined by newlines;
 `replacePlainText(element, text)` replaces them and clears mixed formatting,
-even when the plain text is unchanged. These are the plain-text operations the
-Play Host uses for `the text of`. Info's plain text field also
+even when the plain text is unchanged. It keeps each paragraph's alignment, and
+paragraphs it adds take the last one's, so a centred title stays centred when a
+Script writes it. These are the plain-text operations the
+Play Host uses for `the text of`. Scripts read and set alignment as
+`the textAlign of title`, one of `left`, `center`, `right` or `justify`:
+reading gives the first paragraph's, and setting aligns every paragraph. Info's plain text field also
 clears mixed formatting when its text is changed.
 
 Browser regression checks use the real DOM, including clipboard HTML, selections,
@@ -438,7 +446,7 @@ keys and space drive a game rather than scroll; with no such Handler they
 scroll as usual. Enter or Space on a focused button sends it `click` and no
 `keyDown`, and a pointer click on a button returns focus to the Page. Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
-colour, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
+colour, align paragraphs, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
 the text again reopens it. Typing, formatting, paste and reader undo/redo send
 `textChanged` to the Element after updating its text, so handlers read the new
 plain text through `the text of me`. IME composition commits at its end.

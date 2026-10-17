@@ -11,9 +11,18 @@ export type TextRun = {
   underline?: boolean;
 };
 
-export type Paragraph = { runs: TextRun[] };
+export const TEXT_ALIGNS = ['left', 'center', 'right', 'justify'] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+export const isTextAlign = (value: unknown): value is TextAlign =>
+  TEXT_ALIGNS.includes(value as TextAlign);
 
-/** Rich text: paragraphs of styled runs (bold, italic, underline, color). */
+/** A paragraph's runs and alignment; absent `align` means left. */
+export type Paragraph = { align?: Exclude<TextAlign, 'left'>; runs: TextRun[] };
+
+/**
+ * Rich text: paragraphs of styled runs (bold, italic, underline, color),
+ * each with its own alignment.
+ */
 export type RichText = Paragraph[];
 
 type ElementBase = {
@@ -171,11 +180,42 @@ export const richTextFromPlainText = (text: string): RichText =>
     .split('\n')
     .map(line => ({ runs: [{ text: line }] }));
 
-/** Script-facing plain text; replacing it clears every run's formatting. */
+/** Sets a paragraph's alignment, storing left as absent. */
+export const alignParagraph = (
+  paragraph: Paragraph,
+  align?: TextAlign,
+): void => {
+  if (align && align !== 'left') {
+    paragraph.align = align;
+  } else {
+    delete paragraph.align;
+  }
+};
+
+/**
+ * Script-facing plain text. Replacing it clears every run's formatting but
+ * keeps each paragraph's alignment; added paragraphs take the last one's.
+ */
 export const textOf = (element: TextElement): string =>
   plainTextOf(element.richText);
 export const replacePlainText = (element: TextElement, text: string): void => {
+  const previous = element.richText;
   element.richText = richTextFromPlainText(text);
+  element.richText.forEach((p, i) =>
+    alignParagraph(p, (previous[i] ?? previous.at(-1))?.align),
+  );
+};
+
+/** Script-facing alignment: the first paragraph's. */
+export const textAlignOf = (element: TextElement): TextAlign =>
+  element.richText[0]?.align ?? 'left';
+/** Aligns every paragraph of the Element's text. */
+export const setTextAlign = (element: TextElement, align: TextAlign): void => {
+  element.richText = element.richText.map(p => {
+    const next = { ...p };
+    alignParagraph(next, align);
+    return next;
+  });
 };
 
 const base = (name: string): ElementBase => ({
