@@ -51,6 +51,10 @@ func init() {
 	}
 	sessionio.CancelDelivery = func(raw any, id string) {
 		g := raw.(*Group)
+		if g.backend != nil {
+			g.backend.cancelDelivery(DeliveryID(id))
+			return
+		}
 		g.mu.Lock()
 		g.inputs = append(g.inputs, delivery{cancel: DeliveryID(id)})
 		ready := g.options.OnReady

@@ -19,6 +19,7 @@ type groupBackend interface {
 	// recipient of a Broadcast. how is its Trace input name.
 	// A call-value input names its Function Value as fn.
 	queue(s *Script, to *Object, fn *Value, m Message, ctx context.Context, how string, decision *Deciding) (DeliveryID, *Pending, error)
+	cancelDelivery(DeliveryID)
 	object(*ObjectKind, string) error
 	setParent(o, parent *Object) error
 	dispose(*Object) error

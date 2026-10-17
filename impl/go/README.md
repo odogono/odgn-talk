@@ -264,15 +264,16 @@ a Group starts; analysis exchanges load nothing and produce no Trace. Value
 formatting and pinned Unicode name matching stay with the Host. The untagged
 build retains Go analysis behind `!talk_zig_experimental` until the Go Core's
 retirement gate. `session`, `driver` and `cmd/northtalk` import no Go parser,
-checker, compiler or generated catalogue packages.
+checker, compiler or generated catalogue packages. Cancelling an unfinished
+inspection expression prevents its property reader from starting.
 
 Native Session tests and all Session Transcripts pass. The experimental
 backend also passes the `describe`, `named-functions` and `object-inspection`
 Transcripts unchanged, including defining documentation and disposed Object
 inspection after Restore. On the experimental
 backend, the Session tests and Transcripts unaffected by the adapter gaps pass;
-callback-queued delivery pumping, error-handler
-arguments, decomposed-source Trace spelling and cancelled inspection are still tracked in
+callback-queued delivery pumping, error-handler arguments and decomposed-source
+Trace spelling are still tracked in
 [#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
 migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
 and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these

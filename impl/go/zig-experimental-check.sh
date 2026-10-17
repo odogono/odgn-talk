@@ -17,7 +17,7 @@ go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclar
 go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection)$' -count=1 "$@" ./internal/corpus
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
-go test -tags talk_zig_experimental -run '^TestPool' -count=1 "$@" ./driver
+go test -tags talk_zig_experimental -run '^(TestPool.*|TestCancelledInspectionNeedsNoReader)$' -count=1 "$@" ./driver
 go test -tags talk_zig_experimental -count=1 "$@" ./store ./internal/storekit ./examples/tenants
 (cd sqlite && go test -tags talk_zig_experimental -count=1 "$@" ./...)
 exec go test -tags talk_zig_experimental -run "$selection" -count=1 "$@" . ./internal/zigwasm
