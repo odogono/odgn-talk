@@ -9,7 +9,6 @@ import {
   PAGE_HANDLES,
   MIN_PAGE_WIDTH,
   MIN_PAGE_HEIGHT,
-  labelSuggestion,
   pageOf,
   selectedOf,
   StackEditor,
@@ -17,51 +16,32 @@ import {
   type Gesture,
   type Handle,
   type PageHandle,
-  type NameCheck,
 } from './editing';
 import {
   ELEMENT_KINDS,
   hasBorder,
   isTextAlign,
-  plainTextOf,
   replacePlainText,
   setTextAlign,
-  TEXT_ALIGNS,
-  textAlignOf,
   type Element,
   type ElementKind,
   type Page,
   type Project,
-  type TextAlign,
   type TextElement,
   textOf,
 } from './model';
 import { ImageAssets, IMAGE_ACCEPT, importImage } from './images';
-import { importSound, isSoundAsset, SOUND_ACCEPT } from './sounds';
+import { importSound, SOUND_ACCEPT } from './sounds';
 import { ScriptWindows } from './scripts';
 import { bringWindowForward, mountWindows } from './windows';
 import type { ScriptOwner } from './script-manifest';
 import { commandForKey, type EditingCommand } from './shortcuts';
 
-import { type Attributes, byId, h } from './dom';
+import { byId, h } from './dom';
 import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
-
-const KIND_NAMES: Record<ElementKind, string> = {
-  text: 'Text',
-  image: 'Image',
-  button: 'Button',
-  rectangle: 'Rectangle',
-  ellipse: 'Ellipse',
-  line: 'Line',
-};
-const ALIGN_LABELS: Record<TextAlign, string> = {
-  left: 'Left',
-  center: 'Centre',
-  right: 'Right',
-  justify: 'Justified',
-};
+import { KIND_NAMES, mountInfoPanel, type NameRefusal } from './info-panel';
 
 const KIND_ICONS: Record<ElementKind, string> = {
   text: 'T',
@@ -71,8 +51,6 @@ const KIND_ICONS: Record<ElementKind, string> = {
   ellipse: '●',
   line: '╱',
 };
-
-const FONTS = ['sans-serif', 'serif', 'monospace', 'cursive'];
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -275,31 +253,6 @@ const floatWindows = () => {
   });
 };
 
-// Info window fields; each input carries the property it edits.
-const field = (
-  label: string,
-  input: HTMLElement,
-  className = 'field',
-): HTMLElement => h('label', { class: className }, h('span', {}, label), input);
-
-const input = (
-  name: string,
-  value: string | number,
-  type = 'text',
-  extra: Attributes = {},
-) => h('input', { type, 'data-field': name, value, ...extra });
-
-const color = (name: string, value: string) =>
-  input(name, /^#[0-9a-f]{6}$/iu.test(value) ? value : '#000000', 'color');
-
-const checkbox = (name: string, label: string, checked: boolean) =>
-  h(
-    'label',
-    { class: 'check' },
-    h('input', { type: 'checkbox', 'data-field': name, checked }),
-    label,
-  );
-
 /** The Page index of a strip thumbnail an event happened on. */
 const pageIndexOf = (event: Event) => {
   const index = (event.target as HTMLElement).closest<HTMLElement>(
@@ -307,8 +260,6 @@ const pageIndexOf = (event: Event) => {
   )?.dataset.page;
   return index === undefined ? undefined : Number(index);
 };
-/** A refused name: what the author typed, and why it was refused. */
-type Refusal = { attempted: string; check: NameCheck & { ok: false } };
 
 export type PlayMode = 'browse' | 'present';
 
@@ -349,6 +300,7 @@ export const mountStack = (
     stopPreview();
     if (!event.persisted) {
       unmountTitle();
+      unmountInfo();
       images.dispose();
     }
   });
@@ -363,9 +315,11 @@ export const mountStack = (
   let pointerElement: string | undefined;
   // The Edit-time sound preview: one voice, never a Script (those run in Play).
   let preview: { audio: HTMLAudioElement; name: string } | undefined;
+  const previewName = signal<string | undefined>(undefined);
   const stopPreview = () => {
     preview?.audio.pause();
     preview = undefined;
+    previewName.value = undefined;
   };
   let activeText: InPlaceTextEditor | undefined;
   let textControls: ElementTextControls | undefined;
@@ -380,7 +334,8 @@ export const mountStack = (
     scripts.open(owner);
   };
   let scale = 1;
-  let refusal: Refusal | undefined;
+  const refusal = signal<NameRefusal | undefined>(undefined);
+  const unmountInfo = mountInfoPanel(info, { editor, refusal, previewName });
   let fieldEdit: Edit | undefined;
   const finishFieldEdit = () => {
     fieldEdit?.finish();
@@ -502,317 +457,6 @@ export const mountStack = (
       editor.pageIndex === editor.project.pages.length - 1;
   };
 
-  /** The name field, with the refusal message and its suggestion if any. */
-  const nameField = (current: string, offer?: string) => {
-    const shown = refusal?.attempted ?? current;
-    const parts = [
-      field(
-        'Name',
-        input('name', shown, 'text', {
-          spellcheck: 'false',
-          autocomplete: 'off',
-          'aria-invalid': refusal ? 'true' : undefined,
-          'aria-describedby': refusal ? 'name-problem' : undefined,
-        }),
-      ),
-    ];
-    const suggestion = refusal?.check.suggestion ?? offer;
-    if (refusal) {
-      parts.push(
-        h(
-          'p',
-          { class: 'problem', id: 'name-problem', role: 'alert' },
-          refusal.check.message,
-        ),
-      );
-    }
-    if (suggestion) {
-      parts.push(
-        h(
-          'p',
-          { class: 'suggestion' },
-          refusal ? 'Try ' : 'Suggested from the label: ',
-          h(
-            'button',
-            { type: 'button', 'data-rename': suggestion },
-            suggestion,
-          ),
-        ),
-      );
-    }
-    return parts;
-  };
-
-  const elementInfo = (element: Immutable<Element>): HTMLElement[] => {
-    const kind: HTMLElement[] = [];
-    switch (element.kind) {
-      case 'text':
-        kind.push(
-          h(
-            'button',
-            { type: 'button', 'data-edit-text': element.name },
-            'Edit formatted text',
-          ),
-          field(
-            'Plain text (replaces formatting)',
-            h(
-              'textarea',
-              { 'data-field': 'text', rows: 4 },
-              plainTextOf(element.richText),
-            ),
-          ),
-          field(
-            'Font',
-            h(
-              'select',
-              { 'data-field': 'font' },
-              ...[...new Set([element.font, ...FONTS])].map(font =>
-                h(
-                  'option',
-                  { value: font, selected: font === element.font },
-                  font,
-                ),
-              ),
-            ),
-          ),
-          field(
-            'Alignment (all paragraphs)',
-            h(
-              'select',
-              { 'data-field': 'textAlign' },
-              ...TEXT_ALIGNS.map(align =>
-                h(
-                  'option',
-                  {
-                    value: align,
-                    selected: align === textAlignOf(element),
-                  },
-                  ALIGN_LABELS[align],
-                ),
-              ),
-            ),
-          ),
-          h(
-            'div',
-            { class: 'row' },
-            field(
-              'Size',
-              input('textSize', element.textSize, 'number', { min: 1 }),
-            ),
-            field('Colour', color('textColor', element.textColor)),
-          ),
-          checkbox('editable', 'Reader can edit', element.editable),
-        );
-        break;
-      case 'image':
-        kind.push(
-          h(
-            'button',
-            { type: 'button', 'data-replace-image': element.name },
-            'Replace image…',
-          ),
-        );
-        break;
-      case 'button':
-        kind.push(
-          field('Label', input('label', element.label)),
-          h(
-            'div',
-            { class: 'row' },
-            field('Fill', color('fill', element.fill)),
-            field('Text', color('textColor', element.textColor)),
-          ),
-        );
-        break;
-      case 'rectangle':
-      case 'ellipse':
-        kind.push(
-          h(
-            'div',
-            { class: 'row' },
-            field('Fill', color('fill', element.fill)),
-            field('Stroke', color('stroke', element.stroke)),
-          ),
-          field(
-            'Thickness',
-            input('thickness', element.thickness, 'number', { min: 0 }),
-          ),
-        );
-        break;
-      case 'line':
-        kind.push(
-          h(
-            'div',
-            { class: 'row' },
-            field('Stroke', color('stroke', element.stroke)),
-            field(
-              'Thickness',
-              input('thickness', element.thickness, 'number', { min: 1 }),
-            ),
-          ),
-        );
-        break;
-    }
-    return [
-      h('h2', {}, `${KIND_NAMES[element.kind]} “${element.name}”`),
-      h(
-        'button',
-        { type: 'button', 'data-script': 'element', 'data-view-only': '' },
-        'Edit Script',
-      ),
-      h(
-        'button',
-        { type: 'button', 'data-script': 'element', 'data-recipe': '' },
-        'Add action…',
-      ),
-      ...nameField(
-        element.name,
-        element.kind === 'button'
-          ? labelSuggestion(editor.page, element, editor.project)
-          : undefined,
-      ),
-      h(
-        'div',
-        { class: 'grid' },
-        ...(['left', 'top', 'width', 'height'] as const).map(key =>
-          field(
-            key[0]!.toUpperCase() + key.slice(1),
-            input(key, element[key], 'number'),
-          ),
-        ),
-      ),
-      ...kind,
-      checkbox('visible', 'Visible', element.visible),
-    ];
-  };
-
-  const pageInfo = (page: Immutable<Page>): HTMLElement[] => [
-    h(
-      'h2',
-      {},
-      `Page ${editor.pageIndex + 1} of ${editor.project.pages.length}`,
-    ),
-    ...nameField(page.name),
-    h(
-      'button',
-      { type: 'button', 'data-script': 'page', 'data-view-only': '' },
-      'Edit Page Script',
-    ),
-    h(
-      'button',
-      { type: 'button', 'data-script': 'page', 'data-recipe': '' },
-      'Add action…',
-    ),
-    h(
-      'div',
-      { class: 'row' },
-      field(
-        'Height',
-        input('pageHeight', page.height, 'number', { min: MIN_PAGE_HEIGHT }),
-      ),
-      field('Background', color('background', page.background)),
-    ),
-    h(
-      'div',
-      { class: 'row' },
-      h(
-        'button',
-        {
-          type: 'button',
-          'data-move-page': -1,
-          disabled: editor.pageIndex === 0,
-        },
-        '← Earlier',
-      ),
-      h(
-        'button',
-        {
-          type: 'button',
-          'data-move-page': 1,
-          disabled: editor.pageIndex === editor.project.pages.length - 1,
-        },
-        'Later →',
-      ),
-    ),
-    h('h2', {}, 'Project'),
-    h(
-      'button',
-      { type: 'button', 'data-script': 'project', 'data-view-only': '' },
-      'Edit Project Script',
-    ),
-    h(
-      'button',
-      { type: 'button', 'data-script': 'project', 'data-recipe': '' },
-      'Add action…',
-    ),
-    field('Title', input('projectName', editor.project.name)),
-    field(
-      'Design width',
-      input('designWidth', editor.project.designWidth, 'number', {
-        min: MIN_PAGE_WIDTH,
-      }),
-    ),
-    h('h2', {}, 'Sounds'),
-    ...(editor.project.assets.filter(isSoundAsset).length
-      ? editor.project.assets.filter(isSoundAsset).map(asset =>
-          h(
-            'div',
-            { class: 'row' },
-            h('span', {}, `${asset.name} (${asset.fileName})`),
-            h(
-              'button',
-              {
-                type: 'button',
-                'data-preview-sound': asset.name,
-                'data-view-only': '',
-              },
-              preview?.name === asset.name ? 'Stop' : 'Preview',
-            ),
-          ),
-        )
-      : [h('p', { class: 'muted' }, 'No sounds yet.')]),
-    h('button', { type: 'button', 'data-add-sound': '' }, 'Add sound…'),
-    h(
-      'p',
-      { class: 'muted' },
-      'Scripts play a sound by its name, like tell sound to play "waves". Add action… can write that for you.',
-    ),
-    h(
-      'p',
-      { class: 'muted' },
-      'Click an Element to select it; Shift-click selects several.',
-    ),
-  ];
-
-  const drawInfo = () => {
-    const focused = (document.activeElement as HTMLElement | null)?.dataset
-      .field;
-    const selected = editor.selected;
-    info.replaceChildren(
-      ...(selected.length === 1
-        ? elementInfo(selected[0]!)
-        : selected.length > 1
-          ? [
-              h('h2', {}, `${selected.length} Elements`),
-              h('p', {}, selected.map(e => e.name).join(', ')),
-              h('p', { class: 'muted' }, 'Drag any of them to move them all.'),
-            ]
-          : pageInfo(editor.page)),
-    );
-    if (editor.readOnly) {
-      for (const control of info.querySelectorAll<
-        | HTMLButtonElement
-        | HTMLInputElement
-        | HTMLSelectElement
-        | HTMLTextAreaElement
-      >('button, input, select, textarea')) {
-        control.disabled = !control.hasAttribute('data-view-only');
-      }
-    } else if (focused) {
-      info.querySelector<HTMLElement>(`[data-field="${focused}"]`)?.focus();
-    }
-  };
-
   // Formatting controls for one selected text Element; while it is edited in
   // place, the InPlaceTextEditor drives them instead.
   const drawTextControls = () => {
@@ -854,9 +498,6 @@ export const mountStack = (
       drawPage();
     }
     drawStrip();
-    if (!fieldEdit) {
-      drawInfo();
-    }
     drawCommands();
     drawTextControls();
     scripts.sync();
@@ -868,7 +509,7 @@ export const mountStack = (
   /** Applies an edit, forgetting any refused name, then redraws. */
   const edit = (change: () => void) => {
     closeText();
-    refusal = undefined;
+    refusal.value = undefined;
     change();
     draw();
   };
@@ -880,7 +521,7 @@ export const mountStack = (
       editor.selection.length === 1
         ? editor.renameElement(element!.name, name)
         : editor.renamePage(name);
-    refusal = check.ok ? undefined : { attempted: name, check };
+    refusal.value = check.ok ? undefined : { attempted: name, check };
     draw();
   };
 
@@ -939,13 +580,7 @@ export const mountStack = (
     if (!live) {
       finishFieldEdit();
     }
-    drawCommands();
-    if (live) {
-      drawPage();
-      drawStrip();
-    } else {
-      draw();
-    }
+    draw();
   };
 
   info.addEventListener('focusout', () => {
@@ -1165,9 +800,6 @@ export const mountStack = (
       historyOf(element),
       () => {
         drawStrip();
-        if (!fieldEdit) {
-          drawInfo();
-        }
         drawCommands();
       },
       () => {
@@ -1307,10 +939,11 @@ export const mountStack = (
     }
     const audio = new Audio(url);
     preview = { audio, name };
+    previewName.value = name;
     audio.addEventListener('ended', () => {
       if (preview?.audio === audio) {
         preview = undefined;
-        draw();
+        previewName.value = undefined;
       }
     });
     void audio.play().catch((error: unknown) => {

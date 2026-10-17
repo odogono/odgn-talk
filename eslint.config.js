@@ -57,6 +57,13 @@ export default [
     },
   },
   {
+    files: ['tooling/creative/**/*.tsx'],
+    rules: {
+      // Preact types this input attribute with its HTML spelling.
+      'react/no-unknown-property': ['error', { ignore: ['spellcheck'] }],
+    },
+  },
+  {
     files: [
       'tools/**/*.ts',
       'impl/ts/tools/**/*.ts',
