@@ -6,7 +6,7 @@ import {
   parseSourceRecovering,
   syntaxSelector,
   type SyntaxNode,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
 export type ScriptOwner = Immutable<Project | Page | Element>;

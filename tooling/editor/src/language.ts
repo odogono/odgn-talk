@@ -3,7 +3,7 @@ import {
   parseSourceRecovering,
   parseEntry,
   type SyntaxElement,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { StreamLanguage, type StreamParser } from '@codemirror/language';
 
 const KEYWORDS = new Set([

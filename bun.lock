@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@odgn/northtalk",
+      "name": "@northtalk/ts",
       "devDependencies": {
         "@nkzw/eslint-config": "^3.3.0",
         "@types/bun": "^1.4.2",
@@ -13,34 +13,34 @@
       },
     },
     "bench/ts": {
-      "name": "@odgn/northtalk-bench",
+      "name": "@northtalk/bench",
       "dependencies": {
-        "@odgn/northtalk": "workspace:*",
+        "@northtalk/ts": "workspace:*",
         "mitata": "^1.0.34",
         "quickjs-emscripten": "0.32.0",
         "wasmoon": "1.16.0",
       },
     },
     "impl/ts": {
-      "name": "@odgn/northtalk",
+      "name": "@northtalk/ts",
     },
     "tooling/cli": {
-      "name": "@odgn/northtalk-cli",
+      "name": "@northtalk/cli",
       "bin": {
         "northtalk": "./src/main.ts",
       },
       "dependencies": {
-        "@odgn/northtalk": "workspace:*",
-        "@odgn/northtalk-tooling": "workspace:*",
+        "@northtalk/ts": "workspace:*",
+        "@northtalk/tooling": "workspace:*",
       },
     },
     "tooling/creative": {
-      "name": "@odgn/northtalk-creative",
+      "name": "@northtalk/creative",
       "dependencies": {
         "@codemirror/state": "^6.7.6",
         "@codemirror/view": "^6.43.13",
-        "@odgn/northtalk": "workspace:*",
-        "@odgn/northtalk-editor": "workspace:*",
+        "@northtalk/ts": "workspace:*",
+        "@northtalk/editor": "workspace:*",
         "@preact/signals": "^2.11.3",
         "@preact/signals-core": "^1.14.4",
         "immer": "^11.1.21",
@@ -48,7 +48,7 @@
       },
     },
     "tooling/editor": {
-      "name": "@odgn/northtalk-editor",
+      "name": "@northtalk/editor",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -57,18 +57,18 @@
         "@codemirror/state": "^6.7.6",
         "@codemirror/view": "^6.43.13",
         "@lezer/highlight": "^1.2.5",
-        "@odgn/northtalk": "workspace:*",
-        "@odgn/northtalk-tooling": "workspace:*",
+        "@northtalk/ts": "workspace:*",
+        "@northtalk/tooling": "workspace:*",
       },
     },
     "tooling/fuzz": {
-      "name": "@odgn/northtalk-fuzz",
+      "name": "@northtalk/fuzz",
       "dependencies": {
-        "@odgn/northtalk": "workspace:*",
+        "@northtalk/ts": "workspace:*",
       },
     },
     "tooling/playground": {
-      "name": "@odgn/northtalk-playground",
+      "name": "@northtalk/playground",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -78,15 +78,15 @@
         "@codemirror/state": "^6.7.6",
         "@codemirror/view": "^6.43.13",
         "@lezer/highlight": "^1.2.5",
-        "@odgn/northtalk": "workspace:*",
-        "@odgn/northtalk-editor": "workspace:*",
-        "@odgn/northtalk-tooling": "workspace:*",
+        "@northtalk/ts": "workspace:*",
+        "@northtalk/editor": "workspace:*",
+        "@northtalk/tooling": "workspace:*",
       },
     },
     "tooling/stack": {
-      "name": "@odgn/northtalk-tooling",
+      "name": "@northtalk/tooling",
       "dependencies": {
-        "@odgn/northtalk": "workspace:*",
+        "@northtalk/ts": "workspace:*",
       },
     },
     "tooling/vscode": {
@@ -96,14 +96,14 @@
         "vscode-languageclient": "^9.0.1",
       },
       "devDependencies": {
-        "@odgn/northtalk": "workspace:*",
+        "@northtalk/ts": "workspace:*",
         "@types/vscode": "~1.90.0",
         "vscode-oniguruma": "^2.0.1",
         "vscode-textmate": "^9.3.2",
       },
     },
     "tools": {
-      "name": "@odgn/northtalk-spec-tools",
+      "name": "@northtalk/spec-tools",
       "devDependencies": {
         "ajv": "^8",
       },
@@ -224,23 +224,23 @@
 
     "@nkzw/eslint-plugin": ["@nkzw/eslint-plugin@2.0.0", "", { "peerDependencies": { "eslint": ">= 9" } }, "sha512-IoU8kOqHfnf7se2dGxMD/7RPm6WVjzjOjWSo7FulRx3lJzuZvXioSkT5Nd82l66DH3Pl2whw74lPT1di3KMwFA=="],
 
-    "@odgn/northtalk": ["@odgn/northtalk@workspace:impl/ts"],
+    "@northtalk/ts": ["@northtalk/ts@workspace:impl/ts"],
 
-    "@odgn/northtalk-bench": ["@odgn/northtalk-bench@workspace:bench/ts"],
+    "@northtalk/bench": ["@northtalk/bench@workspace:bench/ts"],
 
-    "@odgn/northtalk-cli": ["@odgn/northtalk-cli@workspace:tooling/cli"],
+    "@northtalk/cli": ["@northtalk/cli@workspace:tooling/cli"],
 
-    "@odgn/northtalk-creative": ["@odgn/northtalk-creative@workspace:tooling/creative"],
+    "@northtalk/creative": ["@northtalk/creative@workspace:tooling/creative"],
 
-    "@odgn/northtalk-editor": ["@odgn/northtalk-editor@workspace:tooling/editor"],
+    "@northtalk/editor": ["@northtalk/editor@workspace:tooling/editor"],
 
-    "@odgn/northtalk-fuzz": ["@odgn/northtalk-fuzz@workspace:tooling/fuzz"],
+    "@northtalk/fuzz": ["@northtalk/fuzz@workspace:tooling/fuzz"],
 
-    "@odgn/northtalk-playground": ["@odgn/northtalk-playground@workspace:tooling/playground"],
+    "@northtalk/playground": ["@northtalk/playground@workspace:tooling/playground"],
 
-    "@odgn/northtalk-spec-tools": ["@odgn/northtalk-spec-tools@workspace:tools"],
+    "@northtalk/spec-tools": ["@northtalk/spec-tools@workspace:tools"],
 
-    "@odgn/northtalk-tooling": ["@odgn/northtalk-tooling@workspace:tooling/stack"],
+    "@northtalk/tooling": ["@northtalk/tooling@workspace:tooling/stack"],
 
     "@preact/signals": ["@preact/signals@2.11.3", "", { "dependencies": { "@preact/signals-core": "^1.14.4" }, "peerDependencies": { "preact": ">= 10.25.0 || >=11.0.0-0" } }, "sha512-mttwFM98G/JiriTgMwU+UWygL6sfVmYEiNcPSKkUnv4PxPpZhmP2ugGC4qi360+ZIHyQ8NY05bfJT3b4RUIGlw=="],
 

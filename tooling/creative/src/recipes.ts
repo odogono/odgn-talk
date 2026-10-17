@@ -6,7 +6,7 @@ import {
   type SyntaxElement,
   type SyntaxNode,
   type Token,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import type { Element, Project } from './model';
 import { scriptPage, type ScriptOwner } from './script-manifest';
 import { isSoundAsset } from './sounds';

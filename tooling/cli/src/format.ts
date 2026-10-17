@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { formatSource } from '@odgn/northtalk-tooling/format';
+import { formatSource } from '@northtalk/tooling/format';
 
 /** All file and process concerns stay in the CLI, outside the tooling stack. */
 export const format = (files: readonly string[], check: boolean): number => {

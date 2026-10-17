@@ -4,7 +4,7 @@ import {
   type GrantDecls,
   type Kind,
   type Shape,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { record, string } from './protocol';
 export type ManifestOperation = {
   args: Shape[];

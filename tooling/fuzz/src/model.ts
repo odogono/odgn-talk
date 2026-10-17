@@ -1,4 +1,4 @@
-import type { Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@northtalk/ts/replay';
 
 export const features = [
   'compute',

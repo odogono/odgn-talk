@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseSource, type SyntaxElement } from '@odgn/northtalk';
+import { parseSource, type SyntaxElement } from '@northtalk/ts';
 import { formatSource } from '../src/format';
 import { completion, definition, hover, references } from '../src/lsp/features';
 import { readManifest } from '../src/lsp/manifest';

@@ -151,7 +151,7 @@ export const operationDeclarations = (
 /**
  * The Core a case runs on: the TS Core's free functions by default, or
  * another Core behind the same embedding interface, such as the Zig reactor's
- * facade (`@odgn/northtalk/wasm`).
+ * facade (`@northtalk/ts/wasm`).
  */
 export type CaseCore = {
   compileLibrary: typeof compileLibrary;

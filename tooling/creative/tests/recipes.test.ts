@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseSource } from '@odgn/northtalk';
+import { parseSource } from '@northtalk/ts';
 import {
   createElement,
   createPage,

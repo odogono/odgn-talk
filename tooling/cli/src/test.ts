@@ -35,10 +35,10 @@ import {
   type SyntaxNode,
   type Value,
   newGroup,
-} from '@odgn/northtalk';
-import { sourceForm } from '@odgn/northtalk/debug';
-import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
-import { readManifest, type HostManifest } from '@odgn/northtalk-tooling/lint';
+} from '@northtalk/ts';
+import { sourceForm } from '@northtalk/ts/debug';
+import { calendar, locale } from '@northtalk/tooling/builtins';
+import { readManifest, type HostManifest } from '@northtalk/tooling/lint';
 import { differs, replayFile } from './replay';
 
 // The Test Library, supplied by the runner as a Host-supplied Library.

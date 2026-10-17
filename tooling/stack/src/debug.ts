@@ -6,7 +6,7 @@ import {
   type Group,
   type PumpOptions,
   type PumpResult,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import {
   isReadable,
   sourceForm,
@@ -16,15 +16,15 @@ import {
   type DebugSnapshot,
   type DebugSource,
   type RepeatedEffect,
-} from '@odgn/northtalk/debug';
+} from '@northtalk/ts/debug';
 import {
   replayTrace,
   same,
   type ReplayAction,
   type ReplayEvent,
   type Setup,
-} from '@odgn/northtalk/replay';
-export type { Setup as ReplaySetup } from '@odgn/northtalk/replay';
+} from '@northtalk/ts/replay';
+export type { Setup as ReplaySetup } from '@northtalk/ts/replay';
 
 export type SourceBreakpoint = {
   col?: number;

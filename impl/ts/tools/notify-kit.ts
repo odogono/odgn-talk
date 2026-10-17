@@ -1,4 +1,4 @@
-// Drives the notification router, `@odgn/northtalk/notify`, through the
+// Drives the notification router, `@northtalk/ts/notify`, through the
 // router kit, `corpus/notify-kit/`: language-neutral sequences of watches,
 // commits, mailbox refusals, Pumps, releases and checkpoints with the
 // Deliveries the Store Notifications proposal requires. A fresh router, an

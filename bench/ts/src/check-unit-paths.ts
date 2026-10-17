@@ -1,6 +1,6 @@
 // Compare complete Traces, accounting, faults and canonical saved bytes across
 // baseline and optimized checkouts by running this unchanged in each.
-import { encodeValue, newGroup, restore, Value } from '@odgn/northtalk';
+import { encodeValue, newGroup, restore, Value } from '@northtalk/ts';
 const source = `script variable q = 1500 mm
 on run
   repeat 8 times

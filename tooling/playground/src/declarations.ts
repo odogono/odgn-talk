@@ -7,7 +7,7 @@ import {
   syntaxSelector,
   type SyntaxNode,
   type Token,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 
 export type TabDeclaration = {
   /** What a redefinition replaces: a Handler, function, constant or Script Variable by name, or a `use` line by its text. */

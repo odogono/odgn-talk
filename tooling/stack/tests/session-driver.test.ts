@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { bool, parseInstant, text } from '@odgn/northtalk';
-import { SessionHost } from '@odgn/northtalk/session';
+import { bool, parseInstant, text } from '@northtalk/ts';
+import { SessionHost } from '@northtalk/ts/session';
 import {
   SessionDriver,
   type DriverEvent,

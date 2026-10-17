@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk",
+  "name": "@northtalk/ts",
   "private": true,
   "type": "module",
   "exports": {

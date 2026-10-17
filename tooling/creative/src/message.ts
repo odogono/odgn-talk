@@ -1,7 +1,7 @@
 // Message Box commands (#154's Message Box): run against the Play Session
 // while browsing, or in Edit against the authored Project as one undoable
 // edit, through a session that sends no events.
-import { type Value } from '@odgn/northtalk';
+import { type Value } from '@northtalk/ts';
 import { type StackEditor } from './editing';
 import { type Project } from './model';
 import { PlaySession } from './play';

@@ -4,9 +4,9 @@ import { createCanvasView } from './canvas';
 // controls are tooling freedom (chapter 12); everything a session prints and
 // records comes from the Session Host in the session worker.
 import { createWorkbench } from './workbench';
-import { writeTranscript, type UserPrompt } from '@odgn/northtalk/session';
-import { libraryUri, type Position } from '@odgn/northtalk-tooling/lsp';
-import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
+import { writeTranscript, type UserPrompt } from '@northtalk/ts/session';
+import { libraryUri, type Position } from '@northtalk/tooling/lsp';
+import { readDictionary } from '@northtalk/tooling/dictionary';
 import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { planApply, splitDeclarations } from './declarations';
@@ -15,8 +15,8 @@ import {
   offsetOf,
   onEdits,
   refreshHints,
-} from '@odgn/northtalk-editor/editor';
-import { LspClient } from '@odgn/northtalk-editor/lsp-client';
+} from '@northtalk/editor/editor';
+import { LspClient } from '@northtalk/editor/lsp-client';
 import {
   breakpointLines,
   createEditorState,

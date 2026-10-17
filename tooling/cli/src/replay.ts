@@ -1,4 +1,4 @@
-import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
+import { canvasCapabilities } from '@northtalk/tooling/canvas';
 // `northtalk replay`: replay a Session Transcript through a fresh Session
 // Host, and report the first line it printed differently (chapter 12).
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -6,7 +6,7 @@ import {
   parseTranscript,
   replayTranscript,
   writeTranscript,
-} from '@odgn/northtalk/session';
+} from '@northtalk/ts/session';
 
 /** A replay's outcome: its line count, or the first line that differs. */
 export type Replayed =

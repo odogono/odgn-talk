@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { parseInstant } from '@odgn/northtalk';
-import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
-import { lint, readManifest } from '@odgn/northtalk-tooling/lint';
+import { parseInstant } from '@northtalk/ts';
+import { calendar, locale } from '@northtalk/tooling/builtins';
+import { lint, readManifest } from '@northtalk/tooling/lint';
 import { EXAMPLES, type Example } from '../src/examples';
 import { PlaygroundSession } from '../src/session';
 

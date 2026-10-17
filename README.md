@@ -17,7 +17,7 @@ The [layout decision](docs/adr/0046-each-core-lives-under-impl-beside-a-shared-s
 
 - [`spec/`](spec/): the Spec and its Data Files, the authority every Core answers to.
 - [`corpus/`](corpus/): the Conformance Corpus, which every Core runs.
-- [`impl/ts/`](impl/ts/): the TS Core, `@odgn/northtalk`, with its Session Host and tests.
+- [`impl/ts/`](impl/ts/): the TS Core, `@northtalk/ts`, with its Session Host and tests.
 - [`impl/ts/examples/files/`](impl/ts/examples/files/): a runnable Bun Example Host for file cleanup and staged single-file publication in private temporary directories.
 - [`impl/ts/examples/webhooks/`](impl/ts/examples/webhooks/): a runnable Bun webhook rules Example Host on the real Clock, driven by `autoDrive`, with Promise-backed suspending calls cancelled through `AbortSignal`.
 - [`impl/go/examples/tenants/`](impl/go/examples/tenants/): a runnable multi-tenant Go Example Host, an HTTP server with a Group per tenant pumped in parallel by the driver Pool.

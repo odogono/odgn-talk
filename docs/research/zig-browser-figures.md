@@ -1,6 +1,6 @@
 # The TS Core and the Zig reactor in a browser
 
-Answers [#1121](https://github.com/odogono/odgn-talk/issues/1121)'s measurement: payload, startup, Pump throughput and memory for the TS Core and for the Zig `wasm32-wasi` reactor behind `@odgn/northtalk/wasm`, both in Chromium, with the same Host code. [ADR 0097](../adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md) records the decision these figures informed. They describe the commit below; the facade's current support and limitations live in the [TS guide](../../impl/ts/README.md#the-zig-reactor-in-a-browser).
+Answers [#1121](https://github.com/odogono/odgn-talk/issues/1121)'s measurement: payload, startup, Pump throughput and memory for the TS Core and for the Zig `wasm32-wasi` reactor behind `@northtalk/ts/wasm`, both in Chromium, with the same Host code. [ADR 0097](../adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md) records the decision these figures informed. They describe the commit below; the facade's current support and limitations live in the [TS guide](../../impl/ts/README.md#the-zig-reactor-in-a-browser).
 
 ## Outcome
 
@@ -41,7 +41,7 @@ cd impl/ts && bun tools/wasm-browser.ts
 
 Each row's range covers two runs. The figures are taken as follows:
 
-- **Payload:** the [core-switch example's](../../impl/ts/examples/core-switch/) `ts.ts` and `wasm.ts`, each bundled alone. The whole packages bundle within 2 KB of these: 146,551 B Brotli for `@odgn/northtalk` and 48,931 B for `@odgn/northtalk/wasm`.
+- **Payload:** the [core-switch example's](../../impl/ts/examples/core-switch/) `ts.ts` and `wasm.ts`, each bundled alone. The whole packages bundle within 2 KB of these: 146,551 B Brotli for `@northtalk/ts` and 48,931 B for `@northtalk/ts/wasm`.
 - **Startup:** `performance.now()` around `createCore`, then around a new Group and its Load, then around one Delivery and its Pump.
 - **Throughput:** 2,000 Deliveries and then one Pump, seven rounds. Each figure is the median of the last five rounds.
 - **Compute:** `spin 100000` adds each of 1 to 100,000 to a total, five rounds, median.

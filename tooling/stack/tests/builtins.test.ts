@@ -5,7 +5,7 @@ import {
   parseInstant,
   readDisplay,
   text,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { calendar, locale } from '../src/builtins';
 
 const call = (binding: string, now = '2026-03-29T00:30:00Z') =>

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { coreVersions } from '@odgn/northtalk';
+import { coreVersions } from '@northtalk/ts';
 import { readDictionary } from '../src/dictionary';
 import { readManifest } from '../src/lsp/manifest';
 

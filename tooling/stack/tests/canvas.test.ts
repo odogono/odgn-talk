@@ -3,7 +3,7 @@ import {
   SessionHost,
   replayTranscript,
   writeTranscript,
-} from '@odgn/northtalk/session';
+} from '@northtalk/ts/session';
 import { canvasCapabilities, canvasCommands } from '../src/canvas';
 
 test('typed drawing replays headlessly with identical commands and trace', () => {

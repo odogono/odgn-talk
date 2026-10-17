@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-playground",
+  "name": "@northtalk/playground",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,8 +19,8 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.5",
-    "@odgn/northtalk": "workspace:*",
-    "@odgn/northtalk-editor": "workspace:*",
-    "@odgn/northtalk-tooling": "workspace:*"
+    "@northtalk/ts": "workspace:*",
+    "@northtalk/editor": "workspace:*",
+    "@northtalk/tooling": "workspace:*"
   }
 }

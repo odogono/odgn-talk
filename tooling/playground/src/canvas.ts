@@ -1,5 +1,5 @@
-import { readDisplay, type Value } from '@odgn/northtalk';
-import type { CanvasCommand } from '@odgn/northtalk-tooling/canvas';
+import { readDisplay, type Value } from '@northtalk/ts';
+import type { CanvasCommand } from '@northtalk/tooling/canvas';
 
 const numberAt = (args: Value[], i: number) => Number(args[i]!.toString());
 const textAt = (args: Value[], i: number) => args[i]!.asText()!;

@@ -1,16 +1,16 @@
-import { canvasCommands } from '@odgn/northtalk-tooling/canvas';
+import { canvasCommands } from '@northtalk/tooling/canvas';
 // The session worker: the Playground Host. It owns the Session Host, its
 // timers and the replay debugger, and answers the page with the session's
 // state after every request and every Pump it makes at a deadline.
-import type { Setup } from '@odgn/northtalk/setup';
-import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
+import type { Setup } from '@northtalk/ts/setup';
+import { calendar, locale } from '@northtalk/tooling/builtins';
 import {
   ReplayDebugger,
   renderDebugView,
   type ReplayResult,
-} from '@odgn/northtalk-tooling/debug';
-import { bool, list, nothing, text } from '@odgn/northtalk';
-import { SessionDriver } from '@odgn/northtalk-tooling/session-driver';
+} from '@northtalk/tooling/debug';
+import { bool, list, nothing, text } from '@northtalk/ts';
+import { SessionDriver } from '@northtalk/tooling/session-driver';
 import type {
   ConsoleLine,
   FromSession,

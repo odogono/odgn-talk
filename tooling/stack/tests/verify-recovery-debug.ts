@@ -1,4 +1,4 @@
-import { compileLibrary, newGroup } from '@odgn/northtalk';
+import { compileLibrary, newGroup } from '@northtalk/ts';
 import { LiveDebugger, ReplayDebugger } from '../src/debug';
 
 export const recoveryLibrary = `function fail

@@ -14,7 +14,7 @@ import {
   type CalendarImpl,
   type LocaleImpl,
   type Value,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 
 const US_PER_MS = 1000n;
 const US_PER_S = 1_000_000n;

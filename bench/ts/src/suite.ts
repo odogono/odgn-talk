@@ -16,7 +16,7 @@ import {
   type Report,
   type ScriptHandle,
   type LoadOptions,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { peerRunners } from './runners';
 
 export const scriptsDir = join(import.meta.dir, '..', '..', 'scripts');

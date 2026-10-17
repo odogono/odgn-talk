@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import cases from '../../../tools/grammar/recovery-offers.json';
-import { checkSource } from '@odgn/northtalk';
+import { checkSource } from '@northtalk/ts';
 import { parse } from '../../../tools/grammar/parser';
 import { viewSource } from '../../../impl/ts/src/view';
 import { formatSource } from '../src/format';

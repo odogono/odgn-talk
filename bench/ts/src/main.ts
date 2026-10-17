@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, cpus, platform, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { coreVersions } from '@odgn/northtalk';
+import { coreVersions } from '@northtalk/ts';
 import {
   fuelParity,
   markdown,

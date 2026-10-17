@@ -1,4 +1,4 @@
-import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
+import { canvasCapabilities } from '@northtalk/tooling/canvas';
 // The TS REPL: a line-at-a-time interface over the Session Host. Its prompt,
 // line editing, `:help`, `:quit` and how it is told where to write a
 // Transcript are outside parity (chapter 12); everything it prints and
@@ -11,9 +11,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { SessionHost, writeTranscript } from '@odgn/northtalk/session';
-import { calendar, locale } from '@odgn/northtalk-tooling/builtins';
-import { SessionDriver } from '@odgn/northtalk-tooling/session-driver';
+import { SessionHost, writeTranscript } from '@northtalk/ts/session';
+import { calendar, locale } from '@northtalk/tooling/builtins';
+import { SessionDriver } from '@northtalk/tooling/session-driver';
 import { promptAnswer, promptLines } from './prompts';
 
 const help = [

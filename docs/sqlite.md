@@ -131,8 +131,8 @@ database in the same Segment raises `segment participant conflict`.
 
 ## Offering SQLite from a TypeScript Host
 
-The package's `@odgn/northtalk/sqlite` entry point supplies the database
-implementation, while `@odgn/northtalk` supplies the Core's factory. This example
+The package's `@northtalk/ts/sqlite` entry point supplies the database
+implementation, while `@northtalk/ts` supplies the Core's factory. This example
 imports the local sources so it can run directly from this checkout. It uses a
 temporary database and runs one handler to completion. From the repository
 root, run `bun install`, save it as `sqlite-example.ts`, then run

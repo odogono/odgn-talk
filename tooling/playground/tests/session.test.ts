@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { parseInstant, text } from '@odgn/northtalk';
-import { writeTranscript } from '@odgn/northtalk/session';
-import { readDictionary } from '@odgn/northtalk-tooling/dictionary';
+import { parseInstant, text } from '@northtalk/ts';
+import { writeTranscript } from '@northtalk/ts/session';
+import { readDictionary } from '@northtalk/tooling/dictionary';
 import { PlaygroundSession, SESSION_TAB } from '../src/session';
 import {
   recoveryLibrary,

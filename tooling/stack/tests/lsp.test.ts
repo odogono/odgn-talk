@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SessionHost } from '@odgn/northtalk/session';
+import { SessionHost } from '@northtalk/ts/session';
 import { readManifest } from '../src/lsp/manifest';
 import {
   createLanguageServer,

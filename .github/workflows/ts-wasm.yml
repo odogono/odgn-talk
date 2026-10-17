@@ -1,6 +1,6 @@
 name: TS embedding API on the Zig reactor
 
-# @odgn/northtalk/wasm (ADR 0097): the TS embedding API over the Zig Core's
+# @northtalk/ts/wasm (ADR 0097): the TS embedding API over the Zig Core's
 # wasm32-wasi reactor. A change to either side can break the other.
 on:
   pull_request:

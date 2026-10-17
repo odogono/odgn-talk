@@ -1,17 +1,17 @@
-import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
+import { canvasCapabilities } from '@northtalk/tooling/canvas';
 // File and stdio concerns for the browser-safe replay debugger.
 import { readFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
-import type { Setup } from '@odgn/northtalk/setup';
+import { parseTranscript, replayTranscript } from '@northtalk/ts/session';
+import type { Setup } from '@northtalk/ts/setup';
 import {
   ReplayDebugger,
   copyDebugVar,
   renderDebugView,
   type ReplayResult,
   type SourceBreakpoint,
-} from '@odgn/northtalk-tooling/debug';
+} from '@northtalk/tooling/debug';
 
 const help = `:break <unit>:<line>[:<column>]  add a source breakpoint
 :clear                         remove breakpoints

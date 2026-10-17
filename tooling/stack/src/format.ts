@@ -5,7 +5,7 @@ import {
   type SyntaxElement,
   type SyntaxNode,
   type Token,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 
 export type FormatResult = {
   error: ParseError | null;

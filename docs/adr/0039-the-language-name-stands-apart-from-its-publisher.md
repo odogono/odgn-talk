@@ -24,3 +24,4 @@ These are preliminary searches, not trademark clearance. The spaced form `North 
 ## Consequences
 
 - Amended by [ADR 0046](0046-each-core-lives-under-impl-beside-a-shared-spec.md): the Go module moved from the repository root to `impl/go/`, so its path is `github.com/odogono/odgn-talk/impl/go` and its driver's is `github.com/odogono/odgn-talk/impl/go/driver`. The package identifier is still `northtalk`.
+- Amended by [ADR 0102](0102-npm-packages-publish-under-the-northtalk-scope.md): the TS package is `@northtalk/ts`, and every npm package is named under the `@northtalk` scope. ODGN remains the publisher.

@@ -8,7 +8,7 @@ import {
   verifyLspStdio,
   verifyLspInvalidConfiguration,
 } from './lsp-integration';
-import { coreVersions } from '@odgn/northtalk';
+import { coreVersions } from '@northtalk/ts';
 
 const directory = mkdtempSync(join(tmpdir(), 'northtalk-node-'));
 const main = fileURLToPath(new URL('./main.js', import.meta.url));

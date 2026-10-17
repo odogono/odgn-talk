@@ -4,7 +4,7 @@ import {
   parseSourceRecovering,
   type SemanticElement,
   type SemanticNode,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { shapeText } from '../dictionary';
 import { grantDeclarations, type HostManifest } from './manifest';
 import { rangeAt } from './protocol';

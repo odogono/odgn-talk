@@ -8,8 +8,8 @@ import {
   type Operation,
   type Shape,
   type Value,
-} from '@odgn/northtalk';
-import { parseRecord } from '@odgn/northtalk/replay';
+} from '@northtalk/ts';
+import { parseRecord } from '@northtalk/ts/replay';
 
 export const CANVAS_LIMITS = {
   dimension: 4096,

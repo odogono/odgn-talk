@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseTranscript, replayTranscript } from '@odgn/northtalk/session';
-import type { Setup } from '@odgn/northtalk/setup';
+import { parseTranscript, replayTranscript } from '@northtalk/ts/session';
+import type { Setup } from '@northtalk/ts/setup';
 import { replay, same } from '../../../impl/ts/tools/trace-case';
 import { ReplayDebugger } from '../src/debug';
 

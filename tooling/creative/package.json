@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-creative",
+  "name": "@northtalk/creative",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,8 +13,8 @@
   "dependencies": {
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
-    "@odgn/northtalk": "workspace:*",
-    "@odgn/northtalk-editor": "workspace:*",
+    "@northtalk/ts": "workspace:*",
+    "@northtalk/editor": "workspace:*",
     "@preact/signals": "^2.11.3",
     "@preact/signals-core": "^1.14.4",
     "immer": "^11.1.21",

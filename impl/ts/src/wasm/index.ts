@@ -1,7 +1,7 @@
-// @odgn/northtalk/wasm: talk.ts's embedding API over the Zig Core's
+// @northtalk/ts/wasm: talk.ts's embedding API over the Zig Core's
 // `wasm32-wasi` reactor. Values, Shapes, errors and the Capability and Object
 // Kind constructors are the TS Core's own, so Host code written against
-// @odgn/northtalk switches Cores by its import; README.md lists the
+// @northtalk/ts switches Cores by its import; README.md lists the
 // differences.
 export {
   createCore,

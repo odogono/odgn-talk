@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-tooling",
+  "name": "@northtalk/tooling",
   "private": true,
   "type": "module",
   "exports": {
@@ -20,6 +20,6 @@
     "test:browser": "bun tools/browser-smoke.ts"
   },
   "dependencies": {
-    "@odgn/northtalk": "workspace:*"
+    "@northtalk/ts": "workspace:*"
   }
 }

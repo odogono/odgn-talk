@@ -3,11 +3,8 @@
 // editor. Script windows and the Message Box are both built from these.
 import { type Extension } from '@codemirror/state';
 import { EditorView, type KeyBinding } from '@codemirror/view';
-import {
-  northtalkEditor,
-  type LanguageHooks,
-} from '@odgn/northtalk-editor/editor';
-import { LspClient } from '@odgn/northtalk-editor/lsp-client';
+import { northtalkEditor, type LanguageHooks } from '@northtalk/editor/editor';
+import { LspClient } from '@northtalk/editor/lsp-client';
 import { floatingWindow, type FloatingWindow } from './windows';
 import { type scriptManifest } from './script-manifest';
 

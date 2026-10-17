@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-fuzz",
+  "name": "@northtalk/fuzz",
   "private": true,
   "type": "module",
   "bin": {
@@ -10,6 +10,6 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@odgn/northtalk": "workspace:*"
+    "@northtalk/ts": "workspace:*"
   }
 }

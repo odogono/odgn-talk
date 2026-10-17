@@ -14,7 +14,7 @@ import {
   type Text,
 } from '@codemirror/state';
 import { Decoration, EditorView, keymap } from '@codemirror/view';
-import { diagnosticsSpec } from '@odgn/northtalk-editor/editor';
+import { diagnosticsSpec } from '@northtalk/editor/editor';
 import {
   codeEditor,
   codeWindow,

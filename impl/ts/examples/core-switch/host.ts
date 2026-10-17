@@ -1,6 +1,6 @@
 // A Host written once against the embedding API (spec/embedding/talk.ts),
-// given the package it runs on: ts.ts passes @odgn/northtalk and wasm.ts
-// @odgn/northtalk/wasm. Nothing else differs.
+// given the package it runs on: ts.ts passes @northtalk/ts and wasm.ts
+// @northtalk/ts/wasm. Nothing else differs.
 //
 // It loads a Script whose Handler waits on a suspending Operation, Pumps it
 // to that wait, saves the Group, restores the save into a fresh Group, answers

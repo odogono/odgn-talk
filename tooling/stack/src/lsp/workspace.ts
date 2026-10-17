@@ -17,7 +17,7 @@ import {
   type SemanticResult,
   type SyntaxNode,
   type Script,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { lintSyntax, type Lint, type LintProfile } from '../lint';
 import { grantDeclarations, type HostManifest } from './manifest';
 import { rangeAt, type LspDiagnostic } from './protocol';

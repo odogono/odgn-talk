@@ -1,11 +1,11 @@
 // Messages between the page and its workers. The session worker runs the
 // Core, the Session Host and the debuggers. The LSP worker's messages are in
-// `@odgn/northtalk-editor/lsp-protocol`.
+// `@northtalk/editor/lsp-protocol`.
 import type {
   DebugAction,
   TranscriptItem,
   UserPrompt,
-} from '@odgn/northtalk/session';
+} from '@northtalk/ts/session';
 import type { Shared } from './link';
 import type {
   ApplyResult,
@@ -37,7 +37,7 @@ export type ConsoleLine =
   | { k: 'note'; level: 'info' | 'warning' | 'error'; text: string };
 
 export type ReplayView = {
-  canvas: import('@odgn/northtalk-tooling/canvas').CanvasCommand[];
+  canvas: import('@northtalk/tooling/canvas').CanvasCommand[];
   hostInputCount: number;
   hostInputIndex: number;
   pause: Omit<PauseView, 'tab'> | null;
@@ -47,7 +47,7 @@ export type ReplayView = {
 
 export type SessionState = {
   breakpoints: { line: number; tab: string; verified: boolean }[];
-  canvas: import('@odgn/northtalk-tooling/canvas').CanvasCommand[];
+  canvas: import('@northtalk/tooling/canvas').CanvasCommand[];
   generation: number;
   lines: ConsoleLine[];
   manifest: unknown;

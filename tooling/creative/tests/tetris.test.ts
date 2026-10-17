@@ -7,7 +7,7 @@ import {
 } from '../src/examples/tetris';
 import { PlaySession } from '../src/play';
 import { textOf } from '../src/model';
-import { text } from '@odgn/northtalk';
+import { text } from '@northtalk/ts';
 
 // A Play Session on Tetris with an explicit clock, as the browser drives it.
 const start = async (extraHandlers = '') => {

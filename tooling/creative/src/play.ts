@@ -24,7 +24,7 @@ import {
   type ObjectKind,
   type PropDef,
   type Value,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import {
   createElement,
   duplicateElement,

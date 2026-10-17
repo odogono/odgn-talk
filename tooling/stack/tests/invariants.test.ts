@@ -10,7 +10,7 @@ import {
   parseSource,
   type CompileOptions,
   type SyntaxElement,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { formatSource } from '../src/format';
 
 const root = resolve(import.meta.dir, '../../..');
