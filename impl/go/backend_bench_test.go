@@ -286,33 +286,52 @@ func memorySample() memory {
 const coldChildEnv = "NORTHTALK_COLD_START_CHILD"
 
 // BenchmarkBackendColdStart starts a fresh process per iteration, so nothing
-// compiled is shared. The child times its first Group from New to the first
-// Request result, then a second Group on the same Core, which shares any
-// compiled code. Process time includes the test binary's own start.
+// compiled in memory is shared. The child times its first Group from New to
+// the first Request result, then a second Group on the same Core, which shares
+// any compiled code. Process time includes the test binary's own start. With
+// cache=warm the children share a Zig compilation cache directory, filled by
+// an untimed child first; native Go ignores it (#1103).
 func BenchmarkBackendColdStart(b *testing.B) {
-	var first, second, process float64
-	for b.Loop() {
-		start := time.Now()
-		cmd := exec.Command(os.Args[0], "-test.run=^TestBackendColdStartChild$", "-test.count=1")
-		cmd.Env = append(os.Environ(), coldChildEnv+"=1")
-		out, err := cmd.Output()
-		if err != nil {
-			b.Fatal(err, string(out))
-		}
-		process += float64(time.Since(start).Nanoseconds())
-		var f, s float64
-		if _, err := fmt.Sscanf(lineWith(string(out), "cold-start "), "cold-start %g %g", &f, &s); err != nil {
-			b.Fatal(err, string(out))
-		}
-		first += f
-		second += s
+	for _, cache := range []string{"none", "warm"} {
+		b.Run("cache="+cache, func(b *testing.B) {
+			env := append(os.Environ(), coldChildEnv+"=1")
+			if cache == "warm" {
+				env = append(env, "NORTHTALK_ZIG_CACHE_DIR="+b.TempDir())
+				if _, _, err := coldChild(env); err != nil {
+					b.Fatal(err)
+				}
+			}
+			var first, second, process float64
+			for b.Loop() {
+				start := time.Now()
+				f, s, err := coldChild(env)
+				if err != nil {
+					b.Fatal(err)
+				}
+				process += float64(time.Since(start).Nanoseconds())
+				first += f
+				second += s
+			}
+			n := float64(b.N)
+			b.ReportMetric(first/n, "first-group-ns")
+			b.ReportMetric(second/n, "second-group-ns")
+			b.ReportMetric(process/n, "process-ns")
+		})
 	}
-	n := float64(b.N)
-	b.ReportMetric(first/n, "first-group-ns")
-	b.ReportMetric(second/n, "second-group-ns")
-	b.ReportMetric(process/n, "process-ns")
 }
 
+// coldChild runs TestBackendColdStartChild in a new process and returns its
+// first and second Group times.
+func coldChild(env []string) (first, second float64, err error) {
+	cmd := exec.Command(os.Args[0], "-test.run=^TestBackendColdStartChild$", "-test.count=1")
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, 0, fmt.Errorf("%w: %s", err, out)
+	}
+	_, err = fmt.Sscanf(lineWith(string(out), "cold-start "), "cold-start %g %g", &first, &second)
+	return first, second, err
+}
 func lineWith(out, prefix string) string {
 	for line := range strings.Lines(out) {
 		if strings.HasPrefix(line, prefix) {

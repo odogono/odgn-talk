@@ -224,7 +224,11 @@ sqlite per-step charging remains [#911](https://github.com/odogono/odgn-talk/iss
 
 The internal `zigwasm` package verifies the embedded artifact digest. The adapter
 checks language, Cost Model and Unicode versions before use. Compiled code is
-cached process-wide; each Group owns an independent guest. Group cleanup closes
+cached process-wide; each Group owns an independent guest. Each process
+compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
+names a directory, where wazero keeps compiled code for later processes,
+keyed by its version and the artifact. `BenchmarkBackendColdStart` measures
+both, as `cache=none` and `cache=warm`. Group cleanup closes
 the guest through Go's garbage collector, without per-Value Release. Replies
 are copied before another export, and returned Values own Go memory. Data
 conversion uses the existing iterative codec rather than encoding/json's

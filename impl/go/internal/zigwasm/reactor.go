@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/experimental"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
@@ -26,7 +28,14 @@ var manifest []byte
 type Engine struct {
 	runtime  wazero.Runtime
 	compiled wazero.CompiledModule
+	cache    wazero.CompilationCache
 }
+
+// CacheDirEnv names a directory where compiled guest code is kept between
+// processes. Unset, every process compiles the artifact itself. wazero keys
+// the cache by its version and the artifact, so a changed artifact compiles
+// again.
+const CacheDirEnv = "NORTHTALK_ZIG_CACHE_DIR"
 
 func NewEngine(ctx context.Context) (*Engine, error) {
 	var recorded struct {
@@ -39,19 +48,35 @@ func NewEngine(ctx context.Context) (*Engine, error) {
 	if hex.EncodeToString(sum[:]) != recorded.SHA256 {
 		return nil, fmt.Errorf("embedded Zig artifact digest mismatch")
 	}
-	r := wazero.NewRuntime(ctx)
-	if _, err := wasi_snapshot_preview1.Instantiate(ctx, r); err != nil {
-		r.Close(ctx)
+	config := wazero.NewRuntimeConfig()
+	var cache wazero.CompilationCache
+	if dir := os.Getenv(CacheDirEnv); dir != "" {
+		var err error
+		if cache, err = wazero.NewCompilationCacheWithDir(dir); err != nil {
+			return nil, err
+		}
+		config = config.WithCompilationCache(cache)
+	}
+	e := &Engine{runtime: wazero.NewRuntimeWithConfig(ctx, config), cache: cache}
+	if _, err := wasi_snapshot_preview1.Instantiate(ctx, e.runtime); err != nil {
+		e.Close(ctx)
 		return nil, err
 	}
-	c, err := r.CompileModule(ctx, wasm)
+	c, err := e.runtime.CompileModule(ctx, wasm)
 	if err != nil {
-		r.Close(ctx)
+		e.Close(ctx)
 		return nil, err
 	}
-	return &Engine{r, c}, nil
+	e.compiled = c
+	return e, nil
 }
-func (e *Engine) Close(ctx context.Context) error { return e.runtime.Close(ctx) }
+func (e *Engine) Close(ctx context.Context) error {
+	err := e.runtime.Close(ctx)
+	if e.cache != nil {
+		e.cache.Close(ctx)
+	}
+	return err
+}
 func (e *Engine) Instantiate(ctx context.Context) (*Reactor, error) {
 	return e.InstantiateObserved(ctx, nil)
 }
@@ -63,11 +88,12 @@ func (e *Engine) InstantiateObserved(ctx context.Context, observer func([]byte) 
 		inline = &inlineIO{event: observer}
 		config = config.WithStdin(inline).WithStdout(inline)
 	}
-	m, err := e.runtime.InstantiateModule(ctx, e.compiled, config)
+	m, err := e.runtime.InstantiateModule(experimental.WithMemoryAllocator(ctx, experimental.MemoryAllocatorFunc(allocate)), e.compiled, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Reactor{module: m, inline: inline}, nil
+	// Looking an export up per call builds a new call engine and stack each time.
+	return &Reactor{module: m, inline: inline, buffer: m.ExportedFunction("talk_buffer"), send: m.ExportedFunction("talk_send")}, nil
 }
 
 // Reactor serializes exports, including buffer copies and Close. The caller
@@ -79,6 +105,8 @@ type Reactor struct {
 	mu     sync.Mutex
 	module api.Module
 	inline *inlineIO
+	buffer api.Function
+	send   api.Function
 }
 
 func (r *Reactor) Close(ctx context.Context) error {
@@ -101,7 +129,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	if len(frame) == 0 || len(frame) > maxFrame {
 		return nil, fmt.Errorf("frame length %d outside 1..64 MiB", len(frame))
 	}
-	allocated, err := r.module.ExportedFunction("talk_buffer").Call(ctx, uint64(len(frame)))
+	allocated, err := r.buffer.Call(ctx, uint64(len(frame)))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +139,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	if !r.module.Memory().Write(uint32(allocated[0]), frame) {
 		return nil, fmt.Errorf("input buffer outside guest memory")
 	}
-	result, err := r.module.ExportedFunction("talk_send").Call(ctx, uint64(len(frame)))
+	result, err := r.send.Call(ctx, uint64(len(frame)))
 	if r.inline != nil && r.inline.err != nil {
 		return nil, r.inline.err
 	}
