@@ -560,6 +560,44 @@ end frame`;
   };
 };
 
+export const runKeyBrowserTests = async () => {
+  const project = createProject('Keys');
+  const button = createElement('button', 'last');
+  project.pages[0]!.elements.push(button);
+  const shell = mountStack(project);
+  mountPlay(shell);
+  const toggle = document.querySelector<HTMLButtonElement>(
+    '#menu [aria-pressed]',
+  )!;
+  const reader = document.querySelector<HTMLElement>('#reader')!;
+  const press = () => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    reader.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  toggle.click();
+  assert(!press(), 'An unhandled arrow key was claimed');
+  toggle.click();
+  project.pages[0]!.script =
+    'on keyDown key\n set the label of last to key\nend keyDown';
+  toggle.click();
+  assert(press(), 'A handled arrow key still scrolls');
+  await until(
+    () =>
+      document.querySelector('#reader [data-element="last"]')?.textContent ===
+      'ArrowDown',
+  );
+  toggle.click();
+  return {
+    passed: true,
+    checks: ['unhandled keys keep their default', 'handled keys are claimed'],
+  };
+};
+
 export const runUserBrowserTests = async () => {
   const project = createProject('User prompts');
   const button = createElement('button', 'button1');

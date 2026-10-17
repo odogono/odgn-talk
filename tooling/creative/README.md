@@ -432,7 +432,10 @@ Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
 then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
-or to the Page, without preventing normal typing. Reader-editable text opens
+or to the Page, without preventing normal typing. A key sent to the Page when
+a `keyDown` Handler is on its Message Path loses its browser default, so arrow
+keys and space drive a game rather than scroll; with no such Handler they
+scroll as usual. Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
 colour, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
 the text again reopens it. Typing, formatting, paste and reader undo/redo send
