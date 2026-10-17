@@ -20,3 +20,4 @@ With both Cores passing the Conformance Corpus, the gate in ADR 0040 is met, and
 - **Unchanged:** ADR 0009's two Cores, the browser on the TS Core, and same-Core saves (ADR 0008).
 - Narrows [ADR 0040](0040-a-third-native-core-is-deferred-until-both-cores-conform.md).
 - Superseded in part by [ADR 0078](0078-the-zig-third-core-is-built-though-the-message-layer-meets-its-thresholds.md): the Message Layer met its thresholds for both Hosts, and the Zig third Core is built anyway. Everything else here stands.
+- Superseded in part by [ADR 0097](0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md): a browser Host may run the Zig reactor through the TS embedding API. The TS Core stays the browser's default Core.

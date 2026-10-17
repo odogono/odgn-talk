@@ -496,10 +496,17 @@ class JsonReader extends Reader {
   }
 }
 
-const fromJson = (
+/**
+ * Reads the tags a Message Layer adapter receives beyond the Value Encoding,
+ * `$function` and `$pattern`; undefined refuses the tag.
+ */
+export type TagDecoder = (tag: string, data: Json) => Value | undefined;
+
+export const fromJson = (
   value: Json,
   resolve?: ObjectResolver,
   functionResolve?: (handle: string) => Value,
+  tagDecode?: TagDecoder,
 ): Value => {
   let result = nothing;
   const tasks: (() => void)[] = [];
@@ -551,6 +558,14 @@ const fromJson = (
           functionResolve
         ) {
           assign(functionResolve(data));
+          return;
+        }
+        const adapted =
+          tag === '$function' || tag === '$pattern'
+            ? tagDecode?.(tag, data)
+            : undefined;
+        if (adapted) {
+          assign(adapted);
           return;
         }
         if (tag === '$dec' && typeof data === 'string') {

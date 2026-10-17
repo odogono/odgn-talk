@@ -1,0 +1,46 @@
+name: TS embedding API on the Zig reactor
+
+# @odgn/northtalk/wasm (ADR 0097): the TS embedding API over the Zig Core's
+# wasm32-wasi reactor. A change to either side can break the other.
+on:
+  pull_request:
+    paths:
+      - 'impl/ts/**'
+      - 'impl/zig/**'
+      - 'spec/**'
+      - '!spec/**/*.md'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/ts-wasm.yml'
+      - '.github/actions/setup-ts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'impl/ts/**'
+      - 'impl/zig/**'
+      - 'spec/**'
+      - '!spec/**/*.md'
+      - 'corpus/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/ts-wasm.yml'
+      - '.github/actions/setup-ts/**'
+
+jobs:
+  facade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - run: zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi
+        working-directory: impl/zig
+      - uses: ./.github/actions/setup-ts
+      # The same Host code on both Cores.
+      - run: bun test tests/wasm.test.ts examples/core-switch
+        working-directory: impl/ts
+      # Every Trace Case, in both replays, with the reactor behind the facade.
+      - run: bun tools/wasm-corpus.ts --quiet
+        working-directory: impl/ts

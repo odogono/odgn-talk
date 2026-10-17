@@ -1,5 +1,7 @@
 import {
   buildSetupGroup,
+  tsCore,
+  type CaseCore,
   MissingCapabilityError,
   shapeOf,
   type Setup,
@@ -11,12 +13,10 @@ import { SessionObjects } from './session/objects';
 // Only the supplied source reader performs I/O. Replay events add no Trace lines.
 import { readDisplayText } from './readers';
 import { Stubs, hostFailure, type Stub } from './session/stubs';
-import { replacementLibraries } from './library';
 import type { DebugPause } from './debug';
 import type { PumpResult } from './group';
 import corpus from '../../../spec/data/corpus.toml';
 import {
-  compileLibrary,
   defineCapability,
   clockCapability,
   consoleCapability,
@@ -26,7 +26,6 @@ import {
   storeCapability,
   timerCapability,
   userCapability,
-  defineObjectKind,
   type HostObject,
   ScriptError,
   type Call,
@@ -40,7 +39,6 @@ import {
   HostError,
   LoadError,
   type Library,
-  restore,
   NotImplementedError,
   parseInstant,
   readDisplay,
@@ -715,8 +713,10 @@ const driveReplay = function* (
     configureDebug,
     trace = [],
     incremental = false,
+    core = tsCore,
   }: {
     configureDebug?: (group: Group) => void;
+    core?: CaseCore;
     incremental?: boolean;
     restoreBetweenPumps?: boolean;
     trace?: string[];
@@ -867,7 +867,7 @@ const driveReplay = function* (
   const kinds = new Map(
     (setup.objectKinds ?? []).map(k => [
       k.name,
-      defineObjectKind<null>({
+      core.defineObjectKind<null>({
         name: k.name,
         ...(k.parentKinds ? { parentKinds: k.parentKinds } : {}),
         props: Object.fromEntries(
@@ -1021,6 +1021,7 @@ const driveReplay = function* (
     coordinator,
   );
   const built = buildSetupGroup(setup, capabilities, {
+    core,
     name: 'case',
     trace: writeTrace,
     readSource,
@@ -1139,7 +1140,7 @@ const driveReplay = function* (
         case 'replace-library': {
           const name = r.ids[0]!;
           const previous = registered.get(name)!;
-          const library = compileLibrary(
+          const library = core.compileLibrary(
             {
               name,
               version: previous.version,
@@ -1154,7 +1155,7 @@ const driveReplay = function* (
               ? 'carry variables'
               : 'reset variables',
           );
-          registered = replacementLibraries(registered, library);
+          registered = core.replacementLibraries(registered, library);
           break;
         }
         case 'set-parent': {
@@ -1265,7 +1266,7 @@ const driveReplay = function* (
           const disposed = r.fields.has('disposed')
             ? valuesOf(value(r.fields.get('disposed')!)).map(v => v.toString())
             : [];
-          const restored = restore(saved.get(from)!, {
+          const restored = core.restore(saved.get(from)!, {
             name: 'case',
             trace: writeTrace,
             libraries: [...registered.values()].filter(
@@ -1525,7 +1526,7 @@ const driveReplay = function* (
               hidden = false;
               break;
             }
-            const restored = restore(bytes, {
+            const restored = core.restore(bytes, {
               name: 'case',
               trace: writeTrace,
               libraries: [...registered.values()],
@@ -1720,6 +1721,7 @@ export const replayTrace = function* (
   lines: readonly string[],
   options: {
     configureDebug?: (group: Group) => void;
+    core?: CaseCore;
     restoreBetweenPumps?: boolean;
     trace?: string[];
   } = {},
