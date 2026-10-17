@@ -108,6 +108,12 @@ The hook controls execution and reads state; it does not edit Script Variables o
 
 ## Process-wide Core and Host Manifests
 
+**Object element references:** `element name of receiver` and
+`the number of elements of receiver` are
+[specified](../../spec/embedding/object-elements.md) but unsupported here.
+The checked Object Kind interface exposes properties, with no Object
+Collection callbacks.
+
 **Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. The [Zig Core](../zig/README.md#the-machine) implements the staged contract with Zig-only acceptance tests; the shared executable catalogues remain staged. See [#472](https://github.com/odogono/odgn-talk/issues/472).
 
 `createCore()` returns the process-wide `Core` from chapter 9: Capability and Object Kind definitions, the six Standard Capability factories, Library compilation, Group creation and restore. Existing free-function helpers remain available and share that Core's definitions and compilation caches. Script code is cached by code identity across Groups, reloads and restores, while each load still checks its Grants, Object property declarations and limits and initialises separate Script state. Extension code is cached by the complete extended Script identity, since its bindings and variable slots depend on earlier definitions. Library compilation already shares code by identity; its Host version remains metadata.

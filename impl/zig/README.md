@@ -875,6 +875,12 @@ a program can be a long chain of splits, so reading, splicing, writing,
 compiling and matching keep their pending work on explicit stacks and never
 recurse on a pattern or its subject.
 
+**Object element references:** `element name of receiver` and
+`the number of elements of receiver` are
+[specified](../../spec/embedding/object-elements.md) but unsupported here.
+The native, C and Message Layer Object Kind interfaces expose properties,
+with no Object Collection callbacks.
+
 A Host defines Capabilities and Grants through `talk.h`
 ([capabilities](src/machine/capabilities.zig)), and binds Grants at Load, by
 the name the Script uses. `ask` and `tell` call immediate and fire-and-forget

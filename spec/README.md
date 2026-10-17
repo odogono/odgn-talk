@@ -42,6 +42,15 @@ Store `watch` and `unwatch` are specified in [chapter 7](07-libraries-and-the-st
 
 [The metering contract](embedding/metered-operations.md) specifies synchronous chunks and queued asynchronous Fuel authorization, with SQLite step charging. [ADR 0082](../docs/adr/0082-metered-operations-authorize-work-through-the-pump.md) records the choices; the [specification handoff](../docs/handoffs/472-metered-operations.md) names staged executable catalogues and implementation acceptance.
 
+## Object element references
+
+The [object element contract](embedding/object-elements.md) specifies
+computed-name and positional Host Object references and counting. [ADR 0100](../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
+records the design. Grammar, instructions, costs, checked embedding declarations
+and Trace catalogues are staged for coordinated implementation under the
+[handoff](../docs/handoffs/1143-object-elements.md); no Core supports these
+forms yet.
+
 ## Data Files
 
 Before editing grammar, instructions or catalogues, use the [change-impact guide](../docs/agents/spec-changes.md) to identify generators, Core/tooling coverage requirements and delivery boundaries.
