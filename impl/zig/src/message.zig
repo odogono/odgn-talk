@@ -97,6 +97,26 @@ const GroupEntry = struct {
     /// answered or failed: those the Core abandons are listed in the next
     /// reply's `abandoned`, once.
     started: std.ArrayList([]u8) = .empty,
+    /// `group-exchanges-v1`: this Group's exchange while another's is loaded.
+    parked: Exchange = .{},
+
+    /// Frees the entry and its Group, which no exchange may still name.
+    fn destroy(e: *GroupEntry) void {
+        const gpa = e.gpa;
+        e.parked.deinit(gpa);
+        Direct.groupRelease(e.group);
+        for (e.pending_trace.items) |line| gpa.free(line);
+        for (e.started.items) |x| gpa.free(x);
+        e.started.deinit(gpa);
+        e.pending_trace.deinit(gpa);
+        if (e.inline_trace) |*t| {
+            t.bytes.deinit(gpa);
+            for (t.diagnostics.items) |line| gpa.free(line);
+            t.diagnostics.deinit(gpa);
+        }
+        gpa.free(e.name);
+        gpa.destroy(e);
+    }
 
     /// Remembers a call the Host is working on.
     fn track(e: *GroupEntry, id: []const u8) void {
@@ -233,18 +253,9 @@ const Need = struct {
     }
 };
 
-/// One instance's Message Layer state: its Core, and the Handles the Host
-/// holds. Created whole by `Session.init`; the wasm exports keep one in
-/// `instance`.
-pub const Session = struct {
-    gpa: Allocator,
-    core: *talk.Core,
-    grants: std.ArrayList(*caps.Grant) = .empty,
-    capability_handles: std.ArrayList(struct { name: []u8, definition: *caps.Capability }) = .empty,
-    groups: std.ArrayList(*GroupEntry) = .empty,
-    /// Per-Operation and per-property Host contexts, owned here.
-    op_contexts: std.ArrayList(*OpContext) = .empty,
-    prop_contexts: std.ArrayList(*PropContext) = .empty,
+/// A Host-started worker exchange: a Pump, Reload or library replacement
+/// that may pause for needs and Grant releases before its final reply.
+const Exchange = struct {
     /// Whether a Pump is running, so a load's initialiser cannot defer.
     in_pump: bool = false,
     /// Whether a Reload or library replacement is ending the old code's
@@ -257,14 +268,10 @@ pub const Session = struct {
     paused_ref: ?i64 = null,
     need: ?Need = null,
     answer: ?Answer = null,
-    /// OOM inside a Host function, which cannot report it there.
-    oom: bool = false,
     /// The Group whose Pump is running, which a need belongs to.
     pumping_entry: ?*GroupEntry = null,
     exchange_entry: ?*GroupEntry = null,
     exchange_pump: bool = false,
-    /// A `restore` waiting for its `resolve-result`.
-    restoring: ?Restoring = null,
     /// What an `effect-result` brought back, for the re-made hook.
     effect_answer: ?caps.EffectStatus = null,
     /// Grant releases the Core made, sent as `release` needs before the
@@ -272,6 +279,47 @@ pub const Session = struct {
     releases: std.ArrayList(Release) = .empty,
     held: ?HeldReply = null,
     held_ref: i64 = 0,
+    release_continuation: bool = false,
+
+    /// Whether the exchange waits for a result from the Host.
+    fn open(x: *const Exchange) bool {
+        return x.paused_ref != null or x.held != null;
+    }
+
+    fn deinit(x: *Exchange, gpa: Allocator) void {
+        if (x.need) |*n| n.release(gpa);
+        if (x.answer) |*a| a.release(gpa);
+        for (x.releases.items) |*r| r.deinit(gpa);
+        x.releases.deinit(gpa);
+        if (x.held) |h| gpa.free(h.frame);
+        x.* = .{};
+    }
+};
+
+/// One instance's Message Layer state: its Core, and the Handles the Host
+/// holds. Created whole by `Session.init`; the wasm exports keep one in
+/// `instance`.
+pub const Session = struct {
+    gpa: Allocator,
+    core: *talk.Core,
+    grants: std.ArrayList(*caps.Grant) = .empty,
+    capability_handles: std.ArrayList(struct { name: []u8, definition: *caps.Capability }) = .empty,
+    groups: std.ArrayList(*GroupEntry) = .empty,
+    /// Per-Operation and per-property Host contexts, owned here.
+    op_contexts: std.ArrayList(*OpContext) = .empty,
+    prop_contexts: std.ArrayList(*PropContext) = .empty,
+    /// The exchange of the Group the current frame addresses. Without
+    /// `group-exchanges-v1` it is the Session's only exchange; with it,
+    /// each Group parks its own in its entry while another's is loaded.
+    x: Exchange = .{},
+    /// The Group whose exchange is loaded in `x`; null for the Session's.
+    x_owner: ?*GroupEntry = null,
+    /// `group-exchanges-v1`: each Group has its own exchange.
+    group_exchanges: bool = false,
+    /// OOM inside a Host function, which cannot report it there.
+    oom: bool = false,
+    /// A `restore` waiting for its `resolve-result`.
+    restoring: ?Restoring = null,
     admitting: bool = false,
     /// Opted in at hello: notify before the next callback, once across replies.
     early_abandoned: bool = false,
@@ -288,7 +336,6 @@ pub const Session = struct {
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
     reply_error: bool = false,
-    release_continuation: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
     effect_contexts: std.ArrayList(*EffectContext) = .empty,
@@ -305,32 +352,15 @@ pub const Session = struct {
 
     pub fn deinit(s: *Session) void {
         const gpa = s.gpa;
-        if (s.need) |*n| n.release(gpa);
+        s.x.deinit(gpa);
         if (s.restoring) |*r| r.deinit();
-        for (s.releases.items) |*r| r.deinit(gpa);
-        s.releases.deinit(gpa);
-        if (s.held) |h| gpa.free(h.frame);
         for (s.effect_contexts.items) |c| {
             if (c.coordinator) |n| gpa.free(n);
             if (c.locale) |n| gpa.free(n);
             gpa.destroy(c);
         }
         s.effect_contexts.deinit(gpa);
-        if (s.answer) |*a| a.release(gpa);
-        for (s.groups.items) |e| {
-            Direct.groupRelease(e.group);
-            for (e.pending_trace.items) |line| gpa.free(line);
-            for (e.started.items) |x| gpa.free(x);
-            e.started.deinit(gpa);
-            e.pending_trace.deinit(gpa);
-            if (e.inline_trace) |*t| {
-                t.bytes.deinit(gpa);
-                for (t.diagnostics.items) |line| gpa.free(line);
-                t.diagnostics.deinit(gpa);
-            }
-            gpa.free(e.name);
-            gpa.destroy(e);
-        }
+        for (s.groups.items) |e| e.destroy();
         s.groups.deinit(gpa);
         s.grants.deinit(gpa);
         for (s.capability_handles.items) |h| gpa.free(h.name);
@@ -822,11 +852,11 @@ fn chargeAnswer(call: *caps.Call, charged: u64) bool {
 fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Outcome {
     const oc: *OpContext = @ptrCast(@alignCast(context.?));
     const s = oc.session;
-    if (s.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
-    if (s.answer) |*a| {
-        s.pumping_entry.?.group.group.answering_crossing = false;
+    if (s.x.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
+    if (s.x.answer) |*a| {
+        s.x.pumping_entry.?.group.group.answering_crossing = false;
         const answer = a.*;
-        s.answer = null;
+        s.x.answer = null;
         // A result answers only an immediate Operation, started only a
         // suspending one, done only a fire-and-forget one.
         const fits = switch (answer.kind) {
@@ -854,7 +884,7 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
                 if (!chargeAnswer(call, answer.charged)) return .limited;
                 // The Host works on it now, until it answers or the Core
                 // abandons it.
-                if (s.pumping_entry) |e| e.track(call.id);
+                if (s.x.pumping_entry) |e| e.track(call.id);
                 return .started;
             },
             .done => {
@@ -898,12 +928,12 @@ fn opCall(context: ?*anyopaque, call: *caps.Call, args: []const *Value) caps.Out
         }
     }
     // An automatic call where its crossing can't pause has no answer.
-    if (!(s.in_pump or s.in_work) or !call.deferrable) return .broken;
-    s.need = need: {
+    if (!(s.x.in_pump or s.x.in_work) or !call.deferrable) return .broken;
+    s.x.need = need: {
         const gpa = s.gpa;
         var n: Need = .{
             .kind = .op,
-            .entry = s.pumping_entry.?,
+            .entry = s.x.pumping_entry.?,
             .call = gpa.dupe(u8, call.id) catch return .broken,
             .script = undefined,
             .run = undefined,
@@ -970,17 +1000,17 @@ fn coordinatorOf(context: ?*anyopaque, g: *const caps.Grant) ?caps.Coordinator {
 fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentContext) caps.EffectStatus {
     const ec: *EffectContext = @ptrCast(@alignCast(context.?));
     const s = ec.session;
-    if (s.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
-    if (s.effect_answer) |status| {
-        s.pumping_entry.?.group.group.answering_crossing = false;
-        s.effect_answer = null;
+    if (s.x.pumping_entry) |e| if (e.group.group.release_pause) return .deferred;
+    if (s.x.effect_answer) |status| {
+        s.x.pumping_entry.?.group.group.answering_crossing = false;
+        s.x.effect_answer = null;
         return status;
     }
-    if (!(s.in_pump or s.in_work) or !sc.deferrable) return .unknown;
+    if (!(s.x.in_pump or s.x.in_work) or !sc.deferrable) return .unknown;
     const gpa = s.gpa;
     var n: Need = .{
         .kind = .effect,
-        .entry = s.pumping_entry.?,
+        .entry = s.x.pumping_entry.?,
         .call = &.{},
         .script = &.{},
         .run = &.{},
@@ -1013,7 +1043,7 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
             made += 1;
         }
         n.grants = names;
-        s.need = n;
+        s.x.need = n;
         return .deferred;
     }
     n.release(gpa);
@@ -1025,7 +1055,7 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
 fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
     const s: *Session = @ptrCast(@alignCast(context.?));
     if (s.inline_inputs and !s.inline_active) {
-        const entry = s.exchange_entry orelse return;
+        const entry = s.x.exchange_entry orelse return;
         var o = Out.init(s.gpa);
         defer o.deinit();
         o.raw("{\"need\":{\"m\":\"release\",\"script\":") catch return;
@@ -1045,19 +1075,19 @@ fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
         s.gpa.free(script);
         return;
     };
-    s.releases.append(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
+    s.x.releases.append(s.gpa, .{ .script = script, .grant = grant, .reason = gc.reason, .now = gc.now }) catch {
         s.gpa.free(script);
         s.gpa.free(grant);
         return;
     };
-    if (s.in_pump or s.in_work) s.pumping_entry.?.group.group.release_pause = true;
+    if (s.x.in_pump or s.x.in_work) s.x.pumping_entry.?.group.group.release_pause = true;
 }
 
 fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
-    const a = &(s.answer orelse return null);
-    s.pumping_entry.?.group.group.answering_crossing = false;
+    const a = &(s.x.answer orelse return null);
+    s.x.pumping_entry.?.group.group.answering_crossing = false;
     const answer = a.*;
-    s.answer = null;
+    s.x.answer = null;
     switch (answer.kind) {
         .result => return .{ .value = answer.value.? },
         .done => return .done,
@@ -1088,11 +1118,11 @@ fn propAnswer(s: *Session, gpa: Allocator) ?objects.Result {
 }
 
 fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) objects.Result {
-    if (!s.in_pump) return .broken;
+    if (!s.x.in_pump) return .broken;
     const gpa = s.gpa;
-    s.need = .{
+    s.x.need = .{
         .kind = .prop,
-        .entry = s.pumping_entry.?,
+        .entry = s.x.pumping_entry.?,
         .call = &.{},
         .script = &.{},
         .run = &.{},
@@ -1365,7 +1395,7 @@ fn modeName(m: caps.Mode) []const u8 {
 
 /// The `need` reply a paused Pump gets.
 fn needReply(s: *Session, ref: i64) []u8 {
-    const n = &s.need.?;
+    const n = &s.x.need.?;
     var o = Out.init(s.gpa);
     defer o.deinit();
     o.raw("{\"ref\":") catch {};
@@ -1776,20 +1806,20 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 /// writes its reply.
 fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model.dates.Instant, slice: u64, cap: u64) []u8 {
     if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
-    s.in_pump = true;
-    s.exchange_pump = true;
-    s.exchange_entry = entry;
-    s.pumping_entry = entry;
+    s.x.in_pump = true;
+    s.x.exchange_pump = true;
+    s.x.exchange_entry = entry;
+    s.x.pumping_entry = entry;
     defer {
-        s.in_pump = false;
-        s.pumping_entry = null;
+        s.x.in_pump = false;
+        s.x.pumping_entry = null;
     }
     const mg = &entry.group.group;
     mg.observe_crossings = s.crossing_trace and entry.traced;
     if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
-        s.paused_ref = ref;
+        s.x.paused_ref = ref;
         return pausedReply(s, ref);
     }
     return holdForReleases(s, ref, entry, pumpOk(s, ref, entry), .ok);
@@ -1798,22 +1828,22 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
 /// A release may be the only reason execution paused: its acknowledgement
 /// resumes the saved worker rather than returning a precomputed final reply.
 fn pausedReply(s: *Session, ref: i64) []u8 {
-    if (s.need != null) {
-        const reply = holdForReleases(s, ref, s.exchange_entry.?, needReply(s, ref), .outer);
-        return if (s.crossing_trace) withTrace(s, s.exchange_entry.?, reply) else reply;
+    if (s.x.need != null) {
+        const reply = holdForReleases(s, ref, s.x.exchange_entry.?, needReply(s, ref), .outer);
+        return if (s.crossing_trace) withTrace(s, s.x.exchange_entry.?, reply) else reply;
     }
-    if (s.exchange_entry.?.group.group.trace_pause) {
+    if (s.x.exchange_entry.?.group.group.trace_pause) {
         var o = Out.init(s.gpa);
         defer o.deinit();
         o.raw("{\"ref\":") catch return oomReply();
         o.int(ref) catch return oomReply();
         o.raw(",\"need\":{\"m\":\"trace\"}}") catch return oomReply();
         const reply = o.finish() catch return oomReply();
-        return withTrace(s, s.exchange_entry.?, withAbandoned(s, s.exchange_entry.?, reply, .outer));
+        return withTrace(s, s.x.exchange_entry.?, withAbandoned(s, s.x.exchange_entry.?, reply, .outer));
     }
-    std.debug.assert(s.releases.items.len > 0);
-    s.release_continuation = true;
-    return holdForReleases(s, ref, s.exchange_entry.?, s.gpa.dupe(u8, "") catch return oomReply(), .outer);
+    std.debug.assert(s.x.releases.items.len > 0);
+    s.x.release_continuation = true;
+    return holdForReleases(s, ref, s.x.exchange_entry.?, s.gpa.dupe(u8, "") catch return oomReply(), .outer);
 }
 
 /// Opt-in outer Trace for needs and errors. Consumed only after the complete
@@ -1868,17 +1898,17 @@ fn withAbandoned(s: *Session, entry: *GroupEntry, reply: []u8, fields: ReplyFiel
 /// Sends queued Grant releases before `reply`, holding its abandonment
 /// notifications until the first reply actually reaches the Host.
 fn holdForReleases(s: *Session, ref: i64, entry: *GroupEntry, reply: []u8, fields: ReplyFields) []u8 {
-    if (s.releases.items.len == 0) {
-        if (s.paused_ref == null) s.exchange_entry = null;
+    if (s.x.releases.items.len == 0) {
+        if (s.x.paused_ref == null) s.x.exchange_entry = null;
         return withAbandoned(s, entry, reply, fields);
     }
-    s.held = .{ .frame = reply, .entry = entry, .fields = fields };
-    s.held_ref = ref;
+    s.x.held = .{ .frame = reply, .entry = entry, .fields = fields };
+    s.x.held_ref = ref;
     return releaseNeed(s, ref);
 }
 
 fn releaseNeed(s: *Session, ref: i64) []u8 {
-    const r = s.releases.items[0];
+    const r = s.x.releases.items[0];
     var o = Out.init(s.gpa);
     defer o.deinit();
     o.raw("{\"ref\":") catch {};
@@ -1892,30 +1922,30 @@ fn releaseNeed(s: *Session, ref: i64) []u8 {
     o.raw(",\"now\":") catch {};
     o.instant(s.gpa, r.now) catch {};
     o.raw("}}") catch {};
-    return withAbandoned(s, s.held.?.entry, o.finish() catch return oomReply(), .outer);
+    return withAbandoned(s, s.x.held.?.entry, o.finish() catch return oomReply(), .outer);
 }
 
 /// `release-result`: the next release, or the held reply.
 fn releaseResultReply(s: *Session, ref: i64) []u8 {
-    var done = s.releases.orderedRemove(0);
+    var done = s.x.releases.orderedRemove(0);
     done.deinit(s.gpa);
-    if (s.releases.items.len > 0) return releaseNeed(s, ref);
-    const reply = s.held.?;
-    s.held = null;
-    if (s.release_continuation) {
-        s.release_continuation = false;
+    if (s.x.releases.items.len > 0) return releaseNeed(s, ref);
+    const reply = s.x.held.?;
+    s.x.held = null;
+    if (s.x.release_continuation) {
+        s.x.release_continuation = false;
         s.gpa.free(reply.frame);
-        s.paused_ref = null;
-        const entry = s.exchange_entry.?;
+        s.x.paused_ref = null;
+        const entry = s.x.exchange_entry.?;
         entry.group.group.release_pause = false;
-        if (s.work_paused) {
-            s.work_paused = false;
+        if (s.x.work_paused) {
+            s.x.work_paused = false;
             return runWork(s, ref, entry, .resumed);
         }
         return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
     }
-    if (s.exchange_entry) |e| e.group.group.release_pause = false;
-    if (s.paused_ref == null) s.exchange_entry = null;
+    if (s.x.exchange_entry) |e| e.group.group.release_pause = false;
+    if (s.x.paused_ref == null) s.x.exchange_entry = null;
     return withAbandoned(s, reply.entry, reply.frame, reply.fields);
 }
 
@@ -1924,12 +1954,12 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
 fn answerEffect(s: *Session, msg: Json, ref: i64) []u8 {
     const given = asText(field(msg, "status")) orelse "unknown";
     const status: caps.EffectStatus = if (std.mem.eql(u8, given, "ok")) .ok else if (std.mem.eql(u8, given, "failed")) .failed else .unknown;
-    var spent = s.need.?;
+    var spent = s.x.need.?;
     const entry = spent.entry;
-    s.need = null;
-    s.paused_ref = null;
+    s.x.need = null;
+    s.x.paused_ref = null;
     spent.release(s.gpa);
-    s.effect_answer = status;
+    s.x.effect_answer = status;
     return resumeAnswered(s, ref, entry);
 }
 
@@ -1953,7 +1983,7 @@ fn failureOf(s: *Session, entry: ?*GroupEntry, j: Json, answer: *Answer) (Alloca
 
 /// Answers the paused Pump's need and resumes it.
 fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
-    const need = s.need.?;
+    const need = s.x.need.?;
     const entry = need.entry;
     var answer: Answer = .{ .kind = .host_error };
     if (field(msg, "charged")) |v| {
@@ -1998,10 +2028,10 @@ fn answerNeed(s: *Session, msg: Json, ref: i64, is_prop: bool) []u8 {
             answer.kind = .host_error;
         } else return protocolError(s.gpa, ref, "an op-result with no outcome");
     }
-    s.answer = answer;
+    s.x.answer = answer;
     var spent = need;
-    s.need = null;
-    s.paused_ref = null;
+    s.x.need = null;
+    s.x.paused_ref = null;
     spent.release(s.gpa);
     return resumeAnswered(s, ref, entry);
 }
@@ -2021,7 +2051,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -3013,13 +3043,13 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
     if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
     const mg = &entry.group.group;
     const c = s.core;
-    s.in_work = true;
-    s.exchange_pump = false;
-    s.exchange_entry = entry;
-    s.pumping_entry = entry;
+    s.x.in_work = true;
+    s.x.exchange_pump = false;
+    s.x.exchange_entry = entry;
+    s.x.pumping_entry = entry;
     defer {
-        s.in_work = false;
-        s.pumping_entry = null;
+        s.x.in_work = false;
+        s.x.pumping_entry = null;
     }
     const outcome: machine.Group.Resumed = switch (work) {
         .reload => |x| .{ .reload = mg.reload(x.script, x.source, x.carry, x.keep_mailbox) catch |e| {
@@ -3040,8 +3070,8 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
         .replace => |r| r == .paused,
     };
     if (paused) {
-        s.paused_ref = ref;
-        s.work_paused = true;
+        s.x.paused_ref = ref;
+        s.x.work_paused = true;
         return pausedReply(s, ref);
     }
     switch (outcome) {
@@ -3094,8 +3124,8 @@ fn workError(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode
 /// else the paused Pump.
 fn resumeAnswered(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     entry.group.group.answering_crossing = true;
-    if (s.work_paused) {
-        s.work_paused = false;
+    if (s.x.work_paused) {
+        s.x.work_paused = false;
         return runWork(s, ref, entry, .resumed);
     }
     return runPump(s, ref, entry, true, .{ .seconds = 0, .micros = 0 }, 0, 0);
@@ -3926,6 +3956,17 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
     s.active_ref = ref;
+    if (s.group_exchanges and s.restoring == null) {
+        // Each Group's exchange gates only that Group's frames. A frame
+        // naming no Group, or one not made yet, waits on no exchange.
+        if (groupOf(s, msg)) |entry| {
+            loadExchange(s, entry);
+        } else if (std.mem.eql(u8, m, "restore") and anyExchangeOpen(s)) {
+            return protocolError(s.gpa, ref, "a Group's exchange is open");
+        } else if (!messageIn(m, &.{ "op-result", "prop-result", "effect-result", "trace-result", "release-result", "resolve-result" })) {
+            return dispatch(s, msg, ref, m, frame);
+        }
+    }
     if (s.restoring) |r| {
         // Binding callbacks may declare and select a fresh Grant before
         // answering. No Group work is admitted into the restore.
@@ -3936,20 +3977,20 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     }
     // Releases go first: each `release` need waits for its
     // `release-result`, then the reply they came before.
-    if (s.held != null) {
-        if (ref != s.held_ref or !std.mem.eql(u8, m, "release-result")) return pausedAdmission(s, msg, ref, m, s.held_ref);
+    if (s.x.held != null) {
+        if (ref != s.x.held_ref or !std.mem.eql(u8, m, "release-result")) return pausedAdmission(s, msg, ref, m, s.x.held_ref);
         return releaseResultReply(s, ref);
     }
-    if (s.paused_ref) |paused| {
-        if (s.need == null and s.exchange_entry.?.group.group.trace_pause) {
+    if (s.x.paused_ref) |paused| {
+        if (s.x.need == null and s.x.exchange_entry.?.group.group.trace_pause) {
             if (ref != paused) return pausedAdmission(s, msg, ref, m, paused);
             if (!std.mem.eql(u8, m, "trace-result")) return protocolError(s.gpa, ref, "a crossing is waiting for trace-result");
-            const entry = s.exchange_entry.?;
+            const entry = s.x.exchange_entry.?;
             entry.group.group.trace_pause = false;
-            s.paused_ref = null;
+            s.x.paused_ref = null;
             return resumeAnswered(s, ref, entry);
         }
-        const want: []const u8 = switch (s.need.?.kind) {
+        const want: []const u8 = switch (s.x.need.?.kind) {
             .op => "op-result",
             .prop => "prop-result",
             .effect => "effect-result",
@@ -3959,8 +4000,8 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
             if (std.mem.eql(u8, m, "op-result") or std.mem.eql(u8, m, "prop-result") or std.mem.eql(u8, m, "effect-result")) return protocolError(s.gpa, ref, "the result does not match the need");
             return protocolError(s.gpa, ref, "a Pump is waiting for its result");
         }
-        if (s.need.?.kind == .effect) return answerEffect(s, msg, ref);
-        return answerNeed(s, msg, ref, s.need.?.kind == .prop);
+        if (s.x.need.?.kind == .effect) return answerEffect(s, msg, ref);
+        return answerNeed(s, msg, ref, s.x.need.?.kind == .prop);
     }
     // The binding may have refused a worker while this export was still
     // running, then reached this boundary before servicing its queued frame.
@@ -3984,6 +4025,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var gone = s.gone;
             var inline_inputs = s.inline_inputs;
             var analyses = s.analysis;
+            var group_exchanges = s.group_exchanges;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -3996,6 +4038,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     gone = true;
                 } else if (std.mem.eql(u8, name, "analysis-v1")) {
                     analyses = true;
+                } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
+                    group_exchanges = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
@@ -4008,6 +4052,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.gone = gone;
             s.inline_inputs = inline_inputs;
             s.analysis = analyses;
+            s.group_exchanges = group_exchanges;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
@@ -4026,6 +4071,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return grantReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "new-group")) {
         return newGroupReply(s, msg, ref);
+    } else if (s.group_exchanges and std.mem.eql(u8, m, "drop-group")) {
+        return dropGroupReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "load")) {
         return loadReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "deliver")) {
@@ -4101,9 +4148,47 @@ fn messageIn(m: []const u8, names: []const []const u8) bool {
     return false;
 }
 
+/// Loads `entry`'s exchange into `s.x`, parking the one loaded before
+/// in its own Group's entry.
+fn loadExchange(s: *Session, entry: *GroupEntry) void {
+    const owner = s.x_owner orelse s.x.exchange_entry;
+    if (owner != entry) {
+        // With no owner the loaded exchange has never been used.
+        if (owner) |o| o.parked = s.x;
+        s.x = entry.parked;
+        entry.parked = .{};
+    }
+    s.x_owner = entry;
+}
+
+fn anyExchangeOpen(s: *Session) bool {
+    if (s.x.open()) return true;
+    for (s.groups.items) |e| if (e.parked.open()) return true;
+    return false;
+}
+
+/// `drop-group`: frees a Group with no open exchange, running nothing.
+fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    if (s.x_owner == entry) {
+        if (s.x.open()) return protocolError(s.gpa, ref, "the Group's exchange is open");
+        s.x.deinit(s.gpa);
+        s.x_owner = null;
+    }
+    for (s.groups.items, 0..) |e, i| if (e == entry) {
+        _ = s.groups.orderedRemove(i);
+        break;
+    };
+    entry.destroy();
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: i64) []u8 {
     if (ref == worker_ref) return protocolError(s.gpa, ref, "the worker ref is reserved for its result");
-    const entry = s.exchange_entry orelse return protocolError(s.gpa, ref, "no paused worker");
+    const entry = s.x.exchange_entry orelse return protocolError(s.gpa, ref, "no paused worker");
     const group = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
     if (group != entry) return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
     const worker = messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" });
@@ -4113,7 +4198,7 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: 
     const trace = mg.trace;
     // A WASM export has returned, but its Host callback has not. Admission
     // must use the same control queue and Trace hold as native callbacks.
-    mg.pumping = s.exchange_pump;
+    mg.pumping = s.x.exchange_pump;
     if (mg.pumping and !s.inline_active and mg.held_trace == null and trace != null) {
         if (mg.held == null) mg.held = .init(mg.gpa);
         mg.held_trace = trace;
@@ -4296,13 +4381,13 @@ fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
     const io = s.inline_io orelse return;
     s.inline_active = true;
     defer s.inline_active = false;
-    const old_entry = s.exchange_entry;
-    const old_pump = s.exchange_pump;
-    s.exchange_entry = entry;
-    s.exchange_pump = entry.group.group.pumping;
+    const old_entry = s.x.exchange_entry;
+    const old_pump = s.x.exchange_pump;
+    s.x.exchange_entry = entry;
+    s.x.exchange_pump = entry.group.group.pumping;
     defer {
-        s.exchange_entry = old_entry;
-        s.exchange_pump = old_pump;
+        s.x.exchange_entry = old_entry;
+        s.x.exchange_pump = old_pump;
     }
     const owned = s.gpa.dupe(u8, event) catch return;
     const observed = withAbandoned(s, entry, owned, .outer);
@@ -6047,4 +6132,63 @@ test "analysis-v1 serves Session language analysis after opt-in" {
     const named = try okOf(try c.send("{{\"m\":\"message-name\",\"ref\":{d},\"name\":\"move:to:\",\"arity\":2}}", .{7}));
     try t.expect(named.object.get("valid").?.bool);
     try t.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"1\",\"bound\":[1]}}", .{8})));
+}
+
+test "group-exchanges-v1 pauses each Group's Pump on its own and drop-group frees an idle Group" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"group-exchanges-v1\"]}}", .{1}));
+    var offered = false;
+    for (hello.object.get("features").?.array.items) |f| offered = offered or std.mem.eql(u8, f.string, "group-exchanges-v1");
+    try std.testing.expect(offered);
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"double\",\"mode\":\"immediate\",\"args\":[\"number\"],\"result\":\"number\"}}]}}", .{2}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{3}))).object.get("grant").?.integer;
+    inline for (.{ "a", "b" }, 0..) |g, i| {
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"name\":\"" ++ g ++ "\",\"trace\":false}}", .{10 + i}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on double n\\n  ask api to double n\\n  return it + 1\\nend double\\n\"}}", .{ 20 + i, grant }));
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"double\",\"args\":[{d}]}}}}", .{ 30 + i, 10 * (i + 1) }));
+    }
+    // Both Groups pause at their crossings at once.
+    const a = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"a\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{40});
+    try std.testing.expectEqual(@as(i64, 10), a.object.get("need").?.object.get("args").?.array.items[0].integer);
+    const b = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"b\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{41});
+    try std.testing.expectEqual(@as(i64, 20), b.object.get("need").?.object.get("args").?.array.items[0].integer);
+    // The paused Group refuses another worker; Core-level frames carry on;
+    // a restore and dropping a paused Group wait for every exchange.
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"a\"}}", .{42})));
+    _ = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{43}));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"restore\",\"ref\":{d},\"name\":\"r\",\"save\":{{\"$bytes\":\"\"}},\"libraries\":[],\"mismatch\":\"reject\",\"trace\":false}}", .{44})));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"drop-group\",\"ref\":{d},\"group\":\"a\"}}", .{45})));
+    // Results land in the exchange their Group names, in either order.
+    const done_b = try c.sendRef(41, "{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"b\",\"result\":40}}", .{41});
+    try std.testing.expectEqual(@as(i64, 41), (try runEnd(done_b)).object.get("result").?.integer);
+    const done_a = try c.sendRef(40, "{{\"m\":\"op-result\",\"ref\":{d},\"group\":\"a\",\"result\":20}}", .{40});
+    try std.testing.expectEqual(@as(i64, 21), (try runEnd(done_a)).object.get("result").?.integer);
+    // An idle Group drops; its handle is then unknown, and reusable.
+    _ = try okOf(try c.send("{{\"m\":\"drop-group\",\"ref\":{d},\"group\":\"a\"}}", .{50}));
+    try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"a\"}}", .{51})));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"a\",\"name\":\"a\",\"trace\":false}}", .{52}));
+    _ = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"b\"}}", .{53}));
+}
+
+test "without group-exchanges-v1 one paused Pump holds every Group and drop-group is unknown" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"double\",\"mode\":\"immediate\",\"args\":[\"number\"],\"result\":\"number\"}}]}}", .{1}));
+    const grant = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}))).object.get("grant").?.integer;
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"drop-group\",\"ref\":{d},\"group\":\"a\"}}", .{3})));
+    inline for (.{ "a", "b" }, 0..) |g, i| {
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"name\":\"" ++ g ++ "\",\"trace\":false}}", .{10 + i}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on double n\\n  ask api to double n\\n  return it + 1\\nend double\\n\"}}", .{ 20 + i, grant }));
+        _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"" ++ g ++ "\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"double\",\"args\":[1]}}}}", .{30 + i}));
+    }
+    _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"a\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{40})).object.get("need").?;
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"b\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{41})));
+    _ = try runEnd(try c.sendRef(40, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":2}}", .{40}));
 }
