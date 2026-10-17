@@ -7,6 +7,7 @@ on:
       - 'impl/go/**'
       - 'impl/zig/**'
       - 'spec/**'
+      - '!spec/**/*.md'
       - '.github/workflows/go-zig-probe.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'impl/go/**'
       - 'impl/zig/**'
       - 'spec/**'
+      - '!spec/**/*.md'
       - '.github/workflows/go-zig-probe.yml'
 
 jobs:

@@ -5,6 +5,7 @@ on:
     paths:
       - 'impl/zig/**'
       - 'spec/**'
+      - '!spec/**/*.md'
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'impl/zig/**'
       - 'spec/**'
+      - '!spec/**/*.md'
       - 'corpus/**'
       - 'tools/zig/**'
       - 'tools/unicode/**'
