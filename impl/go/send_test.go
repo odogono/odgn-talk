@@ -242,7 +242,14 @@ end watch`})
 
 func TestSendCountsHostReservationsAcceptedDuringPump(t *testing.T) {
 	var trace lines
-	g := New().NewGroup(GroupOptions{Trace: &trace})
+	var record func(string)
+	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
+		if record != nil {
+			record(line)
+		} else {
+			trace.Record(line)
+		}
+	})})
 	a, err := g.Load(LoadOptions{Name: "a", Source: "on go\n send ping with 7 to b\n send ping with 8 to b\nend go"})
 	if err != nil {
 		t.Fatal(err)
@@ -252,12 +259,12 @@ func TestSendCountsHostReservationsAcceptedDuringPump(t *testing.T) {
 		t.Fatal(err)
 	}
 	var inputError error
-	g.options.Trace = traceFunc(func(line string) {
+	record = func(line string) {
 		trace.Record(line)
 		if line == `send a/r1 to=b message=ping args=[7]` {
 			_, inputError = b.Deliver(Message{Name: "ping", Args: []Value{Int(99)}})
 		}
-	})
+	}
 	a.Deliver(Message{Name: "go"})
 	result, err := g.Pump(time.Unix(0, 0), PumpOptions{})
 	if err != nil || inputError != nil || len(operationalReports(result.Reports)) != 2 {

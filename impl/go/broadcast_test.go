@@ -339,20 +339,25 @@ func TestBroadcastCopiesInputsAndValidatesGroup(t *testing.T) {
 }
 
 func TestBroadcastDuringPumpWaitsForNextDrain(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
+	var record func(string)
+	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
+		if record != nil {
+			record(line)
+		}
+	})})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\n return\nend go\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	queued := false
-	g.options.Trace = traceFunc(func(line string) {
+	record = func(line string) {
 		if !queued && strings.HasPrefix(line, "seg ") {
 			queued = true
 			if _, err := g.Broadcast(Message{Name: "go"}); err != nil {
 				t.Error(err)
 			}
 		}
-	})
+	}
 	if _, err := s.Deliver(Message{Name: "go"}); err != nil {
 		t.Fatal(err)
 	}
