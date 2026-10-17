@@ -463,9 +463,9 @@ func (b *zigGroup) queued() bool {
 	if err != nil {
 		panic(err)
 	}
-	var queued bool
-	if err := zigDecode(reply.get("queued"), reflect.ValueOf(&queued).Elem()); err != nil {
-		panic(err)
+	queued, ok := reply.get("queued").boolean()
+	if !ok {
+		panic(fmt.Errorf("talk: queued-inputs reply lacks a boolean queued"))
 	}
 	return queued
 }
