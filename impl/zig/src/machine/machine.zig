@@ -314,6 +314,9 @@ pub const Run = struct {
     cleanup: ?Ending = null,
     /// Cancellation landed in a callback; its rollback may itself pause.
     crossing_cancel: bool = false,
+    /// A refused Charge at the crossing that initiated cancellation still
+    /// fails its cleanup, even if rollback pauses before cleanup starts.
+    crossing_charge_refused: bool = false,
     /// A callback already returned, but Trace observation or another Run's
     /// control landing is awaiting acknowledgement. Replaying the instruction
     /// classifies this owned return without invoking or recording it twice.
@@ -3200,6 +3203,10 @@ pub const Group = struct {
             try cleanups.append(g.gpa, .{ .leave = true });
         } else try g.collect(run, &cleanups, 0, null, null, place);
         try g.startCleanup(run, try nothing(g.gpa), cleanups, .cancel);
+        if (run.crossing_charge_refused) {
+            run.crossing_charge_refused = false;
+            return g.cleanupLimit(run, .fuel);
+        }
         return (try g.nextCleanup(run, true)) orelse try g.execute(run, true);
     }
 
@@ -8085,12 +8092,7 @@ pub const Group = struct {
         // A limit during a cancelled Run's cleanup ends the cleanup, and
         // rolls back its writes.
         if (run.cleanup_from != null) {
-            // The Fuel a cleanup runs out of is its Cleanup Budget.
-            g.write("cleanup-failed {s} limit={s}\n", .{ run.id, @tagName(if (limit == .fuel) .cleanup else limit) });
-            run.cleanup_limit = @tagName(if (limit == .fuel) .cleanup else limit);
-            g.restoreBase(run);
-            run.cleanup_limited = true;
-            return g.cleanupFailed(run);
+            return g.cleanupLimit(run, limit);
         }
         // A Function Value call's Run has no Handler: its fault names the
         // function's own body, as talk.go's does.
@@ -8131,6 +8133,15 @@ pub const Group = struct {
         g.abandonUnwinding(run);
         while (run.frames.items.len > 0) g.popFrame(run);
         return .{ .faulted = limit };
+    }
+
+    fn cleanupLimit(g: *Group, run: *Run, limit: Fault) Outcome {
+        // The Fuel a cleanup runs out of is its Cleanup Budget.
+        g.write("cleanup-failed {s} limit={s}\n", .{ run.id, @tagName(if (limit == .fuel) .cleanup else limit) });
+        run.cleanup_limit = @tagName(if (limit == .fuel) .cleanup else limit);
+        g.restoreBase(run);
+        run.cleanup_limited = true;
+        return g.cleanupFailed(run);
     }
 
     /// Faults the current instruction on its own limit.
@@ -9800,7 +9811,7 @@ pub const Group = struct {
         try g.registerCall(id, suspending and decl.metering == .read_only);
         const returned = run.returned_op;
         run.returned_op = null;
-        const outcome = if (returned) |r| blk: {
+        var outcome = if (returned) |r| blk: {
             call.charged = r.charged;
             break :blk r.outcome;
         } else blk: {
@@ -9846,21 +9857,10 @@ pub const Group = struct {
         const empty = try model.map(gpa, &.{});
         defer empty.release();
         if (call.charge_refused or outcome == .limited) {
-            switch (outcome) {
-                .value => |v| v.release(),
-                .failed => |f| {
-                    gpa.free(f.code);
-                    if (f.message) |t| gpa.free(t);
-                    if (f.data) |d| d.release();
-                },
-                else => {},
-            }
-            record(g, id, grant_name, op_name, args, "", null, call.charged, decl.metering != null);
-            const spent = costs.chargeInstruction(ins.op, m);
-            run.fuel += spent.fuel + run.clause_fuel;
-            run.clause_fuel = 0;
-            run.alloc += spent.alloc;
-            return g.faultOn(.fuel);
+            // Latch the refusal across observation and deferred control
+            // landing, discarding any result the Host returned despite it.
+            g.releaseHostOutcome(outcome);
+            outcome = .limited;
         }
         var owned = true;
         defer if (owned) g.releaseHostOutcome(outcome);
@@ -9893,7 +9893,8 @@ pub const Group = struct {
                     record(g, id, grant_name, op_name, args, "error", shown orelse empty, call.charged, false);
                 },
                 .broken => record(g, id, grant_name, op_name, args, "error", empty, call.charged, false),
-                .deferred, .limited => unreachable,
+                .limited => record(g, id, grant_name, op_name, args, "", null, call.charged, decl.metering != null),
+                .deferred => unreachable,
             }
             // Install a started Call before landing so interruption can
             // abandon it, without committing the Segment first.
@@ -9914,7 +9915,10 @@ pub const Group = struct {
             for (args) |v| try g.push(frame, v.retain());
             return .crossing;
         };
-        if (interrupted) return error.Landed;
+        if (interrupted) {
+            if (outcome == .limited and run.landed.? == .cancel) run.crossing_charge_refused = true;
+            return error.Landed;
+        }
         if (pending) return if (ins.op == .join_ask) .next else .suspended;
         if (!valid) return g.hostError(id, grant_name, op_name, &where);
         switch (outcome) {
@@ -9938,7 +9942,17 @@ pub const Group = struct {
                 return error.Raised;
             },
             .started, .broken => return g.hostError(id, grant_name, op_name, &where),
-            .deferred, .limited => unreachable,
+            .limited => {
+                // Controls land at every Host crossing, including a refused
+                // Charge. Only a surviving Run receives the latched fault;
+                // interruption retains these costs through error.Landed.
+                const spent = costs.chargeInstruction(ins.op, m);
+                run.fuel += spent.fuel + run.clause_fuel;
+                run.clause_fuel = 0;
+                run.alloc += spent.alloc;
+                return g.faultOn(.fuel);
+            },
+            .deferred => unreachable,
         }
         return .next;
     }

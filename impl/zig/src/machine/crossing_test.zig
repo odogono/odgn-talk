@@ -225,7 +225,7 @@ test "cancellation cleanup still reports invalid results and Host failures" {
     };
 }
 
-test "latched Charge refusal retains its accepted prefix ahead of callback Stop" {
+test "callback Stop lands before a latched Charge refusal and retains accepted Fuel" {
     var trace: std.Io.Writer.Allocating = .init(t.allocator);
     defer trace.deinit();
     var g: machine.Group = .init(t.allocator, &trace.writer);
@@ -242,7 +242,28 @@ test "latched Charge refusal retains its accepted prefix ahead of callback Stop"
     try fixture.deliver(&g);
     try g.pump(clock);
     try contains(trace.written(), "charged=5 charge-refused=yes");
-    try contains(trace.written(), "end=fault");
+    try contains(trace.written(), "end=stop");
+    try t.expect(std.mem.indexOf(u8, trace.written(), "fault ") == null);
+    try t.expectEqualStrings("crossing", fixture.script.stopped.?);
+    try t.expectEqual(@as(i64, 0), try fixture.script.variables[0].data.number.integer(i64));
+    try noHostFailure(&g);
+}
+
+test "a refused Charge remains latched when crossing cancellation starts cleanup" {
+    var trace: std.Io.Writer.Allocating = .init(t.allocator);
+    defer trace.deinit();
+    var g: machine.Group = .init(t.allocator, &trace.writer);
+    var host: Host = .{ .g = &g, .control = .cancel, .result = .refused };
+    var fixture: Fixture = undefined;
+    try fixture.init(&host, .immediate, source(.immediate));
+    defer fixture.deinit();
+    defer g.deinit();
+    try fixture.deliver(&g);
+    try g.pump(clock);
+    try contains(trace.written(), "charged=5");
+    try contains(trace.written(), "cleanup-failed s/r1 limit=cleanup");
+    try contains(trace.written(), "outcome=cancelled");
+    try t.expectEqual(@as(i64, 0), try fixture.script.variables[1].data.number.integer(i64));
     try noHostFailure(&g);
 }
 
@@ -304,13 +325,13 @@ fn otherRunTrace(crossing: Crossing, result: Return, control: Control, deferred:
         try g.resumePump();
     }
     try t.expectEqual(@as(usize, 2), host.calls);
-    try t.expectEqual(@as(usize, 1), coordinator.rollbacks);
+    try t.expectEqual(@as(usize, if (crossing == .immediate and result == .refused) 2 else 1), coordinator.rollbacks);
     if (deferred) try t.expect(pauses > 0);
     return trace.toOwnedSlice();
 }
 
 test "callback returns survive another Run's deferred cleanup without repeated calls or charges" {
-    for ([_]Crossing{ .immediate, .get, .set }) |crossing| for ([_]Return{ .value, .wrong_shape, .failure, .invalid_failure, .duplicate_failure, .broken }) |result| for ([_]Control{ .stop, .cancel, .rewind }) |control| {
+    for ([_]Crossing{ .immediate, .get, .set }) |crossing| for ([_]Return{ .value, .wrong_shape, .failure, .invalid_failure, .duplicate_failure, .broken, .refused }) |result| for ([_]Control{ .stop, .cancel, .rewind }) |control| {
         const sync = try otherRunTrace(crossing, result, control, false, true);
         defer t.allocator.free(sync);
         const paused = try otherRunTrace(crossing, result, control, true, true);

@@ -347,6 +347,10 @@ immediate, Start and later Fail data. Pump results, typed Reports, Fuel, futures
 Trace and inspected state compare exactly; only error wording and Host detail
 wording are excluded, and failure detail must remain nonempty. The native tests
 install Trace at Group construction and cancel through public Run controls.
+Stop also lands when a Host Charge fails, retaining accepted Fuel and its
+original reason while discarding the Run without a limit-fault report. Shared
+Hosts cover immediate, suspending and fire-and-forget callbacks, Stop from the
+Operation or its Trace record, and subsequent Requests to the stopped Script.
 
 An internally generated error Run retains its `during` message map through local
 `error` calls, helper calls, later clauses and captured Lambdas, including across
@@ -360,8 +364,7 @@ inherited veto checking on Extend ([#1060](https://github.com/odogono/odgn-talk/
 allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
 Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
 parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)),
-out-of-range wait durations ([#1064](https://github.com/odogono/odgn-talk/issues/1064)),
-and Stop at a failed Host charge ([#1065](https://github.com/odogono/odgn-talk/issues/1065)).
+and out-of-range wait durations ([#1064](https://github.com/odogono/odgn-talk/issues/1064)).
 Explicit Call answers/failures refuse foreign handles at admission on both Cores,
 including nested containers. The shared public Host checks that refusal leaves
 the Call pending and accepts a subsequent valid settlement. Native private-function
