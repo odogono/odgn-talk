@@ -364,6 +364,13 @@ continues the same Pump without repeating the callback or accounting. Refusal
 and Load-error replies carry outer Trace with this feature; legacy Hosts retain
 final-reply timing. This is an Operation crossing observation contract, not
 per-record suspension during arbitrary execution or non-yielding WASM admission.
+The optional WASI `inline-inputs-v1` transport adds those boundaries: every
+complete record is observed synchronously, and input admission checkpoints keep
+the active guest stack without export reentry. It also invokes release hooks
+before their following records, with pending Calls already cancelled. See the
+[inline contract](../../spec/embedding/inline-inputs.md) and the
+[Go adapter guide](../go/README.md#experimental-zig-backend) for acceptance and
+limitations. The ordinary sidecar retains its existing framing and timing.
 The [contract](../../spec/embedding/paused-crossing-inputs.md#operation-trace-observation-at-a-paused-crossing)
 describes the supported boundary. Message Layer `answer.fuel` now reaches the
 settlement-cost API. A queued settlement remains tracked until consumed, so a

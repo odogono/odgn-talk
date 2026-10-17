@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"weak"
 
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"github.com/odogono/odgn-talk/impl/go/internal/zigwasm"
@@ -75,12 +76,19 @@ type zigGroup struct {
 	reactor *zigwasm.Reactor
 	// Serializes exports, receipt bookkeeping and refs. The Group worker guard
 	// owns the entire conversation, including pauses while Host code runs.
-	// Admission during a non-yielding export remains a separate gate.
-	frameMu   sync.Mutex
-	ref       int64
-	pendingMu sync.Mutex
-	pending   map[DeliveryID]*Pending
-	decisions map[string]*Deciding
+	// Inline admission leaves the export on its original guest stack.
+	frameMu       sync.Mutex
+	exporting     bool
+	exportMethod  string
+	admissions    []*zigAdmission
+	inlineRequest *zigAdmission
+	inlineError   error
+	inlineWait    []<-chan struct{}
+	inlineWake    chan struct{}
+	ref           int64
+	pendingMu     sync.Mutex
+	pending       map[DeliveryID]*Pending
+	decisions     map[string]*Deciding
 	// Property crossings' Host details, in crossing order, for this Pump.
 	propertyDetails []string
 	librariesMu     sync.Mutex
@@ -100,7 +108,7 @@ type zigGroup struct {
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "restore-bindings-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1"}
 
 func newZigGroup(g *Group) groupBackend {
 	b := newZigBackend(g)
@@ -113,11 +121,19 @@ func newZigGroup(g *Group) groupBackend {
 
 // A restore needs an initialized Core without an existing Group handle.
 func newZigBackend(g *Group) *zigGroup {
-	reactor, err := zigEngine().Instantiate(context.Background())
+	b := &zigGroup{group: g, inlineWake: make(chan struct{}, 1), pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	owner := weak.Make(b)
+	reactor, err := zigEngine().InstantiateObserved(context.Background(), func(event []byte) ([]byte, error) {
+		live := owner.Value()
+		if live == nil {
+			return nil, fmt.Errorf("inline event after Group collection")
+		}
+		return live.inlineEvent(event)
+	})
 	if err != nil {
 		panic(err)
 	}
-	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	b.reactor = reactor
 	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
 	if err == nil {
 		features := hello.Get("features")
@@ -145,10 +161,12 @@ func newZigBackend(g *Group) *zigGroup {
 }
 
 // exchange reserves the worker ref across every need/result. Inputs use their
-// own refs; no Host callback or Trace sink runs under an export/registry lock.
+// own refs. Host callbacks use the admission queue without acquiring guest
+// ownership or holding adapter admission/registry locks.
 func (b *zigGroup) send(m string, fields map[string]any) (Value, error) {
 	return b.exchange(m, fields, nil)
 }
+
 func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value) error) (Value, error) {
 	defer runtime.KeepAlive(b)
 	var ref int64
@@ -159,12 +177,8 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value)
 			ref = b.ref
 		}
 		fields["m"], fields["ref"], fields["group"] = m, ref, "g"
-		packet, err := b.frame(fields)
-		if err == nil && packet.Get("need").Kind() == KindNothing && packet.Get("err").Kind() == KindNothing && receipt != nil {
-			err = receipt(packet.Get("ok"))
-		}
 		b.frameMu.Unlock()
-		b.observe(packet, m)
+		packet, err := b.export(fields, receipt)
 		if err != nil {
 			return Nothing, err
 		}
@@ -204,7 +218,7 @@ func (b *zigGroup) observe(packet Value, m string) {
 	}
 }
 
-// frame is called with frameMu held; replies and all Values own Go memory.
+// frame is called only by the export owner; replies own Go memory.
 func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	data, err := zigJSON(nil, fields)
 	if err != nil {
@@ -225,9 +239,11 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	if got, e := n.Int64(); e != nil || got != fields["ref"] {
 		return Nothing, fmt.Errorf("Zig reply ref mismatch")
 	}
+	b.frameMu.Lock()
+	defer b.frameMu.Unlock()
 	if packet.Get("need").Kind() != KindNothing {
 		b.paused = true
-	} else if fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result" {
+	} else if packet.Get("err").Kind() == KindNothing && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result") {
 		b.paused = false
 	}
 	return packet, nil
@@ -256,20 +272,17 @@ func (b *zigGroup) beginWorker(m string, fields map[string]any) error {
 	if err == nil {
 		return nil
 	}
-	var packet Value
 	b.frameMu.Lock()
-	if b.paused {
-		b.ref++
-		fields["m"], fields["ref"], fields["group"] = m, b.ref, "g"
-		var frameErr error
-		packet, frameErr = b.frame(fields)
-		b.paused = true // the refusal leaves the enclosing need outstanding
-		if frameErr != nil {
+	active := b.paused || b.exporting
+	b.frameMu.Unlock()
+	if active {
+		// The export may finish before this queued refusal is serviced.
+		// It must still never turn into a second guest worker.
+		fields["refuseWorker"] = true
+		if _, frameErr := b.send(m, fields); frameErr != nil {
 			err = frameErr
 		}
 	}
-	b.frameMu.Unlock()
-	b.observe(packet, m)
 	return err
 }
 
