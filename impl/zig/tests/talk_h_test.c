@@ -1224,8 +1224,8 @@ static int object_path_test(void) {
     talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_prop props[] = {{"dear", 4, talk_any_shape(), get_dear, NULL, NULL, {1000, 0}, {0, 0}}};
-    talk_object_kind_def gauge_def = {"gauge", 5, props, 1, NULL, NULL, 0};
-    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0};
+    talk_object_kind_def gauge_def = {"gauge", 5, props, 1, NULL, NULL, 0, NULL};
+    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0, NULL};
     talk_object_kind *gauge = NULL, *room = NULL;
     int bad = talk_define_object_kind(core, &gauge_def, &gauge) != TALK_OK;
     bad |= talk_define_object_kind(core, &room_def, &room) != TALK_OK;
@@ -1274,6 +1274,79 @@ static int object_path_test(void) {
     bad |= strstr(trace, "fault reader/r1 limit=fuel") == NULL || strstr(trace, "prop reader/r1") != NULL;
     bad |= strstr(trace, "note child/r1 kind=climb-full\nunhandled d2 message=ping target=<object room \"a\">\n") == NULL;
     bad |= strstr(trace, "raise sender/r1 code=\"send failed\"") == NULL;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
+static talk_object *element_member = NULL;
+static int64_t element_index = 0;
+static char element_name[16];
+static talk_call_end element_count(void *context, talk_object *o, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    return talk_int(1, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+static talk_call_end element_at(void *context, talk_object *o, int64_t index, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)error;
+    element_index = index;
+    return talk_object_value(element_member, result) == TALK_OK ? TALK_CALL_ANSWERED : TALK_CALL_BROKEN;
+}
+/* A malformed answer: no result at all. */
+static talk_call_end element_find(void *context, talk_object *o, const char *name, size_t name_len, talk_value **result, talk_script_error *error) {
+    (void)context; (void)o; (void)result; (void)error;
+    if (name_len < sizeof element_name) memcpy(element_name, name, name_len);
+    return TALK_CALL_ANSWERED;
+}
+
+/* An Object Collection (#1143): its declaration is checked and copied at
+ * registration; `at` gets the signed index, `find` the borrowed name, and an
+ * answer without a result is host error. */
+static int object_elements_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    trace_len = 0;
+    memset(trace, 0, sizeof trace);
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    talk_object_kind_def tile_def = {"tile", 4, NULL, 0, NULL, NULL, 0, NULL};
+    talk_object_kind *tile = NULL, *board = NULL, *bad_kind = NULL;
+    int bad = talk_define_object_kind(core, &tile_def, &tile) != TALK_OK;
+    talk_shape *tile_shape = NULL;
+    bad |= talk_object_shape(tile, &tile_shape) != TALK_OK;
+    talk_object_elements wrong = {talk_number_shape(), element_count, element_at, element_find, NULL, {1, 0}, {1, 0}, {1, 0}};
+    talk_object_kind_def wrong_def = {"wrong", 5, NULL, 0, NULL, NULL, 0, &wrong};
+    bad |= talk_define_object_kind(core, &wrong_def, &bad_kind) != TALK_INVALID_VALUE;
+    talk_object_elements missing = {tile_shape, element_count, NULL, element_find, NULL, {1, 0}, {1, 0}, {1, 0}};
+    wrong_def.elements = &missing;
+    bad |= talk_define_object_kind(core, &wrong_def, &bad_kind) != TALK_INVALID_VALUE;
+    talk_object_elements negative = {tile_shape, element_count, element_at, element_find, NULL, {1, 0}, {-1, 0}, {1, 0}};
+    wrong_def.elements = &negative;
+    bad |= talk_define_object_kind(core, &wrong_def, &bad_kind) != TALK_INVALID_VALUE;
+    talk_object_elements elements = {tile_shape, element_count, element_at, element_find, NULL, {1, 0}, {2, 0}, {3, 0}};
+    talk_object_kind_def board_def = {"board", 5, NULL, 0, NULL, NULL, 0, &elements};
+    bad |= talk_define_object_kind(core, &board_def, &board) != TALK_OK;
+    /* Copied: a later change to the declaration changes nothing. */
+    elements.at = NULL;
+    talk_shape_release(tile_shape);
+    talk_object *b = NULL;
+    bad |= talk_group_object(group, board, "b", 1, NULL, &b) != TALK_OK;
+    bad |= talk_group_object(group, tile, "t", 1, NULL, &element_member) != TALK_OK;
+    talk_load_object bound[] = {{"thisBoard", 9, b}};
+    const char *source = "on go\n  put the number of elements of thisBoard into n\n  put the last element of thisBoard into t\n  try\n    put element \"cell\" of thisBoard into x\n  catch e\n    return [n, t, e's operation]\n  end try\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, bound, 1, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= element_index != -1 || strcmp(element_name, "cell") != 0;
+    bad |= strstr(trace, "name=elements op=count value=1") == NULL;
+    bad |= strstr(trace, "name=elements op=at selector=-1 value=<object tile \"t\">") == NULL;
+    bad |= strstr(trace, "name=elements op=find selector=\"cell\" error={}") == NULL;
+    bad |= strstr(trace, "raise s/r1 code=\"host error\"") == NULL;
+    bad |= strstr(trace, "outcome=completed") == NULL;
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -1904,8 +1977,8 @@ static int object_test(void) {
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_text("off", 3, &lamp_state);
     talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, set_state, NULL, {2, 0}, {5, 0}}};
-    talk_object_kind_def lamp_def = {"lamp", 4, props, 1, NULL, NULL, 0};
-    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0};
+    talk_object_kind_def lamp_def = {"lamp", 4, props, 1, NULL, NULL, 0, NULL};
+    talk_object_kind_def room_def = {"room", 4, NULL, 0, NULL, NULL, 0, NULL};
     talk_object_kind *lamp = NULL, *room = NULL;
     int bad = talk_define_object_kind(core, &lamp_def, &lamp) != TALK_OK;
     bad |= talk_define_object_kind(core, &room_def, &room) != TALK_OK;
@@ -1986,7 +2059,7 @@ static int manifest_test(void) {
     talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, NULL, NULL, {2, 0}, {0, 0}}};
     const char *parents[] = {"room"};
     const size_t parents_lens[] = {4};
-    talk_object_kind_def lamp_def = {"lamp", 4, props, 1, parents, parents_lens, 1};
+    talk_object_kind_def lamp_def = {"lamp", 4, props, 1, parents, parents_lens, 1, NULL};
     talk_object_kind *lamp = NULL;
     bad |= talk_define_object_kind(core, &lamp_def, &lamp) != TALK_OK;
     if (bad) return bad;
@@ -2584,6 +2657,7 @@ int main(void) {
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(library_check_test() == 0, "Library checks refuse Joins, undeclared Grants and unknown imports' names as talk.go does");
     expect(function_call_test() == 0, "Function Value calls refuse loose overrides and full or stopped Homes as talk.go does");
+    expect(object_elements_test() == 0, "Object Collections are checked and copied at registration and answer their callbacks");
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
     expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");

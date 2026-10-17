@@ -866,6 +866,9 @@ const Parser = struct {
                 .chunk => |c| c.of,
                 .key => |k| k.base,
                 .group => |g| g,
+                // `set` may read through an Object Element Reference;
+                // nothing writes one.
+                .element => |el| if (property_target) el.of else return p.failCode(.not_a_container, t.start),
                 else => return p.failCode(.not_a_container, t.start),
             };
         }
@@ -1602,6 +1605,13 @@ const Parser = struct {
         } else key = try p.next(.operand);
         const b = base orelse blk: {
             _ = try p.expectWord("of", .operator);
+            // `the number of elements of o`: an Element Count (#1143).
+            if (!code_points and p.isWord(t, "number") and try p.atWord("elements", .operand) and p.isWord(try p.peek2("element-count", .operator), "of")) {
+                _ = try p.next(.operand);
+                _ = try p.next(.operator);
+                const of = try p.postfix(try p.primary());
+                return p.mk(pos, .{ .element_count = of }, &.{of});
+            }
             break :blk try p.postfix(try p.primary());
         };
         if (code_points or properties.has(p.word(p.tokens.items[key]))) {
@@ -1771,6 +1781,15 @@ const Parser = struct {
                 const pos = try p.next(.operand);
                 return p.chunk(pos, k);
             }
+        } else if (std.mem.eql(u8, w, "element") or std.mem.eql(u8, w, "elements")) {
+            // An Object Element Reference, decided as a chunk word is (#1143).
+            if (p.startsIndex(try p.peek2("chunk-word", .operator))) {
+                const pos = try p.next(.operand);
+                const index = try p.range();
+                _ = try p.expectWord("of", .operator);
+                const of = try p.postfix(try p.primary());
+                return p.mk(pos, .{ .element = .{ .index = index, .ordinal = null, .of = of } }, &.{ index, of });
+            }
         }
         const n = try p.next(.operand);
         const open = try p.peek(.operator);
@@ -1842,6 +1861,14 @@ const Parser = struct {
             if (is_target and !p.isWord(n, "of")) {
                 _ = try p.next(.operand);
                 return p.mk(pos, .target, &.{});
+            }
+            if (!is_target and p.isWord(n, "element")) {
+                // `the last element of p`: an ordinal Object Element Reference.
+                const ordinal = try p.next(.operand);
+                _ = try p.next(.operand);
+                _ = try p.expectWord("of", .operator);
+                const of = try p.postfix(try p.primary());
+                return p.mk(pos, .{ .element = .{ .index = null, .ordinal = ordinal, .of = of } }, &.{of});
             }
             if (!is_target and n.kind == .word and (isSingular(p.word(n)) or p.isWord(n, "code"))) {
                 const ordinal = try p.next(.operand);
@@ -2611,6 +2638,18 @@ fn shape(tree: *const ast.Tree, e: *const Expr, w: *std.Io.Writer) !void {
             try shape(tree, c.of, w);
             try w.writeAll(")");
         },
+        .element => |el| {
+            try w.writeAll("(element ");
+            if (el.index) |i| try shape(tree, i, w) else try w.writeAll(tree.text(el.ordinal.?));
+            try w.writeAll(" ");
+            try shape(tree, el.of, w);
+            try w.writeAll(")");
+        },
+        .element_count => |of| {
+            try w.writeAll("(count ");
+            try shape(tree, of, w);
+            try w.writeAll(")");
+        },
         .whose => |x| {
             try w.writeAll("(whose ");
             try shape(tree, x.ordinal.?, w);
@@ -2722,4 +2761,22 @@ test "otherwise is no Argument Label" {
     const command = parsed.result.tree.declarations[0].data.handler.body[0].data.command;
     try testing.expectEqual(@as(usize, 0), command.labels.len);
     try testing.expectEqual(@as(usize, 1), command.args.len);
+}
+
+test "object element references and counts (#1143)" {
+    try expectShape("element 3 of p", "(element 3 p)");
+    try expectShape("elements 3 of p", "(element 3 p)");
+    try expectShape("element n of element 1 of p", "(element n (element 1 p))");
+    try expectShape("the last element of p", "(element last p)");
+    try expectShape("the number of elements of p", "(count p)");
+    try expectShape("the fill of element 3 of p", "(key fill (element 3 p))");
+    // The words stay names, and a key read of `number` is unchanged.
+    try expectShape("element", "element");
+    try expectShape("the number of x", "(key number x)");
+    try expectOutcome("on t\n  set the fill of element 3 of me to 1\nend t\n", "parses");
+    try expectOutcome("on t\n  set element 3 of p to 1\nend t\n", "parses");
+    try expectOutcome("on t\n  put 1 into element 3 of p\nend t\n", "not a container at 2:14");
+    try expectOutcome("on t\n  delete the fill of element 3 of p\nend t\n", "not a container at 2:10");
+    try expectOutcome("on t\n  put element - 1 into n\nend t\n", "unexpected token at 2:19");
+    try expectOutcome("on t\n  put the first element of p whose it is 1 into x\nend t\n", "unexpected token at 2:30");
 }
