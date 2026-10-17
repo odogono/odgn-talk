@@ -267,6 +267,11 @@ const checkElement = (
         kind: k,
         fill: c.str(e.fill, `${path}.fill`) ?? '',
         stroke: c.str(e.stroke, `${path}.stroke`) ?? '',
+        // Older format-1 Projects used a fixed 2px border.
+        thickness:
+          e.thickness === undefined
+            ? 2
+            : (c.num(e.thickness, `${path}.thickness`, 'nonNegative') ?? 2),
       };
     case 'line':
       return {

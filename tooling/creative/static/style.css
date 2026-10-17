@@ -130,7 +130,7 @@ button:disabled {
 }
 .el.rectangle,
 .el.ellipse {
-  border: 2px solid;
+  border-style: solid;
 }
 .el.ellipse {
   border-radius: 50%;

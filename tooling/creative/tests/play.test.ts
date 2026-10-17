@@ -19,6 +19,45 @@ const drain = (play: PlaySession) => {
   throw new Error('Did not become idle');
 };
 
+for (const kind of ['rectangle', 'ellipse'] as const) {
+  test(`Scripts read and write ${kind} border thickness only in Play State`, () => {
+    const project = createProject('Borders');
+    const element = createElement(kind, 'shape');
+    element.script = `on click
+  set the thickness of me to the thickness of me + 3
+end click
+on pointerLeave
+  set the thickness of me to 0
+end pointerLeave
+on pointerEnter
+  set the thickness of me to -1
+end pointerEnter`;
+    project.pages[0]!.elements.push(element);
+    const play = new PlaySession(project);
+    const shape = play.page.elements[0]!;
+    expect(shape).toHaveProperty('thickness', 2);
+    play.send(shape, 'click');
+    drain(play);
+    expect(shape).toHaveProperty('thickness', 5);
+    play.send(shape, 'pointerLeave');
+    drain(play);
+    expect(shape).toHaveProperty('thickness', 0);
+    expect(play.problems).toEqual([]);
+    play.send(shape, 'pointerEnter');
+    drain(play);
+    expect(shape).toHaveProperty('thickness', 0);
+    expect(play.problems).toMatchObject([
+      {
+        owner: element,
+        line: 8,
+        message: `"${kind}" failed while doing "thickness"`,
+      },
+    ]);
+    play.stop(0n);
+    expect(element).toHaveProperty('thickness', 2);
+  });
+}
+
 for (const level of ['element', 'page', 'project']) {
   test(`click reaches the ${level} Handler through Core parents`, () => {
     const project = fixture();

@@ -13,6 +13,17 @@ The authored Project model and its zip file format — pure TypeScript with no U
 - The Project file and browser storage: [#739](https://github.com/odogono/odgn-talk/issues/739).
 - Authored Projects are separate from Play State: [ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md).
 
+Rectangle and ellipse borders have a writable `thickness` in pixels, named
+like a line's thickness. Set **Thickness** in Info, or use
+`set the thickness of box to 1` in a Script. Zero removes the border;
+negative or non-finite values are invalid. New shapes and older Projects
+without the property use 2 px. The width is saved in `.folio` files and browser
+storage, and renders in Edit, Browse and Present. Info edits participate in
+undo/redo; Script changes last only for the Play Session. The
+[`borders` browser suite](tests/borders.browser.ts) checks Info, history and
+Script-driven rendering on `/borders-test.html` (see
+[Browser test suites](#browser-test-suites)).
+
 ## Page size
 
 Click empty space on the Page or desk, or press Escape, to select the Page.

@@ -44,8 +44,8 @@ const specific: Record<Element['kind'], Record<string, string>> = {
   },
   image: { image: 'text' },
   button: { label: 'text', fill: 'text', textColor: 'text' },
-  rectangle: { fill: 'text', stroke: 'text' },
-  ellipse: { fill: 'text', stroke: 'text' },
+  rectangle: { fill: 'text', stroke: 'text', thickness: 'number' },
+  ellipse: { fill: 'text', stroke: 'text', thickness: 'number' },
   line: { stroke: 'text', thickness: 'number' },
 };
 /**

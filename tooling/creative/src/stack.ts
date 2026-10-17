@@ -17,6 +17,7 @@ import {
 } from './editing';
 import {
   ELEMENT_KINDS,
+  hasBorder,
   isTextAlign,
   plainTextOf,
   replacePlainText,
@@ -127,6 +128,7 @@ export const renderElement = (
       Object.assign(node.style, {
         background: element.fill,
         borderColor: element.stroke,
+        borderWidth: `${element.thickness}px`,
       });
       break;
     case 'line': {
@@ -610,6 +612,10 @@ export const mountStack = (
             field('Fill', color('fill', element.fill)),
             field('Stroke', color('stroke', element.stroke)),
           ),
+          field(
+            'Thickness',
+            input('thickness', element.thickness, 'number', { min: 0 }),
+          ),
         );
         break;
       case 'line':
@@ -872,8 +878,12 @@ export const mountStack = (
             setTextAlign(element, value);
           }
         } else {
-          const sizes = key === 'width' || key === 'height';
-          const minimum = sizes ? (element.kind === 'line' ? 0 : 1) : undefined;
+          let minimum: number | undefined;
+          if (key === 'width' || key === 'height') {
+            minimum = element.kind === 'line' ? 0 : 1;
+          } else if (key === 'thickness' && hasBorder(element)) {
+            minimum = 0;
+          }
           (element as Record<string, unknown>)[key] =
             minimum === undefined ? value : Math.max(minimum, value as number);
         }

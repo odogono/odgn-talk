@@ -14,6 +14,7 @@ import {
   readProjectFile,
   serializeProject,
   sha256Hex,
+  validateProjectJson,
   writeProjectFile,
 } from '../src/project-file';
 import { readZip, writeZip } from '../src/zip';
@@ -146,6 +147,53 @@ const fileWithJson = async (json: unknown) =>
       method: 8,
     },
   ]);
+
+for (const kind of ['rectangle', 'ellipse'] as const) {
+  test(`${kind} border thickness survives a Project file round trip, including zero`, async () => {
+    const project = createProject('Borders');
+    for (const thickness of [0, 1, 5.5]) {
+      const element = createElement(
+        kind,
+        `shape${project.pages[0]!.elements.length}`,
+      );
+      Object.assign(element, { thickness });
+      project.pages[0]!.elements.push(element);
+    }
+    const { project: loaded } = await readProjectFile(
+      await writeProjectFile(project, new Map()),
+    );
+    expect(loaded).toEqual(project);
+  });
+
+  test(`older ${kind} borders default to 2px without changing the input`, async () => {
+    const project = createProject('Old borders');
+    project.pages[0]!.elements.push(createElement(kind, 'shape'));
+    const json = serializeProject(project) as {
+      pages: { elements: Record<string, unknown>[] }[];
+    };
+    delete json.pages[0]!.elements[0]!.thickness;
+    // Browser storage uses this same validation entry point.
+    expect(validateProjectJson(json)).toEqual({ project });
+    expect(json.pages[0]!.elements[0]).not.toHaveProperty('thickness');
+    expect((await readProjectFile(await fileWithJson(json))).project).toEqual(
+      project,
+    );
+  });
+
+  test(`${kind} border thickness rejects negative and non-finite numbers and wrong types`, () => {
+    const project = createProject('Invalid borders');
+    project.pages[0]!.elements.push(createElement(kind, 'shape'));
+    for (const thickness of [-1, Infinity, Number.NaN, null, '2']) {
+      const json = serializeProject(project) as {
+        pages: { elements: Record<string, unknown>[] }[];
+      };
+      json.pages[0]!.elements[0]!.thickness = thickness;
+      expect(validateProjectJson(json)).toMatchObject({
+        issues: [{ path: 'pages[0].elements[0].thickness' }],
+      });
+    }
+  });
+}
 
 test('a newer format is refused with a clear error', async () => {
   const { project } = await sampleProject();
