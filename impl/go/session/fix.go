@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 )
 
 // fix is `:fix <run> <path>`, or as a Transcript records it, the
@@ -29,11 +29,11 @@ func (h *Host) fix(rest string) []string {
 		input := ":fix " + run + "\n" + strings.TrimSuffix(source, "\n")
 		h.recording = &input
 	}
-	tree, err := syntax.Parse(source)
+	ds, err := analysis.Source(source)
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
-	declarations := fixDeclarations(source, tree)
+	declarations := fixDeclarations(source, ds)
 	if len(declarations) == 0 {
 		return refusal("bad arguments")
 	}
@@ -63,22 +63,12 @@ func (h *Host) fix(rest string) []string {
 // fixDeclarations are `:fix`'s declarations. Each one's lines run from the
 // line after the last one's last line, without the blank lines at their
 // start, to its own last line, so the comments before it go with it.
-func fixDeclarations(source string, tree *syntax.Tree) []declaration {
+func fixDeclarations(source string, ds []analysis.Declaration) []declaration {
 	lines := strings.Split(source, "\n")
 	var out []declaration
 	from := 0
-	for i, n := range tree.Declarations {
-		limit := len(source)
-		if i+1 < len(tree.Declarations) {
-			limit = tree.Declarations[i+1].Token.Start
-		}
-		end := n.Token.End
-		for _, t := range tree.Tokens {
-			if t.Start >= n.Token.Start && t.Start < limit && t.Kind != syntax.LineBreak && t.Kind != syntax.EOF {
-				end = max(end, t.End)
-			}
-		}
-		last := strings.Count(source[:end], "\n")
+	for _, n := range ds {
+		last := strings.Count(source[:n.Span.End], "\n")
 		first := from
 		for first < last && strings.Trim(lines[first], " \t\r") == "" {
 			first++

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 )
 
 // docsFixture is impl/testdata/declaration-docs.json, which the TS Core's
@@ -45,13 +45,13 @@ func readDocsFixture(t *testing.T) docsFixture {
 
 func TestDeclarationDocumentationAttachesToTopLevelDeclarations(t *testing.T) {
 	for _, u := range readDocsFixture(t).Units {
-		tree, err := syntax.Parse(u.Source)
+		ds, err := analysis.Source(u.Source)
 		if err != nil {
 			t.Fatal(u.Name, err)
 		}
 		got := [][2]string{}
-		for _, n := range tree.Declarations {
-			got = append(got, [2]string{n.Kind, tree.Documentation(n)})
+		for _, n := range ds {
+			got = append(got, [2]string{n.Kind, n.Doc})
 		}
 		if !reflect.DeepEqual(got, u.Docs) {
 			t.Errorf("%s:\n got %q\nwant %q", u.Name, got, u.Docs)

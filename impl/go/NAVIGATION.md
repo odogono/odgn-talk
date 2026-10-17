@@ -146,7 +146,7 @@ Files, grammar, or lowering.
 
 ## Sessions, REPL and Transcripts
 
-- Implementation: [Host](session/host.go), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](cmd/northtalk/)
+- Implementation: [Host](session/host.go), [analysis bridge](internal/analysis/) (native Go or negotiated Zig `analysis-v1`, via [the guest](zig_analysis.go)), [Session Commands](session/commands.go), [observation](session/observe.go), [`:describe`](session/describe.go), [inspection](session/inspect.go), [drivers](driver/), [Transcript replay](driver/transcript.go), [CLI](cmd/northtalk/)
 - Rules: [Entries](../../spec/02-grammar.md#entries), [sessions](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
 - Tests and cases: [Host tests](session/host_test.go), [REPL tests](driver/repl_test.go), [Session parity](internal/corpus/session_test.go), [Transcripts](../../corpus/sessions/)
 - First check: `go -C impl/go test ./session ./driver`

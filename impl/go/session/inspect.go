@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"regexp"
 	"strings"
 )
@@ -15,25 +14,25 @@ import (
 var readerIdentifier = regexp.MustCompile(`\bentry0\w*`)
 
 func (h *Host) inspectExpression(source string) []string {
-	kind, node, err := syntax.ParseEntry(source, h.isHandler)
+	entry, err := h.analyze(source)
 	if err != nil {
-		var parseError *syntax.Error
-		if errors.As(err, &parseError) && parseError.TrailingEntry {
+		var parseError *analysis.Problem
+		if errors.As(err, &parseError) && parseError.Trailing {
 			return refusal("bad arguments")
 		}
 		return h.refused(err, placement{}, 0)
 	}
-	if kind != "expression" || !documentable(source, kind, node) {
+	if entry.Kind != "expression" || !documentable(entry) {
 		return refusal("bad arguments")
 	}
 	h.start()
 	h.inspecting = true
 	defer func() { h.inspecting = false }()
-	_, out := h.run(source, true, node)
+	_, out := h.run(source, true, entry)
 	return out
 }
 func (h *Host) readProperties(x talk.Value) []string {
-	ids := readerIdentifier.FindAllString(generated.InspectReader, -1)
+	ids := readerIdentifier.FindAllString(analysis.Catalogue().InspectReader, -1)
 	n := h.lastEntry + 1
 	for {
 		free := true
@@ -50,7 +49,7 @@ func (h *Host) readProperties(x talk.Value) []string {
 		n++
 	}
 	name := fmt.Sprintf("entry%d", n)
-	source := readerIdentifier.ReplaceAllStringFunc(generated.InspectReader, func(id string) string { return strings.Replace(id, "entry0", name, 1) })
+	source := readerIdentifier.ReplaceAllStringFunc(analysis.Catalogue().InspectReader, func(id string) string { return strings.Replace(id, "entry0", name, 1) })
 	if err := h.script.Extend(source); err != nil {
 		return h.refused(err, placement{}, 0)
 	}

@@ -2,7 +2,7 @@ package session
 
 import (
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	"os"
 	"reflect"
 	"strings"
@@ -109,7 +109,7 @@ func TestPassiveInspectionAndReaderHygiene(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if string(b) != generated.InspectReader {
+	if string(b) != analysis.Catalogue().InspectReader {
 		t.Fatal("reader source differs from normative template")
 	}
 }

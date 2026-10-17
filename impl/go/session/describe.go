@@ -3,13 +3,11 @@ package session
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	"github.com/odogono/odgn-talk/impl/go/internal/docs"
-	"github.com/odogono/odgn-talk/impl/go/internal/generated"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	coreunicode "github.com/odogono/odgn-talk/impl/go/internal/unicode"
 )
 
@@ -49,25 +47,8 @@ func textDisplay(s string) string {
 // signature runs from its first token through its grammar head: a function's
 // or Handler's head line without a trailing comment, or a Constant's or
 // Script Variable's name, without its initializer.
-func declaredIn(source string, tree *syntax.Tree, n *syntax.Node, origin string) declared {
-	end := n.NameToken.End
-	if n.Kind == "function" || n.Kind == "handler" {
-		at := sort.Search(len(tree.Tokens), func(i int) bool { return tree.Tokens[i].Start >= n.Token.Start })
-		for k := at; k < len(tree.Tokens) && tree.Tokens[k].Kind != syntax.LineBreak; k++ {
-			end = tree.Tokens[k].End
-		}
-	}
-	d := declared{origin: origin, declaration: n.Kind, signature: source[n.Token.Start:end], doc: tree.Documentation(n)}
-	if n.Kind == "function" {
-		required := 0
-		for _, p := range n.Params {
-			if len(p.Children) == 0 {
-				required++
-			}
-		}
-		d.arity = []int{required, len(n.Params)}
-	}
-	return d
+func declaredIn(n analysis.Declaration, origin string) declared {
+	return declared{origin: origin, declaration: n.Kind, signature: n.Signature, doc: n.Doc, arity: n.Arity}
 }
 
 // sessionDeclared resolves a current session name or Selector, as binding
@@ -86,11 +67,11 @@ func (h *Host) sessionDeclared(name string) []declared {
 		if d.names[0] != name {
 			continue
 		}
-		tree, err := syntax.Parse(d.source)
-		if err != nil || len(tree.Declarations) == 0 {
+		ds, err := analysis.Source(d.source)
+		if err != nil || len(ds) == 0 {
 			continue
 		}
-		m := declaredIn(d.source, tree, tree.Declarations[0], "session")
+		m := declaredIn(ds[0], "session")
 		if d.kind == "variable" {
 			m.variable = name
 		}
@@ -107,8 +88,12 @@ func (h *Host) librarySource(library string) (string, bool) {
 	if l, added := h.libraries[library]; added {
 		return l.compiled.Source(), true
 	}
-	source, ok := generated.StandardLibraries[library]
-	return source, ok
+	for _, l := range analysis.Catalogue().Libraries {
+		if l.Name == library {
+			return l.Source, true
+		}
+	}
+	return "", false
 }
 
 // libraryDeclared finds a public Library export from the Library's source,
@@ -118,16 +103,16 @@ func (h *Host) libraryDeclared(library, name string) []declared {
 	if !ok {
 		return nil
 	}
-	tree, err := syntax.Parse(source)
+	ds, err := analysis.Source(source)
 	if err != nil {
 		return nil
 	}
 	var out []declared
-	for _, n := range tree.Declarations {
-		if n.Private || n.Kind == "use" || n.Text != name {
+	for _, n := range ds {
+		if n.Private || n.Kind == "use" || n.Name != name {
 			continue
 		}
-		m := declaredIn(source, tree, n, library)
+		m := declaredIn(n, library)
 		if n.Kind == "handler" {
 			m.clause = len(out) + 1
 		}
@@ -139,21 +124,21 @@ func (h *Host) libraryDeclared(library, name string) []declared {
 // libraryExports lists a Library's public export names in source order.
 func (h *Host) libraryExports(library string) []string {
 	source, _ := h.librarySource(library)
-	tree, err := syntax.Parse(source)
+	ds, err := analysis.Source(source)
 	if err != nil {
 		return nil
 	}
 	var out []string
-	for _, n := range tree.Declarations {
-		if !n.Private && n.Kind != "use" && !slices.Contains(out, n.Text) {
-			out = append(out, n.Text)
+	for _, n := range ds {
+		if !n.Private && n.Kind != "use" && !slices.Contains(out, n.Name) {
+			out = append(out, n.Name)
 		}
 	}
 	return out
 }
 
 func builtinDeclared(name string) []declared {
-	for _, b := range generated.Builtins.Builtin {
+	for _, b := range analysis.Catalogue().Builtins {
 		if b.Name == name {
 			return []declared{{origin: "builtin", declaration: "builtin", signature: b.Call, doc: b.Gives}}
 		}
@@ -284,11 +269,12 @@ func (h *Host) apropos(rest string) []string {
 			}
 		}
 	}
-	for _, b := range generated.Builtins.Builtin {
+	for _, b := range analysis.Catalogue().Builtins {
 		add(found{target: target{name: b.Name, origin: "builtin"}, origin: "builtin", available: !h.has(b.Name), docs: builtinDeclared(b.Name)})
 	}
 	libraries := slices.Sorted(func(yield func(string) bool) {
-		for name := range generated.StandardLibraries {
+		for _, l := range analysis.Catalogue().Libraries {
+			name := l.Name
 			if !yield(name) {
 				return
 			}
