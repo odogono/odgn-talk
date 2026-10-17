@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/tetratelabs/wazero"
@@ -26,7 +27,14 @@ var manifest []byte
 type Engine struct {
 	runtime  wazero.Runtime
 	compiled wazero.CompiledModule
+	cache    wazero.CompilationCache
 }
+
+// CacheDirEnv names a directory where compiled guest code is kept between
+// processes. Unset, every process compiles the artifact itself. wazero keys
+// the cache by its version and the artifact, so a changed artifact compiles
+// again.
+const CacheDirEnv = "NORTHTALK_ZIG_CACHE_DIR"
 
 func NewEngine(ctx context.Context) (*Engine, error) {
 	var recorded struct {
@@ -39,19 +47,35 @@ func NewEngine(ctx context.Context) (*Engine, error) {
 	if hex.EncodeToString(sum[:]) != recorded.SHA256 {
 		return nil, fmt.Errorf("embedded Zig artifact digest mismatch")
 	}
-	r := wazero.NewRuntime(ctx)
-	if _, err := wasi_snapshot_preview1.Instantiate(ctx, r); err != nil {
-		r.Close(ctx)
+	config := wazero.NewRuntimeConfig()
+	var cache wazero.CompilationCache
+	if dir := os.Getenv(CacheDirEnv); dir != "" {
+		var err error
+		if cache, err = wazero.NewCompilationCacheWithDir(dir); err != nil {
+			return nil, err
+		}
+		config = config.WithCompilationCache(cache)
+	}
+	e := &Engine{runtime: wazero.NewRuntimeWithConfig(ctx, config), cache: cache}
+	if _, err := wasi_snapshot_preview1.Instantiate(ctx, e.runtime); err != nil {
+		e.Close(ctx)
 		return nil, err
 	}
-	c, err := r.CompileModule(ctx, wasm)
+	c, err := e.runtime.CompileModule(ctx, wasm)
 	if err != nil {
-		r.Close(ctx)
+		e.Close(ctx)
 		return nil, err
 	}
-	return &Engine{r, c}, nil
+	e.compiled = c
+	return e, nil
 }
-func (e *Engine) Close(ctx context.Context) error { return e.runtime.Close(ctx) }
+func (e *Engine) Close(ctx context.Context) error {
+	err := e.runtime.Close(ctx)
+	if e.cache != nil {
+		e.cache.Close(ctx)
+	}
+	return err
+}
 func (e *Engine) Instantiate(ctx context.Context) (*Reactor, error) {
 	return e.InstantiateObserved(ctx, nil)
 }
