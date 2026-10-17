@@ -193,7 +193,7 @@ implementation and coordinator identity stay in Go. Ordinary declarations with
 the same public name do not acquire factory checks or catalogue failures.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1`, `climb-v1`, `function-gone-v1`, `function-metadata-v1`,
+`crossing-trace-v1`, `climb-v1`, `function-gone-v1`, `function-metadata-v1`, `core-message-v1`,
 `standard-refinements-v1`, `inline-inputs-v1` and
 `restore-bindings-v1`.
 The [inline transport](../../spec/embedding/inline-inputs.md) streams every
@@ -268,15 +268,16 @@ checker, compiler or generated catalogue packages. Cancelling an unfinished
 inspection expression prevents its property reader from starting.
 
 Native Session tests and all Session Transcripts pass. The experimental
-backend also passes the `describe`, `named-functions` and `object-inspection`
-Transcripts unchanged, including defining documentation and disposed Object
-inspection after Restore. The Session’s private pending-input hook uses the
+backend also passes the `describe`, `named-functions`, `object-inspection` and
+`observation` Transcripts unchanged, including defining documentation, disposed
+Object inspection after Restore and Core-raised error messages left out of the
+Trace. The Session’s private pending-input hook uses the
 negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
 Pump per Host call, Store Notifications drain at the same Clock reading, and
 restored settlements are pumped before the next Entry. The query observes the
 guest queue without execution or Trace. On the experimental backend, the
-Session tests and Transcripts unaffected by error-handler arguments and
-decomposed-source Trace spelling pass; those gaps are still tracked in
+Session tests and Transcripts unaffected by decomposed-source Trace spelling
+pass; that gap is still tracked in
 [#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
 migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
 and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these

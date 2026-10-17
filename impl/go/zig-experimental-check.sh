@@ -14,8 +14,9 @@ go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$'
 # Session/Transcript gaps are tracked separately in #1053.
 go test -tags talk_zig_experimental -run '^(TestImplicitEntryAfterSelectorDeclaration|TestPassiveAnalysisBeforeSessionStarts|TestConcurrentSessionAnalysis|TestEntryRefusesMultipleDeclarations|TestAnalysisRetainsSourceScalars|TestDeclarationDocumentationAttachesToTopLevelDeclarations|TestFunctionMetadataAcrossSessionExposuresAndRestore|TestInspectionAnonymousLambda|TestDeclarationDocumentationInTheSession|TestStaleFunctionValuesKeepTheirNameAndArityThroughSessionRestore|TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore|TestAGetterThatQueuesADeliveryIsFollowedByOneMorePump|TestAHandlerThatReadsTheGetterAgainGetsOneMorePumpPerHostCall|TestNotificationsPumpAgainAtTheSameReadingUntilNoneIsLeft)$' -count=1 "$@" ./session
 # Function metadata, defining documentation, restored Object inspection,
-# callback Deliveries, Store Notifications and restored settlements.
-go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection|store-notifications|store-notify-host-changes|store-notify-lifecycle|store-notify-own-writes|save-restore)$' -count=1 "$@" ./internal/corpus
+# callback Deliveries, Store Notifications, restored settlements and
+# Core-raised error messages (#1095).
+go test -tags talk_zig_experimental -run 'TestSessionTranscriptParity/sessions/(describe|named-functions|object-inspection|store-notifications|store-notify-host-changes|store-notify-lifecycle|store-notify-own-writes|save-restore|observation)$' -count=1 "$@" ./internal/corpus
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.
 go test -tags talk_zig_experimental -run '^(TestPool.*|TestCancelledInspectionNeedsNoReader)$' -count=1 "$@" ./driver

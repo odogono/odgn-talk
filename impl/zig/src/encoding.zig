@@ -35,6 +35,9 @@ const Step = union(enum) { value: *const Value, punctuation: []const u8, key: []
 pub const FunctionWriter = struct {
     context: ?*anyopaque,
     write: *const fn (?*anyopaque, *std.Io.Writer, *const Value) Error!void,
+    /// `core-message-v1`: a Core-raised error map is written as
+    /// `{"$coreError": [[key, value], …]}`, so its `message` stays marked.
+    core_error: bool = false,
 };
 
 /// Writes `v`'s Value Encoding. A Function at any depth is NotEncodable.
@@ -113,8 +116,10 @@ fn writeOne(w: *std.Io.Writer, v: *const Value, gpa: std.mem.Allocator, steps: *
                     break;
                 }
             }
+            const core = v.core_message and functions != null and functions.?.core_error;
+            if (core) escaped = true;
             if (escaped) {
-                try tag(w, "map");
+                try tag(w, if (core) "coreError" else "map");
                 try w.writeByte('[');
             } else try w.writeByte('{');
             try steps.ensureUnusedCapacity(gpa, 6 * xs.len + 1);
@@ -232,6 +237,8 @@ const Building = struct {
     /// A plain map's member names.
     keys: []const []const u8 = &.{},
     tagged: bool = false,
+    /// A `$coreError` payload: the map is a Core-raised error.
+    core: bool = false,
     next: usize = 0,
     key: []const u8 = "",
     escaped: bool = false,
@@ -289,8 +296,15 @@ fn build(a: std.mem.Allocator, root: Json, r: display.Resolver, mode: Mode) mode
                 .list => try model.list(a, top.items.items),
                 .range => try model.range(a, top.items.items[0], top.items.items[1]),
                 .map => blk: {
-                    if (top.tagged and !top.escaped) return error.InvalidValue;
-                    break :blk try model.map(a, top.pairs.items);
+                    if (top.core) {
+                        // Only a map with a text `message` has one to leave out.
+                        for (top.pairs.items) |p| {
+                            if (std.mem.eql(u8, p.key, "message") and p.value.data == .text) break;
+                        } else return error.InvalidValue;
+                    } else if (top.tagged and !top.escaped) return error.InvalidValue;
+                    const m = try model.map(a, top.pairs.items);
+                    m.core_message = top.core;
+                    break :blk m;
                 },
             };
             var done = stack.pop().?;
@@ -331,11 +345,12 @@ fn startValue(a: std.mem.Allocator, j: Json, r: display.Resolver, mode: Mode) mo
                 const name = object.keys()[0];
                 const payload = object.values()[0];
                 if (std.mem.eql(u8, name, "$range")) return .{ .building = .{ .kind = .range, .children = try pair(payload) } };
-                if (std.mem.eql(u8, name, "$map")) {
+                const core = std.mem.eql(u8, name, "$coreError") and r.core_error;
+                if (core or std.mem.eql(u8, name, "$map")) {
                     if (payload != .array) return error.InvalidValue;
                     // A map with no `$` key is written as a plain object.
                     if (payload.array.items.len == 0) return error.InvalidValue;
-                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true } };
+                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true, .core = core } };
                 }
                 if (name.len > 0 and name[0] == '$') return .{ .value = try taggedLeaf(a, name, payload, r) };
             }
