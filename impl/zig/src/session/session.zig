@@ -11,13 +11,14 @@ const northtalk = @import("northtalk");
 const transcript = @import("transcript.zig");
 const store = @import("store.zig");
 /// The normative `:inspect` reader (session-observation.md).
-const reader_template = @embedFile("inspect-reader");
+const reader_template = northtalk.analysis.inspect_reader;
 
 const Allocator = std.mem.Allocator;
 const parser = northtalk.syntax.parser;
 const lexer = northtalk.syntax.lexer;
 const ast = northtalk.syntax.ast;
 const check = northtalk.check;
+const analysis = northtalk.analysis;
 
 pub const Instant = struct {
     seconds: i64,
@@ -1048,14 +1049,7 @@ pub const Session = struct {
     /// Whether a parse leaves nothing to wait for: it succeeded, or failed
     /// before the end of the source and not inside a fenced literal or hole.
     fn ended(text: []const u8, failure: ?parser.Diagnostic, trailing: bool) bool {
-        const d = failure orelse return true;
-        if (trailing) return true;
-        switch (d.code) {
-            .unterminated_interpolation => return false,
-            .unterminated_text => return !(std.mem.startsWith(u8, text[d.offset..], "\"\"\"") or std.mem.startsWith(u8, text[d.offset..], "`")),
-            else => {},
-        }
-        return d.offset < std.mem.trimEnd(u8, text, " \t\n").len;
+        return analysis.ended(text, failure orelse return true, trailing);
     }
 
     /// Gives the session one Entry or Session Command, with the `|` lines a
@@ -1197,9 +1191,8 @@ pub const Session = struct {
             s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), at.line, at.column });
             return .refused;
         }
-        const wrapped = try std.fmt.allocPrint(ta, "on {s}\n{s}{s}\nend {s}\n", .{ name, if (expression) "return " else "", text, name });
         // The names it binds that become Script Variables.
-        const roots = try s.implicitNames(ta, name, wrapped);
+        const roots = try s.implicitNames(ta, text, expression);
         var source: std.ArrayList(u8) = .empty;
         for (roots) |r| try source.print(ta, "script variable {s}\n", .{r});
         try source.print(ta, "on {s}\n{s}{s}\nend {s}\n", .{ name, if (expression) "return " else "", text, name });
@@ -1275,33 +1268,13 @@ pub const Session = struct {
     /// The names an Entry binds as a Container's root or a Capture, that
     /// the Script doesn't have: checked against its Script Variables and
     /// Constants, as the Core will check the extension.
-    fn implicitNames(s: *Session, ta: Allocator, name: []const u8, wrapped: []const u8) ![]const []const u8 {
-        var prelude: std.ArrayList(u8) = .empty;
-        var lines: u32 = 0;
+    fn implicitNames(s: *Session, ta: Allocator, text: []const u8, expression: bool) ![]const []const u8 {
+        var bound: std.ArrayList([]const u8) = .empty;
         for (s.decls.items) |d| switch (d.kind) {
-            .variable => {
-                try prelude.print(ta, "script variable {s}\n", .{d.names[0]});
-                lines += 1;
-            },
-            .constant => {
-                try prelude.print(ta, "constant {s} = nothing\n", .{d.names[0]});
-                lines += 1;
-            },
+            .variable, .constant => try bound.append(ta, d.names[0]),
             else => {},
         };
-        try prelude.appendSlice(ta, wrapped);
-        const tree = switch (try parser.parse(ta, prelude.items)) {
-            .tree => |t| t,
-            .failure => return &.{},
-        };
-        const result = try check.check(ta, &tree, .{ .collect_roots = true });
-        for (result.bodies, 0..) |b, i| if (b.kind == .handler) {
-            const d = tree.declarations[b.declaration orelse continue];
-            if (d.data != .handler or !std.mem.eql(u8, tree.text(d.data.handler.name), name)) continue;
-            const roots = result.roots.get(@intCast(i)) orelse return &.{};
-            return roots.items;
-        };
-        return &.{};
+        return analysis.implicitNames(ta, text, expression, bound.items);
     }
 
     /// Prints a load's diagnostics, from its `diag` records since `mark`:
@@ -2183,39 +2156,19 @@ pub const Session = struct {
         total: usize = 0,
     };
 
-    /// Every declaration of a source, in order.
+    /// Every declaration of a source but its `use` lines, in order.
     fn declarationsOf(s: *Session, source: []const u8) ![]Shown {
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
-        const ta = arena.allocator();
-        const tree = switch (try parser.parse(ta, source)) {
-            .tree => |t| t,
-            .failure => return &.{},
+        const ds = switch (try analysis.declarations(arena.allocator(), source)) {
+            .declarations => |ds| ds,
+            .problem => return &.{},
         };
-        var lines = try lexer.Lines.init(ta, source);
         var out: std.ArrayList(Shown) = .empty;
-        const all_lines = try splitLines(ta, source);
-        for (tree.declarations) |d| {
-            const first = firstToken(d);
-            const line = lines.position(tree.tokens[first].start).line;
-            const doc = s.dupe(try docBefore(ta, all_lines, line - 1));
-            const head_end = headEnd(&tree, first);
-            switch (d.data) {
-                .handler => |h| {
-                    const name = if (h.fallback) "any message" else try selectorText(ta, &tree, h);
-                    try out.append(s.alloc(), .{ .kind = "handler", .name = s.dupe(name), .signature = s.dupe(source[tree.tokens[h.on].start..head_end]), .doc = doc, .private = d.private != null });
-                },
-                .function => |f| {
-                    var required: usize = 0;
-                    for (f.params) |p| {
-                        if (p.default == null) required += 1;
-                    }
-                    try out.append(s.alloc(), .{ .kind = "function", .name = s.dupe(tree.text(f.name)), .signature = s.dupe(source[tree.tokens[f.keyword].start..head_end]), .doc = doc, .private = d.private != null, .required = required, .total = f.params.len });
-                },
-                .constant => |k| try out.append(s.alloc(), .{ .kind = "constant", .name = s.dupe(tree.text(k.name)), .signature = s.print("constant {s}", .{tree.text(k.name)}), .doc = doc, .private = d.private != null }),
-                .script_variable => |v| try out.append(s.alloc(), .{ .kind = "variable", .name = s.dupe(tree.text(v.name)), .signature = s.print("script variable {s}", .{tree.text(v.name)}), .doc = doc, .private = false }),
-                .use => {},
-            }
+        for (ds) |d| {
+            if (std.mem.eql(u8, d.kind, "use")) continue;
+            const arity = d.arity orelse .{ 0, 0 };
+            try out.append(s.alloc(), .{ .kind = s.dupe(d.kind), .name = s.dupe(d.name), .signature = s.dupe(d.signature), .doc = s.dupe(d.doc), .private = d.private, .required = arity[0], .total = arity[1] });
         }
         return out.items;
     }
@@ -2224,42 +2177,6 @@ pub const Session = struct {
         var out: std.ArrayList([]const u8) = .empty;
         var it = std.mem.splitScalar(u8, source, '\n');
         while (it.next()) |l| try out.append(ta, std.mem.trimEnd(u8, l, "\r"));
-        return out.items;
-    }
-
-    /// The `--|` block straight before line `index` (0-based): each line
-    /// without its indentation, `--|` and one space, joined with LF.
-    fn docBefore(ta: Allocator, lines: []const []const u8, index: usize) ![]const u8 {
-        var from = index;
-        while (from > 0) {
-            const t = std.mem.trimStart(u8, lines[from - 1], " \t");
-            if (!std.mem.startsWith(u8, t, "--|")) break;
-            from -= 1;
-        }
-        var out: std.ArrayList(u8) = .empty;
-        for (lines[from..index], 0..) |l, i| {
-            if (i > 0) try out.append(ta, '\n');
-            var t = std.mem.trimStart(u8, l, " \t")[3..];
-            if (t.len > 0 and t[0] == ' ') t = t[1..];
-            try out.appendSlice(ta, t);
-        }
-        return out.items;
-    }
-
-    /// Where a declaration's head ends: its last token before the first
-    /// line break after `first`.
-    fn headEnd(tree: *const ast.Tree, first: usize) usize {
-        var t = first;
-        while (t + 1 < tree.tokens.len and tree.tokens[t + 1].kind != .newline and tree.tokens[t + 1].kind != .eof) t += 1;
-        return tree.tokens[t].end;
-    }
-
-    fn selectorText(ta: Allocator, tree: *const ast.Tree, h: ast.Handler) ![]const u8 {
-        if (h.labels.len == 0) return tree.text(h.name);
-        var out: std.ArrayList(u8) = .empty;
-        try out.appendSlice(ta, tree.text(h.name));
-        try out.append(ta, ':');
-        for (h.labels) |l| try out.print(ta, "{s}:", .{tree.text(l)});
         return out.items;
     }
 

@@ -350,7 +350,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
-| `hello` | `protocol`, optional `features`: requested supported feature names | `language`, `costModel`, `unicode`, `core`, `saveFormat`, optional `features`: text names (`paused-inputs-v1` advertises paused-input admission; `abandoned-before-needs-v1` supports opt-in cancellation before callbacks; `crossing-trace-v1` supports opt-in Operation Trace observation before landing; `climb-v1` supports opt-in `climbed` on `run end` reports; `function-gone-v1` supports opt-in `gone` on Pump replies; `inline-inputs-v1` supports synchronous per-record observation and admission during exports; `restore-bindings-v1` supports binding registration during resolution and restored Host handle metadata) | `CoreVersions` |
+| `hello` | `protocol`, optional `features`: requested supported feature names | `language`, `costModel`, `unicode`, `core`, `saveFormat`, optional `features`: text names (`paused-inputs-v1` advertises paused-input admission; `abandoned-before-needs-v1` supports opt-in cancellation before callbacks; `crossing-trace-v1` supports opt-in Operation Trace observation before landing; `climb-v1` supports opt-in `climbed` on `run end` reports; `function-gone-v1` supports opt-in `gone` on Pump replies; `inline-inputs-v1` supports synchronous per-record observation and admission during exports; `restore-bindings-v1` supports binding registration during resolution and restored Host handle metadata; `analysis-v1` opens the [language analysis](#language-analysis) messages) | `CoreVersions` |
 | `define-capability` | `name`, optional `handle`: a distinct transport identity used by `grant` and Operation needs while declarations and Fingerprints keep `name`; `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook; optional `standard` refinement family with `standard-refinements-v1` | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks and `release` requests as its Grant release hook. `sqlite` isn't offered through the message layer yet | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |
@@ -385,6 +385,10 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `stop`, `cancel-run`, `rewind-run`, `revoke` | `reason`, `run`, or `grant`: the name | – | `Stop`, `CancelRun`, `RewindRun`, `Revoke` |
 | `counters`, `grants` | – | `Counters`, or `{name: [ops]}` | `Counters`, `Grants` |
 | `export-manifest` | the manifest's definitions, by handle | `manifest`: bytes | `ExportManifest` |
+| `analyze-entry` (`analysis-v1`) | `source`, optional `handlers`, optional `bound`: text names | `kind`, `doc`, `declarations`, `implicit`, and `problem` for a syntax error | – |
+| `analyze-source` (`analysis-v1`) | `source` | `declarations`, or `problem` | – |
+| `analysis-catalogue` (`analysis-v1`) | – | `builtins`: `[{name, call, gives}]`, `libraries`: `[{name, source}]`, `inspectReader` | – |
+| `message-name` (`analysis-v1`) | `name`, `arity` | `valid` | – |
 
 - **Reports** are `talk.ts`'s `Report` union as data: `run end` (`script`, `run`, `delivery`, `broadcast`, `handler`, `fallback`, `outcome`, `result (V)`, `error`, `limit`, `effect`, `at`, `fuel`, `alloc`), `stop`, `unhandled`, `call failed`, `effect failure`, `decided`, `run started`, `run discarded`, `run accounting` and `causal work`. The latter four use the fields in [Run accounting](#run-accounting); `fn` and `args` carry Value Encoding values. A Host opting into `climb-v1` also gets `climbed: true` on the `run end` of a Run whose message went on up the [Message Path](05-handlers-messages-and-scheduling.md#the-message-path), by `pass` or with no clause taking it. That Run hasn't answered its asker, so the Host keeps the `Request` or `Decide` future open until a later `run end`, `unhandled` or `decided` report settles it. An in-process Core knows this without the field. With `function-gone-v1`, a Pump reply's `gone` lists the delivery ids of Host `Call`s found stale at the drain, which end with no report: the Host rejects each with `send failed`, reason `function gone`.
 - **Encodings:** `now` and `nextDeadline` are `$instant` text, byte strings (saves, identities, fingerprints) are `{"$bytes": …}`, durations are whole milliseconds, and every other integer is a JSON integer when its magnitude is below 2⁵³, and its decimal text in a JSON string otherwise.
@@ -407,6 +411,26 @@ sqlite Grant carries its row cap in `maxRows`, independently of its shared
 `coordinator`. These fields copy only the data the guest needs to validate
 calls; arbitrary Host bindings stay in the adapter. An ordinary declaration
 without `standard` never acquires factory refinements from its name.
+
+### Language analysis
+
+`analysis-v1` serves a [Session Host](12-sessions-and-tooling.md) on the message layer the Core's own reading of source, so it decides Entries as an in-process Session Host does ([#1090](https://github.com/odogono/odgn-talk/issues/1090)). Its messages read only their fields: they load nothing, touch no Group, record no Trace and may be sent before `new-group`. Without the opt-in each is a protocol error. A missing or malformed field is `invalid value`.
+
+- **`analyze-entry`** decides one [Entry](12-sessions-and-tooling.md#entries). `handlers` are the first Names of the Session Script's Handlers, so that a Command Call to one is a statement; `bound` are the names the Script already has.
+  - `kind` is `declaration`, `statement`, `expression`, or `empty` for blank input or a lone `--|` block.
+  - `doc` is `attached` when a `--|` block directly precedes the Entry's first line, `pending` when nothing has followed the block yet, and `none` otherwise; a blank line after a block detaches it. The Session Host refuses an attached block before anything but a declaration other than `use`.
+  - `problem` is the first syntax error: `{code, line, col, incomplete, trailing}`, positioned in the Entry's own lines. `incomplete` means more lines could complete the Entry, as a REPL waits for them ([Fenced text in sessions and tooling](12-sessions-and-tooling.md#fenced-text-in-sessions-and-tooling)); `trailing` means a whole statement or expression was followed by more input. Load-time diagnostics still come from `load`, `extend` or `reload`.
+  - `declarations` are a declaration Entry's, as `analyze-source` gives them. An Entry has exactly one; `:fix` accepts several.
+  - `implicit` are a statement's or expression's [implicit Script Variables](12-sessions-and-tooling.md#statements-and-expressions), in the order first bound, without the `bound` names.
+- **`analyze-source`** lists a source's declarations in order, or its first syntax error as `problem`. Each is `{kind, name, word?, private, span, signature, doc, arity?, initializer?, imports?}`:
+  - `kind` is `handler`, `function`, `constant`, `variable` or `use`. `name` is a Handler's Selector or `any message`, and a `use` line's Library; `word` is a Handler's first Name.
+  - `span` is `{start, end, line, endLine}`: UTF-8 byte offsets from its first token to the end of its last token before the next declaration, and their 1-based lines.
+  - `signature` is its head: through the end of a function's or Handler's first line, or `constant x` and `script variable x`. `doc` is the `--|` block straight before it, each line without its indentation, `--|` and one space, joined with LF.
+  - `arity` is a function's `[required, total]` parameters, `initializer` a Script Variable's text after `=`, and `imports` a `use` line's `[{name, local}]`.
+- **`analysis-catalogue`** gives the Built-in catalogue `:describe` and `:apropos` read, the Standard Library's sources and the normative [`:inspect` reader](session/inspect-reader.talk) template.
+- **`message-name`** says whether a `send` could [compute](05-handlers-messages-and-scheduling.md#sending) `name` for `arity` arguments: a Name, or a Selector with one part per argument. `:trace` and `:describe` check Selectors with it.
+
+Display formatting of Values (`:inspect` rows, `:describe` values, Text forms) stays with the Host. The C API has no counterpart: an in-process Session Host links the Core's analysis directly, and a C Host that needs it uses the message layer.
 
 ## Host error catalogue
 

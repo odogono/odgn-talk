@@ -126,6 +126,8 @@ A statement or an expression runs as a Run of an implicit Handler:
 - **`it`** belongs to the Entry's Run, so each Entry starts with `it` as Nothing.
 - **Rollback:** a Limit Fault rolls back the Entry's Segment, prompt state included, with no extra rule ([ADR 0006](../docs/adr/0006-limit-faults-roll-back-the-segment.md)).
 
+A Session Host on the message layer asks the Core to decide its Entries, rather than parsing them itself: an Entry's kind, completeness, leading documentation, declarations and implicit Script Variables, and the catalogue `:describe`, `:apropos` and `:inspect` read, come from [language analysis](09-embedding.md#language-analysis).
+
 ### The foreground
 
 After it pumps, while the Entry's Run hasn't ended, the Session Host:
