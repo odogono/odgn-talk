@@ -1,0 +1,36 @@
+name: Go Zig adapter measurements
+
+# Native Go against the Zig adapter on each required platform (#1054). It
+# times shared runners, so read results as ratios within one job. It runs on
+# demand and when the measurement code changes, not on every Core change.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'impl/go/backend_bench_test.go'
+      - 'impl/go/group_bench_test.go'
+      - 'impl/go/zig-adapter-bench.sh'
+      - '.github/workflows/go-zig-bench.yml'
+
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - run: impl/go/zig-adapter-bench.sh "$RUNNER_TEMP/results"
+        env:
+          COUNT: '5'
+      - run: cat "$RUNNER_TEMP/results/env.txt" "$RUNNER_TEMP/results/comparison.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-zig-adapter-${{ matrix.os }}
+          path: ${{ runner.temp }}/results
