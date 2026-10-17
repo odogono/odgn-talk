@@ -7,6 +7,15 @@ const assert = (value: unknown, message: string) => {
     throw new Error(message);
   }
 };
+const until = async (check: () => boolean) => {
+  for (let i = 0; i < 100; i++) {
+    if (check()) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error('Timed out waiting for Info');
+};
 const win = () => document.querySelector<HTMLElement>('.script-window.front')!;
 const view = () => EditorView.findFromDOM(win().querySelector('.cm-editor')!)!;
 const picker = () => win().querySelector<HTMLElement>('.recipe-picker')!;
@@ -31,6 +40,11 @@ export const runBrowserTests = async () => {
   const shell = mountStack(project);
   shell.editor.click('door');
   shell.redraw();
+  // Info follows selection on Preact's render queue.
+  await until(
+    () =>
+      !!document.querySelector('#info [data-script="element"][data-recipe]'),
+  );
   const results: { error?: string; name: string; passed: boolean }[] = [];
   const test = (name: string, run: () => void) => {
     try {

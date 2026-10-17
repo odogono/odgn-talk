@@ -8,6 +8,15 @@ const assert = (value: unknown, message: string) => {
     throw new Error(message);
   }
 };
+const until = async (check: () => boolean) => {
+  for (let i = 0; i < 100; i++) {
+    if (check()) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  throw new Error('Timed out waiting for Info');
+};
 const project = createProject('Border widths');
 for (const [index, kind] of (['rectangle', 'ellipse'] as const).entries()) {
   const element = createElement(kind, kind);
@@ -44,9 +53,12 @@ export const runBrowserTests = async () => {
     }
   };
   for (const kind of ['rectangle', 'ellipse']) {
-    await test(`${kind} Info renders zero, thin and thick borders with undo/redo`, () => {
+    await test(`${kind} Info renders zero, thin and thick borders with undo/redo`, async () => {
       shell.editor.click(kind);
       shell.redraw();
+      await until(
+        () => !!document.querySelector('#info [data-field="thickness"]'),
+      );
       assert(border(kind) === '2px', 'Default border is 2px');
       for (const width of [0, 1, 6]) {
         setThickness(width);

@@ -220,8 +220,9 @@ export const runBrowserTests = async () => {
       changes: { from: 0, to: view.state.doc.length, insert: original },
     });
   });
-  await test('live Info edits keep focus and undo as one step', () => {
+  await test('live Info edits keep focus and undo as one step', async () => {
     shell.editor.click('button1');
+    await until(() => !!document.querySelector('#info [data-field="label"]'));
     const label = document.querySelector<HTMLInputElement>(
       '#info [data-field="label"]',
     )!;

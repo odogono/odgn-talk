@@ -347,6 +347,8 @@ pub const Session = struct {
     core_errors: bool = false,
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
+    /// `queued-inputs-v1`: Trace-silent pending Host Input queries.
+    queued_inputs: bool = false,
     reply_error: bool = false,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
@@ -2141,7 +2143,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -3254,6 +3256,16 @@ fn carryOf(j: ?Json) ?talk.CarryOver {
     return null;
 }
 
+/// Reads the input queue without a vars snapshot, Trace or execution.
+fn queuedInputsReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw(if (entry.group.group.inputs.items.len > 0) "\"queued\":true" else "\"queued\":false") catch return oomReply();
+    return finishOk(s, &o, null);
+}
+
 /// `inspect`: every Script's variables, live Runs and mailbox, as
 /// `talk.ts`'s Inspection.
 fn inspectReply(s: *Session, msg: Json, ref: i64) []u8 {
@@ -4182,6 +4194,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
             var object_elements = s.object_elements;
+            var queued_inputs = s.queued_inputs;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -4200,6 +4213,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     analyses = true;
                 } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
                     group_exchanges = true;
+                } else if (std.mem.eql(u8, name, "queued-inputs-v1")) {
+                    queued_inputs = true;
                 } else if (std.mem.eql(u8, name, "object-elements-v1")) {
                     object_elements = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
@@ -4218,6 +4233,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
             s.object_elements = object_elements;
+            s.queued_inputs = queued_inputs;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
@@ -4290,6 +4306,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return settleRestoredReply(s, msg, ref);
     } else if (s.function_metadata and std.mem.eql(u8, m, "script-units")) {
         return scriptUnitsReply(s, msg, ref);
+    } else if (s.queued_inputs and std.mem.eql(u8, m, "queued-inputs")) {
+        return queuedInputsReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "inspect")) {
         return inspectReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "grants")) {
@@ -4674,6 +4692,42 @@ fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
     try out.writer.writeByte('1');
     for (0..depth) |_| try out.writer.writeAll(if (objects_only) "}" else "]");
     return out.toOwnedSlice();
+}
+
+test "queued-inputs reads the owning Group without execution or Trace" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"g\"}}", .{1})));
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"queued-inputs-v1\",\"group-exchanges-v1\"]}}", .{2}));
+    for ([_]bool{ false, true }) |traced| {
+        const name: []const u8 = if (traced) "traced" else "silent";
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"{s}\",\"trace\":{s}}}", .{ 3, name, if (traced) "true" else "false" }));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"{s}\",\"name\":\"s\",\"source\":\"on go\\n return 7\\nend go\"}}", .{ 4, name }));
+        const empty = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"{s}\"}}", .{ 5, name }));
+        try std.testing.expect(!empty.object.get("queued").?.bool);
+        try std.testing.expect(empty.object.get("trace") == null);
+        _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"{s}\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{ 6, name }));
+        for (0..2) |_| {
+            const queued = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"{s}\"}}", .{ 7, name }));
+            try std.testing.expect(queued.object.get("queued").?.bool);
+            try std.testing.expect(queued.object.get("trace") == null);
+        }
+        // A refused Pump must leave the queued input observable.
+        try std.testing.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"{s}\",\"now\":\"2026-10-10T12:00:00Z\",\"fuelCap\":-1}}", .{ 8, name })));
+        const retained = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"{s}\"}}", .{ 9, name }));
+        try std.testing.expect(retained.object.get("queued").?.bool);
+        _ = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"{s}\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{ 10, name }));
+        const drained = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"{s}\"}}", .{ 11, name }));
+        try std.testing.expect(!drained.object.get("queued").?.bool);
+        try std.testing.expect(drained.object.get("trace") == null);
+    }
+    _ = try okOf(try c.send("{{\"m\":\"deliver\",\"ref\":{d},\"group\":\"silent\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{12}));
+    const other = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"traced\"}}", .{13}));
+    try std.testing.expect(!other.object.get("queued").?.bool);
+    const own = try okOf(try c.send("{{\"m\":\"queued-inputs\",\"ref\":{d},\"group\":\"silent\"}}", .{14}));
+    try std.testing.expect(own.object.get("queued").?.bool);
 }
 
 test "backwards Pump preserves queued work and the first Clock may predate Unix" {
