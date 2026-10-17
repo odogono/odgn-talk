@@ -6,7 +6,7 @@ import {
   createElement,
   createPage,
   createProject,
-  richTextFromPlainText,
+  DEFAULT_DESIGN_WIDTH,
   type Element,
   type Page,
   type TextElement,
@@ -17,12 +17,28 @@ export const TETRIS_PROJECT_NAME = 'Tetris';
 
 export const ROWS = 20;
 export const COLUMNS = 10;
-const CELL = 24;
-const BOARD_LEFT = 40;
-const BOARD_TOP = 90;
-const PREVIEW_CELL = 20;
-const SIDE_LEFT = BOARD_LEFT + COLUMNS * CELL + 40;
-export const EMPTY_COLOUR = '#1b1b2f';
+// Laid out like a game window on a colour Macintosh running System 7: a
+// menu bar, a platinum window with a pinstriped title bar, Chicago and
+// Geneva type, and pieces in the classic 16-colour palette.
+const DESKTOP = '#666699';
+const PLATINUM = '#dddddd';
+const SHADOW = '#777777';
+const INK = '#000000';
+const CHICAGO =
+  '"ChicagoFLF", Chicago, Charcoal, Geneva, "Lucida Grande", sans-serif';
+const GENEVA = 'Geneva, Verdana, "Lucida Grande", sans-serif';
+const CELL = 22;
+const PREVIEW_CELL = 18;
+const WINDOW_LEFT = 145;
+const WINDOW_TOP = 50;
+const WINDOW_WIDTH = 430;
+const TITLE_HEIGHT = 22;
+const BOARD_LEFT = WINDOW_LEFT + 18;
+const BOARD_TOP = WINDOW_TOP + TITLE_HEIGHT + 16;
+const WINDOW_HEIGHT = TITLE_HEIGHT + 16 + ROWS * CELL + 18;
+const SIDE_LEFT = BOARD_LEFT + COLUMNS * CELL + 22;
+const SIDE_WIDTH = WINDOW_LEFT + WINDOW_WIDTH - 16 - SIDE_LEFT;
+export const EMPTY_COLOUR = '#ffffff';
 
 const PAGE_SCRIPT = `-- Tetris. The board is a list of ${ROWS} rows, each a list of ${COLUMNS}
 -- numbers: 0 for an empty square, or the number of the piece that filled
@@ -33,7 +49,8 @@ constant rows = ${ROWS}
 constant columns = ${COLUMNS}
 constant emptyColour = "${EMPTY_COLOUR}"
 -- I, O, T, S, Z, J and L, in that order.
-constant colours = ["#2ec4d6", "#f2c12e", "#a45de2", "#4cbf4b", "#e0453a", "#3f6fe0", "#f08a2c"]
+-- The classic Macintosh 16-colour palette.
+constant colours = ["#02abea", "#fcf305", "#f20884", "#1fb714", "#dd0806", "#0000d4", "#ff6403"]
 -- Each piece's squares as [row, column] inside its box.
 constant shapes = [[[2, 1], [2, 2], [2, 3], [2, 4]], [[1, 1], [1, 2], [2, 1], [2, 2]], [[1, 2], [2, 1], [2, 2], [2, 3]], [[1, 2], [1, 3], [2, 1], [2, 2]], [[1, 1], [1, 2], [2, 2], [2, 3]], [[1, 1], [2, 1], [2, 2], [2, 3]], [[1, 3], [2, 1], [2, 2], [2, 3]]]
 -- How wide each piece's box is; a piece turns inside its box.
@@ -51,7 +68,6 @@ script variable pieceTop = 0
 script variable pieceLeft = 0
 script variable nextKind = 0
 script variable bag = []
-script variable seed = 1
 script variable score = 0
 script variable level = 1
 script variable lines = 0
@@ -108,6 +124,9 @@ on restart
   put 1 into level
   put 0 into sinceDrop
   put takeFromBag() into nextKind
+  hide alertShadow
+  hide alertBox
+  hide alertInner
   hide gameOver
   put true into playing
   spawnPiece
@@ -115,19 +134,13 @@ on restart
   paint
 end restart
 
--- Until random arrives (#1111), a simple generator stirred by frame times.
-on pickNumber n
-  put (seed * 1103515245 + 12345) mod 2147483648 into seed
-  return seed mod n + 1
-end pickNumber
-
 -- A bag holds one of each piece; take them out in a random order, then
 -- refill it, so every piece comes round once in each seven.
 on takeFromBag
   if the length of bag = 0 then
     put [1, 2, 3, 4, 5, 6, 7] into bag
   end if
-  put pickNumber(the length of bag) into k
+  put random(the length of bag) into k
   put item k of bag into piece
   delete item k of bag
   return piece
@@ -254,6 +267,9 @@ end hardDrop
 
 on endGame
   put false into playing
+  show alertShadow
+  show alertBox
+  show alertInner
   show gameOver
 end endGame
 
@@ -263,7 +279,6 @@ on dropInterval
 end dropInterval
 
 on frame elapsed
-  put (seed + elapsed) mod 2147483648 into seed
   if not playing then
     return
   end if
@@ -355,61 +370,168 @@ const place = <T extends Element>(
   at: Partial<Element> & Record<string, unknown>,
 ): T => Object.assign(element, at);
 
-const square = (
+const box = (
   name: string,
   left: number,
   top: number,
-  size: number,
+  width: number,
+  height: number,
+  fill: string,
+  stroke = INK,
 ): Element =>
   place(createElement('rectangle', name), {
     left,
     top,
-    width: size,
-    height: size,
-    fill: EMPTY_COLOUR,
-    stroke: '#2c2c48',
+    width,
+    height,
+    fill,
+    stroke,
+  });
+
+const rule = (
+  name: string,
+  left: number,
+  top: number,
+  width: number,
+  stroke: string,
+): Element =>
+  place(createElement('line', name), {
+    left,
+    top,
+    width,
+    height: 0,
+    stroke,
+    thickness: 1,
   });
 
 const label = (
   name: string,
   text: string,
+  left: number,
   top: number,
-  textSize = 18,
-  left = SIDE_LEFT,
-  width = 200,
-): TextElement =>
-  place(createElement('text', name) as TextElement, {
+  width: number,
+  options: { bold?: boolean; font?: string; size?: number } = {},
+): TextElement => {
+  const size = options.size ?? 12;
+  return place(createElement('text', name) as TextElement, {
     left,
     top,
     width,
-    height: textSize * 1.6,
-    textSize,
-    textColor: '#f4f4f8',
-    richText: richTextFromPlainText(text),
+    height: Math.ceil(size * 1.5) * (text.split('\n').length || 1),
+    textSize: size,
+    textColor: INK,
+    font: options.font ?? CHICAGO,
+    richText: text
+      .split('\n')
+      .map(line => ({ runs: [{ text: line, bold: options.bold ?? false }] })),
   });
+};
+
+const menuBar = (): Element[] => [
+  box('menuBar', -2, -2, DEFAULT_DESIGN_WIDTH + 4, 24, '#ffffff'),
+  label('menus', '🍎    File    Edit    Game', 14, 2, 400, { size: 13 }),
+];
+
+// A System 7 window: a drop shadow, a platinum frame, a title bar with
+// pinstripes either side of the title and a close box on the left.
+const windowFrame = (title: string): Element[] => {
+  const right = WINDOW_LEFT + WINDOW_WIDTH;
+  const elements: Element[] = [
+    box(
+      'windowShadow',
+      WINDOW_LEFT + 3,
+      WINDOW_TOP + 3,
+      WINDOW_WIDTH,
+      WINDOW_HEIGHT,
+      INK,
+    ),
+    box(
+      'window',
+      WINDOW_LEFT,
+      WINDOW_TOP,
+      WINDOW_WIDTH,
+      WINDOW_HEIGHT,
+      PLATINUM,
+    ),
+  ];
+  for (let i = 0; i < 6; i++) {
+    elements.push(
+      rule(
+        `stripe${i + 1}`,
+        WINDOW_LEFT + 6,
+        WINDOW_TOP + 5 + i * 2,
+        WINDOW_WIDTH - 12,
+        SHADOW,
+      ),
+    );
+  }
+  const titleWidth = 58;
+  elements.push(
+    box(
+      'closeBack',
+      WINDOW_LEFT + 8,
+      WINDOW_TOP + 3,
+      19,
+      16,
+      PLATINUM,
+      PLATINUM,
+    ),
+    box('closeBox', WINDOW_LEFT + 11, WINDOW_TOP + 4, 13, 13, PLATINUM),
+    box(
+      'titleBack',
+      WINDOW_LEFT + (WINDOW_WIDTH - titleWidth) / 2,
+      WINDOW_TOP + 3,
+      titleWidth,
+      16,
+      PLATINUM,
+      PLATINUM,
+    ),
+    label(
+      'windowTitle',
+      title,
+      WINDOW_LEFT + (WINDOW_WIDTH - titleWidth) / 2 + 8,
+      WINDOW_TOP + 1,
+      titleWidth,
+      { size: 13, bold: true },
+    ),
+    rule(
+      'titleRule',
+      WINDOW_LEFT,
+      WINDOW_TOP + TITLE_HEIGHT,
+      right - WINDOW_LEFT,
+      INK,
+    ),
+  );
+  return elements;
+};
+
+const cell = (name: string, left: number, top: number, size: number): Element =>
+  box(name, left, top, size, size, EMPTY_COLOUR, '#ffffff');
 
 const tetrisPage = (): Page => {
   const page: Page = {
     ...createPage('tetris'),
-    background: '#10101c',
-    height: BOARD_TOP + ROWS * CELL + 60,
+    background: DESKTOP,
+    height: WINDOW_TOP + WINDOW_HEIGHT + 40,
     script: PAGE_SCRIPT,
   };
   const elements: Element[] = [
-    label('title', 'Tetris', 24, 30, BOARD_LEFT, 300),
-    place(createElement('rectangle', 'well'), {
-      left: BOARD_LEFT - 4,
-      top: BOARD_TOP - 4,
-      width: COLUMNS * CELL + 8,
-      height: ROWS * CELL + 8,
-      fill: '#2c2c48',
-      stroke: '#6a6a9a',
-    }),
+    ...menuBar(),
+    ...windowFrame('Tetris'),
+    // The well: a sunken white field with a black edge.
+    box(
+      'well',
+      BOARD_LEFT - 3,
+      BOARD_TOP - 3,
+      COLUMNS * CELL + 6,
+      ROWS * CELL + 6,
+      '#ffffff',
+    ),
   ];
   for (let r = 1; r <= ROWS; r++) {
     for (let c = 1; c <= COLUMNS; c++) {
       elements.push(
-        square(
+        cell(
           `cell_${r}_${c}`,
           BOARD_LEFT + (c - 1) * CELL,
           BOARD_TOP + (r - 1) * CELL,
@@ -418,49 +540,129 @@ const tetrisPage = (): Page => {
       );
     }
   }
-  elements.push(label('nextText', 'Next', BOARD_TOP));
+  // The Next piece, in a white field like the board.
+  const previewSize = 4 * PREVIEW_CELL;
+  const previewLeft = SIDE_LEFT + (SIDE_WIDTH - previewSize) / 2;
+  elements.push(
+    label('nextText', 'Next', SIDE_LEFT, BOARD_TOP - 2, SIDE_WIDTH),
+    box(
+      'nextWell',
+      previewLeft - 3,
+      BOARD_TOP + 20,
+      previewSize + 6,
+      previewSize + 6,
+      '#ffffff',
+    ),
+  );
   for (let r = 1; r <= 4; r++) {
     for (let c = 1; c <= 4; c++) {
       elements.push(
-        square(
+        cell(
           `next_${r}_${c}`,
-          SIDE_LEFT + (c - 1) * PREVIEW_CELL,
-          BOARD_TOP + 36 + (r - 1) * PREVIEW_CELL,
+          previewLeft + (c - 1) * PREVIEW_CELL,
+          BOARD_TOP + 23 + (r - 1) * PREVIEW_CELL,
           PREVIEW_CELL,
         ),
       );
     }
   }
+  const scoreTop = BOARD_TOP + 130;
   elements.push(
-    label('scoreText', 'Score: 0', BOARD_TOP + 130),
-    label('levelText', 'Level: 1', BOARD_TOP + 165),
-    label('linesText', 'Lines: 0', BOARD_TOP + 200),
+    box('scoreField', SIDE_LEFT, scoreTop, SIDE_WIDTH, 78, '#ffffff'),
+    label(
+      'scoreText',
+      'Score: 0',
+      SIDE_LEFT + 8,
+      scoreTop + 6,
+      SIDE_WIDTH - 16,
+      {
+        font: GENEVA,
+      },
+    ),
+    label(
+      'levelText',
+      'Level: 1',
+      SIDE_LEFT + 8,
+      scoreTop + 28,
+      SIDE_WIDTH - 16,
+      {
+        font: GENEVA,
+      },
+    ),
+    label(
+      'linesText',
+      'Lines: 0',
+      SIDE_LEFT + 8,
+      scoreTop + 50,
+      SIDE_WIDTH - 16,
+      {
+        font: GENEVA,
+      },
+    ),
     place(createElement('button', 'restartButton'), {
-      left: SIDE_LEFT,
-      top: BOARD_TOP + 250,
-      width: 140,
-      height: 40,
-      label: 'Restart',
+      left: SIDE_LEFT + (SIDE_WIDTH - 110) / 2,
+      top: scoreTop + 96,
+      width: 110,
+      height: 30,
+      label: 'New Game',
+      fill: '#ffffff',
+      textColor: INK,
       script: 'on click\n  send restart to thisPage\nend click\n',
     }),
     label(
       'help',
-      '← → move\n↑ turn, Z turn back\n↓ drop faster\nSpace drop\nClick the board first, then use the keys.',
-      BOARD_TOP + 310,
-      14,
+      '← →  move\n↑  rotate\nZ  rotate back\n↓  soft drop\nSpace  hard drop',
       SIDE_LEFT,
-      220,
+      scoreTop + 146,
+      SIDE_WIDTH,
+      { font: GENEVA, size: 11 },
+    ),
+  );
+  // A System 7 alert for the end of the game, hidden until then.
+  const alertWidth = 200;
+  const alertHeight = 70;
+  const alertLeft = BOARD_LEFT + (COLUMNS * CELL - alertWidth) / 2;
+  const alertTop = BOARD_TOP + (ROWS * CELL - alertHeight) / 2;
+  elements.push(
+    place(
+      box(
+        'alertShadow',
+        alertLeft + 3,
+        alertTop + 3,
+        alertWidth,
+        alertHeight,
+        INK,
+      ),
+      { visible: false },
+    ),
+    place(
+      box('alertBox', alertLeft, alertTop, alertWidth, alertHeight, '#ffffff'),
+      { visible: false },
+    ),
+    place(
+      box(
+        'alertInner',
+        alertLeft + 4,
+        alertTop + 4,
+        alertWidth - 8,
+        alertHeight - 8,
+        '#ffffff',
+      ),
+      { visible: false },
     ),
     place(
       label(
         'gameOver',
-        'Game over',
-        BOARD_TOP + (ROWS * CELL) / 2 - 30,
-        30,
-        BOARD_LEFT,
-        COLUMNS * CELL,
+        '💣  Game Over',
+        alertLeft + 10,
+        alertTop + 22,
+        alertWidth - 20,
+        {
+          size: 16,
+          bold: true,
+        },
       ),
-      { visible: false, height: 60 },
+      { visible: false },
     ),
   );
   page.elements = elements;
