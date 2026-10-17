@@ -6048,3 +6048,110 @@ test "analysis-v1 serves Session language analysis after opt-in" {
     try t.expect(named.object.get("valid").?.bool);
     try t.expectEqualStrings("host error", try errKind(try c.send("{{\"m\":\"analyze-entry\",\"ref\":{d},\"source\":\"1\",\"bound\":[1]}}", .{8})));
 }
+
+test "every analysis exchange requires opt-in and validates its fields" {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const requests = [_][]const u8{
+        "\"m\":\"analyze-entry\",\"source\":\"1\"",
+        "\"m\":\"analyze-source\",\"source\":\"\"",
+        "\"m\":\"analysis-catalogue\"",
+        "\"m\":\"message-name\",\"name\":\"go\",\"arity\":0",
+    };
+    // An ordinary hello advertises the feature but does not open it.
+    const hello = try okOf(try c.send("{{\"ref\":{d},\"m\":\"hello\",\"protocol\":1}}", .{1}));
+    var advertised = false;
+    for (hello.object.get("features").?.array.items) |f| {
+        if (std.mem.eql(u8, f.string, "analysis-v1")) advertised = true;
+    }
+    try t.expect(advertised);
+    for (requests) |request| {
+        try t.expectEqualStrings("protocol error", try errKind(try c.send("{{\"ref\":{d},{s}}}", .{ 2, request })));
+    }
+    _ = try okOf(try c.send("{{\"ref\":{d},\"m\":\"hello\",\"protocol\":1,\"features\":[\"analysis-v1\"]}}", .{3}));
+    const malformed = [_][]const u8{
+        "\"m\":\"analyze-entry\"",
+        "\"m\":\"analyze-entry\",\"source\":1",
+        "\"m\":\"analyze-entry\",\"source\":\"1\",\"handlers\":null",
+        "\"m\":\"analyze-entry\",\"source\":\"1\",\"handlers\":[false]",
+        "\"m\":\"analyze-entry\",\"source\":\"1\",\"bound\":\"x\"",
+        "\"m\":\"analyze-entry\",\"source\":\"1\",\"bound\":[1]",
+        "\"m\":\"analyze-source\"",
+        "\"m\":\"analyze-source\",\"source\":[]",
+        "\"m\":\"message-name\",\"arity\":0",
+        "\"m\":\"message-name\",\"name\":1,\"arity\":0",
+        "\"m\":\"message-name\",\"name\":\"go\"",
+        "\"m\":\"message-name\",\"name\":\"go\",\"arity\":-1",
+        "\"m\":\"message-name\",\"name\":\"go\",\"arity\":1.5",
+    };
+    for (malformed) |request| {
+        const reply = try c.send("{{\"ref\":{d},{s}}}", .{ 4, request });
+        try t.expectEqualStrings("host error", try errKind(reply));
+        try t.expectEqualStrings("invalid value", reply.object.get("err").?.object.get("code").?.string);
+    }
+    // Refusals leave every exchange usable, without creating a Group or Trace.
+    for (requests) |request| {
+        const reply = try c.send("{{\"ref\":{d},{s}}}", .{ 5, request });
+        _ = try okOf(reply);
+        if (reply.object.get("trace")) |lines| try t.expectEqual(@as(usize, 0), lines.array.items.len);
+    }
+    try t.expectEqual(@as(usize, 0), s.groups.items.len);
+}
+
+test "analysis reports positioned syntax errors and ordered implicit bindings" {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"ref\":{d},\"m\":\"hello\",\"protocol\":1,\"features\":[\"analysis-v1\"]}}", .{1}));
+    const entry_error = try okOf(try c.send("{{\"ref\":{d},\"m\":\"analyze-entry\",\"source\":\"if true then\\nput 1 into\"}}", .{2}));
+    const p = entry_error.object.get("problem").?.object;
+    try t.expect(p.get("code").?.string.len > 0);
+    try t.expectEqual(@as(i64, 2), p.get("line").?.integer);
+    try t.expectEqual(@as(i64, 11), p.get("col").?.integer);
+    try t.expect(p.get("incomplete").?.bool);
+    try t.expect(!p.get("trailing").?.bool);
+    const source_error = try okOf(try c.send("{{\"ref\":{d},\"m\":\"analyze-source\",\"source\":\"constant x = 1\\nconstant y = )\"}}", .{3}));
+    const q = source_error.object.get("problem").?.object;
+    try t.expectEqual(@as(i64, 2), q.get("line").?.integer);
+    try t.expectEqual(@as(i64, 14), q.get("col").?.integer);
+    try t.expect(!q.get("incomplete").?.bool);
+    try t.expect(source_error.object.get("declarations") == null);
+    const roots = try okOf(try c.send("{{\"ref\":{d},\"m\":\"analyze-entry\",\"source\":\"if true then\\n put 1 into z\\n put 2 into existing\\n put 3 into a\\n put 4 into z\\nend if\",\"bound\":[\"existing\"]}}", .{4}));
+    const names = roots.object.get("implicit").?.array.items;
+    try t.expectEqual(@as(usize, 2), names.len);
+    try t.expectEqualStrings("z", names[0].string);
+    try t.expectEqualStrings("a", names[1].string);
+    const trailing = try okOf(try c.send("{{\"ref\":{d},\"m\":\"analyze-entry\",\"source\":\"1 2\"}}", .{5}));
+    try t.expect(trailing.object.get("problem").?.object.get("trailing").?.bool);
+    const pending = try okOf(try c.send("{{\"ref\":{d},\"m\":\"analyze-entry\",\"source\":\"--| Documentation.\"}}", .{6}));
+    try t.expectEqualStrings("empty", pending.object.get("kind").?.string);
+    try t.expectEqualStrings("pending", pending.object.get("doc").?.string);
+}
+
+test "message-name validates names, labels and argument counts" {
+    const t = std.testing;
+    const s = Session.init(t.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"ref\":{d},\"m\":\"hello\",\"protocol\":1,\"features\":[\"analysis-v1\"]}}", .{1}));
+    for ([_]struct { name: []const u8, arity: usize, valid: bool }{
+        .{ .name = "go", .arity = 0, .valid = true },
+        .{ .name = "go", .arity = 3, .valid = true },
+        .{ .name = "move:to:", .arity = 2, .valid = true },
+        .{ .name = "move:to:", .arity = 1, .valid = false },
+        .{ .name = "move:", .arity = 1, .valid = false },
+        .{ .name = "move:to", .arity = 2, .valid = false },
+        .{ .name = "", .arity = 0, .valid = false },
+        .{ .name = "two words", .arity = 0, .valid = false },
+        .{ .name = "if", .arity = 0, .valid = false },
+    }) |case| {
+        const reply = try okOf(try c.send("{{\"ref\":{d},\"m\":\"message-name\",\"name\":\"{s}\",\"arity\":{d}}}", .{ 2, case.name, case.arity }));
+        try t.expectEqual(case.valid, reply.object.get("valid").?.bool);
+    }
+}

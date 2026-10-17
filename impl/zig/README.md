@@ -314,6 +314,17 @@ and `cancel-delivery`. Capabilities may declare scopes and Segment-bound Operati
 `reload` or `replace-library` as `effect` and `release` needs and automatic
 `op` needs, and a `grant` may name a
 shared `coordinator`; `store`'s hooks are one Coordinator's.
+`analysis-v1` opens `analyze-entry`, `analyze-source`, `analysis-catalogue`
+and `message-name`, using the same [language analysis](src/analysis.zig)
+as the Zig Session Host. These exchanges need no Group, load no source and
+record no Trace. They return Entry kind, completeness and documentation state,
+positioned syntax errors, declarations and implicit Script Variables, the
+Built-in and Standard Library catalogue, the `:inspect` reader and computed
+message-name validity. Load-time diagnostics still come from loading or
+extending source. The C API has no separate analysis calls; a C Host can use
+the Message Layer, as [chapter 9](../../spec/09-embedding.md#language-analysis)
+specifies.
+
 `standard-refinements-v1` additionally lets adapters attach a fixed Standard
 family to an independently named declaration, retaining raw arguments for their
 own factory wrappers. It includes sqlite, with its row cap carried separately
@@ -488,7 +499,8 @@ declare.
 
 [`src/session/session.zig`](src/session/session.zig) is chapter 12's Session
 Host. It is an ordinary Host: it drives a Group named `session`, holding one
-Script, through `talk.h` alone, using the front end only to read Entries. It
+Script, through `talk.h` alone, using [shared analysis](src/analysis.zig) to
+read Entries and declaration metadata. It
 follows its Runs through their reports, placed by the Group's Trace records,
 and never inserts `Inspect()` to do so. A Driver gives it everything from
 outside: Clock readings, typed lines, prompt answers, and where its output and

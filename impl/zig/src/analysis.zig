@@ -60,6 +60,9 @@ pub const Declared = struct {
     arity: ?[2]usize = null,
     /// A Script Variable's initializer text.
     initializer: ?[]const u8 = null,
+    /// Byte offset just after `=`, for an in-process Host retaining the
+    /// original whitespace and comments when it generates an assignment.
+    initializer_start: ?usize = null,
     /// A `use` line's imports.
     imports: []const Import = &.{},
 };
@@ -138,10 +141,18 @@ pub fn entry(arena: Allocator, text: []const u8, handlers: []const []const u8, b
         return .{ .kind = .declaration, .doc = doc, .declarations = try declarationsIn(arena, &tree) };
     }
     const expression = !isStatement(w, handlers);
+    var result = try executable(arena, text, expression, bound);
+    result.doc = doc;
+    return result;
+}
+
+/// Reads executable input in the requested mode. `:inspect` always reads an
+/// expression, while a Session's generated assignments are statements.
+pub fn executable(arena: Allocator, text: []const u8, expression: bool, bound: []const []const u8) Allocator.Error!Entry {
     const kind: Kind = if (expression) .expression else .statement;
     const r = try parser.parseEntryEnd(arena, text, expression);
-    if (r.failure) |d| return .{ .kind = kind, .doc = doc, .problem = try problem(arena, text, d, r.trailing) };
-    return .{ .kind = kind, .doc = doc, .implicit = try implicitNames(arena, text, expression, bound) };
+    if (r.failure) |d| return .{ .kind = kind, .doc = .none, .problem = try problem(arena, text, d, r.trailing) };
+    return .{ .kind = kind, .doc = .none, .implicit = try implicitNames(arena, text, expression, bound) };
 }
 
 fn problem(arena: Allocator, text: []const u8, d: parser.Diagnostic, trailing: bool) Allocator.Error!Problem {
@@ -241,7 +252,10 @@ fn declarationsIn(arena: Allocator, tree: *const ast.Tree) Allocator.Error![]con
                     // The text after `=`.
                     var t = v.name + 1;
                     while (t < tree.tokens.len and tree.tokens[t].kind != .equal) t += 1;
-                    if (t < tree.tokens.len) x.initializer = std.mem.trim(u8, source[tree.tokens[t].end..end], " \t");
+                    if (t < tree.tokens.len) {
+                        x.initializer_start = tree.tokens[t].end;
+                        x.initializer = std.mem.trim(u8, source[tree.tokens[t].end..end], " \t");
+                    }
                 }
             },
             .use => |u| {
@@ -353,4 +367,38 @@ test "a source's declarations" {
     try std.testing.expectEqualStrings("1 + 2", ds[2].initializer.?);
     try std.testing.expect(validMessageName("greet:to:", 2));
     try std.testing.expect(!validMessageName("greet:to:", 1));
+}
+
+test "declaration metadata preserves source spans, defaults, imports and documentation" {
+    const t = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(t.allocator);
+    defer arena.deinit();
+    const source =
+        "--| Café.\n" ++
+        "--| With a default.\n" ++
+        "private function scale x, factor = 2\n return x * factor\nend scale\n" ++
+        "\nconstant answer = 42\n" ++
+        "script variable total =  1 + 2 -- keep the source\n" ++
+        "use upper from text as up\n" ++
+        "on any message m\n return nothing\nend any message\n";
+    const result = try declarations(arena.allocator(), source);
+    try t.expect(result == .declarations);
+    const ds = result.declarations;
+    try t.expectEqual(@as(usize, 5), ds.len);
+    const f = ds[0];
+    try t.expect(f.private);
+    try t.expectEqualStrings("Café.\nWith a default.", f.doc);
+    try t.expectEqual([2]usize{ 1, 2 }, f.arity.?);
+    try t.expectEqualStrings("private function scale x, factor = 2\n return x * factor\nend scale", source[f.start..f.end]);
+    try t.expectEqual(@as(usize, 3), f.line);
+    try t.expectEqual(@as(usize, 5), f.end_line);
+    try t.expectEqualStrings("constant", ds[1].kind);
+    try t.expectEqualStrings("constant answer", ds[1].signature);
+    try t.expectEqualStrings("", ds[1].doc);
+    try t.expectEqualStrings("1 + 2", ds[2].initializer.?);
+    try t.expect(std.mem.startsWith(u8, source[ds[2].initializer_start.?..], "  1 + 2 -- keep the source"));
+    try t.expectEqualStrings("upper", ds[3].imports[0].name);
+    try t.expectEqualStrings("up", ds[3].imports[0].local);
+    try t.expectEqualStrings("any message", ds[4].name);
+    try t.expect(ds[4].word == null);
 }
