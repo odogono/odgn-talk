@@ -221,7 +221,10 @@ are deliberate experimental limits, retained by the maintainer's decision on
 Unsupported calls do not fall back to native Go language execution.
 Pool, Store and sqlite remain native-Go Host facilities and run through the
 adapter, including the unchanged tenants example and the Store and sqlite test
-kits. Session/REPL and full Corpus acceptance remain separate work.
+kits. The Session Host, REPL and every Session Transcript run on the adapter
+([#1053](https://github.com/odogono/odgn-talk/issues/1053)); CI runs them on
+Linux amd64/arm64 and macOS arm64 and cross-builds each target without cgo.
+Full Corpus acceptance remains separate work.
 
 Store retains `machine.ErrorValue`, `machine.Size` and the `internal/value`
 Encode/Decode/DecodeMembers/JSONString/KindNames helpers. The sqlite module uses

@@ -12,6 +12,8 @@ selection='^(TestInline.*|TestScope.*|TestSegment.*|TestCoordinatorSharesOnePart
 go test -tags talk_zig_experimental -run '^TestRestorePreemptedOpenJoin$/false$' -count=1 "$@" .
 # The Go Session Host, REPL and every Session Transcript (#1053).
 go test -tags talk_zig_experimental -count=1 "$@" ./session
+# The CLI has no tests of its own; build it so the REPL links against the adapter.
+go build -tags talk_zig_experimental -o /dev/null ./cmd/northtalk
 go test -tags talk_zig_experimental -run '^(TestSessionTranscriptParity|TestSessionDecomposedSourceTraceReplaysIndependently)$' -count=1 "$@" ./internal/corpus
 # Native-Go facilities through the adapter (#1052): Pool, Store, storekit,
 # the unchanged tenants example and the separate sqlite module.

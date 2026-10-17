@@ -100,7 +100,7 @@ Files, grammar, or lowering.
 - Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#experimental-zig-backend)
 - Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared native/Zig Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against native `TestCapabilityBridge` observations; to test uncommitted Zig, see the [local loop](README.md#experimental-zig-backend)
 - Measurements against native Go: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite, run on both by [zig-adapter-bench.sh](zig-adapter-bench.sh); results in [the binding research](../../docs/research/go-zig-binding.md)
-- First check: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`; one test: `go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .`; cross-compile (local only, not in CI): `impl/go/cross-check.sh`
+- First check: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`; one test: `go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
 
 ## Public embedding API
 

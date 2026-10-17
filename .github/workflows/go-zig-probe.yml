@@ -68,3 +68,14 @@ jobs:
         env:
           CGO_ENABLED: '0'
       - run: impl/go/zig-experimental-check.sh -race
+
+  # Pure-Go builds of every target from one runner; the matrix above runs them.
+  cross-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+      - run: impl/go/cross-check.sh
