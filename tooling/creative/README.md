@@ -14,14 +14,18 @@ ids, so Script windows follow their owners across edits and history; ids never
 enter `.folio` files or browser storage. Intake copies the supplied Project,
 and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
 
-The Project title and [Info panel](src/info-panel.tsx) are Preact components
+The Project title, [Info panel](src/info-panel.tsx) and
+[Page strip](src/page-strip.tsx) are Preact components
 written in TSX, observing the editor signals through `@preact/signals`. Live
 edits, undo/redo and Project loads update them independently of the shell
 redraw. Info reconciles its controls in place, keeping focus, caret, selection
 and composing text while the Page and strip update. Its read-only state disables
 authored edits while leaving Script viewing and sound previews available. The
 app and browser-test builds compile imported TSX with Preact's automatic JSX
-runtime.
+runtime. Each strip miniature is memoised by its immutable Page value and the
+design width, with session-local Page ids keeping it attached across reorders.
+Editing one Page redraws only its miniature; navigation and unrelated Project
+edits retain all miniatures.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
