@@ -2,13 +2,9 @@
 
 ## Required base and delivery boundary
 
-- **Specification revision:** uncommitted design on `feat/issue-1143`, in
-  `/Users/alex/.t3/worktrees/odgn-talk/t3-d24ccf8d`, based on
-  `84cf0e47e7d8b3f490c56589da710a6696e0c35f`. There is no specification PR or implementation PR yet. Commit this design
-  and replace this entry with its commit/PR before another implementation
-  handoff, or explicitly carry the uncommitted files.
-- **Required base:** the specification commit containing this file, once
-  committed, or that base commit plus the uncommitted files; the whole
+- **Specification revision:** [#1152](https://github.com/odogono/odgn-talk/pull/1152)
+  on `feat/issue-1143`, based on `97981bd9c5687f39787c945d364ed824d5ff9a5c`.
+- **Required base:** the merged commit of #1152; the whole
   [contract](../../spec/embedding/object-elements.md) is required. The existing
   [Spec change-impact guide](../agents/spec-changes.md) governs activation.
 - **Implemented in:** this delivery specifies the contract and
@@ -26,8 +22,8 @@
 The originating [issue #1143](https://github.com/odogono/odgn-talk/issues/1143)
 is an open design proposal discovered while building
 [#1109](https://github.com/odogono/odgn-talk/issues/1109). Its open questions
-are resolved by ADR 0100. No tracker issue has
-been closed or marked implemented by this local design delivery.
+are resolved by ADR 0100. No tracker issue is
+closed by this design delivery.
 
 ## Delivery sequence
 
