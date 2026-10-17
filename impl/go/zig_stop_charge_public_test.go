@@ -39,6 +39,7 @@ func runStopChargeBridgeCases(t *testing.T) []bridgeObservation {
 						return err
 					}
 					op := talk.Operation{Name: "finish", Mode: mode, Result: talk.NumberShape}
+					statement := "ask api to finish"
 					switch mode {
 					case talk.Immediate:
 						op.Do = func(c *talk.Call, _ []talk.Value) (talk.Value, error) {
@@ -46,14 +47,9 @@ func runStopChargeBridgeCases(t *testing.T) []bridgeObservation {
 						}
 					case talk.Suspending:
 						op.Start = func(c *talk.Call, _ []talk.Value) error { return callback(c) }
+						statement += " and wait"
 					case talk.FireAndForget:
 						op.Fire = func(c *talk.Call, _ []talk.Value) error { return callback(c) }
-					}
-					statement := "ask api to finish"
-					if mode == talk.Suspending {
-						statement += " and wait"
-					}
-					if mode == talk.FireAndForget {
 						op.Result = talk.NothingShape
 						statement = "tell api to finish"
 					}
