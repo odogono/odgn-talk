@@ -1624,6 +1624,100 @@ static talk_call_end start(void *context, talk_call *call, talk_value *const *ar
     return TALK_CALL_STARTED;
 }
 
+/* Stop cancels Calls before the first release hook, retaining their ids. */
+typedef struct stop_calls {
+    talk_call *calls[2];
+    size_t count;
+    int releases;
+    int bad;
+    bool consumed;
+} stop_calls;
+
+static talk_call_end stop_start(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
+    (void)args; (void)len; (void)result; (void)error;
+    stop_calls *state = context;
+    if (state->count >= 2) return TALK_CALL_BROKEN;
+    state->calls[state->count++] = call;
+    return TALK_CALL_STARTED;
+}
+
+static void stop_release(void *context, const talk_grant_context *grant) {
+    stop_calls *state = context;
+    state->releases++;
+    state->bad |= grant->reason != TALK_RELEASE_STOP;
+    for (size_t i = 0; i < state->count; i++) {
+        const char *id = NULL;
+        size_t len = 0;
+        talk_call_id(state->calls[i], &id, &len);
+        const char *want = i == 0 ? "s/r1.c1" : "s/r1.c2";
+        state->bad |= len != strlen(want) || memcmp(id, want, len) != 0;
+        if (talk_call_context(state->calls[i]) != !state->consumed) {
+            fprintf(stderr, "talk.h: release %d saw wrong cancellation flag for %s\n", state->releases, want);
+            state->bad = 1;
+        }
+    }
+}
+
+static int stop_call_cancellation_test(bool join, bool settled, bool consumed, const char *abandoned) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    stop_calls state = {0};
+    state.consumed = consumed;
+    talk_operation op = {0};
+    op.name = "touch"; op.name_len = 5;
+    op.result = talk_nothing_shape(); op.mode = TALK_SUSPENDING;
+    op.context = &state; op.fn = stop_start;
+    talk_capability_option hook[] = {talk_with_release_hook(stop_release, &state)};
+    talk_capability_def *def = NULL;
+    int bad = talk_define_capability(core, "resource", 8, &op, 1, hook, 1, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_group *group = NULL;
+    trace_len = 0; memset(trace, 0, sizeof trace);
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    bad |= talk_new_group(core, &options, &group) != TALK_OK;
+    talk_script *blocker = NULL;
+    if (settled && !consumed) {
+        bad |= load_limited(group, "blocker", "on busy\n return 1\nend busy", NULL, &blocker);
+    }
+    talk_load_grant grants[] = {{"api", 3, grant}, {"z", 1, grant}};
+    const char *source = join
+        ? "on go\n wait for all\n  ask api to touch and wait\n  ask api to touch and wait\n end wait\nend go\n"
+        : "on go\n ask api to touch and wait\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 2, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message go = {"go", 2, NULL, 0, NULL};
+    bad |= talk_script_deliver(script, &go, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= state.count != (join ? 2u : 1u);
+    if (settled && state.count > 0) {
+        talk_value *answer = NULL;
+        bad |= talk_nothing(&answer) != TALK_OK;
+        bad |= talk_call_answer(state.calls[0], answer) != TALK_OK;
+        talk_value_release(answer);
+        if (blocker != NULL) {
+            talk_message busy = {"busy", 4, NULL, 0, NULL};
+            bad |= talk_script_deliver(blocker, &busy, NULL) != TALK_OK;
+        }
+        talk_pump_options cap = {0, 1};
+        bad |= talk_pump(group, 1790000000, 0, consumed ? NULL : &cap, NULL) != TALK_OK;
+        bad |= talk_call_context(state.calls[0]);
+    }
+    bad |= talk_script_stop(script, "test", 4) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= state.bad || state.releases != 2;
+    bad |= abandoned ? strstr(trace, abandoned) == NULL : strstr(trace, " abandoned=[") != NULL;
+    bad |= strstr(trace, "\nabandon ") != NULL;
+    bad |= talk_script_stop(script, "again", 5) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= state.releases != 2;
+    if (bad) fprintf(stderr, "%s", trace);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* timer's schedule: counts the arguments it receives. */
 static size_t scheduled = 0;
 static talk_call_end schedule(void *context, talk_call *call, talk_value *const *args, size_t len, talk_value **result, talk_script_error *error) {
@@ -2454,6 +2548,11 @@ int main(void) {
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");
     expect(negative_override_test() == 0, "a negative override is refused with its input and refused records");
     expect(decision_cancel_test() == 0, "cancelling a Decision by delivery or broadcast id spares sealed recipients and does nothing after the seal");
+    expect(stop_call_cancellation_test(false, false, false, " abandoned=[s/r1.c1]") == 0, "Stop cancels a suspended Call before release");
+    expect(stop_call_cancellation_test(true, false, false, " abandoned=[s/r1.c1, s/r1.c2]") == 0, "Stop cancels pending Join Calls before release");
+    expect(stop_call_cancellation_test(false, true, false, NULL) == 0, "Stop cancels an unconsumed answer before release");
+    expect(stop_call_cancellation_test(true, true, false, " abandoned=[s/r1.c2]") == 0, "Stop cancels settled and pending Join Calls before release");
+    expect(stop_call_cancellation_test(false, true, true, NULL) == 0, "Stop leaves a consumed answer uncancelled");
     expect(stop_test() == 0, "a stopped Script discards its Runs with no finally and drops later Deliveries");
     expect(save_test() == 0, "a save restores a waiting Run, a corrupt save is refused, and the first Pump can't go back in time");
     expect(reload_test() == 0, "Extend adds new names, Reload carries Script Variables by name, and replacing a Library rebuilds its importer");

@@ -5821,6 +5821,15 @@ pub const Group = struct {
         };
     }
 
+    /// Every Call of a discarded Run abandoned, its waits left intact.
+    fn abandonRunCalls(run: *Run) void {
+        abandonReadyCalls(run);
+        if (run.waiting) |p| abandonCall(p);
+        if (run.join) |j| for (j.members.items) |m| {
+            if (m.pending) |p| abandonCall(p);
+        };
+    }
+
     fn cleanupLifecycle(g: *Group, run: *Run) error{Deferred}!void {
         abandonReadyCalls(run);
         if (run.cleanup == null) run.cleanup = .{ .outcome = .stopped };
@@ -6124,6 +6133,10 @@ pub const Group = struct {
                 return runNumber(x.id) < runNumber(y.id);
             }
         }.less);
+        // Cancel every discarded Call before cleanup can invoke a Host hook.
+        // Keep the waits intact for the stopped Trace/report and destruction;
+        // settled answers still follow the unconsumed-Call rule.
+        for (runs.items) |r| abandonRunCalls(r);
         // Every Run's rollback first, which may defer while draining:
         // nothing else changes until they complete.
         for (runs.items) |r| try g.cleanupLifecycle(r);

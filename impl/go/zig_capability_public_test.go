@@ -365,14 +365,18 @@ func TestCapabilityBridge(t *testing.T) {
 func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
 	t.Helper()
 	var out []bridgeObservation
-	for _, name := range []string{"release stop", "release revoke", "release panic", "release inputs", "release cancellation", "release crossing stop", "release trim"} {
+	for _, name := range []string{"release stop", "release revoke", "release panic", "release inputs", "release cancellation", "release join cancellation", "release settled cancellation", "release settled join cancellation", "release consumed", "release crossing stop", "release trim"} {
 		t.Run(name, func(t *testing.T) {
 			observation := bridgeObservation{Name: name}
 			core := talk.New()
 			var trace bridgeTrace
 			var g *talk.Group
-			var s, target *talk.Script
-			var call *talk.Call
+			var s, target, blocker *talk.Script
+			var calls []*talk.Call
+			consumed := name == "release consumed"
+			suspending := strings.Contains(name, "cancellation") || consumed
+			joined := strings.Contains(name, "join")
+			settled := strings.Contains(name, "settled") || consumed
 			var generated []*talk.Pending
 			var releases []talk.GrantContext
 			var inRelease, notified atomic.Bool
@@ -382,10 +386,10 @@ func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
 				}
 				return talk.Nothing, nil
 			}}
-			if name == "release cancellation" {
+			if suspending {
 				op.Mode = talk.Suspending
 				op.Do = nil
-				op.Start = func(c *talk.Call, _ []talk.Value) error { call = c; return nil }
+				op.Start = func(c *talk.Call, _ []talk.Value) error { calls = append(calls, c); return nil }
 			}
 			def, err := core.DefineCapability("resource", op, talk.WithReleaseHook(func(ctx talk.GrantContext) {
 				if ctx.Group != g || ctx.ScriptName != "s" || ctx.Now != bridgeNow || ctx.Binding != ctx.GrantName {
@@ -393,11 +397,12 @@ func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
 				}
 				releases = append(releases, ctx)
 				observation.Calls = append(observation.Calls, fmt.Sprintf("release %s %s %s", ctx.ScriptName, ctx.GrantName, ctx.Reason))
-				if call != nil {
-					if call.Context().Err() == nil {
-						t.Fatal("release preceded cancellation")
+				for _, call := range calls {
+					cancelled := call.Context().Err() != nil
+					if cancelled == consumed {
+						t.Fatalf("Call %s cancellation at release: %v", call.ID(), cancelled)
 					}
-					observation.Calls = append(observation.Calls, "cancelled before release")
+					observation.Calls = append(observation.Calls, fmt.Sprintf("%s cancelled=%v before release", call.ID(), cancelled))
 				}
 				if name == "release inputs" {
 					inRelease.Store(true)
@@ -444,11 +449,21 @@ func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
 					generated = append(generated, p)
 				}
 			}})
+			if settled && !consumed {
+				blocker, err = g.Load(talk.LoadOptions{Name: "blocker", Source: "on busy\n return 1\nend busy"})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
 			wait := ""
-			if name == "release cancellation" {
+			if suspending {
 				wait = " and wait"
 			}
-			s, err = g.Load(talk.LoadOptions{Name: "s", Source: "on go\n ask api to touch" + wait + "\nend go", Grants: map[string]*talk.Grant{"api": def.GrantAll("api"), "z": def.GrantAll("z")}, GrantsAsUsed: name == "release trim"})
+			source := "on go\n ask api to touch" + wait + "\nend go"
+			if joined {
+				source = "on go\n wait for all\n  ask api to touch and wait\n  ask api to touch and wait\n end wait\nend go"
+			}
+			s, err = g.Load(talk.LoadOptions{Name: "s", Source: source, Grants: map[string]*talk.Grant{"api": def.GrantAll("api"), "z": def.GrantAll("z")}, GrantsAsUsed: name == "release trim"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -465,18 +480,47 @@ func runReleaseBridgeCases(t *testing.T) []bridgeObservation {
 				}
 				observation.Pumps = append(observation.Pumps, bridgeCanonical(reflect.ValueOf(result)))
 			}
-			switch name {
-			case "release cancellation", "release crossing stop":
+			switch {
+			case suspending || name == "release crossing stop":
 				if _, err = s.Deliver(talk.Message{Name: "go"}); err != nil {
 					t.Fatal(err)
 				}
 				pump()
-			case "release revoke":
+			case name == "release revoke":
 				s.Revoke("api")
 				pump()
 				s.Revoke("api")
 				s.Revoke("missing")
 				pump()
+			}
+			if suspending {
+				want := 1
+				if joined {
+					want = 2
+				}
+				if len(calls) != want {
+					t.Fatalf("got %d Calls, want %d", len(calls), want)
+				}
+			}
+			if settled {
+				calls[0].Answer(talk.Nothing)
+				if blocker != nil {
+					if _, err := blocker.Deliver(talk.Message{Name: "busy"}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				opts := talk.PumpOptions{FuelCap: 1}
+				if consumed {
+					opts.FuelCap = 0
+				}
+				result, err := g.Pump(bridgeNow, opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				observation.Pumps = append(observation.Pumps, bridgeCanonical(reflect.ValueOf(result)))
+				if calls[0].Context().Err() != nil {
+					t.Fatal("settlement cancelled the Call")
+				}
 			}
 			if name != "release crossing stop" {
 				s.Stop("done")
