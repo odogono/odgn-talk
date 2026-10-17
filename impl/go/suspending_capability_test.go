@@ -509,17 +509,29 @@ func TestSuspendingResultOwnership(t *testing.T) {
 	fn := joinEnd(t, joinPump(t, other, 0, PumpOptions{}), "foreign").Result
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {
-			g, s, calls, _ := suspendingLoad(t, Operation{Result: FunctionShape}, "on go\nask api to fetch and wait\nend", Limits{})
+			g, s, calls, trace := suspendingLoad(t, Operation{Result: ValueShape}, "on go\nask api to fetch and wait\nreturn it\nend", Limits{})
 			s.Deliver(Message{Name: "go"})
 			joinPump(t, g, 0, PumpOptions{})
-			if fail {
-				data, _ := Map(KV("fn", fn))
-				(*calls)[0].Fail(&ScriptError{Code: "custom", Data: data})
-			} else {
-				(*calls)[0].Answer(fn)
+			func() {
+				defer func() {
+					err, ok := recover().(*HostError)
+					if !ok || err.Code != WrongGroup {
+						t.Fatal("foreign settlement must panic WrongGroup", err)
+					}
+				}()
+				if fail {
+					data, _ := Map(KV("fn", List(fn)))
+					(*calls)[0].Fail(&ScriptError{Code: "custom", Data: data})
+				} else {
+					(*calls)[0].Answer(fn)
+				}
+			}()
+			if r := joinPump(t, g, 1, PumpOptions{}); len(operationalReports(r.Reports)) != 0 || strings.Contains(strings.Join(*trace, "\n"), "> answer ") || strings.Contains(strings.Join(*trace, "\n"), "> fail ") {
+				t.Fatal("foreign settlement was queued", r, *trace)
 			}
-			end := joinEnd(t, joinPump(t, g, 1, PumpOptions{}), "s")
-			if end.Error == nil || end.Error.Code != "host error" {
+			(*calls)[0].Answer(Int(9))
+			end := joinEnd(t, joinPump(t, g, 2, PumpOptions{}), "s")
+			if end.Error != nil || !end.Result.Equal(Int(9)) {
 				t.Fatal(end)
 			}
 		})
