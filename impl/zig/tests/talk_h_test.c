@@ -1692,6 +1692,44 @@ static int user_test(void) {
     return bad;
 }
 
+/* Stop cancels a suspending Call before the first synchronous release hook. */
+static int release_saw_cancelled;
+static void release_observe_call(void *context, const talk_grant_context *gc) {
+    (void)context;
+    (void)gc;
+    release_saw_cancelled = started != NULL && talk_call_context(started);
+}
+static int release_cancellation_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0};
+    int bad = talk_new_group(core, &options, &group) != TALK_OK;
+    talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
+    talk_capability_option hooks[] = {talk_with_release_hook(release_observe_call, NULL)};
+    talk_capability_def *def = NULL;
+    bad |= talk_define_capability(core, "feed", 4, ops, 1, hooks, 1, &def) != TALK_OK;
+    talk_grant *grant = NULL;
+    bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
+    talk_load_grant grants[] = {{"feed", 4, grant}};
+    const char *source = "on go\n ask feed to fetch and wait\nend go\n";
+    talk_load_options load = {"s", 1, source, strlen(source), grants, 1, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    bad |= talk_load(group, &load, &script) != TALK_OK;
+    talk_message message = {"go", 2, NULL, 0, NULL};
+    started = NULL;
+    release_saw_cancelled = 0;
+    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= started == NULL || talk_call_context(started);
+    bad |= talk_script_stop(script, "done", 4) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= !release_saw_cancelled;
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* A Run suspends at ask … and wait, and resumes with the Host's answer. */
 static int suspension_test(void) {
     talk_core *core = talk_new();
@@ -2435,6 +2473,7 @@ int main(void) {
     talk_owned_bytes_release(&buffer);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
+    expect(release_cancellation_test() == 0, "Stop cancels pending Calls before releasing Grants");
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");
     expect(sqlite_test() == 0, "sqlite refuses a malformed binding, authorizes each step and gives rows as maps");
     expect(metering_test() == 0, "metered C calls request Fuel through a Pump and retain their future and issued eligibility");

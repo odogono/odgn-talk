@@ -18,8 +18,10 @@ current Segment rather than committing it before Stop arrives. The
 demonstrates why an outbox drained after the Pump is insufficient.
 
 Keep Host-initiated exchanges, serialized frames and matching result messages.
-No WASM import calls back into Go, and no additional Script execution happens
-while the callback remains outstanding. This design does not authorize a
+This crossing-return design uses no import callback into the embedding Host,
+and no additional Script execution happens while the callback remains
+outstanding. The separately negotiated [inline transport](inline-inputs.md)
+uses nested WASI stdio frames while the original worker stack stays active. This design does not authorize a
 production Go binding, alternative ABI, performance limits or Go Core retirement.
 
 ## Exchange rules
@@ -307,8 +309,8 @@ This extension covers ordinary immediate, suspending and fire-and-forget
 Operations. It does not advertise per-record suspension during arbitrary Script execution, property
 or lifecycle observation, or input admission while a WASM export has not yielded.
 A sink reacting to other records can still observe a later transport boundary;
-full Trace-sink and non-yielding concurrent-input compatibility remain #884
-gates. The contract and its implementation were accepted in #982 for #978;
+full per-record observation and admission during exports use the separate
+[`inline-inputs-v1` contract](inline-inputs.md). The contract and its implementation were accepted in #982 for #978;
 there are no changed Data Files or expectation blessings.
 
 The public-adapter comparisons also track Zig corrections in #979: settlement

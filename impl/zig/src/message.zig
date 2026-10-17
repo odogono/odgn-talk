@@ -89,6 +89,7 @@ const GroupEntry = struct {
     gone: bool = false,
     /// Trace lines not yet carried by a reply, from the sink.
     pending_trace: std.ArrayList([]u8) = .empty,
+    inline_trace: ?InlineTrace = null,
     /// Whether the last value read held another Group's Function Value.
     wrong_group: bool = false,
     /// The calls the Host answered `started`, or adopted, and hasn't
@@ -273,6 +274,11 @@ pub const Session = struct {
     /// Opted in at hello: notify before the next callback, once across replies.
     early_abandoned: bool = false,
     crossing_trace: bool = false,
+    /// A transport can serve queued inputs on the current guest stack.
+    inline_io: ?*const fn ([]const u8) ?[]const u8 = null,
+    inline_inputs: bool = false,
+    inline_active: bool = false,
+    active_ref: i64 = 0,
     /// `climb-v1`: a `run end` whose message climbed says so.
     climb: bool = false,
     /// `function-gone-v1`: a Pump reply lists stale Function Value calls.
@@ -313,6 +319,11 @@ pub const Session = struct {
             for (e.started.items) |x| gpa.free(x);
             e.started.deinit(gpa);
             e.pending_trace.deinit(gpa);
+            if (e.inline_trace) |*t| {
+                t.bytes.deinit(gpa);
+                for (t.diagnostics.items) |line| gpa.free(line);
+                t.diagnostics.deinit(gpa);
+            }
             gpa.free(e.name);
             gpa.destroy(e);
         }
@@ -1006,6 +1017,22 @@ fn effectHook(context: ?*anyopaque, phase: caps.Phase, sc: *const caps.SegmentCo
 /// the reply it comes before. It has no result and can't refuse.
 fn releaseHook(context: ?*anyopaque, gc: *const caps.GrantContext) void {
     const s: *Session = @ptrCast(@alignCast(context.?));
+    if (s.inline_inputs and !s.inline_active) {
+        const entry = s.exchange_entry orelse return;
+        var o = Out.init(s.gpa);
+        defer o.deinit();
+        o.raw("{\"need\":{\"m\":\"release\",\"script\":") catch return;
+        o.text(gc.script) catch return;
+        o.raw(",\"grant\":") catch return;
+        o.text(gc.grant) catch return;
+        o.raw(",\"reason\":") catch return;
+        o.text(@tagName(gc.reason)) catch return;
+        o.raw(",\"now\":") catch return;
+        o.instant(s.gpa, gc.now) catch return;
+        o.raw("}}") catch return;
+        inlineRound(s, entry, o.buf.written());
+        return;
+    }
     const script = s.gpa.dupe(u8, gc.script) catch return;
     const grant = s.gpa.dupe(u8, gc.grant) catch {
         s.gpa.free(script);
@@ -1981,7 +2008,9 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\"]") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\"") catch return oomReply();
+    if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
+    o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2223,6 +2252,12 @@ fn newGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         return hostError(s.gpa, ref, code);
     }
     entry.group = group.?;
+    if (s.inline_inputs) {
+        entry.inline_trace = .{ .session = s, .entry = entry };
+        if (entry.traced) entry.group.group.trace = &entry.inline_trace.?.writer;
+        entry.group.group.host_poll = inlinePoll;
+        entry.group.group.host_poll_context = &entry.inline_trace.?;
+    }
     s.groups.append(s.gpa, entry) catch return hostError(s.gpa, ref, .out_of_memory);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -2296,7 +2331,7 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
     const code = Direct.load(entry.group, &options, &script);
     entry.group.flush();
     if (code == .load_refused) {
-        if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
+        if (s.crossing_trace) return entryLoadError(s, ref, entry);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
         return loadError(s.gpa, ref, lines);
@@ -2651,7 +2686,7 @@ fn changeCodeReply(s: *Session, msg: Json, ref: i64, is_extend: bool) []u8 {
     const code = Direct.scriptExtend(script, source.ptr, source.len);
     entry.group.flush();
     if (code == .load_refused) {
-        if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
+        if (s.crossing_trace) return entryLoadError(s, ref, entry);
         const lines = takeTrace(entry);
         defer freeTrace(s.gpa, lines);
         return loadError(s.gpa, ref, lines);
@@ -2847,7 +2882,7 @@ fn runWork(s: *Session, ref: i64, entry: *GroupEntry, work: Work) []u8 {
 
 fn workRefused(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
     // As a refused Load: the error reply publishes its diagnostic records.
-    if (s.crossing_trace) return loadError(s.gpa, ref, entry.pending_trace.items);
+    if (s.crossing_trace) return entryLoadError(s, ref, entry);
     const lines = takeTrace(entry);
     defer freeTrace(s.gpa, lines);
     return loadError(s.gpa, ref, lines);
@@ -3226,6 +3261,12 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     }
     defer Direct.restoreResultRelease(result);
     entry.group = group.?;
+    if (s.inline_inputs) {
+        entry.inline_trace = .{ .session = s, .entry = entry };
+        if (entry.traced) entry.group.group.trace = &entry.inline_trace.?.writer;
+        entry.group.group.host_poll = inlinePoll;
+        entry.group.group.host_poll_context = &entry.inline_trace.?;
+    }
     s.groups.append(s.gpa, entry) catch {
         Direct.groupRelease(entry.group);
         for (entry.pending_trace.items) |line| s.gpa.free(line);
@@ -3621,6 +3662,8 @@ fn cancelDeliveryReply(s: *Session, msg: Json, ref: i64) []u8 {
 /// protocol error, and the instance carries on.
 pub fn handle(s: *Session, frame: []const u8) []u8 {
     s.reply_error = false;
+    const previous_ref = s.active_ref;
+    defer s.active_ref = previous_ref;
     const reply = handleFrame(s, frame);
     if (!s.crossing_trace or !s.reply_error) return reply;
     // Errors retain the records made by the refused Host Input. Callback
@@ -3641,6 +3684,7 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     if (msg != .object) return protocolError(s.gpa, 0, "the frame is not an object");
     const ref = asInt(field(msg, "ref")) orelse return protocolError(s.gpa, 0, "no ref");
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
+    s.active_ref = ref;
     if (s.restoring) |r| {
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
@@ -3673,6 +3717,14 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
         if (s.need.?.kind == .effect) return answerEffect(s, msg, ref);
         return answerNeed(s, msg, ref, s.need.?.kind == .prop);
     }
+    // The binding may have refused a worker while this export was still
+    // running, then reached this boundary before servicing its queued frame.
+    if (s.inline_inputs and (asBool(field(msg, "refuseWorker")) orelse false)) {
+        const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+        if (!messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" })) return protocolError(s.gpa, ref, "refuseWorker requires a worker message");
+        recordWorkerRefusal(s, entry, msg, m);
+        return hostError(s.gpa, ref, .reentrant_call);
+    }
     return dispatch(s, msg, ref, m, frame);
 }
 
@@ -3685,6 +3737,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var crossing_trace = s.crossing_trace;
             var climb = s.climb;
             var gone = s.gone;
+            var inline_inputs = s.inline_inputs;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -3695,6 +3748,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     climb = true;
                 } else if (std.mem.eql(u8, name, "function-gone-v1")) {
                     gone = true;
+                } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
+                    inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
                     // This feature adds declaration and binding fields, with no per-Group state.
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
@@ -3703,6 +3758,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.crossing_trace = crossing_trace;
             s.climb = climb;
             s.gone = gone;
+            s.inline_inputs = inline_inputs;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
@@ -3801,13 +3857,16 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: 
     // A WASM export has returned, but its Host callback has not. Admission
     // must use the same control queue and Trace hold as native callbacks.
     mg.pumping = s.exchange_pump;
-    if (mg.pumping and mg.held_trace == null and trace != null) {
+    if (mg.pumping and !s.inline_active and mg.held_trace == null and trace != null) {
         if (mg.held == null) mg.held = .init(mg.gpa);
         mg.held_trace = trace;
     }
     if (mg.held_trace != null) mg.trace = &mg.held.?.writer;
     s.admitting = true;
+    const old_inline = mg.inline_admitting;
+    mg.inline_admitting = s.inline_active;
     defer {
+        mg.inline_admitting = old_inline;
         s.admitting = false;
         mg.pumping = pumping;
         mg.trace = trace;
@@ -3874,6 +3933,7 @@ fn bufferExport(n: usize) callconv(.c) usize {
 
 fn sendExport(n: usize) callconv(.c) u64 {
     const s = session() orelse return 0;
+    s.inline_io = wasiInline;
     const reply = if (n == 0 or n > in_buffer.len)
         protocolError(s.gpa, 0, "no frame of that length")
     else
@@ -3895,6 +3955,154 @@ comptime {
         @export(&sendExport, .{ .name = "talk_send" });
         @export(&initializeExport, .{ .name = "_initialize" });
     }
+}
+
+fn entryLoadError(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
+    if (entry.inline_trace) |*t| if (entry.traced) {
+        defer {
+            for (t.diagnostics.items) |line| s.gpa.free(line);
+            t.diagnostics.clearRetainingCapacity();
+        }
+        return loadError(s.gpa, ref, t.diagnostics.items);
+    };
+    return loadError(s.gpa, ref, entry.pending_trace.items);
+}
+
+/// Streaming Trace writer used only by inline-inputs-v1. It calls the Host
+/// after a complete record, while its producing stack is still alive.
+const InlineTrace = struct {
+    writer: std.Io.Writer = .{ .buffer = &.{}, .vtable = &.{ .drain = drain } },
+    session: *Session,
+    entry: *GroupEntry,
+    bytes: std.ArrayList(u8) = .empty,
+    diagnostics: std.ArrayList([]u8) = .empty,
+
+    fn append(t: *InlineTrace, bytes: []const u8) std.Io.Writer.Error!void {
+        var rest = bytes;
+        while (std.mem.indexOfScalar(u8, rest, '\n')) |end| {
+            t.bytes.appendSlice(t.entry.gpa, rest[0..end]) catch return error.WriteFailed;
+            const line = t.bytes.toOwnedSlice(t.entry.gpa) catch return error.WriteFailed;
+            defer t.entry.gpa.free(line);
+            rest = rest[end + 1 ..];
+            if (std.mem.startsWith(u8, line, "diag ")) {
+                const own = t.entry.gpa.dupe(u8, line) catch return error.WriteFailed;
+                t.diagnostics.append(t.entry.gpa, own) catch {
+                    t.entry.gpa.free(own);
+                    return error.WriteFailed;
+                };
+            }
+            if (t.session.inline_active and t.entry.group.group.pumping and t.entry.group.group.held_trace == null and !t.entry.group.group.pump_finishing) {
+                const own = t.entry.gpa.dupe(u8, line) catch return error.WriteFailed;
+                t.entry.group.group.landing.append(t.entry.gpa, .{ .record = own, .delayed = true }) catch {
+                    t.entry.gpa.free(own);
+                    return error.WriteFailed;
+                };
+            } else if (t.session.inline_active) {
+                const own = t.entry.gpa.dupe(u8, line) catch return error.WriteFailed;
+                t.entry.pending_trace.append(t.entry.gpa, own) catch {
+                    t.entry.gpa.free(own);
+                    return error.WriteFailed;
+                };
+            } else {
+                var event = Out.init(t.entry.gpa);
+                defer event.deinit();
+                event.raw("{\"trace\":[") catch return error.WriteFailed;
+                event.text(line) catch return error.WriteFailed;
+                event.raw("]}") catch return error.WriteFailed;
+                inlineRound(t.session, t.entry, event.buf.written());
+            }
+        }
+        t.bytes.appendSlice(t.entry.gpa, rest) catch return error.WriteFailed;
+    }
+
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const t: *InlineTrace = @alignCast(@fieldParentPtr("writer", w));
+        var n: usize = 0;
+        for (data[0 .. data.len - 1]) |bytes| {
+            try t.append(bytes);
+            n += bytes.len;
+        }
+        const last = data[data.len - 1];
+        for (0..splat) |_| try t.append(last);
+        return n + last.len * splat;
+    }
+};
+
+fn inlinePoll(context: ?*anyopaque) void {
+    const t: *InlineTrace = @ptrCast(@alignCast(context.?));
+    if (!t.session.inline_active) inlineRound(t.session, t.entry, "{\"poll\":true}");
+}
+
+/// Admission executes here, on the original guest stack, never by reentering
+/// talk_send. The producing worker cannot advance until the sink acknowledges.
+fn inlineRound(s: *Session, entry: *GroupEntry, event: []const u8) void {
+    const io = s.inline_io orelse return;
+    s.inline_active = true;
+    defer s.inline_active = false;
+    const old_entry = s.exchange_entry;
+    const old_pump = s.exchange_pump;
+    s.exchange_entry = entry;
+    s.exchange_pump = entry.group.group.pumping;
+    defer {
+        s.exchange_entry = old_entry;
+        s.exchange_pump = old_pump;
+    }
+    const owned = s.gpa.dupe(u8, event) catch return;
+    const observed = withAbandoned(s, entry, owned, .outer);
+    defer freeReply(s.gpa, observed);
+    var incoming = io(observed) orelse return;
+    while (true) {
+        const parsed = std.json.parseFromSlice(Json, s.gpa, incoming, .{ .allocate = .alloc_always, .parse_numbers = false, .max_value_len = max_frame }) catch @trap();
+        defer parsed.deinit();
+        if (parsed.value == .null) return;
+        const msg = parsed.value;
+        const ref = asInt(field(msg, "ref")) orelse @trap();
+        const m = asText(field(msg, "m")) orelse @trap();
+        const reply = withTrace(s, entry, pausedAdmission(s, msg, ref, m, s.active_ref));
+        defer freeReply(s.gpa, reply);
+        var out = Out.init(s.gpa);
+        defer out.deinit();
+        out.raw("{\"reply\":") catch return;
+        out.raw(reply) catch return;
+        out.raw("}") catch return;
+        incoming = io(out.buf.written()) orelse return;
+    }
+}
+
+// The reactor's optional inline transport uses framed WASI stdio. Hosts which
+// do not negotiate it never read or write stdio from talk_send.
+var inline_buffer: std.ArrayList(u8) = .empty;
+fn wasiInline(event: []const u8) ?[]const u8 {
+    if (builtin.target.os.tag != .wasi) return null;
+    const wasi = std.os.wasi;
+    var header: [4]u8 = undefined;
+    std.mem.writeInt(u32, &header, @intCast(event.len), .big);
+    for ([_][]const u8{ &header, event }) |part| {
+        var at: usize = 0;
+        while (at < part.len) {
+            const vec = [_]wasi.ciovec_t{.{ .base = part[at..].ptr, .len = part.len - at }};
+            var n: usize = 0;
+            if (wasi.fd_write(1, &vec, 1, &n) != .SUCCESS or n == 0) @trap();
+            at += n;
+        }
+    }
+    if (!wasiRead(&header)) @trap();
+    const size = std.mem.readInt(u32, &header, .big);
+    if (size > max_frame) @trap();
+    inline_buffer.resize(export_allocator, size) catch @trap();
+    if (!wasiRead(inline_buffer.items)) @trap();
+    return inline_buffer.items;
+}
+fn wasiRead(bytes: []u8) bool {
+    if (builtin.target.os.tag != .wasi) return false;
+    var at: usize = 0;
+    while (at < bytes.len) {
+        const vec = [_]std.os.wasi.iovec_t{.{ .base = bytes[at..].ptr, .len = bytes.len - at }};
+        var n: usize = 0;
+        if (std.os.wasi.fd_read(0, &vec, 1, &n) != .SUCCESS or n == 0) return false;
+        at += n;
+    }
+    return true;
 }
 
 // ------------------------------------------------------------------ tests
@@ -5482,4 +5690,64 @@ test "an enqueued answer keeps cancellation observable until its Run consumes it
     try std.testing.expectEqualStrings(id, ids[0].string);
     const after = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10}));
     try std.testing.expectEqual(@as(usize, 0), after.object.get("abandoned").?.array.items.len);
+}
+
+test "inline input admission observes complete records before the producer advances" {
+    const Host = struct {
+        var events: std.ArrayList([]u8) = .empty;
+        var stopped: bool = false;
+        fn exchange(event: []const u8) ?[]const u8 {
+            const own = std.testing.allocator.dupe(u8, event) catch return null;
+            events.append(std.testing.allocator, own) catch {
+                std.testing.allocator.free(own);
+                return null;
+            };
+            if (!stopped and std.mem.indexOf(u8, event, "> pump clock=") != null) {
+                stopped = true;
+                return "{\"m\":\"stop\",\"ref\":80,\"group\":\"g\",\"script\":\"s\",\"reason\":\"sink\"}";
+            }
+            return "null";
+        }
+    };
+    Host.events = .empty;
+    Host.stopped = false;
+    defer {
+        for (Host.events.items) |event| std.testing.allocator.free(event);
+        Host.events.deinit(std.testing.allocator);
+    }
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    s.inline_io = Host.exchange;
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"inline-inputs-v1\"]}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"trace\":true}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on go\\n return 7\\nend go\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{4}));
+    const pumped = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-15T12:00:00Z\"}}", .{5}));
+    try std.testing.expectEqualStrings("stopped", pumped.object.get("state").?.string);
+    const want = [_][]const u8{ "> load ", "> request ", "> pump ", "seg ", "run ", "> stop ", "stopped ", "pumped " };
+    var at: usize = 0;
+    var replies: usize = 0;
+    for (Host.events.items) |event| {
+        const parsed = try std.json.parseFromSlice(Json, std.testing.allocator, event, .{});
+        defer parsed.deinit();
+        if (parsed.value.object.get("reply")) |reply| {
+            try std.testing.expectEqual(@as(i64, 80), reply.object.get("ref").?.integer);
+            _ = try okOf(reply);
+            replies += 1;
+        }
+        if (parsed.value.object.get("trace")) |lines| for (lines.array.items) |line| {
+            try std.testing.expect(at < want.len);
+            try std.testing.expect(std.mem.startsWith(u8, line.string, want[at]));
+            at += 1;
+        };
+    }
+    try std.testing.expectEqual(want.len, at);
+    try std.testing.expectEqual(@as(usize, 1), replies);
+    // A worker refused by the binding during an export stays refused even
+    // when its frame is serviced at the export's completed boundary.
+    const late = try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"late\",\"source\":\"\",\"refuseWorker\":true}}", .{6});
+    try std.testing.expectEqualStrings("reentrant call", late.object.get("err").?.object.get("code").?.string);
+    try std.testing.expect(Direct.groupScript(s.groupNamed("g").?.group, "late", 4) == null);
 }

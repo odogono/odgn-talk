@@ -129,8 +129,9 @@ or from a later goroutine; AnswerWithCost charges on resumption. Callback panics
 and Host errors become ordinary Host failures. Abandonment cancels Call.Context
 before the next callback, including cancellation cleanup and Calls answered but
 discarded before resumption. Late settlements are harmless. Each worker owns its
-whole need/result exchange; callbacks, Trace sinks and OnReady run outside export
-and registry locks. Callback-generated queued inputs receive distinct refs;
+whole need/result exchange; callbacks, Trace sinks and OnReady run outside
+adapter admission and registry locks. Inline sink callbacks submit through the
+queue while the original export retains guest ownership. Callback-generated queued inputs receive distinct refs;
 worker reentry returns the existing reentrant-call HostError.
 
 `WithReleaseHook` runs during Stop and Revoke with the public GrantContext,
@@ -160,14 +161,21 @@ implementation and coordinator identity stay in Go. Ordinary declarations with
 the same public name do not acquire factory checks or catalogue failures.
 
 The adapter negotiates `paused-inputs-v1`, `abandoned-before-needs-v1`,
-`crossing-trace-v1`, `climb-v1`, `function-gone-v1` and
-`standard-refinements-v1`. Crossing Trace support publishes an Operation's call record and
-held refusal records before crossing controls land, so a Trace sink can queue
-Stop at that boundary. Error replies publish their available refusal/diagnostic
-records before returning the error. Other Script-execution Trace records can
-still arrive in batches; arbitrary per-record input-generating sinks remain a
-compatibility gate. Input admission during a non-yielding WASM export also
-remains open: serialized exports and paused-crossing tests do not establish it.
+`crossing-trace-v1`, `climb-v1`, `function-gone-v1`,
+`standard-refinements-v1` and `inline-inputs-v1`.
+The [inline transport](../../spec/embedding/inline-inputs.md) streams every
+complete Trace record before its producer advances. A sink can queue inputs
+from execution, error, lifecycle and inspection records; controls retain native
+crossing/Stretch boundaries, and ordinary inputs wait for the next Pump.
+Concurrent calls enter one Go-side admission queue while an export runs. The
+guest services it at checkpoints and export boundaries on its original stack,
+without reentering WASM. Admission replies validate and reserve in the guest;
+OnReady and sink callbacks run outside adapter locks. Atomic guest work can delay
+an admission acknowledgement until its next checkpoint or export boundary.
+The public Host matrix compares exact Trace, Fuel, typed Reports, futures and
+inspection with a separately compiled native-Go binary; a Trace-disabled long
+export exercises concurrent Delivery, Stop, CancelRun and Answer. The native
+reference's refused input from `pumped` is excluded pending #1072.
 
 Unsupported calls return an `experimental Zig backend` error, or panic when the
 existing signature has no error result: Save/Restore/Settle and Fingerprint. Two Object Kinds sharing a
@@ -195,7 +203,7 @@ Run the focused public slices from the repository root:
 ```sh
 CGO_ENABLED=0 impl/go/zig-experimental-check.sh
 impl/go/zig-experimental-check.sh -race
-go -C impl/go vet -tags talk_zig_experimental .
+go -C impl/go vet -tags talk_zig_experimental . ./internal/zigwasm
 ```
 
 `TestZigBackendCapabilityParity` builds an untagged test binary, runs its

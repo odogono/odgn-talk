@@ -1353,7 +1353,12 @@ pub const Restored = struct {
 
 /// A Host Input made during a Pump that lands at a Host crossing, and
 /// whether its line is already written.
-pub const Landing = struct { input: Input, written: bool };
+pub const Landing = struct {
+    delayed: bool = false,
+    input: ?Input = null,
+    record: ?[]u8 = null,
+    written: bool = false,
+};
 
 /// How the Host settles a restored pending call.
 pub const How = enum { answer, fail, reissue, adopt };
@@ -1488,6 +1493,12 @@ pub const Group = struct {
     crossing_pause: bool = false,
     /// Message Layer opt-in: observe Operation records before landing.
     observe_crossings: bool = false,
+    /// Optional transport admission checkpoint; never executes Script work.
+    host_poll: ?*const fn (?*anyopaque) void = null,
+    host_poll_context: ?*anyopaque = null,
+    host_poll_ticks: u12 = 0,
+    inline_admitting: bool = false,
+    pump_finishing: bool = false,
     trace_pause: bool = false,
     /// The transport is about to re-enter the callback that paused it.
     /// Its queued controls must follow that callback's record, not land
@@ -1574,7 +1585,10 @@ pub const Group = struct {
             },
         };
         g.releaseInputs(g.inputs.items);
-        for (g.landing.items) |x| g.releaseInputs(&.{x.input});
+        for (g.landing.items) |x| {
+            if (x.input) |input| g.releaseInputs(&.{input});
+            if (x.record) |record| g.gpa.free(record);
+        }
         g.landing.deinit(g.gpa);
         if (g.held) |*h| h.deinit();
         g.inputs.deinit(g.gpa);
@@ -2856,12 +2870,17 @@ pub const Group = struct {
         defer g.landing_active = false;
         g.flushHeld();
         while (g.landing.items.len > 0) {
-            const entry = &g.landing.items[0];
-            if (!entry.written) {
-                g.writeInput(entry.input);
-                entry.written = true;
+            if (g.landing.items[0].record) |record| {
+                _ = g.landing.orderedRemove(0);
+                defer g.gpa.free(record);
+                g.write("{s}\n", .{record});
+                continue;
             }
-            const input = entry.input;
+            const input = g.landing.items[0].input.?;
+            if (!g.landing.items[0].written) {
+                g.landing.items[0].written = true;
+                g.writeInput(input);
+            }
             g.landing_run = running;
             g.landOne(input, running) catch |e| {
                 if (e == error.Deferred) g.landing_paused = true;
@@ -2998,8 +3017,8 @@ pub const Group = struct {
     /// A Stop, CancelRun or RewindRun: made during a Pump, it lands at the
     /// next Host crossing; otherwise the next Pump drains it.
     fn queueLanding(g: *Group, input: Input) !void {
-        if (!g.pumping) return g.enqueue(input);
-        try g.landing.append(g.gpa, .{ .input = input, .written = g.held_trace != null });
+        if (!g.pumping or g.pump_finishing) return g.enqueue(input);
+        try g.landing.append(g.gpa, .{ .input = input, .written = g.held_trace != null, .delayed = g.inline_admitting and g.held_trace == null });
         // Made in a Host function, it is written where it was made, after
         // the crossing's records.
         if (g.held_trace != null) g.writeInput(input);
@@ -3022,8 +3041,11 @@ pub const Group = struct {
         g.held_trace = null;
         const h = if (g.held) |*x| x else return;
         const out = g.trace orelse return;
-        out.writeAll(h.written()) catch {};
-        h.clearRetainingCapacity();
+        // A synchronous sink can append new held records while these are
+        // being observed. Detach this batch before entering the Host.
+        const batch = h.toOwnedSlice() catch return;
+        defer g.gpa.free(batch);
+        out.writeAll(batch) catch {};
     }
 
     /// Queues cancelling a Delivery, by its delivery number.
@@ -3601,6 +3623,7 @@ pub const Group = struct {
         g.pumping = true;
         defer g.pumping = false;
         g.rewound = false;
+        g.pump_finishing = false;
         g.flushChargeRefusals();
         g.clock = clock;
         g.slice = slice;
@@ -3831,6 +3854,7 @@ pub const Group = struct {
             // another settlement can invoke a sibling Start. The input is
             // already consumed, so deferred cleanup resumes only the landing.
             if (input == .settlement and input.settlement.how == .reissue) {
+                if (g.host_poll) |poll| poll(g.host_poll_context);
                 g.land(null) catch |e| {
                     if (e != error.Deferred) return e;
                     g.crossing_pause = true;
@@ -4038,7 +4062,7 @@ pub const Group = struct {
                 g.turn_at += 1;
                 // What landed during the last turn, and a Rewind, which
                 // ends the Pump.
-                if (!g.answering_crossing and g.landing.items.len > 0) g.land(null) catch |e| {
+                if (!g.answering_crossing and g.landing.items.len > 0 and !g.landing.items[0].delayed) g.land(null) catch |e| {
                     if (e != error.Deferred) return e;
                     g.crossing_pause = true;
                     g.turn_at -= 1;
@@ -4113,9 +4137,15 @@ pub const Group = struct {
                     g.crossing_pause = true;
                     return;
                 }
+                g.land(null) catch |e| {
+                    if (e != error.Deferred) return e;
+                    g.crossing_pause = true;
+                    return;
+                };
             }
             g.turn_at = 0;
         }
+        if (g.host_poll) |poll| poll(g.host_poll_context);
         g.land(null) catch |e| {
             if (e != error.Deferred) return e;
             g.crossing_pause = true;
@@ -4129,6 +4159,7 @@ pub const Group = struct {
         if (g.slice > 0) for (g.scripts.items) |x| {
             if (x.spent > x.allowance) x.debt += x.spent - x.allowance;
         };
+        g.pump_finishing = true;
         g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.rewound) "rewound" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
         if (g.next()) |deadline| {
             const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) };
@@ -6173,8 +6204,16 @@ pub const Group = struct {
         var abandoned: std.ArrayList([]const u8) = .empty;
         defer abandoned.deinit(g.gpa);
         for (runs.items) |r| {
-            if (r.waiting) |p| if (p.call) |c| try abandoned.append(g.gpa, c.id);
-            if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| if (p.call) |c| try abandoned.append(g.gpa, c.id);
+            // Release hooks observe cancellation, even when the transport
+            // invokes them synchronously before this Run is destroyed.
+            if (r.waiting) |p| {
+                abandonCall(p);
+                if (p.call) |c| try abandoned.append(g.gpa, c.id);
+            }
+            if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| {
+                abandonCall(p);
+                if (p.call) |c| try abandoned.append(g.gpa, c.id);
+            };
         }
         std.mem.sort([]const u8, abandoned.items, {}, struct {
             fn less(_: void, x: []const u8, y: []const u8) bool {
@@ -6975,6 +7014,10 @@ pub const Group = struct {
         // defer releases its owners and clears its metadata on every path.
         var held: Operands = .{};
         while (true) {
+            if (g.host_poll) |poll| {
+                g.host_poll_ticks +%= 1;
+                if (g.host_poll_ticks == 0) poll(g.host_poll_context);
+            }
             if (g.release_pause) return .{ .preempted = .crossing };
             scratch_arena.reset(&g.scratch);
             // A clause a Command Call tried pays its rate with the clause
@@ -6989,7 +7032,7 @@ pub const Group = struct {
             };
             // What landed at the last Host crossing, between instructions.
             if (!g.answering_crossing) g.flushHeld();
-            if (!g.answering_crossing and g.landing.items.len > 0 and run.base == 0 and run.id.len > 0) {
+            if (!g.answering_crossing and g.landing.items.len > 0 and !g.landing.items[0].delayed and run.base == 0 and run.id.len > 0) {
                 g.land(run) catch |e| {
                     if (e != error.Deferred) return e;
                     return .{ .preempted = .crossing };
