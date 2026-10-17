@@ -1,4 +1,4 @@
-import { parseSourceRecovering, type SyntaxElement } from '@odgn/northtalk';
+import { parseSourceRecovering, type SyntaxElement } from '@northtalk/ts';
 
 export type SyntaxView = {
   children: SyntaxView[];

@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { stdlibSources } from '@odgn/northtalk';
+import { stdlibSources } from '@northtalk/ts';
 import { manifestSourceEdits } from './lsp-manifest';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -17,7 +17,7 @@ import {
   type TextEdit,
   type RpcMessage,
   type WorkspaceSource,
-} from '@odgn/northtalk-tooling/lsp';
+} from '@northtalk/tooling/lsp';
 
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)

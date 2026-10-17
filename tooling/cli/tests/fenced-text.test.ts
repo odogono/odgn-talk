@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { resolve, join } from 'node:path';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { parseTranscript } from '@odgn/northtalk/session';
+import { parseTranscript } from '@northtalk/ts/session';
 
 const run = (stdin: string, args: string[] = []) => {
   const result = Bun.spawnSync(

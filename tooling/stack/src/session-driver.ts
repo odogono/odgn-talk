@@ -4,8 +4,8 @@
 // debugger holds it paused, and wakes it at its deadlines. It is not
 // normative: everything a session prints and records comes from the Session
 // Host. The caller supplies the Clock and the timers, and reads its events.
-import type { Value } from '@odgn/northtalk';
-import type { UserPrompt, Waiting } from '@odgn/northtalk/session';
+import type { Value } from '@northtalk/ts';
+import type { UserPrompt, Waiting } from '@northtalk/ts/session';
 import { sessionCommands } from './generated/session';
 
 /** What the driver needs of a Session Host, or of a Host wrapped by Tooling. */

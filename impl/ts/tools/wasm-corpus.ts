@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Replay the Corpus's Trace Cases through @odgn/northtalk/wasm, the TS
+// Replay the Corpus's Trace Cases through @northtalk/ts/wasm, the TS
 // embedding API over the Zig reactor, as the TS Core's own runner replays
 // them through the TS Core (#1121). The Host side of each case is the TS
 // runner's; only the Core behind it changes, one Core per case.

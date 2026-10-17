@@ -51,5 +51,5 @@ The Core checks each call's Shapes and validates names and messages before the H
 
 ## Running
 
-- **TS:** [`impl/ts/tools/notify-kit.ts`](../../impl/ts/tools/notify-kit.ts) drives `@odgn/northtalk/notify` through the kit. [`impl/ts/tests/notify-kit.test.ts`](../../impl/ts/tests/notify-kit.test.ts) runs it under Bun, and under Node when it is installed.
+- **TS:** [`impl/ts/tools/notify-kit.ts`](../../impl/ts/tools/notify-kit.ts) drives `@northtalk/ts/notify` through the kit. [`impl/ts/tests/notify-kit.test.ts`](../../impl/ts/tests/notify-kit.test.ts) runs it under Bun, and under Node when it is installed.
 - **Go:** [`impl/go/notify/kit_test.go`](../../impl/go/notify/kit_test.go) drives the `notify` router through the kit. `go -C impl/go test ./notify` runs it.

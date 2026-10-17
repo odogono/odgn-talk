@@ -2,7 +2,7 @@ import {
   parseSource,
   type SyntaxElement,
   type SyntaxNode,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { regenerate } from './generator';
 import {
   signatureKey,

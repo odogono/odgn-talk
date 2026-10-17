@@ -1,4 +1,4 @@
-import { rangeAt, type TextEdit } from '@odgn/northtalk-tooling/lsp';
+import { rangeAt, type TextEdit } from '@northtalk/tooling/lsp';
 
 type Frame = {
   key?: string;

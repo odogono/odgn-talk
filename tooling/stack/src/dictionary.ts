@@ -1,7 +1,7 @@
 /** A dictionary of each Grant's Operations, read from a Host Manifest, for
  * LSP hover and completion and the Playground's Dictionary panel. Nothing it
  * produces is normative (ADR 0028). */
-import type { Shape } from '@odgn/northtalk';
+import type { Shape } from '@northtalk/ts';
 import {
   readManifest,
   type HostManifest,

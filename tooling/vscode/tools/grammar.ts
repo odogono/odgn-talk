@@ -2,7 +2,7 @@
 // stdlib Data File, so its word lists follow the Spec. `--check` fails instead
 // of writing when the committed grammar is stale.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { grammar, units } from '@odgn/northtalk';
+import { grammar, units } from '@northtalk/ts';
 
 const root = new URL('../../../', import.meta.url);
 const output = new URL(

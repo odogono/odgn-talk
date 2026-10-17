@@ -2,7 +2,7 @@
 // has its owner's Host Manifest, so unrelated Pages never leak names.
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { diagnosticsSpec } from '@odgn/northtalk-editor/editor';
+import { diagnosticsSpec } from '@northtalk/editor/editor';
 import {
   codeEditor,
   codeWindow,

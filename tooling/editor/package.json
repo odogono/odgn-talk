@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-editor",
+  "name": "@northtalk/editor",
   "private": true,
   "type": "module",
   "exports": {
@@ -20,7 +20,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.5",
-    "@odgn/northtalk": "workspace:*",
-    "@odgn/northtalk-tooling": "workspace:*"
+    "@northtalk/ts": "workspace:*",
+    "@northtalk/tooling": "workspace:*"
   }
 }

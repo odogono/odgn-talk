@@ -1,8 +1,8 @@
 // How the TS REPL shows a `user` prompt and reads its answer from a typed
 // line. Both are outside parity (chapter 12, Prompts): the Transcript records
 // only the answer.
-import { bool, list, nothing, text, type Value } from '@odgn/northtalk';
-import type { UserPrompt } from '@odgn/northtalk/session';
+import { bool, list, nothing, text, type Value } from '@northtalk/ts';
+import type { UserPrompt } from '@northtalk/ts/session';
 
 /** The lines that ask the question. */
 export const promptLines = (p: UserPrompt): string[] => {

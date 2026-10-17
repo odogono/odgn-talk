@@ -1,4 +1,4 @@
-import { createReplayHost, parseRecord } from '@odgn/northtalk/replay';
+import { createReplayHost, parseRecord } from '@northtalk/ts/replay';
 import type { Action, Execution, FuzzCase } from './model';
 
 const hex = (bytes: Uint8Array) =>

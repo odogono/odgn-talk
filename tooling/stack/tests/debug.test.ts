@@ -2,12 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  compileSource,
-  defineCapability,
-  newGroup,
-  num,
-} from '@odgn/northtalk';
+import { compileSource, defineCapability, newGroup, num } from '@northtalk/ts';
 import { replay } from '../../../impl/ts/tools/trace-case';
 import { copyDebugVar, LiveDebugger, renderDebugView } from '../src/debug';
 import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';

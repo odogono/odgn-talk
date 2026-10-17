@@ -8,9 +8,9 @@ import {
   text,
   clockCapability,
   defineObjectKind,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { ReplayDebugger } from '../src/debug';
-import { parseRecord } from '@odgn/northtalk/replay';
+import { parseRecord } from '@northtalk/ts/replay';
 
 const source =
   'script variable n = 0\non go\n put 1 into n\n put 2 into n\n return n\nend';
@@ -302,7 +302,7 @@ test('an early Stop of a different suspended Script lands in the executing Run',
 
 test('recorded charges and results replace live immediate and suspending Host functions', () => {
   const lines: string[] = [];
-  const calls: import('@odgn/northtalk').Call<unknown>[] = [];
+  const calls: import('@northtalk/ts').Call<unknown>[] = [];
   const api = defineCapability('api', {
     get: {
       mode: 'immediate',

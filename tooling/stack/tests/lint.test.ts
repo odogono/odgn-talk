@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { checkSource, newGroup, parseSourceRecovering } from '@odgn/northtalk';
+import { checkSource, newGroup, parseSourceRecovering } from '@northtalk/ts';
 import {
   lint,
   lintSyntax,

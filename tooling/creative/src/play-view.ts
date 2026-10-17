@@ -2,7 +2,7 @@
 // Browsing plays the Project in place on the desk, beside the Tools and
 // Script windows; presenting plays it full-window with the editor hidden.
 import { scriptNameProblems } from './script-names';
-import { text } from '@odgn/northtalk';
+import { text } from '@northtalk/ts';
 import { byId, h } from './dom';
 import { ErrorsWindow } from './errors';
 import { mountMessageWindow } from './message-window';

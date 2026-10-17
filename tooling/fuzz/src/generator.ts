@@ -1,6 +1,6 @@
 import grammar from '../../../spec/data/grammar.toml';
 import diagnostics from '../../../spec/data/diagnostics.toml';
-import { text } from '@odgn/northtalk';
+import { text } from '@northtalk/ts';
 import {
   features,
   type Action,

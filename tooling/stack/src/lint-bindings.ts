@@ -5,7 +5,7 @@ import type {
   SemanticNode,
   SemanticTree,
   SourceSpan,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import { builtins, properties } from './generated/lints';
 import type { LintId } from './lint';
 import type { HostManifest } from './lsp/manifest';

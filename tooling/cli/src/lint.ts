@@ -1,10 +1,6 @@
 // Every I/O concern stays here; the shared Lint engine is browser-safe.
 import { readFileSync } from 'node:fs';
-import {
-  lint,
-  readManifest,
-  type LintProfile,
-} from '@odgn/northtalk-tooling/lint';
+import { lint, readManifest, type LintProfile } from '@northtalk/tooling/lint';
 
 export const lintFiles = (
   files: readonly string[],

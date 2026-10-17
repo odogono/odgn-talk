@@ -1,6 +1,6 @@
 // The LSP worker: the tooling stack's language server, with its formatter and
 // Lints, over `postMessage` in place of stdio.
-import { createLanguageServer } from '@odgn/northtalk-tooling/lsp';
+import { createLanguageServer } from '@northtalk/tooling/lsp';
 import type { FromLsp, ToLsp } from './lsp-protocol';
 
 const scope = self as unknown as {

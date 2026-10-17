@@ -1,7 +1,7 @@
 // The browser corpus page: runs the Conformance Corpus's Trace Cases and
 // Session Transcripts on the TS Core in this browser, with the same checks
 // `corpus:run` makes under Bun (impl/ts/tools/case-checks.ts).
-import type { Setup } from '@odgn/northtalk/replay';
+import type { Setup } from '@northtalk/ts/replay';
 import {
   checkTraceCase,
   checkTranscriptCase,

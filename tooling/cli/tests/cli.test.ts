@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { coreVersions } from '@odgn/northtalk';
+import { coreVersions } from '@northtalk/ts';
 
 const main = resolve(import.meta.dir, '../src/main.ts');
 const corpus = resolve(import.meta.dir, '../../../corpus/sessions');

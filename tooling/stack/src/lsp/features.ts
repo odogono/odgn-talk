@@ -11,8 +11,8 @@ import {
   type SyntaxElement,
   type SyntaxNode,
   type Token,
-} from '@odgn/northtalk';
-import { builtinDocs } from '@odgn/northtalk/session';
+} from '@northtalk/ts';
+import { builtinDocs } from '@northtalk/ts/session';
 import { formatSource } from '../format';
 import {
   bindingKey,

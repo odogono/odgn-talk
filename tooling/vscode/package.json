@@ -95,7 +95,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@odgn/northtalk": "workspace:*",
+    "@northtalk/ts": "workspace:*",
     "@types/vscode": "~1.90.0",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"

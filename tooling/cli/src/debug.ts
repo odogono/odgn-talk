@@ -2,14 +2,14 @@
 import { appendFileSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import { createInterface } from 'node:readline';
-import { compileSource, newGroup } from '@odgn/northtalk';
+import { compileSource, newGroup } from '@northtalk/ts';
 import {
   LiveDebugger,
   copyDebugVar,
   renderDebugView,
   type DebugResult,
   type SourceBreakpoint,
-} from '@odgn/northtalk-tooling/debug';
+} from '@northtalk/tooling/debug';
 
 const help = `:break <line>[:<column>]  add a source breakpoint
 :clear                   remove breakpoints

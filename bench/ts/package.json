@@ -1,5 +1,5 @@
 {
-  "name": "@odgn/northtalk-bench",
+  "name": "@northtalk/bench",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +7,7 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@odgn/northtalk": "workspace:*",
+    "@northtalk/ts": "workspace:*",
     "mitata": "^1.0.34",
     "quickjs-emscripten": "0.32.0",
     "wasmoon": "1.16.0"

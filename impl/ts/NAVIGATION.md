@@ -82,7 +82,7 @@ Files, grammar, or lowering.
 
 ## The Zig reactor behind the embedding API
 
-- Implementation: [`@odgn/northtalk/wasm`](src/wasm/index.ts): the [Group](src/wasm/group.ts) and its needs, the [guest conversation](src/wasm/session.ts), [Values crossing](src/wasm/codec.ts), [frames](src/wasm/wire.ts) and the [WASI imports](src/wasm/reactor.ts)
+- Implementation: [`@northtalk/ts/wasm`](src/wasm/index.ts): the [Group](src/wasm/group.ts) and its needs, the [guest conversation](src/wasm/session.ts), [Values crossing](src/wasm/codec.ts), [frames](src/wasm/wire.ts) and the [WASI imports](src/wasm/reactor.ts)
 - Rules: [the message layer](../../spec/09-embedding.md#the-message-layer), [paused inputs](../../spec/embedding/paused-crossing-inputs.md), [ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md), [the guide's differences](README.md#the-zig-reactor-in-a-browser)
 - Tests and cases: [parity tests](tests/wasm.test.ts), [core-switch example](examples/core-switch/), [Corpus replay](tools/wasm-corpus.ts), [browser figures](tools/wasm-browser.ts)
 - First check: `(cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi) && bun test impl/ts/tests/wasm.test.ts && bun impl/ts/tools/wasm-corpus.ts --quiet`

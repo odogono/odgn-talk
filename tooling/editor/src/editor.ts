@@ -2,7 +2,7 @@
 // highlighting, suspension marks, and the language server's diagnostics,
 // completion, hover and navigation. A page adds its own gutters, marks and
 // keys around these extensions.
-import type { LspDiagnostic, Position } from '@odgn/northtalk-tooling/lsp';
+import type { LspDiagnostic, Position } from '@northtalk/tooling/lsp';
 import {
   autocompletion,
   type CompletionContext,

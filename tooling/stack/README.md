@@ -5,8 +5,8 @@ The formatter, LSP and debugger accept Nothing defaults and optional map-key rea
 **Current limitation:** the [Session observation contract](../../spec/session-observation.md) is only partly implemented here. The formatter preserves `--|` Declaration Documentation and hover uses the Core's extraction and Built-in catalogue. The new observation commands and object-crossing replay are still unavailable ([#370](https://github.com/odogono/odgn-talk/issues/370)).
 
 
-`@odgn/northtalk-tooling` is the browser-safe TypeScript tooling stack over
-`@odgn/northtalk`. It imports only the Core; file, stdio and process handling
+`@northtalk/tooling` is the browser-safe TypeScript tooling stack over
+`@northtalk/ts`. It imports only the Core; file, stdio and process handling
 belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 ([ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
@@ -14,16 +14,16 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 **Recovery Offers:** the formatter, checker/LSP diagnostics and beginner Lints support `offer`, `catch … before unwind` and `choose offer`; the CLI and Playground consume that syntax support. The formatter prints bare zero-argument choices, and each new Advanced Construct suggests a local catch with an explicitly supplied policy callback. Both Cores lower and execute these forms, including nested recovery and cancellation; see the [TS](../../impl/ts/README.md) and [Go](../../impl/go/README.md) support guides. Live and replay stepping follow the active dispatch path, with retained/dispatch frame roles, shared owner locals and an owning-frame index in the tooling-only snapshot. Sessions, CLI and Playground run Library offers chosen by a Session Script and replay their Transcripts; see the [tooling/session evidence](../../docs/reviews/recovery-offers-tooling/README.md) and [tooling contract](../../spec/12-sessions-and-tooling.md#the-debugger).
 
-`@odgn/northtalk-tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
+`@northtalk/tooling/builtins` exports `calendar` and `locale`, the Host functions of the built-in Standard Capabilities that the REPL and the [Playground](../playground/) offer to `:grant`. They answer from the runtime's `Intl` data, so their answers are each Host's own and outside parity. A Session Transcript records each answer as a `~` line. The Session Host builds `store` in itself, in memory, so a Transcript replays its Store without `~` lines.
 
 ## Session Driver
 
-`@odgn/northtalk-tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
+`@northtalk/tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
 
 ## Formatter
 
 ```ts
-import { formatSource } from '@odgn/northtalk-tooling/format';
+import { formatSource } from '@northtalk/tooling/format';
 
 const { source, error } = formatSource('on greet\nsay "hello"\nend greet\n');
 ```
@@ -83,11 +83,11 @@ and no Bun or Node globals, and tests the CLI under both Bun and Node.
 
 ## Lints
 
-`@odgn/northtalk-tooling/lint` is the browser-safe Lint engine over the TS Core's lossless recovering parser. It imports only `@odgn/northtalk`. It runs under Bun, Node, and browser workers; file and process handling belongs to [`tooling/cli`](../cli/). Tooling advice is outside parity and never changes loading, Trace lines or Fuel ([chapter 12](../../spec/12-sessions-and-tooling.md#layers-and-lints), [ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
+`@northtalk/tooling/lint` is the browser-safe Lint engine over the TS Core's lossless recovering parser. It imports only `@northtalk/ts`. It runs under Bun, Node, and browser workers; file and process handling belongs to [`tooling/cli`](../cli/). Tooling advice is outside parity and never changes loading, Trace lines or Fuel ([chapter 12](../../spec/12-sessions-and-tooling.md#layers-and-lints), [ADR 0028](../../docs/adr/0028-tooling-is-one-ts-stack-and-nothing-it-produces-is-normative.md)).
 
 ```ts
-import { lint, lintSyntax, readManifest } from '@odgn/northtalk-tooling/lint';
-import { parseSourceRecovering } from '@odgn/northtalk';
+import { lint, lintSyntax, readManifest } from '@northtalk/tooling/lint';
+import { parseSourceRecovering } from '@northtalk/ts';
 
 const { lints, diagnostics } = lint(source, { profile: 'beginner' });
 const advice = lintSyntax(parseSourceRecovering(source).tree, {
@@ -148,7 +148,7 @@ The same positive/negative fixtures run under Bun, Node and the browser smoke pa
 
 ## Language server
 
-`@odgn/northtalk-tooling/lsp` exports `createLanguageServer(send)`. Supply a
+`@northtalk/tooling/lsp` exports `createLanguageServer(send)`. Supply a
 callback that receives JSON-RPC messages, then pass incoming messages to
 `server.handle(message)`. `server.configure({ manifest, sources, profile })`
 accepts the Host Manifest as JSON text or decoded data, and workspace sources
@@ -196,7 +196,7 @@ Folio-specific knowledge ([ADR 0100](../../docs/adr/0100-object-element-referenc
 Host-authored Operation descriptions are shown as plain text and examples as NorthTalk source in the dictionary, hover and completion documentation.
 
 Each Grant's Operations form a dictionary, built from the manifest's Operation
-Declarations by `@odgn/northtalk-tooling/dictionary`
+Declarations by `@northtalk/tooling/dictionary`
 ([#526](https://github.com/odogono/odgn-talk/issues/526)). An Operation's entry
 is the call its mode allows (`tell g to …`, `ask g to …` or `ask g to … and
 wait`, with argument Shapes as placeholders), then its mode and how long a
@@ -280,13 +280,13 @@ or Bun globals, and the browser smoke page's LSP fixtures.
 
 ## Live debugger
 
-`@odgn/northtalk-tooling/debug` exports `LiveDebugger`, source breakpoint and
+`@northtalk/tooling/debug` exports `LiveDebugger`, source breakpoint and
 result types, `renderDebugView` and `copyDebugVar`. It works in Bun, Node and browser workers;
 the Host supplies the Group, its Grants and lifecycle, and epoch microseconds.
 
 ```ts
-import { compileSource, newGroup } from '@odgn/northtalk';
-import { LiveDebugger, renderDebugView } from '@odgn/northtalk-tooling/debug';
+import { compileSource, newGroup } from '@northtalk/ts';
+import { LiveDebugger, renderDebugView } from '@northtalk/tooling/debug';
 
 const source = 'on go\n put 1 into n\n return n\nend';
 const group = newGroup({ name: 'demo', trace: line => console.log(line) });
@@ -342,7 +342,7 @@ mailboxes and Runs with Segment, lifetime Fuel, frames and locals.
 `renderDebugView(snapshot, 'runs' | 'mailbox' | 'vars')` prints Session-style rows
 prefixed with each Script's name, adding Segment and Fuel to Runs.
 `copyDebugVar(snapshot, name)` prints the same Variable rows in source form, for
-copying; `sourceForm` and `isReadable` from `@odgn/northtalk/debug` work on any
+copying; `sourceForm` and `isReadable` from `@northtalk/ts/debug` work on any
 value.
 
 `clock()` subtracts cumulative paused wall time from the Host's readings and
@@ -367,7 +367,7 @@ Trace Case runner and its `Stubs`. Supply a Trace and its chapter 11 setup, with
 each Script and Library's source in `text`, or provide a source reader:
 
 ```ts
-import { ReplayDebugger } from '@odgn/northtalk-tooling/debug';
+import { ReplayDebugger } from '@northtalk/tooling/debug';
 
 const debug = new ReplayDebugger({
   scripts: [{ name: 's', source: 's.talk', text: source }],

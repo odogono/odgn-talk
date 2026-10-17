@@ -2,9 +2,9 @@
 // session prints and records comes from the Session Host (chapter 12); this
 // module only decides which Entries and Session Commands to give it, and maps
 // debugger positions between tabs and loaded code units. It does no I/O.
-import { parseEntry } from '@odgn/northtalk';
-import { canvasCapabilities } from '@odgn/northtalk-tooling/canvas';
-import type { Value } from '@odgn/northtalk';
+import { parseEntry } from '@northtalk/ts';
+import { canvasCapabilities } from '@northtalk/tooling/canvas';
+import type { Value } from '@northtalk/ts';
 import {
   isReadable,
   sourceForm,
@@ -14,7 +14,7 @@ import {
   type DebugPause,
   type DebugSnapshot,
   type RepeatedEffect,
-} from '@odgn/northtalk/debug';
+} from '@northtalk/ts/debug';
 import {
   replayTranscript,
   SessionHost,
@@ -24,9 +24,9 @@ import {
   type SessionEnvironment,
   type TranscriptItem,
   type Waiting,
-} from '@odgn/northtalk/session';
-import type { Setup } from '@odgn/northtalk/setup';
-import { renderDebugView } from '@odgn/northtalk-tooling/debug';
+} from '@northtalk/ts/session';
+import type { Setup } from '@northtalk/ts/setup';
+import { renderDebugView } from '@northtalk/tooling/debug';
 import {
   planApply,
   splitDeclarations,

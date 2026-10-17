@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { compileSource } from '@odgn/northtalk';
+import { compileSource } from '@northtalk/ts';
 import { replay } from '../../../impl/ts/tools/trace-case';
 import { LiveDebugger } from '../src/debug';
 

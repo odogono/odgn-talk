@@ -1,7 +1,7 @@
 // Folio's Page Object Collection (#1143): `element ... of aPage` and
 // `the number of elements of aPage`, in Play, the Message Box and Edit.
 import { expect, test } from 'bun:test';
-import { exportManifest, text } from '@odgn/northtalk';
+import { exportManifest, text } from '@northtalk/ts';
 import { readManifest } from '../../stack/src/lsp/manifest';
 import { StackEditor } from '../src/editing';
 import { type MessageReply, runInEdit, settle } from '../src/message';

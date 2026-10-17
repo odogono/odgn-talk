@@ -11,7 +11,7 @@ import {
   type SourceSpan,
   type SyntaxNode,
   type Token,
-} from '@odgn/northtalk';
+} from '@northtalk/ts';
 import {
   advancedTags,
   lintCatalogue,

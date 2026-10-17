@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkSource, compileSource, disassemble } from '@odgn/northtalk';
+import { checkSource, compileSource, disassemble } from '@northtalk/ts';
 import { formatSource } from '../src/format';
 
 test('indents blocks and normalises spaces without changing token spelling', () => {

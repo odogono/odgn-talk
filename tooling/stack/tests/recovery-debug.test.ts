@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { newGroup } from '@odgn/northtalk';
+import { newGroup } from '@northtalk/ts';
 import { LiveDebugger, ReplayDebugger } from '../src/debug';
 
 for (const name of [

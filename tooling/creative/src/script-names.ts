@@ -1,5 +1,5 @@
 import { type Immutable } from 'immer';
-import { grammar } from '@odgn/northtalk';
+import { grammar } from '@northtalk/ts';
 import { isIdentifierName, type Page, type Project } from './model';
 import type { ScriptOwner } from './script-manifest';
 

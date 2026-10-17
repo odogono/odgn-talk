@@ -3,7 +3,7 @@ import type {
   LspDiagnostic,
   RpcMessage,
   WorkspaceConfiguration,
-} from '@odgn/northtalk-tooling/lsp';
+} from '@northtalk/tooling/lsp';
 import type { FromLsp, ToLsp } from './lsp-protocol';
 
 export class LspClient {

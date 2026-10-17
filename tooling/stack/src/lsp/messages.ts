@@ -1,7 +1,7 @@
 /** Senders and implementors of a message, by Selector across the workspace.
  * A `send` reaches its Handler along the Message Path, whose parents the Host
  * sets at run time (ADR 0016), so nothing here narrows by receiver. */
-import type { SemanticName, SemanticNode } from '@odgn/northtalk';
+import type { SemanticName, SemanticNode } from '@northtalk/ts';
 import { semanticElements, type Analysis } from './workspace';
 import { rangeAt, type Location, type Range } from './protocol';
 

@@ -1,10 +1,7 @@
 // The Playground's editor: the shared NorthTalk editor, with a breakpoint
 // gutter, the paused line, print it, and keys to run a selection or save.
-import {
-  northtalkEditor,
-  type LanguageHooks,
-} from '@odgn/northtalk-editor/editor';
-import type { LspClient } from '@odgn/northtalk-editor/lsp-client';
+import { northtalkEditor, type LanguageHooks } from '@northtalk/editor/editor';
+import type { LspClient } from '@northtalk/editor/lsp-client';
 import {
   EditorState,
   RangeSet,

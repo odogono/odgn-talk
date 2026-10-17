@@ -1,4 +1,4 @@
-// @odgn/northtalk/wasm: the embedding API over the Zig reactor (#1121).
+// @northtalk/ts/wasm: the embedding API over the Zig reactor (#1121).
 // Each test runs the same Host code on the TS Core and on the facade, and
 // expects the same result. Skipped when talk.wasm hasn't been built:
 // `cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi`.
@@ -51,7 +51,7 @@ const ends = (reports: readonly wasm.Report[]) =>
       : [],
   );
 
-describe.skipIf(!built)('@odgn/northtalk/wasm', () => {
+describe.skipIf(!built)('@northtalk/ts/wasm', () => {
   test('hello reports the Zig Core', async () => {
     const core = await wasm.createCore({ wasm: module! });
     expect(core.versions.core).toStartWith('zig/');

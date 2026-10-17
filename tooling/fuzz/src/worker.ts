@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import { coreVersions } from '@odgn/northtalk';
+import { coreVersions } from '@northtalk/ts';
 import { features, readCase, type Finding } from './model';
 import { checkCase } from './oracles';
 

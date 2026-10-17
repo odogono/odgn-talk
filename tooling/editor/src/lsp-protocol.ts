@@ -3,7 +3,7 @@
 import type {
   RpcMessage,
   WorkspaceConfiguration,
-} from '@odgn/northtalk-tooling/lsp';
+} from '@northtalk/tooling/lsp';
 
 export type ToLsp =
   | { message: RpcMessage; t: 'rpc' }

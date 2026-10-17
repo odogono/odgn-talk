@@ -1,5 +1,5 @@
-import { parseRecord, replayTrace } from '@odgn/northtalk/replay';
-import { readDisplay } from '@odgn/northtalk';
+import { parseRecord, replayTrace } from '@northtalk/ts/replay';
+import { readDisplay } from '@northtalk/ts';
 import { execute } from './runner';
 import { pump } from './generator';
 import type { Finding, FuzzCase, Result } from './model';

@@ -1,4 +1,4 @@
-import { compileSource, newGroup, num } from '@odgn/northtalk';
+import { compileSource, newGroup, num } from '@northtalk/ts';
 import { LiveDebugger, ReplayDebugger, renderDebugView } from '../src/debug';
 import { verifyRecoveryDebugFeatures } from './verify-recovery-debug';
 

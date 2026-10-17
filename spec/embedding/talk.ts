@@ -1,7 +1,7 @@
 // The NorthTalk TS Core's embedding interface: declarations only, never compiled.
 // Metering extensions and SQLite perStep signatures are staged in
 // metered-operations.md#target-embedding-declarations until runtime implementation.
-// The package is @odgn/northtalk.
+// The package is @northtalk/ts.
 //
 // This file mirrors talk.go call for call. The differences are idiom only
 // (ADR 0015): exceptions instead of error values, an optional
@@ -849,7 +849,7 @@ export interface ManifestSpec {
 export declare function exportManifest(m: ManifestSpec): string;
 
 // ---------------------------------------------------------------------------
-// Notification helper: @odgn/northtalk/notify (chapters 7, 9 and 10)
+// Notification helper: @northtalk/ts/notify (chapters 7, 9 and 10)
 // These declarations belong to the helper module, not the Core package root.
 // ---------------------------------------------------------------------------
 
