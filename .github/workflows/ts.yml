@@ -43,6 +43,19 @@ jobs:
       - run: bun run build
         working-directory: impl/ts
 
+  # The packed tarball, installed outside the workspace as npm consumers get it:
+  # under Node 22 and Bun, unbundled in Chromium, and against TypeScript 5.9 and
+  # the latest TypeScript.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ts
+      - run: bunx playwright install --with-deps chromium-headless-shell
+        working-directory: impl/ts
+      - run: bun run build && bun run package:check
+        working-directory: impl/ts
+
   corpus:
     runs-on: ubuntu-latest
     steps:

@@ -19,7 +19,12 @@
     "typecheck": "tsc",
     "test": "bun test tests examples",
     "corpus:run": "bun tools/corpus.ts",
-    "build": "bun build src/index.ts --target browser --outdir dist && cp src/generated/UNICODE-LICENSE.txt dist/UNICODE-LICENSE.txt",
-    "test:browser": "bun tools/browser-smoke.ts"
+    "build": "bun tools/package/build.ts",
+    "test:browser": "bun tools/browser-smoke.ts",
+    "package:check": "bun tools/package/check.ts"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "tsdown": "0.23.1"
   }
 }
