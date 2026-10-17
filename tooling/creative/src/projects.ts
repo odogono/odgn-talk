@@ -22,7 +22,7 @@ import {
   type ProjectFileHandle,
 } from './file-access';
 import { importImage, projectForExport, storageAsset } from './images';
-import { createSampleProject, SAMPLE_PROJECT_NAME } from './sample';
+import { EXAMPLE_PROJECTS, type ExampleProject } from './examples';
 import { importSound, isSoundAsset } from './sounds';
 import {
   PROJECT_MIMETYPE,
@@ -849,16 +849,16 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   /**
-   * Opens a fresh copy of the sample Project (#824), like an import: it
+   * Opens a fresh copy of an Example Project (#824), like an import: it
    * never overwrites the Project on the desk, and its assets are decoded
    * before anything is saved, so a copy that cannot play is refused.
    */
-  const openSample = async (): Promise<void> => {
+  const openExample = async (example: ExampleProject): Promise<void> => {
     try {
-      const sample = await createSampleProject();
+      const content = await example.create();
       const accepted = [];
-      for (const asset of sample.project.assets) {
-        const data = sample.assets.get(asset.hash)!;
+      for (const asset of content.project.assets) {
+        const data = content.assets.get(asset.hash)!;
         const file = new File(
           [data as Uint8Array<ArrayBuffer>],
           asset.fileName,
@@ -884,7 +884,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         ]),
       );
       const created = storage
-        ? await storage.saveProject(undefined, sample.project, { assets })
+        ? await storage.saveProject(undefined, content.project, { assets })
         : undefined;
       const id = created?.id ?? `unsaved-${crypto.randomUUID()}`;
       for (const imported of accepted) {
@@ -892,14 +892,14 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       channel?.post({ type: 'list-changed' });
       await showLoaded(
-        { project: sample.project, migrated: false, record: created },
+        { project: content.project, migrated: false, record: created },
         id,
       );
       notice(
-        `Opened a fresh copy of “${SAMPLE_PROJECT_NAME}”. Choose Browse in Tools to try it, then make it your own.`,
+        `Opened a fresh copy of “${example.name}”. Choose Browse in Tools to try it, then make it your own.`,
       );
     } catch (error) {
-      notice(`Couldn't open the sample Project: ${String(error)}`);
+      notice(`Couldn't open “${example.name}”: ${String(error)}`);
     }
   };
 
@@ -1299,7 +1299,22 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     byId('versions-window').hidden = true;
   });
   byId('new-project').addEventListener('click', () => void newProject());
-  byId('open-sample').addEventListener('click', () => void openSample());
+  byId('example-list').replaceChildren(
+    ...EXAMPLE_PROJECTS.map(example => {
+      const open = h(
+        'button',
+        { type: 'button', 'data-example': example.name },
+        `Open ${example.name}`,
+      );
+      open.addEventListener('click', () => void openExample(example));
+      return h(
+        'li',
+        {},
+        open,
+        h('span', { class: 'muted' }, example.description),
+      );
+    }),
+  );
 
   void storage?.setLastProjectId(currentId).catch(() => {});
   void loadDiskFile(currentId);

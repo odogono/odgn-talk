@@ -653,9 +653,19 @@ vertically: a scaler element carries the scaled size, as the editor's
 stage does, and the presenting header drops its Edit-only controls so Stop
 stays reachable on a phone.
 
-## The sample Project
+## Example Projects
 
-**Projects → Open sample: The Lighthouse Mystery** adds a fresh copy of
+The Projects window lists Folio's Example Projects, from
+[`src/examples/index.ts`](src/examples/index.ts). Opening one adds a fresh,
+editable copy, never overwriting the Project on the desk; its assets are
+decoded first, like an import. To add one, write a builder beside the others
+returning the Project and its asset bytes, list it in `EXAMPLE_PROJECTS`, and
+[`examples.test.ts`](tests/examples.test.ts) checks that it builds and starts
+playing cleanly.
+
+### The Lighthouse Mystery
+
+**Projects → Open The Lighthouse Mystery** adds a fresh copy of
 [#154](https://github.com/odogono/odgn-talk/issues/154)'s acceptance
 example ([#824](https://github.com/odogono/odgn-talk/issues/824)): a
 three-Page illustrated mystery with a reader-editable journal, built as
@@ -666,9 +676,8 @@ both clues across Pages), a `wait`, and creating the trapdoor button
 whose click the Page Script answers through the Message Path — is
 written by hand, as an author would after inserting a Recipe. The
 illustrations are SVG and the bell and waves are generated WAV, all
-from [`src/sample.ts`](src/sample.ts), so the sample exports, reopens
-offline and plays the same anywhere. Opening it never overwrites the
-Project on the desk; its assets are decoded first, like an import.
+from [`src/examples/lighthouse.ts`](src/examples/lighthouse.ts), so it
+exports, reopens offline and plays the same anywhere.
 
 Unit tests play the mystery end to end against the Play Host —
 including that the ending stays locked without both clues, that
@@ -678,6 +687,6 @@ phone width.
 
 Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
-Open `/sample-test.html` and run
-`await import('/sample.browser.js').then(m => m.runBrowserTests())`.
+Open `/lighthouse-test.html` and run
+`await import('/lighthouse.browser.js').then(m => m.runBrowserTests())`.
 The result must have `passed: true`; reload before repeating.

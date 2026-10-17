@@ -5,7 +5,7 @@
 // restores the authored Project exactly.
 import { importImage } from '../src/images';
 import { mountPlay } from '../src/play-view';
-import { createSampleProject } from '../src/sample';
+import { createLighthouseProject } from '../src/examples/lighthouse';
 import { importSound, isSoundAsset } from '../src/sounds';
 import { mountStack } from '../src/stack';
 
@@ -25,7 +25,7 @@ const until = async (check: () => boolean) => {
 };
 
 export const runBrowserTests = async () => {
-  const { project, assets } = await createSampleProject();
+  const { project, assets } = await createLighthouseProject();
   const authored = JSON.stringify(project);
   const shell = mountStack(project);
   // Real decoders, as on import: a sample asset this browser cannot

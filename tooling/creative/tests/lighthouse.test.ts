@@ -8,7 +8,10 @@ import {
 import { PlaySession } from '../src/play';
 import { readProjectFile, writeProjectFile } from '../src/project-file';
 import { projectForExport } from '../src/images';
-import { createSampleProject, SAMPLE_PROJECT_NAME } from '../src/sample';
+import {
+  createLighthouseProject,
+  LIGHTHOUSE_PROJECT_NAME,
+} from '../src/examples/lighthouse';
 import { scriptNameProblems } from '../src/script-names';
 
 const advance = async (play: PlaySession, now = 0n) => {
@@ -34,8 +37,8 @@ const text = (play: PlaySession, name: string): string =>
   textOf(element(play, name) as TextElement);
 
 test('the sample is a valid three-Page Project with illustrations, sounds and a journal', async () => {
-  const { project, assets } = await createSampleProject();
-  expect(project.name).toBe(SAMPLE_PROJECT_NAME);
+  const { project, assets } = await createLighthouseProject();
+  expect(project.name).toBe(LIGHTHOUSE_PROJECT_NAME);
   expect(project.pages.map(p => p.name)).toEqual([
     'harbour',
     'lighthouse',
@@ -64,7 +67,7 @@ test('the sample is a valid three-Page Project with illustrations, sounds and a 
 });
 
 test('the mystery plays end to end: clues, dynamic trapdoor, and the Project Script settles it', async () => {
-  const { project } = await createSampleProject();
+  const { project } = await createLighthouseProject();
   const authored = structuredClone(project);
   const play = new PlaySession(project);
   await advance(play);
@@ -136,7 +139,7 @@ test('the mystery plays end to end: clues, dynamic trapdoor, and the Project Scr
 });
 
 test('leaving the lamp room early cancels its wait with no late write', async () => {
-  const { project } = await createSampleProject();
+  const { project } = await createLighthouseProject();
   const play = new PlaySession(project);
   await advance(play);
   await click(play, 'toLighthouse');
@@ -150,7 +153,7 @@ test('leaving the lamp room early cancels its wait with no late write', async ()
 });
 
 test('the sample exports, reopens from the file alone and plays the same', async () => {
-  const { project, assets } = await createSampleProject();
+  const { project, assets } = await createLighthouseProject();
   const file = await writeProjectFile(projectForExport(project), assets);
   const loaded = await readProjectFile(file);
   expect(loaded.missingAssets).toEqual([]);
