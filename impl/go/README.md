@@ -851,6 +851,12 @@ cases.
 
 ## Group embedding
 
+**Object element references:** `element name of receiver` and
+`the number of elements of receiver` are
+[specified](../../spec/embedding/object-elements.md) but unsupported here.
+The checked Object Kind interface exposes properties, with no Object
+Collection callbacks.
+
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
 `Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `RewindRun`, `Reload`, `Extend`,
 `ReplaceLibrary`, `Save`, `Restore`, `Settle`, `Fingerprint` and `TraceSink` implement their handoff

@@ -637,8 +637,12 @@ A named value fixed when its Script or Library loads, declared with `constant`. 
 _Avoid_: static, final, script variable (a Script Variable can change)
 
 **Chunk Expression**:
-A readable reference to part of a text or list value by ordinal and kind, e.g. `word 3 of line 2 of report`.
+A readable reference to part of a value by kind and selector, e.g. `word 3 of line 2 of report`, or to a member of an Object Collection.
 _Avoid_: substring, slice
+
+**Object Element Reference**:
+A Chunk Expression selecting one Host Object from an Object Collection by name or position, e.g. `element "door" of room`.
+_Avoid_: property lookup, Message Path traversal
 
 **Character**:
 One user-perceived character of text: an extended grapheme cluster under the Unicode version the language version pins. Indexes, ranges, lengths and Text Pattern positions all count Characters.
@@ -657,8 +661,12 @@ A number together with its Unit, e.g. `5 kg`. The Unit is part of the value, so 
 _Avoid_: measurement, unit value, tagged number
 
 **Object Kind**:
-A family of Host Objects the Host defines once per process, with its properties, such as `door` or `item`. Every Host Object is made with one, and `objectKind` gives its name. Not a Kind: every Host Object's Kind is `object`.
+A family of Host Objects the Host defines once per process, with its properties and optional Object Collection, such as `door` or `item`. Every Host Object is made with one, and `objectKind` gives its name. Not a Kind: every Host Object's Kind is `object`.
 _Avoid_: object type, class
+
+**Object Collection**:
+An ordered collection of Host Objects exposed by a Host Object, with a unique name for each member. Its membership and order are independent of Message Path ancestry.
+_Avoid_: child list, parent graph
 
 **Unit Kind**:
 The family of Units that convert into one another because they measure the same thing, e.g. mass (`kg`, `lb`) or volume (`L`, `m^3`). Exact and calendar durations are separate Kinds, and each currency is a Kind of its own.

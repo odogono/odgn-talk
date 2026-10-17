@@ -532,6 +532,48 @@ Page; sounds the Project Script started keep playing (see [Sounds](#sounds)).
 
 ### Dynamic Elements
 
+Computed-name and numbered `element ... of thisPage` references and
+`the number of elements of thisPage` are
+[specified](../../spec/embedding/object-elements.md) but not implemented in
+Folio or its Cores. Use the existing load-time names or `elements.find` below
+for now.
+
+#### Element references
+
+This is Folio's target policy for the
+[Object Collection](../../spec/embedding/object-elements.md).
+Folio declares the collection only on `page`. It contains all live Elements
+on that Page, including hidden Elements and Elements with no Script, in
+`Page.elements` order: index 1 is the backmost, the last is frontmost. Names
+are the existing Page-local identifier names, not labels or ids. All six
+Element Object Kinds are in the result Shape. A Project or Element receiver
+has no collection. Any Script holding a Page can read that Page's collection,
+including a Page that is not showing; its Scripts need not be running.
+
+Create and clone append at the front of the z-order; delete removes the
+member. Later lookups/counts see the change after the existing Pump boundary.
+Reordering changes numeric positions, while a retained member handle keeps
+its identity. Deleting and recreating a name resolves to the new handle;
+retained old handles stay disposed. End of Play restores authored content,
+as it does today. Lookup itself never starts a Script or changes authored
+data. The Message Box and authoring Manifest expose the same collection as
+Play; Edit commands still apply through their disposable session and undo.
+
+Folio declares 1 Fuel and 0 allocation for each callback. Count and signed
+positional access use the existing array; name lookup uses a Page-local name
+index kept in step with create, clone, delete and session construction. The
+Core's text selector rate pays for the size of a name. Names are already
+read-only, so there is no Script rename path to reconcile. Do not rebuild
+that index or allocate a whole list for every lookup.
+
+The `elements` Grant remains available and independent: `create`, `clone`
+and `delete` still mutate through it, and `find` keeps its existing missing-name
+error. Static load-time Element bindings still catch misspellings and keep
+their existing lifetime. Computed references resolve against current Play
+State each time; they do not add new bindings. Tetris can paint a computed
+cell directly and remove its `findCells` startup cache, subject to measured
+Pump/Fuel performance in implementation.
+
 Every Script can use `elements` during Play:
 
 ```talk
