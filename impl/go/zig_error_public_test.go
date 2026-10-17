@@ -79,11 +79,7 @@ end error
 				expected := `[nothing, nothing]`
 				switch origin {
 				case "Host":
-					code, e := talk.Text("mine")
-					if e != nil {
-						t.Fatal(e)
-					}
-					_, p, err = s.Request(nil, talk.Message{Name: "error", Args: []talk.Value{triageMap(t, "code", code)}})
+					_, p, err = s.Request(nil, talk.Message{Name: "error", Args: []talk.Value{triageMap(t, "code", bridgeText("mine"))}})
 				case "message":
 					_, p, err = s.Request(nil, talk.Message{Name: "fail", Args: []talk.Value{talk.Int(7)}})
 					expected = `[{name: "fail", args: [7]}, {name: "fail", args: [7]}]`
