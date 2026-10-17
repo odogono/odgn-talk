@@ -414,3 +414,31 @@ The binary is 2,999,778 bytes; initial guest linear memory after hello is
 
 The historical run cross-compiled all four targets and executed only on
 Darwin/arm64. See current evidence above for the callback artifact.
+
+## Scoped effects and Standard refinements evidence (2026-10-16)
+
+The #1050 public adapter slice uses committed runtime source `6bf5e09f`,
+SHA-256 `11c573856322ab11850060c69147cd8662d47a0350cc764c563c46d185688522`.
+Both embedded copies carry identical bytes and provenance. The shared public
+Hosts now compare 178 scenarios against a separately compiled native-Go Host,
+including exact Trace, Fuel, typed Reports, futures and inspected state. Scope
+and Segment scenarios observe provisional Host writes, shared coordinator
+bindings, automatic cleanup failures, cancellation ordering and fatal outcomes
+across Scripts. Factory scenarios cover uncharged argument checks, permitted
+failures, result refinements, deferred user answers and sqlite row charging.
+
+The tagged root selection contains 331 of 405 tests, adding 43 unchanged native
+tests for this slice. Its remaining exclusions include Save/Restore and tests
+that inspect native private state; public Hosts cover the fatal-effect behavior
+of the latter. [The Go guide](../../impl/go/README.md#experimental-zig-backend)
+owns current support and limits. The maintainer retained the three declaration
+limits on #1050: duplicate Object Kind names in a Group, a Kind first defined
+in a Host callback, and Shapes nested beyond 32 levels.
+
+On Darwin/arm64, native-Go tests, adapter/probe pure-Go tests, race checks and vet
+pass. Zig unit/C tests, all 437 ordinary and deferred Corpus cases, both WASI
+checks and repository lint/format/spec/docs checks pass. Adapter and probe test
+binaries independently cross-build without cgo for Linux amd64/arm64 and macOS
+arm64. Linux execution and this slice's CI acceptance remain pending; these
+checks do not accept performance limits or full Core retirement. Corrections
+found by this slice are tracked in #1056, #1057, #1058 and #1074.

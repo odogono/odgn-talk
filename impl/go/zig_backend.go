@@ -88,6 +88,8 @@ type zigGroup struct {
 	kindsMu         sync.Mutex
 	kinds           map[string]*ObjectKind
 	runs            map[RunID]DeliveryID
+	coordinators    map[*SegmentLifecycle]string
+	effectDetails   map[string]string
 	definitions     map[*CapabilityDef]string
 	callsMu         sync.Mutex
 	calls           map[CallID]context.CancelFunc
@@ -95,16 +97,19 @@ type zigGroup struct {
 	paused          bool
 }
 
+// zigFeatures are the guest protocol features the adapter requests and requires.
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1"}
+
 func newZigGroup(g *Group) groupBackend {
 	reactor, err := zigEngine().Instantiate(context.Background())
 	if err != nil {
 		panic(err)
 	}
-	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1"}})
+	b := &zigGroup{group: g, reactor: reactor, pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
 	if err == nil {
 		features := hello.Get("features")
-		for _, required := range []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1"} {
+		for _, required := range zigFeatures {
 			found := false
 			for i := 1; i <= features.Len(); i++ {
 				if zigText(features.Index(i)) == required {
@@ -491,6 +496,8 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			report = &Unhandled{}
 		case "host error":
 			report = &HostError{}
+		case "effect failure":
+			report = &EffectFailure{}
 		case "call failed":
 			report = &CallFailed{}
 		case "decided":
@@ -500,6 +507,12 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 		}
 		if err := b.decode(row, reflect.ValueOf(report).Elem()); err != nil {
 			return result, err
+		}
+		if effect, ok := report.(*EffectFailure); ok {
+			effect.Detail = b.effectDetail(effect)
+		}
+		if end, ok := report.(*RunEnd); ok && end.Effect != nil {
+			end.Effect.Detail = b.effectDetail(end.Effect)
 		}
 		if failed, ok := report.(*CallFailed); ok && failed.Call == "" {
 			// A property failure: the next unconsumed property detail.
@@ -526,6 +539,7 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 		result.Reports = append(result.Reports, report)
 	}
 	clear(b.failureDetails)
+	clear(b.effectDetails)
 	b.propertyDetails = nil
 	b.pendingMu.Lock()
 	defer b.pendingMu.Unlock()

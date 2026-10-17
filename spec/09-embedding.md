@@ -350,11 +350,11 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | Message | Fields | Reply | `talk.go` |
 | --- | --- | --- | --- |
 | `hello` | `protocol`, optional `features`: requested supported feature names | `language`, `costModel`, `unicode`, `core`, `saveFormat`, optional `features`: text names (`paused-inputs-v1` advertises paused-input admission; `abandoned-before-needs-v1` supports opt-in cancellation before callbacks; `crossing-trace-v1` supports opt-in Operation Trace observation before landing; `climb-v1` supports opt-in `climbed` on `run end` reports; `function-gone-v1` supports opt-in `gone` on Pump replies) | `CoreVersions` |
-| `define-capability` | `name`, `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
+| `define-capability` | `name`, `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook; optional `standard` refinement family with `standard-refinements-v1` | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks and `release` requests as its Grant release hook. `sqlite` isn't offered through the message layer yet | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
-| `grant` | `capability`, `ops`: names, or `"all"`, optional `coordinator`: the name of its Segment Coordinator, shared by every Grant given that name | `grant`: a handle | `Grant`, `GrantAll` |
+| `grant` | `capability`, `ops`: names, or `"all"`, optional `coordinator`: the name of its Segment Coordinator, shared by every Grant given that name; optional `locale` default tag or `maxRows` sqlite row cap with `standard-refinements-v1` | `grant`: a handle | `Grant`, `GrantAll` |
 | `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
@@ -391,6 +391,20 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 - **Framing:** over WASI, the Host writes a frame into a buffer the export `talk_buffer(n)` gives, and `talk_send(n)` returns the reply's pointer and length packed as `ptr << 32 | len`. A sidecar sends each frame as a 4-byte big-endian length, then the JSON, both ways on stdio.
 
 Automatic `op` requests have `automatic: true`, no `fuelLeft`, and a zero `charged` reply. They take `args: []` and use the ordinary immediate `op-result`; an invalid result is a failed abandonment. Script requests have `automatic: false`. The Core applies acquisition/closure acknowledgements before processing result conversion or queued interruption. Lifecycle `effect-result` replies carry no Script values or charges. A `release` exchange carries the enclosing `pump`, `reload` or `replace-library` ref and waits for `release-result`; it adds no Trace record or charge. The enclosing worker call returns final reports only after all its interim exchanges complete. A malformed lifecycle reply is `unknown`, not an ordinary Script error.
+
+`standard-refinements-v1` supports adapters whose Standard factory wrappers
+resolve defaults and convert Host values themselves. `define-capability` may
+name a `standard` family (`calendar`, `locale`, `store`, `sqlite` or `user`)
+independently of the declaration's handle name. It carries the whole factory's
+Operations and copied costs. The guest applies that family's precharge checks,
+result refinements and permitted catalogue failures, while `op` needs retain
+the supplied Script arguments. Host callbacks perform the factory's normal
+default resolution and, for sqlite, parameter/result conversion and per-row
+charging. A Locale Grant carries its effective default tag in `locale`; a
+sqlite Grant carries its row cap in `maxRows`, independently of its shared
+`coordinator`. These fields copy only the data the guest needs to validate
+calls; arbitrary Host bindings stay in the adapter. An ordinary declaration
+without `standard` never acquires factory refinements from its name.
 
 ## Host error catalogue
 

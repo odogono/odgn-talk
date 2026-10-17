@@ -476,6 +476,8 @@ pub const Operation = struct {
     /// Whether the list is enforced even when empty, as for a Standard
     /// Capability, whose every undeclared failure is `host error`.
     closed_errors: bool = false,
+    catalogue_errors: bool = false,
+    failure: ?*const fn (code: []const u8, data: ?*const Value) bool = null,
     scope: Scope = .none,
     /// Whether its effects join the Segment's participant, deferred to the
     /// Segment's outcome.
@@ -773,6 +775,7 @@ pub fn validPropFailure(code: []const u8, data: ?*const Value) bool {
 /// Data, no reserved key, no catalogue code, and a declared code when the
 /// Operation lists its codes.
 pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
+    if (op.failure) |validate| if (!validate(code, data)) return false;
     if (data) |d| switch (d.data) {
         .nothing => {},
         .map => |pairs| for (0..pairs.len) |map_index| {
@@ -787,7 +790,7 @@ pub fn validFailure(op: Operation, code: []const u8, data: ?*const Value) bool {
         // A catalogue code only a Standard Capability may declare, and its
         // fields are the catalogue's.
         const entry = catalogueEntry(code) orelse return true;
-        if (!op.closed_errors) return false;
+        if (!op.catalogue_errors) return false;
         const pairs: model.Map = if (data) |d| (if (d.data == .map) d.data.map else model.Map.empty) else model.Map.empty;
         for (entry.fields) |f| {
             for (0..pairs.len) |map_index| {

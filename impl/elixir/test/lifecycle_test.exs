@@ -184,7 +184,7 @@ defmodule NorthTalk.LifecycleTest do
 
     send(r, {:set, :rollback, :unknown})
     assert {:error, %HostError{code: "effect state unknown"}} = NorthTalk.replace_library(group, new)
-    assert events(2) == [{:effect, :rollback}, {:release, "r", :reload}]
+    assert events(2) == [{:effect, :rollback}, {:release, "r", :stop}]
   end
 
   test "a stop releases each Grant before the stop report", %{responder: r} do
