@@ -14,6 +14,7 @@ import {
 } from '../src/model';
 import { scriptManifest } from '../src/script-manifest';
 import { createLighthouseProject } from '../src/examples/lighthouse';
+import { createTetrisProject } from '../src/examples/tetris';
 
 const fixture = () => {
   const project = createProject('Story');
@@ -124,6 +125,14 @@ test('sample Project custom messages have no unknown-message hints', async () =>
     );
     expect(diagnostics().filter(d => d.code === 'unknown-message')).toEqual([]);
   }
+});
+
+test('element references against a Page check cleanly in the language server', async () => {
+  const { project } = await createTetrisProject();
+  const page = project.pages[0]!;
+  expect(page.script).toContain('element ("cell_" & r & "_" & c) of thisPage');
+  const { diagnostics } = language(scriptManifest(project, page), page.script!);
+  expect(diagnostics().filter(d => d.severity === 1)).toEqual([]);
 });
 
 test('custom messages retain selectors and arity without declaring strings or fallback handlers', () => {

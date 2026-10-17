@@ -99,6 +99,13 @@ const objectKinds = [
   {
     name: 'page',
     props: props({ name: 'text', background: 'text', height: 'number' }),
+    // Play's Page Object Collection (#1143), as data.
+    elements: {
+      shape: elementShape,
+      countCost: { fuel: 1, alloc: 0 },
+      atCost: { fuel: 1, alloc: 0 },
+      findCost: { fuel: 1, alloc: 0 },
+    },
   },
   ...ELEMENT_KINDS.map(name => ({
     name,
