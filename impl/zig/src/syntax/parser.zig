@@ -38,13 +38,23 @@ pub fn parse(arena: Allocator, source: []const u8) Allocator.Error!Result {
 /// in `scratch`, which can reclaim superseded buffers. Only their final
 /// contents are copied into the tree.
 pub fn parseWithScratch(arena: Allocator, scratch: Allocator, source: []const u8) Allocator.Error!Result {
+    return parseUnit(arena, scratch, source, false);
+}
+
+/// A declaration Entry contains exactly one declaration; refuse trailing
+/// input before parsing a second, even when that second declaration is open.
+pub fn parseDeclarationEntry(arena: Allocator, source: []const u8) Allocator.Error!Result {
+    return parseUnit(arena, arena, source, true);
+}
+
+fn parseUnit(arena: Allocator, scratch: Allocator, source: []const u8, single: bool) Allocator.Error!Result {
     const shared = try arena.create(lexer.Shared);
     shared.* = .{ .source = source, .arena = arena };
     var p: Parser = .{ .a = arena, .scratch = scratch, .lex = .init(shared) };
     defer p.tokens.deinit(scratch);
     try p.brackets.ensureTotalCapacity(arena, 16);
     try p.nl_base.append(arena, 0);
-    const declarations = p.sourceUnit() catch |e| switch (e) {
+    const declarations = p.sourceUnit(single) catch |e| switch (e) {
         error.Syntax => return .{ .failure = p.failure.? },
         error.OutOfMemory => return error.OutOfMemory,
     };
@@ -454,11 +464,12 @@ const Parser = struct {
         if (t.kind != .eof) return p.failAt(t);
     }
 
-    fn sourceUnit(p: *Parser) Error![]const ast.Declaration {
+    fn sourceUnit(p: *Parser, single: bool) Error![]const ast.Declaration {
         var out: std.ArrayList(ast.Declaration) = .empty;
         defer out.deinit(p.scratch);
         try p.skipNewlines();
         while ((try p.peek(.operand)).kind != .eof) {
+            if (single and out.items.len > 0) return p.fail(.operand);
             try out.append(p.scratch, try p.declaration());
             try p.skipNewlines();
         }

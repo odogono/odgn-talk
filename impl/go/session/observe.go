@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	coretrace "github.com/odogono/odgn-talk/impl/go/internal/trace"
 )
 
@@ -178,7 +178,7 @@ func selectorText(s string) bool {
 	if strings.Contains(s, ":") {
 		arity = strings.Count(s, ":")
 	}
-	return syntax.ValidComputedMessageName(s, arity)
+	return analysis.ValidMessageName(s, arity)
 }
 func (h *Host) trace(name, rest string) []string {
 	o := &h.observation
@@ -216,15 +216,15 @@ func (h *Host) fuel(rest string) []string {
 		return refusal("bad arguments")
 	}
 	h.start()
-	kind, node, err := syntax.ParseEntry(rest, h.isHandler)
+	entry, err := h.analyze(rest)
 	if err != nil {
 		return h.refused(err, placement{}, 0)
 	}
-	if !documentable(rest, kind, node) || kind != "statement" && kind != "expression" {
+	if !documentable(entry) || entry.Kind != "statement" && entry.Kind != "expression" {
 		return refusal("bad arguments")
 	}
 	h.measuring = true
 	defer func() { h.measuring = false }()
-	_, out := h.run(rest, kind == "expression", node)
+	_, out := h.run(rest, entry.Kind == "expression", entry)
 	return out
 }

@@ -247,10 +247,27 @@ nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
-The embedded reactor supports Zig's opt-in `analysis-v1` exchanges for Entry
-and source analysis, catalogues and computed message names. The Go Session
-Host still uses Go's parser and checker for this work; switching it to these
-exchanges is tracked in [#1092](https://github.com/odogono/odgn-talk/issues/1092).
+With `talk_zig_experimental`, the Go Session Host and REPL use the embedded
+Core's negotiated `analysis-v1` exchanges for Entry classification and
+continuation, positioned syntax diagnostics, implicit Script Variables,
+declaration descriptions and documentation, Fix/Continue, Built-in and Standard
+Library catalogues, the inspection reader and computed message names. A single
+serialized analysis guest shares the adapter's compiled engine and works before
+a Group starts; analysis exchanges load nothing and produce no Trace. Value
+formatting and pinned Unicode name matching stay with the Host. The untagged
+build retains Go analysis behind `!talk_zig_experimental` until the Go Core's
+retirement gate. `session`, `driver` and `cmd/northtalk` import no Go parser,
+checker, compiler or generated catalogue packages.
+
+Native Session tests and all Session Transcripts pass. On the experimental
+backend, the Session tests and Transcripts unaffected by the adapter gaps pass;
+Function Value metadata, callback-queued delivery pumping, error-handler
+arguments, decomposed-source Trace spelling, documentation retained by runtime
+Function Values and cancelled inspection are still tracked in
+[#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
+migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
+and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these
+full selections expose those remaining gaps.
 
 Sharing guests is what keeps a tenant cheap. On an Apple M5 with 10 guests
 per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and

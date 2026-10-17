@@ -239,6 +239,10 @@ a permanent Go parser/checker/compiler/interpreter would undermine the objective
 Session language analysis must eventually move to Zig, preserving diagnostics,
 inspection, descriptions and Fix/Continue.
 
+The experimental binding now uses Zig analysis for the Go Session Host and REPL.
+The [Go guide](../../impl/go/README.md#experimental-zig-backend) describes current
+support, the native build choice and the remaining Session runtime gaps.
+
 Linux and macOS, each on amd64 and arm64, require execution verification as well
 as cross-compilation. Existing Go-Core saves are disposable for this cutover;
 document a fresh start, not a cross-Core converter. The replacement must still

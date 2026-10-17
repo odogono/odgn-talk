@@ -84,7 +84,7 @@ const declaration_words = [_][]const u8{ "on", "function", "private", "use", "co
 const Words = struct { first: []const u8, second: []const u8 };
 
 fn firstWords(line: []const u8) Words {
-    var words = std.mem.tokenizeAny(u8, std.mem.trimStart(u8, line, " \t"), " \t(");
+    var words = std.mem.tokenizeAny(u8, std.mem.trimStart(u8, line, " \t"), " \t\r\n(");
     return .{ .first = words.next() orelse "", .second = words.next() orelse "" };
 }
 
@@ -112,29 +112,28 @@ fn isDocLine(line: []const u8) bool {
     return std.mem.startsWith(u8, std.mem.trimStart(u8, line, " \t"), "--|");
 }
 
-fn isBlank(line: []const u8) bool {
-    return std.mem.trim(u8, line, " \t\r").len == 0;
-}
-
 /// Classifies one Entry, without loading it. `handlers` are the first
 /// Names of the Session Script's Handlers; `bound` are the names the
 /// Script already has, which an Entry's implicit names exclude.
 pub fn entry(arena: Allocator, text: []const u8, handlers: []const []const u8, bound: []const []const u8) Allocator.Error!Entry {
     const lines = try splitLines(arena, text);
-    var i: usize = 0;
-    while (i < lines.len and isBlank(lines[i])) i += 1;
-    var doc: Doc = .none;
-    if (i < lines.len and isDocLine(lines[i])) {
-        while (i < lines.len and isDocLine(lines[i])) i += 1;
-        doc = .attached;
-        if (i < lines.len and isBlank(lines[i])) doc = .none;
-        while (i < lines.len and isBlank(lines[i])) i += 1;
-        if (i == lines.len) return .{ .kind = .empty, .doc = .pending };
+    var shared: lexer.Shared = .{ .source = text, .arena = arena };
+    const lex = lexer.Lexer.init(&shared);
+    var token = try lex.next(0, .operand);
+    while (token.kind == .newline) token = try lex.next(token.end, .operand);
+    if (token.kind == .eof) {
+        // The last empty slice represents the final line break, not a
+        // second blank line. A real blank line or ordinary comment detaches.
+        const last = if (lines.len > 1 and lines[lines.len - 1].len == 0) lines.len - 2 else lines.len - 1;
+        return .{ .kind = .empty, .doc = if (isDocLine(lines[last])) .pending else .none };
     }
-    if (i == lines.len) return .{ .kind = .empty, .doc = .none };
-    const w = firstWords(lines[i]);
+    var positions = try lexer.Lines.init(arena, text);
+    const line = positions.position(token.start).line - 1;
+    const attached = try docBefore(arena, lines, line);
+    const doc: Doc = if (attached.len > 0 or (line > 0 and isDocLine(lines[line - 1]))) .attached else .none;
+    const w = firstWords(text[token.start..]);
     if (isDeclaration(w)) {
-        const tree = switch (try parser.parse(arena, text)) {
+        const tree = switch (try parser.parseDeclarationEntry(arena, text)) {
             .tree => |t| t,
             .failure => |d| return .{ .kind = .declaration, .doc = doc, .problem = try problem(arena, text, d, false) },
         };
@@ -260,6 +259,7 @@ fn declarationsIn(arena: Allocator, tree: *const ast.Tree) Allocator.Error![]con
             },
             .use => |u| {
                 x.kind = "use";
+                x.doc = "";
                 x.name = tree.text(u.library);
                 x.signature = source[start..head_end];
                 var imports: std.ArrayList(Import) = .empty;
@@ -285,8 +285,17 @@ fn firstToken(d: ast.Declaration) usize {
 
 fn splitLines(arena: Allocator, source: []const u8) Allocator.Error![]const []const u8 {
     var out: std.ArrayList([]const u8) = .empty;
-    var it = std.mem.splitScalar(u8, source, '\n');
-    while (it.next()) |l| try out.append(arena, std.mem.trimEnd(u8, l, "\r"));
+    var from: usize = if (std.mem.startsWith(u8, source, "\xef\xbb\xbf")) 3 else 0;
+    var i = from;
+    while (i < source.len) {
+        if (source[i] == '\r' or source[i] == '\n') {
+            try out.append(arena, source[from..i]);
+            const crlf = source[i] == '\r' and i + 1 < source.len and source[i + 1] == '\n';
+            i += if (crlf) @as(usize, 2) else 1;
+            from = i;
+        } else i += 1;
+    }
+    try out.append(arena, source[from..]);
     return out.items;
 }
 
@@ -401,4 +410,33 @@ test "declaration metadata preserves source spans, defaults, imports and documen
     try t.expectEqualStrings("up", ds[3].imports[0].local);
     try t.expectEqualStrings("any message", ds[4].name);
     try t.expect(ds[4].word == null);
+}
+
+test "documentation detaches at blank lines and handles source line endings" {
+    const t = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(t.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try t.expectEqual(Doc.pending, (try entry(a, "--| Pending.\n", &.{}, &.{})).doc);
+    try t.expectEqual(Doc.none, (try entry(a, "--| Detached.\n\n", &.{}, &.{})).doc);
+    try t.expectEqual(Kind.empty, (try entry(a, "-- ordinary\n", &.{}, &.{})).kind);
+    const source = "\xef\xbb\xbf--| First.\r\n--| Second.\r\nfunction f\r\nend f\r\n--| Private.\rprivate constant c = 1\r--| Not attached.\nuse join from text\n";
+    const ds = (try declarations(a, source)).declarations;
+    try t.expectEqualStrings("First.\nSecond.", ds[0].doc);
+    try t.expectEqualStrings("Private.", ds[1].doc);
+    try t.expectEqualStrings("", ds[2].doc);
+    try t.expectEqual(Kind.declaration, (try entry(a, "-- ordinary\rconstant k = 1", &.{}, &.{})).kind);
+}
+
+test "a declaration Entry refuses a second declaration, even unfinished" {
+    const t = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(t.allocator);
+    defer arena.deinit();
+    for ([_][]const u8{ "constant a = 1\nconstant b = 2", "constant a = 1\nfunction b" }) |source| {
+        const p = (try entry(arena.allocator(), source, &.{}, &.{})).problem.?;
+        try t.expectEqualStrings("unexpected token", p.code);
+        try t.expectEqual(@as(usize, 2), p.line);
+        try t.expectEqual(@as(usize, 1), p.column);
+        try t.expect(!p.incomplete);
+    }
 }

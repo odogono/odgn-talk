@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 
 	talk "github.com/odogono/odgn-talk/impl/go"
+	"github.com/odogono/odgn-talk/impl/go/internal/analysis"
 	"github.com/odogono/odgn-talk/impl/go/internal/sessionio"
-	"github.com/odogono/odgn-talk/impl/go/internal/syntax"
 	"github.com/odogono/odgn-talk/impl/go/store"
 )
 
@@ -203,15 +203,16 @@ func (h *Host) Input(source string) []string {
 		out = h.command(s)
 	} else {
 		h.start()
-		kind, node, err := syntax.ParseEntry(source, h.isHandler)
+		entry, err := h.analyze(source)
 		if err != nil {
 			out = h.refused(err, placement{}, 0)
-		} else if !documentable(source, kind, node) {
+		} else if !documentable(entry) {
 			out = []string{"! bad arguments"}
-		} else if kind == "declaration" {
-			out = h.declare(describe(s, node), node)
-		} else if kind != "" {
-			_, out = h.run(s, kind == "expression", node)
+		} else if entry.Kind == "declaration" {
+			d := entry.Declarations[0]
+			out = h.declare(describe(s, d), d)
+		} else if entry.Kind != "empty" {
+			_, out = h.run(s, entry.Kind == "expression", entry)
 		}
 	}
 	return h.finished(out)
@@ -363,15 +364,15 @@ func libraryHandler(l *talk.Library, name string) bool {
 	if l == nil {
 		return false
 	}
-	tree, err := syntax.Parse(l.Source())
+	ds, err := analysis.Source(l.Source())
 	if err != nil {
 		return false
 	}
-	for _, n := range tree.Declarations {
+	for _, n := range ds {
 		if n.Private {
 			continue
 		}
-		if n.Kind == "handler" && n.Text == name {
+		if n.Kind == "handler" && n.Name == name {
 			return true
 		}
 		if n.Kind == "use" {
@@ -399,19 +400,18 @@ func (h *Host) NeedsMore(source string) bool {
 	} else if strings.HasPrefix(source, ":") {
 		return false
 	}
-	_, _, err := syntax.ParseEntry(source, h.isHandler)
-	var e *syntax.Error
-	return errors.As(err, &e) && e.Incomplete || err == nil && syntax.LeadingDoc(source) == syntax.DocPending
+	entry, err := h.analyze(source)
+	var e *analysis.Problem
+	return errors.As(err, &e) && e.Incomplete || err == nil && entry.Doc == "pending"
 }
 
-// documentable refuses a leading doc block that documents nothing: one
-// followed by a statement, an expression or an Import, or by no Entry at all.
-func documentable(source, kind string, node *syntax.Node) bool {
-	switch syntax.LeadingDoc(source) {
-	case syntax.DocPending:
+// documentable refuses a leading doc block that documents no declaration.
+func documentable(entry *analysis.Entry) bool {
+	switch entry.Doc {
+	case "pending":
 		return false
-	case syntax.DocAttached:
-		return kind == "declaration" && node.Kind != "use"
+	case "attached":
+		return entry.Kind == "declaration" && entry.Declarations[0].Kind != "use"
 	}
 	return true
 }
@@ -434,18 +434,14 @@ func sourceOf(ds []declaration) string {
 	}
 	return b.String()
 }
-func describe(source string, n *syntax.Node) declaration {
-	d := declaration{kind: n.Kind, source: source, names: []string{n.Text}}
+func describe(source string, n analysis.Declaration) declaration {
+	d := declaration{kind: n.Kind, source: source, names: []string{n.Name}}
 	if n.Kind == "use" {
-		d.library = n.Text
+		d.library = n.Name
 		d.names = nil
-		for _, p := range n.Params {
-			local := p.Text
-			if len(n.Children) > 0 {
-				local = n.Children[0].Text
-			}
-			d.uses = append(d.uses, use{p.Text, local})
-			d.names = append(d.names, local)
+		for _, u := range n.Imports {
+			d.uses = append(d.uses, use{u.Name, u.Local})
+			d.names = append(d.names, u.Local)
 		}
 	}
 	return d
@@ -463,7 +459,7 @@ func useDeclaration(library string, uses []use) declaration {
 	}
 	return d
 }
-func (h *Host) declare(d declaration, n *syntax.Node) []string {
+func (h *Host) declare(d declaration, n analysis.Declaration) []string {
 	reused := false
 	for _, name := range d.names {
 		reused = reused || h.has(name)
@@ -481,11 +477,11 @@ func (h *Host) declare(d declaration, n *syntax.Node) []string {
 			if old.kind == "variable" && old.names[0] == d.names[0] {
 				expr := "nothing"
 				adjust := placement{}
-				if len(n.Children) > 0 {
+				if n.Initializer != nil {
 					// The initializer begins after the declaration's '=' token, preserving
 					// its exact source spelling, including multiline fenced literals.
-					// The '=' follows the name, so a leading doc block can't hold it.
-					eq := n.NameToken.End + strings.Index(d.source[n.NameToken.End:], "=")
+					// Start at the declaration token so documentation cannot supply the '='.
+					eq := n.Span.Start + strings.Index(d.source[n.Span.Start:], "=")
 					expr = d.source[eq+1:]
 					adjust.col = 4 - utf8.RuneCountInString(d.source[strings.LastIndex(d.source[:eq], "\n")+1:eq+1])
 				}
@@ -560,19 +556,23 @@ func placed(declarations []declaration, d declaration) []declaration {
 	return next
 }
 
-func (h *Host) run(source string, expression bool, node *syntax.Node) (bool, []string) {
-	return h.runAt(source, expression, node, placement{})
+func (h *Host) run(source string, expression bool, entry *analysis.Entry) (bool, []string) {
+	return h.runAt(source, expression, entry, placement{})
 }
-func (h *Host) runAt(source string, expression bool, node *syntax.Node, adjust placement) (bool, []string) {
+func (h *Host) runAt(source string, expression bool, entry *analysis.Entry, adjust placement) (bool, []string) {
 	n := h.lastEntry + 1
 	for h.has(fmt.Sprintf("entry%d", n)) {
 		n++
 	}
 	handler := fmt.Sprintf("entry%d", n)
-	if node == nil {
-		_, node, _ = syntax.ParseEntry(source, h.isHandler)
+	if entry == nil {
+		var err error
+		entry, err = h.analyze(source)
+		if err != nil {
+			return false, h.refused(err, placement{}, 0)
+		}
 	}
-	bound := h.implicitVariables(node)
+	bound := entry.Implicit
 	body := source
 	if expression {
 		body = "return " + body
@@ -630,9 +630,9 @@ func where(unit string, line, col int, p placement, length int) string {
 	return fmt.Sprintf("%d:%d", l, col)
 }
 func (h *Host) refused(err error, p placement, length int) []string {
-	var syntaxError *syntax.Error
+	var syntaxError *analysis.Problem
 	if errors.As(err, &syntaxError) {
-		return []string{fmt.Sprintf("! %s at %d:%d", syntaxError.Code, syntaxError.Pos.Line, syntaxError.Pos.Column)}
+		return []string{fmt.Sprintf("! %s at %d:%d", syntaxError.Code, syntaxError.Line, syntaxError.Col)}
 	}
 	var load *talk.LoadError
 	if errors.As(err, &load) {
