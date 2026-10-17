@@ -39,7 +39,7 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 	if err != nil {
 		return nil, err
 	}
-	raw, err := base64.StdEncoding.DecodeString(zigText(reply.Get("identity").Get("$bytes")))
+	raw, err := zigBytes(reply.Get("identity"))
 	if err != nil || len(raw) != 32 {
 		return nil, fmt.Errorf("Zig compile-library returned an invalid identity")
 	}
@@ -100,7 +100,7 @@ func (b *zigGroup) ensureLibrary(l *Library) error {
 	if err != nil {
 		return err
 	}
-	raw, _ := base64.StdEncoding.DecodeString(zigText(reply.Get("identity").Get("$bytes")))
+	raw, _ := zigBytes(reply.Get("identity"))
 	if hex.EncodeToString(raw) != hex.EncodeToString(l.id[:]) {
 		return fmt.Errorf("Zig guest compiled %s to a different identity", l.Name())
 	}
@@ -108,8 +108,14 @@ func (b *zigGroup) ensureLibrary(l *Library) error {
 	return nil
 }
 
-func zigIdentity(id [32]byte) map[string]any {
-	return map[string]any{"$bytes": base64.StdEncoding.EncodeToString(id[:])}
+func zigIdentity(id [32]byte) map[string]any { return zigByteValue(id[:]) }
+
+func zigByteValue(raw []byte) map[string]any {
+	return map[string]any{"$bytes": base64.StdEncoding.EncodeToString(raw)}
+}
+
+func zigBytes(v Value) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(zigText(v.Get("$bytes")))
 }
 
 func (b *zigGroup) addLibrary(l *Library) error {

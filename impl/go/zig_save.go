@@ -4,17 +4,12 @@ package northtalk
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"reflect"
 	"time"
 )
 
 func init() { experimentalRestore = zigRestore }
-
-func zigBytes(v Value) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(zigText(v.Get("$bytes")))
-}
 
 func (b *zigGroup) save() ([]byte, error) {
 	reply, err := b.worker("save", map[string]any{})
@@ -68,11 +63,11 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 		libraries[i] = zigIdentity(l.id)
 		g.libraries[l.Name()] = l
 	}
-	if o.Mismatch != RejectMismatch && o.Mismatch != VariablesOnly {
+	policy, ok := map[MismatchPolicy]string{RejectMismatch: "reject", VariablesOnly: "variables only"}[o.Mismatch]
+	if !ok {
 		return nil, result, g.refuse(InvalidValue, "invalid mismatch policy")
 	}
-	policy := map[MismatchPolicy]string{RejectMismatch: "reject", VariablesOnly: "variables only"}[o.Mismatch]
-	_, err = b.exchange("restore", map[string]any{"save": map[string]any{"$bytes": base64.StdEncoding.EncodeToString(save)}, "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply Value) error {
+	_, err = b.exchange("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply Value) error {
 		return b.restoreReceipt(reply, &result)
 	})
 	if err != nil {
@@ -105,7 +100,7 @@ func (b *zigGroup) restoreBindings(need Value) (map[string]any, error) {
 		grants[i] = wire[name]
 		s := b.group.Script(script)
 		if s == nil {
-			s = &Script{group: b.group, name: script, grants: map[string]*Grant{}}
+			s = b.newRestoredScript(script)
 			b.group.scripts = append(b.group.scripts, s)
 		}
 		s.grants[name] = kept[name]
@@ -122,6 +117,10 @@ func (b *zigGroup) restoreBindings(need Value) (map[string]any, error) {
 		b.restoreObject(kind, id, native)
 	}
 	return map[string]any{"grants": grants, "objects": objects}, nil
+}
+
+func (b *zigGroup) newRestoredScript(name string) *Script {
+	return &Script{group: b.group, name: name, grants: map[string]*Grant{}}
 }
 
 func (b *zigGroup) restoreObject(kind, id string, native any) {
@@ -141,18 +140,20 @@ func (b *zigGroup) restoreObject(kind, id string, native any) {
 
 func (b *zigGroup) restoreReceipt(reply Value, result *RestoreResult) error {
 	// Resolution order need not be load order; ScriptNames must retain it.
-	var scripts []*Script
-	for i := 1; i <= reply.Get("scripts").Len(); i++ {
-		name := zigText(reply.Get("scripts").Index(i))
+	names := reply.Get("scripts")
+	scripts := make([]*Script, 0, names.Len())
+	for i := 1; i <= names.Len(); i++ {
+		name := zigText(names.Index(i))
 		s := b.group.Script(name)
 		if s == nil {
-			s = &Script{group: b.group, name: name, grants: map[string]*Grant{}}
+			s = b.newRestoredScript(name)
 		}
 		scripts = append(scripts, s)
 	}
 	b.group.scripts = scripts
-	for i := 1; i <= reply.Get("objects").Len(); i++ {
-		pair := reply.Get("objects").Index(i)
+	objects := reply.Get("objects")
+	for i := 1; i <= objects.Len(); i++ {
+		pair := objects.Index(i)
 		b.restoreObject(zigText(pair.Index(1)), zigText(pair.Index(2)), nil)
 	}
 	// PendingCall's wire keys and Operation identity differ from its public
@@ -179,19 +180,17 @@ func (b *zigGroup) restoreReceipt(reply Value, result *RestoreResult) error {
 		b.calls[p.ID] = cancel
 		result.Pending = append(result.Pending, p)
 	}
-	if err := b.decode(reply.Get("variablesOnly"), reflect.ValueOf(&result.VariablesOnly).Elem()); err != nil {
-		return err
-	}
 	for _, field := range []struct {
 		name string
 		dst  any
-	}{{"discardedRuns", &result.DiscardedRuns}, {"droppedMessages", &result.DroppedMessages}, {"abandonedCalls", &result.AbandonedCalls}} {
+	}{{"variablesOnly", &result.VariablesOnly}, {"discardedRuns", &result.DiscardedRuns}, {"droppedMessages", &result.DroppedMessages}, {"abandonedCalls", &result.AbandonedCalls}} {
 		if err := b.decode(reply.Get(field.name), reflect.ValueOf(field.dst).Elem()); err != nil {
 			return err
 		}
 	}
-	for i := 1; i <= reply.Get("disposed").Len(); i++ {
-		pair := reply.Get("disposed").Index(i)
+	disposed := reply.Get("disposed")
+	for i := 1; i <= disposed.Len(); i++ {
+		pair := disposed.Index(i)
 		result.Disposed = append(result.Disposed, ObjectRef{Kind: zigText(pair.Index(1)), ID: zigText(pair.Index(2))})
 	}
 	reports, err := b.pumpReceipt(reply)
