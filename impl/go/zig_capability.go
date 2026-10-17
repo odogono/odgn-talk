@@ -35,18 +35,17 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 	for _, name := range names {
 		g := given[name]
 		def := g.definition
-		handle, exists := b.definitions[def]
-		if !exists {
-			handle = fmt.Sprintf("go-capability-%d", len(b.definitions)+1)
+		handle, err := b.reg.define(def, func(handle string) error {
 			ops, _ := zigDeclaration(def)
 			declaration := map[string]any{"name": def.name, "handle": handle, "ops": ops, "release": def.release != nil, "segmentLifecycle": zigSegmentBound(def)}
 			if len(def.checks) != 0 {
 				declaration["standard"] = def.name
 			}
-			if _, err := b.send("define-capability", declaration); err != nil {
-				return nil, nil, err
-			}
-			b.definitions[def] = handle
+			_, err := b.send("define-capability", declaration)
+			return err
+		})
+		if err != nil {
+			return nil, nil, err
 		}
 		ops := make([]string, 0, len(g.operations))
 		bound := g.named()
@@ -241,7 +240,7 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	}
 	name := zigText(need.Get("operation"))
 	op, ok := grant.definition.ops[name]
-	if !ok || !grant.operations[name] || zigText(need.Get("capability")) != b.definitions[grant.definition] {
+	if !ok || !grant.operations[name] || zigText(need.Get("capability")) != b.reg.handle(grant.definition) {
 		return nil, fmt.Errorf("Zig callback does not match its Grant")
 	}
 	var args []Value

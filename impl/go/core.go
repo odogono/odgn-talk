@@ -39,6 +39,9 @@ type Core struct {
 	// libraryChecker is the experimental Zig backend's Group whose guest
 	// checks CompileLibrary's Libraries.
 	libraryChecker *Group
+	// zigGuests is the experimental Zig backend's pool of guests its
+	// Groups share.
+	zigGuests any
 }
 
 type compileKey struct {
