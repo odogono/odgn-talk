@@ -341,7 +341,7 @@ pub const Session = struct {
     climb: bool = false,
     /// `function-gone-v1`: a Pump reply lists stale Function Value calls.
     gone: bool = false,
-    /// `function-metadata-v1`: Function Values carry their name and arity.
+    /// `function-metadata-v1`: Function Values carry name, arity and source identity.
     function_metadata: bool = false,
     /// `analysis-v1`: the language analysis exchanges are open.
     analysis: bool = false,
@@ -705,6 +705,10 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
             w.writeAll("null") catch return error.WriteFailed;
         } else std.json.Stringify.value(code.name, .{}, w) catch return error.WriteFailed;
         w.print(",{d},{d}", .{ code.required, code.total }) catch return error.WriteFailed;
+        w.writeAll(",{\"$bytes\":\"") catch return error.WriteFailed;
+        var encoded: [44]u8 = undefined;
+        w.writeAll(std.base64.standard.Encoder.encode(&encoded, &code.unit)) catch return error.WriteFailed;
+        w.writeAll("\"}") catch return error.WriteFailed;
     }
     w.writeAll("]}") catch return error.WriteFailed;
 }
@@ -3948,6 +3952,44 @@ fn standardCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     return finishOk(s, &o, null);
 }
 
+/// Current Script/extension sources and their transitive Library sources.
+fn scriptUnitsReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const script = scriptOf(entry, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const home = entry.group.group.script(script.name) orelse return hostError(s.gpa, ref, .invalid_value);
+    var libraries: std.ArrayList(*machine.Library) = .empty;
+    defer libraries.deinit(s.gpa);
+    libraries.appendSlice(s.gpa, home.extensions.items) catch return oomReply();
+    libraries.appendSlice(s.gpa, home.imports) catch return oomReply();
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    o.raw("\"units\":[") catch return oomReply();
+    writeSourceUnit(&o, s.gpa, home.name, home.source, machine.codeIdentity(home.name, home.source, .script, home.imports)) catch return oomReply();
+    var i: usize = 0;
+    while (i < libraries.items.len) : (i += 1) {
+        const library = libraries.items[i];
+        o.raw(",") catch return oomReply();
+        writeSourceUnit(&o, s.gpa, library.name, library.source, library.identity) catch return oomReply();
+        for (library.imports) |imported| {
+            if (std.mem.indexOfScalar(*machine.Library, libraries.items, imported) == null) libraries.append(s.gpa, imported) catch return oomReply();
+        }
+    }
+    o.raw("]") catch return oomReply();
+    // This query observes source only: no vars snapshot, Trace or execution.
+    return finishOk(s, &o, null);
+}
+
+fn writeSourceUnit(o: *Out, gpa: Allocator, name: []const u8, source: []const u8, identity: [32]u8) Allocator.Error!void {
+    try o.raw("{\"name\":");
+    try o.text(name);
+    try o.raw(",\"source\":");
+    try o.text(source);
+    try o.raw(",\"identity\":");
+    try o.bytesTag(gpa, &identity);
+    try o.raw("}");
+}
+
 /// The Script a message names, in its Group.
 fn scriptOf(entry: *GroupEntry, msg: Json) ?*talk.Script {
     const name = asText(field(msg, "script")) orelse return null;
@@ -4224,6 +4266,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return restoreReply(s, msg, ref, frame);
     } else if (std.mem.eql(u8, m, "settle")) {
         return settleRestoredReply(s, msg, ref);
+    } else if (s.function_metadata and std.mem.eql(u8, m, "script-units")) {
+        return scriptUnitsReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "inspect")) {
         return inspectReply(s, msg, ref);
     } else if (std.mem.eql(u8, m, "grants")) {
@@ -5496,17 +5540,26 @@ test "function-metadata-v1 adds names and arities without changing opaque tokens
     _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable fs\\nfunction double n, m = 1\\n return n * 2\\nend double\\non make\\n put double into f\\n put [f, given [x, y], z: x + y + z, given: 1, given n: f(n)] into fs\\n return fs\\nend make\\non echo x\\n return x\\nend echo\"}}", .{2}));
     _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\"}}}}", .{3}));
     const legacy = (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}))).object.get("result").?.array.items;
+    const unnegotiated = try c.send("{{\"m\":\"script-units\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{40});
+    try std.testing.expectEqualStrings("protocol error", try errKind(unnegotiated));
     const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"function-metadata-v1\"]}}", .{5}));
     var advertised = false;
     for (hello.object.get("features").?.array.items) |f| {
         if (std.mem.eql(u8, f.string, "function-metadata-v1")) advertised = true;
     }
     try std.testing.expect(advertised);
+    const sources = try okOf(try c.send("{{\"m\":\"script-units\",\"ref\":{d},\"group\":\"g\",\"script\":\"s\"}}", .{41}));
+    try std.testing.expect(sources.object.get("trace") == null);
+    const units = sources.object.get("units").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), units.len);
+    try std.testing.expectEqualStrings("s", units[0].object.get("name").?.string);
+    try std.testing.expect(std.mem.indexOf(u8, units[0].object.get("source").?.string, "function double") != null);
     const seen = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{6}));
     const functions = seen.object.get("scripts").?.array.items[0].object.get("vars").?.array.items[0].array.items[1].array.items;
     for (functions, legacy, 0..) |f, old, i| {
         const parts = f.object.get("$function").?.array.items;
-        try std.testing.expectEqual(@as(usize, 6), parts.len);
+        try std.testing.expectEqual(@as(usize, 7), parts.len);
+        try std.testing.expectEqualStrings(units[0].object.get("identity").?.object.get("$bytes").?.string, parts[6].object.get("$bytes").?.string);
         try std.testing.expectEqualStrings(old.object.get("$function").?.array.items[2].string, parts[2].string);
         if (i == 0) {
             try std.testing.expectEqualStrings("double", parts[3].string);

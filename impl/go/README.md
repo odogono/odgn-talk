@@ -92,7 +92,7 @@ failures, with `call failed` detail kept in Go. The adapter negotiates
 answer, not at the first Run's end.
 
 Function Values cross with the negotiated `function-metadata-v1` feature as
-the guest's `{"$function": [home, display, token, name, required, total]}`.
+the guest's `{"$function": [home, display, token, name, required, total, unit]}`.
 In Go each is an ordinary `function` Value of its Group, whose identity is the
 token: `HomeScript`, `String` and `Equal` behave natively, another Group's is
 refused as `wrong group` before encoding, and the storage encoding still
@@ -100,7 +100,10 @@ refuses it. They travel in message arguments, results, Reports, Inspect
 variables and Capability arguments and results, including Function Shapes.
 The Session's passive inspection and descriptions read the declared name
 (Nothing for Lambdas) and required/total parameter counts, including defaults,
-stale Function Values and repeated Save/Restore.
+stale Function Values and repeated Save/Restore. The Session archives Declaration
+Documentation by defining-unit identity, using the read-only `script-units`
+query after accepted code changes. Old functions keep their original docs
+through redefinition, Library replacement and Restore; Lambdas have no docs.
 `Group.Call` goes through the guest's `call` with the native admission checks
 and records, its context cancelling the call, and the adapter negotiates
 `function-gone-v1`, so a call found stale at the drain rejects with `send
@@ -263,11 +266,13 @@ build retains Go analysis behind `!talk_zig_experimental` until the Go Core's
 retirement gate. `session`, `driver` and `cmd/northtalk` import no Go parser,
 checker, compiler or generated catalogue packages.
 
-Native Session tests and all Session Transcripts pass. On the experimental
+Native Session tests and all Session Transcripts pass. The experimental
+backend also passes the `describe`, `named-functions` and `object-inspection`
+Transcripts unchanged, including defining documentation and disposed Object
+inspection after Restore. On the experimental
 backend, the Session tests and Transcripts unaffected by the adapter gaps pass;
 callback-queued delivery pumping, error-handler
-arguments, decomposed-source Trace spelling, documentation retained by runtime
-Function Values and cancelled inspection are still tracked in
+arguments, decomposed-source Trace spelling and cancelled inspection are still tracked in
 [#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
 migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
 and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these

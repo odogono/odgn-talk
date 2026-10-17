@@ -102,6 +102,7 @@ type saved struct {
 // Foreground bookkeeping reads only the Trace; Inspect is reserved for the
 // three explicit inspection commands, each of which is a vars Host Input.
 type Host struct {
+	sources map[[32]byte]map[string]string
 	// rewound is whether the last Pump returned rewound.
 	rewound                      bool
 	objectItems                  []Item
@@ -326,6 +327,7 @@ func (h *Host) start() {
 	h.objectSession.initial(h.objectBindings)
 	h.script, err = h.group.Load(talk.LoadOptions{Name: "session", Source: "", Grants: h.grants, Objects: h.objectBindings})
 	must(err)
+	h.harvestSources()
 }
 func must(err error) {
 	if err != nil {
@@ -469,6 +471,7 @@ func (h *Host) declare(d declaration, n analysis.Declaration) []string {
 			return h.refused(err, placement{}, 0)
 		}
 		h.declarations = append(h.declarations, d)
+		h.harvestSources()
 		h.units++
 		return nil
 	}
@@ -516,6 +519,7 @@ func (h *Host) reloadFrom(next []declaration, keepMailbox bool) ([]string, error
 		return nil, err
 	}
 	h.declarations = next
+	h.harvestSources()
 	h.implicit = map[string]bool{}
 	h.placements = map[string]placement{}
 	h.units = 1
@@ -590,6 +594,7 @@ func (h *Host) runAt(source string, expression bool, entry *analysis.Entry, adju
 		return false, h.refused(err, p, len(strings.Split(source, "\n")))
 	}
 	h.lastEntry = n
+	h.harvestSources()
 	h.implicit[handler] = true
 	h.placements[fmt.Sprintf("session+%d", h.units)] = p
 	h.units++

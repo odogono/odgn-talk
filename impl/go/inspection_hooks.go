@@ -59,7 +59,7 @@ func inspectionShape(s shape.Shape) Value {
 	panic("unknown Shape")
 }
 func init() {
-	docs.Inspection = func(raw any) ([]string, []string) {
+	docs.Inspection = func(raw any, functionDoc docs.FunctionReader) ([]string, []string) {
 		x := raw.(Value)
 		out := []string{"value " + inspectionMap(KV("kind", inspectionText(v.KindNames[x.inner.Kind])), KV("value", x)).String()}
 		size := -1
@@ -105,7 +105,7 @@ func init() {
 				}
 				arity, _ = Range(Int(int64(required)), Int(int64(total)))
 			}
-			doc, _ := docs.Function(x)
+			doc, _ := functionDoc(x)
 			out = append(out, "function "+inspectionMap(KV("name", name), KV("arity", arity), KV("home", inspectionText(fn.Home))).String(), "doc "+inspectionText(doc).String())
 		}
 		var names []string

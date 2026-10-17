@@ -37,6 +37,8 @@ func TestZigBackendFunctionMetadataDecoder(t *testing.T) {
 		`["s","display","token",null,2,1]`,
 		`["s","display","token",null,0,{"$dec":"1.5"}]`,
 		`["s","display","token",null,0,{"$dec":"9223372036854775808"}]`,
+		`["s","display","token",null,0,0,"source"]`,
+		`["s","display","token",null,0,0,{"$bytes":"AA=="}]`,
 	} {
 		if _, err := b.decodeValue([]byte(`{"$function":` + payload + `}`)); err == nil {
 			t.Errorf("accepted malformed Function metadata %s", payload)

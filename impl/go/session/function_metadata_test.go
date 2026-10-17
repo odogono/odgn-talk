@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	talk "github.com/odogono/odgn-talk/impl/go"
 )
 
 func TestFunctionMetadataAcrossSessionExposuresAndRestore(t *testing.T) {
@@ -51,5 +53,51 @@ func TestFunctionMetadataAcrossSessionExposuresAndRestore(t *testing.T) {
 			}
 		}
 		check()
+	}
+}
+
+func TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore(t *testing.T) {
+	h := New(Environment{Now: func() time.Time { return time.Unix(0, 0) }})
+	input := func(source string) {
+		t.Helper()
+		if out := h.Input(source); len(out) != 0 {
+			t.Fatal(source, out)
+		}
+	}
+	value := func(name string) talk.Value {
+		t.Helper()
+		for _, pair := range h.Inspect().Scripts[0].Vars {
+			if pair.Key == name {
+				return pair.Val
+			}
+		}
+		t.Fatal("missing variable", name)
+		return talk.Nothing
+	}
+	// Keep the exact source scalars as documentation; the defining unit,
+	// rather than a current same-name declaration, determines this text.
+	const original = "Original e\u0301."
+	input("--| " + original + "\nfunction double n\n return n * 2\nend double")
+	input("put double into old")
+	old := value("old")
+	if out := h.Input(":save before"); len(out) != 1 || out[0] != "saved before" {
+		t.Fatal(out)
+	}
+	input("--| Replacement.\nfunction double n\n return n * 2\nend double")
+	input("put double into newer")
+	newer := value("newer")
+	for round := 0; round < 2; round++ {
+		for _, test := range []struct {
+			value talk.Value
+			doc   string
+		}{{old, original}, {newer, "Replacement."}} {
+			if doc, ok := h.FunctionDocumentation(test.value); !ok || doc != test.doc {
+				t.Fatalf("round %d: documentation %q, want %q", round, doc, test.doc)
+			}
+		}
+		if out := h.Input(":restore before"); len(out) != 1 || out[0] != "restored before" {
+			t.Fatal(out)
+		}
+		old = value("old")
 	}
 }

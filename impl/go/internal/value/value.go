@@ -66,7 +66,12 @@ type FunctionData struct {
 // WireFunction is the CodeState of a Function Value another Core made and
 // the Message Layer carried: its Code is the opaque token, and Display its
 // whole display form. Saves never hold one.
-type WireFunction struct{ Display string }
+type WireFunction struct {
+	Display string
+	// Unit identifies the defining source, independently of the opaque token.
+	Unit    [32]byte
+	HasUnit bool
+}
 
 // WireDisplay is a carried Function Value's display form, if it is one.
 func (f *FunctionData) WireDisplay() (string, bool) {

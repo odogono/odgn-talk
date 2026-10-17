@@ -387,13 +387,18 @@ fn taggedLeaf(a: std.mem.Allocator, name: []const u8, payload: Json, r: display.
         const resolve = r.function_token orelse return error.InvalidValue;
         if (payload != .array) return error.InvalidValue;
         const parts = payload.array.items;
-        if (parts.len != 3 and parts.len != 6) return error.InvalidValue;
-        if (parts.len == 6) {
+        if (parts.len != 3 and parts.len != 6 and parts.len != 7) return error.InvalidValue;
+        if (parts.len >= 6) {
             if (parts[3] != .null and parts[3] != .string) return error.InvalidValue;
             // Metadata is descriptive; only the token resolves the Function.
             const required = try functionArity(parts[4]);
             const total = try functionArity(parts[5]);
             if (required > total) return error.InvalidValue;
+        }
+        if (parts.len == 7) {
+            const unit = try decodeParsed(a, parts[6], .{});
+            defer unit.release();
+            if (unit.data != .bytes or unit.data.bytes.len != 32) return error.InvalidValue;
         }
         return resolve(r.context, try string(parts[0]), try string(parts[1]), try string(parts[2]));
     }

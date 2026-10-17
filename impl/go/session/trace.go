@@ -198,7 +198,7 @@ func (h *Host) pumpAt(reading time.Time) []string {
 			switch e.outcome {
 			case "completed":
 				if h.inspections[e.delivery] && end != nil {
-					rows, _ := docs.Inspection(end.Result)
+					rows, _ := docs.Inspection(end.Result, h.functionDocumentation)
 					for _, row := range rows {
 						out = append(out, h.prefix(e.run)+row)
 					}
