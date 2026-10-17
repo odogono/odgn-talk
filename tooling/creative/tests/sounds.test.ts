@@ -169,21 +169,21 @@ test('adding a sound is one undoable edit and identical bytes keep one name', as
   const sound = await importSound(new File([mp3], 'waves.mp3'), decode);
   const project = createProject('Story');
   const editor = new StackEditor(project);
-  const before = structuredClone(project);
+  const before = structuredClone(editor.project);
   expect(editor.addSound(sound.asset)).toBe('waves');
   expect(editor.addSound({ ...sound.asset, name: 'sea' })).toBe('waves');
-  expect(project.assets).toHaveLength(1);
+  expect(editor.project.assets).toHaveLength(1);
   const other = await importSound(new File([wav], 'waves.wav'), decode);
   expect(editor.addSound(other.asset)).toBe('waves2');
   editor.undo();
-  expect(project.assets.map(a => a.name)).toEqual(['waves']);
+  expect(editor.project.assets.map(a => a.name)).toEqual(['waves']);
   editor.undo();
-  expect(project).toEqual(before);
+  expect(editor.project).toEqual(before);
   editor.redo();
-  expect(project.assets.map(a => a.name)).toEqual(['waves']);
+  expect(editor.project.assets.map(a => a.name)).toEqual(['waves']);
   editor.readOnly = true;
   editor.addSound(other.asset);
-  expect(project.assets).toHaveLength(1);
+  expect(editor.project.assets).toHaveLength(1);
 });
 
 test('sounds survive export and import, and unused sounds follow the Script rule', async () => {

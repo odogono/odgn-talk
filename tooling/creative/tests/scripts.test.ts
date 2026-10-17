@@ -5,6 +5,7 @@ import {
   type RpcMessage,
 } from '../../stack/src/lsp';
 import { readManifest } from '../../stack/src/lsp/manifest';
+import { serializeProject } from '../src/project-file';
 import { StackEditor } from '../src/editing';
 import {
   createElement,
@@ -264,10 +265,14 @@ test('LSP diagnoses misspelt names and refreshes after renames on each Page', ()
   expect(remote.diagnostics().some(d => d.code === 'unknown name')).toBe(true);
   const editor = new StackEditor(project);
   editor.renameElement('button1', 'renamedButton');
-  local.server.configure({ manifest: scriptManifest(project, page) });
+  local.server.configure({
+    manifest: scriptManifest(editor.project, editor.page),
+  });
   expect(local.diagnostics().some(d => d.code === 'unknown name')).toBe(true);
   editor.undo();
-  local.server.configure({ manifest: scriptManifest(project, editor.page) });
+  local.server.configure({
+    manifest: scriptManifest(editor.project, editor.page),
+  });
   expect(local.diagnostics().filter(d => d.severity === 1)).toEqual([]);
 });
 
@@ -290,24 +295,24 @@ test('LSP offers kind-specific properties for bound names', () => {
   expect(items.some(item => item.label === 'label')).toBe(true);
 });
 
-test('window identities follow owners through rename, reorder and history without entering authored data', () => {
-  const { project, page } = fixture();
+test('session ids follow Script owners through rename, reorder and history without entering files', () => {
+  const { project } = fixture();
   const editor = new StackEditor(project);
-  const button = page.elements.find(e => e.kind === 'button')!;
-  const id = editor.identity(button);
+  const button = editor.page.elements.find(e => e.kind === 'button')!;
+  const id = button.id;
   editor.renameElement(button.name, 'newButton');
   editor.movePage(0, 1);
   expect(
-    editor.identity(
-      project.pages[1]!.elements.find(e => e.name === 'newButton')!,
-    ),
+    editor.project.pages[1]!.elements.find(e => e.name === 'newButton')!.id,
   ).toBe(id);
   editor.undo();
   editor.undo();
-  expect(editor.identity(editor.element('button1')!)).toBe(id);
+  expect(editor.element('button1')!.id).toBe(id);
   editor.redo();
-  expect(editor.identity(editor.element('newButton')!)).toBe(id);
-  expect(JSON.stringify(project)).not.toContain('identities');
+  expect(editor.element('newButton')!.id).toBe(id);
+  expect(JSON.stringify(serializeProject(editor.project))).not.toContain(
+    '"id"',
+  );
 });
 
 test('the declared Grants accept the settled call forms', () => {

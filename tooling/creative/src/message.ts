@@ -3,7 +3,7 @@
 // edit, through a session that sends no events.
 import { type Value } from '@odgn/northtalk';
 import { type StackEditor } from './editing';
-import { type Element, type Project } from './model';
+import { type Project } from './model';
 import { PlaySession } from './play';
 
 /** What a command printed: its value, nothing, or an error. */
@@ -40,8 +40,8 @@ export const settle = async (
     : { error: "It didn't finish; waits only run while browsing." };
 };
 
-/** Copies `from` onto `to`, keeping `to`'s identity and unchanged values. */
-const assignChanged = (to: object, from: object, skip: string[] = []) => {
+/** Copies `from` onto `to`, keeping unchanged values. */
+const assignChanged = (to: object, from: object, skip: string[] = ['id']) => {
   const target = to as Record<string, unknown>;
   const source = from as Record<string, unknown>;
   for (const key of Object.keys(target)) {
@@ -61,22 +61,31 @@ const assignChanged = (to: object, from: object, skip: string[] = []) => {
 
 /**
  * Writes a session's Project back over the authored one it copied. Authored
- * Pages and Elements keep their identity, so open Script windows stay
+ * Pages and Elements keep their session-local ids, so open Script windows stay
  * attached; Elements the command created are added and deleted ones removed.
  */
 export const applySession = (authored: Project, play: PlaySession): void => {
   assignChanged(authored, play.project, ['pages', 'assets']);
   play.project.pages.forEach((copy, index) => {
     const page = authored.pages[index]!;
-    assignChanged(page, copy, ['elements']);
-    page.elements = copy.elements.map(element => {
-      const original = play.authored.get(element) as Element | undefined;
-      if (!original || !page.elements.includes(original)) {
+    assignChanged(page, copy, ['elements', 'id']);
+    const elements = copy.elements.map(element => {
+      const original =
+        element.id === undefined
+          ? undefined
+          : page.elements.find(e => e.id === element.id);
+      if (!original) {
         return structuredClone(element);
       }
       assignChanged(original, element);
       return original;
     });
+    if (
+      elements.length !== page.elements.length ||
+      elements.some((e, i) => e !== page.elements[i])
+    ) {
+      page.elements = elements;
+    }
   });
 };
 
@@ -102,7 +111,7 @@ export const runInEdit = async (
   if (reply.error || editor.generation !== generation || editor.readOnly) {
     return reply;
   }
-  editor.edit(() => applySession(editor.project, play));
+  editor.edit(({ project }) => applySession(project, play));
   if (play.pageIndex !== editor.pageIndex) {
     editor.goToPage(play.pageIndex);
   }

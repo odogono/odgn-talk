@@ -2,6 +2,7 @@
 // storage failures show (#752). The IndexedDB layer is `storage.ts`, the
 // scheduling is `autosave.ts`, and one-editor-per-Project is `edit-lock.ts`;
 // this file draws them and connects them to the Stack shell.
+import { type Immutable } from 'immer';
 import { Autosave, failureMessage, type AutosaveState } from './autosave';
 import {
   EditLock,
@@ -140,7 +141,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const editor = shell.editor;
   let currentId = deps.initial.id;
   let record: ProjectRecord | undefined = deps.initial.record;
-  let preview: { latest: Project; savedAt: number; seq: number } | undefined;
+  let preview:
+    { latest: Immutable<Project>; savedAt: number; seq: number } | undefined;
   let orphaned = false;
   let firstSave = true;
   let renamingId: string | undefined;
@@ -154,10 +156,9 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     { handle: ProjectFileHandle; id: string; stamp: FileStamp } | undefined;
   // Autosave is disabled without storage; still protect in-memory edits when
   // importing or switching Projects. An export makes that exact revision safe.
-  let safeProject = JSON.stringify(editor.project);
+  let safeProject = editor.project;
   const hasUnsafeChanges = () =>
-    (autosave.dirty || !storage || orphaned) &&
-    JSON.stringify(editor.project) !== safeProject;
+    (autosave.dirty || !storage || orphaned) && editor.project !== safeProject;
 
   const notice = (text: string): void => {
     byId('notice-text').textContent = text;
@@ -384,11 +385,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     file: Uint8Array;
     id: string;
     missingNames: string[];
-    project: Project;
-    source: string;
+    project: Immutable<Project>;
+    source: Immutable<Project>;
   }> => {
     editor.finishPendingEdit();
-    const source = JSON.stringify(editor.project);
+    const source = editor.project;
     const project = projectForExport(editor.project);
     const id = currentId;
     // Session bytes cover most assets; read only the rest from storage.
@@ -420,10 +421,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const markFileSaved = async (
     built: Awaited<ReturnType<typeof buildProjectFile>>,
   ): Promise<void> => {
-    if (
-      currentId === built.id &&
-      JSON.stringify(editor.project) === built.source
-    ) {
+    if (currentId === built.id && editor.project === built.source) {
       safeProject = built.source;
     }
     if (
@@ -431,8 +429,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       record &&
       !orphaned &&
       currentId === built.id &&
-      JSON.stringify(projectForExport(editor.project)) ===
-        JSON.stringify(built.project)
+      editor.project === built.source
     ) {
       const now = Date.now();
       await storage.markExported(currentId, now).catch(() => {});
@@ -527,7 +524,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void drawStorageStatus();
   });
 
-  const loadAssets = async (project: Project): Promise<void> => {
+  const loadAssets = async (project: Immutable<Project>): Promise<void> => {
     if (!storage) {
       return;
     }
@@ -624,7 +621,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
         ]),
       );
       const previousId = currentId;
-      const previousModel = JSON.stringify(editor.project);
+      const previousModel = editor.project;
       const created = storage
         ? await storage.saveProject(undefined, loaded.project, { assets })
         : undefined;
@@ -632,10 +629,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (handle) {
         await rememberDiskFile(importedId, handle, stampOfFile(file));
       }
-      if (
-        currentId !== previousId ||
-        JSON.stringify(editor.project) !== previousModel
-      ) {
+      if (currentId !== previousId || editor.project !== previousModel) {
         channel?.post({ type: 'list-changed' });
         await drawList();
         notice(
@@ -754,17 +748,20 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   let switching = false;
   /** Puts a loaded Project on the desk and makes it the one being edited. */
   const showLoaded = async (
-    loaded: Omit<LoadedProject, 'record'> & { record?: ProjectRecord },
+    loaded: Omit<LoadedProject, 'project' | 'record'> & {
+      project: Immutable<Project>;
+      record?: ProjectRecord;
+    },
     id: string,
   ): Promise<void> => {
     if (switching) {
       return;
     }
     switching = true;
-    const before = JSON.stringify(editor.project);
+    const before = editor.project;
     try {
       await loadAssets(loaded.project);
-      if (JSON.stringify(editor.project) !== before) {
+      if (editor.project !== before) {
         notice(
           'Your current edits stay on the desk. Open the other Project from Projects when ready.',
         );
@@ -779,7 +776,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       currentId = id;
       record = loaded.record;
       editor.replaceProject(loaded.project);
-      safeProject = JSON.stringify(editor.project);
+      safeProject = editor.project;
       shell.setReadOnly(!editingNow);
       autosave.setEnabled(editingNow && !!storage);
       shell.redraw();
@@ -912,8 +909,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     try {
       if (id === currentId) {
         const edit = editor.startEdit();
-        edit.change(() => {
-          editor.project.name = name;
+        edit.change(({ project }) => {
+          project.name = name;
         });
         edit.finish();
         shell.redraw();
@@ -1058,7 +1055,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     (byId('new-project') as HTMLButtonElement).disabled = false;
   };
 
-  const exitPreview = (project: Project): void => {
+  const exitPreview = (project: Immutable<Project>): void => {
     preview = undefined;
     byId('preview-note').hidden = true;
     editor.replaceProject(project);
@@ -1143,7 +1140,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     preview = {
       seq,
       savedAt,
-      latest: preview?.latest ?? structuredClone(editor.project),
+      latest: preview?.latest ?? editor.project,
     };
     autosave.setEnabled(false);
     editor.replaceProject(loaded.project);
@@ -1214,7 +1211,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       });
       channel?.post({ type: 'list-changed' });
       await showLoaded(
-        { project: editor.project, migrated: false, record: created },
+        {
+          project: editor.project,
+          migrated: false,
+          record: created,
+        },
         created.id,
       );
       if (carried) {

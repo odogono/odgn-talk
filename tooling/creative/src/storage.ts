@@ -4,6 +4,7 @@
 // save is all or nothing. Recent versions of the model are kept for
 // recovery, sharing assets by hash. The in-memory Project stays the master
 // copy until a write succeeds; nothing here ever mutates it.
+import { type Immutable } from 'immer';
 import type { Project } from './model';
 import {
   CURRENT_FORMAT,
@@ -262,7 +263,7 @@ const projectFromModel = (
 };
 
 /** Refuses to store a Project that reading back would reject. */
-const checkedModel = (project: Project): Record<string, unknown> => {
+const checkedModel = (project: Immutable<Project>): Record<string, unknown> => {
   const issues = validateProject(project);
   if (issues.length) {
     throw new ProjectFileError(
@@ -340,7 +341,7 @@ export class ProjectStorage {
    */
   async saveProject(
     id: string | undefined,
-    project: Project,
+    project: Immutable<Project>,
     { assets = new Map(), now = Date.now() }: SaveOptions = {},
   ): Promise<ProjectRecord> {
     const model = checkedModel(project);

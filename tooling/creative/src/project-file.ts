@@ -2,12 +2,14 @@
 // `mimetype` entry first, a deflated `project.json` with an integer
 // `format` version, and one stored `assets/<sha256>.<ext>` per asset.
 // Files hold the authored Project only, never Play State (ADR 0041).
+import { type Immutable } from 'immer';
 
 import {
   alignParagraph,
   ELEMENT_KINDS,
   isIdentifierName,
   isTextAlign,
+  projectWithoutIds,
   type Asset,
   type Element,
   type ElementKind,
@@ -358,7 +360,9 @@ export const validateProjectJson = (
 };
 
 /** Checks an in-memory Project the same way reading a file does. */
-export const validateProject = (project: Project): ValidationIssue[] => {
+export const validateProject = (
+  project: Immutable<Project>,
+): ValidationIssue[] => {
   const result = validateProjectJson(project);
   return 'issues' in result ? result.issues : [];
 };
@@ -369,10 +373,10 @@ export const validateProject = (project: Project): ValidationIssue[] => {
  * The parsed-JSON form of a Project file's `project.json`. The model is
  * plain JSON data, so this is an independent copy plus the format header.
  */
-export const serializeProject = (project: Project): Obj => ({
+export const serializeProject = (project: Immutable<Project>): Obj => ({
   format: CURRENT_FORMAT,
   app: APP,
-  ...structuredClone(project),
+  ...projectWithoutIds(project),
 });
 
 /** The error for a damaged `project.json`, named by its first issue. */
@@ -447,7 +451,7 @@ const bytesMatch = async (asset: Asset, bytes: Uint8Array): Promise<boolean> =>
  * Bytes the asset table does not name are dropped from the export.
  */
 export const writeProjectFile = async (
-  project: Project,
+  project: Immutable<Project>,
   assetBytes: ReadonlyMap<string, Uint8Array>,
   { allowMissing = false }: { allowMissing?: boolean } = {},
 ): Promise<Uint8Array> => {

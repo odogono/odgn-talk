@@ -48,9 +48,9 @@ export const runBrowserTests = async () => {
   ];
   const shell = mountStack(project);
   const storage = await openProjectStorage(indexedDB);
-  const stored = await storage.saveProject(undefined, project);
+  const stored = await storage.saveProject(undefined, shell.editor.project);
   const autosave = new Autosave(async () => {
-    await storage.saveProject(stored.id, project);
+    await storage.saveProject(stored.id, shell.editor.project);
   });
   shell.editor.onChange = () => autosave.markDirty();
   await test('opening, Message Path, deduplication and authored edits', async () => {
@@ -65,7 +65,7 @@ export const runBrowserTests = async () => {
     const view = viewOf(win);
     view.dispatch({ changes: { from: 0, insert: source } });
     assert(
-      project.pages[0]!.elements[0]!.script === source,
+      shell.editor.project.pages[0]!.elements[0]!.script === source,
       'Script edits reach authored owner',
     );
     await until(
@@ -85,8 +85,8 @@ export const runBrowserTests = async () => {
       });
     }
     assert(
-      project.script === '-- Script 1' &&
-        project.pages[0]!.script === '-- Script 0',
+      shell.editor.project.script === '-- Script 1' &&
+        shell.editor.project.pages[0]!.script === '-- Script 0',
       'All owner kinds are editable',
     );
   });
@@ -173,7 +173,7 @@ export const runBrowserTests = async () => {
       saved.project.pages[0]!.elements[0]!.script === '-- changed',
       'Autosaved Script',
     );
-    const bytes = await writeProjectFile(project, new Map());
+    const bytes = await writeProjectFile(shell.editor.project, new Map());
     const imported = await readProjectFile(bytes);
     assert(
       imported.project.pages[0]!.elements[0]!.script === '-- changed',
@@ -219,6 +219,61 @@ export const runBrowserTests = async () => {
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: original },
     });
+  });
+  await test('live Info edits keep focus and undo as one step', () => {
+    shell.editor.click('button1');
+    const label = document.querySelector<HTMLInputElement>(
+      '#info [data-field="label"]',
+    )!;
+    const before = shell.editor.element('button1');
+    label.focus();
+    for (const value of ['G', 'Go']) {
+      label.value = value;
+      label.dispatchEvent(new Event('input', { bubbles: true }));
+      assert(
+        label.isConnected && document.activeElement === label,
+        'Live input keeps its DOM and focus',
+      );
+      assert(
+        shell.editor.element('button1')?.kind === 'button',
+        'Owner remains a button',
+      );
+    }
+    label.dispatchEvent(new Event('change', { bubbles: true }));
+    shell.editor.undo();
+    assert(
+      shell.editor.element('button1') === before,
+      'One undo restores the starting owner',
+    );
+  });
+  await test('authored text keeps its editable DOM through immutable updates', () => {
+    open('text1');
+    const node = document.querySelector<HTMLElement>(
+      '#page [data-element="text1"]',
+    )!;
+    node.focus();
+    node.textContent = 'Edited text';
+    node.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    assert(
+      node.isConnected && document.activeElement === node,
+      'Text editing retains its DOM and focus',
+    );
+    const element = shell.editor.element('text1');
+    assert(
+      element?.kind === 'text' &&
+        element.richText[0]?.runs[0]?.text === 'Edited text',
+      'Text reaches the frozen root',
+    );
+    node.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }),
+    );
+    assert(
+      node.isConnected && node.textContent === 'Text',
+      'Text undo retains the editable node',
+    );
+    node.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
   });
   await test('text gestures, close, read-only and Project replacement', () => {
     open('text1', true);

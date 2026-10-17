@@ -1,3 +1,4 @@
+import { type Immutable } from 'immer';
 import { grammar } from '@odgn/northtalk';
 import { isIdentifierName, type Page, type Project } from './model';
 import type { ScriptOwner } from './script-manifest';
@@ -12,8 +13,8 @@ export const reservedScriptNames: ReadonlySet<string> = new Set([
   'sound',
 ]);
 export const elementNamesTaken = (
-  project: Project,
-  page: Page,
+  project: Immutable<Project>,
+  page: Immutable<Page>,
   current?: string,
 ): Set<string> =>
   new Set([
@@ -22,7 +23,7 @@ export const elementNamesTaken = (
     ...page.elements.filter(e => e.name !== current).map(e => e.name),
   ]);
 export const pageNamesTaken = (
-  project: Project,
+  project: Immutable<Project>,
   current?: string,
 ): Set<string> =>
   new Set([
@@ -33,7 +34,7 @@ export const pageNamesTaken = (
 
 /** Imported Projects remain untouched; identify each owner requiring repair. */
 export const scriptNameProblems = (
-  project: Project,
+  project: Immutable<Project>,
 ): { message: string; owner: ScriptOwner }[] => {
   const problems: { message: string; owner: ScriptOwner }[] = [];
   const check = (owner: ScriptOwner, label: string, collision: boolean) => {

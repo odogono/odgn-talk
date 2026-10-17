@@ -1,5 +1,6 @@
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
+import { type Immutable } from 'immer';
 import {
   coreVersions,
   parseSourceRecovering,
@@ -8,15 +9,34 @@ import {
 } from '@odgn/northtalk';
 import { ELEMENT_KINDS, type Element, type Page, type Project } from './model';
 
-export type ScriptOwner = Project | Page | Element;
+export type ScriptOwner = Immutable<Project | Page | Element>;
+
+/** An owner's session id; the Project Script is 0. */
+export const ownerId = (owner: ScriptOwner): number =>
+  'pages' in owner ? 0 : owner.id!;
+
+/** Every Script owner: the Project, then each Page followed by its Elements. */
+export const scriptOwners = <P extends Immutable<Project> | Project>(
+  project: P,
+): (P | P['pages'][number] | P['pages'][number]['elements'][number])[] => [
+  project,
+  ...project.pages.flatMap(page => [page, ...page.elements]),
+];
+
+/** The owner with a session id, absent once it has gone. */
+export const ownerById = <P extends Immutable<Project> | Project>(
+  project: P,
+  id: number,
+) => scriptOwners(project).find(owner => ownerId(owner) === id);
 
 /** The Page containing an owner, absent for the Project Script. */
 export const scriptPage = (
-  project: Project,
+  project: Immutable<Project>,
   owner: ScriptOwner,
-): Page | undefined =>
+): Immutable<Page> | undefined =>
   project.pages.find(
-    page => page === owner || page.elements.includes(owner as Element),
+    page =>
+      page === owner || page.elements.includes(owner as Immutable<Element>),
   );
 
 const props = (fields: Record<string, string>) =>
@@ -219,7 +239,10 @@ const scriptMessages = (source: string) => {
 };
 
 /** Every Script binds all Pages and only its own Page's Elements. */
-export const scriptManifest = (project: Project, owner: ScriptOwner) => {
+export const scriptManifest = (
+  project: Immutable<Project>,
+  owner: ScriptOwner,
+) => {
   const page = scriptPage(project, owner);
   if (owner !== project && !page) {
     throw new Error('The Script owner is not in this Project');

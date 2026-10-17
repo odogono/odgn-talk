@@ -2,6 +2,7 @@
 // authored edit; retain bytes for undo and failed-save exports (#753). The
 // bytes store is keyed by hash for every asset, so sound bytes (#822) live
 // here too; sound intake and playback are in sounds.ts.
+import { castDraft, type Immutable } from 'immer';
 import type { Asset, Project } from './model';
 import { sha256Hex } from './project-file';
 import type { NewAsset } from './storage';
@@ -158,7 +159,7 @@ export class ImageAssets {
   }
 
   /** Only bytes named by this model enter its atomic storage transaction. */
-  forStorage(project: Project): Map<string, NewAsset> {
+  forStorage(project: Immutable<Project>): Map<string, NewAsset> {
     const result = new Map<string, NewAsset>();
     for (const asset of project.assets) {
       const bytes = this.bytes.get(asset.hash);
@@ -180,8 +181,8 @@ export class ImageAssets {
 
 /** Keep names used by images. Scripts can also refer to asset names, so when
  * Scripts exist retain the table: dynamic references cannot be proven unused. */
-export const projectForExport = (project: Project): Project => {
-  const copy = structuredClone(project);
+export const projectForExport = (project: Immutable<Project>): Project => {
+  const copy = castDraft(structuredClone(project));
   const scripted =
     project.script ||
     project.pages.some(p => p.script || p.elements.some(e => e.script));

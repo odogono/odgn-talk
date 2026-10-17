@@ -19,9 +19,10 @@ import {
 test('Page handles resize around the centre with a fixed top and minimum size', () => {
   expect(PAGE_HANDLES).toEqual(['w', 'e', 'sw', 's', 'se']);
   for (const handle of PAGE_HANDLES) {
-    const editor = new StackEditor(createProject('Resize'));
-    editor.page.elements.push(createElement('rectangle', 'box'));
-    editor.project.pages.push(createPage('other'));
+    const project = createProject('Resize');
+    project.pages[0]!.elements.push(createElement('rectangle', 'box'));
+    project.pages.push(createPage('other'));
+    const editor = new StackEditor(project);
     const width = editor.project.designWidth;
     const height = editor.page.height;
     const otherHeight = editor.project.pages[1]!.height;
@@ -54,8 +55,9 @@ test('Page handles resize around the centre with a fixed top and minimum size', 
 });
 
 test('Page resize rejects read-only edits and stale gestures cannot change another Page', () => {
-  const editor = new StackEditor(createProject('Resize'));
-  editor.project.pages.push(createPage('other'));
+  const project = createProject('Resize');
+  project.pages.push(createPage('other'));
+  const editor = new StackEditor(project);
   editor.readOnly = true;
   expect(editor.startPageResize('se')).toBeUndefined();
   editor.readOnly = false;
@@ -123,9 +125,9 @@ test('moving drags every selected Element from where it started', () => {
   const move = editor.startMove();
   move.to(5, 5);
   move.to(30.4, -10.6);
-  expect(rectangle!.left).toBe(before.r + 30);
-  expect(ellipse!.top).toBe(before.e - 11);
-  expect(line!.left).toBe(before.l);
+  expect(editor.element('rectangle1')!.left).toBe(before.r + 30);
+  expect(editor.element('ellipse1')!.top).toBe(before.e - 11);
+  expect(editor.element('line1')!.left).toBe(before.l);
 });
 
 test('resizing keeps the opposite edge and a minimum size', () => {
@@ -159,14 +161,12 @@ test('a resize needs exactly one selected Element, and lines may go flat', () =>
   expect(editor.startResize('se')).toBeUndefined();
 
   editor.click('rectangle1', { shift: true });
-  const line = editor.element('line1')!;
   editor.startResize('s')!.to(0, -500);
-  expect(line.height).toBe(0);
+  expect(editor.element('line1')!.height).toBe(0);
 
   editor.click('rectangle1');
-  const rectangle = editor.element('rectangle1')!;
   editor.startResize('s')!.to(0, -500);
-  expect(rectangle.height).toBe(8);
+  expect(editor.element('rectangle1')!.height).toBe(8);
 });
 
 test('an Element name must be an identifier, unique within its Page', () => {
@@ -219,14 +219,19 @@ test('a Page name must be an identifier, unique within the Project', () => {
 });
 
 test("a button's name is suggested from its label", () => {
-  const editor = editorWith('button', 'button');
-  const [first, second] = editor.page.elements as ButtonElement[];
+  const project = createProject('Labels');
+  const page = project.pages[0]!;
+  page.elements = [
+    createElement('button', 'button1'),
+    createElement('button', 'button2'),
+  ];
+  const [first, second] = page.elements as ButtonElement[];
   first!.label = 'Climb the stairs →';
-  expect(labelSuggestion(editor.page, first!)).toBe('climbTheStairs');
+  expect(labelSuggestion(page, first!)).toBe('climbTheStairs');
   first!.name = 'climbTheStairs';
-  expect(labelSuggestion(editor.page, first!)).toBeUndefined();
+  expect(labelSuggestion(page, first!)).toBeUndefined();
   second!.label = 'Climb the stairs';
-  expect(labelSuggestion(editor.page, second!)).toBe('climbTheStairs2');
+  expect(labelSuggestion(page, second!)).toBe('climbTheStairs2');
 });
 
 test('Pages are added after the showing one, and reordered', () => {
@@ -263,4 +268,37 @@ test('changing Page clears the selection', () => {
   editor.addPage();
   expect(editor.selection).toEqual([]);
   expect(editor.page.elements).toEqual([]);
+});
+
+test('state is copied, deeply frozen, and shares untouched Pages and Elements', () => {
+  const project = createProject('Immutable');
+  project.pages[0]!.elements.push(
+    createElement('button', 'button1'),
+    createElement('text', 'text1'),
+  );
+  project.pages.push(createPage('other'));
+  const editor = new StackEditor(project);
+  const before = editor.state.value;
+  project.name = 'External change';
+  expect(editor.project.name).toBe('Immutable');
+  expect(Object.isFrozen(project)).toBe(false);
+  expect(() => {
+    // @ts-expect-error The live Project is deeply immutable.
+    editor.project.name = 'Forbidden';
+  }).toThrow();
+  expect(() => {
+    // @ts-expect-error Nested arrays are immutable too.
+    editor.page.elements.push(createElement('button', 'forbidden'));
+  }).toThrow();
+  expect(() => {
+    // @ts-expect-error Selection belongs to the immutable root.
+    editor.state.value.selection.push('forbidden');
+  }).toThrow();
+  editor.renameElement('button1', 'renamed');
+  expect(editor.state.value).not.toBe(before);
+  expect(editor.project.pages[1]).toBe(before.project.pages[1]);
+  expect(editor.page.elements[1]).toBe(before.project.pages[0]!.elements[1]);
+  expect(before.project.pages[0]!.elements[0]!.name).toBe('button1');
+  editor.undo();
+  expect(editor.state.value).toBe(before);
 });

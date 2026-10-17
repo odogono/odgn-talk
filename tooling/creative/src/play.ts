@@ -1,4 +1,5 @@
 // A Play Session owns its Group and a disposable copy of the authored Project.
+import { castDraft, type Immutable } from 'immer';
 import { elementNamesTaken, scriptNameProblems } from './script-names';
 import {
   bool,
@@ -45,12 +46,18 @@ import {
   FOLIO_COMMANDS,
   scriptManifest,
   scriptPage,
-  type ScriptOwner,
+  type ScriptOwner as AuthoredOwner,
 } from './script-manifest';
 import { MESSAGE_FIRST_LINE, messageSource } from './message-script';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
-export type PlayProblem = { line: number; message: string; owner: ScriptOwner };
+type ScriptOwner = Project | Page | Element;
+
+export type PlayProblem = {
+  line: number;
+  message: string;
+  owner: AuthoredOwner;
+};
 export type PlayMessage =
   | 'startPlay'
   | 'openPage'
@@ -134,7 +141,7 @@ export class PlaySession {
   #unhandledSender: string | undefined;
   readonly problems: PlayProblem[] = [];
   readonly objects = new Map<ScriptOwner, HostObject<ScriptOwner>>();
-  readonly authored = new Map<ScriptOwner, ScriptOwner>();
+  readonly authored = new Map<ScriptOwner, Immutable<ScriptOwner>>();
   readonly owners = new Map<string, ScriptOwner>();
   #kinds = new Map<string, ObjectKind<ScriptOwner>>();
   #nextObject = 0;
@@ -461,7 +468,7 @@ export class PlaySession {
   changed = false;
 
   constructor(
-    project: Project,
+    project: Immutable<Project>,
     public pageIndex = 0,
     options: {
       events?: boolean;
@@ -492,7 +499,7 @@ export class PlaySession {
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
     }
-    this.project = structuredClone(project);
+    this.project = castDraft(structuredClone(project));
     const originals = [
       project,
       ...project.pages.flatMap(p => [p, ...p.elements]),

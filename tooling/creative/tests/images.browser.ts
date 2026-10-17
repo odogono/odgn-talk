@@ -1,3 +1,4 @@
+import { castDraft } from 'immer';
 // Run on the dedicated test page described in README.md. Exercises real image
 // decoders, IndexedDB and the editor's picker/drop/export/import wiring.
 import { EditLock } from '../src/edit-lock';
@@ -151,11 +152,12 @@ export const runBrowserTests = async () => {
         document.querySelector<HTMLElement>('[data-kind="image"]')!,
         svg('red'),
       );
-      await until(() => project.pages[0]!.elements.length === 1);
+      await until(() => shell.editor.project.pages[0]!.elements.length === 1);
       drop(node('page'), svg('red'));
-      await until(() => project.pages[0]!.elements.length === 2);
+      await until(() => shell.editor.project.pages[0]!.elements.length === 2);
       assert(
-        project.assets.length === 1 && shell.images.bytes.size === 1,
+        shell.editor.project.assets.length === 1 &&
+          shell.images.bytes.size === 1,
         'image not deduplicated',
       );
       assert(
@@ -165,16 +167,21 @@ export const runBrowserTests = async () => {
       assert(!node('page').querySelector('svg, script'), 'SVG markup inserted');
       assert(!('svgExecuted' in globalThis), 'SVG script executed');
       await delegate.flush();
-      const bytes = await storage.assetBytes(project.assets.map(a => a.hash));
+      const bytes = await storage.assetBytes(
+        shell.editor.project.assets.map(a => a.hash),
+      );
       assert(bytes.size === 1, 'asset not saved');
     });
     await test('wrong types and undecodable drops preserve the Project and report the reason', async () => {
-      const before = JSON.stringify(project);
+      const before = JSON.stringify(shell.editor.project);
       drop(node('page'), new File(['plain text'], 'fake.png'));
       await until(() =>
         node('notice-text').textContent!.includes('unsupported image type'),
       );
-      assert(JSON.stringify(project) === before, 'wrong type changed Project');
+      assert(
+        JSON.stringify(shell.editor.project) === before,
+        'wrong type changed Project',
+      );
       drop(
         node('page'),
         new File(
@@ -186,12 +193,12 @@ export const runBrowserTests = async () => {
         node('notice-text').textContent!.includes('could not be decoded'),
       );
       assert(
-        JSON.stringify(project) === before,
+        JSON.stringify(shell.editor.project) === before,
         'undecodable image changed Project',
       );
     });
     await test('replacement is undoable and unused bytes are omitted from export', async () => {
-      for (const element of project.pages[0]!.elements) {
+      for (const element of shell.editor.project.pages[0]!.elements) {
         shell.editor.click(element.name);
         shell.redraw();
         pick(
@@ -209,7 +216,9 @@ export const runBrowserTests = async () => {
       shell.editor.undo();
       shell.redraw();
       assert(
-        JSON.stringify(project.pages[0]!.elements).includes('red.svg'),
+        JSON.stringify(shell.editor.project.pages[0]!.elements).includes(
+          'red.svg',
+        ),
         'undo lost original',
       );
       shell.editor.redo();
@@ -222,7 +231,7 @@ export const runBrowserTests = async () => {
         read.project.assets.length === 1 && read.assets.size === 1,
         'unused assets exported',
       );
-      assert(project.assets.length === 2, 'export mutated editor');
+      assert(shell.editor.project.assets.length === 2, 'export mutated editor');
     });
     await test('a failed image autosave still exports the in-memory bytes', async () => {
       const save = storage.saveProject.bind(storage);
@@ -234,7 +243,7 @@ export const runBrowserTests = async () => {
         storage.assetBytes = async () => {
           throw new DOMException('Closed', 'InvalidStateError');
         };
-        shell.editor.edit(() => {
+        shell.editor.edit(({ project }) => {
           project.name += ' edited';
         });
         await delegate.flush();
@@ -244,7 +253,8 @@ export const runBrowserTests = async () => {
         await until(() => !!exported);
         const loaded = await readProjectFile(exported!);
         assert(
-          loaded.assets.size === 1 && loaded.project.name === project.name,
+          loaded.assets.size === 1 &&
+            loaded.project.name === shell.editor.project.name,
           'failed-save export lost work',
         );
       } finally {
@@ -264,9 +274,10 @@ export const runBrowserTests = async () => {
         node('projects-window'),
         new File([exported! as Uint8Array<ArrayBuffer>], 'saved.folio'),
       );
-      await until(() => project.name === expected.name);
+      await until(() => shell.editor.project.name === expected.name);
       assert(
-        JSON.stringify(project) === JSON.stringify(expected),
+        JSON.stringify(serializeProject(shell.editor.project)) ===
+          JSON.stringify(serializeProject(expected)),
         'Project changed in round trip',
       );
       assert(
@@ -288,20 +299,23 @@ export const runBrowserTests = async () => {
       await until(async () => (await storage.listProjects()).length > before);
     });
     await test('damaged and newer imports leave the current Project unchanged', async () => {
-      const before = JSON.stringify(project);
+      const before = JSON.stringify(shell.editor.project);
       drop(node('projects-window'), new File(['broken'], 'broken.zip'));
       await until(() =>
         node('notice-text').textContent!.includes("Couldn't import"),
       );
       assert(
-        JSON.stringify(project) === before,
+        JSON.stringify(shell.editor.project) === before,
         'broken file replaced Project',
       );
       const newer = await writeZip([
         {
           name: 'project.json',
           data: new TextEncoder().encode(
-            JSON.stringify({ ...serializeProject(project), format: 999 }),
+            JSON.stringify({
+              ...serializeProject(shell.editor.project),
+              format: 999,
+            }),
           ),
         },
       ]);
@@ -312,10 +326,13 @@ export const runBrowserTests = async () => {
       await until(() =>
         node('notice-text').textContent!.includes('newer version'),
       );
-      assert(JSON.stringify(project) === before, 'newer file replaced Project');
+      assert(
+        JSON.stringify(shell.editor.project) === before,
+        'newer file replaced Project',
+      );
     });
     await test('missing assets open as placeholders with Replace and survive re-export', async () => {
-      const missing = structuredClone(project);
+      const missing = castDraft(structuredClone(shell.editor.project));
       missing.name = 'Missing asset browser check';
       const file = await writeProjectFile(missing, new Map(), {
         allowMissing: true,
@@ -332,7 +349,7 @@ export const runBrowserTests = async () => {
         node('projects-window'),
         new File([file as Uint8Array<ArrayBuffer>], 'missing.zip'),
       );
-      await until(() => project.name === missing.name);
+      await until(() => shell.editor.project.name === missing.name);
       assert(
         node('page').textContent!.includes('Missing image'),
         'missing placeholder absent',

@@ -128,21 +128,24 @@ test('image insertion and replacement restore the entire model and selection thr
   const image = await importImage(new File([png], 'first.png'), decode);
   const project = createProject('Images');
   const editor = new StackEditor(project);
-  const before = structuredClone(project);
+  const before = structuredClone(editor.project);
   editor.setImage(image.asset, undefined, { left: 12, top: 34 });
-  const after = structuredClone(project);
+  const after = structuredClone(editor.project);
   expect(editor.selection).toEqual(['image1']);
   editor.undo();
-  expect(project).toEqual(before);
+  expect(editor.project).toEqual(before);
   expect(editor.selection).toEqual([]);
   editor.redo();
-  expect(project).toEqual(after);
+  expect(editor.project).toEqual(after);
   expect(editor.selection).toEqual(['image1']);
   editor.setImage({ ...image.asset, hash: 'a'.repeat(64) }, 'image1');
-  expect(project.assets.map(a => a.name)).toEqual(['first.png', 'first.png2']);
+  expect(editor.project.assets.map(a => a.name)).toEqual([
+    'first.png',
+    'first.png2',
+  ]);
   editor.undo();
-  expect(project).toEqual(after);
+  expect(editor.project).toEqual(after);
   editor.readOnly = true;
   editor.setImage(image.asset);
-  expect(project).toEqual(after);
+  expect(editor.project).toEqual(after);
 });
