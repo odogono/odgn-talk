@@ -595,6 +595,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | Table | Key | Holds | Case kinds |
 | --- | --- | --- | --- |
 | top level | `kind` | the case kind: `trace`, `disassembly`, `transcript` or `encoding` | trace, disassembly, transcript, encoding |
+| top level | `seed` | the seed the runner makes the Group with, a TOML integer 0 or more; 0 if absent ([chapter 7](07-libraries-and-the-standard-library.md#random-numbers)) | trace |
 | `[versions]` | `language` | the language version the case is blessed for | trace, disassembly, transcript, encoding |
 | `[versions]` | `costModel` | the Cost Model version the case is blessed for | trace, disassembly, transcript, encoding |
 | `[operations]` | `capability` | the Capability the Operation Declaration belongs to | trace, disassembly |

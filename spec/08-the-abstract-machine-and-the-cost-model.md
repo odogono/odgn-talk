@@ -415,7 +415,7 @@ effects, a restricted frame refuses these operations:
 - `wait`, `wait-for`, `wait-for-any`, `join-start`, `join-ask`, `join-send`,
   `join-send-named`, `join-send-spread`, `join-end`, `timeout-start`, `timeout-end`,
   `call-value-wait`, `call-handler-wait`, `veto`, `pass`.
-- `choose-offer`, and `call-builtin` for `offerAvailable` or `isDisposed`.
+- `choose-offer`, and `call-builtin` for `offerAvailable`, `isDisposed` or `random`.
   Recovery-offer lookup and transfer are refused even when the name is unknown
   or names a callback-local offer, so neither can observe or escape through the
   caller's recovery context.
@@ -1133,6 +1133,7 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 | `acos` | `60` | `size(result)` |  |
 | `atan` | `60` | `size(result)` |  |
 | `atan2` | `60` | `size(result)` |  |
+| `random` | `4` | `size(result)` |  |
 | `fromFloat64` | `8` | `size(result)` |  |
 | `fromFloat32` | `8` | `size(result)` |  |
 | `toFloat64` | `8` | `size(result)` |  |

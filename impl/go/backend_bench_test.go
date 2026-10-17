@@ -237,13 +237,17 @@ on fill n
 end fill
 `
 	core := talk.New()
-	// The first Group pays one-time costs, such as the Zig adapter's compile.
-	core.NewGroup(talk.GroupOptions{Name: "warm"})
+	// The first Groups pay one-time costs, such as the Zig adapter's compile
+	// and the guests its Groups share. Every Group stays held, so each
+	// iteration measures what more Groups add, not memory earlier ones freed.
+	var held []*talk.Group
+	for range 64 {
+		held = append(held, core.NewGroup(talk.GroupOptions{Name: "warm"}))
+	}
 	var heap, sys, rss float64
 	for b.Loop() {
 		before := memorySample()
-		held := make([]*talk.Group, groups)
-		for i := range held {
+		for i := range groups {
 			g := core.NewGroup(talk.GroupOptions{Name: fmt.Sprint("held", i)})
 			s, err := g.Load(talk.LoadOptions{Name: "s", Source: source})
 			if err != nil {
@@ -253,7 +257,7 @@ end fill
 			if err := requestOnce(g, s, m, talk.Int(100)); err != nil {
 				b.Fatal(err)
 			}
-			held[i] = g
+			held = append(held, g)
 		}
 		after := memorySample()
 		runtime.KeepAlive(held)

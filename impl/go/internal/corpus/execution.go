@@ -348,7 +348,11 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		return nil, e
 	}
 	ready := make(chan struct{}, 1)
-	g := core.NewGroup(talk.GroupOptions{Trace: crossings, OnReady: func() {
+	seed, e := setupSeed(setup)
+	if e != nil {
+		return nil, e
+	}
+	g := core.NewGroup(talk.GroupOptions{Trace: crossings, Seed: seed, OnReady: func() {
 		select {
 		case ready <- struct{}{}:
 		default:

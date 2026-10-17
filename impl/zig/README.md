@@ -283,7 +283,7 @@ still use. Check names against the installed source, under `lib_dir` from
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
 The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
-uses Zig's opaque `zig/10` saves. Its `restore-bindings-v1` Message Layer feature
+uses Zig's opaque `zig/11` saves. Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
 Script/Object identities and pending Call metadata. Pending Segment ids are
@@ -645,7 +645,7 @@ at the originating call, including a Join Member, without a synthetic Segment.
 A preempted Join's open Segment rolls back; a suspended Run keeps its committed
 variables. `talk_save` refuses with `effects pending` for pending metered calls
 or unresolved requests, even after Reload ends their call. Successful saves
-preserve the request counter and issued-call eligibility in save format `zig/10`;
+preserve the request counter and issued-call eligibility in save format `zig/11`;
 older Zig snapshot layouts are refused. Issued ids are kept as consecutive
 per-Run ranges with the same eligibility. Repeated polling through one Operation
 therefore keeps a fixed number of history entries in memory and in saves.

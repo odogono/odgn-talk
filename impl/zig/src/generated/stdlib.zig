@@ -392,6 +392,17 @@ pub const stdlib: StdlibTable = .{
             .total = 2,
         },
         .{
+            .name = "random",
+            .group = "numbers",
+            .call = "random(n)",
+            .gives = "A whole number from 1 to `n`, the next from the Script Group's generator",
+            .errors = &.{
+                "out of domain",
+            },
+            .required = 1,
+            .total = 1,
+        },
+        .{
             .name = "fromFloat64",
             .group = "floats",
             .call = "fromFloat64(b, order = \"big\")",

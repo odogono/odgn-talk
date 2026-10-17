@@ -1,0 +1,27 @@
+script variable rolls = []
+script variable codes = []
+
+on roll k
+  repeat k times
+    put random(6) after rolls
+  end repeat
+end roll
+
+on pick choice where random(2) is 1
+  put "heads " & choice after rolls
+end pick
+
+on pick choice
+  put "tails " & choice after rolls
+end pick
+
+on bounds
+  put [random(1), random(4294967296)] after rolls
+  repeat for each n in [0, 2.5, -3, 4294967297, "6", 6 kg]
+    try
+      put random(n) after rolls
+    catch e
+      put the code of e after codes
+    end try
+  end repeat
+end bounds

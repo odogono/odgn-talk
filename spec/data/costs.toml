@@ -550,6 +550,11 @@ fuel = "60"
 alloc = "size(result)"
 
 [[rate]]
+key = "builtin.random"
+fuel = "4"
+alloc = "size(result)"
+
+[[rate]]
 key = "builtin.fromFloat64"
 fuel = "8"
 alloc = "size(result)"

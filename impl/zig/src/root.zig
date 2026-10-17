@@ -67,6 +67,7 @@ test {
     _ = @import("machine/sqlite.zig");
     _ = @import("machine/objects.zig");
     _ = @import("machine/builtins.zig");
+    _ = @import("machine/random.zig");
     _ = @import("machine/group_allocator.zig");
     _ = @import("machine/nothing_defaults_test.zig");
     _ = @import("machine/restricted_test.zig");

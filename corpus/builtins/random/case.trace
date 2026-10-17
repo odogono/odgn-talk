@@ -1,0 +1,33 @@
+# Unblessed: `random(n)` draws from the seeded Script Group generator (#1111); first blessing awaits human review.
+> load dice identity=5e93db10cc35d5cd6f5dda8329909110af90610945028acf141707e768cf65da
+> load coin identity=8598ed7dbabf393f60a9931c958b3432660147895e6e421f632c05357f68f43e
+> deliver d1 to=dice message=roll args=[5]
+> pump clock=2026-10-17T09:00:00Z
+seg dice/r1 start delivery=d1 handler=roll clause=1 fuel=98 alloc=224 state=152 end=return
+run dice/r1 outcome=completed delivery=d1 handler=roll fuel=98 alloc=224
+pumped state=idle fuel=98
+> deliver d2 to=coin message=flip
+> deliver d3 to=dice message=pick args=["a"]
+> pump clock=2026-10-17T09:00:01Z
+seg dice/r2 start delivery=d3 handler=pick clause=1 fuel=30 alloc=70 state=183 end=return
+run dice/r2 outcome=completed delivery=d3 handler=pick fuel=30 alloc=70
+seg coin/r1 start delivery=d2 handler=flip clause=1 fuel=20 alloc=40 state=40 end=return
+run coin/r1 outcome=completed delivery=d2 handler=flip fuel=20 alloc=40
+pumped state=idle fuel=50
+> deliver d4 to=dice message=roll args=[3]
+> deliver d5 to=dice message=bounds
+> pump clock=2026-10-17T09:00:02Z
+seg dice/r3 start delivery=d4 handler=roll clause=1 fuel=64 alloc=144 state=287 end=return
+run dice/r3 outcome=completed delivery=d4 handler=roll fuel=64 alloc=144
+raise dice/r4 code="out of domain" at=dice:71 pos=22:11
+raise dice/r4 code="out of domain" at=dice:71 pos=22:11
+raise dice/r4 code="out of domain" at=dice:71 pos=22:11
+raise dice/r4 code="out of domain" at=dice:71 pos=22:11
+raise dice/r4 code="wrong kind" at=dice:71 pos=22:11
+raise dice/r4 code="wrong kind" at=dice:71 pos=22:11
+seg dice/r4 start delivery=d5 handler=bounds clause=1 fuel=214 alloc=593 state=543 end=return
+run dice/r4 outcome=completed delivery=d5 handler=bounds fuel=214 alloc=593
+pumped state=idle fuel=278
+> vars
+vars dice rolls=[3, 6, 4, 4, 4, "heads a", 6, 3, 4, [1, 1731076226]] codes=["out of domain", "out of domain", "out of domain", "out of domain", "wrong kind", "wrong kind"]
+vars coin flips=[1]

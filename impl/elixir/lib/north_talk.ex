@@ -80,7 +80,11 @@ defmodule NorthTalk do
   @doc "The Core's versions and features from `hello`."
   def versions(owner), do: GenServer.call(owner, :versions)
 
-  @doc "Makes a Script Group. `trace: true` records its Trace."
+  @doc """
+  Makes a Script Group. `trace: true` records its Trace, and `seed:`, a
+  whole number from 0 to 2^64 - 1, seeds the generator `random` draws from
+  (0 without one).
+  """
   def new_group(owner, name, opts \\ []), do: GenServer.call(owner, {:new_group, name, opts})
 
   @doc """

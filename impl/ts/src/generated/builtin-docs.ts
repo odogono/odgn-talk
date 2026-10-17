@@ -136,6 +136,10 @@ export const builtinDocs: Readonly<Record<string, { call: string; gives: string 
     "call": "atan2(y, x)",
     "gives": "The angle of the point (`x`, `y`) from the positive x-axis, in radians above -pi and at most pi"
   },
+  "random": {
+    "call": "random(n)",
+    "gives": "A whole number from 1 to `n`, the next from the Script Group's generator"
+  },
   "fromFloat64": {
     "call": "fromFloat64(b, order = \"big\")",
     "gives": "The number an IEEE 754 binary64 float in the 8 Bytes `b` holds, as its shortest round-trip decimal"

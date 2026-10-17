@@ -1,0 +1,20 @@
+# random: `random(n)` draws a whole number from 1 to `n` from the Script
+# Group's PCG32 generator, seeded here by `seed` (spec chapter 7, Random
+# numbers; ADR 0096). Two Scripts share the generator, a Guard's test draws,
+# a bad bound raises before drawing, and the state carries across Pumps and
+# the save and restore the runners make between them.
+
+kind = "trace"
+seed = 42
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "dice"
+source = "dice.talk"
+
+[[scripts]]
+name = "coin"
+source = "coin.talk"

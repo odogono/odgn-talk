@@ -356,6 +356,8 @@ pub const GroupOptions = extern struct {
     trace_context: ?*anyopaque,
     allocator: ?*const HostAllocator = null,
     memory_cap: usize = 0,
+    /// Seeds the generator `random` draws from (chapter 7, Random numbers).
+    seed: u64 = 0,
 };
 
 /// A Host's allocator, which a Group allocates from.
@@ -1066,6 +1068,7 @@ export fn talk_new_group(c: *Core, o: *const GroupOptions, out: *?*Group) HostEr
     const gpa = g.memory.allocator();
     g.out = .init(gpa);
     g.group = .init(gpa, if (o.trace != null) &g.out.writer else null);
+    g.group.seed(o.seed);
     out.* = g;
     return .ok;
 }

@@ -202,10 +202,13 @@ List files with `rg --files tooling/creative` before opening one by name.
   and [rich-text-dom.ts](src/rich-text-dom.ts): in-place text editing.
 - [examples/index.ts](src/examples/index.ts): the Example Projects listed in
   the Projects window; [examples/lighthouse.ts](src/examples/lighthouse.ts)
-  builds The Lighthouse Mystery.
+  builds The Lighthouse Mystery and [examples/tetris.ts](src/examples/tetris.ts)
+  builds Tetris.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
   [examples.test.ts](tests/examples.test.ts),
   [lighthouse.test.ts](tests/lighthouse.test.ts),
+  [tetris.test.ts](tests/tetris.test.ts),
+  [tetris.browser.ts](tests/tetris.browser.ts),
   [page-resize.browser.ts](tests/page-resize.browser.ts),
   [rich-text.browser.ts](tests/rich-text.browser.ts),
   [lighthouse.browser.ts](tests/lighthouse.browser.ts).

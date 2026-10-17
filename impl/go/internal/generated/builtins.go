@@ -342,6 +342,17 @@ var Builtins = BuiltinsTable{
 			Total:    2,
 		},
 		BuiltinsTableBuiltinEntry{
+			Name:  "random",
+			Group: "numbers",
+			Call:  "random(n)",
+			Gives: "A whole number from 1 to `n`, the next from the Script Group's generator",
+			Errors: []string{
+				"out of domain",
+			},
+			Required: 1,
+			Total:    1,
+		},
+		BuiltinsTableBuiltinEntry{
 			Name:  "fromFloat64",
 			Group: "floats",
 			Call:  "fromFloat64(b, order = \"big\")",

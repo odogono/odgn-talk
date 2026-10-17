@@ -1113,7 +1113,8 @@ export const checkSyntax = (
       const binding = site.name.binding;
       const allowed =
         site.name.role === 'call'
-          ? binding?.kind === 'builtin function'
+          ? // `random` draws from the Group, so it has an effect.
+            binding?.kind === 'builtin function' && binding.name !== 'random'
           : binding?.kind === 'builtin constant' ||
             (binding?.kind === 'constant' &&
               (binding.span === null

@@ -14,6 +14,7 @@ The Go Core's module path is `github.com/odogono/odgn-talk/impl/go`, with the pu
 
 - **`Core`** is process-wide. It holds the compile cache, so a Script or Library with the same code identity compiles once. It defines Capabilities and Object Kinds, compiles Libraries, and makes and restores Groups.
   - **TS helpers:** `createCore()` returns the process-wide Core. The package also keeps its free-function helpers (`defineCapability`, `compileLibrary`, `newGroup`, `restore` and the Capability factories); they use the same process-wide definitions and compile caches. Creating a Core does not reset those definitions or caches. Each Group still owns its live state.
+- **Making a Group:** `NewGroup` takes the Group's name and, optionally, the seed of the generator [`random`](07-libraries-and-the-standard-library.md#random-numbers) draws from, a whole number from 0 to 2^64 − 1. Without one the seed is 0. A restored Group keeps its saved generator state instead.
 - **`Group`** takes every Host Input: load, add and replace Library, deliver, request, broadcast, decide, call a Function Value, `setParent`, dispose, pump, save and settle. It also gives the Group Fingerprint and an Inspection. Host Objects are made per Group, since parents and disposal belong to it.
 - **`Script`** is a handle for calls addressed to one Script: reload, extend, stop, cancel or rewind a Run, revoke a Grant, counters, and deliver, request or decide to the Script itself.
 
@@ -357,7 +358,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
 | `grant` | `capability`, `ops`: names, or `"all"`, optional `coordinator`: the name of its Segment Coordinator, shared by every Grant given that name; optional `locale` default tag or `maxRows` sqlite row cap with `standard-refinements-v1` | `grant`: a handle | `Grant`, `GrantAll` |
 | `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
-| `new-group` | `name`, `trace`: a boolean | – | `NewGroup` |
+| `new-group` | `name`, `trace`: a boolean, optional `seed`: an integer from 0 to 2^64 − 1, in the integer encoding | – | `NewGroup` |
 | `drop-group` (`group-exchanges-v1`) | – | – | the Host letting go of a Group ([dropping a Group](embedding/group-exchanges.md#dropping-a-group)) |
 | `load` | `name`, `source`, `grants`: `{name: handle}`, `grantsAsUsed`, `owner`, `objects`, `limits` | `script`, `trace` | `Load` |
 | `add-library`, `replace-library` | `identity`, and `carry` for a replace | –, or `reports` and `abandoned` | `AddLibrary`, `ReplaceLibrary` |

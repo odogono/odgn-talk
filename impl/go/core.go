@@ -39,6 +39,9 @@ type Core struct {
 	// libraryChecker is the experimental Zig backend's Group whose guest
 	// checks CompileLibrary's Libraries.
 	libraryChecker *Group
+	// zigGuests is the experimental Zig backend's pool of guests its
+	// Groups share.
+	zigGuests any
 }
 
 type compileKey struct {
@@ -54,7 +57,7 @@ func CoreVersions() Versions {
 	if experimentalVersions != nil {
 		return experimentalVersions()
 	}
-	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/8"}
+	return Versions{Language: generated.Version.Language, CostModel: fmt.Sprint(generated.Costs.Version), Unicode: generated.UnicodeVersion, Core: "go/0.1.0", SaveFormat: "go/9"}
 }
 func DefaultLimits() Limits {
 	var l Limits

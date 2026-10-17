@@ -27,7 +27,7 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	fields := map[string]any{"m": "pump", "ref": int64(100), "group": "g", "now": "2026-10-15T12:00:00Z", "fuelSlice": 30}
+	fields := map[string]any{"m": "pump", "ref": int64(100), "group": b.groupHandle(), "now": "2026-10-15T12:00:00Z", "fuelSlice": 30}
 	completed := false
 	for i := 0; i < 10; i++ {
 		packet, err := b.frame(fields)
@@ -45,11 +45,11 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 		}
 		switch zigText(need.Get("m")) {
 		case "trace":
-			fields = map[string]any{"m": "trace-result", "ref": int64(100)}
+			fields = map[string]any{"m": "trace-result", "ref": int64(100), "group": b.groupHandle()}
 		case "effect":
-			fields = map[string]any{"m": "effect-result", "ref": int64(100), "status": "ok"}
+			fields = map[string]any{"m": "effect-result", "ref": int64(100), "group": b.groupHandle(), "status": "ok"}
 		case "op":
-			fields = map[string]any{"m": "op-result", "ref": int64(100), "result": nil}
+			fields = map[string]any{"m": "op-result", "ref": int64(100), "group": b.groupHandle(), "result": nil}
 		default:
 			t.Fatal(need)
 		}

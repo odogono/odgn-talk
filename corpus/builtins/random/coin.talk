@@ -1,0 +1,5 @@
+script variable flips = []
+
+on flip
+  put random(2) after flips
+end flip

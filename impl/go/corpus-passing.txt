@@ -441,3 +441,4 @@ stdlib/mappings-restricted
 stdlib/mappings-restore
 stdlib/mappings-limits
 stdlib/mappings-depth
+builtins/random

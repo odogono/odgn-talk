@@ -37,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 10;
+pub const format_version: u32 = 11;
 
 pub const Error = error{
     InvalidSave,
@@ -934,6 +934,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.timers);
     try o.int(g.run_order);
     try o.int(g.charge_counter);
+    try o.int(g.random_state);
     try o.int(g.issued_calls.runs.count());
     var issued: std.ArrayList([]const u8) = .empty;
     defer issued.deinit(gpa);
@@ -2199,6 +2200,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.timers = try i.int();
     g.run_order = try i.int();
     g.charge_counter = try i.int();
+    g.random_state = try i.wide();
     const issued_count = try i.count();
     for (0..issued_count) |_| {
         const run = try a.dupe(u8, try i.str());
@@ -2758,13 +2760,13 @@ test "a save that doesn't match is refused under RejectMismatch, and nothing is 
     try testing.expectEqual(Outcome.mismatch, try restore(&restored, other, .{}, &result));
 }
 
-test "older issued-id and random snapshot layouts are refused" {
+test "prior snapshot layouts are refused" {
     const gpa = testing.allocator;
     var g: Group = .init(gpa, null);
     defer g.deinit();
     const bytes = try save(&g, gpa, try g.groupFingerprint());
     defer gpa.free(bytes);
-    for ([_]u8{ 8, 9 }) |old| {
+    for ([_]u8{ 8, 9, 10 }) |old| {
         // These versions have one-byte LEB128 headers. Give the otherwise
         // valid save a legacy header and a matching integrity digest.
         bytes[magic.len] = old;

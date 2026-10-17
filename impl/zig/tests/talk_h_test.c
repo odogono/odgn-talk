@@ -55,7 +55,7 @@ static int group_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable total = 0\non bump n\n  add n to total\n  return total & \"!\"\nend bump\n";
     talk_load_options load = {"adder", 5, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -145,7 +145,7 @@ static int capability_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
@@ -219,7 +219,7 @@ static int host_command_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation reserved[] = {{"if", 2, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, true}};
@@ -307,7 +307,7 @@ static int revoke_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const talk_shape *args[] = {talk_text_shape()};
     talk_operation ops[] = {{"twice", 5, args, 1, talk_text_shape(), {7, 0}, TALK_IMMEDIATE, 0, NULL, 0, twice, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
@@ -376,7 +376,7 @@ static int scope_test(void) {
     memset(trace, 0, sizeof trace);
     lifecycle_seen[0] = 0;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_scope_decl opens = {"file", 4, "close", 5, NULL, 0};
     talk_scope_decl closes = {NULL, 0, NULL, 0, "file", 4};
@@ -479,7 +479,7 @@ static int segment_test(void) {
     memset(trace, 0, sizeof trace);
     effects_seen[0] = 0;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_operation ops[] = {{"write", 5, NULL, 0, talk_nothing_shape(), {1, 0}, TALK_IMMEDIATE, 0, NULL, 0, lifecycle, NULL, NULL, true, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
@@ -537,7 +537,7 @@ static int broadcast_selection_test(void) {
         for (int handler = 0; handler < 2; handler++) {
             talk_core *core = talk_new();
             talk_group *group = NULL;
-            talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+            talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
             trace_len = 0;
             memset(trace, 0, sizeof trace);
             bad |= talk_new_group(core, &options, &group) != TALK_OK;
@@ -584,7 +584,7 @@ static int decision_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "on move n, deciding\n  if n is 1 then veto \"blocked\"\nend move\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -658,7 +658,7 @@ static int store_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost entries[] = {{"get", 3, {1, 0}}, {"set", 3, {1, 0}}, {"delete", 6, {1, 0}}, {"keys", 4, {1, 0}}, {"increment", 9, {1, 0}}, {"swap", 4, {1, 0}}, {"watch", 5, {1, 0}}, {"unwatch", 7, {1, 0}}};
     talk_costs costs = {entries, 8};
@@ -749,7 +749,7 @@ static int sqlite_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost entries[] = {{"query", 5, {1, 0}}, {"change", 6, {1, 0}}, {"begin", 5, {1, 0}}, {"commit", 6, {1, 0}}, {"rollback", 8, {1, 0}}};
     talk_costs costs = {entries, 5};
@@ -896,7 +896,7 @@ static int router_test(void) {
     store_revision = 0;
     watch_cap = 100;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost entries[] = {{"get", 3, {0, 0}}, {"set", 3, {0, 0}}, {"delete", 6, {0, 0}}, {"keys", 4, {0, 0}}, {"increment", 9, {0, 0}}, {"swap", 4, {0, 0}}, {"watch", 5, {0, 0}}, {"unwatch", 7, {0, 0}}};
     talk_costs costs = {entries, 8};
@@ -969,7 +969,7 @@ static int standard_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost clock_costs[] = {{"now", 3, {5, 0}}};
     talk_costs costs = {clock_costs, 1};
@@ -1012,7 +1012,7 @@ static int limits_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_limits negative = {0};
     negative.fuel_per_run = -1;
@@ -1058,7 +1058,7 @@ static int slice_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable n = 0\non count\n  repeat 5 times\n    add 1 to n\n  end repeat\nend count\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1095,7 +1095,7 @@ static int cancel_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable n = 0\non hold\n  try\n    wait 1 s\n  finally\n    put 9 into n\n  end try\nend hold\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1129,7 +1129,7 @@ static int decision_cancel_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *quick_source = "on enter, deciding\n  wait 1 s\nend enter\n";
     const char *slow_source = "on enter, deciding\n  repeat forever\n  end repeat\nend enter\n";
@@ -1177,7 +1177,7 @@ static int negative_override_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "on enter\nend enter\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1221,7 +1221,7 @@ static int object_path_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_prop props[] = {{"dear", 4, talk_any_shape(), get_dear, NULL, NULL, {1000, 0}, {0, 0}}};
     talk_object_kind_def gauge_def = {"gauge", 5, props, 1, NULL, NULL, 0};
@@ -1290,7 +1290,7 @@ static int function_call_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *home_source = "on exported\n  return given: 5\nend exported\non ping\nend ping\n";
     const char *caller_source = "on go callback\n  try\n    callback() and wait\n  catch e\n    return the code of e\n  end try\nend go\n";
@@ -1376,7 +1376,7 @@ static int stop_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable n = 0\non hold\n  try\n    wait 1 s\n  finally\n    put 9 into n\n  end try\nend hold\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1440,7 +1440,7 @@ static int reload_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable n = 1\non bump\n  add 1 to n\nend bump\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1490,7 +1490,7 @@ static int save_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *source = "script variable n = 0\non nap\n  wait 5 s\n  add 1 to n\nend nap\n";
     talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
@@ -1562,7 +1562,7 @@ static int runaway_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 128u << 20};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 128u << 20, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     /* The measurements run the allocation cases with Fuel to spare, so the
      * Allocation Budget is what ends them. */
@@ -1674,7 +1674,7 @@ static int stop_call_cancellation_test(bool join, bool settled, bool consumed, c
     bad |= talk_capability_def_grant_all(def, NULL, &grant) != TALK_OK;
     talk_group *group = NULL;
     trace_len = 0; memset(trace, 0, sizeof trace);
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     bad |= talk_new_group(core, &options, &group) != TALK_OK;
     talk_script *blocker = NULL;
     if (settled && !consumed) {
@@ -1747,7 +1747,7 @@ static int user_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_named_cost timer_costs[] = {{"schedule", 8, {1, 0}}, {"cancel", 6, {1, 0}}};
     talk_costs timer_all = {timer_costs, 2};
@@ -1797,7 +1797,7 @@ static int release_cancellation_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0, 0};
     int bad = talk_new_group(core, &options, &group) != TALK_OK;
     talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_option hooks[] = {talk_with_release_hook(release_observe_call, NULL)};
@@ -1831,7 +1831,7 @@ static int suspension_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_operation ops[] = {{"fetch", 5, NULL, 0, talk_number_shape(), {20, 0}, TALK_SUSPENDING, 1000, NULL, 0, start, NULL, NULL, false, NULL, 0, NULL, 0, NULL, NULL, 0, false}};
     talk_capability_def *def = NULL;
@@ -1900,7 +1900,7 @@ static int object_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     talk_text("off", 3, &lamp_state);
     talk_prop props[] = {{"state", 5, talk_text_shape(), get_state, set_state, NULL, {2, 0}, {5, 0}}};
@@ -2047,7 +2047,7 @@ static int library_constant_functions_test(void) {
         trace_len = 0;
         memset(trace, 0, sizeof trace);
         talk_group *group = NULL;
-        talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+        talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
         bad |= talk_new_group(core, &options, &group) != TALK_OK;
         bad |= talk_add_library(group, lib) != TALK_OK;
         const char *source = "use box, apply from helper\nscript variable got\non go\n put the f of box into f\n put [f(2), apply(4)] into got\nend go\n";
@@ -2076,7 +2076,7 @@ static int library_test(void) {
     trace_len = 0;
     memset(trace, 0, sizeof trace);
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
     const char *base_source = "constant step = 10\nfunction bump n, by = step\n  return n + by\nend bump\n";
     talk_library_source base_src = {"base", 4, "1", 1, base_source, strlen(base_source)};
@@ -2189,7 +2189,7 @@ static int host_list_memory_test(void) {
     if (core == NULL) return 1;
     talk_allocator host = {NULL, host_alloc, host_free};
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, NULL, NULL, &host, 64 * 1024};
+    talk_group_options options = {"g", 1, NULL, NULL, &host, 64 * 1024, 0};
     int bad = talk_new_group(core, &options, &group) != TALK_OK;
     /* Both arguments are Host values. Reusing the same child isolates the
      * growing List's allocations: its backing must come from the Group. */
@@ -2273,7 +2273,7 @@ static int snapshot_growth_test(void) {
     talk_core *core = talk_new();
     if (core == NULL) return 1;
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, NULL, NULL, NULL, 0, 0};
     int bad = talk_new_group(core, &options, &group) != TALK_OK;
     const char *source = "on probe n\n  put [] into root\n  put nothing after root\n  put [] into result\n  repeat n times\n    put [] into prefix\n    put nothing after prefix\n    put prefix into snapshot\n    put root after prefix\n    put snapshot into root\n    put root after result\n  end repeat\n  return result\nend probe\n";
     talk_limits limits = {0};
@@ -2319,7 +2319,7 @@ static int memory_test(void) {
     memset(trace, 0, sizeof trace);
     talk_allocator host = {NULL, host_alloc, host_free};
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, &host, 256 * 1024};
+    talk_group_options options = {"g", 1, record, NULL, &host, 256 * 1024, 0};
     int bad = talk_new_group(core, &options, &group) != TALK_OK;
     /* Each turn of the loop doubles the text, far past the cap long before
      * the logical budgets: the Group refuses, and the process goes on. */
@@ -2356,7 +2356,7 @@ static talk_call_end metered_start(void *context, talk_call *call, talk_value *c
 static int metering_test(void) {
     talk_core *core = talk_new();
     talk_group *group = NULL;
-    talk_group_options options = {"g", 1, record, NULL, NULL, 0};
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
     if (core == NULL || talk_new_group(core, &options, &group) != TALK_OK) return 1;
     trace_len = 0;
     memset(trace, 0, sizeof trace);
