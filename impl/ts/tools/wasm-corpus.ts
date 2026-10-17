@@ -16,12 +16,7 @@ import { checkTraceCase } from './case-checks';
 import { DeferredCaseError, reader } from './trace-case';
 
 /** Divergences in the reactor, each with its issue; they're reported, not failed. */
-const known = new Map([
-  [
-    'limits/max-join-minimum',
-    '#1128: a Join of exactly maxJoin members faults under crossing-trace-v1',
-  ],
-]);
+const known = new Map<string, string>();
 
 const root = resolve(import.meta.dir, '../../..');
 const corpusRoot = resolve(root, 'corpus');
