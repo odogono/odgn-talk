@@ -3,6 +3,7 @@ package value
 import (
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -43,16 +44,16 @@ func JSONString(s string, plain bool) string {
 	return out.String()
 }
 func Encode(v Value, plain bool) ([]byte, error) {
-	return EncodeWire(v, plain, nil)
+	return EncodeWire(v, plain, nil, false)
 }
 
 // EncodeWire is the Value Encoding with Function Values written by
 // function, as the Message Layer carries them; nil refuses them. With
-// function, a Core-raised error map is {"$coreError": [[key, value], …]}
+// coreErrors, a Core-raised error map is {"$coreError": [[key, value], …]}
 // (core-message-v1), so its message stays marked.
-func EncodeWire(v Value, plain bool, function func(*FunctionData) (string, error)) ([]byte, error) {
+func EncodeWire(v Value, plain bool, function func(*FunctionData) (string, error), coreErrors bool) ([]byte, error) {
 	var out strings.Builder
-	err := encode(&out, v, plain, function, function != nil)
+	err := encode(&out, v, plain, function, coreErrors)
 	if err != nil {
 		return nil, err
 	}
@@ -105,13 +106,12 @@ func encode(out *strings.Builder, root Value, plain bool, function func(*Functio
 					break
 				}
 			}
-			marked := core && v.CoreMessage
-			wrapped = wrapped || marked
-			if marked {
-				out.WriteString(`{"$coreError":[`)
-				text("]}")
-			} else if wrapped {
-				out.WriteString(`{"$map":[`)
+			tag := "$map"
+			if core && v.CoreMessage {
+				tag, wrapped = "$coreError", true
+			}
+			if wrapped {
+				out.WriteString(`{"` + tag + `":[`)
 				text("]}")
 			} else {
 				out.WriteByte('{')
@@ -536,23 +536,17 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		}
 		return r.wire(v)
 	case "$coreError":
-		if v.Kind != List || len(v.Items()) == 0 || r.wire == nil {
+		pairs, ok := tagPairs(v)
+		if !ok || len(pairs) == 0 || r.wire == nil {
 			return bad()
 		}
-		pairs := make([]Pair, len(v.Items()))
-		for i, item := range v.Items() {
-			if item.Kind != List || len(item.Items()) != 2 || item.Items()[0].Kind != Text {
-				return bad()
-			}
-			pairs[i] = Pair{item.Items()[0].Text(), item.Items()[1]}
+		// Only a map with a text message has one to leave out.
+		if !slices.ContainsFunc(pairs, func(p Pair) bool { return p.Key == "message" && p.Val.Kind == Text }) {
+			return bad()
 		}
 		m, e := NewMap(pairs)
 		if e != nil {
 			return Value{}, e
-		}
-		// Only a map with a text message has one to leave out.
-		if m.Get("message").Kind != Text {
-			return bad()
 		}
 		m.CoreMessage = true
 		return m, nil
@@ -628,19 +622,8 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		}
 		return i, nil
 	case "$map":
-		if v.Kind != List {
-			return bad()
-		}
-		pairs := make([]Pair, len(v.Items()))
-		hasDollarKey := false
-		for i, item := range v.Items() {
-			if item.Kind != List || len(item.Items()) != 2 || item.Items()[0].Kind != Text {
-				return bad()
-			}
-			pairs[i] = Pair{item.Items()[0].Text(), item.Items()[1]}
-			hasDollarKey = hasDollarKey || strings.HasPrefix(pairs[i].Key, "$")
-		}
-		if !hasDollarKey {
+		pairs, ok := tagPairs(v)
+		if !ok || !slices.ContainsFunc(pairs, func(p Pair) bool { return strings.HasPrefix(p.Key, "$") }) {
 			return bad()
 		}
 		return NewMap(pairs)
@@ -670,4 +653,24 @@ func (r *jsonReader) tag(p Pair) (Value, error) {
 		return pattern, nil
 	}
 	return bad()
+}
+
+// tagPairs reads a tag payload of [key, value] pairs.
+func tagPairs(v Value) ([]Pair, bool) {
+	if v.Kind != List {
+		return nil, false
+	}
+	items := v.Items()
+	pairs := make([]Pair, len(items))
+	for i, item := range items {
+		if item.Kind != List {
+			return nil, false
+		}
+		kv := item.Items()
+		if len(kv) != 2 || kv[0].Kind != Text {
+			return nil, false
+		}
+		pairs[i] = Pair{kv[0].Text(), kv[1]}
+	}
+	return pairs, true
 }

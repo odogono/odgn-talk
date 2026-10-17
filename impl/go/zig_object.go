@@ -309,7 +309,7 @@ func (b *zigGroup) zigEncoded(v Value) (json.RawMessage, error) {
 	}
 	raw, err := corevalue.EncodeWire(v.inner, false, func(f *corevalue.FunctionData) (string, error) {
 		return `{"$function":[` + corevalue.JSONString(f.Home, false) + "," + corevalue.JSONString(wireDisplay(f), false) + "," + corevalue.JSONString(f.Code, false) + "]}", nil
-	})
+	}, true) // zigFeatures always negotiates core-message-v1
 	if err != nil {
 		return nil, &HostError{InvalidValue, err.Error()}
 	}

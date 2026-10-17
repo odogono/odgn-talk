@@ -10,7 +10,7 @@ func TestWireMarksCoreRaisedErrorMessages(t *testing.T) {
 	}
 	raised.CoreMessage = true
 	noFunctions := func(*FunctionData) (string, error) { return "", nil }
-	wire, err := EncodeWire(raised, false, noFunctions)
+	wire, err := EncodeWire(raised, false, noFunctions, true)
 	if err != nil || string(wire) != `{"$coreError":[["code","x"],["message","m"]]}` {
 		t.Fatalf("wire %s, %v", wire, err)
 	}

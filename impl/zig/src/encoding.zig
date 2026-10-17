@@ -297,18 +297,14 @@ fn build(a: std.mem.Allocator, root: Json, r: display.Resolver, mode: Mode) mode
                 .range => try model.range(a, top.items.items[0], top.items.items[1]),
                 .map => blk: {
                     if (top.core) {
-                        const m = try model.map(a, top.pairs.items);
                         // Only a map with a text `message` has one to leave out.
-                        const message = m.get("message");
-                        if (message == null or message.?.data != .text) {
-                            m.release();
-                            return error.InvalidValue;
-                        }
-                        m.core_message = true;
-                        break :blk m;
-                    }
-                    if (top.tagged and !top.escaped) return error.InvalidValue;
-                    break :blk try model.map(a, top.pairs.items);
+                        for (top.pairs.items) |p| {
+                            if (std.mem.eql(u8, p.key, "message") and p.value.data == .text) break;
+                        } else return error.InvalidValue;
+                    } else if (top.tagged and !top.escaped) return error.InvalidValue;
+                    const m = try model.map(a, top.pairs.items);
+                    m.core_message = top.core;
+                    break :blk m;
                 },
             };
             var done = stack.pop().?;
@@ -349,15 +345,12 @@ fn startValue(a: std.mem.Allocator, j: Json, r: display.Resolver, mode: Mode) mo
                 const name = object.keys()[0];
                 const payload = object.values()[0];
                 if (std.mem.eql(u8, name, "$range")) return .{ .building = .{ .kind = .range, .children = try pair(payload) } };
-                if (std.mem.eql(u8, name, "$map")) {
+                const core = std.mem.eql(u8, name, "$coreError") and r.core_error;
+                if (core or std.mem.eql(u8, name, "$map")) {
                     if (payload != .array) return error.InvalidValue;
                     // A map with no `$` key is written as a plain object.
                     if (payload.array.items.len == 0) return error.InvalidValue;
-                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true } };
-                }
-                if (std.mem.eql(u8, name, "$coreError") and r.core_error) {
-                    if (payload != .array or payload.array.items.len == 0) return error.InvalidValue;
-                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true, .core = true } };
+                    return .{ .building = .{ .kind = .map, .children = payload.array.items, .tagged = true, .core = core } };
                 }
                 if (name.len > 0 and name[0] == '$') return .{ .value = try taggedLeaf(a, name, payload, r) };
             }

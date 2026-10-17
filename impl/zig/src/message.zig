@@ -472,7 +472,11 @@ const Out = struct {
         writeInt(o.w(), n) catch return error.OutOfMemory;
     }
     fn value(o: *Out, v: *const Value) (Allocator.Error || error{NotEncodable})!void {
-        const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction, .core_error = s.core_errors } else null;
+        return o.valueWith(v, if (handling) |s| s.core_errors else false);
+    }
+    /// A Value Encoding, marking Core-raised error maps only when `core_errors`.
+    fn valueWith(o: *Out, v: *const Value, core_errors: bool) (Allocator.Error || error{NotEncodable})!void {
+        const functions: ?encoding.FunctionWriter = if (handling) |s| .{ .context = s, .write = writeFunction, .core_error = core_errors } else null;
         encoding.writeWith(o.w(), v, functions) catch |e| return if (e == error.NotEncodable) error.NotEncodable else error.OutOfMemory;
     }
     /// `{"$bytes":…}`, chapter 9's byte-string encoding.
@@ -689,8 +693,7 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
     iw.print(",\"f\":{d},\"d\":", .{found[1]}) catch return error.OutOfMemory;
     std.json.Stringify.value(f.display, .{}, iw) catch return error.OutOfMemory;
     iw.writeAll(",\"c\":") catch return error.OutOfMemory;
-    // Captures always mark Core-raised errors: the token is this layer's own.
-    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy, .core_error = true });
+    try encoding.writeWith(iw, f.captures, .{ .context = s, .write = writeFunctionLegacy, .core_error = token_core_errors });
     iw.writeAll("}") catch return error.OutOfMemory;
     const codec = std.base64.standard.Encoder;
     const token = try s.gpa.alloc(u8, codec.calcSize(inner.written().len));
@@ -717,6 +720,10 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
     w.writeAll("]}") catch return error.WriteFailed;
 }
 
+/// A token's captures always mark Core-raised errors, whatever was
+/// negotiated: the token is this layer's own, written and read here.
+const token_core_errors = true;
+
 /// Reads a `$function` token against `context`'s Group: another Group's is
 /// `wrong group`, and anything this layer didn't write is invalid.
 fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, token: []const u8) model.Error!*Value {
@@ -741,7 +748,7 @@ fn resolveFunction(context: ?*anyopaque, home: []const u8, shown: []const u8, to
     const code = functions[@intCast(index)];
     const display_text = asText(field(parsed.value, "d")) orelse return error.InvalidValue;
     var captured = resolverOf(e);
-    captured.core_error = true;
+    captured.core_error = token_core_errors;
     const captures = try encoding.decodeParsed(gpa, field(parsed.value, "c") orelse return error.InvalidValue, captured);
     defer captures.release();
     return model.function(gpa, code.home, display_text, @intFromPtr(code), captures);
@@ -1685,10 +1692,11 @@ fn writeReport(o: *Out, report: machine.report.Report, climbed: bool) Allocator.
             if (r.err) |v| {
                 try o.raw(",\"error\":");
                 // `error` is a plain error record, not a Value Encoding
-                // field, so `core-message-v1` leaves its own map unmarked.
-                var record = v.*;
-                record.core_message = false;
-                try reportValue(o, &record);
+                // field, so `core-message-v1` leaves it unmarked.
+                o.valueWith(v, false) catch |e| switch (e) {
+                    error.NotEncodable => try o.raw("null"),
+                    error.OutOfMemory => return error.OutOfMemory,
+                };
             }
             try optionalText(o, "limit", r.limit);
             if (r.effect) |e| {
