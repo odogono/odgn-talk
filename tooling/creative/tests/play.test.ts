@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createElement, createPage, createProject, textOf } from '../src/model';
-import { PlaySession } from '../src/play';
+import { definesHandler, PlaySession } from '../src/play';
 
 const fixture = () => {
   const project = createProject('Story');
@@ -805,4 +805,63 @@ test('leaving the Page and Stop take down pending prompts', async () => {
   play.stop(0n);
   expect(play.prompts).toEqual([]);
   expect(play.problems).toEqual([]);
+});
+
+test('definesHandler finds a declared Handler and tolerates bad source', () => {
+  expect(definesHandler('on frame elapsed\nend frame', 'frame')).toBe(true);
+  expect(definesHandler('on click\nend click', 'frame')).toBe(false);
+  expect(definesHandler('on frame (', 'frame')).toBe(false);
+});
+
+test('frame reaches only Scripts that handle it, with elapsed since their last frame', async () => {
+  const project = fixture();
+  project.pages[0]!.script =
+    'script variable total = 0\non frame elapsed\n add elapsed to total\n set the label of button1 to "" & total\nend frame';
+  project.pages[0]!.elements[1]!.script = 'on click\nend click';
+  const play = new PlaySession(project);
+  await advance(play);
+  expect(play.wantsFrames).toBe(true);
+  play.frame(1_000_000n);
+  await advance(play, 1_000_000n);
+  play.frame(1_016_000n);
+  await advance(play, 1_016_000n);
+  expect(play.problems).toEqual([]);
+  expect(play.page.elements[0]).toHaveProperty('label', '16');
+});
+
+test('no Script handling frame means no frames are wanted', () => {
+  const play = new PlaySession(fixture());
+  expect(play.wantsFrames).toBe(false);
+});
+
+test('a frame arriving while the last frame Run waits is dropped and its time carried', async () => {
+  const project = fixture();
+  project.pages[0]!.script =
+    'on frame elapsed\n set the label of button1 to "" & elapsed\n wait 50 ms\nend frame';
+  const play = new PlaySession(project);
+  await advance(play);
+  play.frame(0n);
+  await advance(play);
+  play.frame(16_000n); // still waiting: dropped
+  await advance(play, 16_000n);
+  await advance(play, 50_000n);
+  await Promise.resolve();
+  play.frame(66_000n);
+  await advance(play, 66_000n);
+  expect(play.page.elements[0]).toHaveProperty('label', '66');
+});
+
+test("leaving the Page stops its Script's frames", async () => {
+  const project = fixture();
+  project.pages.push(createPage('page2'));
+  project.pages[0]!.script =
+    'on frame elapsed\nend frame\non click\n tell pages to show page2\nend click';
+  const play = new PlaySession(project);
+  await advance(play);
+  expect(play.wantsFrames).toBe(true);
+  play.send(play.page, 'click');
+  await advance(play);
+  await advance(play, 2_000_000n);
+  expect(play.pageIndex).toBe(1);
+  expect(play.wantsFrames).toBe(false);
 });

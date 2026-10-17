@@ -24,7 +24,7 @@ List files with `rg --files tooling/creative` before opening one by name.
   `offline`, `rich-text` and `storage`. In the page's console run
   `await import('/<suite>.browser.js').then(m => m.runBrowserTests())`;
   every result must have `passed: true`. `play` also exports
-  `runElementsBrowserTests`, `runUserBrowserTests` and
+  `runElementsBrowserTests`, `runFrameBrowserTests`, `runUserBrowserTests` and
   `runMessageBoxBrowserTests`; run each after a reload. The watch server
   empties `dist/` on every app rebuild, so rebuild the suites after one.
 - Service-worker trap: once `/` has loaded, Folio's
@@ -48,9 +48,11 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [play.ts](src/play.ts): the Play Session, its Group, the disposable Project
   copy, the `PlayMessage` list (`startPlay`, `openPage`, `click`, …) and
-  `send`, Page navigation, `wait`, dynamic Elements.
+  `send`, Page navigation, `wait`, dynamic Elements, and `frame` delivery
+  (`definesHandler`, `wantsFrames`, `frame`; ADR 0095).
 - [play-view.ts](src/play-view.ts): Browse and Present in the browser,
-  pointer and key input turned into `PlayMessage`s.
+  pointer and key input turned into `PlayMessage`s, and the
+  `requestAnimationFrame` loop that drives `frame`.
 - [play-text.ts](src/play-text.ts): reader-editable text and its history.
 - Tests: [play.test.ts](tests/play.test.ts),
   [play-text.test.ts](tests/play-text.test.ts),
