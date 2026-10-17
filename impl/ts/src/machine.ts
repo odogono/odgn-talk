@@ -5612,7 +5612,7 @@ export const callFunction = (
 
 // The element instructions pay their base rate before validation, so an
 // error they raise must not be charged the rate again (#1143).
-function paidOnce(body: () => Value): Value {
+const paidOnce = (body: () => Value): Value => {
   try {
     return body();
   } catch (error) {
@@ -5621,4 +5621,4 @@ function paidOnce(body: () => Value): Value {
     }
     throw error;
   }
-}
+};
