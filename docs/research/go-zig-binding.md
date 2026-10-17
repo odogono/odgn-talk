@@ -33,11 +33,14 @@ local machine for every Host crossing, while pure execution is close on both.
 GC on fewer spare cores is a likely cause, given the allocation rate below, but
 is not confirmed.
 
-### Proposed retirement limits
+### Retirement limits
 
-**Status: proposed, awaiting the maintainer decision.** Nothing below is
-agreed or recorded on #1054 or #884 yet. Limits are Zig-to-native ratios within
-one job, except cold start. A limit passes when every CI platform meets it.
+**Status: agreed by the maintainer on 2026-10-17** and recorded on #1054 and
+#884. Limits are Zig-to-native ratios within one job, except cold start. A
+limit passes when every CI platform meets it. Three pass. The misses have two
+follow-ups: [#1101](https://github.com/odogono/odgn-talk/issues/1101) for
+deferred-call age and rollback, and
+[#1103](https://github.com/odogono/odgn-talk/issues/1103) for the rest.
 
 | Workload | Measure | Proposed limit | Linux amd64 | Linux arm64 | macOS CI | Result |
 |---|---|---|---|---|---|---|
@@ -72,8 +75,8 @@ to 1.5–2.7× at `slice=1000`.
 
 ### Hotspots
 
-Profiles from the local run explain the misses in four groups, each a candidate
-follow-up if the limits above are agreed.
+Profiles from the local run explain the misses in four groups. The second is
+#1101; #1103 covers the other three.
 
 1. **Message Layer crossing.** This covers immediate and deferred calls,
    conversion, messaging, throughput, tail latency and short slices. On
