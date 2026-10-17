@@ -142,10 +142,8 @@ const GroupEntry = struct {
     }
 
     fn isAbandoned(e: *GroupEntry, id: []const u8) bool {
-        for (e.group.group.calls.items) |c| {
-            if (std.mem.eql(u8, c.id, id)) return c.abandoned.load(.acquire);
-        }
-        return false;
+        const c = e.group.group.callById(id) orelse return false;
+        return c.abandoned.load(.acquire);
     }
 
     /// Writes actual abandonments in Call order without consuming them:
@@ -172,12 +170,11 @@ const GroupEntry = struct {
         try o.raw(",\"settled\":[");
         var first = true;
         for (e.started.items) |id| {
-            for (e.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id) and c.settlement_consumed and !c.abandoned.load(.acquire)) {
-                if (!first) try o.raw(",");
-                first = false;
-                try o.text(id);
-                break;
-            };
+            const c = e.group.group.callById(id) orelse continue;
+            if (!c.settlement_consumed or c.abandoned.load(.acquire)) continue;
+            if (!first) try o.raw(",");
+            first = false;
+            try o.text(id);
         }
         try o.raw("]");
     }
@@ -186,12 +183,8 @@ const GroupEntry = struct {
     fn forgetAbandoned(e: *GroupEntry) void {
         var i: usize = 0;
         while (i < e.started.items.len) {
-            var consumed = false;
-            for (e.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, e.started.items[i])) {
-                consumed = c.settlement_consumed;
-                break;
-            };
-            if (consumed or e.isAbandoned(e.started.items[i])) {
+            const c = e.group.group.callById(e.started.items[i]);
+            if (c != null and (c.?.settlement_consumed or c.?.abandoned.load(.acquire))) {
                 e.gpa.free(e.started.orderedRemove(i));
             } else i += 1;
         }
@@ -2753,11 +2746,7 @@ fn requestChargeReply(s: *Session, msg: Json, ref: i64) []u8 {
 fn settleReply(s: *Session, msg: Json, ref: i64, is_fail: bool) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     const call_id = asText(field(msg, "call")) orelse return hostError(s.gpa, ref, .invalid_value);
-    var call: ?*caps.Call = null;
-    for (entry.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, call_id)) {
-        call = c;
-    };
-    const c = call orelse return hostError(s.gpa, ref, .unknown_call);
+    const c = entry.group.group.callById(call_id) orelse return hostError(s.gpa, ref, .unknown_call);
     const code = if (is_fail) blk: {
         const e = field(msg, "error") orelse break :blk Direct.callFail(c, null);
         const ecode = asText(field(e, "code")) orelse return hostError(s.gpa, ref, .invalid_value);
@@ -3640,14 +3629,14 @@ fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (A
         try o.raw(",\"operation\":");
         try o.text(p.operation[0..p.operation_len]);
         try o.raw(",\"args\":[");
-        for (entry.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id)) {
+        if (entry.group.group.callById(id)) |c| {
             for (c.args, 0..) |v, k| {
                 if (k > 0) try o.raw(",");
                 try o.value(v);
             }
-        };
+        }
         try o.raw("]");
-        for (entry.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id)) {
+        if (entry.group.group.callById(id)) |c| {
             if (entry.group.group.script(c.script)) |script| if (script.grant(c.grant)) |grant| {
                 try o.raw(",\"capability\":");
                 try o.text(grant.grant.capability.name);
@@ -3658,7 +3647,7 @@ fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (A
             try o.text(c.segment);
             try o.raw(",\"now\":");
             try o.instant(entry.gpa, c.now);
-        };
+        }
         try o.raw("}");
     }
     try o.raw("],\"disposed\":[");
