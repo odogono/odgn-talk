@@ -18,6 +18,7 @@ const display = @import("../display.zig");
 const lower = @import("../lower/lower.zig");
 const binary = @import("binary.zig");
 const capabilities = @import("capabilities.zig");
+const issued_calls = @import("issued_calls.zig");
 const objects = @import("objects.zig");
 const fingerprint = @import("fingerprint.zig");
 const verify = @import("verify.zig");
@@ -36,7 +37,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 8;
+pub const format_version: u32 = 10;
 
 pub const Error = error{
     InvalidSave,
@@ -933,10 +934,10 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.timers);
     try o.int(g.run_order);
     try o.int(g.charge_counter);
-    try o.int(g.issued_calls.count());
+    try o.int(g.issued_calls.runs.count());
     var issued: std.ArrayList([]const u8) = .empty;
     defer issued.deinit(gpa);
-    var ids = g.issued_calls.keyIterator();
+    var ids = g.issued_calls.runs.keyIterator();
     while (ids.next()) |id| try issued.append(gpa, id.*);
     std.mem.sort([]const u8, issued.items, {}, struct {
         fn less(_: void, x: []const u8, y: []const u8) bool {
@@ -945,7 +946,13 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }.less);
     for (issued.items) |id| {
         try o.str(id);
-        try o.flag(g.issued_calls.get(id).?);
+        const ranges = g.issued_calls.runs.get(id).?.items;
+        try o.int(ranges.len);
+        for (ranges) |range| {
+            try o.int(range.first);
+            try o.int(range.last);
+            try o.flag(range.eligible);
+        }
     }
     // Libraries, by identity.
     try o.int(g.libraries.items.len);
@@ -2194,11 +2201,21 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.charge_counter = try i.int();
     const issued_count = try i.count();
     for (0..issued_count) |_| {
-        const id = try a.dupe(u8, try i.str());
-        errdefer a.free(id);
-        const eligible = try i.flag();
-        if (g.issued_calls.contains(id)) return error.InvalidSave;
-        try g.issued_calls.put(a, id, eligible);
+        const run = try a.dupe(u8, try i.str());
+        errdefer a.free(run);
+        if (run.len == 0 or g.issued_calls.runs.contains(run)) return error.InvalidSave;
+        var ranges: std.ArrayList(issued_calls.Range) = .empty;
+        errdefer ranges.deinit(a);
+        const count = try i.count();
+        if (count == 0) return error.InvalidSave;
+        for (0..count) |_| {
+            const range: issued_calls.Range = .{ .first = try i.int(), .last = try i.int(), .eligible = try i.flag() };
+            issued_calls.IssuedCalls.append(&ranges, a, range) catch |err| return switch (err) {
+                error.InvalidCallId => error.InvalidSave,
+                error.OutOfMemory => error.OutOfMemory,
+            };
+        }
+        try g.issued_calls.runs.put(a, run, ranges);
     }
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
     // Libraries, matched by identity to those the Host passes.
@@ -2739,6 +2756,25 @@ test "a save that doesn't match is refused under RejectMismatch, and nothing is 
     defer restored.deinit();
     var result: Result = .{};
     try testing.expectEqual(Outcome.mismatch, try restore(&restored, other, .{}, &result));
+}
+
+test "older issued-id and random snapshot layouts are refused" {
+    const gpa = testing.allocator;
+    var g: Group = .init(gpa, null);
+    defer g.deinit();
+    const bytes = try save(&g, gpa, try g.groupFingerprint());
+    defer gpa.free(bytes);
+    for ([_]u8{ 8, 9 }) |old| {
+        // These versions have one-byte LEB128 headers. Give the otherwise
+        // valid save a legacy header and a matching integrity digest.
+        bytes[magic.len] = old;
+        std.crypto.hash.sha2.Sha256.hash(bytes[0 .. bytes.len - 32], bytes[bytes.len - 32 ..][0..32], .{});
+        var restored: Group = .init(gpa, null);
+        defer restored.deinit();
+        var result: Result = .{};
+        defer result.deinit(gpa);
+        try testing.expectError(error.InvalidSave, restore(&restored, bytes, .{}, &result));
+    }
 }
 
 test "a variables-only restore keeps Script Variables and discards the rest" {
