@@ -3,7 +3,11 @@ import { functionContract } from './function-contract';
 
 test('catalogue contracts distinguish constants, fixed arity and trailing defaults', () => {
   expect(functionContract('U+0022')).toBeUndefined();
-  expect(functionContract('empty()')).toEqual({ required: 0, total: 0, variadic: false });
+  expect(functionContract('empty()')).toEqual({
+    required: 0,
+    total: 0,
+    variadic: false,
+  });
   expect(functionContract('codePoint(c)')).toEqual({
     required: 1,
     total: 1,

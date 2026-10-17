@@ -332,7 +332,7 @@
               "builtin",
               "builtin",
               0,
-              "The least item of the list `xs` under `<`, the first of equal ones"
+              "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items"
             ]
           ]
         },

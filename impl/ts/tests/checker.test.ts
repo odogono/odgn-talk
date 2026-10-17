@@ -518,6 +518,17 @@ describe('Core binding and function contracts', () => {
     expect(diagnostics('function f x = 1\n return f()\nend f')).toEqual([]);
   });
 
+  test('a variadic Built-in takes any number of arguments past its required ones', () => {
+    expect(
+      diagnostics(
+        'on t\n min()\n min(1)\n max(1, 2, 3, 4)\n codePoint("a", "b")\nend t',
+      ),
+    ).toEqual([
+      ['wrong argument count', 2, 2],
+      ['wrong argument count', 5, 2],
+    ]);
+  });
+
   test('Built-in and Standard Library contracts include optional arguments and renames', () => {
     expect(
       diagnostics(

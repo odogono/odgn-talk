@@ -2074,7 +2074,8 @@ const Checker = struct {
                 const b = stdlib.builtin[index];
                 const required: usize = @intCast(b.required.?);
                 const total: usize = @intCast(b.total.?);
-                if (call.args.len < required or call.args.len > total) try c.report(.wrong_argument_count, call.name);
+                const over = !(b.variadic orelse false) and call.args.len > total;
+                if (call.args.len < required or over) try c.report(.wrong_argument_count, call.name);
             },
             .function => {
                 const f = c.functions.get(name).?;
@@ -2360,15 +2361,15 @@ fn expectDiagnostics(source: []const u8, context: Context, expected: []const u8)
 }
 
 test "Built-in calls check arity but shadowing variables remain dynamic" {
-    try expectDiagnostics("constant x = min(1, 2)", .{}, "wrong argument count at 1:14\n");
+    try expectDiagnostics("constant x = codePoint(\"a\", \"b\")", .{}, "wrong argument count at 1:14\n");
     try expectDiagnostics(
         \\on t
-        \\  return [min(), min(1, 2), round(), round(1, 2, 3, 4)]
+        \\  return [min(), max(), round(), round(1, 2, 3, 4)]
         \\end t
-    , .{}, "wrong argument count at 2:11\nwrong argument count at 2:18\nwrong argument count at 2:29\nwrong argument count at 2:38\n");
+    , .{}, "wrong argument count at 2:11\nwrong argument count at 2:18\nwrong argument count at 2:25\nwrong argument count at 2:34\n");
     try expectDiagnostics(
         \\on t
-        \\  return [min([1, 2]), round(1), round(1, 2), round(1, 2, "half up")]
+        \\  return [min([1, 2]), min(1, 2), max(1, 2, 3), round(1), round(1, 2), round(1, 2, "half up")]
         \\end t
     , .{}, "");
     try expectDiagnostics(

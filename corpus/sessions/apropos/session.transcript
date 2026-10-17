@@ -109,7 +109,7 @@ doc 1 ""
 name {target: {name: "max", origin: "session"}, origin: "session", available: true, import: nothing}
 doc ""
 name {target: {name: "max", origin: "builtin"}, origin: "builtin", available: false, import: nothing}
-doc "The greatest item of the list `xs` under `<`, the first of equal ones"
+doc "The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items"
 > :apropos "İ"
 > :apropos 3
 name {target: {name: "fromFloat32", origin: "builtin"}, origin: "builtin", available: true, import: nothing}

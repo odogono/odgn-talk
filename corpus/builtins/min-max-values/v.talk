@@ -3,25 +3,25 @@
 script variable seen = []
 
 on values
-  put [max(6, 3, 9), min(6, 3, 9), max(100, 1000 - 75 * 20)] into seen
+  put [max(6, 3, 9), min(6, 3, 9), max(100, 1000 - 75 * 20)] after seen
 end values
 
 on lone
-  put [max([6, 3, 9]), min(7), max(2 m, 150 cm), max("a", "b")] into seen
+  put [max([6, 3, 9]), min(7), max(2 m, 150 cm), max("a", "b")] after seen
 end lone
 
 on equal
-  put [max(1, 1.0), min(1.0, 1)] into seen
+  put [max(1, 1.0), min(1.0, 1)] after seen
 end equal
 
 on lists
-  put max([1, 2], [3]) into seen
+  put max([1, 2], [3]) after seen
 end lists
 
 on mixed
-  put max(1, 2, "t", 4) into seen
+  put max(1, 2, "t", 4) after seen
 end mixed
 
 on empty
-  put min([]) into seen
+  put min([]) after seen
 end empty

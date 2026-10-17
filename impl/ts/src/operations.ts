@@ -2127,18 +2127,19 @@ export const builtin = (
   switch (name) {
     case 'min':
     case 'max': {
-      if (x!.kind !== 'list') {
-        throw wrongKind('list', x!);
-      }
-      if (x!.length === 0) {
+      // One list argument gives its items; otherwise the arguments are the values.
+      const values =
+        args.length === 1 && x!.kind === 'list'
+          ? Array.from({ length: x!.length }, (_, i) => x!.index(i + 1))
+          : args;
+      if (values.length === 0) {
         throw outOfDomain(name, x!);
       }
-      let best = x!.index(1);
+      let best = values[0]!;
       const comparer = new Comparer(false);
       let scanned = 1;
       measure.scanned = scanned;
-      for (let i = 2; i <= x!.length; i++) {
-        const item = x!.index(i);
+      for (const item of values.slice(1)) {
         scanned = scanAdd(scanned, scanAdd(1, comparer.scanned(item, best)));
         measure.scanned = scanned;
         const o = orderBy(comparer, item, best);

@@ -1,5 +1,5 @@
 # Unblessed: Built-in argument counts and shadowing (#773); first blessing awaits human review.
-> load constant-too-many identity=208d9d858c2506bc407eebb5a1cbb7daed4f91d17ad63ec3a053473be224f81a
+> load constant-too-many identity=bcdd330e6e344afe0c5628a8201c8d6b17f67036d75ea32ac25e206b340a1283
 diag constant-too-many code="wrong argument count" pos=1:14
 > load too-few identity=6701cf085a6adedf0c8a9d971cd614442cf3989580736bf076ab7f526d0a5af0
 diag too-few code="wrong argument count" pos=2:10
