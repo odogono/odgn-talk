@@ -14,6 +14,10 @@ ids, so Script windows follow their owners across edits and history; ids never
 enter `.folio` files or browser storage. Intake copies the supplied Project,
 and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
 
+The Project title is a Preact component written in TSX, observing the editor
+signal through `@preact/signals`; live renames, undo/redo and Project loads
+update it independently of the shell redraw. The app and browser-test builds
+compile imported TSX with Preact's automatic JSX runtime.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -448,6 +452,10 @@ for (const name of await caches.keys()) await caches.delete(name);
 ```
 
 Running a suite on `/` registers the worker again.
+
+The `project-title` suite runs on `/project-title-test.html`; import
+`/project-title.browser.js` and call `runBrowserTests()` to check live rename,
+undo/redo and Project replacement through the real shell and Preact title.
 
 ## Play
 

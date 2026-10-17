@@ -213,6 +213,9 @@ Files, grammar, or lowering.
 - Tests and cases: [editor tests](../../tooling/editor/tests/), [Folio tests](../../tooling/creative/tests/), [browser suites](../../tooling/creative/README.md#browser-test-suites)
 - First check: `bun test tooling/editor/tests tooling/creative/tests`
 
+Folio's [build instructions](../../tooling/creative/NAVIGATION.md#running-and-testing)
+cover its Preact JSX configuration and the app and browser-test bundles.
+
 ## Differential fuzzing
 
 - Implementation: [Fuzzer](../../tooling/fuzz/) over the [shared replay driver](src/replay.ts), with the [Go worker](../go/cmd/fuzzworker/)
