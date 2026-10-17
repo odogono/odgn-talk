@@ -743,6 +743,17 @@ export class PlaySession {
     return this.project.pages[this.pageIndex]!;
   }
 
+  /** Whether a message sent to `owner` meets a Handler on its Message Path. */
+  handles(owner: ScriptOwner, message: PlayMessage): boolean {
+    const path: ScriptOwner[] =
+      owner === this.project
+        ? [owner]
+        : owner === this.page
+          ? [owner, this.project]
+          : [owner, this.page, this.project];
+    return path.some(o => !!o.script && definesHandler(o.script, message));
+  }
+
   send(owner: ScriptOwner, name: PlayMessage, args: Value[] = []): void {
     if (this.stopped || this.navigating) {
       return;

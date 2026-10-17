@@ -470,11 +470,14 @@ export const mountPlay = (shell: StackShell): void => {
     const element = session.page.elements.find(
       e => e.name === node?.dataset.element,
     );
-    session.send(
-      element?.kind === 'text' && element.editable ? element : session.page,
-      'keyDown',
-      [text(event.key)],
-    );
+    const target =
+      element?.kind === 'text' && element.editable ? element : session.page;
+    // A handled key belongs to the Project: arrows and space don't scroll.
+    // Editable text keeps typing, so only the Page's keys are claimed.
+    if (target === session.page && session.handles(target, 'keyDown')) {
+      event.preventDefault();
+    }
+    session.send(target, 'keyDown', [text(event.key)]);
     if (
       element?.kind === 'button' &&
       (event.key === 'Enter' || event.key === ' ')
