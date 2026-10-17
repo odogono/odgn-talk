@@ -454,9 +454,11 @@ func operationCheck(d Operation) check.OperationCheck {
 }
 
 // Answer queues a suspending call's settlement for the next Pump.
+// A foreign Group's Value panics with WrongGroup without queuing an input.
 func (c *Call) Answer(v Value) { c.AnswerWithCost(v, 0) }
 
 // AnswerWithCost charges late Fuel with result conversion on resumption.
+// Like Answer, it panics with WrongGroup for foreign Values before queuing.
 func (c *Call) AnswerWithCost(v Value, fuel int64) {
 	c.refuseAutomaticSettlement()
 	if fuel < 0 || fuel > 9007199254740991 {
@@ -466,6 +468,7 @@ func (c *Call) AnswerWithCost(v Value, fuel int64) {
 }
 
 // Fail queues a copied ScriptError; nil fails as host error.
+// Foreign Values in Data panic with WrongGroup without queuing an input.
 func (c *Call) Fail(e *ScriptError) {
 	c.refuseAutomaticSettlement()
 	var copy *ScriptError
@@ -490,6 +493,11 @@ func (c *Call) queueSettlement(kind string, v Value, e *ScriptError, fuel int64)
 	if g.backend != nil {
 		g.backend.settleCall(c, kind, v, e, fuel)
 		return
+	}
+	// Check the original Data before building the failure envelope: malformed
+	// Data or a colliding key must not hide a foreign handle from admission.
+	if !validGroup(v.inner, g) || e != nil && !validGroup(e.Data.inner, g) {
+		panic(&HostError{WrongGroup, "settlement contains a foreign Value"})
 	}
 	fields := map[string]string{}
 	if kind == "answer" {

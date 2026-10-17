@@ -284,9 +284,9 @@ Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issu
 parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)),
 out-of-range wait durations ([#1064](https://github.com/odogono/odgn-talk/issues/1064)),
 and Stop at a failed Host charge ([#1065](https://github.com/odogono/odgn-talk/issues/1065)).
-Explicit Call answers/failures refuse foreign handles at admission as the Spec
-requires; the native Go tests expect deferred failure instead
-([#1066](https://github.com/odogono/odgn-talk/issues/1066)). Native private-function
+Explicit Call answers/failures refuse foreign handles at admission on both Cores,
+including nested containers. The shared public Host checks that refusal leaves
+the Call pending and accepts a subsequent valid settlement. Native private-function
 and save-layout tests cannot run unchanged through a public adapter; snapshot
 round trips await Save/Restore, and Go heap-allocation ratios are not a guest
 memory measurement.
@@ -937,9 +937,10 @@ before being stored in `it`; fire-and-forget calls leave `it` unchanged. An
 accepted Host effect remains committed when later conversion or Script code faults.
 
 A valid custom `ScriptError` raises its code, message and Data with Operation
-identity. Data must be a Map or Nothing; other kinds and foreign Group values
-become `host error`. Catalogue codes, reserved Data keys, undeclared codes,
-invalid results, plain errors and panics also become `host error`, with Host-only
+identity. Data must be a Map or Nothing; other kinds become `host error`.
+Foreign Group values in returned failures also become `host error`; explicit
+`Call.Fail` refuses them at admission. Catalogue codes, reserved Data keys,
+undeclared codes, invalid results, plain errors and panics also become `host error`, with Host-only
 detail in `CallFailed`. Returned failures and queued `Call.Fail` inputs retain
 Error maps in the Trace even when Data collides with the error envelope. Valid
 Nothing/map failures retain their ordinary conversion costs and budget checks.
@@ -961,10 +962,12 @@ ordinary Host crossing; compiled code retains only call metadata and declaration
 Suspending `ask … and wait` invokes `Start` once after the same atomic precharge.
 `Call.Answer`, `AnswerWithCost` and `Fail` may run on any goroutine, append Host
 inputs and call `OnReady`; answers queued during `Start` wait for the next Pump.
-An answer or failure carrying another Group's handle is admitted and raises `host
-error` on resumption, rather than refused at the call as the Spec requires
-([#1066](https://github.com/odogono/odgn-talk/issues/1066)). The waiting Run retains a 48-byte pending call, then its answer or failure Data
-when ready. Validation, result/Data conversion and any late Fuel are charged on
+An answer or failure carrying another Group's Function Value or Object, including
+inside Lists or Maps, panics with `WrongGroup` before queuing or calling `OnReady`.
+The Call remains pending and can still accept a valid settlement. Immediate
+results and failures returned from `Do` or `Start` retain their `host error`
+validation at the Host crossing. The waiting Run retains a 48-byte pending call,
+then its answer or failure Data when ready. Validation, result/Data conversion and any late Fuel are charged on
 its resuming turn, under the Run budgets, Script slice and Pump cap. Conversion
 faults roll back that Segment while preserving earlier committed effects.
 Duplicate and abandoned settlements are recorded and ignored.

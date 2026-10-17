@@ -1335,6 +1335,11 @@ dropped with another `stopped` record, a Script's `send` to it is dropped, and
 a Broadcast leaves it out, as it does a Script a Stop or disposal queued ahead
 of it will stop. A Group whose Scripts are all stopped pumps as `stopped`.
 
+Stop marks every discarded Run's suspended Calls and pending Join members
+abandoned before invoking cleanup or Grant release hooks. Already-settled Calls
+are cancelled only if their answers have not been consumed; they add no second
+abandonment record. Call handles and ids remain valid through release.
+
 ## Values and ownership
 
 `talk.h` implements Nothing, Bool, Text, Int, Uint, FromFloat, Dec, Quantity,

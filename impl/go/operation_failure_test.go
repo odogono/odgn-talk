@@ -58,24 +58,32 @@ func TestOperationMalformedFailureData(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, completion := range []string{"immediate", "start", "fail"} {
-		for _, test := range []struct {
+		type failureCase struct {
 			name           string
 			data           Value
 			emptyTrace     bool
 			withoutMessage bool
-		}{
+		}
+		tests := []failureCase{
 			{"number", Int(123), true, false},
 			{"text", mustPublicText("private payload"), true, false},
 			{"list", List(Int(1)), true, false},
 			{"boolean", Bool(true), true, false},
-			{"foreign Object", foreign.Value(), true, false},
-			{"nested foreign Object", localeMap(t, KV("payload", foreign.Value())), true, false},
 			{"code collision", localeMap(t, KV("code", mustPublicText("replacement"))), true, false},
 			{"message collision", localeMap(t, KV("message", mustPublicText("replacement"))), true, false},
 			{"reserved location", localeMap(t, KV("at", Int(9))), false, false},
 			{"reserved deadline", localeMap(t, KV("deadline", Bool(true))), false, false},
 			{"reserved message without envelope collision", localeMap(t, KV("message", mustPublicText("replacement"))), false, true},
-		} {
+		}
+		// Foreign returned failures become host error; explicit Fail refuses
+		// them at admission (TestCallSettlementOwnership).
+		if completion != "fail" {
+			tests = append(tests,
+				failureCase{"foreign Object", foreign.Value(), true, false},
+				failureCase{"nested foreign Object", localeMap(t, KV("payload", foreign.Value())), true, false},
+			)
+		}
+		for _, test := range tests {
 			t.Run(completion+"/"+test.name, func(t *testing.T) {
 				message := "private Host detail"
 				if test.withoutMessage {
