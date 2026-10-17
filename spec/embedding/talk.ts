@@ -491,6 +491,8 @@ export interface GroupOptions {
   /** Called when a queued Host Input makes the Group runnable. Don't pump inside it. */
   onReady?(): void;
   trace?: (line: string) => void;
+  /** Seeds the generator `random` draws from, 0 to 2^64 - 1; 0 when absent. */
+  seed?: bigint;
 }
 
 /** Compile-time Operation modes and argument Shapes, by the Grant name in source. */

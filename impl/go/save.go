@@ -123,6 +123,7 @@ type savedGroup struct {
 	Save                            int64
 	Clock                           time.Time
 	Delivery, Broadcast, Timer      int64
+	Random                          int64 // the `random` generator's state, its bits as int64
 	Libraries                       map[string][32]byte
 	Scripts                         []savedScript
 	Objects                         []savedObject
@@ -295,7 +296,7 @@ func (g *Group) Save() ([]byte, error) {
 		}
 	}
 	g.mu.Lock()
-	data := savedGroup{Accounting: g.accounting, Family: "northtalk-go", Format: CoreVersions().SaveFormat, Versions: CoreVersions(), Name: g.options.Name, Fingerprint: fmt.Sprintf("%x", g.fingerprint()), Save: g.nextSave, Clock: g.clock, Delivery: g.nextDelivery, Broadcast: g.nextBroadcast, Timer: g.nextTimer, Libraries: map[string][32]byte{}}
+	data := savedGroup{Accounting: g.accounting, Family: "northtalk-go", Format: CoreVersions().SaveFormat, Versions: CoreVersions(), Name: g.options.Name, Fingerprint: fmt.Sprintf("%x", g.fingerprint()), Save: g.nextSave, Clock: g.clock, Delivery: g.nextDelivery, Broadcast: g.nextBroadcast, Timer: g.nextTimer, Random: int64(g.random), Libraries: map[string][32]byte{}}
 	refs := map[any]string{g: "group"}
 	for _, s := range g.scripts {
 		refs[s.state] = "script/" + s.name

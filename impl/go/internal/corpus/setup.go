@@ -32,6 +32,15 @@ func ReadSetup(text string) (Setup, error) {
 		if name == "kind" {
 			continue
 		}
+		if name == "seed" {
+			if kind != "trace" {
+				return nil, fmt.Errorf("unexpected seed in %s case", kind)
+			}
+			if _, e := setupSeed(root); e != nil {
+				return nil, e
+			}
+			continue
+		}
 		allowedTable := false
 		for _, entry := range generated.Corpus.Setup {
 			if entry.Table == name {
@@ -74,4 +83,18 @@ func ReadSetup(text string) (Setup, error) {
 		}
 	}
 	return root, nil
+}
+
+// setupSeed is the root's `seed`, the seed the runner makes the Group with;
+// 0 if absent.
+func setupSeed(setup Setup) (uint64, error) {
+	v, ok := setup["seed"]
+	if !ok {
+		return 0, nil
+	}
+	n, ok := v.(int64)
+	if !ok || n < 0 {
+		return 0, fmt.Errorf("seed must be an integer 0 or more")
+	}
+	return uint64(n), nil
 }

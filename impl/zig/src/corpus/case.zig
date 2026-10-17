@@ -135,7 +135,17 @@ pub const Disassembly = struct { unit: []const u8, expected: []const u8 };
 pub const Setup = struct {
     units: []const Unit,
     disassembly: []const Disassembly,
+    /// The seed the Group's `random` generator starts from.
+    seed: u64 = 0,
 };
+
+/// The root's `seed`, or 0 if absent.
+pub fn seedOf(all: []const Table) Error!u64 {
+    if (all.len == 0 or all[0].header.len != 0) return 0;
+    const v = field(all[0], "seed") orelse return 0;
+    if (v != .raw) return error.MalformedCase;
+    return std.fmt.parseInt(u64, v.raw, 10) catch error.MalformedCase;
+}
 
 const Declared = struct { capability: []const u8, operation: check.Operation };
 
@@ -229,7 +239,7 @@ pub fn fromTables(a: Allocator, all: []const Table) Error!Setup {
             try disassembly.append(a, .{ .unit = string(t, "unit"), .expected = string(t, "expected") });
         }
     }
-    return .{ .units = units.items, .disassembly = disassembly.items };
+    return .{ .units = units.items, .disassembly = disassembly.items, .seed = try seedOf(all) };
 }
 
 test "inline tables, arrays and Grants" {

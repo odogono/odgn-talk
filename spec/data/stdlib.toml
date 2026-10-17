@@ -265,6 +265,13 @@ gives = "The angle of the point (`x`, `y`) from the positive x-axis, in radians 
 errors = ["out of domain"]
 
 [[builtin]]
+name = "random"
+group = "numbers"
+call = "random(n)"
+gives = "A whole number from 1 to `n`, the next from the Script Group's generator"
+errors = ["out of domain"]
+
+[[builtin]]
 name = "fromFloat64"
 group = "floats"
 call = "fromFloat64(b, order = \"big\")"

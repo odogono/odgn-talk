@@ -43,6 +43,7 @@ pub fn replay(a: Allocator, gpa: Allocator, io: std.Io, dir: std.Io.Dir, toml: [
     errdefer out.deinit();
     var group = machine.Group.init(gpa, &out.writer);
     defer group.deinit();
+    group.seed(setup.seed);
     var lines = std.mem.splitScalar(u8, expected, '\n');
     while (lines.next()) |line| {
         if (!std.mem.startsWith(u8, line, "> ")) continue;

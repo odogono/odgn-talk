@@ -972,6 +972,14 @@ export const builtins = [
     }
   },
   {
+    "name": "random",
+    "kind": "function",
+    "contract": {
+      "required": 1,
+      "total": 1
+    }
+  },
+  {
     "name": "fromFloat64",
     "kind": "function",
     "contract": {

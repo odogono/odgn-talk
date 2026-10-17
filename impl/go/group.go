@@ -50,6 +50,7 @@ type Group struct {
 	settlementsOpen   bool // protected by mu; closes when the first accepted Pump starts
 	deferredDecisions []*Decided
 	clock             time.Time
+	random            uint64 // the `random` generator's state
 	pumping           bool
 	runningPump       bool // refusals land at a crossing only during a Pump
 	effectUnknown     bool // sticky: an external participant's state is unresolved
@@ -161,7 +162,7 @@ func (p *Pending) settle(v Value, e *ScriptError) {
 	close(p.done)
 }
 func (c *Core) NewGroup(o GroupOptions) *Group {
-	g := &Group{core: c, options: o, libraries: map[string]*Library{}}
+	g := &Group{core: c, options: o, libraries: map[string]*Library{}, random: machine.RandomSeedState(o.Seed)}
 	if experimentalGroupFactory != nil {
 		g.backend = experimentalGroupFactory(g)
 	}

@@ -250,6 +250,7 @@ func (c *Core) Restore(save []byte, o RestoreOptions) (_ *Group, result RestoreR
 	g.nextDelivery = data.Delivery
 	g.nextBroadcast = data.Broadcast
 	g.nextTimer = data.Timer
+	g.random = uint64(data.Random)
 	g.nextSave = data.Save
 	for _, report := range data.Deferred {
 		report := report

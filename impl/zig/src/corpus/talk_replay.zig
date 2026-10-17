@@ -1348,7 +1348,7 @@ pub const Host = struct {
         h.core = c.talk_new() orelse return error.OutOfMemory;
         // Cases at the conformance minimums hold more than the default
         // physical cap allows while they build their values.
-        const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &h.sink, .memory_cap = 1 << 30 };
+        const options: c.talk_group_options = .{ .name = "corpus", .name_len = 6, .trace = record, .trace_context = &h.sink, .memory_cap = 1 << 30, .seed = try case_setup.seedOf(all) };
         try check(c.talk_new_group(h.core, &options, &h.group));
         armCrossings(h.group);
         try defineCapabilities(a, h.core, all, &h.hosts, &h.defs, &h.calls, &h.effects);

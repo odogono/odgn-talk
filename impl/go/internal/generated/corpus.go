@@ -1803,6 +1803,14 @@ var Corpus = CorpusTable{
 			},
 		},
 		CorpusTableSetupEntry{
+			Table: "",
+			Key:   "seed",
+			Is:    "the seed the runner makes the Group with, a TOML integer 0 or more; 0 if absent ([chapter 7](07-libraries-and-the-standard-library.md#random-numbers))",
+			Kinds: []string{
+				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
 			Table: "versions",
 			Key:   "language",
 			Is:    "the language version the case is blessed for",

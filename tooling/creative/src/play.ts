@@ -16,6 +16,7 @@ import {
   text,
   userCapability,
   type Call,
+  type Group,
   type HostObject,
   type ReleaseHook,
   type ObjectKind,
@@ -122,7 +123,7 @@ export class PlaySession {
   readonly project: Project;
   /** This session's playing sounds, owned by the Scripts that started them. */
   readonly sounds: SoundBoard;
-  readonly group = newGroup({ name: 'play', trace: line => this.#trace(line) });
+  readonly group: Group;
   #pendingWarnings: string[] = [];
   #senders = new Map<string, string>();
   #unhandledSender: string | undefined;
@@ -435,8 +436,21 @@ export class PlaySession {
   constructor(
     project: Project,
     public pageIndex = 0,
-    options: { events?: boolean; soundBackend?: SoundBackend } = {},
+    options: {
+      events?: boolean;
+      /**
+       * Seeds the generator `random` draws from, so a test can repeat a
+       * game; 0 when absent. Browse and Present pass the clock.
+       */
+      seed?: bigint;
+      soundBackend?: SoundBackend;
+    } = {},
   ) {
+    this.group = newGroup({
+      name: 'play',
+      trace: line => this.#trace(line),
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
+    });
     this.sounds = new SoundBoard(options.soundBackend, (sound, message) => {
       const owner = this.owners.get(sound.owner);
       if (owner) {

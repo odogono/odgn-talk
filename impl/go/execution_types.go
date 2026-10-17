@@ -29,6 +29,9 @@ type GroupOptions struct {
 	// not pump from inside the callback.
 	OnReady func()
 	Trace   TraceSink // nil: no Trace is recorded
+	// Seed seeds the generator `random` draws from; 0 when the Host has
+	// none (chapter 7, Random numbers).
+	Seed uint64
 }
 
 type TraceSink interface{ Record(line string) }
