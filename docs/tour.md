@@ -135,7 +135,7 @@ on operatorsTour row
 
   -- means ((item 2 of row) as number) * 2
   -- `name(` with no space is a function call. With a space, `(` groups.
-  put max([3, 9, 4]) into top       -- 9
+  put max(3, 9, 4) into top         -- 9
   say (1 + 2) & "!"                 -- "3!"
 
   -- A newline ends a statement. A line goes on while a bracket is open, or
@@ -573,7 +573,7 @@ on lambdasTour readings
   put double(21) into answer                        -- 42
   put filter(readings, isWindy) into windy          -- a function's name is a value
   put map(readings, given {temp: t}: t) into temps  -- params can Destructure
-  put reduce(readings, given worst, r: max([worst, the wind of r]), 0 km/hr) into peak
+  put reduce(readings, given worst, r: max(worst, the wind of r), 0 km/hr) into peak
   put sortBy(readings, given r: the temp of r) into coolestFirst
   put sortBy(readings, given r: the temp of r, "descending") into warmestFirst
   put sortBy(readings, given r: [the city of r, the temp of r]) into byCity

@@ -18,6 +18,7 @@ pub const StdlibTableBuiltinEntry = struct {
     errors: ?[]const []const u8 = null,
     required: ?i64 = null,
     total: ?i64 = null,
+    variadic: ?bool = null,
 };
 
 pub const StdlibTableExportEntry = struct {
@@ -70,26 +71,28 @@ pub const stdlib: StdlibTable = .{
         .{
             .name = "min",
             .group = "values",
-            .call = "min(xs)",
-            .gives = "The least item of the list `xs` under `<`, the first of equal ones",
+            .call = "min(x, …)",
+            .gives = "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items",
             .errors = &.{
                 "out of domain",
                 "can't compare",
             },
             .required = 1,
             .total = 1,
+            .variadic = true,
         },
         .{
             .name = "max",
             .group = "values",
-            .call = "max(xs)",
-            .gives = "The greatest item of the list `xs` under `<`, the first of equal ones",
+            .call = "max(x, …)",
+            .gives = "The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items",
             .errors = &.{
                 "out of domain",
                 "can't compare",
             },
             .required = 1,
             .total = 1,
+            .variadic = true,
         },
         .{
             .name = "codePoint",
@@ -101,6 +104,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "fromCodePoint",
@@ -112,6 +116,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "upper",
@@ -120,6 +125,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "`s` under Unicode full default uppercase mapping, then NFC",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "lower",
@@ -128,6 +134,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "`s` under Unicode full default lowercase mapping, then NFC",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "offset",
@@ -136,6 +143,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none",
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "isDisposed",
@@ -144,6 +152,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "Whether the Host Object `o` has been disposed",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "objectKind",
@@ -152,6 +161,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The name of the Object Kind of the Host Object `o`, as text",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "rangeStart",
@@ -160,6 +170,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The first end of the range `r`, as written",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "rangeEnd",
@@ -168,6 +179,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The second end of the range `r`, as written",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "kindOf",
@@ -176,6 +188,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "conforms",
@@ -187,6 +200,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "check",
@@ -199,6 +213,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "explain",
@@ -210,6 +225,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "functionArity",
@@ -218,6 +234,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "functionName",
@@ -226,6 +243,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "abs",
@@ -234,6 +252,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "`x` without its sign",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "floor",
@@ -242,6 +261,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The greatest integer at or below `x`",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "ceiling",
@@ -250,6 +270,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The least integer at or above `x`",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "truncate",
@@ -258,6 +279,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "`x` with its fraction dropped, toward zero",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "round",
@@ -269,6 +291,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 3,
+            .variadic = false,
         },
         .{
             .name = "sqrt",
@@ -280,6 +303,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "exp",
@@ -291,6 +315,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "ln",
@@ -302,6 +327,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "log10",
@@ -313,6 +339,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "power",
@@ -325,6 +352,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "sin",
@@ -333,6 +361,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The sine of `x` radians",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "cos",
@@ -341,6 +370,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The cosine of `x` radians",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "tan",
@@ -349,6 +379,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The tangent of `x` radians",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "asin",
@@ -360,6 +391,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "acos",
@@ -371,6 +403,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "atan",
@@ -379,6 +412,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The arctangent of `x`, in radians between -pi/2 and pi/2",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "atan2",
@@ -390,6 +424,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "random",
@@ -401,6 +436,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "fromFloat64",
@@ -413,6 +449,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "fromFloat32",
@@ -425,6 +462,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "toFloat64",
@@ -436,6 +474,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "toFloat32",
@@ -447,6 +486,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "year",
@@ -455,6 +495,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The year of the Civil Date `d`, from 1 to 9999",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "month",
@@ -463,6 +504,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The month of `d`, from 1 to 12",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "day",
@@ -471,6 +513,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The day of the month of `d`, from 1 to 31",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "hour",
@@ -482,6 +525,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "minute",
@@ -493,6 +537,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "second",
@@ -504,6 +549,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "microsecond",
@@ -515,6 +561,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "weekday",
@@ -523,6 +570,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "dayOfYear",
@@ -531,6 +579,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The day of the year of `d`, from 1 to 366",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "isoWeek",
@@ -539,6 +588,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The ISO 8601 week number of `d`, from 1 to 53",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "isoWeekYear",
@@ -547,6 +597,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "The ISO 8601 week-numbering year of `d`",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "hasTime",
@@ -555,6 +606,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "Whether the Civil Date `d` has a time of day",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
         .{
             .name = "toCivil",
@@ -567,6 +619,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "toInstant",
@@ -579,6 +632,7 @@ pub const stdlib: StdlibTable = .{
             },
             .required = 2,
             .total = 2,
+            .variadic = false,
         },
         .{
             .name = "pi",
@@ -611,6 +665,7 @@ pub const stdlib: StdlibTable = .{
             .gives = "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name",
             .required = 1,
             .total = 1,
+            .variadic = false,
         },
     },
     .@"export" = &.{

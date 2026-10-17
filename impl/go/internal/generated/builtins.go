@@ -13,6 +13,7 @@ type BuiltinsTableBuiltinEntry struct {
 	Errors   []string
 	Required int64
 	Total    int64
+	Variadic bool
 }
 
 var Builtins = BuiltinsTable{
@@ -20,26 +21,28 @@ var Builtins = BuiltinsTable{
 		BuiltinsTableBuiltinEntry{
 			Name:  "min",
 			Group: "values",
-			Call:  "min(xs)",
-			Gives: "The least item of the list `xs` under `<`, the first of equal ones",
+			Call:  "min(x, …)",
+			Gives: "The least of its arguments under `<`, the first of equal ones; a lone list argument gives the least of its items",
 			Errors: []string{
 				"out of domain",
 				"can't compare",
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: true,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "max",
 			Group: "values",
-			Call:  "max(xs)",
-			Gives: "The greatest item of the list `xs` under `<`, the first of equal ones",
+			Call:  "max(x, …)",
+			Gives: "The greatest of its arguments under `<`, the first of equal ones; a lone list argument gives the greatest of its items",
 			Errors: []string{
 				"out of domain",
 				"can't compare",
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: true,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "codePoint",
@@ -51,6 +54,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "fromCodePoint",
@@ -62,6 +66,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "upper",
@@ -70,6 +75,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "`s` under Unicode full default uppercase mapping, then NFC",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "lower",
@@ -78,6 +84,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "`s` under Unicode full default lowercase mapping, then NFC",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "offset",
@@ -86,6 +93,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The Character position where the leftmost match of `needle`, a text or a Text Pattern, starts in `s`, or 0 if there is none",
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "isDisposed",
@@ -94,6 +102,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "Whether the Host Object `o` has been disposed",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "objectKind",
@@ -102,6 +111,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The name of the Object Kind of the Host Object `o`, as text",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "rangeStart",
@@ -110,6 +120,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The first end of the range `r`, as written",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "rangeEnd",
@@ -118,6 +129,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The second end of the range `r`, as written",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "kindOf",
@@ -126,6 +138,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The name of the kind of `x`, as text, such as `\"number\"` or `\"civil date\"`",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "conforms",
@@ -137,6 +150,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "check",
@@ -149,6 +163,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "explain",
@@ -160,6 +175,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "functionArity",
@@ -168,6 +184,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The range of argument counts the Function Value `f` accepts, from its required parameters to all of them",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "functionName",
@@ -176,6 +193,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The name of the function the Function Value `f` was made from, as defined, or Nothing for a Lambda",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "abs",
@@ -184,6 +202,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "`x` without its sign",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "floor",
@@ -192,6 +211,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The greatest integer at or below `x`",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "ceiling",
@@ -200,6 +220,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The least integer at or above `x`",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "truncate",
@@ -208,6 +229,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "`x` with its fraction dropped, toward zero",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "round",
@@ -219,6 +241,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    3,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "sqrt",
@@ -230,6 +253,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "exp",
@@ -241,6 +265,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "ln",
@@ -252,6 +277,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "log10",
@@ -263,6 +289,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "power",
@@ -275,6 +302,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "sin",
@@ -283,6 +311,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The sine of `x` radians",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "cos",
@@ -291,6 +320,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The cosine of `x` radians",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "tan",
@@ -299,6 +329,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The tangent of `x` radians",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "asin",
@@ -310,6 +341,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "acos",
@@ -321,6 +353,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "atan",
@@ -329,6 +362,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The arctangent of `x`, in radians between -pi/2 and pi/2",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "atan2",
@@ -340,6 +374,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "random",
@@ -351,6 +386,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "fromFloat64",
@@ -363,6 +399,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "fromFloat32",
@@ -375,6 +412,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "toFloat64",
@@ -386,6 +424,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "toFloat32",
@@ -397,6 +436,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "year",
@@ -405,6 +445,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The year of the Civil Date `d`, from 1 to 9999",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "month",
@@ -413,6 +454,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The month of `d`, from 1 to 12",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "day",
@@ -421,6 +463,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The day of the month of `d`, from 1 to 31",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "hour",
@@ -432,6 +475,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "minute",
@@ -443,6 +487,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "second",
@@ -454,6 +499,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "microsecond",
@@ -465,6 +511,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "weekday",
@@ -473,6 +520,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The ISO 8601 day of the week of `d`, 1 for Monday to 7 for Sunday",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "dayOfYear",
@@ -481,6 +529,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The day of the year of `d`, from 1 to 366",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "isoWeek",
@@ -489,6 +538,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The ISO 8601 week number of `d`, from 1 to 53",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "isoWeekYear",
@@ -497,6 +547,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "The ISO 8601 week-numbering year of `d`",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:     "hasTime",
@@ -505,6 +556,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "Whether the Civil Date `d` has a time of day",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "toCivil",
@@ -517,6 +569,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "toInstant",
@@ -529,6 +582,7 @@ var Builtins = BuiltinsTable{
 			},
 			Required: 2,
 			Total:    2,
+			Variadic: false,
 		},
 		BuiltinsTableBuiltinEntry{
 			Name:  "pi",
@@ -561,6 +615,7 @@ var Builtins = BuiltinsTable{
 			Gives:    "Whether the current recovery's retained failure chain has an eligible offer with this Name; false outside recovery or for a malformed or unknown Name",
 			Required: 1,
 			Total:    1,
+			Variadic: false,
 		},
 	},
 }

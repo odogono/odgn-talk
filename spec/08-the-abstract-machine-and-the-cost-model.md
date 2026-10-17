@@ -1099,8 +1099,8 @@ Each Built-in has one rate ([ADR 0021](../docs/adr/0021-the-stdlib-is-a-small-bu
 
 | Built-in | Fuel | Allocation | Input |
 | --- | --- | --- | --- |
-| `min` | `4 + scanned` | 0 | `scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
-| `max` | `4 + scanned` | 0 | `scanned` is 1 for the first item, plus, for each later item examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
+| `min` | `4 + scanned` | 0 | the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
+| `max` | `4 + scanned` | 0 | the values are the arguments, or a lone list argument's items; `scanned` is 1 for the first value, plus, for each later value examined through the first that can't be compared with the best so far, 1 plus what comparing it with the best so far counts under `compare` |
 | `codePoint` | `3` | 0 |  |
 | `fromCodePoint` | `4` | `size(result)` |  |
 | `upper` | `4 + scalars(x1) / 4 + scalars(result) / 8` | `size(result)` |  |
@@ -1178,6 +1178,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#788](https://github.com/odogono/odgn-talk/issues/788) | The `min` and `max` rates count every item they examine as `scanned`, the first included, through the item whose comparison fails |
 | [#695](https://github.com/odogono/odgn-talk/issues/695) | The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional |
 | [#890](https://github.com/odogono/odgn-talk/issues/890) | The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional |
+| [#1132](https://github.com/odogono/odgn-talk/issues/1132) | The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional |
 
 <!-- end -->
 

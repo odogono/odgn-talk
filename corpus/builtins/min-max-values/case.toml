@@ -1,0 +1,15 @@
+# min-max-values: `min` and `max` take their values as arguments, any number
+# of them, and a lone list argument still means its items (spec chapter 7,
+# Values; ADR 0099; #1132). With two or more arguments a list is one value,
+# ordered as `<` orders lists. Values `<` can't order raise `can't compare`,
+# and an empty lone list raises `out of domain`.
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "v"
+source = "v.talk"

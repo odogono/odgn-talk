@@ -15,6 +15,7 @@ import { parseSource } from '../../impl/ts/src/parser';
 import { generateGoCatalogues } from '../go/generate';
 import { generateZigCatalogues } from '../zig/generate';
 import { compileCostModel } from '../costs/compile';
+import { variadicTail } from '../grammar/function-contract';
 import { emitTsCosts } from '../costs/emit-ts';
 
 const compiledCosts = compileCostModel(costs);
@@ -32,9 +33,8 @@ const contract = (call: string) => {
   if (open < 0 || !call.endsWith(')')) {
     return undefined;
   }
-  const parsed = parseSource(
-    `function signature ${call.slice(open + 1, -1)}\nend signature`,
-  );
+  const { params, variadic } = variadicTail(call.slice(open + 1, -1));
+  const parsed = parseSource(`function signature ${params}\nend signature`);
   if (parsed.error) {
     throw new Error(`Invalid function catalogue signature: ${call}`, {
       cause: parsed.error,
@@ -64,6 +64,7 @@ const contract = (call: string) => {
         ),
     ).length,
     total: parameters.length,
+    variadic,
   };
 };
 

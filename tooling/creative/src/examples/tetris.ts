@@ -276,7 +276,7 @@ end endGame
 
 -- Milliseconds between drops: a second at level 1, faster each level.
 on dropInterval
-  return max([100, 1000 - 75 * (level - 1)])
+  return max(100, 1000 - 75 * (level - 1))
 end dropInterval
 
 on frame elapsed

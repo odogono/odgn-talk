@@ -704,7 +704,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": true
     }
   },
   {
@@ -712,7 +713,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": true
     }
   },
   {
@@ -720,7 +722,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -728,7 +731,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -736,7 +740,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -744,7 +749,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -752,7 +758,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -760,7 +767,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -768,7 +776,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -776,7 +785,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -784,7 +794,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -792,7 +803,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -800,7 +812,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -808,7 +821,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -816,7 +830,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -824,7 +839,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -832,7 +848,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -840,7 +857,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -848,7 +866,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -856,7 +875,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -864,7 +884,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -872,7 +893,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -880,7 +902,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -888,7 +911,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -896,7 +920,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -904,7 +929,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -912,7 +938,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -920,7 +947,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -928,7 +956,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -936,7 +965,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -944,7 +974,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -952,7 +983,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -960,7 +992,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -968,7 +1001,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -976,7 +1010,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -984,7 +1019,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -992,7 +1028,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1000,7 +1037,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1008,7 +1046,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1016,7 +1055,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1024,7 +1064,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1032,7 +1073,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1040,7 +1082,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1048,7 +1091,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1056,7 +1100,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1064,7 +1109,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1072,7 +1118,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1080,7 +1127,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1088,7 +1136,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1096,7 +1145,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1104,7 +1154,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1112,7 +1163,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1120,7 +1172,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1144,7 +1197,8 @@ export const builtins = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   }
 ] as const;
@@ -1155,7 +1209,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1164,7 +1219,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1173,7 +1229,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1182,7 +1239,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1191,7 +1249,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1200,7 +1259,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1209,7 +1269,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1218,7 +1279,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1227,7 +1289,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1236,7 +1299,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1245,7 +1309,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1254,7 +1319,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1263,7 +1329,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1272,7 +1339,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1281,7 +1349,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1290,7 +1359,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1299,7 +1369,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1308,7 +1379,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1317,7 +1389,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1326,7 +1399,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1335,7 +1409,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1344,7 +1419,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1353,7 +1429,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1362,7 +1439,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 3,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1371,7 +1449,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1380,7 +1459,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1389,7 +1469,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1398,7 +1479,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1407,7 +1489,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1416,7 +1499,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1425,7 +1509,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1434,7 +1519,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1443,7 +1529,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1452,7 +1539,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1461,7 +1549,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1470,7 +1559,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1479,7 +1569,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1488,7 +1579,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1497,7 +1589,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1506,7 +1599,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1515,7 +1609,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1524,7 +1619,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1533,7 +1629,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1542,7 +1639,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1551,7 +1649,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1560,7 +1659,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1569,7 +1669,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1578,7 +1679,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1587,7 +1689,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 3,
-      "total": 3
+      "total": 3,
+      "variadic": false
     }
   },
   {
@@ -1596,7 +1699,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 5,
-      "total": 7
+      "total": 7,
+      "variadic": false
     }
   },
   {
@@ -1605,7 +1709,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 3,
-      "total": 5
+      "total": 5,
+      "variadic": false
     }
   },
   {
@@ -1614,7 +1719,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1623,7 +1729,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1632,7 +1739,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1641,7 +1749,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1650,7 +1759,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1659,7 +1769,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1668,7 +1779,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 2,
-      "total": 2
+      "total": 2,
+      "variadic": false
     }
   },
   {
@@ -1682,7 +1794,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1691,7 +1804,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1700,7 +1814,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1709,7 +1824,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1718,7 +1834,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   },
   {
@@ -1727,7 +1844,8 @@ export const libraryExports = [
     "kind": "function",
     "contract": {
       "required": 1,
-      "total": 1
+      "total": 1,
+      "variadic": false
     }
   }
 ] as const;
