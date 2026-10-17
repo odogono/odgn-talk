@@ -53,8 +53,8 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 		b.finishAdmission(req, Nothing, err)
 	}
 	b.frameMu.Lock()
-	if err == nil && packet.Get("need").Kind() == KindNothing && packet.Get("err").Kind() == KindNothing && receipt != nil {
-		err = receipt(packet.Get("ok"))
+	if err == nil {
+		err = applyReceipt(packet, receipt)
 	}
 	b.frameMu.Unlock()
 	// Finish late admissions before releasing ownership to another export.
@@ -89,8 +89,8 @@ func (b *zigGroup) finishAdmission(req *zigAdmission, packet Value, err error) {
 			err = fmt.Errorf("inline reply ref mismatch")
 		}
 	}
-	if err == nil && packet.Get("need").Kind() == KindNothing && packet.Get("err").Kind() == KindNothing && req.receipt != nil {
-		err = req.receipt(packet.Get("ok"))
+	if err == nil {
+		err = applyReceipt(packet, req.receipt)
 	}
 	b.frameMu.Unlock()
 	req.packet, req.err = packet, err
@@ -160,4 +160,12 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 		}
 		<-b.inlineWake
 	}
+}
+
+// applyReceipt records a completed reply's ok value; needs and errors carry none.
+func applyReceipt(packet Value, receipt func(Value) error) error {
+	if receipt == nil || packet.Get("need").Kind() != KindNothing || packet.Get("err").Kind() != KindNothing {
+		return nil
+	}
+	return receipt(packet.Get("ok"))
 }

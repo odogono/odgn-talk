@@ -23,7 +23,7 @@ func (s *inlineIO) Write(p []byte) (int, error) {
 	s.written = append(s.written, p...)
 	for len(s.written) >= 4 {
 		n := int(binary.BigEndian.Uint32(s.written))
-		if n > 64<<20 {
+		if n > maxFrame {
 			s.err = fmt.Errorf("inline event exceeds 64 MiB")
 			return 0, s.err
 		}
@@ -35,11 +35,14 @@ func (s *inlineIO) Write(p []byte) (int, error) {
 			s.err = err
 			return 0, err
 		}
-		if len(reply) == 0 || len(reply) > 64<<20 {
+		if len(reply) == 0 || len(reply) > maxFrame {
 			s.err = fmt.Errorf("inline response length %d outside 1..64 MiB", len(reply))
 			return 0, s.err
 		}
 		s.written = s.written[4+n:]
+		if len(s.written) == 0 {
+			s.written = s.written[:0:cap(s.written)]
+		}
 		var header [4]byte
 		binary.BigEndian.PutUint32(header[:], uint32(len(reply)))
 		s.read = append(s.read, header[:]...)

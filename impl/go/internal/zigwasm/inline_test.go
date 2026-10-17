@@ -58,7 +58,7 @@ func TestInlineFailureIsRetained(t *testing.T) {
 	}
 	oversized := inlineIO{}
 	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], 64<<20+1)
+	binary.BigEndian.PutUint32(header[:], maxFrame+1)
 	if _, err := oversized.Write(header[:]); err == nil {
 		t.Fatal("oversized frame admitted")
 	}

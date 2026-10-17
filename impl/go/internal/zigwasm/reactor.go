@@ -91,10 +91,14 @@ func (r *Reactor) MemoryBytes() uint32 {
 	defer r.mu.Unlock()
 	return r.module.Memory().Size()
 }
+
+// maxFrame bounds every transport frame and inline event.
+const maxFrame = 64 << 20
+
 func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(frame) == 0 || len(frame) > 64<<20 {
+	if len(frame) == 0 || len(frame) > maxFrame {
 		return nil, fmt.Errorf("frame length %d outside 1..64 MiB", len(frame))
 	}
 	allocated, err := r.module.ExportedFunction("talk_buffer").Call(ctx, uint64(len(frame)))

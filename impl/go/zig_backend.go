@@ -117,10 +117,10 @@ func newZigGroup(g *Group) groupBackend {
 		panic(err)
 	}
 	b.reactor = reactor
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "inline-inputs-v1"}})
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
 	if err == nil {
 		features := hello.Get("features")
-		for _, required := range []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "inline-inputs-v1"} {
+		for _, required := range zigFeatures {
 			found := false
 			for i := 1; i <= features.Len(); i++ {
 				if zigText(features.Index(i)) == required {
@@ -153,6 +153,10 @@ func newZigGroup(g *Group) groupBackend {
 func (b *zigGroup) send(m string, fields map[string]any) (Value, error) {
 	return b.exchange(m, fields, nil)
 }
+
+// zigFeatures are the transport features the adapter requests and requires.
+var zigFeatures = []string{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "inline-inputs-v1"}
+
 func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value) error) (Value, error) {
 	defer runtime.KeepAlive(b)
 	var ref int64
