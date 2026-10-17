@@ -58,3 +58,7 @@ bun run --cwd tooling/playground build   # a static dist/ any web server can hos
 ```
 
 See [`tooling/playground/`](tooling/playground/) for what it does and how to run the corpus in a browser.
+
+## Licence
+
+NorthTalk is released under the [MIT Licence](LICENSE). Each Core's generated Unicode tables also carry the Unicode licence, which its README describes.
