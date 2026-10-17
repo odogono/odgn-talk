@@ -29,6 +29,7 @@ import {
   duplicateElement,
   ELEMENT_KINDS,
   freshName,
+  hasBorder,
   isIdentifierName,
   isTextAlign,
   replacePlainText,
@@ -540,6 +541,18 @@ export class PlaySession {
                       throw new ScriptError(
                         'out of domain',
                         'Property must be finite',
+                      );
+                    }
+                    if (
+                      key === 'thickness' &&
+                      'kind' in native &&
+                      hasBorder(native) &&
+                      typeof next === 'number' &&
+                      next < 0
+                    ) {
+                      throw new ScriptError(
+                        'out of domain',
+                        'thickness must be zero or above',
                       );
                     }
                     if (

@@ -64,12 +64,16 @@ export type RectangleElement = ElementBase & {
   fill: string;
   kind: 'rectangle';
   stroke: string;
+  /** Border width in pixels; zero hides the border. */
+  thickness: number;
 };
 
 export type EllipseElement = ElementBase & {
   fill: string;
   kind: 'ellipse';
   stroke: string;
+  /** Border width in pixels; zero hides the border. */
+  thickness: number;
 };
 
 export type LineElement = ElementBase & {
@@ -228,6 +232,12 @@ const base = (name: string): ElementBase => ({
 });
 
 /** A new Element of `kind` with that kind's default properties. */
+/** True for shapes whose border has a writable `thickness`. */
+export const hasBorder = (element: {
+  kind: string;
+}): element is RectangleElement | EllipseElement =>
+  element.kind === 'rectangle' || element.kind === 'ellipse';
+
 export const createElement = (kind: ElementKind, name: string): Element => {
   switch (kind) {
     case 'text':
@@ -252,9 +262,21 @@ export const createElement = (kind: ElementKind, name: string): Element => {
         textColor: '#ffffff',
       };
     case 'rectangle':
-      return { ...base(name), kind, fill: '#f0a020', stroke: '#1d1d1f' };
+      return {
+        ...base(name),
+        kind,
+        fill: '#f0a020',
+        stroke: '#1d1d1f',
+        thickness: 2,
+      };
     case 'ellipse':
-      return { ...base(name), kind, fill: '#7ee08a', stroke: '#1d1d1f' };
+      return {
+        ...base(name),
+        kind,
+        fill: '#7ee08a',
+        stroke: '#1d1d1f',
+        thickness: 2,
+      };
     case 'line':
       return {
         ...base(name),
