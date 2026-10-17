@@ -29,7 +29,10 @@ import {
   ELEMENT_KINDS,
   freshName,
   isIdentifierName,
+  isTextAlign,
   replacePlainText,
+  setTextAlign,
+  textAlignOf,
   textOf,
   type Element,
   type ElementKind,
@@ -488,9 +491,13 @@ export class PlaySession {
                   : shape.text,
             get: ({ native }) => {
               const value =
-                key === 'text' && 'kind' in native && native.kind === 'text'
+                'kind' in native && native.kind === 'text' && key === 'text'
                   ? textOf(native)
-                  : (native as Record<string, unknown>)[key];
+                  : 'kind' in native &&
+                      native.kind === 'text' &&
+                      key === 'textAlign'
+                    ? textAlignOf(native)
+                    : (native as Record<string, unknown>)[key];
               return typeof value === 'number'
                 ? num(value)
                 : typeof value === 'boolean'
@@ -518,6 +525,18 @@ export class PlaySession {
                       native.kind === 'text'
                     ) {
                       replacePlainText(native, String(next));
+                    } else if (
+                      key === 'textAlign' &&
+                      'kind' in native &&
+                      native.kind === 'text'
+                    ) {
+                      if (!isTextAlign(next)) {
+                        throw new ScriptError(
+                          'out of domain',
+                          'textAlign must be left, center, right or justify',
+                        );
+                      }
+                      setTextAlign(native, next);
                     } else {
                       (native as Record<string, unknown>)[key] = next;
                     }

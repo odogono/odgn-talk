@@ -4,12 +4,15 @@
 // Files hold the authored Project only, never Play State (ADR 0041).
 
 import {
+  alignParagraph,
   ELEMENT_KINDS,
   isIdentifierName,
+  isTextAlign,
   type Asset,
   type Element,
   type ElementKind,
   type Page,
+  type Paragraph,
   type Project,
   type RichText,
   type TextRun,
@@ -190,7 +193,11 @@ const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
   return paragraphs.map((raw, i) => {
     const p = c.obj(raw, `${path}[${i}]`) ?? {};
     const runs = c.arr(p.runs, `${path}[${i}].runs`) ?? [];
-    return {
+    const align = c.optStr(p.align, `${path}[${i}].align`);
+    if (align !== undefined && !isTextAlign(align)) {
+      c.fail(`${path}[${i}].align`, 'expected left, center, right or justify');
+    }
+    const paragraph: Paragraph = {
       runs: runs.map((rawRun, j) => {
         const at = `${path}[${i}].runs[${j}]`;
         const r = c.obj(rawRun, at) ?? {};
@@ -204,6 +211,8 @@ const checkRichText = (c: Checker, value: unknown, path: string): RichText => {
         return run;
       }),
     };
+    alignParagraph(paragraph, isTextAlign(align) ? align : undefined);
+    return paragraph;
   });
 };
 

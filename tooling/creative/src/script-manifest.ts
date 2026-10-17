@@ -38,6 +38,7 @@ const specific: Record<Element['kind'], Record<string, string>> = {
     text: 'text',
     textColor: 'text',
     textSize: 'number',
+    textAlign: 'text',
     font: 'text',
     editable: 'boolean',
   },
