@@ -9,15 +9,17 @@ if (!(await Bun.file(bundlePath).exists())) {
 const server = Bun.serve({
   hostname: '127.0.0.1',
   port: 3926,
-  fetch(request) {
+  async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === '/') {
       return new Response(Bun.file(resolve(root, 'tests/browser-smoke.html')), {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       });
     }
-    if (path === '/index.js') {
-      return new Response(Bun.file(bundlePath), {
+    // dist/ holds the entry modules and the chunks they import.
+    const file = Bun.file(resolve(root, 'dist', `.${path}`));
+    if (path.endsWith('.js') && !path.includes('..') && (await file.exists())) {
+      return new Response(file, {
         headers: {
           'content-type': 'text/javascript; charset=utf-8',
           'cache-control': 'no-store',
