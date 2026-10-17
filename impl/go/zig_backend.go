@@ -91,37 +91,35 @@ type zigGroup struct {
 	decisions     map[string]*Deciding
 	// Property crossings' Host details, in crossing order, for this Pump.
 	propertyDetails []string
-	librariesMu     sync.Mutex
-	libraries       map[[32]byte]bool
-	kindsMu         sync.Mutex
-	kinds           map[string]*ObjectKind
-	runs            map[RunID]DeliveryID
-	coordinators    map[*SegmentLifecycle]string
-	effectDetails   map[string]string
-	definitions     map[*CapabilityDef]string
-	callsMu         sync.Mutex
-	calls           map[CallID]context.CancelFunc
-	failureDetails  map[CallID]string
-	restoreOptions  *RestoreOptions
-	restoredCalls   map[CallID]*Call
-	paused          bool
+	// The guest's Session-scoped registrations, shared with every Group on it.
+	reg            *zigRegistry
+	runs           map[RunID]DeliveryID
+	coordinators   map[*SegmentLifecycle]string
+	effectDetails  map[string]string
+	callsMu        sync.Mutex
+	calls          map[CallID]context.CancelFunc
+	failureDetails map[CallID]string
+	restoreOptions *RestoreOptions
+	restoredCalls  map[CallID]*Call
+	paused         bool
+	// The guest this Group shares with others of its Core, if any, and the
+	// Group's handle on it.
+	shared *zigShared
+	handle string
+	// Whether the Group has had nothing but its name, so it may move guest.
+	untouched bool
+	dropping  runtime.Cleanup
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1"}
 
-func newZigGroup(g *Group) groupBackend {
-	b := newZigBackend(g)
-	if _, err := b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
-		b.reactor.Close(context.Background())
-		panic(err)
-	}
-	return b
-}
+func newZigGroup(g *Group) groupBackend { return newZigSharedGroup(g) }
 
-// A restore needs an initialized Core without an existing Group handle.
+// A restore needs an initialized Core without an existing Group handle, so
+// a restored Group has a guest of its own.
 func newZigBackend(g *Group) *zigGroup {
-	b := &zigGroup{group: g, inlineWake: make(chan struct{}, 1), pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
+	b := &zigGroup{group: g, inlineWake: make(chan struct{}, 1), pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, reg: newZigRegistry(), runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
 	owner := weak.Make(b)
 	reactor, err := zigEngine().InstantiateObserved(context.Background(), func(event []byte) ([]byte, error) {
 		live := owner.Value()
@@ -134,22 +132,7 @@ func newZigBackend(g *Group) *zigGroup {
 		panic(err)
 	}
 	b.reactor = reactor
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
-	if err == nil {
-		features := hello.Get("features")
-		for _, required := range zigFeatures {
-			found := false
-			for i := 1; i <= features.Len(); i++ {
-				if zigText(features.Index(i)) == required {
-					found = true
-				}
-			}
-			if !found {
-				err = fmt.Errorf("embedded Zig artifact omits %s", required)
-				break
-			}
-		}
-	}
+	err = b.checkHello()
 	if err != nil {
 		reactor.Close(context.Background())
 		panic(err)
@@ -176,7 +159,10 @@ func (b *zigGroup) exchange(m string, fields map[string]any, receipt func(Value)
 			b.ref++
 			ref = b.ref
 		}
-		fields["m"], fields["ref"], fields["group"] = m, ref, "g"
+		fields["m"], fields["ref"], fields["group"] = m, ref, b.groupHandle()
+		if m != "new-group" && m != "define-object-kind" {
+			b.untouched = false
+		}
 		b.frameMu.Unlock()
 		packet, err := b.export(fields, receipt)
 		if err != nil {
@@ -224,7 +210,11 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	if err != nil {
 		return Nothing, err
 	}
-	data, err = b.reactor.Frame(context.Background(), data)
+	if b.shared != nil {
+		data, err = b.shareFrame(data)
+	} else {
+		data, err = b.reactor.Frame(context.Background(), data)
+	}
 	if err != nil {
 		return Nothing, err
 	}
@@ -548,11 +538,8 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			if failed.Detail == "" {
 				failed.Detail = "Host result rejected by the Core"
 			}
-			for def, handle := range b.definitions {
-				if failed.Operation.Capability == handle {
-					failed.Operation.Capability = def.name
-					break
-				}
+			if name, ok := b.reg.definitionName(failed.Operation.Capability); ok {
+				failed.Operation.Capability = name
 			}
 		}
 		if c, _ := row.Get("climbed").AsBool(); c {
@@ -935,4 +922,33 @@ func zigJSON(out []byte, v any) ([]byte, error) {
 	}
 	b, err := json.Marshal(v)
 	return append(out, b...), err
+}
+
+func (b *zigGroup) groupHandle() string {
+	if b.handle == "" {
+		return "g"
+	}
+	return b.handle
+}
+
+// checkHello opens the guest's session and checks it offers every feature
+// the adapter requires.
+func (b *zigGroup) checkHello() error {
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
+	if err == nil {
+		features := hello.Get("features")
+		for _, required := range zigFeatures {
+			found := false
+			for i := 1; i <= features.Len(); i++ {
+				if zigText(features.Index(i)) == required {
+					found = true
+				}
+			}
+			if !found {
+				err = fmt.Errorf("embedded Zig artifact omits %s", required)
+				break
+			}
+		}
+	}
+	return err
 }

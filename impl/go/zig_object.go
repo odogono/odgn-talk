@@ -19,12 +19,18 @@ import (
 // their handles is made. Handles, natives and property callbacks stay in Go;
 // the guest sees only {"$object": [kind, id]}.
 func (b *zigGroup) defineKind(kind *ObjectKind) error {
-	b.kindsMu.Lock()
-	defer b.kindsMu.Unlock()
-	if known, ok := b.kinds[kind.name]; ok {
-		if known != kind {
-			return backendUnsupported("two Object Kinds with one name in a Group")
+	b.reg.kindsMu.Lock()
+	if known, ok := b.reg.kinds[kind.name]; ok && known != kind {
+		b.reg.kindsMu.Unlock()
+		// A Group with nothing but its name can move to a guest where
+		// the name is free, as a guest of its own would have been.
+		if b.moveForKind(kind) {
+			return b.defineKind(kind)
 		}
+		return backendUnsupported("two Object Kinds with one name in a Group's guest")
+	}
+	defer b.reg.kindsMu.Unlock()
+	if _, ok := b.reg.kinds[kind.name]; ok {
 		return nil
 	}
 	names := make([]string, 0, len(kind.props))
@@ -56,7 +62,7 @@ func (b *zigGroup) defineKind(kind *ObjectKind) error {
 	if _, err := b.send("define-object-kind", map[string]any{"name": kind.name, "props": props, "parentKinds": parents}); err != nil {
 		return err
 	}
-	b.kinds[kind.name] = kind
+	b.reg.kinds[kind.name] = kind
 	return nil
 }
 
@@ -72,9 +78,9 @@ func (b *zigGroup) syncKinds() error {
 	c.mu.Unlock()
 	sort.Slice(kinds, func(i, j int) bool { return kinds[i].name < kinds[j].name })
 	for _, k := range kinds {
-		b.kindsMu.Lock()
-		_, known := b.kinds[k.name]
-		b.kindsMu.Unlock()
+		b.reg.kindsMu.Lock()
+		_, known := b.reg.kinds[k.name]
+		b.reg.kindsMu.Unlock()
 		if known {
 			continue
 		}

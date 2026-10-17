@@ -21,14 +21,22 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 		}
 		seen[l.Name()] = l
 	}
+	// A new Group reads the Core's Kinds, so it is made outside c.mu.
 	c.mu.Lock()
-	if c.libraryChecker == nil {
-		c.libraryChecker = c.NewGroup(GroupOptions{Name: "library-checker"})
-	}
-	checker := c.libraryChecker.backend.(*zigGroup)
+	existing := c.libraryChecker
 	c.mu.Unlock()
-	checker.librariesMu.Lock()
-	defer checker.librariesMu.Unlock()
+	if existing == nil {
+		made := c.NewGroup(GroupOptions{Name: "library-checker"})
+		c.mu.Lock()
+		if c.libraryChecker == nil {
+			c.libraryChecker = made
+		}
+		existing = c.libraryChecker
+		c.mu.Unlock()
+	}
+	checker := existing.backend.(*zigGroup)
+	checker.reg.librariesMu.Lock()
+	defer checker.reg.librariesMu.Unlock()
 	for _, l := range imports {
 		if err := checker.ensureLibrary(l); err != nil {
 			return nil, err
@@ -48,7 +56,7 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 	for i := 1; i <= needs.Len(); i++ {
 		l.needs = append(l.needs, OperationRef{Capability: zigText(needs.Index(i).Get("capability")), Operation: zigText(needs.Index(i).Get("operation"))})
 	}
-	checker.libraries[l.id] = true
+	checker.reg.libraries[l.id] = true
 	return l, nil
 }
 
@@ -88,7 +96,7 @@ func (b *zigGroup) compileLibrary(l *Library) (Value, error) {
 
 // ensureLibrary compiles l, and first its imports, in this guest once.
 func (b *zigGroup) ensureLibrary(l *Library) error {
-	if b.libraries[l.id] {
+	if b.reg.libraries[l.id] {
 		return nil
 	}
 	for _, imported := range l.imports {
@@ -104,7 +112,7 @@ func (b *zigGroup) ensureLibrary(l *Library) error {
 	if hex.EncodeToString(raw) != hex.EncodeToString(l.id[:]) {
 		return fmt.Errorf("Zig guest compiled %s to a different identity", l.Name())
 	}
-	b.libraries[l.id] = true
+	b.reg.libraries[l.id] = true
 	return nil
 }
 
@@ -124,9 +132,9 @@ func (b *zigGroup) addLibrary(l *Library) error {
 		return err
 	}
 	defer b.group.endWorker()
-	b.librariesMu.Lock()
+	b.reg.librariesMu.Lock()
 	err := b.ensureLibrary(l)
-	b.librariesMu.Unlock()
+	b.reg.librariesMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -141,9 +149,9 @@ func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error)
 		return nil, err
 	}
 	defer b.group.endWorker()
-	b.librariesMu.Lock()
+	b.reg.librariesMu.Lock()
 	err := b.ensureLibrary(l)
-	b.librariesMu.Unlock()
+	b.reg.librariesMu.Unlock()
 	if err != nil {
 		return nil, err
 	}

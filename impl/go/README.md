@@ -205,7 +205,9 @@ reference's refused input from `pumped` is excluded pending #1072.
 
 Unsupported Capability attachments return an `experimental Zig backend` error.
 Two Object Kinds sharing a
-name in one Group, and a Kind first defined inside a Host callback, are refused.
+name in one Group's guest, and a Kind first defined inside a Host callback, are
+refused. A Group that has done nothing but exist moves to another guest rather
+than meet a Kind of the same name.
 Shapes nested beyond 32 levels are also refused. These three declaration limits
 are deliberate experimental limits, retained by the maintainer's decision on
 [#1050](https://github.com/odogono/odgn-talk/issues/1050).
@@ -224,12 +226,21 @@ sqlite per-step charging remains [#911](https://github.com/odogono/odgn-talk/iss
 
 The internal `zigwasm` package verifies the embedded artifact digest. The adapter
 checks language, Cost Model and Unicode versions before use. Compiled code is
-cached process-wide; each Group owns an independent guest. Each process
+cached process-wide. A Core's Groups share a pool of guests, one per
+`GOMAXPROCS`, each made when a new Group first needs it and given out
+round-robin. A guest is one Message Layer Session, holding the Core's
+Capability definitions, Object Kinds and compiled Libraries once. The adapter
+negotiates `group-exchanges-v1`, so each Group on a guest has its own exchange
+and holds the guest for one frame at a time, even while it waits on a Host
+callback ([the contract](../../spec/embedding/group-exchanges.md)). A new Group
+skips a guest holding an Object Kind the Core has since redefined. A restored
+Group has a guest of its own. Each process
 compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
 names a directory, where wazero keeps compiled code for later processes,
 keyed by its version and the artifact. `BenchmarkBackendColdStart` measures
-both, as `cache=none` and `cache=warm`. Group cleanup closes
-the guest through Go's garbage collector, without per-Value Release. Replies
+both, as `cache=none` and `cache=warm`. Go's garbage collector cleans up
+after a Group, without per-Value Release: it sends `drop-group` for a shared
+guest's Group, and closes a guest once neither its pool nor any Group holds it. Replies
 are copied before another export, and returned Values own Go memory. Data
 conversion uses the existing iterative codec rather than encoding/json's
 nesting limit. Ordinary consumers need Go and pinned module dependencies,
@@ -241,14 +252,12 @@ and source analysis, catalogues and computed message names. The Go Session
 Host still uses Go's parser and checker for this work; switching it to these
 exchanges is tracked in [#1092](https://github.com/odogono/odgn-talk/issues/1092).
 
-Each tenant therefore pays for its own guest. The Apple M-series warm-run
-[Group measurement](https://github.com/odogono/odgn-talk/pull/1087) at `ad92dfbf`
-reported about 0.2 ms and 5.9 MB allocated per NewGroup plus one Script load,
-compared with native Go's 8 µs and 6 KB. A separate one-off `HeapInuse`
-measurement across 100 held Groups reported about 2.3 MB per adapter Group
-versus 2 KB native; its harness was not committed. These workload-specific
-figures do not establish the performance acceptance tracked in
-[#1054](https://github.com/odogono/odgn-talk/issues/1054). To repeat the committed
+Sharing guests is what keeps a tenant cheap. On an Apple M5 with 10 guests
+per Core, NewGroup plus one Script load takes about 29 µs, against 94 µs and
+2.4 MB allocated with a guest per Group and native Go's 4 µs and 6 KB, and a
+held Group retains about 88 KB of heap, against 2.4 MB and native Go's 63 KB
+([#1103](https://github.com/odogono/odgn-talk/issues/1103)). The performance
+limits are tracked in #1103. To repeat the committed
 benchmark, run with and without `-tags talk_zig_experimental`:
 
 ```sh
