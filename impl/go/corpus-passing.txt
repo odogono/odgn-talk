@@ -294,6 +294,7 @@ nothing-defaults/stdlib-attribution
 nothing-defaults/values
 objects/argument-labels
 objects/element-host-failures
+objects/element-references
 objects/guard-keys
 objects/implicit-property-targets
 objects/message-path
