@@ -1282,10 +1282,12 @@ class Parser {
       }
       const e = (yield this.chunkLevel()) as Node;
       let root: Node | undefined = e;
-      while (
-        root &&
-        ['Chunk', 'OrdinalChunk', 'Key', 'Group'].includes(root.k)
-      ) {
+      // `set` may read through an Object Element Reference; nothing writes one.
+      const path = ['Chunk', 'OrdinalChunk', 'Key', 'Group'];
+      if (propertyTarget) {
+        path.push('ObjectElement');
+      }
+      while (root && path.includes(root.k)) {
         root = root.k === 'Group' ? (root.e as Node) : (root.of ?? root.base);
       }
       let outer = e;
@@ -2682,6 +2684,11 @@ class Parser {
         this.next();
         return (yield this.chunk(w)) as Node;
       }
+    } else if (w === 'element' || w === 'elements') {
+      if (this.startsIndex(this.la2('chunk-word', 'operator'))) {
+        this.next();
+        return (yield this.objectElement()) as Node;
+      }
     }
     this.next();
     const p = this.peek(0, 'operator');
@@ -2706,6 +2713,19 @@ class Parser {
       const index = (yield this.range()) as Node;
       this.expectWord('of', 'operator');
       return { k: 'Chunk', kind, index, of: (yield this.postfix()) as Node };
+    } finally {
+      this.leave(frame);
+    }
+  }
+
+  // `element 3 of p`, `element ("cell_" & n) of p`: an Object Element
+  // Reference (#1143), in the Chunk Expression family's syntax node.
+  *objectElement(): ParseTask<Node> {
+    const frame = this.enter('Chunk', 1);
+    try {
+      const index = (yield this.range()) as Node;
+      this.expectWord('of', 'operator');
+      return { k: 'ObjectElement', index, of: (yield this.postfix()) as Node };
     } finally {
       this.leave(frame);
     }
@@ -2742,6 +2762,16 @@ class Parser {
           this.next();
           return { k: 'Target' };
         }
+        if (ORDINALS.has(t.v) && this.isWord(n, 'element')) {
+          this.next();
+          this.next();
+          this.expectWord('of', 'operator');
+          return {
+            k: 'ObjectElement',
+            ord: t.v,
+            of: (yield this.postfix()) as Node,
+          };
+        }
         if (
           ORDINALS.has(t.v) &&
           this.isWord(n) &&
@@ -2766,6 +2796,16 @@ class Parser {
         optional ? 'an optional map key' : 'a key or property name',
       )) as string;
       this.expectWord('of', 'operator');
+      if (
+        !optional &&
+        key === 'number' &&
+        this.isWord(this.peek(0), 'elements') &&
+        this.isWord(this.la2('element-count', 'operator'), 'of')
+      ) {
+        this.next();
+        this.next('operator');
+        return { k: 'ElementCount', of: (yield this.postfix()) as Node };
+      }
       return {
         k: optional ? k : PROPERTIES.has(key) ? 'Property' : 'Key',
         key,

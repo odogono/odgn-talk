@@ -44,9 +44,12 @@ import {
   readDisplay,
   map,
   nothing,
+  num,
+  text,
   type Group,
   type Value,
 } from './index';
+import { traceValue } from './trace';
 
 type RecordSpec = {
   ids?: string[];
@@ -864,12 +867,61 @@ const driveReplay = function* (
     const key = `${record.fields.get('object')}:${record.fields.get('name')}:${record.fields.get('op')}`;
     propertyRecords.set(key, [...(propertyRecords.get(key) ?? []), record]);
   }
+  // Each collection's members, from case.toml, by receiver; a collection
+  // call answers from its record when the Trace has one, as `Get` does.
+  // Members stay display text, so a restored Group resolves its own handles.
+  const members = new Map<string, { name: string; object: string }[]>();
+  const collectionCall = (
+    o: HostObject<null>,
+    op: 'count' | 'at' | 'find',
+    selector: Value | null,
+    live: (list: { name: string; object: string }[]) => Value,
+  ): Value => {
+    const key = `${o.value}:elements:${op}`;
+    crossing(key);
+    const record = propertyRecords.get(key)?.shift();
+    if (record) {
+      const recorded = record.fields.get('selector');
+      if (recorded !== (selector ? traceValue(selector) : undefined)) {
+        throw new Error(
+          `The recorded collection call has selector ${recorded ?? 'none'}`,
+        );
+      }
+      propertyFailure(record);
+      return record.fields.has('value')
+        ? value(record.fields.get('value')!)
+        : nothing;
+    }
+    return live(members.get(`${o.kind.name} ${o.id}`) ?? []);
+  };
   const kinds = new Map(
     (setup.objectKinds ?? []).map(k => [
       k.name,
       core.defineObjectKind<null>({
         name: k.name,
         ...(k.parentKinds ? { parentKinds: k.parentKinds } : {}),
+        ...(k.elements
+          ? {
+              elements: {
+                shape: shapeOf(k.elements.shape),
+                countCost: k.elements.countCost,
+                atCost: k.elements.atCost,
+                findCost: k.elements.findCost,
+                count: (o: HostObject<null>) =>
+                  collectionCall(o, 'count', null, list => num(list.length)),
+                at: (o: HostObject<null>, index: number) =>
+                  collectionCall(o, 'at', num(index), list => {
+                    const m = list[index > 0 ? index - 1 : list.length + index];
+                    return m ? value(m.object) : nothing;
+                  }),
+                find: (o: HostObject<null>, name: string) =>
+                  collectionCall(o, 'find', text(name), list => {
+                    const m = list.find(m => m.name === name);
+                    return m ? value(m.object) : nothing;
+                  }),
+              },
+            }
+          : {}),
         props: Object.fromEntries(
           (k.props ?? []).map(p => [
             p.name,
@@ -1046,6 +1098,35 @@ const driveReplay = function* (
     }
     const handle = group.object(kind, o.id, null);
     made.set(`${o.kind} ${o.id}`, handle);
+  }
+  for (const o of setup.objects ?? []) {
+    if (!o.elements) {
+      continue;
+    }
+    if (!kinds.get(o.kind)!.elements) {
+      throw new Error(`Object Kind ${o.kind} has no collection`);
+    }
+    const names = new Set<string>();
+    members.set(
+      `${o.kind} ${o.id}`,
+      o.elements.map(m => {
+        if (names.has(m.name)) {
+          throw new Error(`Duplicate collection member name ${m.name}`);
+        }
+        names.add(m.name);
+        const member = value(m.object);
+        const state =
+          member.kind === 'object'
+            ? made.get(
+                `${member.asObjectRef()!.kind} ${member.asObjectRef()!.id}`,
+              )
+            : undefined;
+        if (!state) {
+          throw new Error(`Unknown collection member ${m.object}`);
+        }
+        return { name: m.name, object: m.object };
+      }),
+    );
   }
   for (const o of setup.objects ?? []) {
     const handle = made.get(`${o.kind} ${o.id}`)!;

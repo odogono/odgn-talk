@@ -235,6 +235,26 @@ const objectKey = (
 /** A Host Object key read calls the Host, unless it is `id` or a Built-in property. */
 const hostKey = (key: string) => key !== 'id' && !properties.has(key);
 
+/**
+ * An Object Element Reference or Element Count (#1143), which always reads
+ * Host state: `element s of x`, `the first element of x` and
+ * `the number of elements of x`.
+ */
+const isElementRead = (node: SemanticNode): boolean => {
+  const [first, second, third, fourth] = node.children;
+  if (node.rule === 'Chunk') {
+    return word(first, 'element') || word(first, 'elements');
+  }
+  return (
+    node.rule === 'The' &&
+    ((word(second) && word(third, 'element')) ||
+      (second?.kind === 'node' &&
+        second.rule === 'Key' &&
+        keyText(second) === 'number' &&
+        word(fourth, 'elements')))
+  );
+};
+
 const isOptionalRead = (node: SemanticNode): boolean =>
   node.rule === 'The' && word(node.children[1], 'optional');
 
@@ -255,7 +275,9 @@ const checkGuard = (guard: SemanticNode, report: Report) => {
     ) {
       report('not in a guard', head);
     }
-    if (
+    if (isElementRead(node)) {
+      report('not in a guard', head as Leaf);
+    } else if (
       node.rule === 'The' &&
       !isOptionalRead(node) &&
       isHostObject(node.children.at(-1))

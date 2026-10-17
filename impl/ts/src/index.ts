@@ -10,6 +10,7 @@ export {
   defineObjectKind,
   type HostObject,
   type ObjectKind,
+  type ObjectElements,
   type ObjectKindDef,
   type PropDef,
 } from './objects';

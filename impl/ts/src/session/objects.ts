@@ -26,7 +26,16 @@ import {
   type Json,
 } from '../readers';
 import { compareText } from '../text';
-import { Value, listValues } from '../values';
+import { Value, listValues, num, text } from '../values';
+
+type PropertyOperation = 'get' | 'set' | 'count' | 'at' | 'find';
+const externalCollection = (): never => {
+  throw new Error('external collection callback in replay');
+};
+const costFrame = (c: { alloc?: number; fuel: number }) => ({
+  fuel: c.fuel,
+  alloc: c.alloc ?? 0,
+});
 import type { TranscriptItem } from './transcript';
 
 export type ObjectReference = { id: string; kind: string };
@@ -122,12 +131,12 @@ export const parseEnvelope = (source: string): Envelope => {
   }
   const obj = plain(raw) as Envelope;
   const fields: Record<string, [string[], string[]?]> = {
-    kind: [['type', 'name', 'props', 'parentKinds']],
+    kind: [['type', 'name', 'props', 'parentKinds'], ['elements']],
     object: [['type', 'object']],
     setup: [['type', 'objects']],
     'property-begin': [
       ['type', 'crossing', 'object', 'property', 'operation'],
-      ['value'],
+      ['value', 'selector'],
     ],
     'property-end': [['type', 'crossing', 'reply']],
     input: [['type', 'request', 'reply']],
@@ -146,9 +155,13 @@ export const parseEnvelope = (source: string): Envelope => {
   if (obj.type === 'property-begin') {
     counter(obj.crossing);
     string(obj.property);
+    const collection = ['count', 'at', 'find'].includes(string(obj.operation));
     if (
-      !['get', 'set'].includes(string(obj.operation)) ||
-      'value' in obj !== (obj.operation === 'set')
+      !(['get', 'set'].includes(obj.operation as string) || collection) ||
+      'value' in obj !== (obj.operation === 'set') ||
+      'selector' in obj !==
+        (obj.operation === 'at' || obj.operation === 'find') ||
+      (collection && obj.property !== 'elements')
     ) {
       malformed('invalid property operation');
     }
@@ -687,11 +700,22 @@ export class SessionObjects {
             }
           : {}),
       }));
+    const elements = definition.elements;
     const declaration = {
       type: 'kind',
       name: definition.name,
       props,
       parentKinds: definition.parentKinds ?? [],
+      ...(elements
+        ? {
+            elements: {
+              shape: shapeData(elements.shape),
+              countCost: costFrame(elements.countCost),
+              atCost: costFrame(elements.atCost),
+              findCost: costFrame(elements.findCost),
+            },
+          }
+        : {}),
     };
     const encoded = serialize(declaration);
     const old = this.declarations.get(definition.name);
@@ -727,7 +751,37 @@ export class SessionObjects {
         },
       ]),
     );
-    const kind = defineObjectKind({ ...definition, props: wrapped });
+    const kind = defineObjectKind({
+      ...definition,
+      props: wrapped,
+      ...(elements
+        ? {
+            elements: {
+              ...elements,
+              count: (o: HostObject<N>) =>
+                this.property(o, 'elements', 'count', () => elements.count(o)),
+              at: (o: HostObject<N>, index: number) =>
+                this.property(
+                  o,
+                  'elements',
+                  'at',
+                  () => elements.at(o, index),
+                  undefined,
+                  num(index),
+                ),
+              find: (o: HostObject<N>, name: string) =>
+                this.property(
+                  o,
+                  'elements',
+                  'find',
+                  () => elements.find(o, name),
+                  undefined,
+                  text(name),
+                ),
+            },
+          }
+        : {}),
+    });
     this.kinds.set(kind.name, kind as ObjectKind);
     this.declarations.set(kind.name, encoded);
     if (!this.replay) {
@@ -775,7 +829,32 @@ export class SessionObjects {
         },
       ]),
     );
-    this.defineKind({ name, parentKinds: e.parentKinds as string[], props });
+    const elements =
+      e.elements === undefined
+        ? undefined
+        : (() => {
+            const d = exact(e.elements, [
+              'shape',
+              'countCost',
+              'atCost',
+              'findCost',
+            ]);
+            return {
+              shape: decodeShape(d.shape),
+              countCost: validateCost(d.countCost),
+              atCost: validateCost(d.atCost),
+              findCost: validateCost(d.findCost),
+              count: externalCollection,
+              at: externalCollection,
+              find: externalCollection,
+            };
+          })();
+    this.defineKind({
+      name,
+      parentKinds: e.parentKinds as string[],
+      props,
+      ...(elements ? { elements } : {}),
+    });
   }
   private registerObject(e: Envelope) {
     this.consume('object');
@@ -796,12 +875,20 @@ export class SessionObjects {
   private property<N>(
     o: HostObject<N>,
     name: string,
-    operation: 'get' | 'set',
+    operation: PropertyOperation,
     callback: () => Value | undefined,
     value?: Value,
+    selector?: Value,
   ): Value {
     try {
-      return this.propertyCrossing(o, name, operation, callback, value);
+      return this.propertyCrossing(
+        o,
+        name,
+        operation,
+        callback,
+        value,
+        selector,
+      );
     } catch (error) {
       if (this.replay && error instanceof TranscriptError) {
         this.failure = error;
@@ -812,9 +899,10 @@ export class SessionObjects {
   private propertyCrossing<N>(
     o: HostObject<N>,
     name: string,
-    operation: 'get' | 'set',
+    operation: PropertyOperation,
     callback: () => Value | undefined,
     value?: Value,
+    selector?: Value,
   ): Value {
     if (this.active) {
       return malformed('reentrant property callback');
@@ -830,6 +918,7 @@ export class SessionObjects {
       property: name,
       operation,
       ...(value ? { value: encoded(this.encode(value)) } : {}),
+      ...(selector ? { selector: encoded(this.encode(selector)) } : {}),
     };
     if (this.replay) {
       const e = this.consume('property-begin');
@@ -837,6 +926,9 @@ export class SessionObjects {
         serialize({
           ...e,
           ...(value ? { value: encoded(jsonSource(nodeAt(e, 'value'))) } : {}),
+          ...(selector
+            ? { selector: encoded(jsonSource(nodeAt(e, 'selector'))) }
+            : {}),
         }) !== serialize(begin)
       ) {
         malformed('unmatched property crossing');
@@ -856,7 +948,7 @@ export class SessionObjects {
         }
         const reply = recordObject(end.reply);
         if ('value' in reply) {
-          if (operation !== 'get') {
+          if (operation === 'set') {
             malformed('value for setter');
           }
           return this.decode(nodeAt(end, 'reply', 'value'));
@@ -893,9 +985,9 @@ export class SessionObjects {
         type: 'property-end',
         crossing: integer(crossing),
         reply:
-          operation === 'get'
-            ? { value: encoded(this.encode(result!)) }
-            : { ok: true },
+          operation === 'set'
+            ? { ok: true }
+            : { value: encoded(this.encode(result!)) },
       });
       return result as Value;
     } catch (error) {

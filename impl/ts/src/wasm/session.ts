@@ -37,6 +37,9 @@ export const features = [
   'restore-bindings-v1',
 ] as const;
 
+/** Features this Host uses when the guest offers them (#1143). */
+export const optionalFeatures = ['object-elements-v1'] as const;
+
 export type Versions = {
   core: string;
   costModel: string;
@@ -75,6 +78,11 @@ const failure = (err: Json): Error => {
   );
 };
 
+const costFrame = (c: { alloc?: number; fuel: number }) => ({
+  fuel: c.fuel,
+  alloc: c.alloc ?? 0,
+});
+
 const isStandard = (def: CapabilityDef<unknown>) =>
   [...def.operations.values()].some(op => standardChecks(op));
 const segmentBound = (def: CapabilityDef<unknown>) =>
@@ -91,6 +99,8 @@ export class Session {
   readonly #coordinators = new Map<SegmentCoordinator, string>();
   readonly #kinds = new Set<string>();
   readonly #libraries = new Set<string>();
+  /** Whether the guest accepts Object Collection declarations. */
+  readonly elements: boolean;
 
   constructor(
     module: WebAssembly.Module,
@@ -100,9 +110,10 @@ export class Session {
     this.reactor = new Reactor(module, diagnostics);
     const hello = this.exchange('hello', {
       protocol: 1,
-      features: [...features],
+      features: [...features, ...optionalFeatures],
     });
     const offered = new Set(textsOf(field(hello, 'features')));
+    this.elements = offered.has('object-elements-v1');
     const missing = features.filter(f => !offered.has(f));
     if (missing.length) {
       throw new InstanceLostError(`talk.wasm lacks ${missing.join(', ')}`);
@@ -242,8 +253,24 @@ export class Session {
       if (this.#kinds.has(kind.name)) {
         continue;
       }
+      if (kind.elements && !this.elements) {
+        throw new HostError(
+          'invalid value',
+          `talk.wasm lacks object-elements-v1 for ${kind.name}'s collection`,
+        );
+      }
       this.exchange('define-object-kind', {
         name: kind.name,
+        ...(kind.elements
+          ? {
+              elements: {
+                shape: shapeData(kind.elements.shape) as Frame,
+                countCost: costFrame(kind.elements.countCost),
+                atCost: costFrame(kind.elements.atCost),
+                findCost: costFrame(kind.elements.findCost),
+              },
+            }
+          : {}),
         props: [...kind.props].map(([name, p]) => ({
           name,
           shape: (p.shape ? shapeData(p.shape) : 'value') as Frame,

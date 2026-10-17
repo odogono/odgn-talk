@@ -16,7 +16,7 @@ import {
   type Reader,
 } from './binary';
 import { charge, partSize, rateOf, sizeOf, type Measured } from './costs';
-import { integerOf } from './decimal';
+import { integerOf, isInteger } from './decimal';
 import type { Body, CodeUnit, Instruction, UnwindEntry } from './code-unit';
 import { arityOf } from './code-unit';
 import {
@@ -667,7 +667,8 @@ export type RunRecord =
       kind: 'prop';
       name: string;
       object: Value;
-      op: 'get' | 'set';
+      op: 'get' | 'set' | 'count' | 'at' | 'find';
+      selector?: Value;
       value?: Value;
     }
   | {
@@ -2741,6 +2742,146 @@ export class Run {
     return result;
   }
 
+  // The receiver of `element s of o` or `the number of elements of o`, after
+  // its selector's checks: a live object whose kind has a collection.
+  private collectionOf(v: Value, fn: string) {
+    const o = stateOf(v);
+    if (!o) {
+      throw wrongKind('object', v);
+    }
+    if (o.disposed) {
+      throw new ScriptError('object gone', [['object', v]]);
+    }
+    const elements = o.handle.kind.elements;
+    if (!elements) {
+      throw new ScriptError('out of domain', [
+        ['function', text(fn)],
+        ['value', v],
+      ]);
+    }
+    return { o, elements };
+  }
+
+  /**
+   * `element s of o` (#1143): the selector is checked, then the receiver,
+   * and one Host callback answers, charged and recorded as a property
+   * getter is. Zero and positions past 2^53 - 1 select nothing.
+   */
+  private getElement(selector: Value, v: Value, rate: number): Value {
+    this.m.input = selector;
+    this.pay(rate);
+    let index: number | null = null;
+    if (selector.kind === 'number') {
+      const d = decimalParts(selector.asDecimal()!);
+      if (!isInteger(d)) {
+        throw wrongKind('integer', selector);
+      }
+      const n = integerOf(d);
+      const bound = BigInt(Number.MAX_SAFE_INTEGER);
+      index = n === 0n || n > bound || n < -bound ? 0 : Number(n);
+    } else if (selector.kind !== 'text') {
+      throw wrongKind('number or text', selector);
+    }
+    const { o, elements } = this.collectionOf(v, 'element');
+    if (index === 0) {
+      return nothing;
+    }
+    return index === null
+      ? this.elementCall(o, v, 'find', selector, elements.findCost, () =>
+          elements.find(o.handle, selector.asText()!),
+        )
+      : this.elementCall(o, v, 'at', selector, elements.atCost, () =>
+          elements.at(o.handle, index),
+        );
+  }
+
+  /** `the number of elements of o` (#1143): the Host's count, one callback. */
+  private countElements(v: Value, rate: number): Value {
+    this.pay(rate);
+    const { o, elements } = this.collectionOf(v, 'number of elements');
+    return this.elementCall(o, v, 'count', null, elements.countCost, () =>
+      elements.count(o.handle),
+    );
+  }
+
+  // One collection callback: its declared cost first, then the call, its
+  // `prop` crossing and its result's checks and conversion.
+  private elementCall(
+    o: ObjectState,
+    v: Value,
+    op: 'count' | 'at' | 'find',
+    selector: Value | null,
+    cost: { alloc?: number; fuel: number },
+    call: () => unknown,
+  ): Value {
+    const ctx = this.propContext(o, `elements.${op}`, cost);
+    this.payAmount(ctx.declared, cost.alloc ?? 0);
+    const record = (extra: { error?: Value; value?: Value }) =>
+      this.hostCrossing({
+        kind: 'prop',
+        object: v,
+        name: 'elements',
+        op,
+        ...(selector ? { selector } : {}),
+        ...extra,
+      });
+    let result: unknown;
+    try {
+      result = call();
+    } catch (error) {
+      throw this.failure(
+        ctx,
+        error instanceof HostScriptError ? error : null,
+        failed => record({ error: failed }),
+        hostDetail(error),
+      );
+    }
+    const detail = this.elementResultDetail(o, op, result);
+    if (detail) {
+      record({ error: map([]) });
+      throw this.hostError(ctx, detail);
+    }
+    record({ value: result as Value });
+    this.payConversion(ctx, result as Value, 0);
+    return result as Value;
+  }
+
+  // What is wrong with a collection callback's result, or null.
+  private elementResultDetail(
+    o: ObjectState,
+    op: 'count' | 'at' | 'find',
+    result: unknown,
+  ): string | null {
+    if (!Value.isValue(result)) {
+      return 'its result is not a Value';
+    }
+    if (op === 'count') {
+      if (result.kind !== 'number') {
+        return 'its count is not a number';
+      }
+      const d = decimalParts(result.asDecimal()!);
+      const n = isInteger(d) ? integerOf(d) : -1n;
+      return n < 0n || n > BigInt(Number.MAX_SAFE_INTEGER)
+        ? 'its count is not an integer from 0 to 2^53 - 1'
+        : null;
+    }
+    if (result.kind === 'nothing') {
+      return null;
+    }
+    const shape = o.handle.kind.elements!.shape;
+    if (mismatch(result, shape)) {
+      return resultDetail(result, shape, this.script.functionGroup);
+    }
+    const member = stateOf(result)!;
+    if (member.disposed) {
+      return 'its member is disposed';
+    }
+    if (this.host && !this.host.group.holdsObject(result)) {
+      return 'its member belongs to another Group';
+    }
+    return null;
+  }
+
   /** `set the p of o to v`: the Host's `Set`, after the value's Shape check. */
   private setProperty(v: Value, name: string, value: Value, rate: number) {
     const o = stateOf(v);
@@ -4118,6 +4259,9 @@ export class Run {
           ins.operands[0] === 'offerAvailable' ||
           ins.operands[0] === 'random'
         );
+      case Op.GetElement:
+      case Op.CountElements:
+        return true;
       case Op.GetKey:
       case Op.GetKeyComputed:
         return (
@@ -4331,6 +4475,16 @@ export class Run {
         }
         m.result = getKey(this.peek(), keyText(this.peek(1)));
         return this.replace(2, rate);
+      case Op.GetElement:
+        m.result = this.getElement(this.peek(1), this.peek(), rate);
+        frame.stack.length -= 2;
+        frame.stack.push(m.result);
+        return next();
+      case Op.CountElements:
+        m.result = this.countElements(this.peek(), rate);
+        frame.stack.pop();
+        frame.stack.push(m.result);
+        return next();
       case Op.Property:
         m.input = this.peek();
         m.result = property(a as string, m.input);

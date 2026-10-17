@@ -94,6 +94,44 @@ const tokens = (node: SyntaxNode) =>
   node.children.filter((child): child is Token => child.kind === 'token');
 const isName = (token: Token) =>
   token.t === 'word' && token.v !== '_' && !RESERVED.has(token.v);
+const isWordToken = (element: SyntaxElement | undefined, word: string) =>
+  element?.kind === 'token' && element.t === 'word' && element.v === word;
+/**
+ * An Object Element Reference or Element Count (#1143): `element s of x`,
+ * `the first element of x` or `the number of elements of x`.
+ */
+const isElementRead = (node: SyntaxNode): boolean => {
+  const [first, second, third, fourth] = node.children;
+  if (node.rule === 'Chunk') {
+    return isWordToken(first, 'element') || isWordToken(first, 'elements');
+  }
+  return (
+    node.rule === 'The' &&
+    ((second?.kind === 'token' && isWordToken(third, 'element')) ||
+      (second?.kind === 'node' &&
+        second.rule === 'Key' &&
+        tokens(second)
+          .map(t => t.v)
+          .join(' ') === 'number' &&
+        isWordToken(fourth, 'elements')))
+  );
+};
+/** The expression a Container is, past its wrappers and parentheses. */
+const containerExpression = (container: SyntaxNode): SyntaxNode => {
+  let node = container;
+  for (;;) {
+    const inner = nodes(node);
+    if (
+      node.rule === 'Chunk' ||
+      node.rule === 'The' ||
+      inner.length !== 1 ||
+      tokens(node).some(t => t.v !== '(' && t.v !== ')')
+    ) {
+      return node;
+    }
+    node = inner[0]!;
+  }
+};
 const bodyRules = new Set(['Handler', 'Function', 'Lambda']);
 // Only these productions introduce or classify name sites.
 const siteRules = new Set<SyntaxNode['rule']>([
@@ -1058,6 +1096,19 @@ export const checkSyntax = (
     }
   }
 
+  for (const { element } of ordered) {
+    if (
+      element.kind === 'node' &&
+      element.rule === 'Container' &&
+      context.get(context.get(element)!.parent!)?.first?.v === 'set' &&
+      isElementRead(containerExpression(element))
+    ) {
+      report(
+        'not a property',
+        context.get(context.get(element)!.parent!)!.first!,
+      );
+    }
+  }
   for (const { node, root } of containers) {
     const binding = root.name.binding;
     if (
@@ -1090,6 +1141,10 @@ export const checkSyntax = (
             return;
           }
           continue;
+        }
+        if (isElementRead(element)) {
+          report('not constant', context.get(element)!.first!);
+          return;
         }
         if (element.rule === 'The' && !nodes(element).length) {
           report('not constant', context.get(element)!.first!);
