@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { SessionHost } from '@odgn/northtalk/session';
+import { readManifest } from '../src/lsp/manifest';
 import {
   createLanguageServer,
   type RpcMessage,
@@ -135,6 +136,219 @@ const setup = (
 };
 const at = (line: number, character: number) => ({
   position: { line, character },
+});
+
+describe('Manifest Object Collections', () => {
+  const elements = {
+    shape: { oneOf: [{ object: 'lamp' }, { object: 'switch' }] },
+    countCost: { fuel: 1 },
+    atCost: { fuel: 2, alloc: 3 },
+    findCost: { fuel: 4 },
+  };
+  const host = {
+    ...manifest,
+    objectKinds: [
+      { name: 'panel', elements },
+      { name: 'lamp', props: [{ name: 'brightness', shape: 'number' }] },
+      { name: 'switch', props: [{ name: 'enabled', shape: 'boolean' }] },
+    ],
+    objects: [{ name: 'thisPanel', kind: 'panel' }],
+  };
+  test('reads collection Shapes and all three costs', () => {
+    expect(readManifest(host).objectKinds.get('panel')).toMatchObject({
+      elements: {
+        shape: {
+          k: 'oneOf',
+          of: [
+            { k: 'object', kind: 'lamp' },
+            { k: 'object', kind: 'switch' },
+          ],
+        },
+        countCost: { fuel: 1, alloc: 0 },
+        atCost: { fuel: 2, alloc: 3 },
+        findCost: { fuel: 4, alloc: 0 },
+      },
+    });
+    expect(
+      readManifest(host).objectKinds.get('lamp')?.elements,
+    ).toBeUndefined();
+  });
+  test('rejects malformed collection metadata', () => {
+    for (const bad of [
+      null,
+      { ...elements, shape: undefined },
+      { ...elements, shape: 'object' },
+      { ...elements, shape: { optional: { object: 'lamp' } } },
+      { ...elements, shape: { oneOf: [] } },
+      { ...elements, shape: { oneOf: [{ object: 'lamp' }, 'text'] } },
+      {
+        ...elements,
+        shape: { oneOf: [{ object: 'lamp' }, { object: 'lamp' }] },
+      },
+      { ...elements, countCost: undefined },
+      { ...elements, atCost: { fuel: -1 } },
+      { ...elements, findCost: { fuel: 1.5 } },
+      {
+        ...elements,
+        findCost: { fuel: 1, alloc: Number.MAX_SAFE_INTEGER + 1 },
+      },
+    ]) {
+      expect(() =>
+        readManifest({
+          ...host,
+          objectKinds: [{ name: 'panel', elements: bad }],
+        }),
+      ).toThrow();
+    }
+  });
+  test('hovers element references and counts with the collection Shape', () => {
+    for (const expression of [
+      'element "desk" of thisPanel',
+      'elements ("de" & "sk") of (thisPanel)',
+      'the first element of thisPanel',
+      'the last element of thisPanel',
+      'the number of elements of thisPanel',
+    ]) {
+      const { sent, request } = setup(
+        `on demo\n return ${expression}\nend demo`,
+        host,
+      );
+      expect((sent.at(-1)!.params as Published).diagnostics).toEqual([]);
+      const hover = request('textDocument/hover', at(1, 9));
+      expect(hover?.contents.value).toContain('lamp object or switch object');
+      expect(hover?.contents.value).toContain('panel');
+      expect(hover?.contents.value).toContain(
+        expression.includes('number') ? 'Result: number' : 'Result: optional',
+      );
+    }
+  });
+  test('offers possible member properties without inferring a definite member kind', () => {
+    const source =
+      'on demo\n return the  of element "desk" of thisPanel\nend demo';
+    const { request } = setup(source, host);
+    const completion = request('textDocument/completion', at(1, 12));
+    expect(completion.map(c => c.label)).toEqual(['brightness', 'enabled']);
+    expect(completion.find(c => c.label === 'brightness')?.detail).toContain(
+      'lamp',
+    );
+    expect(completion.find(c => c.label === 'enabled')?.detail).toContain(
+      'switch',
+    );
+  });
+  test('completes partial properties, computed selectors and ordinal receivers', () => {
+    for (const [property, receiver, labels] of [
+      ['br', 'element (name & "desk") of (thisPanel)', ['brightness']],
+      ['', '(the first element of thisPanel)', ['brightness', 'enabled']],
+      ['', 'the last element of thisPanel', ['brightness', 'enabled']],
+      ['', 'elements 1 of thisPanel', ['brightness', 'enabled']],
+    ] as const) {
+      const line = ` return the ${property} of ${receiver}`;
+      const { request } = setup(`on demo name\n${line}\nend demo`, host);
+      expect(
+        request('textDocument/completion', at(1, 12 + property.length)).map(
+          c => c.label,
+        ),
+      ).toEqual([...labels]);
+    }
+  });
+  test('supports homogeneous collections and keeps ordinary property completion', () => {
+    const homogeneous = {
+      ...host,
+      objectKinds: [
+        { name: 'panel', elements: { ...elements, shape: { object: 'lamp' } } },
+        {
+          name: 'lamp',
+          props: [{ name: 'brightness', shape: 'number', readOnly: true }],
+        },
+      ],
+      objects: [...host.objects, { name: 'deskLamp', kind: 'lamp' }],
+    };
+    for (const receiver of [
+      'element "desk" of thisPanel',
+      'deskLamp',
+      '(deskLamp)',
+    ]) {
+      const { request } = setup(
+        `on demo\n return the br of ${receiver}\nend demo`,
+        homogeneous,
+      );
+      expect(request('textDocument/completion', at(1, 14))).toEqual([
+        expect.objectContaining({
+          label: 'brightness',
+          detail: expect.stringContaining('read-only'),
+        }),
+      ]);
+    }
+    const { request } = setup(
+      'on demo\n return element 1 of thisPanel\nend demo',
+      homogeneous,
+    );
+    expect(request('textDocument/hover', at(1, 9))?.contents.value).toContain(
+      'Result: optional lamp object',
+    );
+  });
+  test('does not invent kinds for unknown, shadowed or computed receivers', () => {
+    for (const [head, receiver] of [
+      ['on demo thisPanel', 'thisPanel'],
+      ['on demo receiver', 'receiver'],
+      ['on demo', 'me'],
+      ['on demo', 'it'],
+      ['on demo', 'the target'],
+      ['on demo\n put thisPanel into alias', 'alias'],
+      ['on demo\n put element 1 of thisPanel into member', 'member'],
+      ['on demo', 'element 1 of thisPanel'],
+      ['use answer from maths as thisPanel\non demo', 'thisPanel'],
+    ]) {
+      const source = `${head}\n return element 1 of ${receiver}\nend demo`;
+      const line = head!.split('\n').length;
+      const { request } = setup(source, host);
+      expect(request('textDocument/hover', at(line, 9))).toBeNull();
+      const completion = setup(
+        `${head}\n return the  of ${receiver}\nend demo`,
+        host,
+      ).request('textDocument/completion', at(line, 12));
+      // A direct element reference can offer possible member properties.
+      if (receiver !== 'element 1 of thisPanel') {
+        expect(
+          completion.some(c => ['brightness', 'enabled'].includes(c.label)),
+        ).toBe(false);
+      }
+    }
+    for (const withManifest of [false, manifest]) {
+      const { request } = setup(
+        'on demo\n return element 1 of thisPanel\nend demo',
+        withManifest,
+      );
+      expect(request('textDocument/hover', at(1, 9))).toBeNull();
+    }
+  });
+  test('shares completion properties across possible kinds and refreshes Manifest changes', () => {
+    const line = ' return the  of element 1 of thisPanel';
+    const { request, server } = setup(`on demo\n${line}\nend demo`, host);
+    server.configure({
+      manifest: {
+        ...host,
+        objectKinds: host.objectKinds.map(kind => ({
+          ...kind,
+          props: [{ name: 'label', shape: 'text' }],
+        })),
+      },
+    });
+    const completion = request('textDocument/completion', at(1, 12));
+    expect(completion).toEqual([
+      expect.objectContaining({
+        label: 'label',
+        detail: expect.stringContaining('lamp'),
+      }),
+    ]);
+    expect(completion[0]?.detail).toContain('switch');
+    server.configure({ manifest: null });
+    expect(
+      request('textDocument/completion', at(1, 12)).some(
+        c => c.label === 'label',
+      ),
+    ).toBe(false);
+  });
 });
 
 test('hover uses Core documentation for declarations and ordered Handler Clauses', () => {

@@ -178,6 +178,21 @@ When completing the property in `the label of button1`, the Manifest's kind
 for `button1` supplies its properties. The Manifest does not identify `me`'s
 kind, so this completion does not infer properties for `me`.
 
+The Manifest reader retains an Object Kind's optional `elements` declaration,
+including its member Shape and count, positional and name lookup costs. Hover
+on `element selector of receiver`, an ordinal element reference or
+`the number of elements of receiver` shows the named receiver's collection
+Shape. An element reference's result is optional; a count's result is a number.
+Property completion on an element reference offers the properties of each
+possible member kind, labelled with that kind. A heterogeneous collection's
+suggestions do not assert that every member has each property. The receiver
+must resolve to a well-known Host Object binding, with parentheses allowed;
+shadowing parameters and locals do not inherit that binding's kind. Collection
+results do not establish a definite Object Kind for subsequent assignments,
+property reads or nested collection receivers. The Manifest declares member
+kinds, so it cannot supply individual members' names. This uses no
+Folio-specific knowledge ([ADR 0100](../../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)).
+
 Host-authored Operation descriptions are shown as plain text and examples as NorthTalk source in the dictionary, hover and completion documentation.
 
 Each Grant's Operations form a dictionary, built from the manifest's Operation

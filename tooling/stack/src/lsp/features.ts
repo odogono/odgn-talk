@@ -29,6 +29,7 @@ import {
   type TextEdit,
 } from './protocol';
 import type { HostManifest, ManifestOperation } from './manifest';
+import { collectionHover, objectProperties } from './objects';
 import {
   dictionaryOf,
   dictionaryOperation,
@@ -506,24 +507,10 @@ export const completion = (
   }
 
   const rest = source.slice(offset).split(/\r\n|\r|\n/)[0]!;
-  // A property slot with a named receiver can use the Host's Object Kind.
-  // `me` has no kind in the Manifest; do not guess one from other objects.
-  const propertySlot = /\bthe\s+([\p{L}\p{N}_]*)$/u.exec(line);
-  const propertyReceiver =
-    /^[\p{L}\p{N}_]*\s+of\s+([\p{L}_][\p{L}\p{N}_]*)\b/u.exec(rest);
-  if (propertySlot && propertyReceiver && manifest) {
-    const kind = manifest.objectsKinds.get(propertyReceiver[1]!);
-    const properties = kind && manifest.objectKinds.get(kind)?.props;
+  if (manifest) {
+    const properties = objectProperties(analysis, offset, manifest, all);
     if (properties) {
-      return [...properties]
-        .filter(([name]) => name.startsWith(propertySlot[1]!))
-        .map(([name, prop]) =>
-          item(
-            name,
-            10,
-            `${kind} property${prop.readOnly ? ' (read-only)' : ''}`,
-          ),
-        );
+      return properties;
     }
   }
   // `tell g to` calls only fire-and-forget Operations, and `ask g to` only the
@@ -762,6 +749,11 @@ export const hover = (
   const whose = whoseHover(analysis, offset);
   if (whose) {
     return whose;
+  }
+  const objectCollection =
+    manifest && collectionHover(analysis, offset, manifest);
+  if (objectCollection) {
+    return objectCollection;
   }
   const within = (n: SemanticNode) =>
     n.span.start <= offset && offset < n.span.end;

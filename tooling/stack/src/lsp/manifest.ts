@@ -31,7 +31,16 @@ export type ManifestMessage = {
   examples?: string[];
   name: string;
 };
+type ManifestCost = { alloc: number; fuel: number };
 export type ManifestObjectKind = {
+  elements?: {
+    atCost: ManifestCost;
+    countCost: ManifestCost;
+    findCost: ManifestCost;
+    /** The distinct Object Kinds a member may have. */
+    kinds: string[];
+    shape: Shape;
+  };
   name: string;
   props: Map<string, { readOnly: boolean; shape: Shape }>;
 };
@@ -127,6 +136,19 @@ const shape = (value: unknown, depth = 0): Shape => {
   }
   throw new Error('Invalid manifest Shape');
 };
+const elementShape = (value: unknown) => {
+  const result = shape(value);
+  const members = result.k === 'oneOf' ? result.of : [result];
+  const names = members.flatMap(s => (s.k === 'object' ? [s.kind] : []));
+  if (
+    !members.length ||
+    names.length !== members.length ||
+    new Set(names).size !== names.length
+  ) {
+    throw new Error('Invalid manifest Object Collection Shape');
+  }
+  return { kinds: names, shape: result };
+};
 /** Decode data only: never construct Capabilities or execute Host callbacks. */
 export const readManifest = (value: unknown): HostManifest => {
   const data = record(typeof value === 'string' ? JSON.parse(value) : value);
@@ -205,7 +227,17 @@ export const readManifest = (value: unknown): HostManifest => {
         shape: shape(prop.shape ?? 'value'),
       });
     }
-    objectKinds.set(name, { name, props });
+    const objectKind: ManifestObjectKind = { name, props };
+    if (kind.elements !== undefined) {
+      const elements = record(kind.elements);
+      objectKind.elements = {
+        ...elementShape(elements.shape),
+        countCost: cost(elements.countCost),
+        atCost: cost(elements.atCost),
+        findCost: cost(elements.findCost),
+      };
+    }
+    objectKinds.set(name, objectKind);
   }
   const objectsKinds = new Map(
     array(data.objects).map(v => {
