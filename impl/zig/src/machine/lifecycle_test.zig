@@ -262,3 +262,49 @@ test "fatal rollback during Stop publishes Scripts in load order and traces refu
     try testing.expect(std.mem.indexOf(u8, refusal, "> reload s carry=yes") != null);
     try testing.expect(std.mem.indexOf(u8, refusal, "refused code=\"effect state unknown\"") != null);
 }
+
+test "stopped Script Reload releases Grants once before publishing, synchronously or paused" {
+    const ReleaseHost = struct {
+        pause: bool,
+        releases: usize = 0,
+
+        fn release(context: ?*anyopaque, gc: *const caps.GrantContext) void {
+            const h: *@This() = @ptrCast(@alignCast(context.?));
+            h.releases += 1;
+            const g: *machine.Group = @ptrCast(@alignCast(gc.group.?));
+            if (h.pause and gc.reason == .reload) g.release_pause = true;
+        }
+    };
+    const gpa = testing.allocator;
+    for ([_]bool{ false, true }) |pause| {
+        var host: ReleaseHost = .{ .pause = pause };
+        var capability: caps.Capability = .{ .name = "resource", .operations = &.{}, .release = .{ .call = ReleaseHost.release, .context = &host } };
+        var grant: caps.Grant = .{ .capability = &capability, .operations = &.{} };
+        var g: machine.Group = .init(gpa, null);
+        defer g.deinit();
+        const old = "on value\nreturn 1\nend value\n";
+        const fresh = "on value\nreturn 2\nend value\n";
+        const s = (try g.load("s", old, .{ .grants = &.{.{ .name = "api", .grant = &grant }} })).loaded;
+        try g.stopInput("s", "done");
+        try g.pump(.{ .seconds = 1790000000, .micros = 0 });
+        try testing.expect(s.stopped != null);
+        try testing.expectEqual(@as(usize, 1), host.releases);
+        g.release_pause = false;
+        try testing.expectEqual(.refused, try g.reload(s, "on", false, false));
+        try testing.expectEqual(@as(usize, 1), host.releases);
+        const result = try g.reload(s, fresh, false, false);
+        try testing.expectEqual(@as(usize, 2), host.releases);
+        if (pause) {
+            try testing.expectEqual(.paused, result);
+            try testing.expectEqualStrings(old, s.source);
+            try testing.expect(s.stopped != null);
+            g.release_pause = false;
+            try testing.expectEqual(.reloaded, (try g.resumeWork()).reload);
+        } else {
+            try testing.expectEqual(.reloaded, result);
+        }
+        try testing.expectEqual(@as(usize, 2), host.releases);
+        try testing.expectEqualStrings(fresh, s.source);
+        try testing.expect(s.stopped == null);
+    }
+}

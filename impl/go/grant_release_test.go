@@ -235,6 +235,66 @@ func TestGrantReleaseReloadAndNoReleaseCases(t *testing.T) {
 	}
 }
 
+func TestGrantReleaseStoppedReload(t *testing.T) {
+	c := New()
+	var contexts []GrantContext
+	var reentries []error
+	d := releaseCapability(t, c, func(ctx GrantContext) {
+		contexts = append(contexts, ctx)
+		_, err := ctx.Group.Save()
+		reentries = append(reentries, err)
+	})
+	g := c.NewGroup(GroupOptions{})
+	s := releaseLoad(t, g, "s", releaseSource, map[string]*Grant{
+		"api": d.GrantAll("binding"),
+		"z":   d.GrantAll("other"),
+	})
+	s.Stop("done")
+	releasePump(t, g)
+	if len(contexts) != 2 {
+		t.Fatal(contexts)
+	}
+	contexts, reentries = nil, nil
+	if _, err := s.Reload("on", ResetVariables); err == nil {
+		t.Fatal("bad Reload accepted")
+	}
+	if len(contexts) != 0 {
+		t.Fatal(contexts)
+	}
+	if _, err := s.Reload(releaseSource, ResetVariables); err != nil {
+		t.Fatal(err)
+	}
+	if len(contexts) != 2 {
+		t.Fatalf("release contexts %v; want both Grants released on stopped-Script Reload", contexts)
+	}
+	for i, want := range []struct{ name, binding string }{{"api", "binding"}, {"z", "other"}} {
+		ctx := contexts[i]
+		if ctx.Group != g || ctx.ScriptName != "s" || ctx.GrantName != want.name || ctx.Binding != want.binding || ctx.Now != releaseNow || ctx.Reason != ReleaseReload {
+			t.Fatal(ctx)
+		}
+		var host *HostError
+		if !errors.As(reentries[i], &host) || host.Code != ReentrantCall {
+			t.Fatal(reentries)
+		}
+	}
+	_, future, err := s.Request(nil, Message{Name: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	releasePump(t, g)
+	select {
+	case <-future.Done():
+	default:
+		t.Fatal("reloaded Script did not answer")
+	}
+	if _, err := future.Result(); err != nil {
+		t.Fatal(err)
+	}
+	if len(contexts) != 2 {
+		t.Fatal(contexts)
+	}
+}
+
 func TestGrantReleaseLibraryReplacement(t *testing.T) {
 	c := New()
 	var events []string
