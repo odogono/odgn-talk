@@ -592,9 +592,32 @@ export const runKeyBrowserTests = async () => {
       'ArrowDown',
   );
   toggle.click();
+  // Space on a focused button clicks it without also reaching the Page.
+  project.pages[0]!.script =
+    'on keyDown key\n set the label of last to "key " & key\nend keyDown';
+  button.script = 'on click\n set the label of me to "clicked"\nend click';
+  toggle.click();
+  const last = () =>
+    document.querySelector<HTMLElement>('#reader [data-element="last"]')!;
+  last().focus();
+  last().dispatchEvent(
+    new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+  );
+  await until(() => last().textContent === 'clicked');
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert(last().textContent === 'clicked', 'Space on a button sent keyDown');
+  // A pointer click leaves focus with the Page, so Space reaches it.
+  last().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+  assert(document.activeElement === reader, 'A pointer click kept focus');
+  toggle.click();
   return {
     passed: true,
-    checks: ['unhandled keys keep their default', 'handled keys are claimed'],
+    checks: [
+      'unhandled keys keep their default',
+      'handled keys are claimed',
+      'Space on a focused button only clicks',
+      'a pointer click returns focus to the Page',
+    ],
   };
 };
 

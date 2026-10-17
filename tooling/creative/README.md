@@ -435,7 +435,8 @@ then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
 or to the Page, without preventing normal typing. A key sent to the Page when
 a `keyDown` Handler is on its Message Path loses its browser default, so arrow
 keys and space drive a game rather than scroll; with no such Handler they
-scroll as usual. Reader-editable text opens
+scroll as usual. Enter or Space on a focused button sends it `click` and no
+`keyDown`, and a pointer click on a button returns focus to the Page. Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
 colour, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
 the text again reopens it. Typing, formatting, paste and reader undo/redo send

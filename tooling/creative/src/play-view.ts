@@ -248,6 +248,10 @@ export const mountPlay = (shell: StackShell): void => {
           if (touch) {
             send('pointerLeave');
           }
+          // A pointer click leaves the keys with the Page, as games expect.
+          if (event.detail > 0 && element.kind === 'button') {
+            reader.focus();
+          }
         });
         fresh.addEventListener('focus', () => {
           if (element.kind === 'text') {
@@ -472,6 +476,17 @@ export const mountPlay = (shell: StackShell): void => {
     const element = session.page.elements.find(
       e => e.name === node?.dataset.element,
     );
+    // Enter or Space activates a focused button, as in a browser, and is
+    // not also a key for the Page.
+    if (
+      element?.kind === 'button' &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault();
+      session.send(element, 'click');
+      schedule();
+      return;
+    }
     const target =
       element?.kind === 'text' && element.editable ? element : session.page;
     // A handled key belongs to the Project: arrows and space don't scroll.
@@ -480,13 +495,6 @@ export const mountPlay = (shell: StackShell): void => {
       event.preventDefault();
     }
     session.send(target, 'keyDown', [text(event.key)]);
-    if (
-      element?.kind === 'button' &&
-      (event.key === 'Enter' || event.key === ' ')
-    ) {
-      event.preventDefault();
-      session.send(element, 'click');
-    }
     schedule();
   });
   shell.onRedraw(() => {
