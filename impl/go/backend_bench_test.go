@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -223,11 +222,15 @@ func BenchmarkBackendMultiGroup(b *testing.B) {
 	}
 }
 
-// BenchmarkBackendRetainedMemory holds many loaded Groups, each with a filled
-// Script Variable, and reports what each costs after a GC: live Go heap, Go
-// runtime memory from the OS, and the process's resident set where ps exists.
+// BenchmarkBackendRetainedMemory reports the live Go heap each loaded Group
+// adds, with a filled Script Variable, while every Group stays held. The Zig
+// adapter keeps guest linear memory on the Go heap (zigwasm.linearMemory), so
+// the figure includes it; wazero's compiled code is shared per process and
+// is not counted. Each iteration measures a fresh Core: it warms 64 Groups
+// first, which pay one-time costs such as the guests a Core's Groups share,
+// then measures many more, so guest memory growth averages out (#1103).
 func BenchmarkBackendRetainedMemory(b *testing.B) {
-	const groups = 32
+	const warm, groups = 64, 256
 	const source = `script variable rows = []
 on fill n
  repeat for each i in 1..n
@@ -236,17 +239,14 @@ on fill n
  return n
 end fill
 `
-	core := talk.New()
-	// The first Groups pay one-time costs, such as the Zig adapter's compile
-	// and the guests its Groups share. Every Group stays held, so each
-	// iteration measures what more Groups add, not memory earlier ones freed.
-	var held []*talk.Group
-	for range 64 {
-		held = append(held, core.NewGroup(talk.GroupOptions{Name: "warm"}))
-	}
-	var heap, sys, rss float64
+	var heap float64
 	for b.Loop() {
-		before := memorySample()
+		core := talk.New()
+		var held []*talk.Group
+		for range warm {
+			held = append(held, core.NewGroup(talk.GroupOptions{Name: "warm"}))
+		}
+		before := settledHeap()
 		for i := range groups {
 			g := core.NewGroup(talk.GroupOptions{Name: fmt.Sprint("held", i)})
 			s, err := g.Load(talk.LoadOptions{Name: "s", Source: source})
@@ -259,32 +259,31 @@ end fill
 			}
 			held = append(held, g)
 		}
-		after := memorySample()
+		after := settledHeap()
+		runtime.KeepAlive(core)
 		runtime.KeepAlive(held)
-		heap += float64(after.heap-before.heap) / groups
-		sys += float64(after.sys-before.sys) / groups
-		rss += float64(after.rss-before.rss) / groups
+		heap += float64(after-before) / groups
 	}
-	n := float64(b.N)
-	b.ReportMetric(heap/n, "heap-B/group")
-	b.ReportMetric(sys/n, "sys-B/group")
-	b.ReportMetric(rss/n, "rss-B/group")
+	b.ReportMetric(heap/float64(b.N), "heap-B/group")
 }
 
-type memory struct{ heap, sys, rss int64 }
-
-func memorySample() memory {
-	runtime.GC()
-	runtime.GC()
+// settledHeap collects until the live heap stops changing and returns it.
+// runtime.GC returns before cleanups run, and the Zig adapter frees a
+// collected Group's guest in a cleanup, so a Core from an earlier iteration
+// would otherwise be freed partway through a later measurement.
+func settledHeap() int64 {
 	var s runtime.MemStats
-	runtime.ReadMemStats(&s)
-	m := memory{heap: int64(s.HeapAlloc), sys: int64(s.Sys - s.HeapReleased)}
-	if out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(os.Getpid())).Output(); err == nil {
-		if kib, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64); err == nil {
-			m.rss = kib << 10
+	last := int64(-1)
+	for range 50 {
+		runtime.GC()
+		time.Sleep(time.Millisecond)
+		runtime.ReadMemStats(&s)
+		if int64(s.HeapAlloc) == last {
+			break
 		}
+		last = int64(s.HeapAlloc)
 	}
-	return m
+	return last
 }
 
 const coldChildEnv = "NORTHTALK_COLD_START_CHILD"
