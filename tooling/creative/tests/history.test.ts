@@ -52,11 +52,19 @@ for (const names of [['a'], ['a', 'c']]) {
       expect(copy).toEqual({
         ...source,
         name: `${name}2`,
+        id: copy.id,
         left: source.left + 20,
         top: source.top + 20,
       });
       if (copy.kind === 'text' && source.kind === 'text') {
-        copy.richText[0]!.runs[0]!.text = 'Changed copy';
+        editor.edit(({ project, pageIndex }) => {
+          const copy = project.pages[pageIndex]!.elements.find(
+            e => e.name === `${name}2`,
+          )!;
+          if (copy.kind === 'text') {
+            copy.richText[0]!.runs[0]!.text = 'Changed copy';
+          }
+        });
         expect(source.richText[0]!.runs[0]!.text).toBe('Text');
       }
     }
@@ -75,7 +83,9 @@ for (const names of [['a'], ['a', 'c']]) {
 
 test('duplicates reserve names of originals and of every copy', () => {
   const editor = makeEditor();
-  editor.page.elements.push(createElement('button', 'a2'));
+  editor.edit(({ project }) => {
+    project.pages[0]!.elements.push(createElement('button', 'a2'));
+  });
   select(editor, 'a2', 'a');
   editor.duplicate();
   expect(editor.selection).toEqual(['a3', 'a4']);
@@ -83,11 +93,23 @@ test('duplicates reserve names of originals and of every copy', () => {
 
 test('duplicate a Page after itself, preserving layout and independent nested data', () => {
   const editor = makeEditor();
-  editor.page.script = 'on openPage\nend openPage';
+  editor.edit(({ project }) => {
+    project.pages[0]!.script = 'on openPage\nend openPage';
+  });
   checkUndo(editor, () => editor.duplicate());
   expect(editor.pageIndex).toBe(1);
-  expect(editor.page).toEqual({ ...editor.project.pages[0]!, name: 'page2' });
-  editor.page.elements[0]!.left = 500;
+  expect(editor.page).toEqual({
+    ...editor.project.pages[0]!,
+    id: editor.page.id,
+    elements: editor.page.elements,
+    name: 'page2',
+  });
+  expect(editor.page.elements.map(e => ({ ...e, id: undefined }))).toEqual(
+    editor.project.pages[0]!.elements.map(e => ({ ...e, id: undefined })),
+  );
+  editor.edit(({ project, pageIndex }) => {
+    project.pages[pageIndex]!.elements[0]!.left = 500;
+  });
   expect(editor.project.pages[0]!.elements[0]!.left).toBe(40);
 });
 
@@ -184,8 +206,8 @@ test('moves, resizes and live Info changes each undo as one edit', () => {
   checkUndo(editor, () => {
     const edit = editor.startEdit();
     for (const name of ['M', 'My', 'Mystery revised']) {
-      edit.change(() => {
-        editor.project.name = name;
+      edit.change(({ project }) => {
+        project.name = name;
       });
     }
     edit.finish();
@@ -225,11 +247,10 @@ test('undo finishes a pending gesture and later stale updates cannot mutate hist
 
 test('long mixed history repeats every Project exactly without drift', () => {
   const editor = makeEditor();
-  const project = editor.project;
-  const states = [structuredClone(project)];
+  const states = [editor.project];
   const record = (change: () => void) => {
     change();
-    states.push(structuredClone(project));
+    states.push(editor.project);
   };
   for (let i = 0; i < 20; i++) {
     select(editor, 'a');
@@ -253,11 +274,12 @@ test('long mixed history repeats every Project exactly without drift', () => {
     editor.selectPage();
     record(() => editor.renamePage(`scene${i}`));
     record(() =>
-      editor.edit(() => {
+      editor.edit(({ project, pageIndex }) => {
+        const page = project.pages[pageIndex]!;
         project.designWidth++;
-        editor.page.height++;
-        editor.page.background = i % 2 ? '#123456' : '#654321';
-        editor.page.elements[0]!.script = `on click\n  put ${i}\nend click`;
+        page.height++;
+        page.background = i % 2 ? '#123456' : '#654321';
+        page.elements[0]!.script = `on click\n  put ${i}\nend click`;
       }),
     );
     record(() => editor.addPage());
@@ -268,13 +290,12 @@ test('long mixed history repeats every Project exactly without drift', () => {
   for (let round = 0; round < 3; round++) {
     for (let i = states.length - 2; i >= 0; i--) {
       editor.undo();
-      expect(project).toBe(editor.project);
-      expect(project).toEqual(states[i]!);
+      expect(editor.project).toBe(states[i]!);
     }
     expect(editor.canUndo).toBe(false);
     for (const state of states.slice(1)) {
       editor.redo();
-      expect(project).toEqual(state);
+      expect(editor.project).toBe(state);
     }
     expect(editor.canRedo).toBe(false);
   }
@@ -317,8 +338,14 @@ test('replaceProject loads another Project without history or a change notice', 
   editor.onChange = () => notices++;
   const other = createProject('Other');
   editor.replaceProject(other);
-  expect(editor.project).toBe(reference);
-  expect(editor.project).toEqual(other);
+  expect(editor.project).not.toBe(reference);
+  expect(editor.project).toEqual({
+    ...other,
+    pages: other.pages.map((page, i) => ({
+      ...page,
+      id: editor.project.pages[i]!.id,
+    })),
+  });
   expect(editor.project).not.toBe(other);
   expect(editor.canUndo).toBe(false);
   expect(editor.canRedo).toBe(false);

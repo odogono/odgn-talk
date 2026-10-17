@@ -2,6 +2,15 @@
 // Elements are selected, and the moves, resizes, renames and Page edits the
 // shell makes. Pure TS over the Project model, so it is tested without a DOM.
 import {
+  batch,
+  computed,
+  effect,
+  signal,
+  untracked,
+  type ReadonlySignal,
+} from '@preact/signals-core';
+import { castDraft, freeze, produce, type Immutable } from 'immer';
+import {
   elementNamesTaken,
   pageNamesTaken,
   reservedScriptNames,
@@ -62,7 +71,11 @@ const namesExcept = (
   new Set(items.map(i => i.name).filter(name => name !== except));
 
 // Without a Project, only the Page's own Elements and reserved names are known.
-const elementNamesNear = (page: Page, current?: string, project?: Project) =>
+const elementNamesNear = (
+  page: Immutable<Page>,
+  current?: string,
+  project?: Immutable<Project>,
+) =>
   project
     ? elementNamesTaken(project, page, current)
     : new Set([...reservedScriptNames, ...namesExcept(page.elements, current)]);
@@ -72,10 +85,10 @@ const elementNamesNear = (page: Page, current?: string, project?: Project) =>
  * Page. `current` is the Element's own name, which it may keep.
  */
 export const checkElementName = (
-  page: Page,
+  page: Immutable<Page>,
   name: string,
   current?: string,
-  project?: Project,
+  project?: Immutable<Project>,
 ): NameCheck =>
   checkName(
     name,
@@ -86,7 +99,7 @@ export const checkElementName = (
 
 /** Checks `name` for a Page: an identifier, unique within the Project. */
 export const checkPageName = (
-  project: Project,
+  project: Immutable<Project>,
   name: string,
   current?: string,
 ): NameCheck =>
@@ -97,9 +110,9 @@ export const checkPageName = (
  * already has it.
  */
 export const labelSuggestion = (
-  page: Page,
-  button: ButtonElement,
-  project?: Project,
+  page: Immutable<Page>,
+  button: Immutable<ButtonElement>,
+  project?: Immutable<Project>,
 ): string | undefined => {
   const suggestion = freshName(
     suggestName(button.label),
@@ -130,7 +143,8 @@ export const MIN_PAGE_HEIGHT = 160;
 type Box = Pick<Element, 'height' | 'left' | 'top' | 'width'>;
 
 /** The smallest size a resize leaves; a line may be flat in either direction. */
-const minimumSize = (element: Element) => (element.kind === 'line' ? 0 : 8);
+const minimumSize = (element: Immutable<Element>) =>
+  element.kind === 'line' ? 0 : 8;
 
 /**
  * `box` resized by dragging `handle` by (dx, dy) design pixels. The opposite
@@ -170,187 +184,210 @@ export const resizeBox = (
 export type Gesture = { finish(): void; to(dx: number, dy: number): void };
 
 /** Several live updates that become one undoable edit on `finish`. */
-export type Edit = { change(update: () => void): void; finish(): void };
+export type Edit = {
+  change(update: (draft: EditorState) => void): void;
+  finish(): void;
+};
 
-type Snapshot = {
-  identities: { elements: number[]; page: number }[];
+export type EditorState = {
   pageIndex: number;
   pageSelected: boolean;
   project: Project;
   selection: string[];
 };
-type HistoryEntry = { after: Snapshot; before: Snapshot };
+type Root = Immutable<EditorState>;
+type HistoryEntry = { after: Root; before: Root };
+export const pageOf = (state: EditorState) =>
+  state.project.pages[state.pageIndex]!;
+export const selectedOf = (state: EditorState) =>
+  pageOf(state).elements.filter(e => state.selection.includes(e.name));
+const elementOf = (state: EditorState, name: string) =>
+  pageOf(state).elements.find(e => e.name === name);
+
 export type LayerOrder = 'forward' | 'backward' | 'front' | 'back';
 
 /** Where a new Element goes: down and right of the last one added. */
 const CASCADE = 20;
 
-/**
- * The editor's state over one authored Project. Edits change the Project in
- * place; the shell renders after each one.
- */
+/** Immutable authored state. Every write runs on an Immer draft. */
 export class StackEditor {
-  #nextIdentity = 0;
-  #identities = new WeakMap<object, number>();
-  /** Session-local identities survive history, but never enter Project files. */
-  identity(owner: object): number {
-    let id = this.#identities.get(owner);
-    if (id === undefined) {
-      id = ++this.#nextIdentity;
-      this.#identities.set(owner, id);
-    }
-    return id;
-  }
+  #state;
+  readonly state: ReadonlySignal<Root>;
+  #past = signal<HistoryEntry[]>([]);
+  #future = signal<HistoryEntry[]>([]);
+  #pending = signal<{ before: Root } | undefined>(undefined);
+  #readOnly = signal(false);
+  readonly currentPage;
+  readonly selectedElements;
+  readonly undoAvailable;
+  readonly redoAvailable;
 
-  #pageIndex = 0;
-  #selection: string[] = [];
-  // Set only by an explicit Page selection, so Delete never removes a Page
-  // just because no Elements are selected.
-  #pageSelected = false;
-  #past: HistoryEntry[] = [];
-  #future: HistoryEntry[] = [];
-  // An object, not a bare Snapshot, so stale Edit handles can be detected by
-  // identity. `json` caches the serialised Project for change checks.
-  #pending: { before: Snapshot; json: string } | undefined;
-
-  /**
-   * Told after every authored change to the Project: a finished undoable
-   * edit, a live change inside one, and undo and redo. Autosave listens
-   * here (#752). Loading a different Project is not a change.
-   */
+  /** Told by an effect when the authored Project changes, including live edits. */
   onChange: (() => void) | undefined;
-
-  /**
-   * While set, the Project cannot change: undo and redo do nothing, and
-   * any edit is rolled back when it finishes. Selection and the showing
-   * Page still change, so a read-only tab can look around.
-   */
-  readOnly = false;
   /** Incremented when switching Projects or loading a stored version. */
   generation = 0;
 
-  constructor(readonly project: Project) {}
-
-  #snapshot(): Snapshot {
-    return structuredClone({
-      identities: this.project.pages.map(page => ({
-        page: this.identity(page),
-        elements: page.elements.map(element => this.identity(element)),
-      })),
-      project: this.project,
-      pageIndex: this.#pageIndex,
-      selection: this.#selection,
-      pageSelected: this.#pageSelected,
+  constructor(project: Immutable<Project>) {
+    this.#state = signal<Root>(this.#initial(project));
+    this.state = this.#state;
+    this.currentPage = computed(
+      () => this.state.value.project.pages[this.state.value.pageIndex]!,
+    );
+    this.selectedElements = computed(() =>
+      this.currentPage.value.elements.filter(e =>
+        this.state.value.selection.includes(e.name),
+      ),
+    );
+    this.undoAvailable = computed(
+      () =>
+        !this.#readOnly.value &&
+        (this.#past.value.length > 0 || this.#pendingChanged),
+    );
+    this.redoAvailable = computed(
+      () =>
+        !this.#readOnly.value &&
+        this.#future.value.length > 0 &&
+        !this.#pendingChanged,
+    );
+    let previous = this.project;
+    let generation = this.generation;
+    effect(() => {
+      const project = this.state.value.project;
+      const changed = previous !== project && generation === this.generation;
+      previous = project;
+      generation = this.generation;
+      if (changed) {
+        untracked(() => {
+          if (!this.readOnly) {
+            this.onChange?.();
+          }
+        });
+      }
     });
   }
 
-  #restore(snapshot: Snapshot): void {
-    const copy = structuredClone(snapshot);
-    this.#assignProject(copy.project);
-    copy.project.pages.forEach((page, index) => {
-      const ids = copy.identities[index]!;
-      this.#identities.set(page, ids.page);
-      page.elements.forEach((element, i) =>
-        this.#identities.set(element, ids.elements[i]!),
-      );
-    });
-    this.#pageIndex = copy.pageIndex;
-    this.#selection = copy.selection;
-    this.#pageSelected = copy.pageSelected;
+  #initial(project: Immutable<Project>): Root {
+    const copy = castDraft(structuredClone(project));
+    this.#assignIds(copy);
+    return freeze(
+      { project: copy, pageIndex: 0, selection: [], pageSelected: false },
+      true,
+    );
   }
 
-  /** Replaces the Project's contents, preserving its object reference. */
-  #assignProject(project: Project): void {
-    // Preserve the Project reference held by the shell and storage clients.
-    for (const key of Object.keys(this.project)) {
-      if (!(key in project)) {
-        delete (this.project as Partial<Project>)[key as keyof Project];
+  /** Gives each Page and Element without a session id a fresh one. */
+  #assignIds(project: Project): void {
+    for (const page of project.pages) {
+      page.id ??= this.#id();
+      for (const element of page.elements) {
+        element.id ??= this.#id();
       }
     }
-    Object.assign(this.project, project);
   }
 
-  /**
-   * Loads a different Project into this editor: opening one from the
-   * Project list, previewing or restoring an earlier version, or following
-   * another tab's save. History starts over; this is not an authored edit,
-   * so `onChange` is not told.
-   */
-  replaceProject(project: Project): void {
-    this.generation++;
-    this.#pending = undefined;
-    this.#assignProject(structuredClone(project));
-    this.#past = [];
-    this.#future = [];
-    this.#pageIndex = 0;
-    this.#selection = [];
-    this.#pageSelected = false;
+  #nextId = 0;
+  #id(): number {
+    return ++this.#nextId;
   }
 
-  /** Finishes any live edit, recording it as one undo step. */
+  get project(): Immutable<Project> {
+    return this.state.value.project;
+  }
+  get readOnly(): boolean {
+    return this.#readOnly.value;
+  }
+  set readOnly(value: boolean) {
+    this.#readOnly.value = value;
+  }
+
+  #update(change: (draft: EditorState) => void): void {
+    this.#state.value = produce(this.#state.peek(), change);
+  }
+
+  /** Loads an independent frozen Project, resetting history without an edit notice. */
+  replaceProject(project: Immutable<Project>): void {
+    batch(() => {
+      this.generation++;
+      this.#pending.value = undefined;
+      this.#past.value = [];
+      this.#future.value = [];
+      this.#state.value = this.#initial(project);
+    });
+  }
+
   finishPendingEdit(): void {
     this.#finish();
   }
 
   get #pendingChanged(): boolean {
-    return (
-      !!this.#pending && this.#pending.json !== JSON.stringify(this.project)
-    );
+    const pending = this.#pending.value;
+    return !!pending && pending.before.project !== this.project;
   }
 
   #finish(): void {
-    const pending = this.#pending;
-    const changed = this.#pendingChanged;
-    this.#pending = undefined;
-    if (pending && changed && this.readOnly) {
-      this.#restore(pending.before);
-    } else if (pending && changed) {
-      this.#past.push({ before: pending.before, after: this.#snapshot() });
-      this.#future = [];
-      this.onChange?.();
-    }
+    batch(() => {
+      const pending = this.#pending.peek();
+      if (pending && pending.before.project !== this.project) {
+        if (this.readOnly) {
+          this.#state.value = pending.before;
+        } else {
+          this.#past.value = [
+            ...this.#past.peek(),
+            { before: pending.before, after: this.#state.peek() },
+          ];
+          this.#future.value = [];
+        }
+      }
+      this.#pending.value = undefined;
+    });
   }
 
   get canUndo(): boolean {
-    return !this.readOnly && (this.#past.length > 0 || this.#pendingChanged);
+    return this.undoAvailable.value;
   }
-
   get canRedo(): boolean {
-    return !this.readOnly && this.#future.length > 0 && !this.#pendingChanged;
+    return this.redoAvailable.value;
   }
 
   /** Records any authored Project change, including Info and future Script edits. */
-  edit<T>(change: () => T): T {
+  edit<T>(change: (draft: EditorState) => T): T {
     const edit = this.startEdit();
     let result!: T;
-    edit.change(() => {
-      result = change();
+    batch(() => {
+      try {
+        edit.change(draft => {
+          result = change(draft);
+        });
+      } finally {
+        edit.finish();
+      }
     });
-    edit.finish();
     return result;
   }
 
-  /** Starts a live edit. Starting another edit also finishes this one. */
+  /** Starts live immutable updates, recorded as one undo step on finish. */
   startEdit(): Edit {
+    return this.#startEdit(false);
+  }
+
+  // Gestures use absolute offsets from their starting root. Returning to the
+  // origin therefore restores that same root and preserves redo.
+  #startEdit(fromStart: boolean): Edit {
     this.#finish();
-    const before = this.#snapshot();
-    const pending = { before, json: JSON.stringify(before.project) };
-    this.#pending = pending;
-    let changed = false;
+    const pending = { before: this.#state.peek() };
+    this.#pending.value = pending;
     return {
       change: update => {
-        if (this.#pending === pending) {
-          update();
-          // A live notice once the Project really changed, so autosave
-          // can cap how long a continuous drag goes unsaved.
-          changed ||= pending.json !== JSON.stringify(this.project);
-          if (changed && !this.readOnly) {
-            this.onChange?.();
-          }
+        if (this.#pending.peek() === pending && !this.readOnly) {
+          const base = fromStart ? pending.before : this.#state.peek();
+          this.#state.value = produce(base, draft => {
+            update(draft);
+            this.#assignIds(draft.project);
+          });
         }
       },
       finish: () => {
-        if (this.#pending === pending) {
+        if (this.#pending.peek() === pending) {
           this.#finish();
         }
       },
@@ -358,50 +395,47 @@ export class StackEditor {
   }
 
   undo(): void {
-    this.#finish();
-    const entry = this.readOnly ? undefined : this.#past.pop();
-    if (entry) {
-      this.#restore(entry.before);
-      this.#future.push(entry);
-      this.onChange?.();
-    }
+    batch(() => {
+      this.#finish();
+      const entry = this.readOnly ? undefined : this.#past.peek().at(-1);
+      if (entry) {
+        this.#past.value = this.#past.peek().slice(0, -1);
+        this.#future.value = [...this.#future.peek(), entry];
+        this.#state.value = entry.before;
+      }
+    });
   }
 
   redo(): void {
-    this.#finish();
-    const entry = this.readOnly ? undefined : this.#future.pop();
-    if (entry) {
-      this.#restore(entry.after);
-      this.#past.push(entry);
-      this.onChange?.();
-    }
+    batch(() => {
+      this.#finish();
+      const entry = this.readOnly ? undefined : this.#future.peek().at(-1);
+      if (entry) {
+        this.#future.value = this.#future.peek().slice(0, -1);
+        this.#past.value = [...this.#past.peek(), entry];
+        this.#state.value = entry.after;
+      }
+    });
   }
 
   get pageIndex(): number {
-    return this.#pageIndex;
+    return this.state.value.pageIndex;
   }
-
-  /** The Page showing on the desk. */
-  get page(): Page {
-    return this.project.pages[this.#pageIndex]!;
+  get page(): Immutable<Page> {
+    return this.currentPage.value;
   }
-
-  /** The selected Elements' names, in the order they were selected. Empty means the Page is selected. */
   get selection(): readonly string[] {
-    return this.#selection;
+    return this.state.value.selection;
   }
-
-  /** The selected Elements, in layer order. */
-  get selected(): Element[] {
-    return this.page.elements.filter(e => this.#selection.includes(e.name));
+  get selected(): Immutable<Element[]> {
+    return this.selectedElements.value;
   }
-
-  element(name: string): Element | undefined {
+  element(name: string): Immutable<Element> | undefined {
     return this.page.elements.find(e => e.name === name);
   }
 
   /** Text edits for a text Element on the showing Page, one undo step each. */
-  textHistory(element: TextElement): TextHistory {
+  textHistory(element: Immutable<TextElement>): TextHistory {
     return new EditorTextHistory(this, element);
   }
 
@@ -412,43 +446,47 @@ export class StackEditor {
    */
   click(name: string | undefined, { shift = false } = {}): void {
     this.#finish();
-    if (name === undefined || !this.element(name)) {
-      if (!shift) {
-        this.#selection = [];
-        this.#pageSelected = true;
+    this.#update(draft => {
+      if (name === undefined || !this.element(name)) {
+        if (!shift) {
+          draft.selection = [];
+          draft.pageSelected = true;
+        }
+        return;
       }
-      return;
-    }
-    this.#pageSelected = false;
-    if (shift) {
-      this.#selection = this.#selection.includes(name)
-        ? this.#selection.filter(n => n !== name)
-        : [...this.#selection, name];
-    } else if (!this.#selection.includes(name)) {
-      this.#selection = [name];
-    }
+      draft.pageSelected = false;
+      if (shift) {
+        draft.selection = draft.selection.includes(name)
+          ? draft.selection.filter(n => n !== name)
+          : [...draft.selection, name];
+      } else if (!draft.selection.includes(name)) {
+        draft.selection = [name];
+      }
+    });
   }
 
   selectPage(): void {
     this.#finish();
-    this.#selection = [];
-    this.#pageSelected = true;
+    this.#update(draft => {
+      draft.selection = [];
+      draft.pageSelected = true;
+    });
   }
 
   /** Adds an Element of `kind` named like `button1`, and selects it. */
-  addElement(kind: ElementKind): Element {
-    return this.edit(() => {
-      const page = this.page;
+  addElement(kind: ElementKind): Immutable<Element> {
+    return this.edit(draft => {
+      const page = pageOf(draft);
       const element = createElement(
         kind,
-        freshName(`${kind}1`, elementNamesTaken(this.project, page)),
+        freshName(`${kind}1`, elementNamesTaken(draft.project, page)),
       );
       const step = (page.elements.length % 10) * CASCADE;
       element.left += step;
       element.top += step;
       page.elements.push(element);
-      this.#selection = [element.name];
-      this.#pageSelected = false;
+      draft.selection = [element.name];
+      draft.pageSelected = false;
       return element;
     });
   }
@@ -466,21 +504,24 @@ export class StackEditor {
     if (replacement && target?.kind !== 'image') {
       return;
     }
-    this.edit(() => {
-      let asset = this.project.assets.find(a => a.hash === imported.hash);
+    this.edit(draft => {
+      let asset = draft.project.assets.find(a => a.hash === imported.hash);
       if (!asset) {
         asset = {
           ...imported,
-          name: freshName(imported.name, namesExcept(this.project.assets)),
+          name: freshName(imported.name, namesExcept(draft.project.assets)),
         };
-        this.project.assets.push(asset);
+        draft.project.assets.push(asset);
       }
       if (target?.kind === 'image') {
-        target.image = asset.name;
+        const image = elementOf(draft, target.name);
+        if (image?.kind === 'image') {
+          image.image = asset.name;
+        }
       } else {
         const element = createElement(
           'image',
-          freshName('image1', elementNamesTaken(this.project, this.page)),
+          freshName('image1', elementNamesTaken(draft.project, pageOf(draft))),
         );
         if (element.kind !== 'image') {
           return;
@@ -489,9 +530,9 @@ export class StackEditor {
         if (position) {
           Object.assign(element, position);
         }
-        this.page.elements.push(element);
-        this.#selection = [element.name];
-        this.#pageSelected = false;
+        pageOf(draft).elements.push(element);
+        draft.selection = [element.name];
+        draft.pageSelected = false;
       }
     });
   }
@@ -504,14 +545,14 @@ export class StackEditor {
     if (this.readOnly) {
       return imported.name;
     }
-    return this.edit(() => {
-      let asset = this.project.assets.find(a => a.hash === imported.hash);
+    return this.edit(draft => {
+      let asset = draft.project.assets.find(a => a.hash === imported.hash);
       if (!asset) {
         asset = {
           ...imported,
-          name: freshName(imported.name, namesExcept(this.project.assets)),
+          name: freshName(imported.name, namesExcept(draft.project.assets)),
         };
-        this.project.assets.push(asset);
+        draft.project.assets.push(asset);
       }
       return asset.name;
     });
@@ -519,13 +560,18 @@ export class StackEditor {
 
   /** Starts moving the selected Elements; offsets are in design pixels. */
   startMove(): Gesture {
-    const origins = this.selected.map(e => ({ e, left: e.left, top: e.top }));
-    const edit = this.startEdit();
+    const origins = this.selected.map(e => ({
+      name: e.name,
+      left: e.left,
+      top: e.top,
+    }));
+    const edit = this.#startEdit(true);
     return {
       finish: edit.finish,
       to(dx, dy) {
-        edit.change(() => {
-          for (const { e, left, top } of origins) {
+        edit.change(draft => {
+          for (const { name, left, top } of origins) {
+            const e = elementOf(draft, name)!;
             e.left = Math.round(left + dx);
             e.top = Math.round(top + dy);
           }
@@ -537,17 +583,17 @@ export class StackEditor {
   /** Starts resizing the one selected Element by a handle, if exactly one is. */
   startResize(handle: Handle): Gesture | undefined {
     const [element] = this.selected;
-    if (!element || this.#selection.length !== 1) {
+    if (!element || this.selection.length !== 1) {
       return undefined;
     }
     const origin: Box = { ...element };
-    const edit = this.startEdit();
+    const edit = this.#startEdit(true);
     return {
       finish: edit.finish,
       to(dx, dy) {
-        edit.change(() => {
+        edit.change(draft => {
           Object.assign(
-            element,
+            elementOf(draft, element.name)!,
             resizeBox(origin, handle, dx, dy, minimumSize(element)),
           );
         });
@@ -566,20 +612,23 @@ export class StackEditor {
     const page = this.page;
     const width = this.project.designWidth;
     const height = page.height;
-    const edit = this.startEdit();
+    const edit = this.#startEdit(true);
     return {
       finish: edit.finish,
       to: (dx, dy) => {
-        edit.change(() => {
+        edit.change(draft => {
           if (handle.includes('e') || handle.includes('w')) {
             const change = handle.includes('w') ? -dx : dx;
-            this.project.designWidth = Math.max(
+            draft.project.designWidth = Math.max(
               MIN_PAGE_WIDTH,
               Math.round(width + change * 2),
             );
           }
           if (handle.includes('s')) {
-            page.height = Math.max(MIN_PAGE_HEIGHT, Math.round(height + dy));
+            pageOf(draft).height = Math.max(
+              MIN_PAGE_HEIGHT,
+              Math.round(height + dy),
+            );
           }
         });
       },
@@ -594,9 +643,9 @@ export class StackEditor {
     }
     const check = checkElementName(this.page, name, current, this.project);
     if (check.ok) {
-      this.edit(() => {
-        element.name = name;
-        this.#selection = this.#selection.map(n => (n === current ? name : n));
+      this.edit(draft => {
+        elementOf(draft, current)!.name = name;
+        draft.selection = draft.selection.map(n => (n === current ? name : n));
       });
     }
     return check;
@@ -606,8 +655,8 @@ export class StackEditor {
   renamePage(name: string): NameCheck {
     const check = checkPageName(this.project, name, this.page.name);
     if (check.ok) {
-      this.edit(() => {
-        this.page.name = name;
+      this.edit(draft => {
+        pageOf(draft).name = name;
       });
     }
     return check;
@@ -616,35 +665,37 @@ export class StackEditor {
   /** Shows the Page at `index` and selects it. */
   goToPage(index: number): void {
     this.#finish();
-    if (index < 0 || index >= this.project.pages.length) {
-      return;
-    }
-    this.#pageIndex = index;
-    this.#selection = [];
-    this.#pageSelected = true;
+    this.#update(draft => {
+      if (index < 0 || index >= this.project.pages.length) {
+        return;
+      }
+      draft.pageIndex = index;
+      draft.selection = [];
+      draft.pageSelected = true;
+    });
   }
 
   previousPage(): void {
-    this.goToPage(this.#pageIndex - 1);
+    this.goToPage(this.pageIndex - 1);
   }
 
   nextPage(): void {
-    this.goToPage(this.#pageIndex + 1);
+    this.goToPage(this.pageIndex + 1);
   }
 
   /** Adds a Page after the showing one, and shows it. */
-  addPage(): Page {
-    return this.edit(() => {
+  addPage(): Immutable<Page> {
+    return this.edit(draft => {
       const page = createPage(
         freshName(
-          `page${this.project.pages.length + 1}`,
-          pageNamesTaken(this.project),
+          `page${draft.project.pages.length + 1}`,
+          pageNamesTaken(draft.project),
         ),
       );
-      this.project.pages.splice(this.#pageIndex + 1, 0, page);
-      this.#pageIndex++;
-      this.#selection = [];
-      this.#pageSelected = false;
+      draft.project.pages.splice(draft.pageIndex + 1, 0, page);
+      draft.pageIndex++;
+      draft.selection = [];
+      draft.pageSelected = false;
       return page;
     });
   }
@@ -655,32 +706,36 @@ export class StackEditor {
     if (from < 0 || from >= pages.length || to < 0 || to >= pages.length) {
       return;
     }
-    this.edit(() => {
-      const showing = this.page;
+    this.edit(draft => {
+      const pages = draft.project.pages;
+      const showing = pageOf(draft);
       const [moved] = pages.splice(from, 1);
       pages.splice(to, 0, moved!);
-      this.#pageIndex = pages.indexOf(showing);
+      draft.pageIndex = pages.indexOf(showing);
     });
   }
 
   /** Copies the selection in layer order, nudges it, and selects the copies. */
   duplicate(): void {
-    this.edit(() => {
-      this.#pageSelected = false;
-      if (this.#selection.length) {
-        const taken = elementNamesTaken(this.project, this.page);
-        const copies = this.selected.map(element => {
+    this.edit(draft => {
+      draft.pageSelected = false;
+      if (draft.selection.length) {
+        const taken = elementNamesTaken(draft.project, pageOf(draft));
+        const copies = selectedOf(draft).map(element => {
           const copy = duplicateElement(element, taken);
           taken.add(copy.name);
           copy.left += CASCADE;
           copy.top += CASCADE;
           return copy;
         });
-        this.page.elements.push(...copies);
-        this.#selection = copies.map(e => e.name);
+        pageOf(draft).elements.push(...copies);
+        draft.selection = copies.map(e => e.name);
       } else {
-        const copy = duplicatePage(this.page, pageNamesTaken(this.project));
-        this.project.pages.splice(++this.#pageIndex, 0, copy);
+        const copy = duplicatePage(
+          pageOf(draft),
+          pageNamesTaken(draft.project),
+        );
+        draft.project.pages.splice(++draft.pageIndex, 0, copy);
       }
     });
   }
@@ -688,8 +743,8 @@ export class StackEditor {
   /** The editor keeps at least one Page in the authored Project. */
   get canDelete(): boolean {
     return (
-      this.#selection.length > 0 ||
-      (this.#pageSelected && this.project.pages.length > 1)
+      this.selection.length > 0 ||
+      (this.state.value.pageSelected && this.project.pages.length > 1)
     );
   }
 
@@ -698,18 +753,18 @@ export class StackEditor {
     if (!this.canDelete) {
       return;
     }
-    this.edit(() => {
-      this.#pageSelected = false;
-      if (this.#selection.length) {
-        this.page.elements = this.page.elements.filter(
-          e => !this.#selection.includes(e.name),
+    this.edit(draft => {
+      draft.pageSelected = false;
+      if (draft.selection.length) {
+        pageOf(draft).elements = pageOf(draft).elements.filter(
+          e => !draft.selection.includes(e.name),
         );
-        this.#selection = [];
+        draft.selection = [];
       } else {
-        this.project.pages.splice(this.#pageIndex, 1);
-        this.#pageIndex = Math.min(
-          this.#pageIndex,
-          this.project.pages.length - 1,
+        draft.project.pages.splice(draft.pageIndex, 1);
+        draft.pageIndex = Math.min(
+          draft.pageIndex,
+          draft.project.pages.length - 1,
         );
       }
     });
@@ -717,14 +772,15 @@ export class StackEditor {
 
   /** Keeps selected Elements' relative order, including adjacent groups. */
   orderLayers(order: LayerOrder): void {
-    this.edit(() => {
-      const elements = this.page.elements;
-      const selection = new Set(this.#selection);
-      const selected = (element: Element) => selection.has(element.name);
+    this.edit(draft => {
+      const elements = pageOf(draft).elements;
+      const selection = new Set(draft.selection);
+      const selected = (element: Immutable<Element>) =>
+        selection.has(element.name);
       if (order === 'front' || order === 'back') {
         const chosen = elements.filter(selected);
         const others = elements.filter(e => !selected(e));
-        this.page.elements =
+        pageOf(draft).elements =
           order === 'front' ? [...others, ...chosen] : [...chosen, ...others];
       } else if (order === 'forward') {
         for (let i = elements.length - 2; i >= 0; i--) {
@@ -744,12 +800,13 @@ export class StackEditor {
 }
 
 class EditorTextHistory implements TextHistory {
-  #last: TextElement;
+  #last: Immutable<TextElement>;
   constructor(
     readonly editor: StackEditor,
-    element: TextElement,
+    element: Immutable<TextElement>,
   ) {
-    this.#last = element;
+    const current = editor.element(element.name);
+    this.#last = current?.kind === 'text' ? current : element;
   }
   get canUndo(): boolean {
     return this.editor.canUndo;
@@ -757,22 +814,25 @@ class EditorTextHistory implements TextHistory {
   get canRedo(): boolean {
     return this.editor.canRedo;
   }
-  get element(): TextElement {
-    const found = this.editor.element(this.#last.name);
+  get element(): Immutable<TextElement> {
+    const found = this.editor.page.elements.find(e => e.id === this.#last.id);
     if (found?.kind === 'text') {
       this.#last = found;
     }
     return this.#last;
   }
-  set(text: RichText): void {
+  set(text: Immutable<RichText>): void {
     const target = this.element;
     const next = renormalizeRichText(text);
     if (
       JSON.stringify(next) !==
       JSON.stringify(renormalizeRichText(target.richText))
     ) {
-      this.editor.edit(() => {
-        target.richText = next;
+      this.editor.edit(draft => {
+        const element = elementOf(draft, target.name);
+        if (element?.kind === 'text') {
+          element.richText = next;
+        }
       });
     }
   }

@@ -41,17 +41,18 @@ test('errors name the command line, not the Errors window', async () => {
   expect(play.problems).toEqual([]);
 });
 
-test('in Edit a command is one undoable authored edit that keeps identities', async () => {
+test('in Edit a command is one undoable authored edit that keeps session-local ids', async () => {
   const project = fixture();
   const editor = new StackEditor(project);
-  const button = project.pages[0]!.elements[0]!;
+  const button = editor.page.elements[0]!;
   expect(await runInEdit(editor, 'set the label of button1 to "Go"')).toEqual({
     text: undefined,
   });
-  expect(project.pages[0]!.elements[0]).toBe(button);
-  expect(button).toHaveProperty('label', 'Go');
+  expect(editor.page.elements[0]!.id).toBe(button.id);
+  expect(editor.page.elements[0]).not.toBe(button);
+  expect(editor.page.elements[0]).toHaveProperty('label', 'Go');
   editor.undo();
-  expect(project.pages[0]!.elements[0]).toHaveProperty('label', 'Button');
+  expect(editor.page.elements[0]).toHaveProperty('label', 'Button');
 });
 
 test('in Edit, created Elements are kept and navigation moves the editor', async () => {
@@ -68,7 +69,7 @@ test('in Edit, created Elements are kept and navigation moves the editor', async
 test('in Edit, a failing command changes nothing and read-only refuses', async () => {
   const project = fixture();
   const editor = new StackEditor(project);
-  const before = structuredClone(project);
+  const before = editor.project;
   expect(
     (
       await runInEdit(
@@ -77,13 +78,13 @@ test('in Edit, a failing command changes nothing and read-only refuses', async (
       )
     ).error,
   ).toContain('Division by zero');
-  expect(project).toEqual(before);
+  expect(editor.project).toBe(before);
   expect(editor.canUndo).toBe(false);
   editor.readOnly = true;
   expect(
     (await runInEdit(editor, 'set the label of button1 to "X"')).error,
   ).toContain('read-only');
-  expect(project).toEqual(before);
+  expect(editor.project).toBe(before);
 });
 
 test('hide and show are Host Commands, whose errors name the command line', async () => {
@@ -108,7 +109,33 @@ test('in Edit, hide is one undoable authored edit', async () => {
   const project = fixture();
   const editor = new StackEditor(project);
   expect(await runInEdit(editor, 'hide button1')).toEqual({ text: undefined });
-  expect(project.pages[0]!.elements[0]!.visible).toBe(false);
+  expect(editor.page.elements[0]!.visible).toBe(false);
   editor.undo();
-  expect(project.pages[0]!.elements[0]!.visible).toBe(true);
+  expect(editor.page.elements[0]!.visible).toBe(true);
+});
+
+test('expressions and unchanged writes preserve the root and redo history', async () => {
+  const editor = new StackEditor(fixture());
+  editor.renameElement('button1', 'renamed');
+  editor.undo();
+  const before = editor.state.value;
+  expect(await runInEdit(editor, '3 + 4')).toEqual({ text: '7' });
+  expect(await runInEdit(editor, 'show button1')).toEqual({ text: undefined });
+  expect(editor.state.value).toBe(before);
+  expect(editor.canUndo).toBe(false);
+  expect(editor.canRedo).toBe(true);
+});
+
+test('Message Box clones get fresh ids while unchanged owners keep theirs', async () => {
+  const editor = new StackEditor(fixture());
+  const button = editor.element('button1')!;
+  const page = editor.page.id;
+  await runInEdit(editor, 'ask elements to clone button1');
+  expect(editor.page.id).toBe(page);
+  expect(editor.element('button1')).toBe(button);
+  expect(editor.element('button2')!.id).toBeDefined();
+  expect(editor.element('button2')!.id).not.toBe(button.id);
+  editor.undo();
+  expect(editor.element('button1')).toBe(button);
+  expect(editor.element('button2')).toBeUndefined();
 });

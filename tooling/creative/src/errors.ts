@@ -1,8 +1,9 @@
 // The Errors window: Script problems from the last Play Session, kept after
 // it ends, each linking to its authored Script and line.
+import { type Immutable } from 'immer';
 import { byId, h } from './dom';
 import { type Page, type Project } from './model';
-import { scriptPage, type ScriptOwner } from './script-manifest';
+import { ownerById, scriptPage, type ScriptOwner } from './script-manifest';
 import { bringWindowForward } from './windows';
 import { type StackShell } from './stack';
 
@@ -15,8 +16,10 @@ export type ScriptProblem = {
 /** Where an owner was when its problem was reported, to find it after undo. */
 type Location = { name: string; page?: string };
 
-const isProject = (owner: ScriptOwner): owner is Project => 'pages' in owner;
-const isPage = (owner: ScriptOwner): owner is Page => 'elements' in owner;
+const isProject = (owner: ScriptOwner): owner is Immutable<Project> =>
+  'pages' in owner;
+const isPage = (owner: ScriptOwner): owner is Immutable<Page> =>
+  'elements' in owner;
 
 export class ErrorsWindow {
   readonly #list = byId('error-list');
@@ -98,6 +101,9 @@ export class ErrorsWindow {
     const project = this.shell.editor.project;
     if (isProject(owner)) {
       return project;
+    }
+    if (owner.id !== undefined) {
+      return ownerById(project, owner.id);
     }
     if (scriptPage(project, owner)) {
       return owner;

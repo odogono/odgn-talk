@@ -15,7 +15,10 @@ import { bringWindowForward } from './windows';
 import { openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
 import {
+  ownerById,
+  ownerId,
   scriptManifest,
+  scriptOwners,
   scriptPage,
   type ScriptOwner,
 } from './script-manifest';
@@ -47,11 +50,8 @@ export class ScriptWindows {
   }
 
   #owners(): Map<number, ScriptOwner> {
-    const project = this.editor.project;
     return new Map(
-      [project, ...project.pages.flatMap(page => [page, ...page.elements])].map(
-        owner => [this.editor.identity(owner), owner],
-      ),
+      scriptOwners(this.editor.project).map(owner => [ownerId(owner), owner]),
     );
   }
 
@@ -89,7 +89,12 @@ export class ScriptWindows {
 
   open(owner: ScriptOwner, line?: number): void {
     this.#dropStale();
-    const id = this.editor.identity(owner);
+    const id = ownerId(owner);
+    const current = this.#owners().get(id);
+    if (!current) {
+      return;
+    }
+    owner = current;
     const existing = this.#windows.get(id);
     if (existing) {
       bringWindowForward(existing.node);
@@ -153,8 +158,11 @@ export class ScriptWindows {
           if (!current) {
             return;
           }
-          this.editor.edit(() => {
-            current.script = text;
+          this.editor.edit(({ project }) => {
+            const owner = ownerById(project, id);
+            if (owner) {
+              owner.script = text;
+            }
           });
           // Redraw first: it sends the Manifest with any new Handlers, so
           // the diagnostics for this text already know them.
@@ -212,7 +220,7 @@ export class ScriptWindows {
       return;
     }
     this.open(owner);
-    const win = this.#windows.get(this.editor.identity(owner))!;
+    const win = this.#windows.get(ownerId(owner))!;
     openRecipePicker(
       win.recipes,
       win.view,
@@ -245,10 +253,10 @@ export class ScriptWindows {
           this.close(id);
           continue;
         }
-        if (owner !== win.owner) {
+        if (owner.name !== win.owner.name) {
           win.recipes.replaceChildren();
-          win.owner = owner;
         }
+        win.owner = owner;
         win.addAction.disabled = this.editor.readOnly;
         if (this.editor.readOnly) {
           win.recipes.replaceChildren();

@@ -150,8 +150,10 @@ test('text edits are steps in the Stack editor history, and formatting survives 
     ),
   );
   const styled = structuredClone(history.element.richText);
-  editor.edit(() => {
-    history.element.left = 99;
+  editor.edit(({ project }) => {
+    project.pages[0]!.elements.find(
+      e => e.name === history.element.name,
+    )!.left = 99;
   });
   history.set(styleTextRange(styled, { start: 0, end: 4 }, { bold: false }));
   const removed = structuredClone(history.element.richText);

@@ -1,3 +1,4 @@
+import { serializeProject } from '../src/project-file';
 // Run on a dedicated page without main.js, as described in README.md.
 import { EditorView } from '@codemirror/view';
 import { createElement, createPage, createProject } from '../src/model';
@@ -153,7 +154,8 @@ export const runBrowserTests = async () => {
   field.dispatchEvent(new CompositionEvent('compositionend'));
   await until(() => readerButton().textContent === '日本語 one\nJournal');
   assert(
-    JSON.stringify(project) === JSON.stringify(original),
+    JSON.stringify(serializeProject(shell.editor.project)) ===
+      JSON.stringify(serializeProject(original)),
     'Play mutated authored data',
   );
   toggle.click();
@@ -182,6 +184,7 @@ export const runBrowserTests = async () => {
   toggle.click();
   button.script =
     'on click\n set the text of input1 to "Authored journal"\nend click';
+  shell.editor.replaceProject(project);
   toggle.click();
   const replaced = document.querySelector<HTMLElement>(
     '#reader [data-element="input1"]',
@@ -211,6 +214,7 @@ export const runBrowserTests = async () => {
   button.script =
     'on click\n set the label of me to "Kept"\n tell pages to show page2\nend click';
   input.script = '';
+  shell.editor.replaceProject(project);
   toggle.click();
   const journal = document.querySelector<HTMLElement>(
     '#reader [data-element="input1"]',
@@ -249,6 +253,7 @@ export const runBrowserTests = async () => {
     'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Finished"\nend click';
   input.script =
     'on pointerEnter\n set the text of me to "Responsive"\nend pointerEnter';
+  shell.editor.replaceProject(project);
   toggle.click();
   readerButton().click();
   await until(() => readerButton().textContent === 'Waiting');
@@ -275,6 +280,7 @@ export const runBrowserTests = async () => {
   button.script =
     'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\n send leaked to project\nend click';
   input.script = 'on click\n tell pages to show page2\nend click';
+  shell.editor.replaceProject(project);
   toggle.click();
   readerButton().click();
   await until(() => readerButton().textContent === 'Waiting');
@@ -305,6 +311,7 @@ export const runBrowserTests = async () => {
     'on openPage\n wait 200 ms\n set the background of me to "rgb(1, 2, 3)"\nend openPage';
   button.script =
     'on click\n set the label of me to "Waiting"\n wait 200 ms\n set the label of me to "Late"\nend click';
+  shell.editor.replaceProject(project);
   const waitingOriginal = structuredClone(project);
   for (const action of ['Stop', 'Escape']) {
     toggle.click();
@@ -339,13 +346,15 @@ export const runBrowserTests = async () => {
       `${action} let a wait change Edit`,
     );
     assert(
-      JSON.stringify(project) === JSON.stringify(waitingOriginal),
+      JSON.stringify(serializeProject(shell.editor.project)) ===
+        JSON.stringify(serializeProject(waitingOriginal)),
       `${action} allowed a wait to change authored data`,
     );
   }
   project.script = '';
   project.pages[0]!.script = '';
   button.script = 'on click\n repeat forever\n end repeat\nend click';
+  shell.editor.replaceProject(project);
   toggle.click();
   readerButton().click();
   await new Promise(resolve => setTimeout(resolve, 10));
@@ -358,6 +367,7 @@ export const runBrowserTests = async () => {
   );
   assert(!shell.readOnly, 'Runaway blocked Edit');
   button.script = 'on click\n put missing into x\nend click';
+  shell.editor.replaceProject(project);
   toggle.click();
   const errorLink = [
     ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
@@ -398,7 +408,10 @@ export const runBrowserTests = async () => {
     'Browse did not start with fresh errors',
   );
   assert(!view.state.readOnly, 'Script editor read-only while browsing');
-  button.script = 'on click\n set the label of me to "Fixed"\nend click';
+  shell.editor.edit(({ project }) => {
+    project.pages[0]!.elements.find(e => e.name === button.name)!.script =
+      'on click\n set the label of me to "Fixed"\nend click';
+  });
   readerButton().click();
   await new Promise(resolve => setTimeout(resolve, 50));
   assert(
@@ -427,7 +440,7 @@ export const runBrowserTests = async () => {
     .click();
   assert(
     !document.body.classList.contains('browsing') &&
-      project.pages[0]!.elements.length > 2,
+      shell.editor.project.pages[0]!.elements.length > 2,
     'An Element tool did not return to Edit and add',
   );
   shell.editor.undo();
@@ -502,7 +515,8 @@ end click`;
   await until(() => !element('original'));
   toggle.click();
   assert(
-    JSON.stringify(project) === JSON.stringify(before),
+    JSON.stringify(serializeProject(shell.editor.project)) ===
+      JSON.stringify(serializeProject(before)),
     'Dynamic Elements changed authored Project',
   );
   assert(
@@ -584,6 +598,7 @@ export const runKeyBrowserTests = async () => {
   toggle.click();
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to key\nend keyDown';
+  shell.editor.replaceProject(project);
   toggle.click();
   assert(press(), 'A handled arrow key still scrolls');
   await until(
@@ -596,6 +611,7 @@ export const runKeyBrowserTests = async () => {
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to "key " & key\nend keyDown';
   button.script = 'on click\n set the label of me to "clicked"\nend click';
+  shell.editor.replaceProject(project);
   toggle.click();
   const last = () =>
     document.querySelector<HTMLElement>('#reader [data-element="last"]')!;
@@ -778,7 +794,7 @@ export const runMessageBoxBrowserTests = async () => {
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
   );
   enter();
-  await until(() => !welcome.visible);
+  await until(() => !shell.editor.element('welcomeText')!.visible);
   assert(shell.editor.canUndo, 'hide was not undoable');
 
   // While browsing, `show` changes only the session.
@@ -802,7 +818,10 @@ export const runMessageBoxBrowserTests = async () => {
         '#reader [data-element="welcomeText"]',
       )?.hidden === false,
   );
-  assert(!welcome.visible, 'Browsing changed the authored Element');
+  assert(
+    !shell.editor.element('welcomeText')!.visible,
+    'Browsing changed the authored Element',
+  );
   set('the visible of welcomeText');
   enter();
   await until(() => log().at(-1) === 'true');

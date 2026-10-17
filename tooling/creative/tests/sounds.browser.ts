@@ -94,8 +94,11 @@ export const runBrowserTests = async () => {
 
   await test('Add sound imports through the picker as one undoable edit', async () => {
     pickSound(wavFile());
-    await until(() => project.assets.length === 1);
-    assert(project.assets[0]!.name === 'waves', 'Sound named for Scripts');
+    await until(() => shell.editor.project.assets.length === 1);
+    assert(
+      shell.editor.project.assets[0]!.name === 'waves',
+      'Sound named for Scripts',
+    );
     assert(
       document
         .querySelector('#info')!
@@ -104,16 +107,18 @@ export const runBrowserTests = async () => {
     );
     shell.editor.undo();
     shell.redraw();
-    assert(project.assets.length === 0, 'Undo removes the sound');
+    assert(shell.editor.project.assets.length === 0, 'Undo removes the sound');
     shell.editor.redo();
     shell.redraw();
-    assert(project.assets.length === 1, 'Redo restores the sound');
+    assert(shell.editor.project.assets.length === 1, 'Redo restores the sound');
   });
 
   await test('a Script loops the sound in Play and Stop silences it', () => {
-    project.pages[0]!.elements[0]!.script =
-      'on click\n tell sound to loop "waves"\nend click';
-    const play = new PlaySession(project, 0, {
+    shell.editor.edit(({ project }) => {
+      project.pages[0]!.elements[0]!.script =
+        'on click\n tell sound to loop "waves"\nend click';
+    });
+    const play = new PlaySession(shell.editor.project, 0, {
       soundBackend: browserSoundBackend(asset => shell.images.url(asset)),
     });
     play.send(play.page.elements[0]!, 'click');

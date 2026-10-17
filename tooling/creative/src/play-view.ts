@@ -170,7 +170,9 @@ export const mountPlay = (shell: StackShell): void => {
     });
     if (
       activeText &&
-      !play.page.elements.includes(activeText.history.element)
+      !play.page.elements.some(
+        element => element === activeText!.history.element,
+      )
     ) {
       closeText();
     }

@@ -53,7 +53,7 @@ export const runBrowserTests = async () => {
     );
     button('Insert action').click();
     assert(
-      project.pages[0]!.elements[0]!.script ===
+      shell.editor.project.pages[0]!.elements[0]!.script ===
         'on click\n  tell pages to show cellar\nend click\n',
       'Source inserted',
     );
@@ -136,7 +136,7 @@ export const runBrowserTests = async () => {
     );
   });
   test('Project picker offers navigation and sounds; read-only closes and disables picker', () => {
-    shell.openScript(project);
+    shell.openScript(shell.editor.project);
     add();
     assert(
       [

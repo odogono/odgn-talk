@@ -315,3 +315,18 @@ test('older formats migrate one step at a time', () => {
   );
   expect(() => migrateProjectJson({ name: 'x' })).toThrow('format');
 });
+
+test('session ids leave Project JSON and portable file bytes unchanged', async () => {
+  const { StackEditor } = await import('../src/editing');
+  const project = createProject('Portable');
+  project.pages[0]!.elements.push(createElement('text', 'text1'));
+  const editor = new StackEditor(project);
+  expect(editor.page.id).toBeDefined();
+  expect(editor.page.elements[0]!.id).toBeDefined();
+  expect(JSON.stringify(serializeProject(editor.project))).toBe(
+    JSON.stringify(serializeProject(project)),
+  );
+  expect(await writeProjectFile(editor.project, new Map())).toEqual(
+    await writeProjectFile(project, new Map()),
+  );
+});

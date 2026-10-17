@@ -1,3 +1,4 @@
+import { type Immutable } from 'immer';
 import { scriptNameProblems } from './script-names';
 import type { EditorView } from '@codemirror/view';
 import { h } from './dom';
@@ -16,7 +17,7 @@ import type { ScriptOwner } from './script-manifest';
 export const openRecipePicker = (
   parent: HTMLElement,
   view: EditorView,
-  project: Project,
+  project: Immutable<Project>,
   owner: ScriptOwner,
   readOnly: () => boolean,
 ): void => {

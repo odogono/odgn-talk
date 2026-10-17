@@ -205,9 +205,13 @@ test('creation and rename avoid reserved bindings and Page/Element collisions', 
     expect(editor.renameElement('door', name).ok).toBe(false);
   }
   expect(editor.renamePage('remote').ok).toBe(false);
-  project.pages[1]!.name = 'button1';
+  editor.edit(({ project }) => {
+    project.pages[1]!.name = 'button1';
+  });
   expect(editor.addElement('button').name).toBe('button2');
-  project.pages[0]!.elements.push(createElement('button', 'page4'));
+  editor.edit(({ project }) => {
+    project.pages[0]!.elements.push(createElement('button', 'page4'));
+  });
   expect(editor.addPage().name).toBe('page5');
 });
 

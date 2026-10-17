@@ -193,7 +193,7 @@ end keyDown`;
 test('in Edit a write through a reference is one undoable edit; a failure changes nothing', async () => {
   const project = fixture();
   const editor = new StackEditor(project);
-  const rectangle = project.pages[0]!.elements.find(
+  const rectangle = editor.project.pages[0]!.elements.find(
     e => e.kind === 'rectangle',
   )!;
   const fill = (rectangle as { fill: string }).fill;
@@ -203,20 +203,20 @@ test('in Edit a write through a reference is one undoable edit; a failure change
       'set the fill of element "rectangle1" of thisPage to "red"',
     ),
   ).toEqual({ text: undefined });
-  expect(project.pages[0]!.elements).toContain(rectangle);
-  expect(rectangle).toHaveProperty('fill', 'red');
+  expect(editor.element(rectangle.name)!.id).toBe(rectangle.id);
+  expect(editor.element(rectangle.name)).toHaveProperty('fill', 'red');
   editor.undo();
   expect(
-    project.pages[0]!.elements.find(e => e.name === 'rectangle1'),
+    editor.project.pages[0]!.elements.find(e => e.name === 'rectangle1'),
   ).toHaveProperty('fill', fill);
 
-  const before = structuredClone(project);
+  const before = structuredClone(editor.project);
   const reply = await runInEdit(
     editor,
     'set the fill of element 99 of thisPage to "red"',
   );
   expect(reply.error).toMatch(/^line 1: /u);
-  expect(project).toEqual(before);
+  expect(editor.project).toEqual(before);
 });
 
 test('Play and the authoring Manifest declare the same Page collection', () => {

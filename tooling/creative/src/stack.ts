@@ -2,12 +2,16 @@
 // #154: the Page on a desk, floating Tools and Info windows, and a strip of
 // Pages. The edits themselves live in `editing.ts`; this file draws them and
 // turns pointer and form events into them.
+import { effect, signal, untracked } from '@preact/signals-core';
+import { type Immutable } from 'immer';
 import {
   HANDLES,
   PAGE_HANDLES,
   MIN_PAGE_WIDTH,
   MIN_PAGE_HEIGHT,
   labelSuggestion,
+  pageOf,
+  selectedOf,
   StackEditor,
   type Edit,
   type Gesture,
@@ -73,7 +77,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 
 /** An Element as the reader would see it, positioned in design pixels. */
 export const renderElement = (
-  element: Element,
+  element: Immutable<Element>,
   imageUrl?: string,
 ): HTMLElement => {
   const node = h('div', {
@@ -159,10 +163,10 @@ export const renderElement = (
 
 /** A Page at design size, unscaled. */
 const renderPage = (
-  page: Page,
+  page: Immutable<Page>,
   designWidth: number,
   into: HTMLElement,
-  project: Project,
+  project: Immutable<Project>,
   images: ImageAssets,
 ) => {
   into.replaceChildren(
@@ -331,11 +335,12 @@ export type StackShell = {
  * earlier version is being previewed.
  */
 export const mountStack = (
-  project: Project,
+  initialProject: Immutable<Project>,
   options: { readOnly?: boolean } = {},
 ): StackShell => {
+  const editor = new StackEditor(initialProject);
+  const redrawVersion = signal(0);
   const redrawListeners = new Set<() => void>();
-  const editor = new StackEditor(project);
   const images = new ImageAssets();
   const scripts = new ScriptWindows(editor, () => draw());
   window.addEventListener('pagehide', event => {
@@ -361,7 +366,8 @@ export const mountStack = (
   };
   let activeText: InPlaceTextEditor | undefined;
   let textControls: ElementTextControls | undefined;
-  const historyOf = (element: TextElement) => editor.textHistory(element);
+  const historyOf = (element: Immutable<TextElement>) =>
+    editor.textHistory(element);
   const closeText = () => {
     activeText?.destroy();
     activeText = undefined;
@@ -384,16 +390,22 @@ export const mountStack = (
       desk.clientWidth -
       Number.parseFloat(style.paddingLeft) -
       Number.parseFloat(style.paddingRight);
-    scale = Math.min(1, Math.max(0.1, room / project.designWidth));
+    scale = Math.min(1, Math.max(0.1, room / editor.project.designWidth));
     pageNode.style.transform = `scale(${scale})`;
-    stage.style.width = `${project.designWidth * scale}px`;
+    stage.style.width = `${editor.project.designWidth * scale}px`;
     byId('caption').style.width = stage.style.width;
     stage.style.height = `${editor.page.height * scale}px`;
     desk.style.setProperty('--scale', String(scale));
   };
 
   const drawPage = () => {
-    renderPage(editor.page, project.designWidth, pageNode, project, images);
+    renderPage(
+      editor.page,
+      editor.project.designWidth,
+      pageNode,
+      editor.project,
+      images,
+    );
     const selected = editor.selected;
     stage.querySelector('.page-handles')?.remove();
     if (!selected.length && !editor.readOnly) {
@@ -444,16 +456,22 @@ export const mountStack = (
     }
     byId('page-name').textContent = editor.page.name;
     byId('page-number').textContent =
-      `${editor.pageIndex + 1} / ${project.pages.length}`;
+      `${editor.pageIndex + 1} / ${editor.project.pages.length}`;
     fit();
   };
 
   const drawStrip = () => {
-    const scaleDown = THUMBNAIL_WIDTH / project.designWidth;
+    const scaleDown = THUMBNAIL_WIDTH / editor.project.designWidth;
     thumbnails.replaceChildren(
-      ...project.pages.map((page, index) => {
+      ...editor.project.pages.map((page, index) => {
         const miniature = h('div', { class: 'page' });
-        renderPage(page, project.designWidth, miniature, project, images);
+        renderPage(
+          page,
+          editor.project.designWidth,
+          miniature,
+          editor.project,
+          images,
+        );
         miniature.style.transform = `scale(${scaleDown})`;
         const frame = h('div', { class: 'thumbnail' }, miniature);
         frame.style.height = `${Math.min(72, page.height * scaleDown)}px`;
@@ -478,7 +496,7 @@ export const mountStack = (
     (byId('previous-page') as HTMLButtonElement).disabled =
       editor.pageIndex === 0;
     (byId('next-page') as HTMLButtonElement).disabled =
-      editor.pageIndex === project.pages.length - 1;
+      editor.pageIndex === editor.project.pages.length - 1;
   };
 
   /** The name field, with the refusal message and its suggestion if any. */
@@ -522,7 +540,7 @@ export const mountStack = (
     return parts;
   };
 
-  const elementInfo = (element: Element): HTMLElement[] => {
+  const elementInfo = (element: Immutable<Element>): HTMLElement[] => {
     const kind: HTMLElement[] = [];
     switch (element.kind) {
       case 'text':
@@ -647,7 +665,7 @@ export const mountStack = (
       ...nameField(
         element.name,
         element.kind === 'button'
-          ? labelSuggestion(editor.page, element, project)
+          ? labelSuggestion(editor.page, element, editor.project)
           : undefined,
       ),
       h(
@@ -665,8 +683,12 @@ export const mountStack = (
     ];
   };
 
-  const pageInfo = (page: Page): HTMLElement[] => [
-    h('h2', {}, `Page ${editor.pageIndex + 1} of ${project.pages.length}`),
+  const pageInfo = (page: Immutable<Page>): HTMLElement[] => [
+    h(
+      'h2',
+      {},
+      `Page ${editor.pageIndex + 1} of ${editor.project.pages.length}`,
+    ),
     ...nameField(page.name),
     h(
       'button',
@@ -704,7 +726,7 @@ export const mountStack = (
         {
           type: 'button',
           'data-move-page': 1,
-          disabled: editor.pageIndex === project.pages.length - 1,
+          disabled: editor.pageIndex === editor.project.pages.length - 1,
         },
         'Later →',
       ),
@@ -720,16 +742,16 @@ export const mountStack = (
       { type: 'button', 'data-script': 'project', 'data-recipe': '' },
       'Add action…',
     ),
-    field('Title', input('projectName', project.name)),
+    field('Title', input('projectName', editor.project.name)),
     field(
       'Design width',
-      input('designWidth', project.designWidth, 'number', {
+      input('designWidth', editor.project.designWidth, 'number', {
         min: MIN_PAGE_WIDTH,
       }),
     ),
     h('h2', {}, 'Sounds'),
-    ...(project.assets.filter(isSoundAsset).length
-      ? project.assets.filter(isSoundAsset).map(asset =>
+    ...(editor.project.assets.filter(isSoundAsset).length
+      ? editor.project.assets.filter(isSoundAsset).map(asset =>
           h(
             'div',
             { class: 'row' },
@@ -811,15 +833,28 @@ export const mountStack = (
   };
 
   const draw = () => {
-    byId('project-title').textContent = project.name;
+    redrawVersion.value++;
+  };
+  const drawNow = () => {
+    if (
+      activeText &&
+      !editor.selected.some(e => e.id === activeText!.history.element.id)
+    ) {
+      closeText();
+    }
+    byId('project-title').textContent = editor.project.name;
     pageNode.classList.toggle('edit', !editor.readOnly);
     (byId('add-page') as HTMLButtonElement).disabled = editor.readOnly;
     for (const button of byId('tools').querySelectorAll('button')) {
       button.disabled = editor.readOnly;
     }
-    drawPage();
+    if (!activeText) {
+      drawPage();
+    }
     drawStrip();
-    drawInfo();
+    if (!fieldEdit) {
+      drawInfo();
+    }
     drawCommands();
     drawTextControls();
     scripts.sync();
@@ -866,8 +901,10 @@ export const mountStack = (
           ? Math.round(number)
           : target.value;
     fieldEdit ??= editor.startEdit();
-    fieldEdit.change(() => {
-      const [element] = editor.selected;
+    fieldEdit.change(draft => {
+      const { project } = draft;
+      const page = pageOf(draft);
+      const [element] = selectedOf(draft);
       if (element && editor.selection.length === 1) {
         if (key === 'text' && element.kind === 'text') {
           if (textOf(element) !== value) {
@@ -888,9 +925,9 @@ export const mountStack = (
             minimum === undefined ? value : Math.max(minimum, value as number);
         }
       } else if (key === 'pageHeight') {
-        editor.page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
+        page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
       } else if (key === 'background') {
-        editor.page.background = String(value);
+        page.background = String(value);
       } else if (key === 'projectName') {
         project.name = String(value);
       } else if (key === 'designWidth') {
@@ -902,7 +939,7 @@ export const mountStack = (
     }
     drawCommands();
     if (live) {
-      byId('project-title').textContent = project.name;
+      byId('project-title').textContent = editor.project.name;
       drawPage();
       drawStrip();
     } else {
@@ -933,7 +970,7 @@ export const mountStack = (
     const button = (event.target as HTMLElement).closest('button');
     if (button?.dataset.script) {
       const owners = {
-        project: () => project,
+        project: () => editor.project,
         page: () => editor.page,
         element: () => editor.selected[0]!,
       };
@@ -1127,7 +1164,9 @@ export const mountStack = (
       historyOf(element),
       () => {
         drawStrip();
-        drawInfo();
+        if (!fieldEdit) {
+          drawInfo();
+        }
         drawCommands();
       },
       () => {
@@ -1259,7 +1298,7 @@ export const mountStack = (
       return;
     }
     stopPreview();
-    const asset = project.assets.find(a => a.name === name);
+    const asset = editor.project.assets.find(a => a.name === name);
     const url = images.url(asset);
     if (!url) {
       imageNotice(`The sound “${name}” is missing from this Project.`);
@@ -1458,7 +1497,15 @@ export const mountStack = (
   new ResizeObserver(fit).observe(desk);
   mountWindows();
   floatWindows();
-  draw();
+  // The one redraw effect: every state, history, read-only or forced change.
+  effect(() => {
+    void editor.state.value;
+    void editor.canUndo;
+    void editor.canRedo;
+    void editor.readOnly;
+    void redrawVersion.value;
+    untracked(drawNow);
+  });
   return {
     editor,
     images,

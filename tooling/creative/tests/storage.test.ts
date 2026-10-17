@@ -332,3 +332,25 @@ test('a Project file handle is kept, replaced and deleted with its Project', asy
   await storage.deleteProject(record.id);
   expect(await storage.fileHandle(record.id)).toBeUndefined();
 });
+
+test('stored version JSON omits session ids byte for byte', async () => {
+  const { StackEditor } = await import('../src/editing');
+  const { createElement } = await import('../src/model');
+  const { serializeProject } = await import('../src/project-file');
+  const project = createProject('Stored');
+  project.pages[0]!.elements.push(createElement('button', 'button1'));
+  const editor = new StackEditor(project);
+  const models: string[] = [];
+  const fake = createFakeIdb({
+    failPuts: (store, value) => {
+      if (store === 'versions') {
+        models.push(JSON.stringify((value as { model: unknown }).model));
+      }
+      return undefined;
+    },
+  });
+  const { storage } = await openStorage(fake);
+  await storage.saveProject(undefined, editor.project);
+  expect(models).toEqual([JSON.stringify(serializeProject(project))]);
+  storage.close();
+});

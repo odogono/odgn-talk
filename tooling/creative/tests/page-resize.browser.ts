@@ -63,7 +63,8 @@ export const runBrowserTests = () => {
       new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
     );
     assert(
-      project.designWidth === 410 && shell.editor.page.height === 241,
+      shell.editor.project.designWidth === 410 &&
+        shell.editor.page.height === 241,
       'Keyboard resizes both dimensions',
     );
     assert(
@@ -75,7 +76,8 @@ export const runBrowserTests = () => {
     shell.editor.undo();
     shell.redraw();
     assert(
-      project.designWidth === 400 && shell.editor.page.height === 240,
+      shell.editor.project.designWidth === 400 &&
+        shell.editor.page.height === 240,
       'Undo restores size',
     );
   });
@@ -88,7 +90,7 @@ export const runBrowserTests = () => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     }
     assert(
-      project.designWidth === MIN_PAGE_WIDTH &&
+      shell.editor.project.designWidth === MIN_PAGE_WIDTH &&
         shell.editor.page.height === MIN_PAGE_HEIGHT,
       'Minimum width and height',
     );
@@ -120,11 +122,11 @@ export const runBrowserTests = () => {
     test(`pointer ${name} drag respects scale, fixed top, minimums and one-step undo`, () => {
       const stage = document.querySelector<HTMLElement>('#stage')!;
       const bounds = stage.getBoundingClientRect();
-      const before = structuredClone(project);
+      const before = structuredClone(shell.editor.project);
       const rect = handle(name).getBoundingClientRect();
       const scale =
         document.querySelector('#page')!.getBoundingClientRect().width /
-        project.designWidth;
+        shell.editor.project.designWidth;
       const event = (type: string, x: number, y: number) =>
         new PointerEvent(type, {
           bubbles: true,
@@ -149,7 +151,8 @@ export const runBrowserTests = () => {
           ? 240
           : Math.max(MIN_PAGE_HEIGHT, Math.round(240 + dy / scale));
       assert(
-        project.designWidth === width && shell.editor.page.height === height,
+        shell.editor.project.designWidth === width &&
+          shell.editor.page.height === height,
         `Pointer resize gives ${width} × ${height}`,
       );
       assert(
@@ -157,25 +160,26 @@ export const runBrowserTests = () => {
         'Top stays fixed',
       );
       assert(
-        JSON.stringify(project.pages[0]!.elements) ===
+        JSON.stringify(shell.editor.project.pages[0]!.elements) ===
           JSON.stringify(before.pages[0]!.elements),
         'Elements stay in place',
       );
       assert(
-        project.pages[1]!.height === before.pages[1]!.height,
+        shell.editor.project.pages[1]!.height === before.pages[1]!.height,
         'Other Page height stays unchanged',
       );
       centered();
       shell.editor.undo();
       shell.redraw();
       assert(
-        JSON.stringify(project) === JSON.stringify(before),
+        JSON.stringify(shell.editor.project) === JSON.stringify(before),
         'Entire drag undoes in one step',
       );
       shell.editor.redo();
       shell.redraw();
       assert(
-        project.designWidth === width && shell.editor.page.height === height,
+        shell.editor.project.designWidth === width &&
+          shell.editor.page.height === height,
         'Redo restores size',
       );
       shell.editor.undo();
