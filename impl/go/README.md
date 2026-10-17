@@ -270,10 +270,13 @@ inspection expression prevents its property reader from starting.
 Native Session tests and all Session Transcripts pass. The experimental
 backend also passes the `describe`, `named-functions` and `object-inspection`
 Transcripts unchanged, including defining documentation and disposed Object
-inspection after Restore. On the experimental
-backend, the Session tests and Transcripts unaffected by the adapter gaps pass;
-callback-queued delivery pumping, error-handler arguments and decomposed-source
-Trace spelling are still tracked in
+inspection after Restore. The Session’s private pending-input hook uses the
+negotiated `queued-inputs-v1` query, so callback Deliveries receive one extra
+Pump per Host call, Store Notifications drain at the same Clock reading, and
+restored settlements are pumped before the next Entry. The query observes the
+guest queue without execution or Trace. On the experimental backend, the
+Session tests and Transcripts unaffected by error-handler arguments and
+decomposed-source Trace spelling pass; those gaps are still tracked in
 [#1053](https://github.com/odogono/odgn-talk/issues/1053). Check the analysis
 migration with `go -C impl/go test -tags talk_zig_experimental ./session ./driver`
 and the `TestSessionTranscriptParity` selection in `./internal/corpus`; these

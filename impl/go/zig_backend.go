@@ -112,7 +112,7 @@ type zigGroup struct {
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "function-metadata-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "function-metadata-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1", "queued-inputs-v1"}
 
 // zigOptionalFeatures are used when the guest offers them: Object Collection
 // declarations need object-elements-v1 (#1143).
@@ -455,6 +455,19 @@ func (b *zigGroup) cancelDelivery(id DeliveryID) {
 		panic(err)
 	}
 	b.ready()
+}
+
+// queued serves the Session's private queue hook from the owning Core.
+func (b *zigGroup) queued() bool {
+	reply, err := b.send("queued-inputs", map[string]any{})
+	if err != nil {
+		panic(err)
+	}
+	var queued bool
+	if err := zigDecode(reply.get("queued"), reflect.ValueOf(&queued).Elem()); err != nil {
+		panic(err)
+	}
+	return queued
 }
 
 func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) {
