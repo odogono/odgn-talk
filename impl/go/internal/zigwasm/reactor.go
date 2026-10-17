@@ -12,6 +12,7 @@ import (
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/experimental"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
@@ -63,11 +64,12 @@ func (e *Engine) InstantiateObserved(ctx context.Context, observer func([]byte) 
 		inline = &inlineIO{event: observer}
 		config = config.WithStdin(inline).WithStdout(inline)
 	}
-	m, err := e.runtime.InstantiateModule(ctx, e.compiled, config)
+	m, err := e.runtime.InstantiateModule(experimental.WithMemoryAllocator(ctx, experimental.MemoryAllocatorFunc(allocate)), e.compiled, config)
 	if err != nil {
 		return nil, err
 	}
-	return &Reactor{module: m, inline: inline}, nil
+	// Looking an export up per call builds a new call engine and stack each time.
+	return &Reactor{module: m, inline: inline, buffer: m.ExportedFunction("talk_buffer"), send: m.ExportedFunction("talk_send")}, nil
 }
 
 // Reactor serializes exports, including buffer copies and Close. The caller
@@ -79,6 +81,8 @@ type Reactor struct {
 	mu     sync.Mutex
 	module api.Module
 	inline *inlineIO
+	buffer api.Function
+	send   api.Function
 }
 
 func (r *Reactor) Close(ctx context.Context) error {
@@ -101,7 +105,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	if len(frame) == 0 || len(frame) > maxFrame {
 		return nil, fmt.Errorf("frame length %d outside 1..64 MiB", len(frame))
 	}
-	allocated, err := r.module.ExportedFunction("talk_buffer").Call(ctx, uint64(len(frame)))
+	allocated, err := r.buffer.Call(ctx, uint64(len(frame)))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +115,7 @@ func (r *Reactor) Frame(ctx context.Context, frame []byte) ([]byte, error) {
 	if !r.module.Memory().Write(uint32(allocated[0]), frame) {
 		return nil, fmt.Errorf("input buffer outside guest memory")
 	}
-	result, err := r.module.ExportedFunction("talk_send").Call(ctx, uint64(len(frame)))
+	result, err := r.send.Call(ctx, uint64(len(frame)))
 	if r.inline != nil && r.inline.err != nil {
 		return nil, r.inline.err
 	}
