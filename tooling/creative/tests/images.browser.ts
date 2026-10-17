@@ -201,6 +201,12 @@ export const runBrowserTests = async () => {
       for (const element of shell.editor.project.pages[0]!.elements) {
         shell.editor.click(element.name);
         shell.redraw();
+        await until(
+          () =>
+            !!node('info').querySelector(
+              `[data-replace-image="${element.name}"]`,
+            ),
+        );
         pick(
           node('info').querySelector<HTMLElement>('[data-replace-image]')!,
           svg('blue'),
