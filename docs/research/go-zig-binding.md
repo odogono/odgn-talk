@@ -42,7 +42,7 @@ follow-ups: [#1101](https://github.com/odogono/odgn-talk/issues/1101) for
 deferred-call age and rollback, and
 [#1103](https://github.com/odogono/odgn-talk/issues/1103) for the rest.
 
-| Workload | Measure | Proposed limit | Linux amd64 | Linux arm64 | macOS CI | Result |
+| Workload | Measure | Limit | Linux amd64 | Linux arm64 | macOS CI | Result |
 |---|---|---|---|---|---|---|
 | Warm execution | worst Run of core, collections, macro | ≤ 2× | 1.78× | 1.35× | 1.49× | Pass |
 | Restore | `lifecycle/restore` | ≤ 1.5× | 0.20× | 0.19× | 0.19× | Pass |
