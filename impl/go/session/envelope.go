@@ -155,9 +155,12 @@ func ParseEnvelope(source string) (e Envelope, err error) {
 	typ := envelopeText(e["type"])
 	switch typ {
 	case "kind":
-		envelopeFields(e, []string{"type", "name", "props", "parentKinds"})
+		envelopeFields(e, []string{"type", "name", "props", "parentKinds"}, "elements")
 		if envelopeText(e["name"]) == "" {
 			envelopeError("empty kind")
+		}
+		if raw, ok := e["elements"]; ok {
+			decodeEnvelopeElements(raw)
 		}
 		var ps []Envelope
 		if json.Unmarshal(e["props"], &ps) != nil || ps == nil {
@@ -195,13 +198,16 @@ func ParseEnvelope(source string) (e Envelope, err error) {
 			envelopeRef(r)
 		}
 	case "property-begin":
-		envelopeFields(e, []string{"type", "crossing", "object", "property", "operation"}, "value")
+		envelopeFields(e, []string{"type", "crossing", "object", "property", "operation"}, "value", "selector")
 		envelopeCounter(e["crossing"])
 		envelopeRef(e["object"])
-		envelopeText(e["property"])
+		property := envelopeText(e["property"])
 		op := envelopeText(e["operation"])
 		_, value := e["value"]
-		if op != "get" && op != "set" || value != (op == "set") {
+		_, selector := e["selector"]
+		// An Object Collection callback (#1143) is a crossing on `elements`.
+		collection := op == "count" || op == "at" || op == "find"
+		if op != "get" && op != "set" && !collection || value != (op == "set") || selector != (op == "at" || op == "find") || collection && property != "elements" {
 			envelopeError("invalid operation")
 		}
 	case "property-end":

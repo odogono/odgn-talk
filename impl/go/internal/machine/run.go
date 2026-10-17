@@ -399,6 +399,9 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 		if prop != nil && inGuard(f) {
 			prop = nil // ordinary key evaluation raises wrong kind without a Host call
 		}
+		if i.Op == generated.OpGetElement || i.Op == generated.OpCountElements {
+			prop = elementRequest(f, i)
+		}
 		if prop != nil || i.Op == generated.OpAsk || i.Op == generated.OpTell || i.Op == generated.OpAskWait || i.Op == generated.OpJoinAsk {
 			if i.Op == generated.OpJoinAsk && (r.Limits.Join > 0 || r.Limits.Bounded) && len(r.Join.Members) >= r.Limits.Join {
 				r.fault("join")
@@ -435,8 +438,28 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			var result value.Value
 			var err *value.Value
 			blocked := false
+			if prop != nil && prop.op != "" {
+				// A collection read pays its base rate before any check.
+				fuel, alloc := prop.charge(i)
+				if !pay(fuel, alloc) {
+					break
+				}
+				if prop.failed != nil {
+					r.raise(*prop.failed)
+					if slice > 0 && r.Fuel-start >= slice && r.Status == Running {
+						r.Status = Preempted
+					}
+					continue
+				}
+			}
 			if prop != nil {
-				result, err = property(prop.object, prop.name, prop.set, prop.input, pay)
+				op := "get"
+				if prop.op != "" {
+					op = prop.op
+				} else if prop.set {
+					op = "set"
+				}
+				result, err = property(prop.object, prop.name, op, prop.input, pay)
 			} else {
 				result, err, blocked = operation(i.Operands()[0].Text, i.Operands()[1].Text, args, pay)
 			}

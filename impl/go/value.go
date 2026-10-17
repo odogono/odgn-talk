@@ -235,6 +235,7 @@ type ObjectKind struct {
 	name        string
 	props       map[string]Prop
 	parentKinds []string
+	elements    *ObjectElements
 }
 type Object struct {
 	kind     *ObjectKind

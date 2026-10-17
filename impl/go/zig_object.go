@@ -59,7 +59,19 @@ func (b *zigGroup) defineKind(kind *ObjectKind) error {
 	if paused {
 		return backendUnsupported("declaring an Object Kind during a Host callback")
 	}
-	if _, err := b.send("define-object-kind", map[string]any{"name": kind.name, "props": props, "parentKinds": parents}); err != nil {
+	declaration := map[string]any{"name": kind.name, "props": props, "parentKinds": parents}
+	if e := kind.elements; e != nil {
+		if !b.reg.elements {
+			return &HostError{InvalidValue, "embedded Zig artifact lacks object-elements-v1 for " + kind.name + "'s collection"}
+		}
+		shape, err := zigShape(e.Shape.inner, 0)
+		if err != nil {
+			return err
+		}
+		cost := func(c Cost) map[string]any { return map[string]any{"fuel": c.Fuel, "alloc": c.Alloc} }
+		declaration["elements"] = map[string]any{"shape": shape, "countCost": cost(e.CountCost), "atCost": cost(e.AtCost), "findCost": cost(e.FindCost)}
+	}
+	if _, err := b.send("define-object-kind", declaration); err != nil {
 		return err
 	}
 	b.reg.kinds[kind.name] = kind
@@ -140,13 +152,17 @@ func (b *zigGroup) property(need zigReply) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an unknown Object")
 	}
+	set, collection := false, false
+	for _, entry := range need.entries() {
+		set = set || entry.Key == "value"
+		collection = collection || entry.Key == "op"
+	}
+	if collection {
+		return b.collection(need, o)
+	}
 	prop, ok := o.kind.props[zigText(need.get("prop"))]
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an undeclared property")
-	}
-	set := false
-	for _, entry := range need.entries() {
-		set = set || entry.Key == "value"
 	}
 	var input Value
 	if set {
@@ -186,6 +202,71 @@ func (b *zigGroup) property(need zigReply) (map[string]any, error) {
 		}
 		return map[string]any{"value": encoded}, nil
 	}
+}
+
+// collection answers an Object Collection callback (#1143): the `prop` need
+// named `elements`, with its `op` and, for `at` and `find`, its `selector`.
+// The guest has already charged and checked the selector; it checks the
+// result after the reply.
+func (b *zigGroup) collection(need zigReply, o *Object) (map[string]any, error) {
+	hostError := func(detail string) (map[string]any, error) {
+		b.propertyDetails = append(b.propertyDetails, detail)
+		return map[string]any{"hostError": detail}, nil
+	}
+	e := o.kind.elements
+	if e == nil || zigText(need.get("prop")) != "elements" {
+		return nil, fmt.Errorf("Zig collection callback names an Object Kind without a collection")
+	}
+	var selector Value
+	for _, entry := range need.entries() {
+		if entry.Key == "selector" {
+			if err := b.decode(need.get("selector"), reflect.ValueOf(&selector).Elem()); err != nil {
+				return nil, err
+			}
+		}
+	}
+	var invoke func() (Value, error)
+	switch op := zigText(need.get("op")); {
+	case op == "count":
+		invoke = func() (Value, error) { return e.Count(o) }
+	case op == "at" && selector.inner.Kind == corevalue.Number:
+		index, err := selector.inner.Number().Int64()
+		if err != nil || index == 0 {
+			return nil, fmt.Errorf("Zig collection callback has an invalid position")
+		}
+		invoke = func() (Value, error) { return e.At(o, index) }
+	case op == "find" && selector.inner.Kind == corevalue.Text:
+		name := selector.inner.Text()
+		invoke = func() (Value, error) { return e.Find(o, name) }
+	default:
+		return nil, fmt.Errorf("Zig collection callback is malformed")
+	}
+	result, failure := func() (v Value, err error) {
+		defer func() {
+			if caught := recover(); caught != nil {
+				err = fmt.Errorf("Host panic: %v", caught)
+			}
+		}()
+		return invoke()
+	}()
+	if failure != nil {
+		if e, ok := failure.(*ScriptError); ok && e != nil {
+			encoded, err := b.zigScriptFailure(e)
+			if err != nil {
+				return hostError(err.Error())
+			}
+			if detail := propertyFailureDetail(e); detail != "" {
+				b.propertyDetails = append(b.propertyDetails, detail)
+			}
+			return map[string]any{"fail": encoded}, nil
+		}
+		return hostError(fmt.Sprint(failure))
+	}
+	encoded, err := b.zigEncoded(result)
+	if err != nil {
+		return hostError(err.Error())
+	}
+	return map[string]any{"value": encoded}, nil
 }
 
 // propertyFailureDetail is native Go's reason, if any, that a property's
