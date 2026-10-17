@@ -765,10 +765,13 @@ typedef struct talk_prop {
  * TALK_CALL_STARTED, TALK_CALL_LIMITED and TALK_CALL_BROKEN are host error.
  * at's index is nonzero: positive from the front, negative from the end.
  * find's name is borrowed UTF-8 for the callback, with its byte length. */
+/* C only: ObjectElements.Count. */
 typedef talk_call_end (*talk_element_count_fn)(void *context, talk_object *o,
     talk_value **result, talk_script_error *error);
+/* C only: ObjectElements.At. */
 typedef talk_call_end (*talk_element_at_fn)(void *context, talk_object *o,
     int64_t index, talk_value **result, talk_script_error *error);
+/* C only: ObjectElements.Find. */
 typedef talk_call_end (*talk_element_find_fn)(void *context, talk_object *o,
     const char *name, size_t name_len,
     talk_value **result, talk_script_error *error);
