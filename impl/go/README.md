@@ -224,7 +224,11 @@ sqlite per-step charging remains [#911](https://github.com/odogono/odgn-talk/iss
 
 The internal `zigwasm` package verifies the embedded artifact digest. The adapter
 checks language, Cost Model and Unicode versions before use. Compiled code is
-cached process-wide; each Group owns an independent guest. Group cleanup closes
+cached process-wide; each Group owns an independent guest. Each process
+compiles the artifact before its first Group, unless `NORTHTALK_ZIG_CACHE_DIR`
+names a directory, where wazero keeps compiled code for later processes,
+keyed by its version and the artifact. `BenchmarkBackendColdStart` measures
+both, as `cache=none` and `cache=warm`. Group cleanup closes
 the guest through Go's garbage collector, without per-Value Release. Replies
 are copied before another export, and returned Values own Go memory. Data
 conversion uses the existing iterative codec rather than encoding/json's
@@ -232,6 +236,10 @@ nesting limit. Ordinary consumers need Go and pinned module dependencies,
 without Zig or a WASM runtime download. The maintainer command
 `python3 spikes/go-zig-binding/build-artifact.py` rebuilds both embedded copies
 from committed Core/spec sources and records identical provenance.
+The embedded reactor supports Zig's opt-in `analysis-v1` exchanges for Entry
+and source analysis, catalogues and computed message names. The Go Session
+Host still uses Go's parser and checker for this work; switching it to these
+exchanges is tracked in [#1092](https://github.com/odogono/odgn-talk/issues/1092).
 
 Each tenant therefore pays for its own guest. The Apple M-series warm-run
 [Group measurement](https://github.com/odogono/odgn-talk/pull/1087) at `ad92dfbf`

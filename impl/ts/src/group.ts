@@ -4299,6 +4299,9 @@ export class Group {
     }
     outcome = run.ended;
     this.active = null;
+    if (run.suspended) {
+      this.releaseRecords(running);
+    }
     // A Run a Fallback Handler clause took names the message's Selector as
     // its Handler; one that ended unhandled took no clause (ADR 0064).
     const fallback = run.fallback && outcome?.kind !== 'unhandled';
@@ -4503,6 +4506,32 @@ export class Group {
       },
       detail: rec.detail,
     };
+  }
+
+  // A suspended Run has committed its Segment, so it can't be rewound and the
+  // Trace has its records. It keeps only its pending calls, for their
+  // arguments, and its latest Recovery Offer choice, which restore checks
+  // against its attempt count. A long-lived Run's save then doesn't grow
+  // with every call it has made (#1119).
+  private releaseRecords(running: Running) {
+    const { run } = running;
+    const written = running.recordsWritten ?? 0;
+    let lastOffer = -1;
+    run.records.forEach((r, i) => {
+      if (r.kind === 'offer-chosen') {
+        lastOffer = i;
+      }
+    });
+    const kept = run.records.filter(
+      (r, i) =>
+        i >= written ||
+        i === lastOffer ||
+        (r.kind === 'call' && run.pendingCall(r.id) !== undefined),
+    );
+    if (kept.length !== run.records.length) {
+      running.recordsWritten = written - (run.records.length - kept.length);
+      run.records = kept;
+    }
   }
 
   private writeRecords(running: Running, records0: number) {

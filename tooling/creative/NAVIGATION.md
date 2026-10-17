@@ -24,7 +24,8 @@ List files with `rg --files tooling/creative` before opening one by name.
   `offline`, `rich-text` and `storage`. In the page's console run
   `await import('/<suite>.browser.js').then(m => m.runBrowserTests())`;
   every result must have `passed: true`. `play` also exports
-  `runElementsBrowserTests`, `runFrameBrowserTests`, `runUserBrowserTests` and
+  `runElementsBrowserTests`, `runFrameBrowserTests`, `runKeyBrowserTests`,
+  `runUserBrowserTests` and
   `runMessageBoxBrowserTests`; run each after a reload. The watch server
   empties `dist/` on every app rebuild, so rebuild the suites after one.
 - Service-worker trap: once `/` has loaded, Folio's

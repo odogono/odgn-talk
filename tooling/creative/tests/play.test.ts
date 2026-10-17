@@ -865,3 +865,13 @@ test("leaving the Page stops its Script's frames", async () => {
   expect(play.pageIndex).toBe(1);
   expect(play.wantsFrames).toBe(false);
 });
+
+test('handles looks along the Message Path to the Project', () => {
+  const project = fixture();
+  const play = new PlaySession(project);
+  expect(play.handles(play.page, 'keyDown')).toBe(false);
+  project.script = 'on keyDown key\nend keyDown';
+  const handled = new PlaySession(project);
+  expect(handled.handles(handled.page, 'keyDown')).toBe(true);
+  expect(handled.handles(handled.page.elements[1]!, 'keyDown')).toBe(true);
+});
