@@ -694,6 +694,22 @@ button:disabled {
   flex: 1;
   min-width: 8rem;
 }
+#projects-panel h3 {
+  font-size: 0.9rem;
+  margin: 0.6rem 0 0.3rem;
+}
+#example-list {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+}
+#example-list li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.35rem 0;
+}
 #storage-status {
   border-top: 1px solid #ddd;
   margin-top: 0.6rem;

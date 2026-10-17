@@ -1,10 +1,10 @@
-// The sample Project (#824): #154's acceptance example, a three-Page
+// The Lighthouse Mystery Example Project (#824): #154's acceptance example, a three-Page
 // illustrated mystery built the way a non-programmer would — navigation,
 // show/hide, text and sound actions are the exact source Script Recipes
 // insert (`recipes.ts`), and only the parts Recipes do not offer (clue
 // messages to the Project Script, `wait`, creating an Element) are written
 // out by hand, as an author would after inserting a Recipe. Illustrations
-// are SVG and sounds are generated WAV, so the sample needs no files and
+// are SVG and sounds are generated WAV, so the Example Project needs no files and
 // reopens offline exactly as exported.
 import {
   createElement,
@@ -14,19 +14,14 @@ import {
   type Asset,
   type Element,
   type Page,
-  type Project,
   type TextElement,
-} from './model';
-import { sha256Hex } from './project-file';
-import { recipeSource, type RecipeTarget } from './recipes';
+} from '../model';
+import { sha256Hex } from '../project-file';
+import { recipeSource, type RecipeTarget } from '../recipes';
 
-export const SAMPLE_PROJECT_NAME = 'The Lighthouse Mystery';
+import { type ExampleContent } from './index';
 
-export type SampleProject = {
-  /** Asset bytes by SHA-256 hash, for storage and portable export. */
-  assets: Map<string, Uint8Array>;
-  project: Project;
-};
+export const LIGHTHOUSE_PROJECT_NAME = 'The Lighthouse Mystery';
 
 const SVG = (scene: string): Uint8Array =>
   new TextEncoder().encode(
@@ -223,7 +218,7 @@ const page = (name: string, background: string): Page => ({
  * the Play Session, and timers and Page-owned sounds stop when their
  * Page is left while the Project's clues carry on.
  */
-export const createSampleProject = async (): Promise<SampleProject> => {
+export const createLighthouseProject = async (): Promise<ExampleContent> => {
   const files: { bytes: Uint8Array; fileName: string; mediaType: string }[] = [
     { bytes: HARBOUR_ART, fileName: 'harbour.svg', mediaType: 'image/svg+xml' },
     {
@@ -252,7 +247,7 @@ export const createSampleProject = async (): Promise<SampleProject> => {
     });
   }
 
-  const project = createProject(SAMPLE_PROJECT_NAME);
+  const project = createProject(LIGHTHOUSE_PROJECT_NAME);
   project.assets = table;
   // The Project Script remembers the clues across Pages (by hand: no
   // Recipe sends a message), and settles the ending when asked.

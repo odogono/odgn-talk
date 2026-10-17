@@ -197,10 +197,13 @@ List files with `rg --files tooling/creative` before opening one by name.
   Pages strip, Page resizing; [main.ts](src/main.ts) boots the page.
 - [text-editor.ts](src/text-editor.ts) over [rich-text.ts](src/rich-text.ts)
   and [rich-text-dom.ts](src/rich-text-dom.ts): in-place text editing.
-- [sample.ts](src/sample.ts): the sample Project.
+- [examples/index.ts](src/examples/index.ts): the Example Projects listed in
+  the Projects window; [examples/lighthouse.ts](src/examples/lighthouse.ts)
+  builds The Lighthouse Mystery.
 - Tests: [rich-text.test.ts](tests/rich-text.test.ts),
-  [sample.test.ts](tests/sample.test.ts),
+  [examples.test.ts](tests/examples.test.ts),
+  [lighthouse.test.ts](tests/lighthouse.test.ts),
   [page-resize.browser.ts](tests/page-resize.browser.ts),
   [rich-text.browser.ts](tests/rich-text.browser.ts),
-  [sample.browser.ts](tests/sample.browser.ts).
+  [lighthouse.browser.ts](tests/lighthouse.browser.ts).
 - First check: `bun test tooling/creative/tests/rich-text.test.ts`.

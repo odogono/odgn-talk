@@ -322,6 +322,10 @@ _Avoid_: creative tool, Studio, editor (for the application)
 An authored collection of Pages, assets and Scripts that forms one interactive creation.
 _Avoid_: Stack, Book, application, folio (for the authored creation or its file)
 
+**Example Project**:
+A Project that ships with Folio and that an author can open and change as a copy, to learn how to build something.
+_Avoid_: sample, demo, template
+
 **Page**:
 A scrolling visual surface within a Project, containing freely positioned Elements and optionally its own Owning Script.
 _Avoid_: Card, screen, canvas (for the Page)

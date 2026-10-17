@@ -13,7 +13,7 @@ import {
   ELEMENT_KINDS,
 } from '../src/model';
 import { scriptManifest } from '../src/script-manifest';
-import { createSampleProject } from '../src/sample';
+import { createLighthouseProject } from '../src/examples/lighthouse';
 
 const fixture = () => {
   const project = createProject('Story');
@@ -113,7 +113,7 @@ const language = (manifest: unknown, text: string) => {
 };
 
 test('sample Project custom messages have no unknown-message hints', async () => {
-  const { project } = await createSampleProject();
+  const { project } = await createLighthouseProject();
   for (const owner of [
     project,
     ...project.pages.flatMap(p => [p, ...p.elements]),
