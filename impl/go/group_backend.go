@@ -9,6 +9,7 @@ import (
 // Only the experimental build registers an alternate implementation. Keeping
 // this seam in the existing API lets the same Host tests exercise both Cores.
 var experimentalGroupFactory func(*Group) groupBackend
+var experimentalRestore func(*Core, []byte, RestoreOptions) (*Group, RestoreResult, error)
 var experimentalVersions func() Versions
 var experimentalCompileLibrary func(*Core, LibrarySource, []*Library, GrantDecls) (*Library, error)
 
@@ -29,6 +30,8 @@ type groupBackend interface {
 	inspect() Inspection
 	counters(*Script) Counters
 	control(*Script, string, map[string]any)
+	save() ([]byte, error)
+	settle(CallID, Settlement) (*Call, error)
 	fingerprint() [32]byte
 	settleCall(*Call, string, Value, *ScriptError, int64)
 	grantNames(*Script) map[string][]string

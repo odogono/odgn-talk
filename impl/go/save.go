@@ -276,7 +276,7 @@ func (g *Group) codec(ref func(reflect.Value) (string, bool), resolve func(strin
 // Save snapshots a Quiescent Group without draining Host Inputs or closing effects.
 func (g *Group) Save() ([]byte, error) {
 	if g.backend != nil {
-		return nil, backendUnsupported("Save")
+		return g.backend.save()
 	}
 	if err := g.beginWorker(); err != nil {
 		return nil, err

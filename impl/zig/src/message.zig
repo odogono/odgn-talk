@@ -239,6 +239,7 @@ pub const Session = struct {
     gpa: Allocator,
     core: *talk.Core,
     grants: std.ArrayList(*caps.Grant) = .empty,
+    capability_handles: std.ArrayList(struct { name: []u8, definition: *caps.Capability }) = .empty,
     groups: std.ArrayList(*GroupEntry) = .empty,
     /// Per-Operation and per-property Host contexts, owned here.
     op_contexts: std.ArrayList(*OpContext) = .empty,
@@ -329,6 +330,8 @@ pub const Session = struct {
         }
         s.groups.deinit(gpa);
         s.grants.deinit(gpa);
+        for (s.capability_handles.items) |h| gpa.free(h.name);
+        s.capability_handles.deinit(gpa);
         for (s.op_contexts.items) |c| {
             gpa.free(c.capability);
             gpa.free(c.operation);
@@ -351,6 +354,7 @@ pub const Session = struct {
     }
 
     fn capabilityNamed(s: *Session, name: []const u8) ?*caps.Capability {
+        for (s.capability_handles.items) |h| if (std.mem.eql(u8, h.name, name)) return h.definition;
         for (s.core.definitions.items) |d| if (std.mem.eql(u8, d.name, name)) return d;
         return null;
     }
@@ -1814,7 +1818,13 @@ fn pausedReply(s: *Session, ref: i64) []u8 {
 fn withTrace(s: *Session, entry: *GroupEntry, reply: []u8) []u8 {
     if (reply.ptr == &oom_buf or !entry.traced) return reply;
     entry.group.flush();
-    if (entry.pending_trace.items.len == 0) return reply;
+    return withBufferedTrace(s, entry, reply);
+}
+
+// A failed restore has already released its Group, but its Trace belongs
+// to the error reply just as a successful restore's does.
+fn withBufferedTrace(s: *Session, entry: *GroupEntry, reply: []u8) []u8 {
+    if (reply.ptr == &oom_buf or !entry.traced or entry.pending_trace.items.len == 0) return reply;
     defer freeReply(s.gpa, reply);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -2008,7 +2018,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -2119,6 +2129,9 @@ fn adapterStandardOperation(s: *Session, capability: []const u8, which: standard
 
 fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     const name = asText(field(msg, "name")) orelse return hostError(s.gpa, ref, .invalid_value);
+    const wire_handle = if (field(msg, "handle")) |h| asText(h) orelse return hostError(s.gpa, ref, .invalid_value) else name;
+    if (name.len == 0 or wire_handle.len == 0) return hostError(s.gpa, ref, .invalid_value);
+    for (s.capability_handles.items) |h| if (std.mem.eql(u8, h.name, wire_handle)) return hostError(s.gpa, ref, .name_reused);
     const lifecycle = asBool(field(msg, "segmentLifecycle")) orelse false;
     const releasing = asBool(field(msg, "release")) orelse false;
     const ops_j = field(msg, "ops") orelse return hostError(s.gpa, ref, .invalid_value);
@@ -2132,10 +2145,16 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
         if (ops_j.array.items.len != standard.operations(w).len) return hostError(s.gpa, ref, .invalid_value);
     }
     const a = s.core.gpa;
+    const declaration_name = a.dupe(u8, name) catch return hostError(s.gpa, ref, .out_of_memory);
+    var installed = false;
+    defer if (!installed) a.free(declaration_name);
+    const owned_handle = s.gpa.dupe(u8, wire_handle) catch return hostError(s.gpa, ref, .out_of_memory);
+    defer if (!installed) s.gpa.free(owned_handle);
+    s.capability_handles.ensureUnusedCapacity(s.gpa, 1) catch return hostError(s.gpa, ref, .out_of_memory);
     const ops = a.alloc(caps.Operation, ops_j.array.items.len) catch return hostError(s.gpa, ref, .out_of_memory);
     var made: usize = 0;
     for (ops_j.array.items, ops) |item, *slot| {
-        slot.* = (if (which) |w| adapterStandardOperation(s, name, w, item) else operationOf(s, name, item)) catch |e| {
+        slot.* = (if (which) |w| adapterStandardOperation(s, wire_handle, w, item) else operationOf(s, wire_handle, item)) catch |e| {
             for (ops[0..made]) |op| releaseOp(a, op);
             a.free(ops);
             return hostError(s.gpa, ref, if (e == error.OutOfMemory) .out_of_memory else .invalid_value);
@@ -2157,12 +2176,16 @@ fn defineCapabilityReply(s: *Session, msg: Json, ref: i64) []u8 {
     }
     const release: ?caps.ReleaseHook = if (releasing) .{ .call = releaseHook, .context = s } else null;
     var def: ?*caps.Capability = null;
-    const code = talk.defineCapabilityZigWith(s.core, name, ops, coordinator_of, release, &def);
+    const code = talk.defineCapabilityZigWith(s.core, wire_handle, ops, coordinator_of, release, &def);
     if (code != .ok) {
         for (ops) |op| releaseOp(a, op);
         a.free(ops);
         return hostError(s.gpa, ref, code);
     }
+    a.free(def.?.name);
+    def.?.name = declaration_name;
+    s.capability_handles.appendAssumeCapacity(.{ .name = owned_handle, .definition = def.? });
+    installed = true;
     var o = Out.init(s.gpa);
     defer o.deinit();
     beginOk(&o, ref) catch return oomReply();
@@ -3159,7 +3182,9 @@ fn restoreReply(s: *Session, msg: Json, ref: i64, frame: []const u8) []u8 {
     var resolving: Resolving = .{ .gpa = s.gpa };
     var group: ?*talk.Group = null;
     var result: ?*talk.RestoreResult = null;
-    const options: talk.RestoreOptions = .{ .name = handle_name.ptr, .name_len = handle_name.len, .trace = null, .trace_context = null, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = &resolving, .resolve = Resolving.resolve, .resolve_context = &resolving, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
+    var probe: GroupEntry = .{ .gpa = s.gpa, .name = &.{}, .group = undefined, .traced = asBool(field(msg, "trace")) orelse false };
+    defer freeTrace(s.gpa, takeTrace(&probe));
+    const options: talk.RestoreOptions = .{ .name = handle_name.ptr, .name_len = handle_name.len, .trace = traceSink, .trace_context = &probe, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = &resolving, .resolve = Resolving.resolve, .resolve_context = &resolving, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
     const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
     Direct.restoreResultRelease(result);
     if (group) |g| Direct.groupRelease(g);
@@ -3169,7 +3194,7 @@ fn restoreReply(s: *Session, msg: Json, ref: i64, frame: []const u8) []u8 {
     }
     if (code != .ok) {
         resolving.deinit();
-        return hostError(s.gpa, ref, code);
+        return restoreError(s, &probe, ref, code);
     }
     resolving.answered = true;
     if (resolving.grants.items.len == 0 and resolving.objects.items.len == 0) {
@@ -3235,6 +3260,19 @@ fn resolveResultReply(s: *Session, msg: Json, ref: i64) []u8 {
     return restoreWith(s, parsed.value, ref, r);
 }
 
+// Restore failures have no retained Group for handle() to find. Preserve
+// their records here, including failures rejected before a restore record.
+fn restoreError(s: *Session, entry: *GroupEntry, ref: i64, code: talk.HostErrorCode) []u8 {
+    if (entry.traced and (entry.pending_trace.items.len == 0 or !std.mem.startsWith(u8, entry.pending_trace.items[entry.pending_trace.items.len - 1], "refused "))) {
+        const line = std.fmt.allocPrint(s.gpa, "refused code=\"{s}\"", .{talk.hostCodeName(code)}) catch return oomReply();
+        entry.pending_trace.append(s.gpa, line) catch {
+            s.gpa.free(line);
+            return oomReply();
+        };
+    }
+    return withBufferedTrace(s, entry, hostError(s.gpa, ref, code));
+}
+
 /// Restores for real, with the Host's answers, and replies with the
 /// result.
 fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
@@ -3253,11 +3291,12 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
     const options: talk.RestoreOptions = .{ .name = name.ptr, .name_len = name.len, .trace = traceSink, .trace_context = entry, .libraries = request.libraries.ptr, .libraries_len = request.libraries.len, .grants = Resolving.rebind, .grants_context = r, .resolve = Resolving.resolve, .resolve_context = r, .mismatch = request.mismatch, .allocator = null, .memory_cap = std.math.maxInt(usize) };
     const code = Direct.restore(s.core, request.save.ptr, request.save.len, &options, &group, &result);
     if (code != .ok) {
+        const reply = restoreError(s, entry, ref, code);
         for (entry.pending_trace.items) |line| s.gpa.free(line);
         entry.pending_trace.deinit(s.gpa);
         s.gpa.free(entry.name);
         s.gpa.destroy(entry);
-        return hostError(s.gpa, ref, code);
+        return reply;
     }
     defer Direct.restoreResultRelease(result);
     entry.group = group.?;
@@ -3284,7 +3323,23 @@ fn restoreWith(s: *Session, msg: Json, ref: i64, r: *Resolving) []u8 {
 }
 
 fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (Allocator.Error || error{NotEncodable})!void {
-    try o.raw("\"variablesOnly\":");
+    // Host wrappers need handles for Scripts without pending Calls, and
+    // Objects which were already disposed (and so needed no resolution).
+    try o.raw("\"scripts\":[");
+    for (entry.group.group.scripts.items, 0..) |script, i| {
+        if (i > 0) try o.raw(",");
+        try o.text(script.name);
+    }
+    try o.raw("],\"objects\":[");
+    for (entry.group.group.objects.items, 0..) |object, i| {
+        if (i > 0) try o.raw(",");
+        try o.raw("[");
+        try o.text(object.kind.name);
+        try o.raw(",");
+        try o.text(object.id);
+        try o.raw("]");
+    }
+    try o.raw("],\"variablesOnly\":");
     try o.raw(if (res.variables_only) "true" else "false");
     try o.raw(",\"pending\":[");
     for (res.pending, 0..) |p, i| {
@@ -3305,7 +3360,20 @@ fn writeRestored(o: *Out, entry: *GroupEntry, res: *const talk.RestoreResult) (A
                 try o.value(v);
             }
         };
-        try o.raw("]}");
+        try o.raw("]");
+        for (entry.group.group.calls.items) |c| if (std.mem.eql(u8, c.id, id)) {
+            if (entry.group.group.script(c.script)) |script| if (script.grant(c.grant)) |grant| {
+                try o.raw(",\"capability\":");
+                try o.text(grant.grant.capability.name);
+            };
+            try o.raw(",\"run\":");
+            try o.text(c.run);
+            try o.raw(",\"segment\":");
+            try o.text(c.segment);
+            try o.raw(",\"now\":");
+            try o.instant(entry.gpa, c.now);
+        };
+        try o.raw("}");
     }
     try o.raw("],\"disposed\":[");
     for (res.disposed, 0..) |d, i| {
@@ -3686,6 +3754,10 @@ fn handleFrame(s: *Session, frame: []const u8) []u8 {
     const m = asText(field(msg, "m")) orelse return protocolError(s.gpa, ref, "no message name");
     s.active_ref = ref;
     if (s.restoring) |r| {
+        // Binding callbacks may declare and select a fresh Grant before
+        // answering. No Group work is admitted into the restore.
+        if (ref != r.ref and std.mem.eql(u8, m, "define-capability")) return defineCapabilityReply(s, msg, ref);
+        if (ref != r.ref and std.mem.eql(u8, m, "grant")) return grantReply(s, msg, ref);
         if (ref != r.ref or !std.mem.eql(u8, m, "resolve-result")) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
         return resolveResultReply(s, msg, ref);
     }
@@ -3752,7 +3824,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
                     // This feature adds declaration and binding fields, with no per-Group state.
-                } else if (!std.mem.eql(u8, name, "paused-inputs-v1")) return protocolError(s.gpa, ref, "unsupported feature");
+                } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
@@ -4893,9 +4965,12 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     const objs = need.object.get("objects").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), objs.len);
     try std.testing.expectEqualStrings("hall", objs[0].array.items[1].string);
-    // Nothing else is read until the Host answers.
+    // Group work stays blocked, while a fresh declaration and Grant can
+    // be registered for this restore without changing its public name.
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{11})));
-    const restored = try okOf(try c.sendRef(10, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[true]}}", .{ 10, grant }));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"handle\":\"new-api\",\"ops\":[{{\"name\":\"fetch\",\"mode\":\"suspending\",\"args\":[\"number\"],\"result\":\"number\",\"maxPending\":5000}}]}}", .{90}));
+    const rebound = (try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"new-api\",\"ops\":\"all\"}}", .{91}))).object.get("grant").?.integer;
+    const restored = try okOf(try c.sendRef(10, "{{\"m\":\"resolve-result\",\"ref\":{d},\"grants\":[{d}],\"objects\":[true]}}", .{ 10, rebound }));
     try std.testing.expect(restored.object.get("variablesOnly").?.bool == false);
     try std.testing.expectEqual(@as(usize, 0), restored.object.get("disposed").?.array.items.len);
     const pending = restored.object.get("pending").?.array.items;
@@ -4903,6 +4978,12 @@ test "restore asks the Host to resolve Grants and objects, then settle answers a
     try std.testing.expectEqualStrings("s", pending[0].object.get("script").?.string);
     try std.testing.expectEqualStrings("api", pending[0].object.get("grant").?.string);
     try std.testing.expectEqualStrings("fetch", pending[0].object.get("operation").?.string);
+    try std.testing.expectEqualStrings("s/r1", pending[0].object.get("run").?.string);
+    try std.testing.expectEqualStrings("s/r1.s1", pending[0].object.get("segment").?.string);
+    try std.testing.expectEqualStrings("2026-10-10T12:00:00Z", pending[0].object.get("now").?.string);
+    try std.testing.expectEqualStrings("api", pending[0].object.get("capability").?.string);
+    try std.testing.expectEqualStrings("s", restored.object.get("scripts").?.array.items[0].string);
+    try std.testing.expectEqualStrings("hall", restored.object.get("objects").?.array.items[0].array.items[1].string);
     try std.testing.expectEqual(@as(i64, 9), pending[0].object.get("args").?.array.items[0].integer);
     const call = pending[0].object.get("call").?.string;
     _ = try okOf(try c.send("{{\"m\":\"settle\",\"ref\":{d},\"group\":\"g2\",\"call\":\"{s}\",\"settlement\":{{\"answer\":42}}}}", .{ 12, call }));

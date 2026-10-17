@@ -271,32 +271,6 @@ func TestZigBackendOwnedDeepValuesAndIndependentGroups(t *testing.T) {
 	}
 }
 
-func TestZigBackendRejectsUnsupportedOperations(t *testing.T) {
-	core := talk.New()
-	g := core.NewGroup(talk.GroupOptions{})
-	if _, err := g.Load(talk.LoadOptions{Name: "s", Source: "on go\nend go\n"}); err != nil {
-		t.Fatal(err)
-	}
-	checks := []struct {
-		name string
-		call func() error
-	}{
-		{"save", func() error { _, e := g.Save(); return e }},
-		{"restore", func() error { _, _, e := core.Restore(nil, talk.RestoreOptions{}); return e }},
-	}
-	for _, check := range checks {
-		t.Run(check.name, func(t *testing.T) {
-			err := check.call()
-			if err == nil || !strings.HasPrefix(err.Error(), "experimental Zig backend:") {
-				t.Fatal(err)
-			}
-		})
-	}
-	if g.Script("other") != nil {
-		t.Fatal("unsupported load published a Script")
-	}
-}
-
 func TestZigBackendDataValues(t *testing.T) {
 	const encoded = `[null,true,-3,{"$dec":"3.0"},{"$dec":"9007199254740992"},"é<>\u000a",{"$quantity":["2.50","GBP"]},{"$bytes":"DQo="},{"$range":[3,7]},{"$date":"2026-09-27T14:30:00.5"},{"$instant":"1969-12-31T23:59:59.999999Z"},{"$pattern":"<\"a\">"},{"$map":[["$ref",1],["é",[null,true]]]}]`
 	value, err := talk.DecodeValue([]byte(encoded), nil)

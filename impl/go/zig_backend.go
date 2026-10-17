@@ -102,13 +102,25 @@ type zigGroup struct {
 	callsMu         sync.Mutex
 	calls           map[CallID]context.CancelFunc
 	failureDetails  map[CallID]string
+	restoreOptions  *RestoreOptions
+	restoredCalls   map[CallID]*Call
 	paused          bool
 }
 
 // zigFeatures are the guest protocol features the adapter requests and requires.
-var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1"}
+var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1"}
 
 func newZigGroup(g *Group) groupBackend {
+	b := newZigBackend(g)
+	if _, err := b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
+		b.reactor.Close(context.Background())
+		panic(err)
+	}
+	return b
+}
+
+// A restore needs an initialized Core without an existing Group handle.
+func newZigBackend(g *Group) *zigGroup {
 	b := &zigGroup{group: g, inlineWake: make(chan struct{}, 1), pending: map[DeliveryID]*Pending{}, decisions: map[string]*Deciding{}, kinds: map[string]*ObjectKind{}, libraries: map[[32]byte]bool{}, runs: map[RunID]DeliveryID{}, coordinators: map[*SegmentLifecycle]string{}, effectDetails: map[string]string{}, definitions: map[*CapabilityDef]string{}, calls: map[CallID]context.CancelFunc{}, failureDetails: map[CallID]string{}}
 	owner := weak.Make(b)
 	reactor, err := zigEngine().InstantiateObserved(context.Background(), func(event []byte) ([]byte, error) {
@@ -139,10 +151,6 @@ func newZigGroup(g *Group) groupBackend {
 		}
 	}
 	if err != nil {
-		reactor.Close(context.Background())
-		panic(err)
-	}
-	if _, err = b.send("new-group", map[string]any{"name": g.Name(), "trace": g.options.Trace != nil}); err != nil {
 		reactor.Close(context.Background())
 		panic(err)
 	}
@@ -235,7 +243,7 @@ func (b *zigGroup) frame(fields map[string]any) (Value, error) {
 	defer b.frameMu.Unlock()
 	if packet.Get("need").Kind() != KindNothing {
 		b.paused = true
-	} else if packet.Get("err").Kind() == KindNothing && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result") {
+	} else if packet.Get("err").Kind() == KindNothing && (fields["m"] == "pump" || fields["m"] == "op-result" || fields["m"] == "trace-result" || fields["m"] == "release-result" || fields["m"] == "resolve-result") {
 		b.paused = false
 	}
 	return packet, nil
@@ -476,6 +484,7 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 	_, err := b.exchange("pump", fields, func(reply Value) error {
 		var err error
 		result, err = b.pumpReceipt(reply)
+		clear(b.restoredCalls)
 		return err
 	})
 
@@ -655,7 +664,6 @@ func (b *zigGroup) control(s *Script, method string, fields map[string]any) {
 	}
 	b.ready()
 }
-func (b *zigGroup) fingerprint() [32]byte { panic(backendUnsupported("Fingerprint")) }
 
 func (b *zigGroup) zigDataOnly(v Value) error {
 	stack := []Value{v}

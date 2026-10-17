@@ -282,6 +282,15 @@ still use. Check names against the installed source, under `lib_dir` from
 - `std.testing.refAllDeclsRecursive` is gone; use `refAllDecls` per container.
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
+The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
+uses Zig's opaque `zig/8` saves. Its `restore-bindings-v1` Message Layer feature
+permits Capability/Grant registration while answering resolution, keeps public
+Capability names separate from transport handles, and returns the restored
+Script/Object identities and pending Call metadata. Pending Segment ids are
+reconstructed from retained Run accounting; preserving the original Call Clock
+across later Pumps remains [#1067](https://github.com/odogono/odgn-talk/issues/1067).
+Rejected mismatches retain their mandatory Trace mode and error-reply records.
+
 The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). The native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-Core saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
 
 The `wasm32-wasi` target builds a WASI reactor: a module with no `_start` that
