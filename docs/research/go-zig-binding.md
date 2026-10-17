@@ -6,6 +6,105 @@ against `34c990976c5b863b7791bc64c8ac760c263e2e9d`. The
 reactor and executes it through wazero. **The original investigation failed its first compatibility gate;
 follow-up Stop parity is described below. The Go Core remains supported.**
 
+## Adapter measurements against native Go, 2026-10-17
+
+[#1054](https://github.com/odogono/odgn-talk/issues/1054) measures the public
+adapter behind `talk_zig_experimental` against native Go through the same
+public API. [`zig-adapter-bench.sh`](../../impl/go/zig-adapter-bench.sh) runs the
+Backend benchmarks in [`backend_bench_test.go`](../../impl/go/backend_bench_test.go),
+Group instantiation, and the Benchmark Suite's Load and Run, built once without
+and once with the tag. The [`go-zig-bench` workflow](../../.github/workflows/go-zig-bench.yml)
+runs it on each platform. All runs use Go 1.27.2, wazero v1.12.0,
+`CGO_ENABLED=0`, `-count 5`, and the embedded artifact built from
+`079a7c36` by Zig 0.17.0 (wasm32-wasi, ReleaseSafe, sha256
+`18c5ac696faa06a5784543b881608c50291b333c20fd556b724f3e039fdb65ee`).
+
+| Platform | Machine | Commit | Results |
+|---|---|---|---|
+| Linux amd64 | CI, AMD EPYC 7763, 4 vCPU | `55a2d794` (merge of `b7ef6e42`) | [ci-linux-amd64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-amd64/) |
+| Linux arm64 | CI, 4 vCPU | `55a2d794` | [ci-linux-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-linux-arm64/) |
+| macOS arm64 | CI, Apple M1 (virtual), 3 vCPU | `55a2d794` | [ci-darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-ci-darwin-arm64/) |
+| macOS arm64 | Local Apple M5 | `7bb8942d` with the benchmark changes | [darwin-arm64](../../bench/results/go-zig-adapter/2026-10-17-darwin-arm64/) |
+
+Each directory holds `env.txt`, raw output for both backends and a benchstat
+`comparison.txt`. Shared runners are noisy, so read results as ratios within
+one job. Ratios on the 3–4 vCPU runners are about three times those on the
+local machine for every Host crossing, while pure execution is close on both.
+GC on fewer spare cores is a likely cause, given the allocation rate below, but
+is not confirmed.
+
+### Proposed retirement limits
+
+**Status: proposed, awaiting the maintainer decision.** Nothing below is
+agreed or recorded on #1054 or #884 yet. Limits are Zig-to-native ratios within
+one job, except cold start. A limit passes when every CI platform meets it.
+
+| Workload | Measure | Proposed limit | Linux amd64 | Linux arm64 | macOS CI | Result |
+|---|---|---|---|---|---|---|
+| Warm execution | worst Run of core, collections, macro | ≤ 2× | 1.78× | 1.35× | 1.49× | Pass |
+| Restore | `lifecycle/restore` | ≤ 1.5× | 0.20× | 0.19× | 0.19× | Pass |
+| Large Load | `lifecycle/load-large` | ≤ 2.5× | 2.09× | 1.56× | 1.74× | Pass |
+| Load into a new Group | `Load/core/loop` | ≤ 3× | 23.9× | 19.5× | 17.4× | Miss |
+| Group on shared code | `GroupInstantiation` | ≤ 10× | 107× | 84× | 88× | Miss |
+| Cold start | first Group in a fresh process | ≤ 250 ms | 1.57 s | 1.40 s | 1.50 s | Miss |
+| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 16–20× | 11–19× | 11–18× | Miss |
+| Value conversion | `host/conversion` | ≤ 3× | 7.5× | 6.2× | 4.8× | Miss |
+| Deferred call | `BackendDeferredCall/history=0` | ≤ 3× | 16.7× | 21.7× | 22.8× | Miss |
+| Deferred call with age | Zig `history=5000` ÷ `history=0` | ≤ 1.2× | 1.76× | 1.89× | 1.74× | Miss |
+| Rollback | `lifecycle/rollback` | ≤ 2× | 108× | 104× | 106× | Miss |
+| Messaging | `messaging/*` | ≤ 2× | 2.9–6.9× | 2.6–6.3× | 3.5–5.3× | Miss |
+| Multi-Group throughput | `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.20× | 0.19× | 0.26× | Miss |
+| Tail latency | `BackendRequest` p99 | ≤ 3× | 11.3× | 8.9× | 10.2× | Miss |
+| Retained memory | `BackendRetainedMemory` heap per Group | ≤ 4× | 38× | 31× | 38× | Miss |
+
+The absolute figures behind those ratios, on Linux amd64, native then Zig:
+
+- Request round trip 11.5 µs / 186 µs, p99 59 µs / 669 µs, 89 / 879 allocations.
+- Deferred call 33 µs / 552 µs, rising to 974 µs after 5000 earlier calls.
+- 16 Groups 40.5k / 8.2k requests per second.
+- Group instantiation 11 µs / 1.2 ms, with 6.3 KiB / 5.6 MiB allocated.
+- Retained per Group 61 KiB / 2.3 MiB heap.
+- Cold start: first Group 0.23 ms / 1.57 s, a second Group on the same Core
+  56 µs / 1.39 ms.
+
+A slice-heavy Run multiplies the crossing cost: `fib@slice=10` is 19–27×, falling
+to 1.5–2.7× at `slice=1000`.
+
+### Hotspots
+
+Profiles from the local run explain the misses in four groups, each a candidate
+follow-up if the limits above are agreed.
+
+1. **Message Layer crossing.** This covers immediate and deferred calls,
+   conversion, messaging, throughput, tail latency and short slices. On
+   `BackendRequest`, Go-side JSON decoding is about 43% of the caller path and
+   encoding about 13%; the guest frame itself is about 17%. Each request
+   allocates about 170 KB. About 68% of that is wazero call-engine churn,
+   because [`reactor.go`](../../impl/go/internal/zigwasm/reactor.go) looks up
+   `talk_buffer` and `talk_send` on every frame, and GC takes about 45% of CPU.
+   Caching those exports cut allocation 3.8× in a local experiment with no
+   local time gain, which may differ on the smaller CI runners. JSON remains
+   the larger cost; a binary frame or direct WASM exports would remove it.
+2. **Retained suspending Calls**, tracked in
+   [#1101](https://github.com/odogono/odgn-talk/issues/1101). This covers deferred
+   calls with age, `host/suspending` (37–42×) and rollback. The Zig Machine
+   keeps every suspending Call until the Group ends and scans that list in
+   `isAbandoned`, `writeSettled` and `forgetAbandoned`, so 95% of that time is
+   in guest code. Across eight successive Runs, a suspending call grew from
+   54 µs to 95 µs and a rollback Run from 2.6 ms to 37 ms, while native Go
+   stayed flat.
+3. **Per-Group guest.** This covers Load into a new Group, shared-code
+   instantiation and retained memory. Each Group instantiates its own guest,
+   allocating 5.6 MiB and retaining about 2 MiB of heap once loaded.
+4. **Cold compile.** The runtime compiles the ReleaseSafe artifact once per
+   process with no compilation cache, so the first Group pays 0.7 s locally and
+   1.4–1.6 s on CI. A wazero compilation cache directory or a smaller release
+   build are the obvious candidates.
+
+Under #1054, a failed limit blocks adapter expansion until an alternative passes
+it: an optimized Message Layer, direct WASM exports, or cgo as an optional
+backend only.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)
@@ -236,7 +335,9 @@ The immediate-call probe is about 8× native Go in this one workload. No numeric
 threshold has been approved, and this unoptimized comparison cannot settle the
 backend choice. Cold compilation, cached-code instantiation and initial linear
 memory were measured separately; neither application tail latency nor retained
-process memory was measured.
+process memory was measured. The
+[2026-10-17 measurements](#adapter-measurements-against-native-go-2026-10-17)
+now cover both through the public adapter.
 
 The focused callback probe above covers the next gate after Stop. Broaden its
 error/metering/lifecycle coverage and test Pool concurrency in the public adapter.
