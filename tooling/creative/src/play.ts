@@ -8,6 +8,7 @@ import {
   LoadError,
   MailboxFull,
   newGroup,
+  parseSource,
   nothing,
   num,
   ScriptError,
@@ -52,7 +53,34 @@ export type PlayMessage =
   | 'pointerEnter'
   | 'pointerLeave'
   | 'keyDown'
-  | 'textChanged';
+  | 'textChanged'
+  | 'frame';
+
+type CstNode = {
+  children?: CstNode[];
+  kind: string;
+  rule?: string;
+  v?: string;
+};
+
+/** Whether a Script's source declares a Handler for `message`. */
+export const definesHandler = (source: string, message: string): boolean => {
+  let tree: CstNode | null;
+  try {
+    tree = parseSource(source).tree as CstNode | null;
+  } catch {
+    return false;
+  }
+  const first = (node: CstNode | undefined, rule: string) =>
+    node?.children?.find(child => child.rule === rule);
+  return (tree?.children ?? []).some(declaration => {
+    const name = first(
+      first(first(declaration, 'Handler'), 'MessageName'),
+      'Name',
+    );
+    return name?.children?.[0]?.v === message;
+  });
+};
 
 // Each Message Box command loads as a fresh ownerless Script under this
 // prefix: the Core cannot unload Scripts, and the names change by Page.
@@ -104,6 +132,8 @@ export class PlaySession {
   readonly owners = new Map<string, ScriptOwner>();
   #kinds = new Map<string, ObjectKind<ScriptOwner>>();
   #nextObject = 0;
+  // Each `frame` Script's last delivery time, and whether its Run is pending.
+  #frames = new Map<string, { busy: boolean; last: bigint | undefined }>();
   #pendingClones: Element[] = [];
   #elements = defineCapability('elements', {
     create: {
@@ -158,6 +188,7 @@ export class PlaySession {
         for (const [name, owner] of this.owners) {
           if (owner === element) {
             this.sounds.stopOwner(name);
+            this.#frames.delete(name);
             this.group.script(name)?.stop('Element deleted');
           }
         }
@@ -611,18 +642,22 @@ export class PlaySession {
       this.owners.set(name, owner);
       const objects = owner === this.project ? pages : pageObjects;
       try {
+        this.#frames.delete(name);
         const existing = this.group.script(name);
         if (existing) {
           existing.reload(owner.script, 'reset variables');
-          continue;
+        } else {
+          this.group.load({
+            name,
+            source: owner.script,
+            owner: this.objects.get(owner),
+            objects,
+            grants: this.#grants(),
+          });
         }
-        this.group.load({
-          name,
-          source: owner.script,
-          owner: this.objects.get(owner),
-          objects,
-          grants: this.#grants(),
-        });
+        if (definesHandler(owner.script, 'frame')) {
+          this.#frames.set(name, { busy: false, last: undefined });
+        }
       } catch (error) {
         if (!(error instanceof LoadError)) {
           throw error;
@@ -648,6 +683,7 @@ export class PlaySession {
     for (const [name, owner] of this.owners) {
       if (scriptPage(this.project, owner) === this.page) {
         this.sounds.stopOwner(name);
+        this.#frames.delete(name);
         this.group.script(name)?.stop('Left Page');
       }
     }
@@ -724,6 +760,40 @@ export class PlaySession {
         line: 1,
         message: 'Too many pending messages',
       });
+    }
+  }
+
+  /** Whether any Script handles `frame`, so the browser should ask for frames. */
+  get wantsFrames(): boolean {
+    return !this.stopped && this.#frames.size > 0;
+  }
+
+  /**
+   * Sends `frame` straight to each Script that handles it, never up the
+   * Message Path. A Script whose last `frame` Run hasn't ended skips this
+   * one; its next `elapsed` covers the time since the one it last got.
+   */
+  frame(now: bigint): void {
+    if (this.stopped || this.navigating) {
+      return;
+    }
+    for (const [name, state] of this.#frames) {
+      if (state.busy) {
+        continue;
+      }
+      const elapsed =
+        state.last === undefined
+          ? 0
+          : Math.round(Number(now - state.last) / 1000);
+      state.last = now;
+      state.busy = true;
+      const done = () => {
+        state.busy = false;
+      };
+      void this.group
+        .script(name)!
+        .request({ name: 'frame', args: [num(elapsed)] })
+        .result.then(done, done);
     }
   }
 

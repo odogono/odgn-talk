@@ -563,6 +563,26 @@ does not block reader input, other handlers or other Scripts. A handler can
 repeat an effect by waiting and then sending itself another message. No timer
 Capability or additional Grant is needed.
 
+For animation and games, declare an `on frame elapsed` Handler
+([ADR 0095](../../docs/adr/0095-folio-delivers-a-frame-message-to-scripts-that-handle-it.md)).
+Folio sends `frame` once per displayed frame, straight to each Script that
+declares it, never up the Message Path; `elapsed` is the whole milliseconds
+since that Script's previous `frame`, 0 on its first. A Script whose last
+`frame` Run is still running or waiting skips frames until it ends, and its
+next `elapsed` covers the gap. Frames stop when the reader leaves the Script's
+Page, pause while the tab is hidden and never run in Edit:
+
+```talk
+script variable sinceMove = 0
+on frame elapsed
+  add elapsed to sinceMove
+  if sinceMove >= 500 then
+    put 0 into sinceMove
+    set the left of ball to the left of ball + 10
+  end if
+end frame
+```
+
 Leaving a Page cancels its Page and Element Scripts' pending waits, including
 `closePage` if it exceeds the one-second navigation deadline. The Project
 Script's waits keep their deadlines across navigation. Stop, Escape and Back

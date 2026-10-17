@@ -79,6 +79,8 @@ export const mountPlay = (shell: StackShell): void => {
   let session: PlaySession | undefined;
   let mode: PlayMode | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // requestAnimationFrame pauses with a hidden tab, so frames do too.
+  let frameRequest: number | undefined;
   let generation = 0;
   let problemCount = 0;
   let drawnPage: PlaySession['page'] | undefined;
@@ -309,6 +311,7 @@ export const mountPlay = (shell: StackShell): void => {
         draw();
       }
       showProblems();
+      requestFrame();
       if (result.state === 'sliced') {
         schedule();
       } else if (result.nextDeadline !== undefined) {
@@ -321,6 +324,19 @@ export const mountPlay = (shell: StackShell): void => {
       }
     }, delay);
   };
+  const requestFrame = () => {
+    if (frameRequest !== undefined || !session?.wantsFrames) {
+      return;
+    }
+    frameRequest = requestAnimationFrame(() => {
+      frameRequest = undefined;
+      if (!session || session.stopped) {
+        return;
+      }
+      session.frame(now());
+      schedule();
+    });
+  };
   const stopPlay = () => {
     if (!session) {
       return;
@@ -328,6 +344,10 @@ export const mountPlay = (shell: StackShell): void => {
     closeText();
     clearTimeout(timer);
     timer = undefined;
+    if (frameRequest !== undefined) {
+      cancelAnimationFrame(frameRequest);
+      frameRequest = undefined;
+    }
     session.stop(now());
   };
   const drawModes = () => {
