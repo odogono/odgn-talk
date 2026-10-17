@@ -35,15 +35,15 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 			t.Fatal(err)
 		}
 		b.observe(packet, fields["m"].(string))
-		if packet.Get("err").Kind() != KindNothing {
-			t.Fatal(packet)
+		if packet.err.present() {
+			t.Fatal(string(packet.root))
 		}
-		need := packet.Get("need")
-		if need.Kind() == KindNothing {
+		need := packet.need
+		if !need.present() {
 			completed = true
 			break
 		}
-		switch zigText(need.Get("m")) {
+		switch zigText(need.get("m")) {
 		case "trace":
 			fields = map[string]any{"m": "trace-result", "ref": int64(100), "group": b.groupHandle()}
 		case "effect":
