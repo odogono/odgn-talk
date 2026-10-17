@@ -2557,6 +2557,44 @@ pub const Session = struct {
         return error.MalformedTranscript;
     }
 
+    /// A collection's Shape, an Object Shape or a choice of them, owned.
+    fn elementShape(s: *Session, shape: std.json.Value) !*c.talk_shape {
+        if (shape != .object) return error.MalformedTranscript;
+        if (shape.object.get("object")) |k| {
+            if (k != .string) return error.MalformedTranscript;
+            return @ptrCast(try northtalk.talk.objectShapeNamed(k.string));
+        }
+        const choices = (shape.object.get("oneOf") orelse return error.MalformedTranscript).array.items;
+        const made = try s.alloc().alloc(?*const c.talk_shape, choices.len);
+        var done: usize = 0;
+        defer for (made[0..done]) |x| c.talk_shape_release(x);
+        for (choices, made) |x, *m| {
+            m.* = try s.elementShape(x);
+            done += 1;
+        }
+        var out: ?*c.talk_shape = null;
+        try check_(c.talk_one_of(made.ptr, made.len, &out));
+        return out.?;
+    }
+
+    fn elementReply(context: ?*anyopaque, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+        const s: *Session = @ptrCast(@alignCast(context.?));
+        const reply = s.callbackReply() orelse return c.TALK_CALL_BROKEN;
+        return s.replyEnd(reply, result, err);
+    }
+
+    fn elementCount(context: ?*anyopaque, _: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return elementReply(context, result, err);
+    }
+
+    fn elementAt(context: ?*anyopaque, _: ?*c.talk_object, _: i64, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return elementReply(context, result, err);
+    }
+
+    fn elementFind(context: ?*anyopaque, _: ?*c.talk_object, _: [*c]const u8, _: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+        return elementReply(context, result, err);
+    }
+
     fn shapeOf(s: *Session, shape: std.json.Value) !*const c.talk_shape {
         _ = s;
         if (shape == .string) {
@@ -2593,7 +2631,30 @@ pub const Session = struct {
                 .set_cost = .{ .fuel = info.set[0], .alloc = info.set[1] },
             };
         }
-        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.ptr, .props_len = props.len, .parent_kinds = null, .parent_kinds_lens = null, .parent_kinds_len = 0 };
+        // Its Object Collection (#1143), whose callbacks the recorded
+        // `property-begin` crossings answer as a getter's do.
+        var elements: c.talk_object_elements = undefined;
+        const declared = v.object.get("elements");
+        if (declared) |e| {
+            const cost = struct {
+                fn of(x: ?std.json.Value) c.talk_cost {
+                    const pair = costOf(x);
+                    return .{ .fuel = pair[0], .alloc = pair[1] };
+                }
+            }.of;
+            elements = .{
+                .shape = try s.elementShape(e.object.get("shape") orelse return error.MalformedTranscript),
+                .count = elementCount,
+                .at = elementAt,
+                .find = elementFind,
+                .context = s,
+                .count_cost = cost(e.object.get("countCost")),
+                .at_cost = cost(e.object.get("atCost")),
+                .find_cost = cost(e.object.get("findCost")),
+            };
+        }
+        defer if (declared != null) c.talk_shape_release(elements.shape);
+        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.ptr, .props_len = props.len, .parent_kinds = null, .parent_kinds_lens = null, .parent_kinds_len = 0, .elements = if (declared != null) &elements else null };
         var kind: ?*c.talk_object_kind = null;
         try check_(c.talk_define_object_kind(s.core, &def, &kind));
         try s.kinds.put(s.alloc(), name, .{ .name = name, .kind = kind.?, .props = infos });

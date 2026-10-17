@@ -876,10 +876,14 @@ compiling and matching keep their pending work on explicit stacks and never
 recurse on a pattern or its subject.
 
 **Object element references:** `element name of receiver` and
-`the number of elements of receiver` are
-[specified](../../spec/embedding/object-elements.md) but unsupported here.
-The native, C and Message Layer Object Kind interfaces expose properties,
-with no Object Collection callbacks.
+`the number of elements of receiver` run here as `get-element` and
+`count-elements` ([the contract](../../spec/embedding/object-elements.md)).
+An Object Kind declares its Object Collection natively (`objects.Elements`),
+through C's `talk_object_elements`, which registration checks and copies, or
+through the Message Layer's `define-object-kind` `elements` after the
+`object-elements-v1` hello feature; each callback is a `prop` need with an
+`op` and a `selector`. Corpus setup, both replay modes and Session
+Transcript replay answer collection calls from their records.
 
 A Host defines Capabilities and Grants through `talk.h`
 ([capabilities](src/machine/capabilities.zig)), and binds Grants at Load, by
