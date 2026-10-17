@@ -729,6 +729,38 @@ var Machine = MachineTable{
 			},
 		},
 		MachineTableInstructionEntry{
+			Name:     "get-element",
+			Group:    "access",
+			Operands: []string{},
+			Pops:     2,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "get-element",
+			Does:     "`element s of o`: pops the Host Object and, below it, the selector, and pushes the member the Object Kind's collection gives, or Nothing",
+			Errors: []string{
+				"wrong kind",
+				"object gone",
+				"out of domain",
+				"restricted operation",
+			},
+		},
+		MachineTableInstructionEntry{
+			Name:     "count-elements",
+			Group:    "access",
+			Operands: []string{},
+			Pops:     1,
+			Pushes:   1,
+			Suspends: false,
+			Cost:     "count-elements",
+			Does:     "`the number of elements of o`: pops the Host Object and pushes its collection's count",
+			Errors: []string{
+				"wrong kind",
+				"object gone",
+				"out of domain",
+				"restricted operation",
+			},
+		},
+		MachineTableInstructionEntry{
 			Name:  "property",
 			Group: "access",
 			Operands: []string{

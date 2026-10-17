@@ -33,6 +33,10 @@ export const makeCostRates = (measure: Measure): readonly ((m: Measured) => Char
   (m) => ({ fuel: 4 + Math.ceil((1 * (m.steps ?? 0)) / 1), alloc: 0 }),
   // get-key
   (m) => ({ fuel: 3, alloc: 0 }),
+  // get-element
+  (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.input)) / 8), alloc: 0 }),
+  // count-elements
+  (m) => ({ fuel: 3, alloc: 0 }),
   // property
   (m) => ({ fuel: 3 + Math.ceil((1 * measure(4, m.input)) / 8) + Math.ceil((1 * measure(7, m.result)) / 1), alloc: Math.ceil((1 * (m.resultSize ?? measure(1, m.result))) / 1) }),
   // chunk-get

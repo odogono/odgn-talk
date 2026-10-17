@@ -1,0 +1,24 @@
+-- Object Element References and Element Counts (#1143, ADR 0100)
+
+on paint r, c
+  set the fill of element ("cell_" & r & "_" & c) of thisPage to "red"
+  set the fill of element 3 of thisPage to "red"
+  put the number of elements of thisPage into n
+  put the last element of thisPage into frontmost
+  put the first element of anotherPage into backmost
+  put element wanted of anotherPage otherwise nothing into found
+  put element -1 of thisPage into frontmost
+  put the label of elements 2 of thisPage into label
+  set the label of element 1 of me to "Open"
+  set the label of the second element of it to "Open"
+end paint
+
+on names element, elements, number
+  -- bare names, and calls with no space, are not references
+  put element into e
+  put elements & number into both
+  put element(3) into called
+  put (element) - 1 into below
+  put the number of thisPage into key
+  put the number of elements into keyOfName
+end names

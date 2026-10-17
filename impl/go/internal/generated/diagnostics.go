@@ -252,11 +252,13 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not in a guard",
-			RaisedWhen: "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id",
-			At:         "the call's name, the Lambda's `given`, or the key's `the` or `'s`",
+			RaisedWhen: "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, reads a non-id key of a Host Object known at load, or holds an Object Element Reference or Element Count; a computed key on such an object must be the text literal id",
+			At:         "the call's name, the Lambda's `given`, the key's `the` or `'s`, or the reference's first token",
 			Sources: []string{
 				"ADR 0025",
+				"ADR 0100",
 				"#115",
+				"#1143",
 			},
 		},
 		DiagnosticsTableDiagnosticEntry{
@@ -371,7 +373,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not a property",
-			RaisedWhen: "`set` writes a bare variable, not a key of a Host Object",
+			RaisedWhen: "`set` writes a bare variable or an Object Element Reference, not a key of a Host Object",
 			At:         "`set`",
 			Sources: []string{
 				"ADR 0016",
@@ -380,7 +382,7 @@ var Diagnostics = DiagnosticsTable{
 		},
 		DiagnosticsTableDiagnosticEntry{
 			Code:       "not constant",
-			RaisedWhen: "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, or calls `random`",
+			RaisedWhen: "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, calls `random`, or holds an Object Element Reference or Element Count",
 			At:         "the first token that isn't allowed",
 			Sources: []string{
 				"ADR 0035",

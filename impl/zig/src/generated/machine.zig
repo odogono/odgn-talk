@@ -735,6 +735,38 @@ pub const machine: MachineTable = .{
             },
         },
         .{
+            .name = "get-element",
+            .group = "access",
+            .operands = &.{},
+            .pops = .{ .int = 2 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "get-element",
+            .does = "`element s of o`: pops the Host Object and, below it, the selector, and pushes the member the Object Kind's collection gives, or Nothing",
+            .errors = &.{
+                "wrong kind",
+                "object gone",
+                "out of domain",
+                "restricted operation",
+            },
+        },
+        .{
+            .name = "count-elements",
+            .group = "access",
+            .operands = &.{},
+            .pops = .{ .int = 1 },
+            .pushes = .{ .int = 1 },
+            .suspends = false,
+            .cost = "count-elements",
+            .does = "`the number of elements of o`: pops the Host Object and pushes its collection's count",
+            .errors = &.{
+                "wrong kind",
+                "object gone",
+                "out of domain",
+                "restricted operation",
+            },
+        },
+        .{
             .name = "property",
             .group = "access",
             .operands = &.{

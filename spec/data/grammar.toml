@@ -191,6 +191,14 @@ word = "each"
 positions = ["after `repeat for`"]
 
 [[contextual]]
+word = "element"
+positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the` and an ordinal (an ordinal Object Element Reference)"]
+
+[[contextual]]
+word = "elements"
+positions = ["operand position, before a token that can start an index (an Object Element Reference)", "after `the number of`, before `of` (an Element Count)"]
+
+[[contextual]]
 word = "empty"
 positions = ["after `is` or `is not`"]
 
@@ -249,6 +257,10 @@ positions = ["operator position"]
 [[contextual]]
 word = "next"
 positions = ["at the start of a statement, before `repeat`"]
+
+[[contextual]]
+word = "number"
+positions = ["after `the`, before `of elements of` (an Element Count)"]
 
 [[contextual]]
 word = "optional"
@@ -479,7 +491,7 @@ rule = "at the start of a statement, `choose` followed by `offer` is a choice; o
 
 [[decision]]
 name = "chunk-word"
-rule = "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name"
+rule = "a chunk word, `element` or `elements` followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression or an Object Element Reference; otherwise it is a name"
 
 [[decision]]
 name = "code-point"
@@ -500,6 +512,10 @@ rule = "`does` followed by `not` is the operator, and `contain`, `begin with`, `
 [[decision]]
 name = "during"
 rule = "after a comma in a Handler head, `during` followed by a word is the modifier"
+
+[[decision]]
+name = "element-count"
+rule = "after `the number of`, `elements` followed by `of` is an Element Count; otherwise `number` was an ordinary key"
 
 [[decision]]
 name = "every-chunk"
@@ -535,7 +551,7 @@ rule = "after `the`, `optional` followed by `of` is an ordinary key; otherwise i
 
 [[decision]]
 name = "ordinal"
-rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key"
+rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk, and followed by `element` an ordinal Object Element Reference; otherwise it is a key"
 
 [[decision]]
 name = "ordering-words"
@@ -637,7 +653,7 @@ raised_when = "A token can't continue the parse, including the end of a line or 
 
 [[syntax_error]]
 code = "not a container"
-raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token"
+raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token"
 
 [units]
 catalogue = "units.toml"

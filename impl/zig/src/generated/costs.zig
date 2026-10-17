@@ -103,6 +103,10 @@ pub const costs: CostsTable = .{
             .issue = "#1132",
             .change = "The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional",
         },
+        .{
+            .issue = "#1143",
+            .change = "Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional.",
+        },
     },
     .measure = .{
         .size = "the logical size of the value, as the [[size]] table gives it",
@@ -296,6 +300,16 @@ pub const costs: CostsTable = .{
             .key = "get-key",
             .fuel = "3",
             .input = "the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
+        },
+        .{
+            .key = "get-element",
+            .fuel = "3 + scalars(input) / 8",
+            .input = "the selector; the Host's collection callback also charges its declared cost and the result's conversion, as a property getter does",
+        },
+        .{
+            .key = "count-elements",
+            .fuel = "3",
+            .input = "the Host Object; the Host's count callback also charges its declared cost and the result's conversion, as a property getter does",
         },
         .{
             .key = "property",

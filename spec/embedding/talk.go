@@ -633,12 +633,29 @@ type Prop struct {
 	SetCost Cost
 }
 
+// ObjectElements is an Object Kind's ordered, named collection of Host
+// Objects (#1143). Shape is an Object Shape or a OneOf of them; results are
+// checked against it, wrapped in Optional. At gets a nonzero index: positive
+// from the front, negative from the end. Its callbacks run inside the Run,
+// synchronously and read-only, like a property's Get.
+type ObjectElements struct {
+	Shape     Shape
+	Count     func(o *Object) (Value, error)
+	At        func(o *Object, index int64) (Value, error)
+	Find      func(o *Object, name string) (Value, error)
+	CountCost Cost
+	AtCost    Cost
+	FindCost  Cost
+}
+
 type ObjectKindDef struct {
 	Name  string
 	Props []Prop
 	// ParentKinds lists the kinds that may be this kind's parent, for the
 	// Host Manifest only. SetParent doesn't check it.
 	ParentKinds []string
+	// Elements is nil for a kind with no collection.
+	Elements *ObjectElements
 }
 
 type ObjectKind struct { /* opaque */

@@ -782,7 +782,7 @@ is = "Core-triggered scope abandonment; no declared cost, Charge or conversion c
 name = "prop"
 input = false
 ids = ["run"]
-is = "a Host Object property call"
+is = "a Host Object property call, or a call to its Object Kind's collection"
 
 [[record.key]]
 key = "object"
@@ -792,19 +792,25 @@ is = "the object"
 [[record.key]]
 key = "name"
 type = "id"
-is = "the property"
+is = "the property, or `elements` for a collection call"
 
 [[record.key]]
 key = "op"
 type = "word"
-words = ["get", "set"]
-is = "a read or a write"
+words = ["get", "set", "count", "at", "find"]
+is = "a read or a write, or a collection's count, positional lookup or name lookup"
+
+[[record.key]]
+key = "selector"
+type = "value"
+optional = true
+is = "for `at`, the nonzero integer position, and for `find`, the text name"
 
 [[record.key]]
 key = "value"
 type = "value"
 optional = true
-is = "the value read or written"
+is = "the value read or written, or the collection call's answer"
 
 [[record.key]]
 key = "error"
@@ -1427,6 +1433,12 @@ is = "its properties, each `{name, shape, readOnly, getCost, setCost}`"
 kinds = ["trace"]
 
 [[setup]]
+table = "objectKinds"
+key = "elements"
+is = "its optional Object Collection, `{shape, countCost, atCost, findCost}`"
+kinds = ["trace"]
+
+[[setup]]
 table = "objects"
 key = "kind"
 is = "a Host Object's kind"
@@ -1442,6 +1454,12 @@ kinds = ["trace", "encoding"]
 table = "objects"
 key = "props"
 is = "the values its properties start with, a table from property name to a value in the display form, as text"
+kinds = ["trace"]
+
+[[setup]]
+table = "objects"
+key = "elements"
+is = "the members of its Object Kind's collection, in order, each `{name, object}` with the object in the display form, as text"
 kinds = ["trace"]
 
 [[setup]]

@@ -72,6 +72,8 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `dropping` | after a comma in a Handler head |
 | `during` | after a comma in a Handler head, before a name |
 | `each` | after `repeat for` |
+| `element` | operand position, before a token that can start an index (an Object Element Reference); after `the` and an ordinal (an ordinal Object Element Reference) |
+| `elements` | operand position, before a token that can start an index (an Object Element Reference); after `the number of`, before `of` (an Element Count) |
 | `empty` | after `is` or `is not` |
 | `ends` | operator position, before `with` |
 | `every` | operand position, before `match` (the Match Search); at the start of an expression, before a chunk kind's singular or `code` (an Every Head) |
@@ -87,6 +89,7 @@ A Reserved Word is never a Name, anywhere. Each one is reserved for a reason:
 | `mod` | operator position |
 | `most` | after `is at` or `is not at` |
 | `next` | at the start of a statement, before `repeat` |
+| `number` | after `the`, before `of elements of` (an Element Count) |
 | `optional` | after `the`, unless followed by `of` |
 | `otherwise` | between default expression operands |
 | `private` | at the start of a top-level declaration, before `on`, `function` or `constant` |
@@ -302,7 +305,7 @@ SendList       ::= ListItem ( ',' ListItem )*
 - **`send`** names its receiver last (`send greet with "Ann" to board`), or, after `send to`, first, then `:` and a Command Call's phrase (`send to board: move knight to "e4"`). `to` can't name a message, so one token decides. Only the target-first form carries labels. A bracketed expression in place of the message name computes it (`send (next) with order to me`), and `(` can't start a Name, so one token decides that too. In the receiver-last form, `...e` in the `with` list spreads a list into the arguments, as in a list literal (`send log with "seen", ...rest to me`).
 - **`and wait`** ends a `send`, an `ask`, a Command Call or a call statement, and only as a whole statement. `put f(x) and wait into y` is a syntax error at `and`.
 - **Operations:** the Word after `ask … to` or `tell … to` is always an Operation name, even a Reserved Word (`ask files to delete path`). The one-line `tell` never takes `and wait`. After `tell`'s receiver, `to` gives the one-line form and the end of the line opens a [`tell` block](#blocks), so one token decides.
-- **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name, or whose path to that root contains a Built-in property, is `not a container`, reported at the Container's first token (`put 1 into 3`, `put 1 into the length of x`, `delete item 1 of the items of x`). This applies to every statement taking a Container. `set` takes a property target instead: a Container, or a path whose final step is a key rooted in `me`, `it` or `the target`; the same Built-in property ban applies. Bare implicit roots and chunk writes through them are `not a container` at the target's first token. Property reads inside computed keys, chunk indexes or delimiters are allowed: they are expressions evaluated to select the target, not levels on its path to the root. What a root Name refers to is a load rule.
+- **Containers:** a Container is a Name, or a Chunk Expression or key path rooted in one. A Container whose root isn't a Name, or whose path to that root contains a Built-in property, is `not a container`, reported at the Container's first token (`put 1 into 3`, `put 1 into the length of x`, `delete item 1 of the items of x`). This applies to every statement taking a Container. `set` takes a property target instead: a Container, or a path whose final step is a key rooted in `me`, `it` or `the target`; the same Built-in property ban applies. A property target may also read through an Object Element Reference, which no other Container may contain. Bare implicit roots and chunk writes through them are `not a container` at the target's first token. Property reads inside computed keys, chunk indexes or delimiters are allowed: they are expressions evaluated to select the target, not levels on its path to the root. What a root Name refers to is a load rule.
 - **`put ...`** splices a list, and so takes only `after` or `before`.
 - **`return` and `veto`** take an expression if one starts next. `return` is never an operand ([chapter 1](01-lexical-structure.md#text-literals)).
 - **`pass`** names the message it passes, by its name and then its labels: `pass move to` passes `move:to:`. A Fallback Handler passes its message with `pass any message`, decided on two tokens as in its head, so a Handler for `any:message:` can't name itself in `pass`. **`exit`** only takes `repeat`, and **`next repeat`** is decided on two tokens, so `next` is otherwise a Name.
@@ -500,14 +503,18 @@ Postfix        ::= Primary ( "'s" Key )*
 Key            ::= 'code' 'points' | Word
 Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | BinaryBuild | '(' Expression ')'
                  | List | Map | 'true' | 'false' | 'nothing' | 'it' | 'me'
-                 | The | ReplaceExpression | MatchSearch | Chunk | Call | Name
+                 | The | ReplaceExpression | MatchSearch | ObjectElement | Chunk | Call | Name
 Call           ::= Name CallOpen ExpressionList? ')'
 Chunk          ::= ChunkWord Range 'of' Postfix
 ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
+ObjectElement  ::= ( 'element' | 'elements' ) Range 'of' Postfix
+                   /* an Object Element Reference, decided as a Chunk is */
 The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
                          | '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
-                         | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
-                   /* the Name after an Ordinal is a chunk kind's singular */
+                         | Ordinal ( 'code' 'point' | Name ) 'of' Postfix
+                         | 'number' 'of' 'elements' 'of' Postfix | Key 'of' Postfix )
+                   /* the Name after an Ordinal is a chunk kind's singular or `element`;
+                      `number` `of` is an Element Count only before `elements` `of` */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
 EveryHead      ::= 'every' ( 'code' 'point' | Name ) 'of' Postfix ( 'delimited' 'by' Postfix )?
@@ -524,6 +531,7 @@ MapKey         ::= ( Word | Text ) ':'  /* a Word key may not be `offer` */
 <!-- end -->
 
 - **Chunk words:** a chunk word followed by a token that can start an index is a Chunk Expression. An index starts with a Number, a Text, `-`, `[`, `(` with a space before it, a Name that isn't in the FOLLOW set, or `the`, `it` or `me`. Anything else makes the chunk word a Name. So `put 5 into line` and `line 3 of report` both work, but `put line - 1 into x` reads `line -1 of …` and fails at `into`, and needs `(line) - 1`.
+- **Object Element References:** `element` or `elements` followed by a token that can start an index is an Object Element Reference, decided as a chunk word is: `element 3 of thisPage`, `element ("cell_" & n) of p`. An ordinal followed by `element` after `the` is one too: `the last element of p`. After `the number of`, `elements` followed by `of` is an Element Count, `the number of elements of p`; otherwise `the number of x` reads the key `number`. None of these words is reserved, so `put element into e` and `element(3)` still work, but `put element - 1 into n` reads `element -1 of …` and needs `(element) - 1`. An Object Element Reference takes no `delimited by` and no Whose Clause ([the object element contract](embedding/object-elements.md)).
 - **Keys and properties:** `the <word> of x` reads a key, unless the word is a Built-in property below. Any Word may follow `the` or `'s`, Reserved Words included, and `code points` is read as one. `the "any key" of m` always reads a key, and `the (k) of m` computes one.
 - **Ordinals** name a chunk only after `the`, and only when a chunk kind's singular follows (`the last word of s`). Otherwise the ordinal is a key.
 - **`the target`** is the object a message was sent to. `the target of x` is a key named `target`.
@@ -692,12 +700,13 @@ These are the only places where the parser reads a second token before it choose
 | `can-be` | `can` followed by `be` is the kind test; otherwise the word ends the expression |
 | `capture` | in a Text Pattern, a word followed by `:` is a Capture |
 | `choose-offer` | at the start of a statement, `choose` followed by `offer` is a choice; otherwise `choose` starts a Command Call |
-| `chunk-word` | a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name |
+| `chunk-word` | a chunk word, `element` or `elements` followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression or an Object Element Reference; otherwise it is a name |
 | `code-point` | `code` followed by `point` or `points` is the chunk kind |
 | `comes` | `comes` followed by `before` or `after` is the operator; otherwise the word ends the expression |
 | `delimited-by` | `delimited` followed by `by` is the modifier |
 | `does-not` | `does` followed by `not` is the operator, and `contain`, `begin with`, `end with` or `match` must follow; otherwise the word ends the expression |
 | `during` | after a comma in a Handler head, `during` followed by a word is the modifier |
+| `element-count` | after `the number of`, `elements` followed by `of` is an Element Count; otherwise `number` was an ordinary key |
 | `every-chunk` | at the start of an expression, `every` followed by a chunk kind's singular, or by `code`, starts an Every Head |
 | `every-match` | `every` followed by `match` starts a Match Search; otherwise `every` is a name, unless `every-chunk` applies |
 | `ignoring-case` | `ignoring` followed by `case` is the modifier |
@@ -706,7 +715,7 @@ These are the only places where the parser reads a second token before it choose
 | `map-key` | in `{…}`, a word or text followed by `:` is a key, Reserved Words except `offer` included; in a map pattern, a word without `:` is the shorthand `{name}` |
 | `next-repeat` | at the start of a statement, `next` followed by `repeat` is the loop statement; otherwise `next` starts a Command Call |
 | `optional-key` | after `the`, `optional` followed by `of` is an ordinary key; otherwise it introduces an optional map-key read |
-| `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key |
+| `ordinal` | after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk, and followed by `element` an ordinal Object Element Reference; otherwise it is a key |
 | `ordering-words` | after `is` or `is not`, `greater` or `less` followed by `than`, or `at` followed by `least` or `most`, is the operator; otherwise the word is a Name |
 | `pattern-anchor` | in a Text Pattern, `text`, `line` or `word` followed by the second word of an anchor is that anchor |
 | `replace-first` | after `replace`, `first` followed by anything but `in` means only the first match |
@@ -753,7 +762,7 @@ Every Core accepts every construct. These are tagged Advanced for tooling only, 
 | `unterminated text` | An ordinary text literal is unclosed at its line end, or a fenced literal is unclosed at EOF; reported at its opener |
 | `bad unit` | A Unit after a numeric literal names a factor the Unit Catalogue doesn't have, has a malformed or negative exponent, or names two Units of one Unit Kind |
 | `unexpected token` | A token can't continue the parse, including the end of a line or of the source |
-| `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token |
+| `not a container` | A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token |
 | `unterminated interpolation` | A hole is unclosed at EOF; reported at its dollar-brace opener |
 | `empty interpolation` | An interpolation hole contains no expression |
 | `invalid text escape` | A backtick escape is malformed, octal, or produces an unpaired surrogate |
@@ -803,7 +812,7 @@ A local Handler may share a Script Variable's or Constant's name without a `name
 | `not in a library` | Library code uses `me`, `the target`, `pass`, `veto`, `wait for`, `send` or a well-known object name, or has a top-level `script variable` or a Fallback Handler | its first token | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a script` | A Script's declaration starts with `private` | `private` | [ADR 0020](../docs/adr/0020-scripts-share-code-through-stateless-libraries.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `not in a lambda` | `pass` or `the target` is inside a Lambda | `pass` or `the` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `not in a guard` | A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id | the call's name, the Lambda's `given`, or the key's `the` or `'s` | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `not in a guard` | A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, reads a non-id key of a Host Object known at load, or holds an Object Element Reference or Element Count; a computed key on such an object must be the text literal id | the call's name, the Lambda's `given`, the key's `the` or `'s`, or the reference's first token | [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0100](../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md), [#115](https://github.com/odogono/odgn-talk/issues/115), [#1143](https://github.com/odogono/odgn-talk/issues/1143) |
 | `not in a whose` | A Whose Clause's condition calls anything but a Built-in, a call through a name that shadows a Built-in included, or holds a Lambda | the call's name, or the Lambda's `given` | [ADR 0074](../docs/adr/0074-a-whose-clause-picks-the-chunks-whose-condition-holds.md), [#525](https://github.com/odogono/odgn-talk/issues/525) |
 | `not in a join` | A Join's body holds `wait`, `wait for`, a nested Join, `name … and wait`, `f(x) and wait`, `return`, `veto`, `pass`, an `exit repeat` or `next repeat` whose loop is outside the Join, or a member inside a `try` | its first token, or the member's | [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `empty join` | A Join has no member in its source | its `wait` | [ADR 0026](../docs/adr/0026-a-join-starts-several-calls-from-one-run-and-suspends-once.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
@@ -816,8 +825,8 @@ A local Handler may share a Script Variable's or Constant's name without a `name
 | `wrong message` | `pass m` names a message other than the one its Handler handles, `pass any message` is outside a Fallback Handler, or a Fallback Handler's `pass` names a message | the message's name, or `any` | [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `bad suffixes` | A Handler head has more than one of `queued`, `dropping` and `replacing`, a suffix twice, `, queued` with `, deciding`, `, during` on a Handler other than `on error`, or `, deciding` on a Fallback Handler | the first suffix that breaks the rule | [ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md), [ADR 0064](../docs/adr/0064-a-fallback-handler-receives-messages-no-clause-matches.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `can't write` | A Container is rooted in a Constant, a Lambda puts into a captured local, the body of a `repeat` that collects writes its collecting target, through a Container rooted in it, a pattern that binds it or an inner loop that collects into it, or `set` writes a read-only property of a Host Object whose kind and key are known at load | the Container's root, the binding, the inner loop's collecting target, or `set` | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [ADR 0025](../docs/adr/0025-lambdas-are-first-class-function-values-that-run-in-their-home-script.md), [ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `not a property` | `set` writes a bare variable, not a key of a Host Object | `set` | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
-| `not constant` | The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, or calls `random` | the first token that isn't allowed | [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `not a property` | `set` writes a bare variable or an Object Element Reference, not a key of a Host Object | `set` | [ADR 0016](../docs/adr/0016-messages-reach-scripts-through-core-owned-object-parents.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
+| `not constant` | The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, calls `random`, or holds an Object Element Reference or Element Count | the first token that isn't allowed | [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `default order` | A parameter without a default follows one with a default | the parameter | [ADR 0035](../docs/adr/0035-trailing-function-parameters-may-have-constant-defaults.md), [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `initialiser failed` | An initialiser raises an error when the unit loads | the raising instruction's position in the source map | [#115](https://github.com/odogono/odgn-talk/issues/115) |
 | `nothing to fold` | `ignoring case` follows `is a`, `can be` or `is empty`, which compare no text | `ignoring` | [#115](https://github.com/odogono/odgn-talk/issues/115) |

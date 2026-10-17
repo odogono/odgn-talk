@@ -49,6 +49,8 @@ pub const Opcode = enum(u8) {
     get_key_computed,
     get_optional_key,
     get_optional_key_computed,
+    get_element,
+    count_elements,
     property,
     property_delimited,
     chunk_get,

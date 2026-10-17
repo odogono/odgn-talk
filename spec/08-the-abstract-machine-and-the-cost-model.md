@@ -194,6 +194,8 @@ Each operator does what [chapter 3](03-values.md) and [chapter 4](04-expressions
 | `get-key-computed` |  | 2 | 1 | `the (k) of x`, with the key below the value | `wrong kind`, `object gone`, `restricted operation` |
 | `get-optional-key` | `key` | 1 | 1 | `the optional k of x`: reads the key `k` of a map, or gives Nothing for a missing key or a Nothing receiver; any other receiver is `wrong kind` | `wrong kind` |
 | `get-optional-key-computed` |  | 2 | 1 | `the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does | `wrong kind` |
+| `get-element` |  | 2 | 1 | `element s of o`: pops the Host Object and, below it, the selector, and pushes the member the Object Kind's collection gives, or Nothing | `wrong kind`, `object gone`, `out of domain`, `restricted operation` |
+| `count-elements` |  | 1 | 1 | `the number of elements of o`: pops the Host Object and pushes its collection's count | `wrong kind`, `object gone`, `out of domain`, `restricted operation` |
 | `property` | `property` | 1 | 1 | `the p of x`, for a Built-in property | `wrong kind` |
 | `property-delimited` | `property` | 2 | 1 | `the items of x delimited by d`, with the delimiter on top | `wrong kind`, `out of range` |
 | `chunk-get` | `chunk` | 2 | 1 | One chunk level: pops the value, then its index, and pushes the chunk | `wrong kind` |
@@ -409,7 +411,8 @@ effects, a restricted frame refuses these operations:
 
 - `load-var`, `store-var`, `store-definition`, `load-object`, `me`, `target`.
 - `set-property`, `set-property-computed`; `get-key` and `get-key-computed` on a
-  Host Object, except a text key exactly `id`.
+  Host Object, except a text key exactly `id`; `get-element` and
+  `count-elements` whatever their operands.
 - `ask`, `ask-wait`, `tell`; every `send`, `send-wait`, `send-named`,
   `send-named-wait`, `send-spread`, `send-spread-wait`, `send-up`, `send-up-wait`.
 - `wait`, `wait-for`, `wait-for-any`, `join-start`, `join-ask`, `join-send`,
@@ -521,6 +524,13 @@ A chain `k1 i1 of k2 i2 of … of x`, with an optional `delimited by d`, lowers 
 4. then, from the innermost level out, `chunk-get` of its kind, or `load t` `chunk-get-delimited item` for an `item` level with a delimiter.
 
 The temp is released at the end. A plural chunk word lowers as its singular.
+
+An Object Element Reference `element s of x` lowers to ⟦s⟧ ⟦x⟧ `get-element`;
+an ordinal one lowers its ordinal's integer as a `const` in place of ⟦s⟧. An
+Element Count lowers to ⟦x⟧ `count-elements`. Each is positioned at the
+reference's first token, including a leading `the`. A `set` property target
+reads through a reference with the same lowering; nothing else writes one
+([the object element contract](embedding/object-elements.md)).
 
 ### Whose Clauses
 
@@ -1057,6 +1067,8 @@ Cost Model **0**.
 | `convert` | `4 + scalars(input) / 8 + scalars(result) / 8` | `size(result)` | the value converted |
 | `search` | `4 + steps` | 0 | the text searched |
 | `get-key` | `3` | 0 | the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does |
+| `get-element` | `3 + scalars(input) / 8` | 0 | the selector; the Host's collection callback also charges its declared cost and the result's conversion, as a property getter does |
+| `count-elements` | `3` | 0 | the Host Object; the Host's count callback also charges its declared cost and the result's conversion, as a property getter does |
 | `property` | `3 + scalars(input) / 8 + items(result)` | `size(result)` | the value whose property is read |
 | `chunk-get` | `3 + scanned / 8` | `size(result)` | the value read; `scanned` is the Characters or items from its start to the end of the chunk, code points for a `code point` chunk, and all of them when the chunk isn't there; `test-chunk` measures as a read of the chunk it tests |
 | `chunk-set` | `4 + scalars(result) / 8 + items(result) / 8` | `size(input)` | the new part; the Fuel counts the whole rebuilt value, and the allocation only the new part (ADR 0010) |
@@ -1179,6 +1191,7 @@ Cost Model 0 is provisional, so it changes in place, and each change is listed i
 | [#695](https://github.com/odogono/odgn-talk/issues/695) | The `conforms`, `check` and `explain` rates charge 4 Fuel plus `scanned` for Shape definition validation and matching, failed work included; `explain` also allocates its report's logical size and a successful `check` allocates nothing; Cost Model 0 remains provisional |
 | [#890](https://github.com/odogono/odgn-talk/issues/890) | The `compare` rate counts the pairs a comparison examines at every depth, a shared part at each occurrence as logical size does, and the `member`, `min` and `max` rates count what comparing each item they examine counts; a Core may compare a shared pair once but charges for each occurrence; Cost Model 0 remains provisional |
 | [#1132](https://github.com/odogono/odgn-talk/issues/1132) | The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional |
+| [#1143](https://github.com/odogono/odgn-talk/issues/1143) | Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional. |
 
 <!-- end -->
 

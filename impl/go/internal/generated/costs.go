@@ -104,6 +104,10 @@ var Costs = CostsTable{
 			Issue:  "#1132",
 			Change: "The `min` and `max` rates scan their arguments, or a lone list argument's items, as they scanned a list's items; the rates are unchanged and Cost Model 0 remains provisional",
 		},
+		CostsTableChangeEntry{
+			Issue:  "#1143",
+			Change: "Add get-element and count-elements for Object Element References, at a 3-Fuel base plus the selector's scalars / 8, before each Host collection callback's declared cost and result conversion; Cost Model 0 remains provisional.",
+		},
 	},
 	Measure: CostsTableMeasure{
 		Size:       "the logical size of the value, as the [[size]] table gives it",
@@ -297,6 +301,16 @@ var Costs = CostsTable{
 			Key:   "get-key",
 			Fuel:  "3",
 			Input: "the map, optional Nothing receiver, or Host Object; a Host Object's property also charges the value's conversion, as a Capability result does",
+		},
+		CostsTableRateEntry{
+			Key:   "get-element",
+			Fuel:  "3 + scalars(input) / 8",
+			Input: "the selector; the Host's collection callback also charges its declared cost and the result's conversion, as a property getter does",
+		},
+		CostsTableRateEntry{
+			Key:   "count-elements",
+			Fuel:  "3",
+			Input: "the Host Object; the Host's count callback also charges its declared cost and the result's conversion, as a property getter does",
 		},
 		CostsTableRateEntry{
 			Key:   "property",

@@ -251,11 +251,13 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not in a guard",
-            .raised_when = "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, or reads a non-id key of a Host Object known at load; a computed key on such an object must be the text literal id",
-            .at = "the call's name, the Lambda's `given`, or the key's `the` or `'s`",
+            .raised_when = "A Guard calls anything but a Built-in, a call through a name that shadows a Built-in included, holds a Lambda, reads a non-id key of a Host Object known at load, or holds an Object Element Reference or Element Count; a computed key on such an object must be the text literal id",
+            .at = "the call's name, the Lambda's `given`, the key's `the` or `'s`, or the reference's first token",
             .sources = &.{
                 "ADR 0025",
+                "ADR 0100",
                 "#115",
+                "#1143",
             },
         },
         .{
@@ -370,7 +372,7 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not a property",
-            .raised_when = "`set` writes a bare variable, not a key of a Host Object",
+            .raised_when = "`set` writes a bare variable or an Object Element Reference, not a key of a Host Object",
             .at = "`set`",
             .sources = &.{
                 "ADR 0016",
@@ -379,7 +381,7 @@ pub const diagnostics: DiagnosticsTable = .{
         },
         .{
             .code = "not constant",
-            .raised_when = "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, or calls `random`",
+            .raised_when = "The initialiser of a Constant or a Script Variable, or a parameter's default, uses anything but literals, Constants declared above it and Built-ins, calls `random`, or holds an Object Element Reference or Element Count",
             .at = "the first token that isn't allowed",
             .sources = &.{
                 "ADR 0035",

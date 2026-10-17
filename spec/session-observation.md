@@ -107,10 +107,10 @@ JSON is compact UTF-8 with envelope/declaration object keys in Unicode code-poin
 
 | `type` | Other fields | Meaning |
 | --- | --- | --- |
-| `kind` | `name`, `props`, `parentKinds` | Register the Object Kind; properties use the worker `define-object-kind` declaration model, sorted by name. |
+| `kind` | `name`, `props`, `parentKinds`, optional `elements` | Register the Object Kind; properties use the worker `define-object-kind` declaration model, sorted by name, and `elements` is its Object Collection declaration when it has one. |
 | `object` | `object` | Register an identity before its first use; no native pointer is recorded. |
 | `setup` | `objects` | Initial well-known bindings, a map from Script binding name to object reference, before session Load. |
-| `property-begin` | `crossing`, `object`, `property`, `operation`, optional `value` | Start an actual Host getter/setter callback. `operation` is `get` or `set`; `value` is present only for a set. |
+| `property-begin` | `crossing`, `object`, `property`, `operation`, optional `value` or `selector` | Start an actual Host getter/setter or collection callback. `operation` is `get` or `set`, or for `property` `elements` `count`, `at` or `find`; `value` is present only for a set, and `selector` only for `at` and `find`. |
 | `property-end` | `crossing`, `reply` | Finish that callback with exactly one worker `prop-result` alternative (`value`, `ok`, `fail` or `hostError`). |
 | `input` | `request`, `reply` | A Host action made outside ordinary Session Command translation, with worker-protocol fields and its synchronous reply. |
 | `function` | `handle`, `exposure`, `path` | Bind a portable handle to a Function Value in a Core-to-Host value exposure, as below. |

@@ -939,7 +939,7 @@ var Corpus = CorpusTable{
 			Ids: []string{
 				"run",
 			},
-			Is: "a Host Object property call",
+			Is: "a Host Object property call, or a call to its Object Kind's collection",
 			Key: []CorpusTableRecordEntryKeyEntry{
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "object",
@@ -949,21 +949,30 @@ var Corpus = CorpusTable{
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "name",
 					Type: "id",
-					Is:   "the property",
+					Is:   "the property, or `elements` for a collection call",
 				},
 				CorpusTableRecordEntryKeyEntry{
 					Key:  "op",
 					Type: "word",
-					Is:   "a read or a write",
+					Is:   "a read or a write, or a collection's count, positional lookup or name lookup",
 					Words: []string{
 						"get",
 						"set",
+						"count",
+						"at",
+						"find",
 					},
+				},
+				CorpusTableRecordEntryKeyEntry{
+					Key:      "selector",
+					Type:     "value",
+					Is:       "for `at`, the nonzero integer position, and for `find`, the text name",
+					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
 					Key:      "value",
 					Type:     "value",
-					Is:       "the value read or written",
+					Is:       "the value read or written, or the collection call's answer",
 					Optional: true,
 				},
 				CorpusTableRecordEntryKeyEntry{
@@ -1957,6 +1966,14 @@ var Corpus = CorpusTable{
 			},
 		},
 		CorpusTableSetupEntry{
+			Table: "objectKinds",
+			Key:   "elements",
+			Is:    "its optional Object Collection, `{shape, countCost, atCost, findCost}`",
+			Kinds: []string{
+				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
 			Table: "objects",
 			Key:   "kind",
 			Is:    "a Host Object's kind",
@@ -1978,6 +1995,14 @@ var Corpus = CorpusTable{
 			Table: "objects",
 			Key:   "props",
 			Is:    "the values its properties start with, a table from property name to a value in the display form, as text",
+			Kinds: []string{
+				"trace",
+			},
+		},
+		CorpusTableSetupEntry{
+			Table: "objects",
+			Key:   "elements",
+			Is:    "the members of its Object Kind's collection, in order, each `{name, object}` with the object in the display form, as text",
 			Kinds: []string{
 				"trace",
 			},

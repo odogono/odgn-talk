@@ -570,6 +570,28 @@ errors = ["wrong kind"]
 does = "`the optional (k) of x`, with the key below the receiver: after both are evaluated, the key must be text, then reads as `get-optional-key` does"
 
 [[instruction]]
+name = "get-element"
+group = "access"
+operands = []
+pops = 2
+pushes = 1
+suspends = false
+cost = "get-element"
+errors = ["wrong kind", "object gone", "out of domain", "restricted operation"]
+does = "`element s of o`: pops the Host Object and, below it, the selector, and pushes the member the Object Kind's collection gives, or Nothing"
+
+[[instruction]]
+name = "count-elements"
+group = "access"
+operands = []
+pops = 1
+pushes = 1
+suspends = false
+cost = "count-elements"
+errors = ["wrong kind", "object gone", "out of domain", "restricted operation"]
+does = "`the number of elements of o`: pops the Host Object and pushes its collection's count"
+
+[[instruction]]
 name = "property"
 group = "access"
 operands = ["property"]
