@@ -4490,7 +4490,7 @@ pub const Group = struct {
                 run.clauses_seen += 1;
                 if (b.params.len != d.args.len) continue;
                 run.clause = run.clauses_seen;
-                if (try g.tryClause(s, run, place.library, @intCast(i), d.args, d.during, false)) |end| return end;
+                if (try g.tryClause(s, run, place.library, @intCast(i), d.args, false)) |end| return end;
             }
         };
         if (!fallback) {
@@ -4506,7 +4506,7 @@ pub const Group = struct {
             if (b.kind != .fallback) continue;
             run.fallback = true;
             run.clause = b.clause orelse 1;
-            if (try g.tryClause(s, run, place.library, @intCast(i), &.{message}, null, true)) |end| return end;
+            if (try g.tryClause(s, run, place.library, @intCast(i), &.{message}, true)) |end| return end;
         }
         return .unhandled;
     }
@@ -4536,17 +4536,12 @@ pub const Group = struct {
         if (deciding) run.verdict = true else try g.takePart(run.delivery, .allowed);
     }
 
-    fn tryClause(g: *Group, s: *Script, run: *Run, library: ?*Library, body: u32, args: []const *Value, during: ?*Value, fallback: bool) !?Outcome {
+    fn tryClause(g: *Group, s: *Script, run: *Run, library: ?*Library, body: u32, args: []const *Value, fallback: bool) !?Outcome {
         const unit = s.unitIn(library);
         const b = unit.bodies[body];
         run.clause_body = body;
         run.clause_unit = library;
         try g.pushFrameIn(run, library, body, args);
-        if (b.during) |slot| if (during) |x| {
-            const f = &run.frames.items[run.frames.items.len - 1];
-            f.locals[slot].release();
-            f.locals[slot] = x.retain();
-        };
         // Dispatch charges the clause at the body's first instruction,
         // together with that instruction's own charge.
         run.clause_fuel = 4;
@@ -6984,6 +6979,12 @@ pub const Group = struct {
             };
             made += 1;
         }
+        // `during` describes this Run's failed Delivery. Every error
+        // clause sees it, including local calls and later called clauses.
+        if (b.during) |slot| if (run.delivery.during) |during| {
+            locals[slot].release();
+            locals[slot] = during.retain();
+        };
         const restricted = run.frames.items.len > 0 and run.frames.items[run.frames.items.len - 1].restricted;
         try run.frames.append(g.gpa, .{ .library = library, .body = body, .pc = b.first, .locals = locals, .restricted = restricted });
     }
