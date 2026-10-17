@@ -218,6 +218,11 @@ TS, Go and Zig reproduce each Trace in ordinary and Save/Restore replay, and
 the Disassembly. All nine keep their `Unblessed` markers pending first-blessing review; agreement
 is not approval.
 
+The object element reference cases (#1143), including
+`disassembly/object-elements` and two `restricted-kit` Traces, received human
+first-blessing approval on 2026-10-17; see the
+[approval record](../docs/reviews/object-element-references/README.md).
+
 The `load-diagnostics/container-properties` Trace, introduced in #680 for #670,
 received human first-blessing approval on 2026-10-12 for #681. It pins direct,
 intermediate and possessive Built-in property refusals and valid key/property

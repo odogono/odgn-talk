@@ -1,4 +1,4 @@
-# Unblessed: Object Element References, Element Counts and their errors (#1143); first blessing awaits human review.
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
 
 > load board identity=5f740c237902b0e35b2466a33145e2ab1291727bd87dc29949c62e9a3e17bd9a
 > deliver d1 to=board message=paint args=[1, 2]

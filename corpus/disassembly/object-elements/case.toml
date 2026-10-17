@@ -1,4 +1,4 @@
-# Unblessed: Object Element References and Element Counts lower to get-element and count-elements at their first tokens, through `set` property targets and ordinals (#1143); first blessing awaits human review.
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
 kind = "disassembly"
 
 [versions]

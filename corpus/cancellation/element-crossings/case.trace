@@ -1,4 +1,4 @@
-# Unblessed: Stop and cancellation at Object Collection crossings (#1143); first blessing awaits human review.
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
 > load s identity=f31b38b0c5706f1d7f8f26bee75a8d50edb3d0af569191fee61b3650601f7404
 > load t identity=8cdcf95b1dc390b3d14fc4f3ef23bd2e17e07e625bc320f2e758d9e5bcb2f41d
 > deliver d1 to=s message=go

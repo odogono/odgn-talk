@@ -1,4 +1,4 @@
-# Unblessed: Host failures of Object Collection callbacks (#1143); first blessing awaits human review.
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
 
 > load s identity=5d9f3f98ba5780b3f830171a8d36f267c72e1bfbc3bd288a015ce51a3f159cd5
 > deliver d1 to=s message=go

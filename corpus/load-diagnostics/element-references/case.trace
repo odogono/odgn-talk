@@ -1,4 +1,4 @@
-# Unblessed: load diagnostics for Object Element References and Element Counts (#1143); first blessing awaits human review.
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
 > load guard-reference identity=f559ffe6080c9b1e05f10e3cea57b07a2f3ebab391065c1d4655e7ea55a8f426
 diag guard-reference code="not in a guard" pos=1:15
 > load guard-count identity=0982f53163b7af778bf11e17cb4979d7842ddc9f7b385506bd9c8216c4458d23
