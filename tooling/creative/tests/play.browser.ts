@@ -524,6 +524,42 @@ end click`;
   };
 };
 
+export const runFrameBrowserTests = async () => {
+  const project = createProject('Frames');
+  const button = createElement('button', 'counter');
+  project.pages[0]!.elements.push(button);
+  project.pages[0]!.script = `script variable frames = 0
+on frame elapsed
+ add 1 to frames
+ set the label of counter to "" & frames
+end frame`;
+  const shell = mountStack(project);
+  mountPlay(shell);
+  const toggle = document.querySelector<HTMLButtonElement>(
+    '#menu [aria-pressed]',
+  )!;
+  const counter = () =>
+    Number(
+      document.querySelector('#reader [data-element="counter"]')?.textContent,
+    );
+  toggle.click();
+  await until(() => counter() >= 10);
+  toggle.click();
+  const stopped = document.querySelector(
+    '#page [data-element="counter"]',
+  )?.textContent;
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert(
+    document.querySelector('#page [data-element="counter"]')?.textContent ===
+      stopped,
+    'Frames continued in Edit',
+  );
+  return {
+    passed: true,
+    checks: ['frames reach a Page Script', 'no frames in Edit'],
+  };
+};
+
 export const runUserBrowserTests = async () => {
   const project = createProject('User prompts');
   const button = createElement('button', 'button1');

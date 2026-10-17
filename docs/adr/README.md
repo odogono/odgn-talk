@@ -96,3 +96,4 @@ Find a decision by title, then read its rationale and any supersession notice. T
 - [0092: The Elixir Host represents Bytes and ordered Maps as structs](0092-the-elixir-host-represents-bytes-and-ordered-maps-as-structs.md)
 - [0093: Folio browses in place](0093-folio-browses-in-place.md)
 - [0094: Host Commands are Command Call spellings of granted Operations](0094-host-commands-are-command-call-spellings-of-granted-operations.md)
+- [0095: Folio delivers a frame message to Scripts that handle it](0095-folio-delivers-a-frame-message-to-scripts-that-handle-it.md)
