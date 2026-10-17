@@ -1,0 +1,46 @@
+-- board.talk: the element-references case's Script.
+
+script variable log = []
+
+on paint r, c
+  set the fill of element ("cell_" & r & "_" & c) of thisPage to "red"
+  put the fill of element ("cell_" & r & "_" & c) of thisPage after log
+  set the label of the second element of thisPage to "Stop"
+end paint
+
+on look
+  put the number of elements of thisPage after log
+  put element 1 of thisPage after log
+  put element -1 of thisPage after log
+  put the last element of thisPage after log
+  put element "go" of thisPage after log
+  put element "nope" of thisPage after log
+  put element 4 of thisPage after log
+  put element -4 of thisPage after log
+  put element 0 of thisPage after log
+  put element 99999999999999999999 of thisPage after log
+  put element "3" of thisPage after log
+  put elements 3 of thisPage otherwise "none" after log
+  put the number of elements of emptyPage after log
+  put element 1 of emptyPage after log
+end look
+
+on wrong
+  repeat for each [s, o] in [[1.5, thisPage], [1..2, thisPage], [true, thisPage], [1, 5], [1, cell], ["x", cell], [1.5, 5]]
+    try
+      put element s of o after log
+    catch e
+      put e after log
+    end try
+  end repeat
+  try
+    put the number of elements of cell after log
+  catch e
+    put e after log
+  end try
+  try
+    set the fill of element 9 of thisPage to "red"
+  catch e
+    put e after log
+  end try
+end wrong

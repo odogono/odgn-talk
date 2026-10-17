@@ -16,6 +16,7 @@ bytes/value-encoding
 cancellation/broadcast-recipients
 cancellation/cleanup-errors-and-limits
 cancellation/cleanup-preemption
+cancellation/element-crossings
 cancellation/failed-operation-crossings
 cancellation/host-crossings
 cancellation/owner-disposal-and-stop
@@ -161,6 +162,7 @@ disassembly/expressions
 disassembly/fenced-text
 disassembly/messages-and-waiting
 disassembly/nothing-defaults
+disassembly/object-elements
 disassembly/recovery-offers
 disassembly/tell-block
 disassembly/timeout-block
@@ -236,6 +238,7 @@ load-diagnostics/container-properties
 load-diagnostics/default-order
 load-diagnostics/duplicate-key
 load-diagnostics/duplicate-name
+load-diagnostics/element-references
 load-diagnostics/empty-interpolation
 load-diagnostics/empty-join
 load-diagnostics/empty-timeout
@@ -290,6 +293,8 @@ nothing-defaults/host-objects
 nothing-defaults/stdlib-attribution
 nothing-defaults/values
 objects/argument-labels
+objects/element-host-failures
+objects/element-references
 objects/guard-keys
 objects/implicit-property-targets
 objects/message-path

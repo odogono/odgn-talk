@@ -49,6 +49,8 @@ export type Expr =
       kind: string;
       pos: Pos;
     }
+  | { base: Expr; index: Expr | number; k: 'element'; pos: Pos }
+  | { base: Expr; k: 'element-count'; pos: Pos }
   | { items: { e: Expr; spread: boolean }[]; k: 'list'; pos: Pos }
   | { entries: { key: string; value: Expr }[]; k: 'map'; pos: Pos }
   | { k: 'pattern'; pattern: TextPattern; pos: Pos }
@@ -874,6 +876,14 @@ const convert = (node: SemanticNode, built: Map<SemanticNode, unknown>) => {
         .slice(0, index)
         .map(child => (child as Leaf).text)
         .join(' ');
+      if (kind === 'element' || kind === 'elements') {
+        return {
+          k: 'element',
+          pos: at,
+          index: of<Expr>(children[index]),
+          base: of<Expr>(children.at(-1)),
+        } satisfies Expr;
+      }
       return {
         k: 'chunk',
         pos: at,
@@ -1648,11 +1658,17 @@ const the = (node: SemanticNode, of: Of): Expr => {
   }
   if (second.kind === 'node') {
     const key = of<string>(second);
+    if (key === 'number' && isToken(children[3], 'elements')) {
+      return { k: 'element-count', pos: at, base: base() };
+    }
     return properties.has(key)
       ? { k: 'property', pos: at, name: key, base: base(), delimiter: null }
       : { k: 'key', pos: at, key, base: base() };
   }
   const index = ordinals.get(second.text);
+  if (index !== undefined && isToken(children[2], 'element')) {
+    return { k: 'element', pos: at, index, base: base() };
+  }
   const ofAt = children.findIndex(child => isToken(child, 'of'));
   const kind = children
     .slice(2, ofAt)

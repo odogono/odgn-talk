@@ -47,7 +47,7 @@ func Supported(i lower.Instruction) bool {
 		return true
 	case generated.OpEqual, generated.OpNotEqual, generated.OpLess, generated.OpGreater, generated.OpLessOrEqual, generated.OpGreaterOrEqual:
 		return true
-	case generated.OpList, generated.OpListAppend, generated.OpListExtend, generated.OpMap, generated.OpGetKey, generated.OpGetKeyComputed, generated.OpGetOptionalKey, generated.OpGetOptionalKeyComputed, generated.OpSetProperty, generated.OpSetPropertyComputed, generated.OpProperty, generated.OpPropertyDelimited:
+	case generated.OpList, generated.OpListAppend, generated.OpListExtend, generated.OpMap, generated.OpGetKey, generated.OpGetKeyComputed, generated.OpGetOptionalKey, generated.OpGetOptionalKeyComputed, generated.OpSetProperty, generated.OpSetPropertyComputed, generated.OpProperty, generated.OpPropertyDelimited, generated.OpGetElement, generated.OpCountElements:
 		return true
 	case generated.OpChunkGet, generated.OpChunkGetDelimited, generated.OpChunkSet, generated.OpChunkSetDelimited, generated.OpChunkDelete, generated.OpChunkDeleteDelimited, generated.OpTestChunk, generated.OpTestChunkDelimited:
 		return true

@@ -369,6 +369,20 @@ var Grammar = GrammarTable{
 			},
 		},
 		GrammarTableContextualEntry{
+			Word: "element",
+			Positions: []string{
+				"operand position, before a token that can start an index (an Object Element Reference)",
+				"after `the` and an ordinal (an ordinal Object Element Reference)",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "elements",
+			Positions: []string{
+				"operand position, before a token that can start an index (an Object Element Reference)",
+				"after `the number of`, before `of` (an Element Count)",
+			},
+		},
+		GrammarTableContextualEntry{
 			Word: "empty",
 			Positions: []string{
 				"after `is` or `is not`",
@@ -459,6 +473,12 @@ var Grammar = GrammarTable{
 			Word: "next",
 			Positions: []string{
 				"at the start of a statement, before `repeat`",
+			},
+		},
+		GrammarTableContextualEntry{
+			Word: "number",
+			Positions: []string{
+				"after `the`, before `of elements of` (an Element Count)",
 			},
 		},
 		GrammarTableContextualEntry{
@@ -830,7 +850,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableDecisionEntry{
 			Name: "chunk-word",
-			Rule: "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name",
+			Rule: "a chunk word, `element` or `elements` followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression or an Object Element Reference; otherwise it is a name",
 		},
 		GrammarTableDecisionEntry{
 			Name: "code-point",
@@ -851,6 +871,10 @@ var Grammar = GrammarTable{
 		GrammarTableDecisionEntry{
 			Name: "during",
 			Rule: "after a comma in a Handler head, `during` followed by a word is the modifier",
+		},
+		GrammarTableDecisionEntry{
+			Name: "element-count",
+			Rule: "after `the number of`, `elements` followed by `of` is an Element Count; otherwise `number` was an ordinary key",
 		},
 		GrammarTableDecisionEntry{
 			Name: "every-chunk",
@@ -886,7 +910,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableDecisionEntry{
 			Name: "ordinal",
-			Rule: "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
+			Rule: "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk, and followed by `element` an ordinal Object Element Reference; otherwise it is a key",
 		},
 		GrammarTableDecisionEntry{
 			Name: "ordering-words",
@@ -992,7 +1016,7 @@ var Grammar = GrammarTable{
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "not a container",
-			RaisedWhen: "A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token",
+			RaisedWhen: "A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token",
 		},
 		GrammarTableSyntaxErrorEntry{
 			Code:       "unterminated interpolation",

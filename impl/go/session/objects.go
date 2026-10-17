@@ -130,6 +130,22 @@ func (o *Objects) DefineKind(def talk.ObjectKindDef) (*talk.ObjectKind, error) {
 		parents = []string{}
 	}
 	e := Envelope{"type": rawJSON("kind"), "name": rawJSON(def.Name), "props": rawJSON(rows), "parentKinds": rawJSON(parents)}
+	if def.Elements != nil {
+		elements := *def.Elements
+		e["elements"] = elementsDeclaration(&elements)
+		count, at, find := elements.Count, elements.At, elements.Find
+		elements.Count = func(x *talk.Object) (talk.Value, error) {
+			return o.collection(x, "count", talk.Nothing, func() (talk.Value, error) { return count(x) })
+		}
+		elements.At = func(x *talk.Object, index int64) (talk.Value, error) {
+			return o.collection(x, "at", talk.Int(index), func() (talk.Value, error) { return at(x, index) })
+		}
+		elements.Find = func(x *talk.Object, name string) (talk.Value, error) {
+			selector, _ := talk.Text(name)
+			return o.collection(x, "find", selector, func() (talk.Value, error) { return find(x, name) })
+		}
+		def.Elements = &elements
+	}
 	encoded := writeEnvelope(e)
 	if old, ok := o.declarations[def.Name]; ok {
 		if old != encoded {
@@ -197,6 +213,13 @@ func (o *Objects) registrations() {
 					prop.Set = func(*talk.Object, talk.Value) error { return nil }
 				}
 				def.Props = append(def.Props, prop)
+			}
+			if raw, ok := e["elements"]; ok {
+				def.Elements = decodeEnvelopeElements(raw)
+				external := func() (talk.Value, error) { panic("external collection callback in replay") }
+				def.Elements.Count = func(*talk.Object) (talk.Value, error) { return external() }
+				def.Elements.At = func(*talk.Object, int64) (talk.Value, error) { return external() }
+				def.Elements.Find = func(*talk.Object, string) (talk.Value, error) { return external() }
 			}
 			_, err := o.DefineKind(def)
 			must(err)
@@ -312,6 +335,15 @@ func (o *Objects) decode(raw []byte) talk.Value {
 	}
 	return x.(talk.Value)
 }
+
+// collection records an Object Collection callback (#1143) as a property
+// crossing on `elements`, with its selector for `at` and `find`.
+func (o *Objects) collection(x *talk.Object, op string, selector talk.Value, callback func() (talk.Value, error)) (talk.Value, error) {
+	return o.property(x, "elements", op, selector, callback)
+}
+
+// property records one crossing; input is a setter's value or a collection
+// lookup's selector.
 func (o *Objects) property(x *talk.Object, name, op string, input talk.Value, callback func() (talk.Value, error)) (result talk.Value, err error) {
 	if o.active {
 		envelopeError("reentrant callback")
@@ -325,6 +357,10 @@ func (o *Objects) property(x *talk.Object, name, op string, input talk.Value, ca
 	if op == "set" {
 		begin["value"] = o.Encode(input)
 	}
+	selector := op == "at" || op == "find"
+	if selector {
+		begin["selector"] = o.Encode(input)
+	}
 	if o.playback {
 		defer func() {
 			if p := recover(); p != nil {
@@ -335,7 +371,7 @@ func (o *Objects) property(x *talk.Object, name, op string, input talk.Value, ca
 			}
 		}()
 		e := o.consume("property-begin")
-		if envelopeCounter(e["crossing"]).Cmp(o.crossing) != 0 || envelopeRef(e["object"]) != r || envelopeText(e["property"]) != name || envelopeText(e["operation"]) != op || op == "set" && string(e["value"]) != string(begin["value"]) {
+		if envelopeCounter(e["crossing"]).Cmp(o.crossing) != 0 || envelopeRef(e["object"]) != r || envelopeText(e["property"]) != name || envelopeText(e["operation"]) != op || op == "set" && string(e["value"]) != string(begin["value"]) || selector && string(e["selector"]) != string(begin["selector"]) {
 			envelopeError("unmatched property crossing")
 		}
 		o.active = true
@@ -353,7 +389,7 @@ func (o *Objects) property(x *talk.Object, name, op string, input talk.Value, ca
 		}
 		reply := envelopeObject(end["reply"])
 		if raw, ok := reply["value"]; ok {
-			if op != "get" {
+			if op == "set" {
 				envelopeError("value for setter")
 			}
 			return o.decode(raw), nil

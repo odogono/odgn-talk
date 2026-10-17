@@ -114,6 +114,10 @@ type zigGroup struct {
 // zigFeatures are the guest protocol features the adapter requests and requires.
 var zigFeatures = []any{"paused-inputs-v1", "abandoned-before-needs-v1", "crossing-trace-v1", "climb-v1", "function-gone-v1", "standard-refinements-v1", "inline-inputs-v1", "restore-bindings-v1", "group-exchanges-v1"}
 
+// zigOptionalFeatures are used when the guest offers them: Object Collection
+// declarations need object-elements-v1 (#1143).
+var zigOptionalFeatures = []any{"object-elements-v1"}
+
 func newZigGroup(g *Group) groupBackend { return newZigSharedGroup(g) }
 
 // A restore needs an initialized Core without an existing Group handle, so
@@ -982,9 +986,19 @@ func (b *zigGroup) groupHandle() string {
 // checkHello opens the guest's session and checks it offers every feature
 // the adapter requires.
 func (b *zigGroup) checkHello() error {
-	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
+	hello, err := b.send("hello", map[string]any{"protocol": 1, "features": append(slices.Clone(zigFeatures), zigOptionalFeatures...)})
+	if err != nil {
+		// A guest refuses a feature it does not know, leaving its session
+		// unchanged, so ask again without the optional ones.
+		hello, err = b.send("hello", map[string]any{"protocol": 1, "features": zigFeatures})
+	}
 	if err == nil {
 		features := hello.get("features").items()
+		for _, offered := range features {
+			if zigText(offered) == "object-elements-v1" {
+				b.reg.elements = true
+			}
+		}
 		for _, required := range zigFeatures {
 			found := false
 			for _, offered := range features {

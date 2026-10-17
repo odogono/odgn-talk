@@ -188,9 +188,10 @@ A property of any other value raises `wrong kind`. `the items of s delimited by 
 
 ## Chunk Expressions
 
-The [object element contract](embedding/object-elements.md) separately
-specifies scalar Host Object references and counts. Those forms are staged
-for implementation and are not yet part of the active chunk grammar below.
+An Object Element Reference, `element 3 of thisPage`, and an Element Count,
+`the number of elements of thisPage`, read a Host Object's collection rather
+than a part of a value. The [object element contract](embedding/object-elements.md)
+specifies them; they are not text/list chunks.
 
 A Chunk Expression reads part of a value by kind and position: `word 2 of line 3 of report` ([ADR 0011](../docs/adr/0011-text-is-nfc-grapheme-clusters-compared-exactly.md)). A chunk word's singular and plural are the same chunk kind.
 

@@ -9,7 +9,11 @@ import (
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-func (g *Group) property(s *Script, x *execution, object corevalue.Value, name string, set bool, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value) {
+func (g *Group) property(s *Script, x *execution, object corevalue.Value, name, op string, input corevalue.Value, pay func(int64, int64) bool, reports *[]Report, boundary func()) (corevalue.Value, *corevalue.Value) {
+	if op != "get" && op != "set" {
+		return g.elements(s, x, object, op, input, pay, reports, boundary)
+	}
+	set := op == "set"
 	o := object.Object().Handle.(*Object) // only Group-checked Values reach execution
 	key := "get-key"
 	if set {

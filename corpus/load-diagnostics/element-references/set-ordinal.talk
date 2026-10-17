@@ -1,0 +1,3 @@
+on go
+  set the last element of thisPage to 1
+end go

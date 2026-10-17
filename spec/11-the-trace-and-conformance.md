@@ -195,7 +195,7 @@ A record is written when what it records happens, so a Trace is in the order the
 - **A reissued call,** settled with `how=reissue`, crosses to the Host again as the first Pump drains the `settle`: a `call` record under its saved call id, before any Stretch. It has `charged` only if the Host function draws with `Charge`, since the declared cost isn't charged again.
 - **Guard regions:** an error raised in a guard region, which skips its clause or branch, is written as `guard-skip` with its code, and not as `raise`. A Guard that gives something other than a boolean is a `guard-skip` with that `value`.
 - **An unhandled Delivery** is written as its Run's `seg`, with `end=unhandled`, then its `run`, then the `unhandled` record.
-- **Every Host crossing** is recorded: each Capability call as `call`, with an immediate call's result or error and the Fuel it charged, and each property call as `prop`. So a Trace carries every answer a Host gave, and replays without that Host ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)).
+- **Every Host crossing** is recorded: each Capability call as `call`, with an immediate call's result or error and the Fuel it charged, and each property or collection call as `prop`. So a Trace carries every answer a Host gave, and replays without that Host ([chapter 7](07-libraries-and-the-standard-library.md#standard-capabilities)).
 - **Errors:** a Core-raised error map is written without its `message`, wherever the map appears, whose wording is outside parity. Every other key is kept, in the order [chapter 6](06-errors-and-limits.md#errors) gives, and so is the `message` of an error a Script or a Host made ([chapter 6](06-errors-and-limits.md#messages)). Text a Script builds from a Core-raised `message` is outside parity too, and no case may depend on it.
 
 ### Host Inputs
@@ -327,7 +327,7 @@ A record is written when what it records happens, so a Trace is in the order the
 | `seg` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `fuel`, `alloc`, `state`, `end`, `until`?, `n`?, `value`? | a stretch of a Run, from its start, a resume or its continuation after a preemption, to the end of its Segment; `how` is `start`, `resume` or `continue` |
 | `preempt` | `run`, `how` | `delivery`?, `broadcast`?, `from`?, `handler`?, `fallback`?, `clause`?, `fn`?, `by`, `fuel`, `alloc` | a stretch of a Run that a Fuel Slice or the Fuel cap preempted, from its start, a resume or its continuation after a preemption; `how` is as for `seg` |
 | `call` | `call` | `op`, `args`, `result`?, `error`?, `charged`?, `automatic`? | a Capability call |
-| `prop` | `run` | `object`, `name`, `op`, `value`?, `error`? | a Host Object property call |
+| `prop` | `run` | `object`, `name`, `op`, `selector`?, `value`?, `error`? | a Host Object property call, or a call to its Object Kind's collection |
 | `send` | `from` | `to`, `message`?, `fn`?, `args`?, `wait`? | a message a Script sent; `from` is the call id of a send that waits for its reply, and otherwise the sending Run |
 | `raise` | `run` | `code`, `at`, `pos` | an error raised, whether or not it is caught |
 | `guard-skip` | `run` | `at`, `pos`, `code`?, `value`? | a clause or branch skipped because its test raised an error or its Guard gave something other than a boolean |
@@ -388,9 +388,10 @@ A record is written when what it records happens, so a Trace is in the order the
 | `call` | `charged` | `count` | the Fuel `Charge` drew |
 | `call` | `automatic` | `word` | Core-triggered scope abandonment; no declared cost, Charge or conversion cost applies: `yes` |
 | `prop` | `object` | `value` | the object |
-| `prop` | `name` | `id` | the property |
-| `prop` | `op` | `word` | a read or a write: `get`, `set` |
-| `prop` | `value` | `value` | the value read or written |
+| `prop` | `name` | `id` | the property, or `elements` for a collection call |
+| `prop` | `op` | `word` | a read or a write, or a collection's count, positional lookup or name lookup: `get`, `set`, `count`, `at`, `find` |
+| `prop` | `selector` | `value` | for `at`, the nonzero integer position, and for `find`, the text name |
+| `prop` | `value` | `value` | the value read or written, or the collection call's answer |
 | `prop` | `error` | `value` | for a call that failed, the Host's error, as for `call` |
 | `send` | `to` | `target` | the receiver; for a Command Call sent up the Message Path, the Script it reaches |
 | `send` | `message` | `id` | the message's name, for a message |
@@ -612,9 +613,11 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 | `[objectKinds]` | `name` | an Object Kind's name | trace, encoding |
 | `[objectKinds]` | `parentKinds` | the kinds its objects' parents may have | trace, encoding |
 | `[objectKinds]` | `props` | its properties, each `{name, shape, readOnly, getCost, setCost}` | trace |
+| `[objectKinds]` | `elements` | its optional Object Collection, `{shape, countCost, atCost, findCost}` | trace |
 | `[objects]` | `kind` | a Host Object's kind | trace, encoding |
 | `[objects]` | `id` | its stable id | trace, encoding |
 | `[objects]` | `props` | the values its properties start with, a table from property name to a value in the display form, as text | trace |
+| `[objects]` | `elements` | the members of its Object Kind's collection, in order, each `{name, object}` with the object in the display form, as text | trace |
 | `[libraries]` | `name` | a user Library's name | trace, disassembly |
 | `[libraries]` | `version` | its version, as text | trace, disassembly |
 | `[libraries]` | `source` | the file that holds its source | trace, disassembly |
@@ -636,6 +639,7 @@ A Standard Capability supplies its fixed declarations, including when compiling 
 - **Order:** Operation Declarations are ordered by name within their Capability, and Scripts and Libraries load in the order of the Trace's `load` and `add-library` lines, not of `case.toml`.
 - **Host Objects** are made before the first Host Input, in the order listed. Their parents are set by `set-parent` lines, which the Trace records like any Host Input.
 - **Properties** start with the values `case.toml` gives. The runner's `Get` returns the current value and its `Set` stores one, and both are recorded as `prop`.
+- **Collections** hold the members `case.toml` gives, resolved after every Host Object is made; a duplicate name, an unknown member or one outside the collection's Shape fails the case, and a kind with no collection may list none. A receiver whose kind has a collection and lists no members has an empty one. The runner's `Count`, `At` and `Find` answer from that list, `At` counting a negative position from the end, and each is recorded as `prop` with `name=elements`.
 
 A Shape is written as one of these:
 

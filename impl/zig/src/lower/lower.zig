@@ -2253,6 +2253,16 @@ const Frame = struct {
                 } else try f.emit(.property, &.{.{ .text = try f.propertyName(p) }}, at, "");
             },
             .chunk => try f.chunkExpr(e, null),
+            // ⟦s⟧ ⟦o⟧ get-element; an ordinal is its integer, at `the` (#1143).
+            .element => |el| {
+                if (el.index) |i| try f.expr(i) else try f.constAt(try f.numberConstant(ordinalIndex(l.text(el.ordinal.?))), at);
+                try f.expr(el.of);
+                try f.emit(.get_element, &.{}, at, "");
+            },
+            .element_count => |of| {
+                try f.expr(of);
+                try f.emit(.count_elements, &.{}, at, "");
+            },
             .whose => |w| try f.whose(w),
             .list => |items| {
                 var spread = false;
@@ -2769,6 +2779,11 @@ fn exprReads(l: *Lowerer, e: *const Expr, out: *std.ArrayList([]const u8)) Alloc
             try exprReads(l, c.of, out);
             if (c.delimiter) |d| try exprReads(l, d, out);
         },
+        .element => |el| {
+            if (el.index) |i| try exprReads(l, i, out);
+            try exprReads(l, el.of, out);
+        },
+        .element_count => |of| try exprReads(l, of, out),
         .list => |items| for (items) |i| try exprReads(l, i.value, out),
         .map => |entries| for (entries) |m| try exprReads(l, m.value, out),
         .call => |c| {

@@ -2129,6 +2129,17 @@ class BodyLowering {
         return void this.emit(at, 'property', e.name);
       case 'chunk':
         return void (yield* this.chunkRead(e));
+      case 'element':
+        if (typeof e.index === 'number') {
+          this.constant(at, String(e.index));
+        } else {
+          yield this.expr(e.index);
+        }
+        yield this.expr(e.base);
+        return void this.emit(at, 'get-element');
+      case 'element-count':
+        yield this.expr(e.base);
+        return void this.emit(at, 'count-elements');
       case 'list':
         if (!e.items.some(item => item.spread)) {
           for (const item of e.items) {

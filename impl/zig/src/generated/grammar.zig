@@ -368,6 +368,20 @@ pub const grammar: GrammarTable = .{
             },
         },
         .{
+            .word = "element",
+            .positions = &.{
+                "operand position, before a token that can start an index (an Object Element Reference)",
+                "after `the` and an ordinal (an ordinal Object Element Reference)",
+            },
+        },
+        .{
+            .word = "elements",
+            .positions = &.{
+                "operand position, before a token that can start an index (an Object Element Reference)",
+                "after `the number of`, before `of` (an Element Count)",
+            },
+        },
+        .{
             .word = "empty",
             .positions = &.{
                 "after `is` or `is not`",
@@ -458,6 +472,12 @@ pub const grammar: GrammarTable = .{
             .word = "next",
             .positions = &.{
                 "at the start of a statement, before `repeat`",
+            },
+        },
+        .{
+            .word = "number",
+            .positions = &.{
+                "after `the`, before `of elements of` (an Element Count)",
             },
         },
         .{
@@ -829,7 +849,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .name = "chunk-word",
-            .rule = "a chunk word followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression; otherwise it is a name",
+            .rule = "a chunk word, `element` or `elements` followed by a token that can start an index, and isn't a FOLLOW-set word, is a Chunk Expression or an Object Element Reference; otherwise it is a name",
         },
         .{
             .name = "code-point",
@@ -850,6 +870,10 @@ pub const grammar: GrammarTable = .{
         .{
             .name = "during",
             .rule = "after a comma in a Handler head, `during` followed by a word is the modifier",
+        },
+        .{
+            .name = "element-count",
+            .rule = "after `the number of`, `elements` followed by `of` is an Element Count; otherwise `number` was an ordinary key",
         },
         .{
             .name = "every-chunk",
@@ -885,7 +909,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .name = "ordinal",
-            .rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk; otherwise it is a key",
+            .rule = "after `the`, an ordinal followed by a singular chunk word (or `code`) is an ordinal chunk, and followed by `element` an ordinal Object Element Reference; otherwise it is a key",
         },
         .{
             .name = "ordering-words",
@@ -991,7 +1015,7 @@ pub const grammar: GrammarTable = .{
         },
         .{
             .code = "not a container",
-            .raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property; reported at the Container's first token",
+            .raised_when = "A Container's root isn't a Name, or its path to the root contains a Built-in property or, outside a `set` property target, an Object Element Reference; reported at the Container's first token",
         },
         .{
             .code = "unterminated interpolation",

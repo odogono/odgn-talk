@@ -134,6 +134,47 @@ const ObjectStore = struct {
     values: std.AutoHashMapUnmanaged(usize, std.StringHashMapUnmanaged(?*c.talk_value)) = .empty,
     /// Every handle, by `<kind>/<id>`.
     handles: std.StringHashMapUnmanaged(*c.talk_object) = .empty,
+    /// Each collection's members, in order, by its receiver's `<kind>/<id>`.
+    members: std.StringHashMapUnmanaged([]const ObjectStore.Member) = .empty,
+    /// The Trace's collection calls, by `<kind>/<id>:<op>`, which answer
+    /// in place of the members when the Trace has one (#1143).
+    recorded: std.StringHashMapUnmanaged(std.ArrayList(ElementRecord)) = .empty,
+
+    const Member = struct { name: []const u8, object: []const u8 };
+    const ElementRecord = struct { selector: ?[]const u8, value: ?[]const u8, err: ?[]const u8 };
+
+    /// The `<kind>/<id>` of a handle.
+    fn keyOf(store: *ObjectStore, o: *const c.talk_object) ?[]const u8 {
+        var it = store.handles.iterator();
+        while (it.next()) |e| if (e.value_ptr.* == o) return e.key_ptr.*;
+        return null;
+    }
+
+    /// The `<kind>/<id>` of `<object kind "id">`.
+    fn shownKey(a: std.mem.Allocator, shown: []const u8) ?[]const u8 {
+        if (!std.mem.startsWith(u8, shown, "<object ")) return null;
+        const rest = shown["<object ".len..];
+        const sp = std.mem.indexOfScalar(u8, rest, ' ') orelse return null;
+        const q = std.mem.lastIndexOfScalar(u8, rest, '"') orelse return null;
+        if (q < sp + 2) return null;
+        return std.fmt.allocPrint(a, "{s}/{s}", .{ rest[0..sp], rest[sp + 2 .. q] }) catch null;
+    }
+
+    /// Keeps each `prop … name=elements` record of a Trace.
+    fn record(store: *ObjectStore, trace: []const u8) !void {
+        var lines = std.mem.splitScalar(u8, trace, '\n');
+        while (lines.next()) |line| {
+            if (!std.mem.startsWith(u8, line, "prop ")) continue;
+            const name = field(line, "name") orelse continue;
+            if (!std.mem.eql(u8, name, "elements")) continue;
+            const object = shownKey(store.a, field(line, "object") orelse return error.MalformedCase) orelse return error.MalformedCase;
+            const op = field(line, "op") orelse return error.MalformedCase;
+            const key = try std.fmt.allocPrint(store.a, "{s}:{s}", .{ object, op });
+            const got = try store.recorded.getOrPut(store.a, key);
+            if (!got.found_existing) got.value_ptr.* = .empty;
+            try got.value_ptr.append(store.a, .{ .selector = field(line, "selector"), .value = field(line, "value"), .err = field(line, "error") });
+        }
+    }
 
     fn deinit(store: *ObjectStore) void {
         var it = store.values.valueIterator();
@@ -192,6 +233,85 @@ fn propSet(context: ?*anyopaque, o: ?*c.talk_object, v: ?*const c.talk_value, er
     return c.TALK_CALL_ANSWERED;
 }
 
+/// A collection call's answer: the Trace's record for it, when it has
+/// one, whose selector must match; otherwise the case's members.
+fn elementAnswer(store: *ObjectStore, o: ?*c.talk_object, op: []const u8, selector: ?[]const u8, live: *const fn (*ObjectStore, []const ObjectStore.Member, ?[]const u8) ?*c.talk_value, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) c.talk_call_end {
+    cross();
+    const key = store.keyOf(o orelse return c.TALK_CALL_BROKEN) orelse return c.TALK_CALL_BROKEN;
+    var buf: [256]u8 = undefined;
+    const record_key = std.fmt.bufPrint(&buf, "{s}:{s}", .{ key, op }) catch return c.TALK_CALL_BROKEN;
+    if (store.recorded.getPtr(record_key)) |queue| if (queue.items.len > 0) {
+        const r = queue.orderedRemove(0);
+        if (!sameSelector(store.a, r.selector, selector)) return c.TALK_CALL_BROKEN;
+        if (r.err) |shown| return if (scriptError(store.a, shown, err)) c.TALK_CALL_FAILED else c.TALK_CALL_BROKEN;
+        const shown = r.value orelse return c.TALK_CALL_BROKEN;
+        result.* = if (if (std.mem.startsWith(u8, shown, "<object ")) store.named(shown) else null) |member| blk: {
+            var v: ?*c.talk_value = null;
+            _ = c.talk_object_value(member, &v);
+            break :blk v;
+        } else parsed(shown) orelse return c.TALK_CALL_BROKEN;
+        return c.TALK_CALL_ANSWERED;
+    };
+    result.* = live(store, store.members.get(key) orelse &.{}, selector) orelse return c.TALK_CALL_BROKEN;
+    return c.TALK_CALL_ANSWERED;
+}
+
+/// Whether a recorded selector is the one the call made: an `at`'s
+/// position as digits, a `find`'s name as text.
+fn sameSelector(a: std.mem.Allocator, recorded: ?[]const u8, made: ?[]const u8) bool {
+    const r = recorded orelse return made == null;
+    const m = made orelse return false;
+    if (r.len > 0 and r[0] != '"') return std.mem.eql(u8, r, m);
+    const v = parsed(r) orelse return false;
+    defer c.talk_value_release(v);
+    var t: [*c]const u8 = null;
+    var n: usize = 0;
+    if (!c.talk_value_as_text(v, &t, &n)) return false;
+    _ = a;
+    return std.mem.eql(u8, t[0..n], m);
+}
+
+fn memberValue(store: *ObjectStore, m: ?ObjectStore.Member) ?*c.talk_value {
+    var v: ?*c.talk_value = null;
+    if (m) |member| {
+        _ = c.talk_object_value(store.named(member.object) orelse return null, &v);
+    } else _ = c.talk_nothing(&v);
+    return v;
+}
+
+fn liveCount(store: *ObjectStore, members: []const ObjectStore.Member, _: ?[]const u8) ?*c.talk_value {
+    _ = store;
+    var v: ?*c.talk_value = null;
+    _ = c.talk_int(@intCast(members.len), &v);
+    return v;
+}
+
+fn liveAt(store: *ObjectStore, members: []const ObjectStore.Member, selector: ?[]const u8) ?*c.talk_value {
+    const index = std.fmt.parseInt(i64, selector.?, 10) catch return null;
+    const n: i64 = @intCast(members.len);
+    const i = if (index > 0) index - 1 else n + index;
+    return memberValue(store, if (i >= 0 and i < n) members[@intCast(i)] else null);
+}
+
+fn liveFind(store: *ObjectStore, members: []const ObjectStore.Member, selector: ?[]const u8) ?*c.talk_value {
+    for (members) |m| if (std.mem.eql(u8, m.name, selector.?)) return memberValue(store, m);
+    return memberValue(store, null);
+}
+
+fn elementCount(context: ?*anyopaque, o: ?*c.talk_object, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    return elementAnswer(@ptrCast(@alignCast(context.?)), o, "count", null, liveCount, result, err);
+}
+
+fn elementAt(context: ?*anyopaque, o: ?*c.talk_object, index: i64, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    var buf: [24]u8 = undefined;
+    const shown = std.fmt.bufPrint(&buf, "{d}", .{index}) catch return c.TALK_CALL_BROKEN;
+    return elementAnswer(@ptrCast(@alignCast(context.?)), o, "at", shown, liveAt, result, err);
+}
+
+fn elementFind(context: ?*anyopaque, o: ?*c.talk_object, name: [*c]const u8, name_len: usize, result: [*c]?*c.talk_value, err: [*c]c.talk_script_error) callconv(.c) c.talk_call_end {
+    return elementAnswer(@ptrCast(@alignCast(context.?)), o, "find", name[0..name_len], liveFind, result, err);
+}
+
 /// Defines the case's Object Kinds from `[[objectKinds]]` and makes its
 /// objects from `[[objects]]`, with their initial property values.
 fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_group, all: []const case_setup.Table, store: *ObjectStore) !void {
@@ -227,7 +347,28 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
             });
         }
         defer for (props.items) |p| c.talk_shape_release(p.shape);
-        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.items.ptr, .props_len = props.items.len };
+        // Its collection, answered from the members `[[objects]]` gives.
+        var elements: c.talk_object_elements = undefined;
+        const declared_elements = case_setup.field(t, "elements");
+        if (declared_elements) |e| {
+            const cost = struct {
+                fn of(v: ?case_setup.Value) c.talk_cost {
+                    return .{ .fuel = number(if (v) |x| x.get("fuel") else null), .alloc = number(if (v) |x| x.get("alloc") else null) };
+                }
+            }.of;
+            elements = .{
+                .shape = try shapeOf(e.get("shape") orelse return error.MalformedCase),
+                .count = elementCount,
+                .at = elementAt,
+                .find = elementFind,
+                .context = store,
+                .count_cost = cost(e.get("countCost")),
+                .at_cost = cost(e.get("atCost")),
+                .find_cost = cost(e.get("findCost")),
+            };
+        }
+        defer if (declared_elements != null) c.talk_shape_release(elements.shape);
+        const def: c.talk_object_kind_def = .{ .name = name.ptr, .name_len = name.len, .props = props.items.ptr, .props_len = props.items.len, .elements = if (declared_elements != null) &elements else null };
         var kind: ?*c.talk_object_kind = null;
         try check(c.talk_define_object_kind(core, &def, &kind));
         try kinds.put(a, name, kind);
@@ -244,6 +385,26 @@ fn defineObjects(a: std.mem.Allocator, core: ?*c.talk_core, group: ?*c.talk_grou
             try props.put(a, e.key, parsed(e.value.string) orelse return error.MalformedCase);
         };
         try store.values.put(a, @intFromPtr(o.?), props);
+    }
+    // Collection members, once every handle is made: unique names, each a
+    // handle the case makes, only on a kind with a collection.
+    for (all) |t| {
+        if (!std.mem.eql(u8, t.header, "[[objects]]")) continue;
+        const given = case_setup.field(t, "elements") orelse continue;
+        const kind = case_setup.field(t, "kind").?.string;
+        const declared = for (all) |k| {
+            if (std.mem.eql(u8, k.header, "[[objectKinds]]") and std.mem.eql(u8, case_setup.field(k, "name").?.string, kind)) break case_setup.field(k, "elements") != null;
+        } else false;
+        if (!declared or given != .array) return error.MalformedCase;
+        const members = try a.alloc(ObjectStore.Member, given.array.len);
+        for (given.array, members, 0..) |m, *slot, i| {
+            const member_name = (m.get("name") orelse return error.MalformedCase).string;
+            const object = (m.get("object") orelse return error.MalformedCase).string;
+            if (store.named(object) == null) return error.MalformedCase;
+            for (members[0..i]) |x| if (std.mem.eql(u8, x.name, member_name)) return error.MalformedCase;
+            slot.* = .{ .name = member_name, .object = object };
+        }
+        try store.members.put(a, try std.fmt.allocPrint(a, "{s}/{s}", .{ kind, case_setup.field(t, "id").?.string }), members);
     }
 }
 
@@ -674,6 +835,8 @@ fn shapeOf(v: case_setup.Value) !?*c.talk_shape {
             var out: ?*c.talk_shape = null;
             if (v.get("quantity")) |u| {
                 try check(c.talk_quantity_of(u.string.ptr, u.string.len, &out));
+            } else if (v.get("object")) |k| {
+                out = @ptrCast(try northtalk.talk.objectShapeNamed(k.string));
             } else if (v.get("unitKind")) |k| {
                 try check(c.talk_quantity_kind(k.string.ptr, k.string.len, &out));
             } else if (v.get("list")) |inner| {
@@ -1380,6 +1543,7 @@ pub const Host = struct {
     }
 
     fn prepareLive(h: *Host, recorded: []const u8) !void {
+        try h.store.record(recorded);
         if (std.mem.indexOf(u8, recorded, "> stub ") != null) return;
         const a = h.arena.allocator();
         var lines = std.mem.splitScalar(u8, recorded, '\n');

@@ -1,9 +1,9 @@
 # Object element references
 
-This is the normative implementation target for [#1143](https://github.com/odogono/odgn-talk/issues/1143).
-It is staged: the active grammar, machine, embedding declarations and Trace
-catalogues do not yet include it. The [implementation handoff](../../docs/handoffs/1143-object-elements.md)
-identifies their coordinated activation. [ADR 0100](../../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
+This is the normative contract for [#1143](https://github.com/odogono/odgn-talk/issues/1143).
+The grammar, machine, embedding declarations and Trace catalogues include it;
+the [implementation handoff](../../docs/handoffs/1143-object-elements.md)
+tracks each Core's support. [ADR 0100](../../docs/adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md)
 records the choices.
 
 ## Scope and authority
@@ -33,9 +33,9 @@ Existing text/list/Bytes chunks retain their rules.
 
 ## Source and selection
 
-The target source forms (not yet executable) are:
+The source forms are:
 
-```text
+```talk
 set the fill of element ("cell_" & r & "_" & c) of thisPage to "red"
 set the fill of element 3 of thisPage to "red"
 put the number of elements of thisPage into n
@@ -100,9 +100,8 @@ a numeric position is not a stable member identity.
 
 ## Grammar, restrictions and property targets
 
-The implementation adds dedicated productions alongside the existing
-operands and `The` forms. These are target productions, not additions to the
-active `grammar.ebnf` in this delivery:
+Dedicated productions sit alongside the existing operands and `The` forms
+([chapter 2](../02-grammar.md#operands) has them in context):
 
 ```ebnf
 ObjectElement ::= ( 'element' | 'elements' ) Range 'of' Postfix
@@ -152,11 +151,10 @@ are already permitted. They do not introduce an element Whose head:
 `every element of p whose ...` and `the first element of p whose ...` are
 syntax errors at `element` and `whose`, respectively.
 
-## Target embedding declarations
+## Embedding declarations
 
-Add optional `elements` / `Elements` to `ObjectKindDef`. Omission preserves
-existing behavior. Keep the checked `talk.ts`, `talk.go`, C declarations and
-their implementation comparisons unchanged until implementation activation.
+`ObjectKindDef` has an optional `elements` / `Elements`. Omission preserves
+existing behavior.
 
 ```ts
 export interface ObjectElements<N> {
@@ -254,7 +252,7 @@ the C struct layout: rebuild embedding Hosts against the activated header.
 
 ## Lowering, charging and interruption
 
-Two new target instructions are sufficient:
+Two instructions are sufficient:
 
 - `get-element`: pop the receiver, then its selector, and push the selected
   object or Nothing. Evaluate selector before receiver. An ordinal lowers to
@@ -274,9 +272,9 @@ gate before their base or Host charges: raise `restricted operation` with
 `restricted-refusal` rate, and invoke no Host callback. These reads cannot
 be made pure by selecting 0 or an empty collection.
 
-The target base rate for `get-element` is `3 + scalars(input) / 8` Fuel,
+The base rate for `get-element` is `3 + scalars(input) / 8` Fuel,
 allocation 0, with `input` the selector; numeric selectors contribute zero
-scalars. The target base rate for `count-elements` is 3 Fuel, allocation 0.
+scalars. The base rate for `count-elements` is 3 Fuel, allocation 0.
 Divided terms round up and
 charging order uses the existing Cost Model. After expression evaluation,
 pay the base rate before selector/receiver validation. There is no `scanned`

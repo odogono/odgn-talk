@@ -8720,6 +8720,28 @@ pub const Group = struct {
                 const v = base.get(key) orelse try nothing(gpa);
                 try g.push(frame, if (base.get(key)) |found| found.retain() else v);
             },
+            // `element s of o` and `the number of elements of o` (#1143).
+            .get_element => {
+                const receiver = pop(frame);
+                defer receiver.release();
+                const selector = pop(frame);
+                defer selector.release();
+                m.input = selector.retain();
+                const step = try g.getElement(run, frame, selector, receiver, m);
+                if (step == .crossing) {
+                    try g.push(frame, selector.retain());
+                    try g.push(frame, receiver.retain());
+                }
+                return step;
+            },
+            .count_elements => {
+                const receiver = pop(frame);
+                defer receiver.release();
+                const o = try g.collectionOf(receiver, "number of elements");
+                const step = try g.elementCall(run, frame, o, .count, null, 0, m);
+                if (step == .crossing) try g.push(frame, receiver.retain());
+                return step;
+            },
             // A map-only read: Nothing reads as Nothing, and every Host
             // Object, even for `id`, is a wrong kind with no Host call.
             .get_optional_key, .get_optional_key_computed => {
@@ -9963,6 +9985,145 @@ pub const Group = struct {
         }
     }
 
+    /// `element s of o`: the selector's checks, then the receiver's, then
+    /// one collection call; 0 and positions past 2^53 - 1 select Nothing
+    /// with no call (#1143).
+    fn getElement(g: *Group, run: *Run, frame: *Frame, selector: *Value, receiver: *Value, m: *costs.Measures) !Step {
+        var index: ?i64 = null;
+        switch (selector.data) {
+            .number => |d| {
+                const n = objects.wholeMagnitude(d) orelse return g.wrongKind("integer", selector);
+                const signed: i64 = if (n > objects.max_elements) 0 else @intCast(n);
+                index = if (d.negative) -signed else signed;
+            },
+            .text => {},
+            else => return g.wrongKind("number or text", selector),
+        }
+        const o = try g.collectionOf(receiver, "element");
+        if (index) |i| {
+            if (i == 0) {
+                try g.push(frame, try nothing(g.gpa));
+                return .next;
+            }
+            return g.elementCall(run, frame, o, .at, selector, i, m);
+        }
+        return g.elementCall(run, frame, o, .find, selector, 0, m);
+    }
+
+    /// The receiver of a collection read: a live object of this Group whose
+    /// kind has a collection.
+    fn collectionOf(g: *Group, v: *Value, function: []const u8) !*objects.Object {
+        const o = g.objectOf(v) orelse return g.wrongKind("object", v);
+        if (o.disposed) return g.raise("object gone", &.{.{ .key = "object", .value = o.value }});
+        if (o.kind.elements == null) {
+            const f = try model.text(g.gpa, function);
+            defer f.release();
+            return g.raise("out of domain", &.{ .{ .key = "function", .value = f }, .{ .key = "value", .value = v } });
+        }
+        return o;
+    }
+
+    /// One collection call: its declared cost covered first, then the
+    /// call, its `prop` record, its result's checks and its conversion, as
+    /// a property's Get is.
+    fn elementCall(g: *Group, run: *Run, frame: *Frame, o: *objects.Object, op: objects.ElementOp, selector: ?*Value, index: i64, m: *costs.Measures) !Step {
+        const gpa = g.gpa;
+        const els = o.kind.elements.?;
+        const cost = switch (op) {
+            .count => els.count_cost,
+            .at => els.at_cost,
+            .find => els.find_cost,
+        };
+        const returned = run.returned_prop;
+        if (returned == null) try g.coverProperty(run, if (op == .count) .count_elements else .get_element, m, cost);
+        run.returned_prop = null;
+        const outcome = if (returned) |r| r else blk: {
+            const held = g.holdTrace();
+            const result = switch (op) {
+                .count => els.count(els.context, gpa, o),
+                .at => els.at(els.context, gpa, o, index),
+                .find => els.find(els.context, gpa, o, selector.?.data.text),
+            };
+            g.flushChargeRefusals();
+            g.trace = held;
+            break :blk result;
+        };
+        if (outcome == .deferred) return .crossing;
+        var owned = true;
+        defer if (owned) g.releasePropResult(outcome);
+        m.fuel_extra = cost.fuel;
+        m.alloc_extra = cost.alloc;
+        const valid = if (outcome == .value) try g.validElement(o, op, outcome.value) else true;
+        if (returned == null) g.recordElementReturn(run, o, op, selector, outcome, valid);
+        const interrupted = g.landedAt(run) catch |err| {
+            if (err != error.Deferred) return err;
+            run.returned_prop = outcome;
+            owned = false;
+            return .crossing;
+        };
+        if (interrupted) return error.Landed;
+        if (!valid) return g.propError(run, o, op.operation());
+        switch (outcome) {
+            .value => |v| {
+                const size = costs.size(v);
+                m.fuel_extra += (size + 31) / 32;
+                m.alloc_extra += size;
+                try g.push(frame, v);
+                owned = false;
+                return .next;
+            },
+            .failed => |f| {
+                owned = false;
+                return g.propFailed(run, o, op.operation(), .{ .code = f.code, .message = f.message, .data = f.data }, m);
+            },
+            else => return g.propError(run, o, op.operation()),
+        }
+    }
+
+    /// A count is a whole number from 0 to 2^53 - 1; a member is Nothing,
+    /// or a live object of this Group in the collection's Shape.
+    fn validElement(g: *Group, o: *objects.Object, op: objects.ElementOp, v: *Value) !bool {
+        if (op == .count) {
+            if (v.data != .number) return false;
+            const n = objects.wholeMagnitude(v.data.number) orelse return false;
+            return n <= objects.max_elements and (n == 0 or !v.data.number.negative);
+        }
+        if (v.data == .nothing) return true;
+        const checked = try capabilities.checkValue(g.scratch.allocator(), g.gpa, o.kind.elements.?.shape, v);
+        defer checked.release();
+        if (checked.mismatch != null) return false;
+        const member = g.objectOf(v) orelse return false;
+        return !member.disposed;
+    }
+
+    fn recordElementReturn(g: *Group, run: *Run, o: *objects.Object, op: objects.ElementOp, selector: ?*const Value, result: objects.Result, valid: bool) void {
+        switch (result) {
+            .value => |v| g.elementRecord(run, o, op, selector, if (valid) "value" else "error", if (valid) v else null),
+            .failed => |f| {
+                const malformed_data = if (f.data) |d| d.data != .map and d.data != .nothing else false;
+                const shown = if (malformed_data) null else failureMap(g.gpa, .{ .code = f.code, .message = f.message, .data = f.data }) catch null;
+                defer if (shown) |v| v.release();
+                g.elementRecord(run, o, op, selector, "error", shown);
+            },
+            else => g.elementRecord(run, o, op, selector, "error", null),
+        }
+    }
+
+    /// `prop <run> object= name=elements op= selector=? value=|error=`.
+    fn elementRecord(g: *Group, run: *Run, o: *objects.Object, op: objects.ElementOp, selector: ?*const Value, what: []const u8, v: ?*const Value) void {
+        const out = g.trace orelse return;
+        out.print("prop {s} object=", .{run.id}) catch {};
+        display.writeTrace(out, o.value) catch {};
+        out.print(" name=elements op={s}", .{@tagName(op)}) catch {};
+        if (selector) |x| {
+            out.writeAll(" selector=") catch {};
+            display.writeTrace(out, x) catch {};
+        }
+        out.print(" {s}=", .{what}) catch {};
+        if (v) |x| display.writeTrace(out, x) catch {} else out.writeAll("{}") catch {};
+        out.writeAll("\n") catch {};
+    }
+
     /// A Run that can't cover a property's instruction and declared cost
     /// faults before the Host is called, as at an immediate Operation
     /// (chapter 9).
@@ -10268,6 +10429,7 @@ pub const Group = struct {
 
 fn restrictedOperation(frame: *const Frame, ins: lower.Instruction) bool {
     return switch (ins.op) {
+        .get_element, .count_elements => true,
         .load_var, .store_var, .store_definition, .load_object, .me, .target, .set_property, .set_property_computed, .ask, .ask_wait, .tell, .send, .send_wait, .send_named, .send_named_wait, .send_spread, .send_spread_wait, .send_up, .send_up_wait, .wait, .wait_for, .wait_for_any, .join_start, .join_ask, .join_send, .join_send_named, .join_send_spread, .join_end, .timeout_start, .timeout_end, .call_value_wait, .call_handler_wait, .veto, .pass, .choose_offer => true,
         .call_builtin => std.mem.eql(u8, ins.operands[0].text, "isDisposed") or std.mem.eql(u8, ins.operands[0].text, "offerAvailable") or std.mem.eql(u8, ins.operands[0].text, "random"),
         .get_key, .get_key_computed => blk: {

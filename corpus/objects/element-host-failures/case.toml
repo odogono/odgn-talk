@@ -1,0 +1,32 @@
+# element-host-failures: a collection callback's failure follows a property
+# getter's. A Script error the Host raises carries the receiver's Object Kind
+# as `capability` and `elements.count`, `elements.at` or `elements.find` as
+# `operation`; a malformed failure is `host error`. Each is recorded as the
+# `prop` crossing's `error`, and its declared cost stays spent (#1143).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "page"
+elements = { shape = { object = "rect" }, countCost = { fuel = 3 }, atCost = { fuel = 5 }, findCost = { fuel = 7 } }
+
+[[objectKinds]]
+name = "rect"
+
+[[objects]]
+kind = "rect"
+id = "r1"
+
+[[objects]]
+kind = "page"
+id = "main"
+elements = [{ name = "a", object = '<object rect "r1">' }]
+
+[[scripts]]
+name = "s"
+source = "s.talk"
+objects = { thisPage = { kind = "page", id = "main" } }

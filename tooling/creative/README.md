@@ -534,8 +534,8 @@ Page; sounds the Project Script started keep playing (see [Sounds](#sounds)).
 
 Computed-name and numbered `element ... of thisPage` references and
 `the number of elements of thisPage` are
-[specified](../../spec/embedding/object-elements.md) but not implemented in
-Folio or its Cores. Use the existing load-time names or `elements.find` below
+[specified](../../spec/embedding/object-elements.md), but Folio doesn't
+declare a Page collection yet. Use the existing load-time names or `elements.find` below
 for now.
 
 #### Element references

@@ -2815,6 +2815,21 @@ export class BodyCompiler {
       case 'Chunk':
       case 'OrdinalChunk':
         return this.chunkRead(n);
+      case 'ObjectElement':
+        if (n.ord) {
+          this.constant(String(ORDINAL_INDEX[n.ord]));
+        } else {
+          this.expr(n.index);
+        }
+        this.expr(n.of);
+        this.at(n);
+        this.emit('get-element');
+        return;
+      case 'ElementCount':
+        this.expr(n.of);
+        this.at(n);
+        this.emit('count-elements');
+        return;
       case 'Whose':
         return this.whose(n);
       case 'List':

@@ -1,0 +1,48 @@
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
+
+> load board identity=5f740c237902b0e35b2466a33145e2ab1291727bd87dc29949c62e9a3e17bd9a
+> deliver d1 to=board message=paint args=[1, 2]
+> pump clock=2026-10-17T09:00:00Z
+prop board/r1 object=<object page "main"> name=elements op=find selector="cell_1_2" value=<object rect "r2">
+prop board/r1 object=<object rect "r2"> name=fill op=set value="red"
+prop board/r1 object=<object page "main"> name=elements op=find selector="cell_1_2" value=<object rect "r2">
+prop board/r1 object=<object rect "r2"> name=fill op=get value="red"
+prop board/r1 object=<object page "main"> name=elements op=at selector=2 value=<object button "b1">
+prop board/r1 object=<object button "b1"> name=label op=set value="Stop"
+seg board/r1 start delivery=d1 handler=paint clause=1 fuel=101 alloc=240 state=43 end=return
+run board/r1 outcome=completed delivery=d1 handler=paint fuel=101 alloc=240
+pumped state=idle fuel=101
+> deliver d2 to=board message=look
+> pump clock=2026-10-17T09:00:01Z
+prop board/r2 object=<object page "main"> name=elements op=count value=3
+prop board/r2 object=<object page "main"> name=elements op=at selector=1 value=<object rect "r1">
+prop board/r2 object=<object page "main"> name=elements op=at selector=-1 value=<object rect "r2">
+prop board/r2 object=<object page "main"> name=elements op=at selector=-1 value=<object rect "r2">
+prop board/r2 object=<object page "main"> name=elements op=find selector="go" value=<object button "b1">
+prop board/r2 object=<object page "main"> name=elements op=find selector="nope" value=nothing
+prop board/r2 object=<object page "main"> name=elements op=at selector=4 value=nothing
+prop board/r2 object=<object page "main"> name=elements op=at selector=-4 value=nothing
+prop board/r2 object=<object page "main"> name=elements op=find selector="3" value=nothing
+prop board/r2 object=<object page "main"> name=elements op=at selector=3 value=<object rect "r2">
+prop board/r2 object=<object page "empty"> name=elements op=count value=0
+prop board/r2 object=<object page "empty"> name=elements op=at selector=1 value=nothing
+seg board/r2 start delivery=d2 handler=look clause=1 fuel=222 alloc=476 state=323 end=return
+run board/r2 outcome=completed delivery=d2 handler=look fuel=222 alloc=476
+pumped state=idle fuel=222
+> deliver d3 to=board message=wrong
+> pump clock=2026-10-17T09:00:02Z
+raise board/r3 code="wrong kind" at=board:197 pos=31:11
+raise board/r3 code="wrong kind" at=board:197 pos=31:11
+raise board/r3 code="wrong kind" at=board:197 pos=31:11
+raise board/r3 code="wrong kind" at=board:197 pos=31:11
+raise board/r3 code="out of domain" at=board:197 pos=31:11
+raise board/r3 code="out of domain" at=board:197 pos=31:11
+raise board/r3 code="wrong kind" at=board:197 pos=31:11
+raise board/r3 code="out of domain" at=board:220 pos=37:9
+prop board/r3 object=<object page "main"> name=elements op=at selector=9 value=nothing
+raise board/r3 code="wrong kind" at=board:244 pos=42:5
+seg board/r3 start delivery=d3 handler=wrong clause=1 fuel=372 alloc=5996 state=5221 end=return
+run board/r3 outcome=completed delivery=d3 handler=wrong fuel=372 alloc=5996
+pumped state=idle fuel=372
+> vars
+vars board log=["red", 3, <object rect "r1">, <object rect "r2">, <object rect "r2">, <object button "b1">, nothing, nothing, nothing, nothing, nothing, nothing, <object rect "r2">, 0, nothing, {code: "wrong kind", expected: "integer", got: "number", value: 1.5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "number or text", got: "range", value: 1..2, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "number or text", got: "boolean", value: true, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "object", got: "number", value: 5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "element", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "element", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "wrong kind", expected: "integer", got: "number", value: 1.5, at: {unit: "board", handler: "wrong", line: 31, column: 11}}, {code: "out of domain", function: "number of elements", value: <object rect "r1">, at: {unit: "board", handler: "wrong", line: 37, column: 9}}, {code: "wrong kind", expected: "object", got: "nothing", value: nothing, at: {unit: "board", handler: "wrong", line: 42, column: 5}}]

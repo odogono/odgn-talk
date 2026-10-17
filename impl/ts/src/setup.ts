@@ -69,6 +69,13 @@ export type Setup = {
     version: string;
   }[];
   objectKinds?: {
+    /** Its Object Collection's declaration (#1143). */
+    elements?: {
+      atCost: { alloc?: number; fuel: number };
+      countCost: { alloc?: number; fuel: number };
+      findCost: { alloc?: number; fuel: number };
+      shape: ShapeSpec;
+    };
     name: string;
     parentKinds?: string[];
     props?: {
@@ -79,7 +86,13 @@ export type Setup = {
       shape?: ShapeSpec;
     }[];
   }[];
-  objects?: { id: string; kind: string; props?: Record<string, string> }[];
+  objects?: {
+    /** Its collection's members, in order, each object in the display form. */
+    elements?: { name: string; object: string }[];
+    id: string;
+    kind: string;
+    props?: Record<string, string>;
+  }[];
   operations?: OperationSpec[];
   scripts?: {
     grants?: Record<

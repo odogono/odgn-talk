@@ -173,7 +173,20 @@ fn writeAll(a: Allocator, w: *std.Io.Writer, spec: Spec, grants: []const Grant, 
             if (j > 0) try w.writeByte(',');
             try writeString(w, p);
         }
-        try w.writeAll("]}");
+        try w.writeByte(']');
+        // Its collection, after `parentKinds`, only when it has one (#1143).
+        if (k.elements) |e| {
+            try w.writeAll(",\"elements\":{\"shape\":");
+            try fingerprint.writeShape(w, e.shape);
+            try w.writeAll(",\"countCost\":");
+            try writeCost(w, e.count_cost);
+            try w.writeAll(",\"atCost\":");
+            try writeCost(w, e.at_cost);
+            try w.writeAll(",\"findCost\":");
+            try writeCost(w, e.find_cost);
+            try w.writeByte('}');
+        }
+        try w.writeByte('}');
     }
     try w.writeAll("],\"objects\":[");
     for (named, 0..) |o, i| {

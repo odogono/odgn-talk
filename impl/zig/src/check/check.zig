@@ -945,6 +945,11 @@ const Checker = struct {
                 try c.collectExpr(s, ch.of);
                 if (ch.delimiter) |d| try c.collectExpr(s, d);
             },
+            .element => |el| {
+                if (el.index) |i| try c.collectExpr(s, i);
+                try c.collectExpr(s, el.of);
+            },
+            .element_count => |of| try c.collectExpr(s, of),
             .whose => |w| {
                 if (w.ordinal) |o| try c.collectExpr(s, o) else try c.collectExpr(s, w.source);
                 if (w.ordinal == null) if (w.delimiter) |d| try c.collectExpr(s, d);
@@ -1599,7 +1604,7 @@ const Checker = struct {
         var e = target;
         while (e.data == .group) e = e.data.group;
         switch (e.data) {
-            .name => {
+            .name, .element => {
                 try c.report(.not_a_property, keyword);
                 try c.expr(s, target, .normal);
                 return;
@@ -1971,6 +1976,18 @@ const Checker = struct {
                     try c.expr(s, d, in);
                     try c.chunkChain(e);
                 }
+            },
+            // Always a Host read (#1143): never in a Guard or an initialiser.
+            .element => |el| {
+                if (in == .guard) try c.report(.not_in_a_guard, e.pos);
+                if (in == .initialiser) c.notConstant(e.pos);
+                if (el.index) |i| try c.expr(s, i, in);
+                try c.expr(s, el.of, in);
+            },
+            .element_count => |of| {
+                if (in == .guard) try c.report(.not_in_a_guard, e.pos);
+                if (in == .initialiser) c.notConstant(e.pos);
+                try c.expr(s, of, in);
             },
             .whose => |wh| {
                 if (wh.ordinal) |o| try c.expr(s, o, in) else {

@@ -306,7 +306,7 @@ var Errors = ErrorsTable{
 				"function",
 				"value",
 			},
-			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, or an empty list of `user` `choose` items; `value` is the argument, the missing key or the word, and `function` is the function's or Operation's name",
+			RaisedWhen: "An argument is outside a function's domain, e.g. `sqrt(-1)`, a `format` key that's missing, a bad sort direction, a Standard Capability option word that isn't listed, an empty list of `user` `choose` items, or an Object Element Reference or Element Count on a Host Object whose kind has no collection; `value` is the argument, the missing key, the word or the receiver, and `function` is the function's or Operation's name, or `element` or `number of elements`",
 			Sources: []string{
 				"ADR 0002",
 				"ADR 0021",
@@ -389,7 +389,7 @@ var Errors = ErrorsTable{
 			Fields: []string{
 				"object",
 			},
-			RaisedWhen: "A `send … to` reaches a disposed Host Object, or names a Script the Group doesn't hold, or a property of a disposed object is read or set; `object` is the object, or the Script's name as text",
+			RaisedWhen: "A `send … to` reaches a disposed Host Object, or names a Script the Group doesn't hold, or a property or the collection of a disposed object is read or set; `object` is the object, or the Script's name as text",
 			Sources: []string{
 				"ADR 0016",
 				"ADR 0017",

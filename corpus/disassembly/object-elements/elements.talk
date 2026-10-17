@@ -1,0 +1,10 @@
+-- elements.talk: the elements Disassembly case.
+
+on paint page, r, c
+  set the fill of element ("cell_" & r & "_" & c) of page to "red"
+  put element 3 of page into third
+  put the last element of page into frontmost
+  put the number of elements of page into n
+  set the label of the first element of page to "Back"
+  return [third, frontmost, n]
+end paint

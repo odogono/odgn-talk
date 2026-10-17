@@ -248,8 +248,9 @@ A Host that offers the optional [`user`](07-libraries-and-the-standard-library.m
 
 ## Host Objects
 
-An Object Kind's optional Object Collection is specified in the
-[object element contract](embedding/object-elements.md) (staged).
+An Object Kind may also declare an ordered, named Object Collection, which
+`element s of o` and `the number of elements of o` read through its `Count`,
+`At` and `Find` callbacks ([the object element contract](embedding/object-elements.md)).
 
 - **Object Kinds** are defined once per process, each with its properties. A property has a Shape, a `Get` and optionally a `Set`, each with a cost, and runs inside the Run like an immediate Operation: a value read is checked against the Shape and its conversion charged, and a failure raises as an Operation's does, with `capability` the Object Kind's name and `operation` the property's. A value set that breaks the Shape raises `wrong kind` before the `Set` runs. A property with no `Set` is read-only ([chapter 4](04-expressions-and-statements.md#put-let-and-set)).
 - **Handles:** `group.Object(kind, id, native)` makes a handle the first time a Host-owned thing crosses into the Group. The id is the Host's, stable, and unique within its kind in the Group ([ADR 0008](../docs/adr/0008-same-core-save-restore.md)), and a reused one is `duplicate object id`. `group.ObjectByID(kind, id)` returns the handle with that Object Kind name and id, disposed or not, or none if the Group never made one. It is how a Host reaches the handles a [Restore](10-save-and-restore.md#restoring) made, and it fits `DecodeValue`'s resolver ([ADR 0058](../docs/adr/0058-a-restored-groups-host-objects-are-found-by-kind-and-id.md)). The Core holds the kind and id, so a Script reads them with `objectKind(o)` and `the id of o` without calling the Host ([chapter 7](07-libraries-and-the-standard-library.md#values)).
@@ -358,7 +359,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `define-capability` | `name`, optional `handle`: a distinct transport identity used by `grant` and Operation needs while declarations and Fingerprints keep `name`; `ops`: Operation Declarations, each with optional `description` and `examples`, optional `segmentLifecycle: true` advertising all three hooks, optional `release: true` advertising the Grant release hook; optional `standard` refinement family with `standard-refinements-v1` | – | `DefineCapability`, `DefineSegmentCapability`, `DefineCoordinatedCapability` |
 | `standard-capability` | `name`, `costs`; for `store`, the Host answers `effect` requests as its lifecycle hooks and `release` requests as its Grant release hook. `sqlite` isn't offered through the message layer yet | – | `ClockCapability` and the others |
 | `add` | `a (V)`, `b (V)` | `value (V)`, or `fail`: `{code, message, data (V)}` | `Add` |
-| `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds` | – | `DefineObjectKind` |
+| `define-object-kind` | `name`, `props`: `[{name, shape, readOnly, getCost, setCost}]`, `parentKinds`, and with `object-elements-v1` an optional `elements`: `{shape, countCost, atCost, findCost}` | – | `DefineObjectKind` |
 | `grant` | `capability`, `ops`: names, or `"all"`, optional `coordinator`: the name of its Segment Coordinator, shared by every Grant given that name; optional `locale` default tag or `maxRows` sqlite row cap with `standard-refinements-v1` | `grant`: a handle | `Grant`, `GrantAll` |
 | `compile-library` | `name`, `version`, `source`, `imports`: identities, `declarations`: Operation modes and argument Shapes | `identity`, `needs` | `CompileLibrary` |
 | `new-group` | `name`, `trace`: a boolean, optional `seed`: an integer from 0 to 2^64 − 1, in the integer encoding | – | `NewGroup` |
@@ -380,7 +381,7 @@ A message is `{"m": <name>, "ref": <n>, …fields}`, where `ref` is the Host's i
 | `trace` (interim, `crossing-trace-v1`) | outer `trace`: Operation crossing records before landing; optional `settled` beside `abandoned` identifies consumed Calls | `trace-result`: no fields | Trace sink |
 | `effect` (interim) | `script`, `run`, `segment`, `grant`: the first enrolled, `grants`: every enrolled Grant name in enrollment order, optional `coordinator`, `phase`: `begin`, `commit` or `rollback`, `now` | `effect-result`: `{status: "ok" \| "failed" \| "unknown", detail?}` | Segment lifecycle hooks |
 | `release` (interim) | `script`, `grant`, `reason`: `stop`, `reload`, `revoke` or `disable`, `now` | `release-result`: no fields | [Grant release hook](#the-grant-release-hook) |
-| `prop` (interim) | `object`, `prop`, and `value (V)` for a set | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set` |
+| `prop` (interim) | `object`, `prop`, and `value (V)` for a set; with `object-elements-v1`, `prop` `elements` with `op` `count`, `at` or `find` and, for `at` and `find`, `selector (V)` | `prop-result`: `{value (V)}`, `{ok}`, `{fail}` or `{hostError}` | `Get`, `Set`, and an Object Collection's `Count`, `At` and `Find` |
 | `save`, `fingerprint` | – | `save`, `fingerprint`: bytes | `Save`, `Fingerprint` |
 | `inspect` | – | `scripts`: `[{name, disabledGrants?, vars: [[name, value (V)]], runs: [{id, status, handler, wait, until, calls}], mailbox: [{delivery, from, message}]}]` | `Inspect` |
 | `restore` | `name`, `save`, `libraries`: identities, `mismatch`, `trace` | `variablesOnly`, `pending`: `[{call, script, grant, operation, args (V)}]`, `disposed`: `[[kind, id]]`, `discardedRuns`, `droppedMessages`, `abandonedCalls`, `reports` | `Restore` |
@@ -474,7 +475,7 @@ A `LoadError` carries load-time diagnostics instead, and `MailboxFull` is load s
   - `grants`: name, Capability, and Operation Declarations
   - `libraries`: name, version, source and `needs`
   - `messages`: name (a Selector for a labelled message), argument Shapes and receiving kinds, with any documentation
-  - `objectKinds`: name, properties and `parentKinds`
+  - `objectKinds`: name, properties and `parentKinds`, then its `elements` collection declaration when it has one
   - `objects`: well-known name and kind
 - **One data model:** Operation Declarations and Shapes use the same data model as the corpus's `case.toml`, written as JSON here and as TOML there. A Constant value inside them uses the Value Encoding.
 - **Documentation:** an Operation writes its `description`, then its `examples`, after its other keys, each only when present. They are the only keys `case.toml` lacks, and the only ones the Group Fingerprint leaves out, so rewording them changes the manifest's bytes but not the Fingerprint.

@@ -188,14 +188,18 @@ Postfix        ::= Primary ( "'s" Key )*
 Key            ::= 'code' 'points' | Word
 Primary        ::= Number Unit? | Text | InterpolatedText | TextPattern | BinaryBuild | '(' Expression ')'
                  | List | Map | 'true' | 'false' | 'nothing' | 'it' | 'me'
-                 | The | ReplaceExpression | MatchSearch | Chunk | Call | Name
+                 | The | ReplaceExpression | MatchSearch | ObjectElement | Chunk | Call | Name
 Call           ::= Name CallOpen ExpressionList? ')'
 Chunk          ::= ChunkWord Range 'of' Postfix
 ChunkWord      ::= 'code' ( 'point' | 'points' ) | Name  /* a chunk kind's singular or plural */
+ObjectElement  ::= ( 'element' | 'elements' ) Range 'of' Postfix
+                   /* an Object Element Reference, decided as a Chunk is */
 The            ::= 'the' ( 'optional' OptionalKey 'of' Postfix
                          | '(' Expression ')' 'of' Postfix | Text 'of' Postfix | 'target'
-                         | Ordinal ( 'code' 'point' | Name ) 'of' Postfix | Key 'of' Postfix )
-                   /* the Name after an Ordinal is a chunk kind's singular */
+                         | Ordinal ( 'code' 'point' | Name ) 'of' Postfix
+                         | 'number' 'of' 'elements' 'of' Postfix | Key 'of' Postfix )
+                   /* the Name after an Ordinal is a chunk kind's singular or `element`;
+                      `number` `of` is an Element Count only before `elements` `of` */
 Ordinal        ::= Name  /* one of grammar.toml's ordinals */
 MatchSearch    ::= 'every' 'match' 'of' ChunkLevel 'in' Concat
 EveryHead      ::= 'every' ( 'code' 'point' | Name ) 'of' Postfix ( 'delimited' 'by' Postfix )?

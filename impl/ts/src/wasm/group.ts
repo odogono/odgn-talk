@@ -558,8 +558,11 @@ export class WasmGroup {
     const [kind, id] = textsOf(ref);
     const object = this.#objects.get(key(kind!, id!))?.handle;
     const name = textOf(field(need, 'prop'))!;
-    const prop = object?.kind.props.get(name);
     const details = this.#propertyDetails;
+    if (has(need, 'op')) {
+      return this.#collection(need, object, kind!, id!);
+    }
+    const prop = object?.kind.props.get(name);
     if (!object || !prop) {
       return propertyFailure(details, `No property ${name} on ${kind} ${id}`);
     }
@@ -572,6 +575,44 @@ export class WasmGroup {
         return { ok: true };
       }
       return { value: encode(this.#codec, prop.get(object)) };
+    } catch (error) {
+      if (error instanceof ScriptError) {
+        return { fail: this.#failure(error) };
+      }
+      return propertyFailure(details, detailOf(error));
+    }
+  }
+
+  // An Object Collection callback: the `prop` need named `elements`, with
+  // its `op` and, for `at` and `find`, its `selector` (#1143).
+  #collection(
+    need: Json,
+    object: HostObject | undefined,
+    kind: string,
+    id: string,
+  ): Record<string, Frame> {
+    const details = this.#propertyDetails;
+    const elements = object?.kind.elements;
+    if (!object || !elements) {
+      return propertyFailure(details, `No collection on ${kind} ${id}`);
+    }
+    const op = textOf(field(need, 'op'));
+    try {
+      const selector = has(need, 'selector')
+        ? decode(this.#codec, field(need, 'selector'))
+        : null;
+      const result =
+        op === 'count'
+          ? elements.count(object)
+          : op === 'at' && selector?.kind === 'number'
+            ? elements.at(object, Number(selector.asDecimal()!.toString()))
+            : op === 'find' && selector?.kind === 'text'
+              ? elements.find(object, selector.asText()!)
+              : undefined;
+      if (result === undefined) {
+        return propertyFailure(details, `Malformed collection need ${op}`);
+      }
+      return { value: encode(this.#codec, result) };
     } catch (error) {
       if (error instanceof ScriptError) {
         return { fail: this.#failure(error) };

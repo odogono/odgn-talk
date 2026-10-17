@@ -1,0 +1,30 @@
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
+> load guard-reference identity=f559ffe6080c9b1e05f10e3cea57b07a2f3ebab391065c1d4655e7ea55a8f426
+diag guard-reference code="not in a guard" pos=1:15
+> load guard-count identity=0982f53163b7af778bf11e17cb4979d7842ddc9f7b385506bd9c8216c4458d23
+diag guard-count code="not in a guard" pos=1:15
+> load guard-ordinal identity=8913e506a135cc8bd56471b348b56bf61fbcb4a964db89b27f99b50a2a7c8db0
+diag guard-ordinal code="not in a guard" pos=1:15
+> load constant-reference identity=3279193809a668b37c5311375b5b7bb9b5e2ca981dfdb815c543c7b9b32691c8
+diag constant-reference code="not constant" pos=1:18
+> load variable-count identity=99a71f41c718907f9c1b0339ac1d13ba7986771ff54f885c7026dff506765c70
+diag variable-count code="not constant" pos=1:21
+> load default-ordinal identity=86dd303aab2f961da814569853c889adb979ad213328d99f7c078263819bbdc5
+diag default-ordinal code="not constant" pos=1:19
+> load set-reference identity=3e9c8a7570ae04ef7cb1b57f015ca0c1a767cac7ac0394cb8bf4b3c382262b2f
+diag set-reference code="not a property" pos=2:3
+> load set-ordinal identity=507dd8bf39cf016815f62ca725012b575e568553aef16392792ba08abc27ea0d
+diag set-ordinal code="not a property" pos=2:3
+> load put-reference identity=95aefaf5134e425eaf89e4f07d80ff2be961946a04761de6b1921eaa01471d91
+diag put-reference code="not a container" pos=2:14
+> load add-key-reference identity=1e527407bff6aa258efe1eedfcb2963863c29bcc5a1da4a0147ef59d76a4557b
+diag add-key-reference code="not a container" pos=2:12
+> load delete-reference identity=b64586ea3b877923abf1402552b3b58df9398f51e9763ec9f85ba90338857101
+diag delete-reference code="not a container" pos=2:10
+> load every-whose identity=28a428b4af0d1631e9a7f64caeccb06e11749eeca2ea345782b502c5ec80e2b2
+diag every-whose code="unexpected token" pos=2:13
+> load ordinal-whose identity=1d5026a81654fb6849f2a540b0bc0c394e91e6d22e0084578029dc55ed2cc93b
+diag ordinal-whose code="unexpected token" pos=2:37
+> load subtract-name identity=24096fd9f105896622afefea18e0c1df016c2da13c960dd6105e0efa3423bcce
+diag subtract-name code="unexpected token" pos=2:19
+> vars

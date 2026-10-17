@@ -43,6 +43,65 @@ func TestObjectTranscriptRoundTrip(t *testing.T) {
 	}
 }
 
+// Object Collection callbacks (#1143) are recorded as property crossings on
+// `elements` and replay without the Host.
+func TestObjectElementsTranscriptRoundTrip(t *testing.T) {
+	var items []session.Item
+	calls := []string{}
+	h := session.New(session.Environment{Now: func() time.Time { return time.Unix(0, 0) }, Record: func(i session.Item) { items = append(items, i) }, Objects: func(c *session.Objects) map[string]*talk.Object {
+		member, err := c.DefineKind(talk.ObjectKindDef{Name: "SessionCell"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cell *talk.Object
+		kind, err := c.DefineKind(talk.ObjectKindDef{Name: "SessionPage", Elements: &talk.ObjectElements{
+			Shape: talk.ObjectShape(member),
+			Count: func(*talk.Object) (talk.Value, error) { calls = append(calls, "count"); return talk.Int(1), nil },
+			At:    func(*talk.Object, int64) (talk.Value, error) { calls = append(calls, "at"); return cell.Value(), nil },
+			Find: func(*talk.Object, string) (talk.Value, error) {
+				calls = append(calls, "find")
+				return talk.Nothing, nil
+			},
+			CountCost: talk.Cost{Fuel: 1}, AtCost: talk.Cost{Fuel: 1}, FindCost: talk.Cost{Fuel: 2, Alloc: 4},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cell, err = c.Object(member, "c1", struct{}{}); err != nil {
+			t.Fatal(err)
+		}
+		page, err := c.Object(kind, "p", struct{}{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return map[string]*talk.Object{"page": page}
+	}})
+	out := h.Input(`[the number of elements of page, element -1 of page, element "x" of page]`)
+	if len(out) != 1 || out[0] != `[1, <object SessionCell "c1">, nothing]` || strings.Join(calls, ",") != "count,at,find" {
+		t.Fatalf("%v %v", out, calls)
+	}
+	recorded := WriteTranscript(items)
+	for _, want := range []string{`"operation":"at","property":"elements","selector":-1`, `"elements":{"atCost"`} {
+		if !strings.Contains(recorded, want) {
+			t.Fatalf("missing %s in\n%s", want, recorded)
+		}
+	}
+	parsed, err := ParseTranscript(recorded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, replayed, err := ReplayTranscript(parsed, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual := WriteTranscript(replayed); actual != recorded {
+		t.Fatalf("want\n%s\ngot\n%s", recorded, actual)
+	}
+	if len(calls) != 3 {
+		t.Fatal(calls)
+	}
+}
+
 func TestMalformedObjectTranscript(t *testing.T) {
 	var items []session.Item
 	h := session.New(session.Environment{Now: func() time.Time { return time.Unix(0, 0) }, Record: func(i session.Item) { items = append(items, i) }, Objects: func(c *session.Objects) map[string]*talk.Object {

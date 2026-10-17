@@ -851,11 +851,17 @@ cases.
 
 ## Group embedding
 
-**Object element references:** `element name of receiver` and
-`the number of elements of receiver` are
-[specified](../../spec/embedding/object-elements.md) but unsupported here.
-The checked Object Kind interface exposes properties, with no Object
-Collection callbacks.
+**Object element references:** `element s of receiver`, ordinal references
+and `the number of elements of receiver` read an `ObjectKindDef`'s optional
+`Elements` collection, as [the contract](../../spec/embedding/object-elements.md)
+says, with `get-element`, `count-elements` and `prop` crossings in the Trace.
+The machine pays the base rate and checks the selector and receiver kinds;
+`group_elements.go` checks disposal and collection support, then makes the one
+callback and checks its result. Session Transcripts record callbacks as
+property crossings on `elements`. The Zig adapter declares a collection only
+to a guest offering `object-elements-v1`, and answers its `prop` needs with an
+`op`; the Zig reactor does not offer it yet. Go has no `ExportManifest`, so
+there is no Manifest declaration here.
 
 `New`, `NewGroup`, `Load`, Script/Group `Deliver`, `Request` and `Decide`, `Broadcast`, `DecideBroadcast`, `Pump`,
 `Call`, `Inspect`, `Counters`, `Stop`, `CancelRun`, `RewindRun`, `Reload`, `Extend`,

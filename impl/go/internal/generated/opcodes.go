@@ -52,6 +52,8 @@ const (
 	OpGetKeyComputed
 	OpGetOptionalKey
 	OpGetOptionalKeyComputed
+	OpGetElement
+	OpCountElements
 	OpProperty
 	OpPropertyDelimited
 	OpChunkGet

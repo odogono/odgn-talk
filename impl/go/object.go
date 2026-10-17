@@ -1,6 +1,7 @@
 package northtalk
 
 import (
+	"github.com/odogono/odgn-talk/impl/go/internal/shape"
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 	"slices"
 	"unicode/utf8"
@@ -20,10 +21,73 @@ type Prop struct {
 	GetCost Cost
 	SetCost Cost
 }
+
+// ObjectElements is an Object Kind's ordered, named collection of Host
+// Objects (#1143). Shape is an Object Shape or a OneOf of them; results are
+// checked against it, wrapped in Optional. At gets a nonzero index: positive
+// from the front, negative from the end. Its callbacks run inside the Run,
+// synchronously and read-only, like a property's Get.
+type ObjectElements struct {
+	Shape     Shape
+	Count     func(o *Object) (Value, error)
+	At        func(o *Object, index int64) (Value, error)
+	Find      func(o *Object, name string) (Value, error)
+	CountCost Cost
+	AtCost    Cost
+	FindCost  Cost
+}
+
 type ObjectKindDef struct {
-	Name        string
-	Props       []Prop
+	Name  string
+	Props []Prop
+	// ParentKinds lists the kinds that may be this kind's parent, for the
+	// Host Manifest only. SetParent doesn't check it.
 	ParentKinds []string
+	// Elements is nil for a kind with no collection.
+	Elements *ObjectElements
+}
+
+func validCost(cost Cost) bool {
+	return cost.Fuel >= 0 && cost.Alloc >= 0 && cost.Fuel <= 9007199254740991 && cost.Alloc <= 9007199254740991
+}
+
+// objectElements copies a collection declaration. Its Shape is an Object
+// Shape or a nonempty choice of Object Shapes of distinct kinds.
+func objectElements(e *ObjectElements) (*ObjectElements, error) {
+	if e == nil {
+		return nil, nil
+	}
+	if e.Count == nil || e.At == nil || e.Find == nil {
+		return nil, &HostError{InvalidValue, "an Object Collection needs Count, At and Find"}
+	}
+	for _, cost := range []Cost{e.CountCost, e.AtCost, e.FindCost} {
+		if !validCost(cost) {
+			return nil, &HostError{InvalidValue, "invalid Object Collection cost"}
+		}
+	}
+	s := e.Shape.inner
+	choices := []shape.Shape{s}
+	if s.Kind == "oneOf" {
+		choices = s.Of
+	}
+	seen := map[string]bool{}
+	for _, c := range choices {
+		if c.Kind != "object" || seen[c.Name] {
+			return nil, &HostError{InvalidValue, "an Object Collection Shape must be an Object Shape or a choice of distinct ones"}
+		}
+		seen[c.Name] = true
+	}
+	if len(choices) == 0 {
+		return nil, &HostError{InvalidValue, "an Object Collection Shape must be an Object Shape or a choice of distinct ones"}
+	}
+	copied := *e
+	copied.Shape = Shape{cloneShape(s)}
+	return &copied, nil
+}
+
+func cloneShape(s shape.Shape) shape.Shape {
+	s.Of = slices.Clone(s.Of)
+	return s
 }
 
 // DefineObjectKind copies a reusable process-level Object Kind declaration.
@@ -38,12 +102,17 @@ func (c *Core) DefineObjectKind(def ObjectKindDef) (*ObjectKind, error) {
 			return nil, &HostError{InvalidValue, "invalid property declaration"}
 		}
 		for _, cost := range []Cost{prop.GetCost, prop.SetCost} {
-			if cost.Fuel < 0 || cost.Alloc < 0 || cost.Fuel > 9007199254740991 || cost.Alloc > 9007199254740991 {
+			if !validCost(cost) {
 				return nil, &HostError{InvalidValue, "invalid property cost"}
 			}
 		}
 		kind.props[prop.Name] = prop
 	}
+	elements, err := objectElements(def.Elements)
+	if err != nil {
+		return nil, err
+	}
+	kind.elements = elements
 	c.mu.Lock()
 	if c.objectKinds == nil {
 		c.objectKinds = map[string]*ObjectKind{}

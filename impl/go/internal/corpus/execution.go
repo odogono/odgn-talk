@@ -370,7 +370,7 @@ func newExecutionReplay(setup Setup, records []Record, roundTrip bool, readSourc
 		}
 		operations.values.objects = objects
 	} else {
-		objects, e = setupObjects(core, g, setup, operations.values, crossings.crossing)
+		objects, e = setupObjects(core, g, setup, operations.values, crossings.crossing, records)
 	}
 	if e != nil {
 		return nil, e

@@ -173,6 +173,16 @@ export const exportManifest = (m: ManifestSpec): string =>
           setCost: costData(prop.setCost),
         })),
       parentKinds: [...kind.parentKinds].sort(compareText),
+      ...(kind.elements
+        ? {
+            elements: {
+              shape: shapeData(kind.elements.shape),
+              countCost: costData(kind.elements.countCost),
+              atCost: costData(kind.elements.atCost),
+              findCost: costData(kind.elements.findCost),
+            },
+          }
+        : {}),
     })),
     objects: Object.entries(m.objects ?? {})
       .sort(([a], [b]) => compareText(a, b))

@@ -759,6 +759,32 @@ typedef struct talk_prop {
     talk_cost get_cost;
     talk_cost set_cost;
 } talk_prop;
+/* An Object Kind's ordered, named collection of Host Objects (#1143). Each
+ * callback answers with TALK_CALL_ANSWERED and *result, an owned reference,
+ * Nothing included; a Script error with TALK_CALL_FAILED and *error.
+ * TALK_CALL_STARTED, TALK_CALL_LIMITED and TALK_CALL_BROKEN are host error.
+ * at's index is nonzero: positive from the front, negative from the end.
+ * find's name is borrowed UTF-8 for the callback, with its byte length. */
+/* C only: ObjectElements.Count. */
+typedef talk_call_end (*talk_element_count_fn)(void *context, talk_object *o,
+    talk_value **result, talk_script_error *error);
+/* C only: ObjectElements.At. */
+typedef talk_call_end (*talk_element_at_fn)(void *context, talk_object *o,
+    int64_t index, talk_value **result, talk_script_error *error);
+/* C only: ObjectElements.Find. */
+typedef talk_call_end (*talk_element_find_fn)(void *context, talk_object *o,
+    const char *name, size_t name_len,
+    talk_value **result, talk_script_error *error);
+typedef struct talk_object_elements {
+    const talk_shape *shape;
+    talk_element_count_fn count;
+    talk_element_at_fn at;
+    talk_element_find_fn find;
+    void *context;
+    talk_cost count_cost;
+    talk_cost at_cost;
+    talk_cost find_cost;
+} talk_object_elements;
 typedef struct talk_object_kind_def {
     const char *name;
     size_t name_len;
@@ -768,6 +794,7 @@ typedef struct talk_object_kind_def {
     const char *const *parent_kinds;
     const size_t *parent_kinds_lens;
     size_t parent_kinds_len;
+    const talk_object_elements *elements; /* NULL: no collection */
 } talk_object_kind_def;
 /* Defines an Object Kind, once per process. It lives as long as the Core. */
 talk_host_error_code talk_define_object_kind(talk_core *c, const talk_object_kind_def *k, talk_object_kind **out);

@@ -437,11 +437,28 @@ export interface PropDef<N> {
   getCost?: Cost;
   setCost?: Cost;
 }
+/**
+ * An Object Kind's ordered, named collection of Host Objects (#1143). `shape`
+ * is an Object Shape or a `OneOf` of them; results are checked against it,
+ * wrapped in Optional. `at` gets a nonzero index: positive from the front,
+ * negative from the end. Callbacks are synchronous and read-only.
+ */
+export interface ObjectElements<N> {
+  shape: Shape;
+  count(o: HostObject<N>): Value;
+  at(o: HostObject<N>, index: number): Value;
+  find(o: HostObject<N>, name: string): Value;
+  countCost: Cost;
+  atCost: Cost;
+  findCost: Cost;
+}
 export interface ObjectKindDef<N> {
   name: string;
   props: Record<string, PropDef<N>>;
   /** For the Host Manifest only. setParent doesn't check it. */
   parentKinds?: string[];
+  /** Omit for a kind with no collection. */
+  elements?: ObjectElements<N>;
 }
 export interface ObjectKind<N = unknown> { readonly name: string }
 

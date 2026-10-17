@@ -437,6 +437,22 @@ export const instructions = [
     "suspends": false
   },
   {
+    "name": "get-element",
+    "cost": "get-element",
+    "operands": [],
+    "pops": 2,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
+    "name": "count-elements",
+    "cost": "count-elements",
+    "operands": [],
+    "pops": 1,
+    "pushes": 1,
+    "suspends": false
+  },
+  {
     "name": "property",
     "cost": "property",
     "operands": [
@@ -1679,6 +1695,21 @@ export const costModel = {
     },
     {
       "key": "get-key",
+      "fuel": [
+        [0, 0, 3, 1]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "get-element",
+      "fuel": [
+        [0, 0, 3, 1],
+        [4, 1, 1, 8]
+      ],
+      "alloc": []
+    },
+    {
+      "key": "count-elements",
       "fuel": [
         [0, 0, 3, 1]
       ],

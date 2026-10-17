@@ -938,7 +938,7 @@ pub const corpus: CorpusTable = .{
             .ids = &.{
                 "run",
             },
-            .is = "a Host Object property call",
+            .is = "a Host Object property call, or a call to its Object Kind's collection",
             .key = &.{
                 .{
                     .key = "object",
@@ -948,21 +948,30 @@ pub const corpus: CorpusTable = .{
                 .{
                     .key = "name",
                     .type = "id",
-                    .is = "the property",
+                    .is = "the property, or `elements` for a collection call",
                 },
                 .{
                     .key = "op",
                     .type = "word",
-                    .is = "a read or a write",
+                    .is = "a read or a write, or a collection's count, positional lookup or name lookup",
                     .words = &.{
                         "get",
                         "set",
+                        "count",
+                        "at",
+                        "find",
                     },
+                },
+                .{
+                    .key = "selector",
+                    .type = "value",
+                    .is = "for `at`, the nonzero integer position, and for `find`, the text name",
+                    .optional = true,
                 },
                 .{
                     .key = "value",
                     .type = "value",
-                    .is = "the value read or written",
+                    .is = "the value read or written, or the collection call's answer",
                     .optional = true,
                 },
                 .{
@@ -1956,6 +1965,14 @@ pub const corpus: CorpusTable = .{
             },
         },
         .{
+            .table = "objectKinds",
+            .key = "elements",
+            .is = "its optional Object Collection, `{shape, countCost, atCost, findCost}`",
+            .kinds = &.{
+                "trace",
+            },
+        },
+        .{
             .table = "objects",
             .key = "kind",
             .is = "a Host Object's kind",
@@ -1977,6 +1994,14 @@ pub const corpus: CorpusTable = .{
             .table = "objects",
             .key = "props",
             .is = "the values its properties start with, a table from property name to a value in the display form, as text",
+            .kinds = &.{
+                "trace",
+            },
+        },
+        .{
+            .table = "objects",
+            .key = "elements",
+            .is = "the members of its Object Kind's collection, in order, each `{name, object}` with the object in the display form, as text",
             .kinds = &.{
                 "trace",
             },

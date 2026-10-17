@@ -354,6 +354,12 @@ pub const Expr = struct {
         optional_key: struct { base: *Expr, key: ?Tok, code_points: bool, computed: ?*Expr },
         property: struct { base: *Expr, name: Tok, code_points: bool, delimiter: ?*Expr, delimited: ?Tok },
         chunk: Chunk,
+        /// An Object Element Reference (#1143): `element s of o`, at
+        /// `element`, or `the first element of o`, at `the`, whose ordinal
+        /// stands for its integer selector.
+        element: struct { index: ?*Expr, ordinal: ?Tok, of: *Expr },
+        /// An Element Count, `the number of elements of o`, at `the`.
+        element_count: *Expr,
         whose: Whose,
         list: []const ListItem,
         map: []const MapEntry,

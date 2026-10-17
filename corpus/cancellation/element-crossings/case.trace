@@ -1,0 +1,19 @@
+# First blessing approved for #1143 on 2026-10-17; see docs/reviews/object-element-references/README.md.
+> load s identity=f31b38b0c5706f1d7f8f26bee75a8d50edb3d0af569191fee61b3650601f7404
+> load t identity=8cdcf95b1dc390b3d14fc4f3ef23bd2e17e07e625bc320f2e758d9e5bcb2f41d
+> deliver d1 to=s message=go
+> deliver d2 to=t message=go
+> pump clock=2026-10-17T09:00:00Z
+prop s/r1 object=<object page "main"> name=elements op=find selector="a" value=<object rect "r1">
+> cancel-run s/r1
+prop s/r1 object=<object page "main"> name=elements op=count value=1
+seg s/r1 start delivery=d1 handler=go clause=1 fuel=24 alloc=16 state=16 end=cancel
+run s/r1 outcome=cancelled delivery=d1 handler=go fuel=24 alloc=16
+prop t/r1 object=<object page "side"> name=elements op=count value=0
+> stop t reason="off"
+seg t/r1 start delivery=d2 handler=go clause=1 fuel=9 alloc=0 state=16 end=stop
+stopped t reason="off" discarded=[t/r1]
+pumped state=idle fuel=33
+> vars
+vars s n=1
+vars t n=0

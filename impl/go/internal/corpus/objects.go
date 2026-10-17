@@ -10,12 +10,31 @@ import (
 type objectRef struct{ kind, id string }
 type objectReplay map[objectRef]*talk.Object
 
-func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *replayValues, crossing func(string)) (objectReplay, error) {
+func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *replayValues, crossing func(string), records []Record) (objectReplay, error) {
 	kinds := map[string]*talk.ObjectKind{}
 	rows, _ := setup["objectKinds"].([]any)
+	// A collection's Object Shape may name a kind declared later, or its own.
+	// Only the name of these placeholders is used; each is then redefined.
+	placeholders := map[string]*talk.ObjectKind{}
+	for _, raw := range rows {
+		name := raw.(Setup)["name"].(string)
+		kind, err := core.DefineObjectKind(talk.ObjectKindDef{Name: name})
+		if err != nil {
+			return nil, err
+		}
+		placeholders[name] = kind
+	}
+	collections := newCollectionReplay(values, crossing, records)
 	for _, raw := range rows {
 		row := raw.(Setup)
 		def := talk.ObjectKindDef{Name: row["name"].(string)}
+		if raw, ok := row["elements"].(Setup); ok {
+			elements, err := collections.declaration(raw, placeholders)
+			if err != nil {
+				return nil, err
+			}
+			def.Elements = elements
+		}
 		parents, _ := row["parentKinds"].([]any)
 		for _, parent := range parents {
 			def.ParentKinds = append(def.ParentKinds, parent.(string))
@@ -80,6 +99,9 @@ func setupObjects(core *talk.Core, group *talk.Group, setup Setup, values *repla
 			return nil, err
 		}
 		objects[ref] = o
+	}
+	if err := collections.members(setup, kinds, objects); err != nil {
+		return nil, err
 	}
 	return objects, nil
 }

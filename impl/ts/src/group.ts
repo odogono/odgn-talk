@@ -3687,6 +3687,16 @@ export class Group {
     return this.objects.get(`${kind}\u0000${id}`)?.handle;
   }
 
+  /** Whether an object value is one of this Group's handles. */
+  holdsObject(v: Value): boolean {
+    const state = stateOf(v);
+    return (
+      !!state &&
+      this.objects.get(`${state.handle.kind.name}\u0000${state.handle.id}`) ===
+        state
+    );
+  }
+
   // The Group's state of a handle, which must be one of its own.
   private held(o: HostObject): ObjectState {
     const state = stateOf(o.value);
@@ -4673,6 +4683,7 @@ export class Group {
               ['object', traceValue(rec.object)],
               ['name', rec.name],
               ['op', rec.op],
+              ['selector', rec.selector ? traceValue(rec.selector) : null],
               ['value', rec.value ? traceValue(rec.value) : null],
               ['error', rec.error ? traceValue(rec.error) : null],
             ],

@@ -672,7 +672,8 @@ func (p *parser) containerPath(propertyTarget bool) *Node {
 	n := p.chunkLevel()
 	root := n
 	for {
-		if root.Kind == "chunk" {
+		if root.Kind == "chunk" || propertyTarget && root.Kind == "element" {
+			// `set` may read through an Object Element Reference; nothing writes one.
 			root = root.Children[1]
 		} else if root.Kind == "key" && builtinProperty(root) {
 			// Built-in properties are read-only on a Container's path (ADR 0079).
@@ -1324,6 +1325,13 @@ func (p *parser) primary() *Node {
 			p.take(Operand)
 			kind = "code point"
 		}
+		// An Object Element Reference (#1143) takes the chunk-word decision.
+		if (t.Raw == "element" || t.Raw == "elements") && startsIndex(p.peek(Operand)) {
+			n := node("element", t, p.binary(6))
+			p.expect("of")
+			n.Children = append(n.Children, p.postfix())
+			return n
+		}
 		if kind != "" && startsIndex(p.peek(Operand)) {
 			n := node("chunk", t, p.binary(6))
 			n.Text = kind
@@ -1395,6 +1403,16 @@ func (p *parser) the() *Node {
 		return node("key-computed", t, key, p.postfix())
 	}
 	k := p.peek(Operand)
+	// `the first element of p`: an ordinal Object Element Reference (#1143),
+	// positioned at `the`.
+	if slices.Contains(generated.Grammar.Ordinals, k.Raw) && p.second(Operand).Raw == "element" {
+		p.take(Operand)
+		p.take(Operand)
+		ordinal := node("ordinal", t)
+		ordinal.Text = k.Raw
+		p.expect("of")
+		return node("element", t, ordinal, p.postfix())
+	}
 	if slices.Contains(generated.Grammar.Ordinals, k.Raw) && (chunkName(p.second(Operand).Raw) != "" || p.second(Operand).Raw == "code") {
 		p.take(Operand)
 		c := p.word()
@@ -1434,6 +1452,12 @@ func (p *parser) the() *Node {
 		key = p.key()
 	}
 	p.expect("of")
+	// `the number of elements of p`: an Element Count (#1143).
+	if key.Text == "number" && k.Kind != Text && p.pair("elements", "of") {
+		p.take(Operand)
+		p.expect("of")
+		return node("element-count", t, p.postfix())
+	}
 	n := node("key", t, p.postfix())
 	n.Text = key.Text
 	n.Params = []*Node{key}

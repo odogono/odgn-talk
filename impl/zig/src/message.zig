@@ -244,6 +244,9 @@ const Need = struct {
     prop: []u8,
     /// The value a set brings; null reads the property.
     value: ?*Value = null,
+    /// An Object Collection call's `op` and selector (#1143).
+    op: ?[]const u8 = null,
+    selector: ?*Value = null,
     // An effect's fields, with `script`, `run`, `segment`, `grant` and
     // `now`: every enrolled Grant, the named Coordinator, and the phase.
     grants: [][]u8 = &.{},
@@ -258,6 +261,7 @@ const Need = struct {
         for (n.args) |v| v.release();
         gpa.free(n.args);
         if (n.value) |v| v.release();
+        if (n.selector) |v| v.release();
         n.* = undefined;
     }
 };
@@ -325,6 +329,8 @@ pub const Session = struct {
     x_owner: ?*GroupEntry = null,
     /// `group-exchanges-v1`: each Group has its own exchange.
     group_exchanges: bool = false,
+    /// `object-elements-v1`: Object Kinds may declare a collection (#1143).
+    object_elements: bool = false,
     /// OOM inside a Host function, which cannot report it there.
     oom: bool = false,
     /// A `restore` waiting for its `resolve-result`.
@@ -1150,6 +1156,37 @@ fn propNeed(s: *Session, pc: *PropContext, o: *objects.Object, value: ?*Value) o
     return .deferred;
 }
 
+/// An Object Collection call (#1143): the interim `prop` need with `prop`
+/// `elements`, its `op` and, for `at` and `find`, its selector.
+fn elementNeed(s: *Session, pc: *PropContext, o: *objects.Object, op: []const u8, selector: ?*Value) objects.Result {
+    const r = propNeed(s, pc, o, null);
+    if (r == .deferred) {
+        s.x.need.?.op = op;
+        s.x.need.?.selector = selector;
+    } else if (selector) |v| v.release();
+    return r;
+}
+
+fn elementCount(context: ?*anyopaque, gpa: Allocator, o: *objects.Object) objects.Result {
+    const pc: *PropContext = @ptrCast(@alignCast(context.?));
+    if (propAnswer(pc.session, gpa)) |r| return r;
+    return elementNeed(pc.session, pc, o, "count", null);
+}
+
+fn elementAt(context: ?*anyopaque, gpa: Allocator, o: *objects.Object, index: i64) objects.Result {
+    const pc: *PropContext = @ptrCast(@alignCast(context.?));
+    if (propAnswer(pc.session, gpa)) |r| return r;
+    const selector = model.scalar(pc.session.gpa, .{ .number = model.Decimal.fromInt(index) }) catch return .broken;
+    return elementNeed(pc.session, pc, o, "at", selector);
+}
+
+fn elementFind(context: ?*anyopaque, gpa: Allocator, o: *objects.Object, name: []const u8) objects.Result {
+    const pc: *PropContext = @ptrCast(@alignCast(context.?));
+    if (propAnswer(pc.session, gpa)) |r| return r;
+    const selector = model.text(pc.session.gpa, name) catch return .broken;
+    return elementNeed(pc.session, pc, o, "find", selector);
+}
+
 fn propGet(context: ?*anyopaque, gpa: Allocator, o: *objects.Object) objects.Result {
     const pc: *PropContext = @ptrCast(@alignCast(context.?));
     if (propAnswer(pc.session, gpa)) |r| return r;
@@ -1480,6 +1517,14 @@ fn needReply(s: *Session, ref: i64) []u8 {
             o.text(n.prop) catch {};
             if (n.value) |v| {
                 o.raw(",\"value\":") catch {};
+                o.value(v) catch {};
+            }
+            if (n.op) |op| {
+                o.raw(",\"op\":") catch {};
+                o.text(op) catch {};
+            }
+            if (n.selector) |v| {
+                o.raw(",\"selector\":") catch {};
                 o.value(v) catch {};
             }
         },
@@ -2060,7 +2105,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.core) catch {};
     o.raw(",\"saveFormat\":") catch {};
     o.text(v.save_format) catch return oomReply();
-    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\"") catch return oomReply();
+    o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
     o.raw("]") catch return oomReply();
     return finishOk(s, &o, null);
@@ -2849,8 +2894,32 @@ fn defineObjectKindReply(s: *Session, msg: Json, ref: i64) []u8 {
             slot.* = a.dupe(u8, t) catch return hostError(s.gpa, ref, .out_of_memory);
         }
     }
+    // Its Object Collection, only after `object-elements-v1` (#1143).
+    var elements: ?objects.Elements = null;
+    if (field(msg, "elements")) |e| if (e != .null) {
+        if (!s.object_elements) return protocolError(s.gpa, ref, "an Object Collection needs object-elements-v1");
+        if (e != .object) return hostError(s.gpa, ref, .invalid_value);
+        const count_cost = costOf(field(e, "countCost") orelse return hostError(s.gpa, ref, .invalid_value)) catch return hostError(s.gpa, ref, .invalid_value);
+        const at_cost = costOf(field(e, "atCost") orelse return hostError(s.gpa, ref, .invalid_value)) catch return hostError(s.gpa, ref, .invalid_value);
+        const find_cost = costOf(field(e, "findCost") orelse return hostError(s.gpa, ref, .invalid_value)) catch return hostError(s.gpa, ref, .invalid_value);
+        const shape = shapeOf(a, field(e, "shape") orelse return hostError(s.gpa, ref, .invalid_value), 0) catch return hostError(s.gpa, ref, .invalid_value);
+        if (!objects.validElementShape(shape)) {
+            shape.release();
+            return hostError(s.gpa, ref, .invalid_value);
+        }
+        const pc = s.gpa.create(PropContext) catch {
+            shape.release();
+            return hostError(s.gpa, ref, .out_of_memory);
+        };
+        pc.* = .{ .session = s, .kind = s.gpa.dupe(u8, name) catch "", .prop = s.gpa.dupe(u8, "elements") catch "" };
+        s.prop_contexts.append(s.gpa, pc) catch {
+            shape.release();
+            return hostError(s.gpa, ref, .out_of_memory);
+        };
+        elements = .{ .shape = shape, .count = elementCount, .at = elementAt, .find = elementFind, .context = pc, .count_cost = count_cost, .at_cost = at_cost, .find_cost = find_cost };
+    };
     const kind = a.create(objects.Kind) catch return hostError(s.gpa, ref, .out_of_memory);
-    kind.* = .{ .name = a.dupe(u8, name) catch return hostError(s.gpa, ref, .out_of_memory), .props = props, .parent_kinds = parents };
+    kind.* = .{ .name = a.dupe(u8, name) catch return hostError(s.gpa, ref, .out_of_memory), .props = props, .parent_kinds = parents, .elements = elements };
     s.core.kinds.append(a, kind) catch return hostError(s.gpa, ref, .out_of_memory);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -4040,6 +4109,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var inline_inputs = s.inline_inputs;
             var analyses = s.analysis;
             var group_exchanges = s.group_exchanges;
+            var object_elements = s.object_elements;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
                 if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
@@ -4054,6 +4124,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     analyses = true;
                 } else if (std.mem.eql(u8, name, "group-exchanges-v1")) {
                     group_exchanges = true;
+                } else if (std.mem.eql(u8, name, "object-elements-v1")) {
+                    object_elements = true;
                 } else if (std.mem.eql(u8, name, "inline-inputs-v1") and s.inline_io != null) {
                     inline_inputs = true;
                 } else if (std.mem.eql(u8, name, "standard-refinements-v1")) {
@@ -4067,6 +4139,7 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             s.inline_inputs = inline_inputs;
             s.analysis = analyses;
             s.group_exchanges = group_exchanges;
+            s.object_elements = object_elements;
         }
         return helloReply(s, ref);
     } else if (std.mem.eql(u8, m, "add")) {
@@ -4904,6 +4977,47 @@ test "a prop need, a load error's diagnostics, and a fault that loses nothing" {
     try std.testing.expectEqualStrings("limit fault", spun.object.get("outcome").?.string);
     try std.testing.expectEqualStrings("fuel", spun.object.get("limit").?.string);
     _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{10}));
+}
+
+test "object-elements-v1: a collection declaration and its prop needs (#1143)" {
+    const gpa = std.testing.allocator;
+    const s = Session.init(gpa).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const kind = "{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"page\",\"props\":[],\"elements\":{{\"shape\":{{\"object\":\"rect\"}},\"countCost\":{{\"fuel\":1}},\"atCost\":{{\"fuel\":1}},\"findCost\":{{\"fuel\":2}}}}}}";
+    // Without opt-in, a collection is refused rather than stripped.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send(kind, .{1})));
+    const hello = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"object-elements-v1\"]}}", .{2}));
+    var offered = false;
+    for (hello.object.get("features").?.array.items) |f| offered = offered or std.mem.eql(u8, f.string, "object-elements-v1");
+    try std.testing.expect(offered);
+    _ = try okOf(try c.send(kind, .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"define-object-kind\",\"ref\":{d},\"name\":\"rect\",\"props\":[]}}", .{4}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{5}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"page\",\"id\":\"p\"}}", .{6}));
+    _ = try okOf(try c.send("{{\"m\":\"object\",\"ref\":{d},\"group\":\"g\",\"kind\":\"rect\",\"id\":\"r\"}}", .{7}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on probe o\\n  return [the number of elements of o, element -1 of o, element \\\"a\\\" of o]\\nend probe\\n\"}}", .{8}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"probe\",\"args\":[{{\"$object\":[\"page\",\"p\"]}}]}}}}", .{9}));
+    var reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{10});
+    var need = reply.object.get("need").?;
+    try std.testing.expectEqualStrings("elements", need.object.get("prop").?.string);
+    try std.testing.expectEqualStrings("count", need.object.get("op").?.string);
+    try std.testing.expect(need.object.get("selector") == null);
+    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":1}}", .{10});
+    need = reply.object.get("need").?;
+    try std.testing.expectEqualStrings("at", need.object.get("op").?.string);
+    try std.testing.expectEqual(@as(i64, -1), need.object.get("selector").?.integer);
+    reply = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":{{\"$object\":[\"rect\",\"r\"]}}}}", .{10});
+    need = reply.object.get("need").?;
+    try std.testing.expectEqualStrings("find", need.object.get("op").?.string);
+    try std.testing.expectEqualStrings("a", need.object.get("selector").?.string);
+    const done = try c.sendRef(10, "{{\"m\":\"prop-result\",\"ref\":{d},\"value\":null}}", .{10});
+    const end = try runEnd(done);
+    try std.testing.expectEqualStrings("completed", end.object.get("outcome").?.string);
+    const items = end.object.get("result").?.array.items;
+    try std.testing.expectEqual(@as(i64, 1), items[0].integer);
+    try std.testing.expect(items[2] == .null);
 }
 
 test "define-capability carries Operation documentation and refuses other kinds" {

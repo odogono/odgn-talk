@@ -7,13 +7,19 @@
 - **Required base:** the merged commit of #1152; the whole
   [contract](../../spec/embedding/object-elements.md) is required. The existing
   [Spec change-impact guide](../agents/spec-changes.md) governs activation.
-- **Implemented in:** this delivery specifies the contract and
+- **Implemented in:** #1152 specified the contract and
   [ADR 0100](../adr/0100-object-element-references-use-a-fixed-spelling-and-a-host-collection.md).
-  It implements no parser, runtime, Host callback, corpus expectation or Folio
-  behavior. The current checkout already contains the Tetris Example Project.
-- **Remaining work:** all executable activation and acceptance below, then
-  Folio integration and removal of Tetris's startup handle cache. No blocker
-  on a Grid Element is introduced.
+  The shared catalogue branch `feat/1143-shared-catalogue` activates the
+  grammar, `get-element`/`count-elements`, costs, diagnostics, the extended
+  `prop` record and corpus setup, the `talk.ts`, `talk.go` and `talk.h`
+  declarations, the reference parser and lowering, and the whole TS Core
+  (Host API, Manifest, replay, Session Transcripts and the WASI adapter's
+  `object-elements-v1` side), with Unblessed cases. Go and Zig PRs stack on
+  that branch; until they land, Go's API comparison and Disassembly count,
+  Go's corpus gate and the Zig build fail on the new opcodes and declarations.
+- **Remaining work:** the Go and Zig Cores (including the Zig reactor's
+  Message Layer and Elixir registration), then Folio integration and removal
+  of Tetris's startup handle cache. No blocker on a Grid Element is introduced.
 - **Approval still needed:** no new expectation files exist and none have
   been blessed. Future Trace, Disassembly and Session expectations need first
   blessing through the [corpus workflow](../../corpus/README.md#checking).

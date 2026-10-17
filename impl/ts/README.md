@@ -108,11 +108,13 @@ The hook controls execution and reads state; it does not edit Script Variables o
 
 ## Process-wide Core and Host Manifests
 
-**Object element references:** `element name of receiver` and
-`the number of elements of receiver` are
-[specified](../../spec/embedding/object-elements.md) but unsupported here.
-The checked Object Kind interface exposes properties, with no Object
-Collection callbacks.
+**Object element references:** `element s of receiver`, ordinal references
+and `the number of elements of receiver` read an `ObjectKindDef`'s optional
+`elements` collection, as [the contract](../../spec/embedding/object-elements.md)
+says, with `get-element`, `count-elements` and `prop` crossings in the Trace.
+The Host Manifest writes the declaration. The WASI adapter declares a
+collection only to a guest offering `object-elements-v1`, and answers its
+`prop` needs with an `op`; the Zig reactor does not offer it yet.
 
 **Metering support:** the [incremental metering contract](../../spec/embedding/metered-operations.md) is specified but not implemented here. Callback-time `Charge` remains the available interface; queued charge requests, metering declaration validation, the new Trace records and metered-call Save restrictions are unsupported. SQLite factories that exist here still use up-front `max × perRow` charging. The [Zig Core](../zig/README.md#the-machine) implements the staged contract with Zig-only acceptance tests; the shared executable catalogues remain staged. See [#472](https://github.com/odogono/odgn-talk/issues/472).
 

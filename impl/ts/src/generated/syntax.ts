@@ -151,6 +151,7 @@ export const grammar = {
     "delimited-by",
     "does-not",
     "during",
+    "element-count",
     "every-chunk",
     "every-match",
     "ignoring-case",

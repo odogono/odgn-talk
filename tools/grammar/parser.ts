@@ -892,7 +892,12 @@ export class Parser {
     }
     const e = this.chunkLevel();
     let root = e;
-    while (root && ['Chunk', 'OrdinalChunk', 'Key', 'Group'].includes(root.k)) {
+    // `set` may read through an Object Element Reference; nothing writes one.
+    const path = ['Chunk', 'OrdinalChunk', 'Key', 'Group'];
+    if (propertyTarget) {
+      path.push('ObjectElement');
+    }
+    while (root && path.includes(root.k)) {
       root = root.k === 'Group' ? root.e : (root.of ?? root.base);
     }
     let outer = e;
@@ -1926,6 +1931,11 @@ export class Parser {
         this.next();
         return this.chunk(w);
       }
+    } else if (w === 'element' || w === 'elements') {
+      if (this.startsIndex(this.la2('chunk-word', 'operator'))) {
+        this.next();
+        return this.objectElement();
+      }
     }
     this.next();
     const p = this.peek(0, 'operator');
@@ -1991,6 +2001,13 @@ export class Parser {
     return { k: 'Chunk', kind, index, of: this.postfix(this.primary()) };
   }
 
+  // `element 3 of p`, `element ("cell_" & n) of p` (#1143)
+  objectElement(): Node {
+    const index = this.range();
+    this.expectWord('of', 'operator');
+    return { k: 'ObjectElement', index, of: this.postfix(this.primary()) };
+  }
+
   the(): Node {
     this.next();
     let t = this.peek(0);
@@ -2020,6 +2037,16 @@ export class Parser {
         this.next();
         return { k: 'Target' };
       }
+      if (ORDINALS.has(t.v) && this.isWord(n, 'element')) {
+        this.next();
+        this.next();
+        this.expectWord('of', 'operator');
+        return {
+          k: 'ObjectElement',
+          ord: t.v,
+          of: this.postfix(this.primary()),
+        };
+      }
       if (
         ORDINALS.has(t.v) &&
         this.isWord(n) &&
@@ -2044,6 +2071,16 @@ export class Parser {
       optional ? 'an optional map key' : 'a key or property name',
     );
     this.expectWord('of', 'operator');
+    if (
+      !optional &&
+      key === 'number' &&
+      this.isWord(this.peek(0), 'elements') &&
+      this.isWord(this.la2('element-count', 'operator'), 'of')
+    ) {
+      this.next();
+      this.next('operator');
+      return { k: 'ElementCount', of: this.postfix(this.primary()) };
+    }
     return {
       k: optional ? k : PROPERTIES.has(key) ? 'Property' : 'Key',
       key,

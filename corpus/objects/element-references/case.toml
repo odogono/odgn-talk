@@ -1,0 +1,56 @@
+# element-references: `element s of o`, ordinals and `the number of elements
+# of o` read a Host Object's Object Collection through one Host callback each,
+# recorded as `prop` with `name=elements` and the `count`, `at` or `find` op.
+# Zero, positions past 2^53 - 1 and missing names give Nothing; a negative
+# position goes to `At` signed. Selector and receiver errors call nothing
+# (the object element contract; spec chapter 4, Chunk Expressions).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[objectKinds]]
+name = "page"
+props = [{ name = "title", shape = "text", readOnly = true }]
+elements = { shape = { oneOf = [{ object = "rect" }, { object = "button" }] }, countCost = { fuel = 1 }, atCost = { fuel = 1 }, findCost = { fuel = 2, alloc = 4 } }
+
+[[objectKinds]]
+name = "rect"
+props = [{ name = "fill", shape = "text", getCost = { fuel = 1 }, setCost = { fuel = 1 } }]
+
+[[objectKinds]]
+name = "button"
+props = [{ name = "label", shape = "text", setCost = { fuel = 1 } }]
+
+[[objects]]
+kind = "rect"
+id = "r1"
+props = { fill = '"white"' }
+
+[[objects]]
+kind = "button"
+id = "b1"
+props = { label = '"Go"' }
+
+[[objects]]
+kind = "rect"
+id = "r2"
+props = { fill = '"white"' }
+
+[[objects]]
+kind = "page"
+id = "main"
+props = { title = '"Main"' }
+elements = [{ name = "cell_1_1", object = '<object rect "r1">' }, { name = "go", object = '<object button "b1">' }, { name = "cell_1_2", object = '<object rect "r2">' }]
+
+[[objects]]
+kind = "page"
+id = "empty"
+props = { title = '"Empty"' }
+
+[[scripts]]
+name = "board"
+source = "board.talk"
+objects = { thisPage = { kind = "page", id = "main" }, emptyPage = { kind = "page", id = "empty" }, cell = { kind = "rect", id = "r1" } }

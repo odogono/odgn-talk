@@ -1476,3 +1476,23 @@ end t
 on t
   replace "a" in the label of the target with "b"
 end t
+-- case: an Object Element Reference is not a Container
+-- expect: not a container at 2:14
+on t
+  put 1 into element 3 of thisPage
+end t
+-- case: there is no element Whose head
+-- expect: unexpected token at 2:13
+on t
+  put every element of p whose it into xs
+end t
+-- case: an ordinal Object Element Reference takes no Whose Clause
+-- expect: unexpected token at 2:30
+on t
+  put the first element of p whose it into x
+end t
+-- case: a subtraction from a variable named `element` now starts a reference
+-- expect: unexpected token at 2:19
+on t
+  put element - 1 into n
+end t

@@ -339,6 +339,7 @@ pub const Core = struct {
     kinds: std.ArrayList(*objects.Kind) = .empty,
     libraries: std.ArrayList(*machine.Library) = .empty,
     prop_bridges: std.ArrayList(*PropBridge) = .empty,
+    elements_bridges: std.ArrayList(*ElementsBridge) = .empty,
     mappings: std.ArrayList(*Mapping) = .empty,
     lifecycles: std.ArrayList(*SegmentLifecycle) = .empty,
     /// The Host release hooks Capabilities call, with their contexts.
@@ -1030,6 +1031,7 @@ export fn talk_core_release(c: ?*Core) void {
             p.shape.release();
         }
         gpa.free(k.props);
+        if (k.elements) |e| e.shape.release();
         for (k.parent_kinds) |x| gpa.free(x);
         gpa.free(k.parent_kinds);
         gpa.free(k.name);
@@ -1038,6 +1040,8 @@ export fn talk_core_release(c: ?*Core) void {
     core.kinds.deinit(gpa);
     for (core.prop_bridges.items) |b| gpa.destroy(b);
     core.prop_bridges.deinit(gpa);
+    for (core.elements_bridges.items) |b| gpa.destroy(b);
+    core.elements_bridges.deinit(gpa);
     for (core.mappings.items) |m| gpa.destroy(m);
     core.mappings.deinit(gpa);
     for (core.lifecycles.items) |l| gpa.destroy(l);
@@ -3219,6 +3223,22 @@ pub const Prop = extern struct {
     set_cost: Cost,
 };
 
+pub const ElementCountFn = ?*const fn (context: ?*anyopaque, o: *objects.Object, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
+pub const ElementAtFn = ?*const fn (context: ?*anyopaque, o: *objects.Object, index: i64, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
+pub const ElementFindFn = ?*const fn (context: ?*anyopaque, o: *objects.Object, name: [*]const u8, name_len: usize, result: *?*Value, err: *ScriptError) callconv(.c) CallEnd;
+
+/// An Object Kind's Object Collection (#1143).
+pub const ObjectElements = extern struct {
+    shape: ?*const Shape,
+    count: ElementCountFn,
+    at: ElementAtFn,
+    find: ElementFindFn,
+    context: ?*anyopaque,
+    count_cost: Cost,
+    at_cost: Cost,
+    find_cost: Cost,
+};
+
 pub const ObjectKindDef = extern struct {
     name: ?[*]const u8,
     name_len: usize,
@@ -3227,7 +3247,53 @@ pub const ObjectKindDef = extern struct {
     parent_kinds: ?[*]const ?[*]const u8,
     parent_kinds_lens: ?[*]const usize,
     parent_kinds_len: usize,
+    elements: ?*const ObjectElements,
 };
+
+/// A C collection's callbacks and their context, behind the Core's.
+pub const ElementsBridge = struct {
+    count: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd,
+    at: *const fn (?*anyopaque, *objects.Object, i64, *?*Value, *ScriptError) callconv(.c) CallEnd,
+    find: *const fn (?*anyopaque, *objects.Object, [*]const u8, usize, *?*Value, *ScriptError) callconv(.c) CallEnd,
+    context: ?*anyopaque,
+};
+
+// Each answers with an owned result, Nothing included: an answer without
+// one is a host error.
+fn elementResult(gpa: std.mem.Allocator, end: CallEnd, value: ?*Value, failure: ScriptError) objects.Result {
+    const r = propResult(gpa, end, value, failure);
+    return if (r == .done) .broken else r;
+}
+
+const no_failure: ScriptError = .{ .code = null, .code_len = 0, .message = null, .message_len = 0, .data = null };
+
+fn elementCount(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object) objects.Result {
+    const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
+    var value: ?*Value = null;
+    var failure = no_failure;
+    const end = b.count(b.context, o, &value, &failure);
+    return elementResult(gpa, end, value, failure);
+}
+
+fn elementAt(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, index: i64) objects.Result {
+    const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
+    var value: ?*Value = null;
+    var failure = no_failure;
+    const end = b.at(b.context, o, index, &value, &failure);
+    return elementResult(gpa, end, value, failure);
+}
+
+fn elementFind(context: ?*anyopaque, gpa: std.mem.Allocator, o: *objects.Object, name: []const u8) objects.Result {
+    const b: *ElementsBridge = @ptrCast(@alignCast(context.?));
+    var value: ?*Value = null;
+    var failure = no_failure;
+    const end = b.find(b.context, o, name.ptr, name.len, &value, &failure);
+    return elementResult(gpa, end, value, failure);
+}
+
+fn validCost(cost: Cost) bool {
+    return cost.fuel >= 0 and cost.alloc >= 0;
+}
 
 /// A C property's Get and Set and their context, behind the Core's.
 pub const PropBridge = struct { get: *const fn (?*anyopaque, *objects.Object, *?*Value, *ScriptError) callconv(.c) CallEnd, set: PropSetFn, context: ?*anyopaque };
@@ -3289,8 +3355,33 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
     }
     const parents_in: []const ?[*]const u8 = if (def.parent_kinds_len == 0) &.{} else (def.parent_kinds orelse return .invalid_value)[0..def.parent_kinds_len];
     const lens: []const usize = if (def.parent_kinds_len == 0) &.{} else (def.parent_kinds_lens orelse return .invalid_value)[0..def.parent_kinds_len];
+    // Its collection's metadata is copied here; a later change to `def`
+    // changes nothing.
+    var elements: ?objects.Elements = null;
+    if (def.elements) |e| {
+        const shape = e.shape orelse return .invalid_value;
+        if (e.count == null or e.at == null or e.find == null) return .invalid_value;
+        if (!validCost(e.count_cost) or !validCost(e.at_cost) or !validCost(e.find_cost)) return .invalid_value;
+        if (!objects.validElementShape(shape)) return .invalid_value;
+        const b = gpa.create(ElementsBridge) catch return .out_of_memory;
+        b.* = .{ .count = e.count.?, .at = e.at.?, .find = e.find.?, .context = e.context };
+        c.elements_bridges.append(gpa, b) catch {
+            gpa.destroy(b);
+            return .out_of_memory;
+        };
+        elements = .{
+            .shape = retained(shape),
+            .count = elementCount,
+            .at = elementAt,
+            .find = elementFind,
+            .context = b,
+            .count_cost = .{ .fuel = @intCast(e.count_cost.fuel), .alloc = @intCast(e.count_cost.alloc) },
+            .at_cost = .{ .fuel = @intCast(e.at_cost.fuel), .alloc = @intCast(e.at_cost.alloc) },
+            .find_cost = .{ .fuel = @intCast(e.find_cost.fuel), .alloc = @intCast(e.find_cost.alloc) },
+        };
+    }
     const k = gpa.create(objects.Kind) catch return .out_of_memory;
-    k.* = .{ .name = gpa.dupe(u8, name) catch return .out_of_memory, .props = gpa.alloc(objects.Prop, given.len) catch return .out_of_memory };
+    k.* = .{ .name = gpa.dupe(u8, name) catch return .out_of_memory, .props = gpa.alloc(objects.Prop, given.len) catch return .out_of_memory, .elements = elements };
     const parents = gpa.alloc([]const u8, parents_in.len) catch return .out_of_memory;
     for (parents_in, lens, parents) |x, len, *y| y.* = gpa.dupe(u8, bytes(x, len) catch "") catch return .out_of_memory;
     k.parent_kinds = parents;
@@ -3310,6 +3401,12 @@ export fn talk_define_object_kind(c: *Core, def: *const ObjectKindDef, out: *?*o
     c.kinds.append(gpa, k) catch return .out_of_memory;
     out.* = k;
     return .ok;
+}
+
+/// Zig only, for the corpus runner: the Shape of an object of the kind
+/// named, which need not be defined yet, as a collection's own kind isn't.
+pub fn objectShapeNamed(name: []const u8) !*Shape {
+    return Shape.objectOf(allocator, name);
 }
 
 export fn talk_object_shape(k: *const objects.Kind, out: *?*Shape) HostErrorCode {
