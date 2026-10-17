@@ -16,7 +16,7 @@ func (b *zigGroup) save() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return zigBytes(reply.Get("save"))
+	return zigBytes(reply.get("save"))
 }
 
 func (b *zigGroup) fingerprint() [32]byte {
@@ -24,7 +24,7 @@ func (b *zigGroup) fingerprint() [32]byte {
 	if err != nil {
 		panic(err)
 	}
-	raw, err := zigBytes(reply.Get("fingerprint"))
+	raw, err := zigBytes(reply.get("fingerprint"))
 	if err != nil || len(raw) != 32 {
 		panic(fmt.Errorf("Zig fingerprint returned an invalid digest: %v", err))
 	}
@@ -67,7 +67,7 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 	if !ok {
 		return nil, result, g.refuse(InvalidValue, "invalid mismatch policy")
 	}
-	_, err = b.exchange("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply Value) error {
+	_, err = b.exchange("restore", map[string]any{"save": zigByteValue(save), "name": o.Name, "trace": o.Trace != nil, "libraries": libraries, "mismatch": policy}, func(reply zigReply) error {
 		return b.restoreReceipt(reply, &result)
 	})
 	if err != nil {
@@ -76,16 +76,15 @@ func zigRestore(c *Core, save []byte, o RestoreOptions) (_ *Group, result Restor
 	return g, result, nil
 }
 
-func (b *zigGroup) restoreBindings(need Value) (map[string]any, error) {
+func (b *zigGroup) restoreBindings(need zigReply) (map[string]any, error) {
 	o := b.restoreOptions
 	if o == nil {
 		return nil, fmt.Errorf("unexpected Zig restore callback")
 	}
-	asked := need.Get("grants")
-	grants := make([]any, asked.Len())
-	for i := range grants {
-		pair := asked.Index(i + 1)
-		script, name := zigText(pair.Index(1)), zigText(pair.Index(2))
+	asked := need.get("grants").items()
+	grants := make([]any, len(asked))
+	for i, pair := range asked {
+		script, name := zigTextPair(pair)
 		var offered *Grant
 		if o.Grants != nil {
 			offered = o.Grants(script, name)
@@ -105,11 +104,10 @@ func (b *zigGroup) restoreBindings(need Value) (map[string]any, error) {
 		}
 		s.grants[name] = kept[name]
 	}
-	asked = need.Get("objects")
-	objects := make([]bool, asked.Len())
-	for i := range objects {
-		pair := asked.Index(i + 1)
-		kind, id := zigText(pair.Index(1)), zigText(pair.Index(2))
+	asked = need.get("objects").items()
+	objects := make([]bool, len(asked))
+	for i, pair := range asked {
+		kind, id := zigTextPair(pair)
 		var native any
 		if o.Resolve != nil {
 			native, objects[i] = o.Resolve(kind, id)
@@ -138,12 +136,12 @@ func (b *zigGroup) restoreObject(kind, id string, native any) {
 	b.group.objects[key] = &Object{group: b.group, kind: definition, id: id, native: native}
 }
 
-func (b *zigGroup) restoreReceipt(reply Value, result *RestoreResult) error {
+func (b *zigGroup) restoreReceipt(reply zigReply, result *RestoreResult) error {
 	// Resolution order need not be load order; ScriptNames must retain it.
-	names := reply.Get("scripts")
-	scripts := make([]*Script, 0, names.Len())
-	for i := 1; i <= names.Len(); i++ {
-		name := zigText(names.Index(i))
+	names := reply.get("scripts").items()
+	scripts := make([]*Script, 0, len(names))
+	for _, raw := range names {
+		name := zigText(raw)
 		s := b.group.Script(name)
 		if s == nil {
 			s = b.newRestoredScript(name)
@@ -151,31 +149,28 @@ func (b *zigGroup) restoreReceipt(reply Value, result *RestoreResult) error {
 		scripts = append(scripts, s)
 	}
 	b.group.scripts = scripts
-	objects := reply.Get("objects")
-	for i := 1; i <= objects.Len(); i++ {
-		pair := objects.Index(i)
-		b.restoreObject(zigText(pair.Index(1)), zigText(pair.Index(2)), nil)
+	for _, pair := range reply.get("objects").items() {
+		kind, id := zigTextPair(pair)
+		b.restoreObject(kind, id, nil)
 	}
 	// PendingCall's wire keys and Operation identity differ from its public
 	// Go representation. Run/Segment/Clock belong to the adopted Host Call.
-	pending := reply.Get("pending")
-	for i := 1; i <= pending.Len(); i++ {
-		row := pending.Index(i)
-		p := PendingCall{ID: CallID(zigText(row.Get("call"))), Script: zigText(row.Get("script")), Grant: zigText(row.Get("grant"))}
-		p.Operation = OperationRef{Capability: zigText(row.Get("capability")), Operation: zigText(row.Get("operation"))}
+	for _, row := range reply.get("pending").items() {
+		p := PendingCall{ID: CallID(zigText(row.get("call"))), Script: zigText(row.get("script")), Grant: zigText(row.get("grant"))}
+		p.Operation = OperationRef{Capability: zigText(row.get("capability")), Operation: zigText(row.get("operation"))}
 		var binding any
 		if grant := b.group.Script(p.Script).grants[p.Grant]; grant != nil {
 			p.Operation.Capability, binding = grant.definition.name, grant.binding
 		}
-		if err := b.decode(row.Get("args"), reflect.ValueOf(&p.Args).Elem()); err != nil {
+		if err := b.decode(row.get("args"), reflect.ValueOf(&p.Args).Elem()); err != nil {
 			return err
 		}
-		now, err := time.Parse(time.RFC3339Nano, zigText(row.Get("now")))
+		now, err := time.Parse(time.RFC3339Nano, zigText(row.get("now")))
 		if err != nil {
 			return err
 		}
 		ctx, cancel := operationContext(Suspending)
-		call := &Call{group: b.group, id: p.ID, scriptName: p.Script, grantName: p.Grant, binding: binding, runID: RunID(zigText(row.Get("run"))), segmentID: zigText(row.Get("segment")), now: now, context: ctx}
+		call := &Call{group: b.group, id: p.ID, scriptName: p.Script, grantName: p.Grant, binding: binding, runID: RunID(zigText(row.get("run"))), segmentID: zigText(row.get("segment")), now: now, context: ctx}
 		b.restoredCalls[p.ID] = call
 		b.calls[p.ID] = cancel
 		result.Pending = append(result.Pending, p)
@@ -184,14 +179,13 @@ func (b *zigGroup) restoreReceipt(reply Value, result *RestoreResult) error {
 		name string
 		dst  any
 	}{{"variablesOnly", &result.VariablesOnly}, {"discardedRuns", &result.DiscardedRuns}, {"droppedMessages", &result.DroppedMessages}, {"abandonedCalls", &result.AbandonedCalls}} {
-		if err := b.decode(reply.Get(field.name), reflect.ValueOf(field.dst).Elem()); err != nil {
+		if err := b.decode(reply.get(field.name), reflect.ValueOf(field.dst).Elem()); err != nil {
 			return err
 		}
 	}
-	disposed := reply.Get("disposed")
-	for i := 1; i <= disposed.Len(); i++ {
-		pair := disposed.Index(i)
-		result.Disposed = append(result.Disposed, ObjectRef{Kind: zigText(pair.Index(1)), ID: zigText(pair.Index(2))})
+	for _, pair := range reply.get("disposed").items() {
+		kind, id := zigTextPair(pair)
+		result.Disposed = append(result.Disposed, ObjectRef{Kind: kind, ID: id})
 	}
 	reports, err := b.pumpReceipt(reply)
 	result.Reports = reports.Reports
@@ -221,7 +215,7 @@ func (b *zigGroup) settle(id CallID, s Settlement) (*Call, error) {
 		settlement["adopt"] = true
 	}
 	var call *Call
-	_, err := b.exchange("settle", map[string]any{"call": string(id), "settlement": settlement}, func(Value) error {
+	_, err := b.exchange("settle", map[string]any{"call": string(id), "settlement": settlement}, func(zigReply) error {
 		call = b.restoredCalls[id]
 		delete(b.restoredCalls, id)
 		return nil

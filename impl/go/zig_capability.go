@@ -80,10 +80,9 @@ func (b *zigGroup) grants(given map[string]*Grant) (map[string]any, map[string]*
 		if err != nil {
 			return nil, nil, err
 		}
-		n, _ := reply.Get("grant").AsDec()
-		id, err := n.Int64()
-		if err != nil {
-			return nil, nil, err
+		id, ok := reply.get("grant").int64()
+		if !ok {
+			return nil, nil, fmt.Errorf("Zig grant returned an invalid id")
 		}
 		out[name], kept[name] = id, bound
 	}
@@ -195,11 +194,11 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 	}
 }
 
-func (b *zigGroup) callback(need Value) (map[string]any, error) {
-	if zigText(need.Get("m")) == "trace" {
+func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
+	kind := zigText(need.get("m"))
+	if kind == "trace" {
 		return map[string]any{}, nil
 	}
-	kind := zigText(need.Get("m"))
 	if kind == "resolve" {
 		return b.restoreBindings(need)
 	}
@@ -210,13 +209,13 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		return b.effect(need)
 	}
 	if kind != "op" && kind != "release" {
-		return nil, backendUnsupported("Host callback " + zigText(need.Get("m")))
+		return nil, backendUnsupported("Host callback " + kind)
 	}
-	s := b.group.Script(zigText(need.Get("script")))
+	s := b.group.Script(zigText(need.get("script")))
 	if s == nil {
 		return nil, fmt.Errorf("Zig callback names an unknown Script")
 	}
-	grantName := zigText(need.Get("grant"))
+	grantName := zigText(need.get("grant"))
 	grant := s.grants[grantName]
 	if grant == nil {
 		return nil, fmt.Errorf("Zig callback names an unknown Grant")
@@ -225,11 +224,11 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		if grant.definition.release == nil {
 			return nil, fmt.Errorf("Zig release names a Grant without a release hook")
 		}
-		now, err := time.Parse(time.RFC3339Nano, zigText(need.Get("now")))
+		now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
 		if err != nil {
 			return nil, err
 		}
-		reason := ReleaseReason(zigText(need.Get("reason")))
+		reason := ReleaseReason(zigText(need.get("reason")))
 		switch reason {
 		case ReleaseStop, ReleaseReload, ReleaseRevoke, ReleaseDisable:
 		default:
@@ -238,42 +237,37 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 		invokeReleaseHook(grant.definition.release, GrantContext{Group: b.group, ScriptName: s.name, GrantName: grantName, Binding: grant.binding, Now: now, Reason: reason})
 		return map[string]any{}, nil
 	}
-	name := zigText(need.Get("operation"))
+	name := zigText(need.get("operation"))
 	op, ok := grant.definition.ops[name]
-	if !ok || !grant.operations[name] || zigText(need.Get("capability")) != b.reg.handle(grant.definition) {
+	if !ok || !grant.operations[name] || zigText(need.get("capability")) != b.reg.handle(grant.definition) {
 		return nil, fmt.Errorf("Zig callback does not match its Grant")
 	}
 	var args []Value
-	for i := 1; i <= need.Get("args").Len(); i++ {
-		raw, err := EncodeJSON(need.Get("args").Index(i))
-		if err != nil {
-			return nil, err
-		}
+	for _, raw := range need.get("args").items() {
 		v, err := b.decodeValue(raw)
 		if err != nil {
 			detail := err.Error()
-			b.failureDetails[CallID(zigText(need.Get("call")))] = detail
+			b.failureDetails[CallID(zigText(need.get("call")))] = detail
 			return map[string]any{"hostError": detail}, nil
 		}
 		args = append(args, v)
 	}
-	now, err := time.Parse(time.RFC3339Nano, zigText(need.Get("now")))
+	now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := operationContext(op.Mode)
-	automatic, _ := need.Get("automatic").AsBool()
+	automatic, _ := need.get("automatic").boolean()
 	if automatic {
 		ctx = context.Background()
 	}
-	c := &Call{automatic: automatic, scopeName: zigText(need.Get("scope")), group: b.group, scriptName: s.name, runID: RunID(zigText(need.Get("run"))), grantName: grantName, binding: grant.binding, id: CallID(zigText(need.Get("call"))), segmentID: zigText(need.Get("segment")), now: now, context: ctx, starting: true}
+	c := &Call{automatic: automatic, scopeName: zigText(need.get("scope")), group: b.group, scriptName: s.name, runID: RunID(zigText(need.get("run"))), grantName: grantName, binding: grant.binding, id: CallID(zigText(need.get("call"))), segmentID: zigText(need.get("segment")), now: now, context: ctx, starting: true}
 	var left int64
-	limited := need.Get("fuelLeft").Kind() != KindNothing
+	limited := need.get("fuelLeft").present()
 	if limited {
-		n, _ := need.Get("fuelLeft").AsDec()
-		left, err = n.Int64()
-		if err != nil {
-			return nil, err
+		var ok bool
+		if left, ok = need.get("fuelLeft").int64(); !ok {
+			return nil, fmt.Errorf("Zig callback has an invalid fuelLeft")
 		}
 	}
 	c.charge = func(fuel int64) bool {
@@ -344,9 +338,9 @@ func (b *zigGroup) callback(need Value) (map[string]any, error) {
 	}
 	return out, nil
 }
-func (b *zigGroup) abandoned(ids Value) {
-	for i := 1; i <= ids.Len(); i++ {
-		id := CallID(zigText(ids.Index(i)))
+func (b *zigGroup) abandoned(ids zigReply) {
+	for _, raw := range ids.items() {
+		id := CallID(zigText(raw))
 		b.callsMu.Lock()
 		cancel := b.calls[id]
 		delete(b.calls, id)
@@ -359,11 +353,14 @@ func (b *zigGroup) abandoned(ids Value) {
 
 // The Core distinguishes a queued answer from one actually consumed. In
 // particular a sliced ready Run can still be cancelled before resumption.
-func (b *zigGroup) settled(ids Value) {
+func (b *zigGroup) settled(ids zigReply) {
+	if !ids.present() {
+		return
+	}
 	b.callsMu.Lock()
 	defer b.callsMu.Unlock()
-	for i := 1; i <= ids.Len(); i++ {
-		delete(b.calls, CallID(zigText(ids.Index(i))))
+	for _, raw := range ids.items() {
+		delete(b.calls, CallID(zigText(raw)))
 	}
 }
 func (b *zigGroup) settleCall(c *Call, kind string, v Value, e *ScriptError, fuel int64) {
@@ -397,10 +394,11 @@ func (b *zigGroup) grantNames(s *Script) map[string][]string {
 		panic(err)
 	}
 	out := map[string][]string{}
-	for _, entry := range reply.Entries() {
-		ops := make([]string, entry.Val.Len())
-		for i := range ops {
-			ops[i] = zigText(entry.Val.Index(i + 1))
+	for _, entry := range reply.entries() {
+		items := entry.Val.items()
+		ops := make([]string, len(items))
+		for i, op := range items {
+			ops[i] = zigText(op)
 		}
 		out[entry.Key] = ops
 	}
@@ -409,32 +407,32 @@ func (b *zigGroup) grantNames(s *Script) map[string][]string {
 
 // The guest owns enrollment and finalization; bindings and hook identity stay
 // in Go. Enrollment order comes from the need, including aliases.
-func (b *zigGroup) effect(need Value) (map[string]any, error) {
-	s := b.group.Script(zigText(need.Get("script")))
+func (b *zigGroup) effect(need zigReply) (map[string]any, error) {
+	s := b.group.Script(zigText(need.get("script")))
 	if s == nil {
 		return nil, fmt.Errorf("Zig effect names an unknown Script")
 	}
-	name := zigText(need.Get("grant"))
+	name := zigText(need.get("grant"))
 	grant := s.grants[name]
 	if grant == nil || grant.coordinator == nil {
 		return nil, fmt.Errorf("Zig effect names an unknown Coordinator")
 	}
 	grants := []SegmentGrant{}
-	for i := 1; i <= need.Get("grants").Len(); i++ {
-		n := zigText(need.Get("grants").Index(i))
+	for _, raw := range need.get("grants").items() {
+		n := zigText(raw)
 		g := s.grants[n]
 		if g == nil || g.coordinator != grant.coordinator {
 			return nil, fmt.Errorf("Zig effect has inconsistent enrollment")
 		}
 		grants = append(grants, SegmentGrant{GrantName: n, Binding: g.binding})
 	}
-	now, err := time.Parse(time.RFC3339Nano, zigText(need.Get("now")))
+	now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
 	if err != nil {
 		return nil, err
 	}
-	ctx := SegmentContext{Group: b.group, ScriptName: s.name, RunID: RunID(zigText(need.Get("run"))), GrantName: name, SegmentID: zigText(need.Get("segment")), Binding: grant.binding, Now: now, Grants: grants}
+	ctx := SegmentContext{Group: b.group, ScriptName: s.name, RunID: RunID(zigText(need.get("run"))), GrantName: name, SegmentID: zigText(need.get("segment")), Binding: grant.binding, Now: now, Grants: grants}
 	var hook func(SegmentContext) EffectResult
-	phase := zigText(need.Get("phase"))
+	phase := zigText(need.get("phase"))
 	switch phase {
 	case "begin":
 		hook = grant.coordinator.Begin

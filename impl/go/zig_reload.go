@@ -16,7 +16,7 @@ func (b *zigGroup) reload(s *Script, source string, carry CarryOver, keepMailbox
 		return nil, err
 	}
 	var reports []Report
-	_, err := b.exchange("reload", map[string]any{"script": s.name, "source": source, "carry": how, "keepMailbox": keepMailbox}, func(reply Value) error {
+	_, err := b.exchange("reload", map[string]any{"script": s.name, "source": source, "carry": how, "keepMailbox": keepMailbox}, func(reply zigReply) error {
 		result, err := b.pumpReceipt(reply)
 		reports = result.Reports
 		return err

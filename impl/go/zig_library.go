@@ -47,14 +47,13 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 	if err != nil {
 		return nil, err
 	}
-	raw, err := zigBytes(reply.Get("identity"))
+	raw, err := zigBytes(reply.get("identity"))
 	if err != nil || len(raw) != 32 {
 		return nil, fmt.Errorf("Zig compile-library returned an invalid identity")
 	}
 	copy(l.id[:], raw)
-	needs := reply.Get("needs")
-	for i := 1; i <= needs.Len(); i++ {
-		l.needs = append(l.needs, OperationRef{Capability: zigText(needs.Index(i).Get("capability")), Operation: zigText(needs.Index(i).Get("operation"))})
+	for _, need := range reply.get("needs").items() {
+		l.needs = append(l.needs, OperationRef{Capability: zigText(need.get("capability")), Operation: zigText(need.get("operation"))})
 	}
 	checker.reg.libraries[l.id] = true
 	return l, nil
@@ -62,7 +61,7 @@ func zigCompileLibrary(c *Core, src LibrarySource, imports []*Library, decls Gra
 
 // compileLibrary sends one compile-library; the caller holds librariesMu
 // and has compiled its imports.
-func (b *zigGroup) compileLibrary(l *Library) (Value, error) {
+func (b *zigGroup) compileLibrary(l *Library) (zigReply, error) {
 	imports := make([]any, len(l.imports))
 	for i, imported := range l.imports {
 		imports[i] = zigIdentity(imported.id)
@@ -77,7 +76,7 @@ func (b *zigGroup) compileLibrary(l *Library) (Value, error) {
 				for i, arg := range check.Args {
 					shape, err := zigShape(arg.inner, 0)
 					if err != nil {
-						return Nothing, err
+						return nil, err
 					}
 					args[i] = shape
 				}
@@ -108,7 +107,7 @@ func (b *zigGroup) ensureLibrary(l *Library) error {
 	if err != nil {
 		return err
 	}
-	raw, _ := zigBytes(reply.Get("identity"))
+	raw, _ := zigBytes(reply.get("identity"))
 	if hex.EncodeToString(raw) != hex.EncodeToString(l.id[:]) {
 		return fmt.Errorf("Zig guest compiled %s to a different identity", l.Name())
 	}
@@ -122,8 +121,8 @@ func zigByteValue(raw []byte) map[string]any {
 	return map[string]any{"$bytes": base64.StdEncoding.EncodeToString(raw)}
 }
 
-func zigBytes(v Value) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(zigText(v.Get("$bytes")))
+func zigBytes(v zigReply) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(zigText(v.get("$bytes")))
 }
 
 func (b *zigGroup) addLibrary(l *Library) error {
@@ -156,7 +155,7 @@ func (b *zigGroup) replaceLibrary(l *Library, carry CarryOver) ([]Report, error)
 		return nil, err
 	}
 	var reports []Report
-	_, err = b.exchange("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how}, func(reply Value) error {
+	_, err = b.exchange("replace-library", map[string]any{"identity": zigIdentity(l.id), "carry": how}, func(reply zigReply) error {
 		result, err := b.pumpReceipt(reply)
 		reports = result.Reports
 		return err

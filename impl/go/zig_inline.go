@@ -10,10 +10,10 @@ import (
 // serves it. No caller touches guest memory or starts a nested export.
 type zigAdmission struct {
 	fields   map[string]any
-	receipt  func(Value) error
+	receipt  func(zigReply) error
 	done     chan struct{}
 	finished chan struct{}
-	packet   Value
+	packet   zigPacket
 	err      error
 }
 
@@ -27,7 +27,7 @@ func (b *zigGroup) wakeInline() {
 // export serializes guest calls, but leaves admission open while one runs.
 // Inline checkpoints serve requests on that export's guest stack. Requests
 // arriving after its final checkpoint are served at the export boundary.
-func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Value, error) {
+func (b *zigGroup) export(fields map[string]any, receipt func(zigReply) error) (zigPacket, error) {
 	b.frameMu.Lock()
 	if b.exporting {
 		req := &zigAdmission{fields: fields, receipt: receipt, done: make(chan struct{}), finished: make(chan struct{})}
@@ -50,7 +50,7 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 		if err == nil {
 			err = fmt.Errorf("guest returned without acknowledging inline admission")
 		}
-		b.finishAdmission(req, Nothing, err)
+		b.finishAdmission(req, zigPacket{}, err)
 	}
 	b.frameMu.Lock()
 	if err == nil {
@@ -69,7 +69,7 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 		b.admissions = b.admissions[1:]
 		b.frameMu.Unlock()
 		if err != nil {
-			b.finishAdmission(next, Nothing, err)
+			b.finishAdmission(next, zigPacket{}, err)
 		} else {
 			reply, e := b.frame(next.fields)
 			b.finishAdmission(next, reply, e)
@@ -79,13 +79,12 @@ func (b *zigGroup) export(fields map[string]any, receipt func(Value) error) (Val
 	return packet, err
 }
 
-func (b *zigGroup) finishAdmission(req *zigAdmission, packet Value, err error) {
+func (b *zigGroup) finishAdmission(req *zigAdmission, packet zigPacket, err error) {
 	b.frameMu.Lock()
 	if err == nil {
-		n, ok := packet.Get("ref").AsDec()
-		if !ok {
+		if !packet.ref.present() {
 			err = fmt.Errorf("inline reply omitted ref")
-		} else if ref, e := n.Int64(); e != nil || ref != req.fields["ref"] {
+		} else if ref, ok := packet.ref.int64(); !ok || ref != req.fields["ref"] {
 			err = fmt.Errorf("inline reply ref mismatch")
 		}
 	}
@@ -100,25 +99,26 @@ func (b *zigGroup) finishAdmission(req *zigAdmission, packet Value, err error) {
 // inlineEvent is called only by the export goroutine. Sink work runs on a Host
 // goroutine; the guest services its inputs until that work has acknowledged.
 func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
-	event, err := DecodeJSON(data)
+	root, err := zigParseReply(data)
 	if err != nil {
 		return nil, err
 	}
-	if reply := event.Get("reply"); reply.Kind() != KindNothing {
+	event := zigReadPacket(root)
+	if reply := root.get("reply"); reply.present() {
 		req := b.inlineRequest
 		if req == nil {
 			return nil, fmt.Errorf("inline reply without admission")
 		}
 		b.inlineRequest = nil
 		b.inlineWait = append(b.inlineWait, req.finished)
-		b.finishAdmission(req, reply, nil)
-	} else if event.Get("trace").Kind() != KindNothing || event.Get("need").Kind() != KindNothing {
+		b.finishAdmission(req, zigReadPacket(reply), nil)
+	} else if event.trace.present() || event.need.present() {
 		done := make(chan struct{})
 		b.inlineWait = append(b.inlineWait, done)
 		go func() {
 			defer func() { close(done); b.wakeInline() }()
 			b.observe(event, "")
-			if need := event.Get("need"); need.Kind() != KindNothing {
+			if need := event.need; need.present() {
 				_, err := b.callback(need)
 				if err != nil {
 					b.frameMu.Lock()
@@ -163,9 +163,9 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 }
 
 // applyReceipt records a completed reply's ok value; needs and errors carry none.
-func applyReceipt(packet Value, receipt func(Value) error) error {
-	if receipt == nil || packet.Get("need").Kind() != KindNothing || packet.Get("err").Kind() != KindNothing {
+func applyReceipt(packet zigPacket, receipt func(zigReply) error) error {
+	if receipt == nil || packet.need.present() || packet.err.present() {
 		return nil
 	}
-	return receipt(packet.Get("ok"))
+	return receipt(packet.ok)
 }

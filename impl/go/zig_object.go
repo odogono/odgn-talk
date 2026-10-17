@@ -131,23 +131,26 @@ func (b *zigGroup) resolve(kind, id string) (*Object, bool) {
 // A property crossing runs the public Get or Set with the Host's own handle.
 // The guest has already charged, checked read-only and Set's Shape; it
 // checks Get's result Shape after the reply.
-func (b *zigGroup) property(need Value) (map[string]any, error) {
-	ref := need.Get("object").Get("$object")
-	o, ok := b.resolve(zigText(ref.Index(1)), zigText(ref.Index(2)))
+func (b *zigGroup) property(need zigReply) (map[string]any, error) {
+	ref := need.get("object").get("$object").items()
+	o, ok := (*Object)(nil), false
+	if len(ref) == 2 {
+		o, ok = b.resolve(zigText(ref[0]), zigText(ref[1]))
+	}
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an unknown Object")
 	}
-	prop, ok := o.kind.props[zigText(need.Get("prop"))]
+	prop, ok := o.kind.props[zigText(need.get("prop"))]
 	if !ok {
 		return nil, fmt.Errorf("Zig property names an undeclared property")
 	}
 	set := false
-	for _, entry := range need.Entries() {
+	for _, entry := range need.entries() {
 		set = set || entry.Key == "value"
 	}
 	var input Value
 	if set {
-		if err := b.decode(need.Get("value"), reflect.ValueOf(&input).Elem()); err != nil {
+		if err := b.decode(need.get("value"), reflect.ValueOf(&input).Elem()); err != nil {
 			return nil, err
 		}
 	}
