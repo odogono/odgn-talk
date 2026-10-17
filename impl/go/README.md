@@ -212,9 +212,31 @@ mid-suite, compile once and run tests singly:
 `go -C impl/go test -c -tags talk_zig_experimental -o /tmp/adapter.test .`, then
 `(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.
 
+The shared public Hosts include callback-generated Broadcasts, cancellation
+cleanup order and rollback, refused out-of-range Pump Clocks, and malformed
+immediate, Start and later Fail data. Pump results, typed Reports, Fuel, futures,
+Trace and inspected state compare exactly; only error wording and Host detail
+wording are excluded, and failure detail must remain nonempty. The native tests
+install Trace at Group construction and cancel through public Run controls.
+
+Known execution differences remain outside the selection: local error-message
+`during` propagation ([#1059](https://github.com/odogono/odgn-talk/issues/1059)),
+inherited veto checking on Extend ([#1060](https://github.com/odogono/odgn-talk/issues/1060)),
+allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
+Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
+parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)),
+out-of-range wait durations ([#1064](https://github.com/odogono/odgn-talk/issues/1064)),
+and Stop at a failed Host charge ([#1065](https://github.com/odogono/odgn-talk/issues/1065)).
+Explicit Call answers/failures refuse foreign handles at admission as the Spec
+requires; the native Go tests expect deferred failure instead
+([#1066](https://github.com/odogono/odgn-talk/issues/1066)). Native private-function
+and save-layout tests cannot run unchanged through a public adapter; snapshot
+round trips await Save/Restore, and Go heap-allocation ratios are not a guest
+memory measurement.
+
 The same selection executes in CI on Linux amd64/arm64 and macOS arm64, with
-separate pure-Go cross-builds. It includes unchanged public-interface Go tests
-and dedicated adapter tests, rather than asserting the whole native suite
+separate pure-Go native Host and adapter cross-builds. It includes unchanged
+public-interface Go tests and dedicated adapter tests, rather than asserting the whole native suite
 passes under this tag. Full API/Corpus, facility, concurrency and measured
 performance acceptance remain in [#884](https://github.com/odogono/odgn-talk/issues/884).
 
@@ -882,7 +904,9 @@ ordinary Host crossing; compiled code retains only call metadata and declaration
 Suspending `ask … and wait` invokes `Start` once after the same atomic precharge.
 `Call.Answer`, `AnswerWithCost` and `Fail` may run on any goroutine, append Host
 inputs and call `OnReady`; answers queued during `Start` wait for the next Pump.
-The waiting Run retains a 48-byte pending call, then its answer or failure Data
+An answer or failure carrying another Group's handle is admitted and raises `host
+error` on resumption, rather than refused at the call as the Spec requires
+([#1066](https://github.com/odogono/odgn-talk/issues/1066)). The waiting Run retains a 48-byte pending call, then its answer or failure Data
 when ready. Validation, result/Data conversion and any late Fuel are charged on
 its resuming turn, under the Run budgets, Script slice and Pump cap. Conversion
 faults roll back that Segment while preserving earlier committed effects.

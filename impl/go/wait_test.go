@@ -105,8 +105,8 @@ end mark
 	}
 	s.Deliver(Message{Name: "mark"})
 	g.Pump(now, PumpOptions{})
-	// Queue synchronously: context cancellation uses this same input path.
-	g.cancelDelivery(delivery{id: "d1", script: s, pending: pending})
+	// Queue cancellation through the public Run control API.
+	s.CancelRun(g.Inspect().Scripts[0].Runs[0].ID)
 	r, err := g.Pump(now.Add(time.Second), PumpOptions{})
 	if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != Cancelled || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
@@ -143,14 +143,14 @@ end mark
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, p, err := s.Request(nil, Message{Name: "nap"})
+	_, _, err = s.Request(nil, Message{Name: "nap"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	g.Pump(now, PumpOptions{})
 	s.Deliver(Message{Name: "mark"})
-	g.cancelDelivery(delivery{id: id, script: s, pending: p})
+	s.CancelRun(g.Inspect().Scripts[0].Runs[0].ID)
 	r, err := g.Pump(now, PumpOptions{})
 	if err != nil || len(operationalReports(r.Reports)) != 2 {
 		t.Fatal(r, err)
@@ -181,13 +181,13 @@ end mark
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, p, err := s.Request(nil, Message{Name: "nap"})
+	_, _, err = s.Request(nil, Message{Name: "nap"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	g.Pump(now, PumpOptions{})
-	g.cancelDelivery(delivery{id: id, script: s, pending: p})
+	s.CancelRun(g.Inspect().Scripts[0].Runs[0].ID)
 	s.Deliver(Message{Name: "mark"})
 	g.Pump(now, PumpOptions{})
 	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got != `["cleanup", "mark"]` {

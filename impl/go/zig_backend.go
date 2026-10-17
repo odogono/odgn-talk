@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -448,6 +449,20 @@ func (b *zigGroup) pump(now time.Time, options PumpOptions) (PumpResult, error) 
 		return PumpResult{}, err
 	}
 	defer b.group.endWorker()
+	// Refused Clocks cannot be encoded as guest Instants. Record the Host input
+	// here, before taking queued inputs or entering the guest.
+	clock := now.Round(0).UTC().Truncate(time.Microsecond)
+	if clock.Year() < 1 || clock.Year() > 9999 {
+		traceFields := map[string]string{"clock": clock.Format(time.RFC3339Nano)}
+		if options.FuelSlice > 0 {
+			traceFields["fuel-slice"] = strconv.FormatInt(options.FuelSlice, 10)
+		}
+		if options.FuelCap > 0 {
+			traceFields["fuel-cap"] = strconv.FormatInt(options.FuelCap, 10)
+		}
+		b.group.recordRefusal("pump", nil, traceFields, InvalidValue)
+		return PumpResult{}, &HostError{InvalidValue, "Clock outside year 1–9999"}
+	}
 	if err := b.syncKinds(); err != nil {
 		return PumpResult{}, err
 	}
@@ -505,6 +520,11 @@ func (b *zigGroup) pumpReceipt(reply Value) (PumpResult, error) {
 			}
 		} else if ok {
 			failed.Detail = b.failureDetails[failed.Call]
+			// Shape, catalogue and malformed-Data checks run in Zig after landing.
+			// There is no Go callback error to retain for these failures.
+			if failed.Detail == "" {
+				failed.Detail = "Host result rejected by the Core"
+			}
 			for def, handle := range b.definitions {
 				if failed.Operation.Capability == handle {
 					failed.Operation.Capability = def.name

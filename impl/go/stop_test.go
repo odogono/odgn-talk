@@ -246,18 +246,23 @@ func TestStopAbandonsPendingOperationAndFailsScriptSender(t *testing.T) {
 }
 
 func TestStopLandsAtPumpEndWithoutHostCrossing(t *testing.T) {
-	g := New().NewGroup(GroupOptions{})
+	var record func(string)
+	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
+		if record != nil {
+			record(line)
+		}
+	})})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "script variable n=0\non go\n put 9 into n\n repeat forever\n end repeat\nend go\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	queued := false
-	g.options.Trace = traceFunc(func(line string) {
+	record = func(line string) {
 		if !queued && strings.HasPrefix(line, "preempt ") {
 			queued = true
 			s.Stop("end")
 		}
-	})
+	}
 	if _, err := s.Deliver(Message{Name: "go"}); err != nil {
 		t.Fatal(err)
 	}
@@ -305,19 +310,24 @@ func TestStopAtFailedHostChargeRemainsSticky(t *testing.T) {
 
 func TestStopQueuedAtPumpStartWaitsForPumpEnd(t *testing.T) {
 	var trace lines
-	g := New().NewGroup(GroupOptions{})
+	var record func(string)
+	g := New().NewGroup(GroupOptions{Trace: traceFunc(func(line string) {
+		if record != nil {
+			record(line)
+		}
+	})})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on go\n return 7\nend go\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	queued := false
-	g.options.Trace = traceFunc(func(line string) {
+	record = func(line string) {
 		trace.Record(line)
 		if !queued && strings.HasPrefix(line, "> pump ") {
 			queued = true
 			s.Stop("end")
 		}
-	})
+	}
 	_, p, err := s.Request(nil, Message{Name: "go"})
 	if err != nil {
 		t.Fatal(err)

@@ -90,6 +90,13 @@ jobs:
           CGO_ENABLED: '0'
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+      # Compile both sides of the shared public Host comparison independently.
+      - run: go test -c -o native.test .
+        working-directory: impl/go
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
       - run: go test -c -tags talk_zig_experimental -o adapter.test .
         working-directory: impl/go
         env:
