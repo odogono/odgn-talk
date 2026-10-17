@@ -11,8 +11,21 @@ import {
 import type { GrantDecls } from './effects';
 import type { Limits } from './machine';
 import { LoadError } from './errors';
-import { newGroup, type Group, type Script } from './group';
-import { compileLibrary, type Library } from './library';
+import {
+  newGroup,
+  restore,
+  type Group,
+  type GroupOptions,
+  type RestoreOptions,
+  type RestoreResult,
+  type Script,
+} from './group';
+import { compileLibrary, replacementLibraries, type Library } from './library';
+import {
+  defineObjectKind,
+  type ObjectKind,
+  type ObjectKindDef,
+} from './objects';
 import type { HostObject } from './objects';
 import type { SqliteBinding } from './sqlite-capability';
 import type { TranscriptItem } from './session/transcript';
@@ -122,12 +135,37 @@ export const operationDeclarations = (
   return declarations;
 };
 
+/**
+ * The Core a case runs on: the TS Core's free functions by default, or
+ * another Core behind the same embedding interface, such as the Zig reactor's
+ * facade (`@odgn/northtalk/wasm`).
+ */
+export type CaseCore = {
+  compileLibrary: typeof compileLibrary;
+  defineObjectKind<N>(k: ObjectKindDef<N>): ObjectKind<N>;
+  newGroup(o: GroupOptions): Group;
+  /** The Host's Libraries after a replacement, its dependents recompiled. */
+  replacementLibraries: typeof replacementLibraries;
+  restore(
+    bytes: Uint8Array,
+    o: RestoreOptions,
+  ): { group: Group; result: RestoreResult };
+};
+export const tsCore: CaseCore = {
+  compileLibrary,
+  defineObjectKind,
+  newGroup,
+  replacementLibraries,
+  restore,
+};
+
 // Every Library case.toml names, compiled once each Library it imports is, so
 // in any order; one that never compiles keeps its LoadError.
 const compileLibraries = (
   readSource: (file: string) => string,
   setup: Setup,
   declarations: GrantDecls,
+  core: CaseCore = tsCore,
 ): Map<string, Library | LoadError> => {
   const out = new Map<string, Library | LoadError>();
   let pending = setup.libraries ?? [];
@@ -140,7 +178,7 @@ const compileLibraries = (
         );
         out.set(
           library.name,
-          compileLibrary(
+          core.compileLibrary(
             {
               ...library,
               source: library.text ?? readSource(library.source),
@@ -255,6 +293,7 @@ export const buildSetupGroup = (
   setup: Setup,
   capabilities: ReadonlyMap<string, CapabilityDef<unknown>>,
   options: {
+    core?: CaseCore;
     name: string;
     readSource?(file: string): string;
     resolveObject?(kind: string, id: string): HostObject | undefined;
@@ -263,7 +302,8 @@ export const buildSetupGroup = (
     withCoordinator?<T>(name: string | undefined, make: () => T): T;
   },
 ): SetupGroup => {
-  const group = newGroup({
+  const core = options.core ?? tsCore;
+  const group = core.newGroup({
     name: options.name,
     trace: options.trace,
     ...(setup.seed === undefined ? {} : { seed: BigInt(setup.seed) }),
@@ -274,7 +314,7 @@ export const buildSetupGroup = (
       throw new Error(`No source reader for ${file}`);
     });
   const declarations = operationDeclarations(capabilities);
-  const libraries = compileLibraries(readSource, setup, declarations);
+  const libraries = compileLibraries(readSource, setup, declarations, core);
   const bound = new Map<string, Record<string, Grant<unknown>>>();
   const objectOf = (o: ObjectRefSpec): HostObject => {
     const found = options.resolveObject?.(o.kind, o.id);

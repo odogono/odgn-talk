@@ -114,6 +114,49 @@ The hook controls execution and reads state; it does not edit Script Variables o
 
 `exportManifest({ kind, version, grants, libraries, messages, objectKinds, objects })` returns compact JSON with one trailing LF for the Host to write to `<kind>.talk-manifest.json`. Optional collections default to empty arrays. Declarations, receiving kinds and parent kinds are sorted in code-point order; argument Shapes, map fields and alternatives retain declaration order. Properties include `name`, `shape` (default `"value"`), `readOnly`, `getCost` and `setCost` (default zero Fuel and allocation). Operation Declarations use the same data helpers as saves and Group Fingerprints, with non-empty plain-text `description` and source-text `examples` appended only in the manifest. `defineCapability` validates these fields; rewording them leaves saves, restore matching and Group Fingerprints unchanged. Bindings, native objects and executable Host callbacks never appear, and export never calls them. The manifest is tooling-only and outside Trace parity.
 
+## The Zig reactor in a browser
+
+`@odgn/northtalk/wasm` offers this package's embedding API over the [Zig Core](../zig/README.md)'s `wasm32-wasi` reactor and its [Message Layer](../../spec/09-embedding.md#the-message-layer), so a browser Host can run either Core ([ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md)). Its Values, Shapes, errors and Capability and Object Kind constructors are this package's own, so a Host switches Cores by its import:
+
+```ts
+import { createCore, shape, text } from '@odgn/northtalk/wasm'; // or '@odgn/northtalk'
+
+const core = await createCore(); // or createCore({ wasm: url, bytes or WebAssembly.Module })
+```
+
+`createCore` compiles `talk.wasm`, by default the file beside the module. Build it with `zig build -Dtarget=wasm32-wasi` in `impl/zig`, which writes `zig-out/bin/talk.wasm`, and serve it with the bundle. Every call after `createCore` is synchronous, as on the TS Core. The [core-switch example](examples/core-switch/) runs one Host on both Cores.
+
+Each Group has a guest instance of its own, with its own Instance Owner. Grant bindings, Host Objects' natives, Operation functions, lifecycle hooks and futures stay in JS, and the guest's interim needs call them. The facade negotiates seven features, and refuses a reactor that lacks any of them:
+
+- `paused-inputs-v1`, so a callback can queue calls.
+- `abandoned-before-needs-v1`, so a Call's `signal` aborts before the next callback runs.
+- `crossing-trace-v1`, which brings refused calls' Trace records.
+- `climb-v1`, so a Request settles at its answer.
+- `function-gone-v1`, so a stale Function Value call rejects.
+- `standard-refinements-v1`, so the Standard Capability factories are this package's, with the guest's own checks.
+- `restore-bindings-v1`, which rebinds Grants during a restore.
+
+It differs from the TS Core in these ways:
+
+- **Making the Core:** `createCore` is asynchronous and takes `{ wasm, diagnostics }`. `core.versions` replaces `coreVersions`: the language, Cost Model and Unicode versions match the TS Core's, and the Core and save format are Zig's. Use the Core's methods: the package exports no free `newGroup`, `restore`, `compileLibrary` or `defineCapability`.
+- **Saves** are in the Zig format, so neither Core restores the other's ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)).
+- **Libraries and Object Kinds** must come from this Core's `compileLibrary` and `defineObjectKind`, so it can declare them in each guest. A Library compiled elsewhere is refused with `invalid value`.
+- **Each Group costs a guest:** about 2 MiB of linear memory and 150 KB of JS heap ([figures](../../docs/research/zig-browser-figures.md)). Nothing caps a guest's memory. A trap or an unreadable reply throws `InstanceLostError` and loses only that Group. `Group.memoryBytes()` gives its linear memory.
+- **Frames** are at most 64 MiB. A larger one, such as a save restored past that size, throws `FrameRefusedError` and leaves the Group usable.
+- **Function Values** that the guest makes read only `homeScript()` and their display form, and compare by the guest's token. **Text Patterns** from the guest carry only their source. Both go back to the guest unchanged.
+- **`call failed` details:** a result the guest rejects, against its Shape or its error catalogue, reports `Host result rejected by the Core`, not the TS Core's description. Parity covers the code, not the detail.
+- **Not provided:** the debugger hooks, the Session Host, the notification router and the other subpaths.
+- **A Join of exactly `maxJoin` members** faults under `crossing-trace-v1` ([#1128](https://github.com/odogono/odgn-talk/issues/1128)).
+
+```sh
+(cd impl/zig && zig build -Dtarget=wasm32-wasi --prefix ../../.cache/zig-wasi)
+bun test tests/wasm.test.ts examples/core-switch # the same Host code on both Cores
+bun tools/wasm-corpus.ts                         # every Trace Case, through the facade
+bun tools/wasm-browser.ts                        # both Cores in headless Chromium, with figures
+```
+
+`wasm-corpus.ts` replays each Trace Case with this package's Host side and the reactor behind it, in both replays. It reports a known divergence with its issue, and a case whose save is past the frame limit, apart from failures. `wasm-browser.ts` finds Chromium through `--chrome`, `$CHROME` or Playwright's cache. Its `--serve` flag serves the pages for a browser of your own instead.
+
 ## Grant release hooks
 
 `defineCapability(name, operations, lifecycle?, release?)` accepts an independent,

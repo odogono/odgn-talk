@@ -11,7 +11,8 @@
     "./replay": "./src/replay.ts",
     "./setup": "./src/setup.ts",
     "./debug": "./src/debug-api.ts",
-    "./driver": "./src/driver.ts"
+    "./driver": "./src/driver.ts",
+    "./wasm": "./src/wasm/index.ts"
   },
   "scripts": {
     "typecheck": "tsc",
