@@ -14,10 +14,6 @@ const store = @import("store.zig");
 const reader_template = northtalk.analysis.inspect_reader;
 
 const Allocator = std.mem.Allocator;
-const parser = northtalk.syntax.parser;
-const lexer = northtalk.syntax.lexer;
-const ast = northtalk.syntax.ast;
-const check = northtalk.check;
 const analysis = northtalk.analysis;
 
 pub const Instant = struct {
@@ -1025,31 +1021,23 @@ pub const Session = struct {
             const rest = std.mem.trim(u8, trimmed[end..], " \t\n");
             if (rest.len == 0) return true;
             if (std.mem.eql(u8, name, ":inspect")) {
-                const r = try parser.parseEntryEnd(ta, rest, true);
-                return ended(rest, r.failure, r.trailing);
+                const e = try analysis.executable(ta, rest, true, &.{});
+                return if (e.problem) |p| !p.incomplete else true;
             }
             if (std.mem.eql(u8, name, ":fuel")) return s.complete(rest);
             return true;
         }
-        // A `--|` block waits for the declaration it documents.
-        const lines = try splitLines(ta, trimmed);
-        var i: usize = 0;
-        while (i < lines.len and (std.mem.startsWith(u8, std.mem.trimStart(u8, lines[i], " \t"), "--|") or std.mem.trim(u8, lines[i], " \t").len == 0)) i += 1;
-        if (i == lines.len) return false;
-        const w = firstWords(lines[i]);
-        if (isDeclaration(w)) return switch (try parser.parse(ta, trimmed)) {
-            .tree => true,
-            .failure => |d| ended(trimmed, d, false),
-        };
-        const statement = s.isStatement(w);
-        const r = try parser.parseEntryEnd(ta, trimmed, !statement);
-        return ended(trimmed, r.failure, r.trailing);
+        const e = try s.analyzeEntry(ta, trimmed);
+        if (e.doc == .pending) return false;
+        return if (e.problem) |p| !p.incomplete else true;
     }
 
-    /// Whether a parse leaves nothing to wait for: it succeeded, or failed
-    /// before the end of the source and not inside a fenced literal or hole.
-    fn ended(text: []const u8, failure: ?parser.Diagnostic, trailing: bool) bool {
-        return analysis.ended(text, failure orelse return true, trailing);
+    /// Supplies the Session Script's names to the same analysis the Message
+    /// Layer serves. All returned slices live in `ta` or `text`.
+    fn analyzeEntry(s: *Session, ta: Allocator, text: []const u8) !analysis.Entry {
+        var handlers: std.ArrayList([]const u8) = .empty;
+        for (s.decls.items) |d| if (d.kind == .handler) try handlers.append(ta, d.word);
+        return analysis.entry(ta, text, handlers.items, try s.boundNames(ta));
     }
 
     /// Gives the session one Entry or Session Command, with the `|` lines a
@@ -1066,8 +1054,14 @@ pub const Session = struct {
 
     // ------------------------------------------------------------ Entries
 
-    const statement_words = [_][]const u8{ "if", "repeat", "match", "try", "wait", "tell", "put", "let", "set", "add", "subtract", "multiply", "divide", "delete", "send", "ask", "return", "veto", "pass", "exit", "throw", "replace" };
-    const declaration_words = [_][]const u8{ "on", "function", "private", "use", "constant" };
+    fn sayProblem(s: *Session, p: analysis.Problem) void {
+        s.sayf("! {s} at {d}:{d}", .{ p.code, p.line, p.column });
+    }
+
+    /// Text naming a Session Command rather than an Entry.
+    fn isCommand(text: []const u8) bool {
+        return std.mem.startsWith(u8, std.mem.trimStart(u8, text, " \t\n"), ":");
+    }
 
     fn entryText(input: transcript.Input, ea: Allocator) ![]const u8 {
         var out: std.ArrayList(u8) = .empty;
@@ -1079,87 +1073,38 @@ pub const Session = struct {
         return out.items;
     }
 
-    /// The first word of an Entry, after any leading `--|` lines.
-    fn firstWords(text: []const u8) struct { first: []const u8, second: []const u8, doc: bool } {
-        var lines = std.mem.splitScalar(u8, text, '\n');
-        var doc = false;
-        while (lines.next()) |l| {
-            const t = std.mem.trimStart(u8, l, " \t");
-            if (std.mem.startsWith(u8, t, "--|")) {
-                doc = true;
-                continue;
-            }
-            var words = std.mem.tokenizeAny(u8, t, " \t(");
-            const first = words.next() orelse "";
-            const second = words.next() orelse "";
-            return .{ .first = first, .second = second, .doc = doc };
-        }
-        return .{ .first = "", .second = "", .doc = doc };
-    }
-
     fn isOneOf(w: []const u8, words: []const []const u8) bool {
         for (words) |x| if (std.mem.eql(u8, x, w)) return true;
         return false;
     }
 
-    fn isDeclaration(w: anytype) bool {
-        return isOneOf(w.first, &declaration_words) or (std.mem.eql(u8, w.first, "script") and std.mem.eql(u8, w.second, "variable"));
-    }
-
     fn entry(s: *Session, input: transcript.Input) !void {
         const text = try entryText(input, s.alloc());
-        // What decides the Entry: its first line after any `--|` block.
-        var deciding = text;
-        // A leading `--|` block documents the declaration straight after it.
-        // A blank line detaches it; before anything else it is refused.
-        const lines = try splitLines(s.alloc(), text);
-        var i: usize = 0;
-        while (i < lines.len and std.mem.startsWith(u8, std.mem.trimStart(u8, lines[i], " \t"), "--|")) i += 1;
-        if (i > 0) {
-            if (i == lines.len) return s.say("! bad arguments");
-            if (std.mem.trim(u8, lines[i], " \t").len == 0) {
-                while (i < lines.len and std.mem.trim(u8, lines[i], " \t").len == 0) i += 1;
-                if (i == lines.len) return s.say("! bad arguments");
-                deciding = try std.mem.join(s.alloc(), "\n", lines[i..]);
-            } else {
-                const w = firstWords(lines[i]);
-                if (!isDeclaration(w) or std.mem.eql(u8, w.first, "use")) return s.say("! bad arguments");
-                return s.declaration(text);
-            }
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        const e = try s.analyzeEntry(arena.allocator(), text);
+        if (e.doc == .pending) return s.say("! bad arguments");
+        if (e.doc == .attached) {
+            if (e.kind != .declaration) return s.say("! bad arguments");
+            if (e.declarations.len > 0 and std.mem.eql(u8, e.declarations[0].kind, "use")) return s.say("! bad arguments");
         }
-        const w = firstWords(deciding);
-        if (isDeclaration(w)) return s.declaration(text);
-        const statement = s.isStatement(w);
-        _ = try s.runEntry(text, !statement);
+        if (e.kind == .declaration) return s.declaration(text);
+        _ = try s.runEntry(text, e.kind == .expression);
     }
 
     /// `:inspect <expression>`: one expression, run as an ordinary Entry,
     /// whose value is described in rows rather than echoed.
     fn inspectExpression(s: *Session, rest: []const u8, more: []const []const u8) !void {
-        var text: std.ArrayList(u8) = .empty;
-        try text.appendSlice(s.alloc(), rest);
-        for (more) |l| {
-            try text.append(s.alloc(), '\n');
-            try text.appendSlice(s.alloc(), l);
-        }
-        if (std.mem.trim(u8, text.items, " \t\n").len == 0) return s.say("! bad arguments");
-        const w = firstWords(text.items);
-        if (w.doc or isDeclaration(w) or isOneOf(w.first, &statement_words) or w.first[0] == ':') return s.say("! bad arguments");
-        // Trailing input after the expression is refused.
+        const text = try entryText(.{ .first = rest, .more = more }, s.alloc());
+        if (isCommand(text)) return s.say("! bad arguments");
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
-        if ((try parser.parseEntryEnd(arena.allocator(), text.items, true)).trailing) return s.say("! bad arguments");
-        _ = try s.runAs(text.items, true, true);
-    }
-
-    /// Whether an Entry is a statement, by its first words, rather than an
-    /// expression (chapter 2, Entries).
-    fn isStatement(s: *Session, w: anytype) bool {
-        return isOneOf(w.first, &statement_words) or
-            (std.mem.eql(u8, w.first, "with") and std.mem.eql(u8, w.second, "timeout")) or
-            (std.mem.eql(u8, w.first, "choose") and std.mem.eql(u8, w.second, "offer")) or
-            (std.mem.eql(u8, w.first, "next") and std.mem.eql(u8, w.second, "repeat")) or
-            std.mem.eql(u8, w.first, "say") or s.handlerStarting(w.first);
+        // A Handler's name may also name a value. `:inspect` always reads
+        // that value as an expression, rather than as a Command Call.
+        const e = try analysis.entry(arena.allocator(), text, &.{}, try s.boundNames(arena.allocator()));
+        if (e.doc != .none or e.kind != .expression) return s.say("! bad arguments");
+        if (e.problem) |p| if (p.trailing) return s.say("! bad arguments");
+        _ = try s.runAs(text, true, true);
     }
 
     /// Whether the Session Script has a Handler whose Selector starts with
@@ -1184,15 +1129,13 @@ pub const Session = struct {
         const ta = arena.allocator();
         const n = s.freeEntry();
         const name = s.print("entry{d}", .{n});
-        // Its syntax, on its own: the end of the Entry ends its last line.
-        if (try parser.parseEntry(ta, text, expression)) |d| {
-            var lines = try lexer.Lines.init(ta, text);
-            const at = lines.position(d.offset);
-            s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), at.line, at.column });
+        // Its syntax and implicit bindings, in the Entry's own positions.
+        const e = try analysis.executable(ta, text, expression, try s.boundNames(ta));
+        if (e.problem) |p| {
+            s.sayProblem(p);
             return .refused;
         }
-        // The names it binds that become Script Variables.
-        const roots = try s.implicitNames(ta, text, expression);
+        const roots = e.implicit;
         var source: std.ArrayList(u8) = .empty;
         for (roots) |r| try source.print(ta, "script variable {s}\n", .{r});
         try source.print(ta, "on {s}\n{s}{s}\nend {s}\n", .{ name, if (expression) "return " else "", text, name });
@@ -1265,16 +1208,15 @@ pub const Session = struct {
         return false;
     }
 
-    /// The names an Entry binds as a Container's root or a Capture, that
-    /// the Script doesn't have: checked against its Script Variables and
-    /// Constants, as the Core will check the extension.
-    fn implicitNames(s: *Session, ta: Allocator, text: []const u8, expression: bool) ![]const []const u8 {
+    /// Names already bound in the Session Script, excluded from implicit
+    /// Script Variable discovery.
+    fn boundNames(s: *Session, ta: Allocator) ![]const []const u8 {
         var bound: std.ArrayList([]const u8) = .empty;
         for (s.decls.items) |d| switch (d.kind) {
             .variable, .constant => try bound.append(ta, d.names[0]),
             else => {},
         };
-        return analysis.implicitNames(ta, text, expression, bound.items);
+        return bound.items;
     }
 
     /// Prints a load's diagnostics, from its `diag` records since `mark`:
@@ -1299,41 +1241,31 @@ pub const Session = struct {
 
     // ------------------------------------------------------------ declarations
 
-    /// A parsed declaration's kind and names, and for `use` and `script
-    /// variable` what the session source needs.
-    fn describeDecl(s: *Session, tree: *const ast.Tree, d: ast.Declaration, text: []const u8) !Decl {
+    /// Copies shared declaration metadata into the Session Source's lifetime.
+    fn describeDecl(s: *Session, d: analysis.Declared, text: []const u8, source_start: usize) !Decl {
         const sa = s.alloc();
-        switch (d.data) {
-            .handler => |h| {
-                if (h.fallback) return .{ .text = text, .kind = .fallback, .names = try sa.dupe([]const u8, &.{"any message"}) };
-                var selector: std.ArrayList(u8) = .empty;
-                try selector.appendSlice(sa, tree.text(h.name));
-                if (h.labels.len > 0) {
-                    try selector.append(sa, ':');
-                    for (h.labels) |l| try selector.print(sa, "{s}:", .{tree.text(l)});
-                }
-                return .{ .text = text, .kind = .handler, .names = try sa.dupe([]const u8, &.{selector.items}), .word = s.dupe(tree.text(h.name)) };
-            },
-            .function => |f| return .{ .text = text, .kind = .function, .names = try sa.dupe([]const u8, &.{s.dupe(tree.text(f.name))}) },
-            .constant => |k| return .{ .text = text, .kind = .constant, .names = try sa.dupe([]const u8, &.{s.dupe(tree.text(k.name))}) },
-            .script_variable => |v| {
-                var initialiser: ?[]const u8 = null;
-                if (v.value != null) {
-                    // The text after `=`.
-                    var t = v.name + 1;
-                    while (t < tree.tokens.len and tree.tokens[t].kind != .equal) t += 1;
-                    if (t < tree.tokens.len) initialiser = s.dupe(text[tree.tokens[t].end..]);
-                }
-                return .{ .text = text, .kind = .variable, .names = try sa.dupe([]const u8, &.{s.dupe(tree.text(v.name))}), .init = initialiser };
-            },
-            .use => |u| {
-                var imported: std.ArrayList([]const u8) = .empty;
-                for (u.names) |n| try imported.append(sa, s.dupe(tree.text(n)));
-                const rename: ?[]const u8 = if (u.rename) |r| s.dupe(tree.text(r)) else null;
-                const names = if (rename) |r| try sa.dupe([]const u8, &.{r}) else imported.items;
-                return .{ .text = text, .kind = .use, .names = names, .use = .{ .names = imported.items, .library = s.dupe(tree.text(u.library)), .rename = rename } };
-            },
+        if (std.mem.eql(u8, d.kind, "use")) {
+            var imported: std.ArrayList([]const u8) = .empty;
+            var names: std.ArrayList([]const u8) = .empty;
+            var rename: ?[]const u8 = null;
+            for (d.imports) |n| {
+                try imported.append(sa, s.dupe(n.name));
+                try names.append(sa, s.dupe(n.local));
+                if (!std.mem.eql(u8, n.name, n.local)) rename = s.dupe(n.local);
+            }
+            return .{ .text = text, .kind = .use, .names = names.items, .use = .{ .names = imported.items, .library = s.dupe(d.name), .rename = rename } };
         }
+        const kind: Decl.Kind = if (std.mem.eql(u8, d.kind, "handler"))
+            (if (d.word == null) .fallback else .handler)
+        else
+            std.meta.stringToEnum(Decl.Kind, d.kind).?;
+        return .{
+            .text = text,
+            .kind = kind,
+            .names = try sa.dupe([]const u8, &.{s.dupe(d.name)}),
+            .word = if (d.word) |w| s.dupe(w) else "",
+            .init = if (d.initializer_start) |at| s.dupe(text[at - source_start ..]) else null,
+        };
     }
 
     fn sessionSource(s: *Session, decls: []const Decl) []const u8 {
@@ -1357,20 +1289,12 @@ pub const Session = struct {
         var arena: std.heap.ArenaAllocator = .init(s.gpa);
         defer arena.deinit();
         const ta = arena.allocator();
-        const tree = switch (try parser.parse(ta, text)) {
-            .tree => |t| t,
-            .failure => |d| {
-                var lines = try lexer.Lines.init(ta, text);
-                const at = lines.position(d.offset);
-                s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), at.line, at.column });
-                return;
-            },
+        const ds = switch (try analysis.declarations(ta, text)) {
+            .declarations => |ds| ds,
+            .problem => |p| return s.sayProblem(p),
         };
-        if (tree.declarations.len != 1) {
-            s.say("! bad arguments");
-            return;
-        }
-        const decl = try s.describeDecl(&tree, tree.declarations[0], s.dupe(text));
+        if (ds.len != 1) return s.say("! bad arguments");
+        const decl = try s.describeDecl(ds[0], s.dupe(text), 0);
         // A Script Variable the Script has: its initialiser is set in the
         // session source, and `put e into x` runs as a statement.
         if (decl.kind == .variable) if (s.declIndex(.variable, decl.names[0])) |i| {
@@ -2026,40 +1950,25 @@ pub const Session = struct {
         defer arena.deinit();
         const ta = arena.allocator();
         const source = s.sourceOf(lines);
-        const tree = switch (try parser.parse(ta, source)) {
-            .tree => |t| t,
-            .failure => |d| {
-                var at_lines = try lexer.Lines.init(ta, source);
-                const at = at_lines.position(d.offset);
-                return s.sayf("! {s} at {d}:{d}", .{ d.code.spelling(), at.line, at.column });
-            },
+        const ds = switch (try analysis.declarations(ta, source)) {
+            .declarations => |ds| ds,
+            .problem => |p| return s.sayProblem(p),
         };
-        if (tree.declarations.len == 0) return s.say("! bad arguments");
+        if (ds.len == 0) return s.say("! bad arguments");
         const run = args[0];
         if (!std.mem.startsWith(u8, run, "session/") or !s.isLive(run)) return s.say("! no such run");
-        // Each declaration's lines: from the line after the last one's last
-        // line, without the blank lines at their start, to its own last.
+        // Keep the source lines, including documentation, with each declaration.
         var decls: std.ArrayList(Decl) = .empty;
-        var file_lines = try lexer.Lines.init(ta, source);
         var from: usize = 0;
-        for (0..tree.declarations.len) |i| {
-            const next_first: usize = if (i + 1 < tree.declarations.len) firstToken(tree.declarations[i + 1]) else tree.tokens.len - 1;
-            var last = next_first - 1;
-            while (last > 0 and tree.tokens[last].kind == .newline) last -= 1;
-            const last_line = file_lines.position(tree.tokens[last].start).line;
+        var source_start: usize = 0;
+        for (ds) |d| {
             var start_line = from + 1;
-            while (start_line <= last_line and std.mem.trim(u8, lines[start_line - 1], " \t").len == 0) start_line += 1;
-            var text: std.ArrayList(u8) = .empty;
-            for (lines[start_line - 1 .. last_line], 0..) |l, k| {
-                if (k > 0) try text.append(s.alloc(), '\n');
-                try text.appendSlice(s.alloc(), l);
-            }
-            from = last_line;
-            const one = switch (try parser.parse(ta, text.items)) {
-                .tree => |t| t,
-                .failure => return s.say("! bad arguments"),
-            };
-            try decls.append(ta, try s.describeDecl(&one, one.declarations[0], text.items));
+            while (start_line <= d.end_line and std.mem.trim(u8, lines[start_line - 1], " \t").len == 0) start_line += 1;
+            for (lines[from .. start_line - 1]) |l| source_start += l.len + 1;
+            const text = try std.mem.join(s.alloc(), "\n", lines[start_line - 1 .. d.end_line]);
+            from = d.end_line;
+            try decls.append(ta, try s.describeDecl(d, text, source_start));
+            source_start += text.len + 1;
         }
         // The Rewind.
         try check_(c.talk_script_rewind_run(s.script, run.ptr, run.len));
@@ -2095,16 +2004,6 @@ pub const Session = struct {
         _ = try s.pump();
     }
 
-    fn firstToken(d: ast.Declaration) usize {
-        if (d.private) |p| return p;
-        return switch (d.data) {
-            .handler => |h| h.on,
-            .function => |f| f.keyword,
-            .constant => |k| k.keyword,
-            .script_variable => |v| v.keyword,
-            .use => |u| u.keyword,
-        };
-    }
     // ------------------------------------------------------------ sources
 
     /// Keeps each of the Session Script's units' sources by code identity,
@@ -2129,13 +2028,13 @@ pub const Session = struct {
     /// A Library's source: a user Library's, or a stdlib Library's.
     fn librarySource(s: *Session, name: []const u8) ?[]const u8 {
         if (s.libraries.get(name)) |l| return l.source;
-        for (northtalk.generated.stdlib_sources.sources) |src| if (std.mem.eql(u8, src.name, name)) return src.source;
+        for (analysis.libraries) |src| if (std.mem.eql(u8, src.name, name)) return src.source;
         return null;
     }
 
     fn librarySourceByIdentity(s: *Session, unit: [32]u8) ?UnitSource {
         if (s.sources.get(unit)) |u| return u;
-        for (northtalk.generated.stdlib_sources.sources) |src| {
+        for (analysis.libraries) |src| {
             const l = northtalk.machine.stdlibLibrary(src.name) orelse continue;
             if (std.mem.eql(u8, &l.identity, &unit)) return .{ .name = src.name, .source = src.source };
         }
@@ -2170,13 +2069,6 @@ pub const Session = struct {
             const arity = d.arity orelse .{ 0, 0 };
             try out.append(s.alloc(), .{ .kind = s.dupe(d.kind), .name = s.dupe(d.name), .signature = s.dupe(d.signature), .doc = s.dupe(d.doc), .private = d.private, .required = arity[0], .total = arity[1] });
         }
-        return out.items;
-    }
-
-    fn splitLines(ta: Allocator, source: []const u8) ![]const []const u8 {
-        var out: std.ArrayList([]const u8) = .empty;
-        var it = std.mem.splitScalar(u8, source, '\n');
-        while (it.next()) |l| try out.append(ta, std.mem.trimEnd(u8, l, "\r"));
         return out.items;
     }
 
@@ -2271,7 +2163,7 @@ pub const Session = struct {
     const Builtin = struct { name: []const u8, call: []const u8, gives: []const u8 };
 
     fn builtinNamed(name: []const u8) ?Builtin {
-        for (northtalk.generated.stdlib.stdlib.builtin) |b| if (std.mem.eql(u8, b.name, name)) return .{ .name = b.name, .call = b.call, .gives = b.gives };
+        for (analysis.builtins) |b| if (std.mem.eql(u8, b.name, name)) return .{ .name = b.name, .call = b.call, .gives = b.gives };
         return null;
     }
 
@@ -2413,13 +2305,13 @@ pub const Session = struct {
             }
         };
         // Built-ins, even when shadowed.
-        for (northtalk.generated.stdlib.stdlib.builtin) |b| {
+        for (analysis.builtins) |b| {
             const available = !seen.contains(b.name);
             try found.append(s.alloc(), .{ .name = b.name, .rank = 1, .library = "", .line = s.print("name {{target: {s}, origin: \"builtin\", available: {}, import: nothing}}", .{ s.targetShown(null, b.name, "builtin"), available }), .docs = try s.alloc().dupe([]const u8, &.{s.print("doc {s}", .{s.textShown(b.gives)})}) });
         }
         // Every registered Library's public exports, imported or not.
         var libs: std.ArrayList([]const u8) = .empty;
-        for (northtalk.generated.stdlib_sources.sources) |src| try libs.append(s.alloc(), src.name);
+        for (analysis.libraries) |src| try libs.append(s.alloc(), src.name);
         for (s.libraries.keys()) |k| try libs.append(s.alloc(), k);
         for (libs.items) |lib| {
             const lsource = s.librarySource(lib) orelse continue;
@@ -2558,25 +2450,7 @@ pub const Session = struct {
 
     /// A Selector, as `:trace` takes it: a Name, or Names each ended by `:`.
     fn validSelector(text: []const u8) bool {
-        if (text.len == 0) return false;
-        if (std.mem.indexOfScalar(u8, text, ':') == null) return isName(text);
-        if (text[text.len - 1] != ':') return false;
-        var parts = std.mem.splitScalar(u8, text[0 .. text.len - 1], ':');
-        var n: usize = 0;
-        while (parts.next()) |p| {
-            if (!isName(p)) return false;
-            n += 1;
-        }
-        return n >= 2;
-    }
-
-    fn isName(w: []const u8) bool {
-        if (w.len == 0) return false;
-        for (w, 0..) |ch, i| {
-            const ok = std.ascii.isAlphabetic(ch) or ch == '_' or ch >= 0x80 or (i > 0 and std.ascii.isDigit(ch));
-            if (!ok) return false;
-        }
-        return true;
+        return analysis.validMessageName(text, std.mem.count(u8, text, ":"));
     }
 
     fn traceCommand(s: *Session, rest: []const u8) !void {
@@ -2610,18 +2484,15 @@ pub const Session = struct {
             for (s.observing.measurements.items) |*m| s.say(s.fuelRow(m));
             return;
         }
-        var text: std.ArrayList(u8) = .empty;
-        try text.appendSlice(s.alloc(), rest);
-        for (more) |l| {
-            try text.append(s.alloc(), '\n');
-            try text.appendSlice(s.alloc(), l);
-        }
-        const w = firstWords(text.items);
-        if (w.doc or isDeclaration(w) or (w.first.len > 0 and w.first[0] == ':')) return s.say("! bad arguments");
-        const statement = s.isStatement(w);
+        const text = try entryText(.{ .first = rest, .more = more }, s.alloc());
+        if (isCommand(text)) return s.say("! bad arguments");
+        var arena: std.heap.ArenaAllocator = .init(s.gpa);
+        defer arena.deinit();
+        const e = try s.analyzeEntry(arena.allocator(), text);
+        if (e.doc != .none or e.kind == .declaration or e.kind == .empty) return s.say("! bad arguments");
         s.measuring = true;
         defer s.measuring = false;
-        _ = try s.runEntry(text.items, !statement);
+        _ = try s.runEntry(text, e.kind == .expression);
     }
     // ------------------------------------------------------------ object crossings
 
