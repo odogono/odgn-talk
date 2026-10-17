@@ -3,6 +3,7 @@
 // so it needs no files and reopens offline exactly as exported.
 import { type Project } from '../model';
 import { createLighthouseProject, LIGHTHOUSE_PROJECT_NAME } from './lighthouse';
+import { createTetrisProject, TETRIS_PROJECT_NAME } from './tetris';
 
 export type ExampleContent = {
   /** Asset bytes by SHA-256 hash, for storage and portable export. */
@@ -22,5 +23,11 @@ export const EXAMPLE_PROJECTS: readonly ExampleProject[] = [
     description:
       'A short illustrated mystery: navigation, show and hide, sounds, a wait and a reader journal.',
     create: createLighthouseProject,
+  },
+  {
+    name: TETRIS_PROJECT_NAME,
+    description:
+      'The falling-blocks game: a frame loop, arrow keys and a board of 200 rectangles repainted by one Page Script.',
+    create: createTetrisProject,
   },
 ];

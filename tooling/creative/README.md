@@ -690,3 +690,29 @@ Build it with the other suites (see [Browser test suites](#browser-test-suites))
 Open `/lighthouse-test.html` and run
 `await import('/lighthouse.browser.js').then(m => m.runBrowserTests())`.
 The result must have `passed: true`; reload before repeating.
+
+### Tetris
+
+**Projects → Open Tetris** adds the falling-blocks game
+([#1114](https://github.com/odogono/odgn-talk/issues/1114)), built from
+[`src/examples/tetris.ts`](src/examples/tetris.ts). The board is 200
+rectangles, `cell_1_1` to `cell_20_10`, and a 4×4 `next_` grid previews the
+next piece; all are drawn in advance, and while playing the Page Script only
+changes their fills. The whole game is that one Page Script, in Handlers
+split by concern: `frame` adds up `elapsed` for gravity, `keyDown` moves,
+turns and drops, and `fits`, `tryMove`, `rotate`, `lockPiece`, `clearLines`
+and `paint` keep the board as a list of lists. `paint` changes only the
+rectangles whose colour differs from what they show.
+
+Arrow keys move, Up and Z turn, Down drops faster and Space drops. Pieces
+come from a 7-bag. Gravity starts at one row a second and speeds up by 75 ms
+each level, down to 100 ms; the level rises every ten lines, and one to four
+lines score 100, 300, 500 or 800 times the level. There are no wall kicks,
+hold or ghost piece. Until `random` lands
+([#1111](https://github.com/odogono/odgn-talk/issues/1111)), the Script picks
+pieces with its own small generator, stirred by frame times.
+
+Unit tests drive the game on an explicit clock through `frame` and `keyDown`:
+spawning, moving, turning, gravity, drops, a four-line clear, a level-up and
+game over. Open `/tetris-test.html` and run
+`await import('/tetris.browser.js').then(m => m.runBrowserTests())`.
