@@ -316,7 +316,7 @@ const fuel = (expr: string): number =>
       .match(/ fuel=(\d+)/)![1],
   );
 
-describe('the min and max Built-ins (ADR 0098)', () => {
+describe('the min and max Built-ins (ADR 0099)', () => {
   test.each([
     ['min(3, 1, 2)', '1'],
     ['max(3, 1, 2)', '3'],
