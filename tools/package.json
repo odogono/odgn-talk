@@ -23,6 +23,7 @@
     "zig:check": "bun zig/generate.ts --check",
     "commits:check": "bun commits/check.ts",
     "changelog": "bun commits/changelog.ts",
+    "release-notes:ts": "bun commits/release-notes.ts",
     "lints:generate": "bun lints/generate.ts",
     "lints:check": "bun lints/generate.ts --check",
     "docs:check": "bun docs/check.ts"

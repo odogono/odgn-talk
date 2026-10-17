@@ -37,6 +37,8 @@ A PR whose title is `feat`, `fix` or `perf`, or marks a breaking change, adds a 
 
 To see the unreleased changelog, run `bun run changelog`.
 
+To release `@northtalk/ts`, run `bun run release-notes:ts 0.1.1` before tagging `ts-v0.1.1`. It writes a dated `## [0.1.1]` section into `impl/ts/CHANGELOG.md`, after `## [Unreleased]`, from the fragments added since the latest `ts-v*` tag whose scope is `ts` or `spec`, or that are breaking. `--dry-run` prints the section instead. Fragments stay where they are, since other packages read them too. With no `ts-v*` tag yet, it fails, and the first section is written by hand.
+
 To check a PR the way CI does, run:
 
 ```sh

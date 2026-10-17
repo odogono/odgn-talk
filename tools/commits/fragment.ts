@@ -85,3 +85,30 @@ export const fragmentMatches = (
   ((CHANGELOG_TYPES as readonly string[]).includes(subject.type)
     ? fragment.type === subject.type
     : breaking);
+
+const GROUPS: Array<[string, (fragment: Fragment) => boolean]> = [
+  ['Breaking', fragment => fragment.breaking],
+  ['Added', fragment => !fragment.breaking && fragment.type === 'feat'],
+  ['Fixed', fragment => !fragment.breaking && fragment.type === 'fix'],
+  ['Performance', fragment => !fragment.breaking && fragment.type === 'perf'],
+];
+
+// A changelog section under `heading`: the fragments grouped by type, with the
+// breaking ones first whatever their type.
+export const changelogSection = (
+  heading: string,
+  fragments: Fragment[],
+): string => {
+  const lines = [`## ${heading}`];
+  for (const [group, belongs] of GROUPS) {
+    const entries = fragments.filter(belongs);
+    if (entries.length > 0) {
+      lines.push('', `### ${group}`, '');
+      for (const { entry, scope } of entries) {
+        const text = entry.replaceAll('\n', '\n  ');
+        lines.push(`- ${scope ? `**${scope}:** ` : ''}${text}`);
+      }
+    }
+  }
+  return lines.join('\n');
+};
