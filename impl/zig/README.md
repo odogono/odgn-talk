@@ -835,6 +835,13 @@ entered. An uncaught error ends the Run and queues an
 `error` message to the Script's own mailbox, for its `on error` Handler. Core
 messages are left out of the Trace, since their wording is outside parity.
 
+An error Run's `, during` message map stays available in locally called `error`
+clauses, including later clauses after a pattern or Guard fails. Helper calls,
+captured Lambdas and Fuel slicing retain it. A Host-delivered `error` message
+has no such metadata and binds Nothing. For errors from Function Value calls,
+the required `{fn, args}` metadata remains a separate correction
+([#1084](https://github.com/odogono/odgn-talk/issues/1084)).
+
 Text Patterns run on chapter 8's Pike VM ([matcher](src/machine/matcher.zig)).
 A pattern value keeps its canonical source, so the matcher reads it back,
 compiles it and runs the program, counting `steps` by the Running rules: the

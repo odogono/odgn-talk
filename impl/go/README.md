@@ -275,8 +275,14 @@ Trace and inspected state compare exactly; only error wording and Host detail
 wording are excluded, and failure detail must remain nonempty. The native tests
 install Trace at Group construction and cancel through public Run controls.
 
-Known execution differences remain outside the selection: local error-message
-`during` propagation ([#1059](https://github.com/odogono/odgn-talk/issues/1059)),
+An internally generated error Run retains its `during` message map through local
+`error` calls, helper calls, later clauses and captured Lambdas, including across
+Fuel slicing. Host-delivered `error` messages bind Nothing. Shared public Hosts
+compare both cases against native Go with exact Trace, Fuel, typed Reports,
+futures and inspected state. Function-call error metadata still needs the
+chapter 6 `{fn, args}` correction in both Cores ([#1084](https://github.com/odogono/odgn-talk/issues/1084)).
+
+Known execution differences remain outside the selection:
 inherited veto checking on Extend ([#1060](https://github.com/odogono/odgn-talk/issues/1060)),
 allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
 Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
