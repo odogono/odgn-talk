@@ -1,6 +1,7 @@
-//! The Wait table (ADR 0105): pending Waits, suspending Calls, abandonment
-//! and retirement. Settlement changes Wait state and returns the Run and
-//! Join Member that answered; scheduling and Trace writes belong to the Group.
+//! The Wait table (ADR 0105): pending Waits, suspending Calls, abandonment,
+//! retirement, and save export/import. Settlement changes Wait state and
+//! returns the Run and Join Member that answered; scheduling and Trace writes
+//! belong to the Group.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const machine = @import("machine.zig");
@@ -8,6 +9,7 @@ const Pending = machine.Pending;
 const Run = machine.Run;
 const capabilities = @import("capabilities.zig");
 const Call = capabilities.Call;
+const issued = @import("issued_calls.zig");
 const Lock = @import("queue_lock.zig").Lock;
 
 /// The existing ways a Call's wait ends without consuming its answer.
@@ -39,7 +41,7 @@ pub const Waits = struct {
     /// Retired Calls keep their identity for late Host answers, but no args.
     retired_calls: std.ArrayList(*Call) = .empty,
     call_index: std.StringHashMapUnmanaged(*Call) = .empty,
-    issued_calls: @import("issued_calls.zig").IssuedCalls = .{},
+    issued_calls: issued.IssuedCalls = .{},
     /// A suspending Start kept alive across a transport pause.
     starting_call: ?*Call = null,
 
@@ -121,12 +123,6 @@ pub const Waits = struct {
     /// whose next() returns ?*Run; no Group or Script is needed by this module.
     pub fn awaited(w: *const Waits, c: *const Call, runs: anytype) bool {
         for (w.all()) |p| if (p.call == c) return true;
-        return awaitedByRun(c, runs);
-    }
-
-    /// Whether a live Run still waits on the Call or holds its answer.
-    /// Saves use this alone so their bytes stay as before.
-    pub fn awaitedByRun(c: *const Call, runs: anytype) bool {
         var it = runs;
         while (it.next()) |r| {
             if (r.waiting) |p| if (p.call == c) return true;
@@ -154,6 +150,150 @@ pub const Waits = struct {
             kept += 1;
         }
         w.calls.shrinkRetainingCapacity(kept);
+    }
+
+    /// A borrowed view of the table, plus the compact list of Calls a save
+    /// needs. Retired and unreferenced Calls retain no save history (#1126).
+    /// The caller holds input_lock throughout export and encoding.
+    pub const Export = struct {
+        table: *const Waits,
+        timers: u64,
+        calls: std.ArrayList(*Call) = .empty,
+
+        pub fn deinit(e: *Export, a: Allocator) void {
+            e.calls.deinit(a);
+        }
+
+        /// Issued ranges are written in Run-id order, independent of hashing.
+        pub fn writeIssued(e: Export, a: Allocator, out: anytype) !void {
+            try out.int(e.table.issued_calls.runs.count());
+            var ids: std.ArrayList([]const u8) = .empty;
+            defer ids.deinit(a);
+            var it = e.table.issued_calls.runs.keyIterator();
+            while (it.next()) |id| try ids.append(a, id.*);
+            std.mem.sort([]const u8, ids.items, {}, struct {
+                fn less(_: void, x: []const u8, y: []const u8) bool {
+                    return std.mem.lessThan(u8, x, y);
+                }
+            }.less);
+            for (ids.items) |id| {
+                try out.str(id);
+                const ranges = e.table.issued_calls.runs.get(id).?.items;
+                try out.int(ranges.len);
+                for (ranges) |range| {
+                    try out.int(range.first);
+                    try out.int(range.last);
+                    try out.flag(range.eligible);
+                }
+            }
+        }
+
+        /// Waits refer to their Run and optional Join Member in table order.
+        pub fn writeOrder(e: Export, out: anytype, runs: []const *Run) !void {
+            try out.int(e.table.pending.items.len);
+            for (e.table.pending.items) |p| {
+                try out.int(std.mem.indexOfScalar(*Run, runs, p.run).?);
+                try out.ref(p.member);
+            }
+        }
+    };
+
+    pub fn exportState(w: *const Waits, a: Allocator, runs: anytype) !Export {
+        var e: Export = .{ .table = w, .timers = w.timers };
+        errdefer e.deinit(a);
+        for (w.calls.items) |c| if (w.awaited(c, runs)) try e.calls.append(a, c);
+        return e;
+    }
+
+    /// Restore is exclusive: no Host can access this table until it finishes.
+    pub fn importTimers(w: *Waits, timers: u64) void {
+        w.timers = timers;
+    }
+
+    pub fn importIssued(w: *Waits, a: Allocator, in: anytype) !void {
+        const count = try in.count();
+        for (0..count) |_| {
+            const run = try a.dupe(u8, try in.str());
+            errdefer a.free(run);
+            if (run.len == 0 or w.issued_calls.runs.contains(run)) return error.InvalidSave;
+            var ranges: std.ArrayList(issued.Range) = .empty;
+            errdefer ranges.deinit(a);
+            const n = try in.count();
+            if (n == 0) return error.InvalidSave;
+            for (0..n) |_| {
+                const range: issued.Range = .{ .first = try in.int(), .last = try in.int(), .eligible = try in.flag() };
+                issued.IssuedCalls.append(&ranges, a, range) catch |err| return switch (err) {
+                    error.InvalidCallId => error.InvalidSave,
+                    error.OutOfMemory => error.OutOfMemory,
+                };
+            }
+            try w.issued_calls.runs.put(a, run, ranges);
+        }
+    }
+
+    pub const CallContext = struct {
+        clock: @import("../value.zig").dates.Instant,
+        group: ?*anyopaque,
+        owner: ?*anyopaque,
+    };
+
+    /// Own the Call before decoding its remaining fields, so a refused save
+    /// releases even a partially read Call through the ordinary table teardown.
+    pub fn importCall(w: *Waits, a: Allocator, id: []const u8, context: CallContext) !*Call {
+        if (w.callById(id) != null) return error.InvalidSave;
+        const owned = try a.dupe(u8, id);
+        errdefer a.free(owned);
+        const c = try a.create(Call);
+        errdefer a.destroy(c);
+        c.* = .{ .id = owned, .script = "", .grant = "", .binding = null, .now = context.clock, .left = null, .starting = false, .group = context.group, .owner = context.owner, .gpa = a };
+        try w.addCall(a, c);
+        return c;
+    }
+
+    /// Import takes ownership even on invalid member references; Run teardown
+    /// must be able to release a partially restored Wait.
+    pub fn importWait(w: *Waits, run: *Run, member: ?usize, p: ?*Pending) !void {
+        _ = w;
+        if (member) |m| run.join.?.members.items[m].pending = p else run.waiting = p;
+        if (p) |x| if (x.member != member) return error.InvalidSave;
+    }
+
+    /// The Run records own decoded Waits before their global order is read.
+    /// Rebuild that order without changing deadlines, counters or back-references.
+    pub fn importOrder(w: *Waits, a: Allocator, in: anytype, runs: []const *Run) !void {
+        const count = try in.count();
+        try w.pending.ensureTotalCapacity(a, count);
+        for (0..count) |_| {
+            const run = runs[try in.index(runs.len)];
+            const p = if (try in.ref(std.math.maxInt(u32))) |m| blk: {
+                const join = run.join orelse return error.InvalidSave;
+                if (m >= join.members.items.len) return error.InvalidSave;
+                break :blk join.members.items[m].pending orelse return error.InvalidSave;
+            } else run.waiting orelse return error.InvalidSave;
+            if (std.mem.indexOfScalar(*Pending, w.pending.items, p) != null) return error.InvalidSave;
+            w.pending.appendAssumeCapacity(p);
+        }
+    }
+
+    /// The restored Calls still needing a Host decision, in Call-id order.
+    pub fn importedPending(w: *const Waits, a: Allocator, calls: []const *Call) !std.ArrayList([]const u8) {
+        var ids: std.ArrayList([]const u8) = .empty;
+        errdefer ids.deinit(a);
+        for (calls) |c| for (w.pending.items) |p| if (p.call == c) {
+            try ids.append(a, c.id);
+            break;
+        };
+        std.mem.sort([]const u8, ids.items, {}, struct {
+            fn less(_: void, x: []const u8, y: []const u8) bool {
+                return machine.callOrder(x, y);
+            }
+        }.less);
+        return ids;
+    }
+
+    pub fn hasMeteredWait(w: *const Waits) bool {
+        for (w.pending.items) |p| if (p.decl) |op| if (op.metering != null) return true;
+        return false;
     }
 
     pub const Settlement = struct { run: *Run, member: ?usize, ready: bool };
@@ -582,4 +722,133 @@ test "retirement protects every awaited reference and a starting Call" {
     try t.expectEqual(@as(usize, 0), w.calls.items.len);
     try t.expectEqual(@as(usize, 1), w.retired_calls.items.len);
     try t.expectEqual(@as(usize, 0), c.args.len);
+}
+
+test "save export compacts Call history and uses the same awaited query as retirement" {
+    var w: Waits = .{};
+    defer w.deinit(t.allocator);
+    var run = bareRun();
+    const unused = try testCall(&w, "s/r1.c1");
+    const ready = try testCall(&w, "s/r1.c2");
+    const member = try testCall(&w, "s/r1.c3");
+    const pending = try testCall(&w, "s/r1.c4");
+    const retired = try testCall(&w, "s/r1.c5");
+    retired.settlement_consumed = true;
+    run.waited.call = ready;
+    var join: machine.Join = .{};
+    defer join.members.deinit(t.allocator);
+    try join.members.append(t.allocator, .{ .pending = null, .waited = .{ .call = member } });
+    run.join = &join;
+    var p: Pending = .{ .run = &run, .call = pending, .deadline = 10, .order = 0 };
+    try w.add(t.allocator, &p);
+    defer w.take(&p);
+    // Retain a table reference even if a Zig error escaped before the Run
+    // recorded it; both retirement and export must protect the same Call.
+    run.waiting = null;
+    const runs: TestRuns = .{ .runs = &.{&run} };
+    w.retireCalls(t.allocator, runs);
+    try t.expectEqual(@as(usize, 1), w.retired_calls.items.len);
+    w.starting_call = unused;
+    var saved = try w.exportState(t.allocator, runs);
+    defer saved.deinit(t.allocator);
+    try t.expectEqualSlices(*Call, &.{ ready, member, pending }, saved.calls.items);
+    try t.expectEqual(@as(u64, 1), saved.timers);
+    try t.expectEqual(@as(usize, 4), w.calls.items.len);
+}
+
+/// A token codec keeps the ordering tests independent of save bytes and Groups.
+const TestOrder = struct {
+    tokens: std.ArrayList(u64) = .empty,
+    at: usize = 0,
+
+    pub fn int(o: *TestOrder, n: u64) !void {
+        try o.tokens.append(t.allocator, n);
+    }
+    pub fn ref(o: *TestOrder, n: ?usize) !void {
+        try o.int(if (n) |x| x + 1 else 0);
+    }
+    pub fn count(i: *TestOrder) !usize {
+        if (i.at == i.tokens.items.len) return error.InvalidSave;
+        const n = i.tokens.items[i.at];
+        i.at += 1;
+        return @intCast(n);
+    }
+    pub fn index(i: *TestOrder, n: usize) !usize {
+        const x = try i.count();
+        return if (x < n) x else error.InvalidSave;
+    }
+    pub fn readRef(i: *TestOrder, n: usize) !?usize {
+        const x = try i.count();
+        if (x == 0) return null;
+        return if (x - 1 < n) x - 1 else error.InvalidSave;
+    }
+};
+
+// Zig has no overloaded methods: this view supplies the input-side ref.
+const TestOrderIn = struct {
+    data: *TestOrder,
+
+    pub fn count(i: TestOrderIn) !usize {
+        return i.data.count();
+    }
+    pub fn index(i: TestOrderIn, n: usize) !usize {
+        return i.data.index(n);
+    }
+    pub fn ref(i: TestOrderIn, n: usize) !?usize {
+        return i.data.readRef(n);
+    }
+};
+
+test "import preserves Wait order, deadlines and back-references independently of Run order" {
+    var w: Waits = .{};
+    defer w.deinit(t.allocator);
+    var runs = [_]Run{ bareRun(), bareRun() };
+    var join: machine.Join = .{};
+    defer join.members.deinit(t.allocator);
+    runs[1].join = &join;
+    try join.members.append(t.allocator, .{ .pending = null, .waited = .{} });
+    var own: Pending = .{ .run = &runs[0], .deadline = 10, .order = 9 };
+    var member: Pending = .{ .run = &runs[1], .deadline = 10, .order = 3, .member = 0 };
+    try w.importWait(&runs[0], null, &own);
+    try w.importWait(&runs[1], 0, &member);
+    w.importTimers(15);
+    // The Join Member began first even though its Run is second.
+    var tokens: TestOrder = .{};
+    defer tokens.tokens.deinit(t.allocator);
+    try tokens.tokens.appendSlice(t.allocator, &.{ 2, 1, 1, 0, 0 });
+    const run_list = [_]*Run{ &runs[0], &runs[1] };
+    try w.importOrder(t.allocator, TestOrderIn{ .data = &tokens }, &run_list);
+    try t.expectEqualSlices(*Pending, &.{ &member, &own }, w.all());
+    try t.expectEqual(&member, w.due(10).?);
+    try t.expectEqual(&own, runs[0].waiting.?);
+    try t.expectEqual(&member, join.members.items[0].pending.?);
+    var saved = try w.exportState(t.allocator, TestRuns{ .runs = &run_list });
+    defer saved.deinit(t.allocator);
+    try t.expectEqual(@as(u64, 15), saved.timers);
+    var encoded: TestOrder = .{};
+    defer encoded.tokens.deinit(t.allocator);
+    try saved.writeOrder(&encoded, &run_list);
+    try t.expectEqualSlices(u64, tokens.tokens.items, encoded.tokens.items);
+    // A duplicate Wait must be refused without appending it twice.
+    tokens.at = 0;
+    tokens.tokens.items[3] = 1;
+    tokens.tokens.items[4] = 1;
+    w.pending.clearRetainingCapacity();
+    try t.expectError(error.InvalidSave, w.importOrder(t.allocator, TestOrderIn{ .data = &tokens }, &run_list));
+    try t.expectEqualSlices(*Pending, &.{&member}, w.all());
+    // A bad member reference still belongs to its Run for failure teardown.
+    try t.expectError(error.InvalidSave, w.importWait(&runs[0], null, &member));
+    try t.expectEqual(&member, runs[0].waiting.?);
+}
+
+test "import owns partially decoded Calls and refuses duplicate identities" {
+    var w: Waits = .{};
+    defer w.deinit(t.allocator);
+    const context: Waits.CallContext = .{ .clock = .{ .seconds = 10, .micros = 1 }, .group = null, .owner = null };
+    const c = try w.importCall(t.allocator, "s/r1.c1", context);
+    try t.expectEqual(c, w.callById("s/r1.c1").?);
+    try t.expectEqual(context.clock, c.now);
+    try t.expect(!c.starting);
+    try t.expectError(error.InvalidSave, w.importCall(t.allocator, "s/r1.c1", context));
+    try t.expectEqual(@as(usize, 1), w.calls.items.len);
 }
