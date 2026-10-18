@@ -85,6 +85,23 @@ export const mountPlay = (shell: StackShell): void => {
   let problemCount = 0;
   let drawnPage: PlaySession['page'] | undefined;
   let activeText: InPlaceTextEditor | undefined;
+  // Physical key codes keep releases paired if modifiers change event.key.
+  const heldKeys = new Map<
+    string,
+    { key: string; target: PlaySession['page'] | TextElement }
+  >();
+  const releaseKeys = () => {
+    // send ignores input during closePage; keep releases until navigation
+    // finishes so the surviving Project Handler still receives them.
+    if (session?.navigating) {
+      return;
+    }
+    for (const { key, target } of heldKeys.values()) {
+      session?.send(target, 'keyUp', [text(key)]);
+    }
+    heldKeys.clear();
+    schedule();
+  };
   const renderedElements = new WeakMap<HTMLElement, Element>();
   const histories = new Map<TextElement, ReaderTextHistory>();
   const closeText = () => {
@@ -144,6 +161,9 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const play = session;
     if (drawnPage !== play.page) {
+      // Old Page Scripts have stopped; release to any surviving Project
+      // Handler and require a fresh press on the new Page.
+      releaseKeys();
       closeText();
       pageNode.replaceChildren();
       drawnPage = play.page;
@@ -344,6 +364,7 @@ export const mountPlay = (shell: StackShell): void => {
     });
   };
   const stopPlay = () => {
+    heldKeys.clear();
     if (!session) {
       return;
     }
@@ -469,7 +490,11 @@ export const mountPlay = (shell: StackShell): void => {
       leave();
       return;
     }
-    if (!reader.contains(event.target as Node)) {
+    if (
+      session.stopped ||
+      session.navigating ||
+      !reader.contains(event.target as Node)
+    ) {
       return;
     }
     const node = (event.target as HTMLElement).closest<HTMLElement>(
@@ -491,6 +516,15 @@ export const mountPlay = (shell: StackShell): void => {
     }
     const target =
       element?.kind === 'text' && element.editable ? element : session.page;
+    const code = event.code || event.key;
+    // A repeat after focus returns cannot start a new held key: its eventual
+    // release may still belong to the window or Session that lost focus.
+    if (!heldKeys.has(code)) {
+      if (event.repeat) {
+        return;
+      }
+      heldKeys.set(code, { key: event.key, target });
+    }
     // A handled key belongs to the Project: arrows and space don't scroll.
     // Editable text keeps typing, so only the Page's keys are claimed.
     if (target === session.page && session.handles(target, 'keyDown')) {
@@ -498,6 +532,28 @@ export const mountPlay = (shell: StackShell): void => {
     }
     session.send(target, 'keyDown', [text(event.key)]);
     schedule();
+  });
+  document.addEventListener('keyup', event => {
+    const code = event.code || event.key;
+    const held = heldKeys.get(code);
+    if (!session || !held || session.navigating) {
+      return;
+    }
+    heldKeys.delete(code);
+    if (held.target === session.page && session.handles(held.target, 'keyUp')) {
+      event.preventDefault();
+    }
+    session.send(held.target, 'keyUp', [text(held.key)]);
+    schedule();
+  });
+  // Release to the original recipient before focus moves to another field,
+  // a Script window or a prompt. The later physical keyup is ignored.
+  reader.addEventListener('focusout', releaseKeys);
+  window.addEventListener('blur', releaseKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      releaseKeys();
+    }
   });
   shell.onRedraw(() => {
     // Another Project's errors no longer point at anything here.

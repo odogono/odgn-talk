@@ -194,11 +194,15 @@ const messages = [
   'pointerEnter',
   'pointerLeave',
   'keyDown',
+  'keyUp',
   'openPage',
   'closePage',
   'startPlay',
   'textChanged',
-].map(name => ({ name, args: name === 'keyDown' ? ['text'] : [] }));
+].map(name => ({
+  name,
+  args: name === 'keyDown' || name === 'keyUp' ? ['text'] : [],
+}));
 
 // Folio also delivers messages authored Scripts send to each other. Declare
 // an owner's named Handlers alongside the built-in events; the Host event

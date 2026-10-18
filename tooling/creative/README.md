@@ -508,12 +508,25 @@ Tools, Script and Errors windows still open (the Edit menu offers only Undo and 
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
-then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
-or to the Page, without preventing normal typing. A key sent to the Page when
-a `keyDown` Handler is on its Message Path loses its browser default, so arrow
-keys and space drive a game rather than scroll; with no such Handler they
-scroll as usual. Enter or Space on a focused button sends it `click` and no
-`keyDown`, and a pointer click on a button returns focus to the Page. Reader-editable text opens
+then `pointerLeave`. `keyDown key` and `keyUp key` report a pressed and released
+browser key (`event.key`) to focused editable text, otherwise to the Page.
+Each takes one text argument. Editable text keeps normal typing; a Page key
+event loses its browser default only when that message's Handler is on the
+Page's Message Path (Page or Project Script). This lets arrow keys and space
+drive a game rather than scroll; unhandled events keep their defaults.
+Operating-system auto-repeat continues to send `keyDown`, with no additional
+argument. Scripts can use `keyDown` and `keyUp` to track several held keys and
+implement their own repeat timing through `frame`.
+
+Focus changes, window blur and hiding the tab send one `keyUp` for each held
+key to its original recipient, using the key reported on its first `keyDown`
+even if modifiers have changed. Later physical releases and repeats are
+ignored until a fresh press. Page navigation also releases held keys along the
+old Page's Message Path to any surviving Project Handler. Stopping Play
+discards held keys, so releases
+cannot reach a new session. Enter or Space on a focused button sends it
+`click` and neither key message; a pointer click returns focus to the Page.
+Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
 colour, align paragraphs, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
 the text again reopens it. Typing, formatting, paste and reader undo/redo send
