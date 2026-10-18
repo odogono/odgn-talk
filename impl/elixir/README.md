@@ -29,6 +29,14 @@ group = NorthTalk.new_group!(MyApp.Talk, "tenant-1", [])
 - **Results:** each call returns `{:ok, _}` or `{:error, error}`, where `error` is a `NorthTalk.HostError`, `NorthTalk.LoadError` or `NorthTalk.ScriptError`. The `!` variants raise it instead. `deliver/4` returns once the message is accepted. `request/5` returns once its Run ends, with the `run end` report and its Fuel.
 - **Driving:** by default the owner Pumps a Group after each delivery, one Fuel Slice per Pump. Each slice is a separate message to the owner, so other work interleaves. It Pumps again at the Group's next deadline. With `drive: :manual`, the caller calls `pump/2` with its own Clock readings.
 - **Values:** see `NorthTalk.Value`. Numbers are integers or `Decimal`s, and floats are refused. Text is a UTF-8 binary, normalised to NFC, and Bytes are `NorthTalk.Bytes`. A map is a `NorthTalk.Map`, in order; a plain map with at most one key is accepted on input ([ADR 0092](../../docs/adr/0092-the-elixir-host-represents-bytes-and-ordered-maps-as-structs.md)). Quantities, ranges, Instants, Civil Dates, Patterns and Host Objects are `NorthTalk.*` structs, and `DateTime`, `Date` and `NaiveDateTime` are accepted on input. Decoding refuses any form the encoder wouldn't write, and never creates atoms.
+- **Combined request and Pump:** `request_pump/5` and `call_pump/4` admit a message or Function call and Pump its Group once, in one exchange, under either drive. They use the binary `request-pump-fields-v1` envelope ([the contract](../../spec/embedding/request-pump-binary.md)), and are refused with `invalid value` before admission when the reactor doesn't offer it. An admission refusal is `{:error, error}`, with no Pump. Otherwise the call returns `{:ok, %NorthTalk.Pumped{pending: pending, pump: outcome}}`, where `outcome` is `pump/2`'s result, or `{:error, error}` when the Pump was refused and the request is left queued. `await/2` waits for the pending request's result as `request/5` would, and can be called again. A timeout is a `HostError` with code `timeout`, and the Run carries on. `release_pending/1` discards the result and fails awaiters with `pending released`, but doesn't cancel the request. `close_group/1` releases a Group's handles. Needs and their answers stay JSON.
+
+  ```elixir
+  {:ok, %NorthTalk.Pumped{pending: pending}} = NorthTalk.request_pump(group, "pricing", "total", [items])
+  {:ok, %NorthTalk.Result{value: total}} = NorthTalk.await(pending)
+  :ok = NorthTalk.release_pending(pending)
+  ```
+
 - **Function Values** a Script returns, or passes to a callback, are `NorthTalk.Function` handles bound to their Group and owner. `call/4` calls one through its Group as `request/5` sends a message, and one can be passed back into the same Group. A handle is held until `release/1`, or until `close_group/1` or the owner closes; there are no finalisers. Using one after that, or through another Group, is a `HostError`: `function released`, `group closed`, `instance closed` or `wrong group`. `close_group/1` acts on the Host's side only, since the Core has no message that frees a Group.
 
   ```elixir
@@ -112,7 +120,8 @@ Each owner holds about 2.1 MiB of guest linear memory and 0.2 MiB of process hea
 | [`examples/shop/`](examples/shop/) | The OTP example and getting-started guide. |
 | [`lib/north_talk/owner.ex`](lib/north_talk/owner.ex) | The Instance Owner: exchanges, needs, Pumps and waiting requests. |
 | [`lib/north_talk/capability.ex`](lib/north_talk/capability.ex) | Capabilities, Grants, and the `NorthTalk.Call`, `NorthTalk.Effect` and `NorthTalk.Release` a callback or hook gets. |
-| [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, and a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s. |
+| [`lib/north_talk/group.ex`](lib/north_talk/group.ex) | Group and Library handles, a restore's `NorthTalk.Restored` and `NorthTalk.PendingCall`s, and a combined call's `NorthTalk.Pumped` and `NorthTalk.Pending`. |
+| [`lib/north_talk/binary.ex`](lib/north_talk/binary.ex) | The `request-pump-fields-v1` binary envelope, converted to and from the JSON form the owner reads. |
 | [`lib/north_talk/value.ex`](lib/north_talk/value.ex) | Value conversion. |
 | [`lib/north_talk/types.ex`](lib/north_talk/types.ex) | The value structs, and `NorthTalk.Function` handles. |
 | [`lib/north_talk/transport.ex`](lib/north_talk/transport.ex) | The transport behaviour: one frame in, one frame out. |

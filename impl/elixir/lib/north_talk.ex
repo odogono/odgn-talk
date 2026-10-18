@@ -174,6 +174,51 @@ defmodule NorthTalk do
   end
 
   @doc """
+  Sends a message to a Script and Pumps its Group once, in one exchange,
+  under either drive. An admission refusal is `{:error, exception}`, with no
+  handle and no Pump. Once admitted, it returns `{:ok, %NorthTalk.Pumped{}}`
+  holding the request's `NorthTalk.Pending` and the Pump's outcome; a refused
+  Pump leaves the request queued. Earlier inputs run first, and the Run may
+  still be going after the Pump; an automatic owner Pumps on afterwards.
+
+  Options: `:now`, a `DateTime` Clock reading, and `:fuel_slice`, as for
+  `pump/2`. A reactor without `request-pump-fields-v1` refuses it before
+  admission with `invalid value`; `request/5` and `pump/2` still work there.
+  """
+  def request_pump(%Group{owner: owner} = group, to, name, args \\ [], opts \\ []),
+    do: GenServer.call(owner, {:pumped, "request-pump", group, {to, name, args}, opts})
+
+  @doc """
+  Calls a Function Value and Pumps its Group once, as `request_pump/5` sends
+  a message. A stale Function Value fails its Run, not the admission.
+  """
+  def call_pump(%Group{owner: owner} = group, %NorthTalk.Function{} = fun, args \\ [], opts \\ []),
+    do: GenServer.call(owner, {:pumped, "call-pump", group, {fun, args}, opts})
+
+  @doc """
+  Waits up to `timeout` ms for a pending request's Run to end, returning what
+  `request/5` would. It can be awaited again, and returns the same result.
+  A timeout is a `NorthTalk.HostError` with code `timeout`, and the Run carries
+  on. A released handle is `pending released`.
+  """
+  def await(%NorthTalk.Pending{owner: owner} = pending, timeout \\ 5_000) do
+    GenServer.call(owner, {:await, pending, timeout}, :infinity)
+  catch
+    :exit, _ -> {:error, %NorthTalk.HostError{code: "instance closed", detail: "#{inspect(owner)} is not running"}}
+  end
+
+  @doc """
+  Releases a pending request: discards its result and fails its awaiters,
+  now and later, with `pending released`. The request is not cancelled.
+  Releasing it twice, or through a closed owner, does nothing.
+  """
+  def release_pending(%NorthTalk.Pending{owner: owner} = pending) do
+    GenServer.call(owner, {:release_pending, pending})
+  catch
+    :exit, _ -> :ok
+  end
+
+  @doc """
   Releases a Function Value handle. Later use of it is `function released`.
   Releasing it twice, or through a closed owner, does nothing. A Group's or
   owner's handles are all released when it closes; there are no finalisers.
@@ -299,6 +344,9 @@ defmodule NorthTalk do
         restore: 4,
         settle: 3,
         call: 4,
+        request_pump: 5,
+        call_pump: 4,
+        await: 2,
         close_group: 1
       ] do
     args = Macro.generate_arguments(arity, __MODULE__)
