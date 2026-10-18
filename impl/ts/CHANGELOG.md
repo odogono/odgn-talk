@@ -7,6 +7,18 @@ tracked separately in the Spec's Data Files.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
+### Added
+
+- First public npm release of [`@northtalk/ts`](https://www.npmjs.com/package/@northtalk/ts/v/0.1.0), published under the MIT Licence from [`ts-v0.1.0`](https://github.com/odogono/odgn-talk/tree/ts-v0.1.0), for [#1173](https://github.com/odogono/odgn-talk/issues/1173).
+- ESM and TypeScript declarations for the TS Core, Session Host, Stores, notifications, SQLite, driver, Zig reactor embedding and tooling surfaces. The package excludes the corpus replay helpers and `talk.wasm`.
+- Support for Node 22 or later (`sqlite` needs Node 22.13 or later), Bun, evergreen browsers and TypeScript 5.9 or later, checked against the packed tarball.
+
+Earlier development notes are preserved below in [Earlier unreleased history](#earlier-unreleased-history).
+
+## Earlier unreleased history
+
 ### Changed
 
 - The TS Core moved to `impl/ts/`, inside a Bun workspace whose root also holds the Spec tools in `tools/` ([ADR 0046](../../docs/adr/0046-each-core-lives-under-impl-beside-a-shared-spec.md)). Its corpus runner and browser smoke test are now `impl/ts/tools/`. The package and its exports are unchanged.
