@@ -362,8 +362,14 @@ futures and inspected state. Function-call errors retain the original Function
 Value in `{fn, args}` metadata, including its captures. Save/Restore retains this
 metadata in the failed Run, queued error and locally called error Handler.
 
+Extend rejects local calls into inherited Handlers containing `veto`, including
+command, function-style and Lambda calls across earlier extension code units
+([#1060](https://github.com/odogono/odgn-talk/issues/1060)). Diagnostics retain each
+veto's defining position. The shared public Host compares refusals, unchanged
+state and code identity, pending Run resumption and subsequent Host Decisions
+against native Go with exact Trace, Fuel, typed Reports, futures and Inspection.
+
 Known execution differences remain outside the selection:
-inherited veto checking on Extend ([#1060](https://github.com/odogono/odgn-talk/issues/1060)),
 allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
 Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
 parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)),

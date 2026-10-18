@@ -2014,14 +2014,10 @@ pub const Group = struct {
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
         try diagnostics.appendSlice(scratch, checked.diagnostics);
         try g.libraryNeeds(scratch, t, context.grants orelse &.{}, &diagnostics);
-        std.mem.sort(check.Diagnostic, diagnostics.items, {}, struct {
-            fn less(_: void, x: check.Diagnostic, y: check.Diagnostic) bool {
-                return x.offset < y.offset;
-            }
-        }.less);
+        std.mem.sort(check.Diagnostic, diagnostics.items, &lines, check.Diagnostic.lessThan);
         if (diagnostics.items.len > 0) {
             for (diagnostics.items) |d| {
-                const p = lines.position(d.offset);
+                const p = d.position(&lines);
                 g.write("diag {s} code=\"{s}\" pos={d}:{d}\n", .{ label, d.code.spelling(), p.line, p.column });
             }
             refused.* = diagnostics.items.len;
@@ -2045,8 +2041,7 @@ pub const Group = struct {
         var names: std.ArrayList(check.Inherited) = .empty;
         defer names.deinit(g.gpa);
         const link = try std.fmt.allocPrint(scratch, "@{s}", .{unit_name});
-        const exported = try check.exportsWithScratch(g.gpa, g.gpa, t, &checked);
-        defer g.gpa.free(exported);
+        const exported = try check.exportsWithScratch(scratch, g.gpa, t, &checked);
         for (exported) |e| try names.append(g.gpa, .{ .name = e.name, .unit = link, .export_ = e });
         for (t.declarations) |d| if (d.data == .use) {
             const u = d.data.use;

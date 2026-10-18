@@ -341,6 +341,7 @@ func runBridgeCases(t *testing.T) []bridgeObservation {
 	observations = append(observations, runFunctionBridgeCases(t)...)
 	observations = append(observations, runLibraryBridgeCases(t)...)
 	observations = append(observations, runReloadBridgeCases(t)...)
+	observations = append(observations, runExtendVetoBridgeCases(t)...)
 	observations = append(observations, runHostCommandBridgeCases(t)...)
 	observations = append(observations, runTriageBridgeCases(t)...)
 	observations = append(observations, runStopChargeBridgeCases(t)...)
