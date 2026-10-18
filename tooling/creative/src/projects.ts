@@ -1,7 +1,9 @@
 // The Project list, earlier versions, autosave wiring and the banners
 // storage failures show (#752). The IndexedDB layer is `storage.ts`, the
 // scheduling is `autosave.ts`, and one-editor-per-Project is `edit-lock.ts`;
-// this file draws them and connects them to the Stack shell.
+// this file connects them to the Stack shell. The lists are Preact
+// components in `projects-window.tsx`, following the signals kept here.
+import { computed, signal } from '@preact/signals';
 import { type Immutable } from 'immer';
 import { Autosave, failureMessage, type AutosaveState } from './autosave';
 import {
@@ -38,8 +40,10 @@ import {
   type ProjectFileHandleRecord,
   type ProjectRecord,
   type ProjectStorage,
+  type VersionInfo,
 } from './storage';
 import { byId, h } from './dom';
+import { mountProjectsWindow } from './projects-window';
 
 const when = (time: number): string => new Date(time).toLocaleString();
 
@@ -139,14 +143,19 @@ const LOST_EDITORSHIP = 'EditorshipLostError';
 export const mountProjects = (deps: ProjectsDeps): void => {
   const { channel, lock, shell, storage } = deps;
   const editor = shell.editor;
-  let currentId = deps.initial.id;
   let record: ProjectRecord | undefined = deps.initial.record;
-  let preview:
-    { latest: Immutable<Project>; savedAt: number; seq: number } | undefined;
-  let orphaned = false;
   let firstSave = true;
-  let renamingId: string | undefined;
-  let confirmingDeleteId: string | undefined;
+  // What the Projects and Earlier Versions lists show (projects-window.tsx).
+  const currentId = signal(deps.initial.id);
+  const preview = signal<
+    { latest: Immutable<Project>; savedAt: number; seq: number } | undefined
+  >(undefined);
+  const orphaned = signal(false);
+  const editing = signal(lock.editing);
+  const records = signal<readonly ProjectRecord[]>([]);
+  const versions = signal<readonly VersionInfo[]>([]);
+  const renamingId = signal<string | undefined>(undefined);
+  const confirmingDeleteId = signal<string | undefined>(undefined);
   // The current Project's file on disk, where Save writes back to it
   // (#823). `pendingDisk` carries a just-opened file's handle to the
   // Project it becomes, before that Project is the current one.
@@ -158,7 +167,8 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   // importing or switching Projects. An export makes that exact revision safe.
   let safeProject = editor.project;
   const hasUnsafeChanges = () =>
-    (autosave.dirty || !storage || orphaned) && editor.project !== safeProject;
+    (autosave.dirty || !storage || orphaned.value) &&
+    editor.project !== safeProject;
 
   const notice = (text: string): void => {
     byId('notice-text').textContent = text;
@@ -172,7 +182,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   }
 
   const drawReadonly = (): void => {
-    byId('readonly-banner').hidden = lock.editing || orphaned;
+    byId('readonly-banner').hidden = lock.editing || orphaned.value;
   };
 
   /** Draws Save, Save As and what saving to disk means in this browser. */
@@ -184,7 +194,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     byId('save-file-rule').hidden = !disk.save;
     // Only the editing tab writes a Project's file; a read-only copy
     // could be older than the one being edited. Export still downloads.
-    save.disabled = !lock.editing || !!preview;
+    save.disabled = !lock.editing || !!preview.value;
     saveAs.disabled = save.disabled;
     save.title = diskFile
       ? `Save back to ${diskFile.stamp.name}`
@@ -229,7 +239,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     stamp: FileStamp,
   ): Promise<void> => {
     pendingDisk = { handle, id, stamp };
-    if (id === currentId) {
+    if (id === currentId.value) {
       diskFile = { handle, stamp };
       drawFileAccess();
     }
@@ -300,17 +310,21 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   const save = async (): Promise<void> => {
-    if (!storage || orphaned || preview) {
+    if (!storage || orphaned.value || preview.value) {
       return;
     }
     if (!(await lock.stillEditing())) {
       lock.release();
       throw new StorageError('Another tab took over editing.', LOST_EDITORSHIP);
     }
-    record = await storage.saveProject(currentId, editor.project, {
+    record = await storage.saveProject(currentId.value, editor.project, {
       assets: shell.images.forStorage(editor.project),
     });
-    channel?.post({ type: 'saved', projectId: currentId, seq: record.seq });
+    channel?.post({
+      type: 'saved',
+      projectId: currentId.value,
+      seq: record.seq,
+    });
   };
 
   const autosave = new Autosave(save, {
@@ -340,10 +354,13 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   });
 
   const applyEditing = (editingNow: boolean): void => {
-    if (!preview) {
+    editing.value = lock.editing;
+    if (!preview.value) {
       shell.setReadOnly(!editingNow);
     }
-    autosave.setEnabled(editingNow && !!storage && !preview && !orphaned);
+    autosave.setEnabled(
+      editingNow && !!storage && !preview.value && !orphaned.value,
+    );
     drawReadonly();
     drawFileAccess();
     drawSaveStatus(autosave.state);
@@ -354,7 +371,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   deps.lockDelegate.onEditing = applyEditing;
 
   editor.onChange = () => {
-    if (!preview && !orphaned) {
+    if (!preview.value && !orphaned.value) {
       autosave.markDirty();
     }
   };
@@ -391,7 +408,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     editor.finishPendingEdit();
     const source = editor.project;
     const project = projectForExport(editor.project);
-    const id = currentId;
+    const id = currentId.value;
     // Session bytes cover most assets; read only the rest from storage.
     const missing = [...new Set(project.assets.map(a => a.hash))].filter(
       hash => !shell.images.bytes.has(hash),
@@ -421,18 +438,18 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   const markFileSaved = async (
     built: Awaited<ReturnType<typeof buildProjectFile>>,
   ): Promise<void> => {
-    if (currentId === built.id && editor.project === built.source) {
+    if (currentId.value === built.id && editor.project === built.source) {
       safeProject = built.source;
     }
     if (
       storage &&
       record &&
-      !orphaned &&
-      currentId === built.id &&
+      !orphaned.value &&
+      currentId.value === built.id &&
       editor.project === built.source
     ) {
       const now = Date.now();
-      await storage.markExported(currentId, now).catch(() => {});
+      await storage.markExported(currentId.value, now).catch(() => {});
       record = { ...record, exportedAt: now };
       await drawStorageStatus();
     }
@@ -620,7 +637,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
           storageAsset(imported.bytes, imported.asset.mediaType),
         ]),
       );
-      const previousId = currentId;
+      const previousId = currentId.value;
       const previousModel = editor.project;
       const created = storage
         ? await storage.saveProject(undefined, loaded.project, { assets })
@@ -629,7 +646,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       if (handle) {
         await rememberDiskFile(importedId, handle, stampOfFile(file));
       }
-      if (currentId !== previousId || editor.project !== previousModel) {
+      if (currentId.value !== previousId || editor.project !== previousModel) {
         channel?.post({ type: 'list-changed' });
         await drawList();
         notice(
@@ -769,11 +786,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       shell.setReadOnly(true);
       const editingNow = await lock.acquire(id);
-      preview = undefined;
+      preview.value = undefined;
       byId('preview-note').hidden = true;
-      orphaned = false;
+      orphaned.value = false;
       byId('orphan-banner').hidden = true;
-      currentId = id;
+      currentId.value = id;
       record = loaded.record;
       editor.replaceProject(loaded.project);
       safeProject = editor.project;
@@ -794,13 +811,13 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       await drawStorageStatus();
     } finally {
       switching = false;
-      shell.setReadOnly(!!preview || !lock.editing);
+      shell.setReadOnly(!!preview.value || !lock.editing);
     }
   };
 
   /** Opens a stored Project, flushing the current one first. */
   const openProject = async (id: string): Promise<void> => {
-    if (!storage || id === currentId) {
+    if (!storage || id === currentId.value) {
       return;
     }
     editor.finishPendingEdit();
@@ -907,7 +924,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     try {
-      if (id === currentId) {
+      if (id === currentId.value) {
         const edit = editor.startEdit();
         edit.change(({ project }) => {
           project.name = name;
@@ -936,7 +953,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     await storage.deleteProject(id);
     channel?.post({ type: 'deleted', projectId: id });
     channel?.post({ type: 'list-changed' });
-    if (id !== currentId) {
+    if (id !== currentId.value) {
       await drawList();
       return;
     }
@@ -947,169 +964,35 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       : newProject());
   };
 
-  /** Draws the Project list; a hidden window is drawn when it opens. */
+  /** Loads the Project list; a hidden window is loaded when it opens. */
   const drawList = async (): Promise<void> => {
-    if (byId('projects-window').hidden) {
+    if (byId('projects-window').hidden || !storage) {
       return;
     }
-    const list = byId('project-list');
-    if (!storage) {
-      list.replaceChildren(
-        h('li', {}, "Projects can't be kept in this browser."),
-      );
-      return;
-    }
-    const records = await storage.listProjects().catch(() => []);
-    list.replaceChildren(
-      ...records.map(item => {
-        const current = item.id === currentId;
-        const lockedHere = current && !lock.editing;
-        if (renamingId === item.id) {
-          const input = h('input', {
-            value: item.title,
-            'aria-label': 'Project name',
-          }) as HTMLInputElement;
-          const save = h('button', { type: 'button' }, 'Save');
-          save.addEventListener('click', () => {
-            renamingId = undefined;
-            void renameProject(item.id, input.value);
-          });
-          const cancel = h('button', { type: 'button' }, 'Cancel');
-          cancel.addEventListener('click', () => {
-            renamingId = undefined;
-            void drawList();
-          });
-          return h('li', {}, input, save, cancel);
-        }
-        const parts: (Node | string)[] = [
-          h(
-            'span',
-            { class: current ? 'title current' : 'title' },
-            `${item.title} `,
-            h('span', { class: 'muted' }, when(item.modifiedAt)),
-          ),
-        ];
-        const button = (
-          label: string,
-          action: () => void,
-          disabled = false,
-        ): HTMLButtonElement => {
-          const node = h(
-            'button',
-            { type: 'button', disabled },
-            label,
-          ) as HTMLButtonElement;
-          node.addEventListener('click', action);
-          return node;
-        };
-        if (!current) {
-          parts.push(button('Open', () => void openProject(item.id)));
-        }
-        parts.push(
-          button(
-            'Rename',
-            () => {
-              renamingId = item.id;
-              confirmingDeleteId = undefined;
-              void drawList();
-            },
-            lockedHere,
-          ),
-          button('Duplicate', () => {
-            void storage
-              .duplicateProject(item.id)
-              .then(() => {
-                channel?.post({ type: 'list-changed' });
-                return drawList();
-              })
-              .catch(error => notice(String(error)));
-          }),
-        );
-        if (confirmingDeleteId === item.id) {
-          parts.push(
-            button('Delete this Project?', () => {
-              confirmingDeleteId = undefined;
-              void deleteProject(item.id).catch(error => notice(String(error)));
-            }),
-            button('Keep', () => {
-              confirmingDeleteId = undefined;
-              void drawList();
-            }),
-          );
-        } else {
-          parts.push(
-            button(
-              'Delete',
-              () => {
-                confirmingDeleteId = item.id;
-                renamingId = undefined;
-                void drawList();
-              },
-              lockedHere,
-            ),
-          );
-        }
-        return h('li', {}, ...parts);
-      }),
-    );
+    records.value = await storage.listProjects().catch(() => []);
     (byId('new-project') as HTMLButtonElement).disabled = false;
   };
 
   const exitPreview = (project: Immutable<Project>): void => {
-    preview = undefined;
+    preview.value = undefined;
     byId('preview-note').hidden = true;
     editor.replaceProject(project);
     shell.setReadOnly(!lock.editing);
-    autosave.setEnabled(lock.editing && !!storage && !orphaned);
+    autosave.setEnabled(lock.editing && !!storage && !orphaned.value);
     shell.redraw();
     drawFileAccess();
     void drawVersions();
   };
 
-  /** Draws the version list; a hidden window is drawn when it opens. */
+  /** Loads the version list; a hidden window is loaded when it opens. */
   const drawVersions = async (): Promise<void> => {
     (byId('restore-version') as HTMLButtonElement).disabled = !lock.editing;
-    if (byId('versions-window').hidden) {
+    if (byId('versions-window').hidden || !storage || orphaned.value) {
       return;
     }
-    const list = byId('version-list');
-    if (!storage || orphaned) {
-      list.replaceChildren(h('li', {}, 'No earlier versions are kept.'));
-      return;
-    }
-    const versions = await storage.listVersions(currentId).catch(() => []);
-    list.replaceChildren(
-      ...versions.map((version, index) => {
-        const viewing = preview?.seq === version.seq;
-        const node = h(
-          'button',
-          { type: 'button', disabled: viewing || (index === 0 && !preview) },
-          viewing ? 'Viewing' : 'Preview',
-        ) as HTMLButtonElement;
-        node.addEventListener('click', () => {
-          if (index === 0 && preview) {
-            exitPreview(preview.latest);
-          } else {
-            void previewVersion(version.seq, version.savedAt);
-          }
-        });
-        return h(
-          'li',
-          {},
-          h(
-            'span',
-            { class: 'when' },
-            `${when(version.savedAt)} `,
-            h(
-              'span',
-              { class: 'muted' },
-              `${version.pageCount} Page${version.pageCount === 1 ? '' : 's'}${index === 0 ? ' · latest' : ''}`,
-            ),
-          ),
-          node,
-        );
-      }),
-    );
+    versions.value = await storage
+      .listVersions(currentId.value)
+      .catch(() => []);
   };
 
   const previewVersion = async (
@@ -1121,7 +1004,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     editor.finishPendingEdit();
     await autosave.flush();
-    if (autosave.dirty && !preview) {
+    if (autosave.dirty && !preview.value) {
       notice(
         "Couldn't save your latest work, so it stays on the desk. Export a copy first.",
       );
@@ -1129,7 +1012,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     }
     let loaded: LoadedProject;
     try {
-      loaded = await storage.loadVersion(currentId, seq);
+      loaded = await storage.loadVersion(currentId.value, seq);
     } catch (error) {
       notice(
         error instanceof Error ? error.message : "Couldn't open that version.",
@@ -1137,10 +1020,10 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       return;
     }
     await loadAssets(loaded.project);
-    preview = {
+    preview.value = {
       seq,
       savedAt,
-      latest: preview?.latest ?? editor.project,
+      latest: preview.value?.latest ?? editor.project,
     };
     autosave.setEnabled(false);
     editor.replaceProject(loaded.project);
@@ -1156,24 +1039,27 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   };
 
   byId('back-to-latest').addEventListener('click', () => {
-    if (preview) {
-      exitPreview(preview.latest);
+    if (preview.value) {
+      exitPreview(preview.value.latest);
     }
   });
   byId('restore-version').addEventListener('click', () => {
     void (async () => {
-      if (!storage || !preview || !lock.editing) {
+      if (!storage || !preview.value || !lock.editing) {
         return;
       }
       if (!(await lock.stillEditing())) {
         lock.release();
         return;
       }
-      const restored = await storage.restoreVersion(currentId, preview.seq);
+      const restored = await storage.restoreVersion(
+        currentId.value,
+        preview.value.seq,
+      );
       record = restored.record;
       channel?.post({
         type: 'saved',
-        projectId: currentId,
+        projectId: currentId.value,
         seq: restored.record.seq,
       });
       exitPreview(restored.project);
@@ -1189,7 +1075,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       }
       // The tab that gave up editing flushed first; show its latest save.
       const loaded = await storage
-        .loadProject(currentId)
+        .loadProject(currentId.value)
         .catch(() => undefined);
       if (loaded) {
         record = loaded.record;
@@ -1229,11 +1115,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
       void drawList();
       return;
     }
-    if (message.projectId !== currentId) {
+    if (message.projectId !== currentId.value) {
       return;
     }
     if (message.type === 'deleted') {
-      orphaned = true;
+      orphaned.value = true;
       autosave.setEnabled(false);
       byId('orphan-banner').hidden = false;
       byId('readonly-banner').hidden = true;
@@ -1259,11 +1145,11 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     while (behind) {
       behind = false;
       // Unsaved work in this tab is never replaced; it keeps its banner.
-      if (lock.editing || preview || autosave.dirty || !storage) {
+      if (lock.editing || preview.value || autosave.dirty || !storage) {
         break;
       }
       await storage
-        .loadProject(currentId)
+        .loadProject(currentId.value)
         .then(async loaded => {
           await loadAssets(loaded.project);
           record = loaded.record;
@@ -1300,25 +1186,78 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     byId('versions-window').hidden = true;
   });
   byId('new-project').addEventListener('click', () => void newProject());
-  byId('example-list').replaceChildren(
-    ...EXAMPLE_PROJECTS.map(example => {
-      const open = h(
-        'button',
-        { type: 'button', 'data-example': example.name },
-        `Open ${example.name}`,
-      );
-      open.addEventListener('click', () => void openExample(example));
-      return h(
-        'li',
-        {},
-        open,
-        h('span', { class: 'muted' }, example.description),
-      );
-    }),
+  mountProjectsWindow(
+    {
+      examples: byId('example-list'),
+      projects: byId('project-list'),
+      versions: byId('version-list'),
+    },
+    {
+      actions: {
+        backToLatest: () => {
+          if (preview.value) {
+            exitPreview(preview.value.latest);
+          }
+        },
+        cancel: () => {
+          renamingId.value = undefined;
+          confirmingDeleteId.value = undefined;
+        },
+        confirmDelete: id => {
+          confirmingDeleteId.value = id;
+          renamingId.value = undefined;
+        },
+        delete: id => {
+          void deleteProject(id)
+            .catch(error => notice(String(error)))
+            .finally(() => {
+              if (confirmingDeleteId.value === id) {
+                confirmingDeleteId.value = undefined;
+              }
+            });
+        },
+        duplicate: id => {
+          void storage
+            ?.duplicateProject(id)
+            .then(() => {
+              channel?.post({ type: 'list-changed' });
+              return drawList();
+            })
+            .catch(error => notice(String(error)));
+        },
+        open: id => void openProject(id),
+        openExample: example => void openExample(example),
+        previewVersion: version =>
+          void previewVersion(version.seq, version.savedAt),
+        // The field stays until the list shows the new name.
+        rename: (id, title) =>
+          void renameProject(id, title).finally(() => {
+            if (renamingId.value === id) {
+              renamingId.value = undefined;
+            }
+          }),
+        startRename: id => {
+          renamingId.value = id;
+          confirmingDeleteId.value = undefined;
+        },
+      },
+      examples: EXAMPLE_PROJECTS,
+      state: {
+        confirmingDeleteId,
+        currentId,
+        editing,
+        orphaned,
+        previewSeq: computed(() => preview.value?.seq),
+        records,
+        renamingId,
+        stored: !!storage,
+        versions,
+      },
+    },
   );
 
-  void storage?.setLastProjectId(currentId).catch(() => {});
-  void loadDiskFile(currentId);
+  void storage?.setLastProjectId(currentId.value).catch(() => {});
+  void loadDiskFile(currentId.value);
   void drawList();
   void drawVersions();
   void drawStorageStatus();
