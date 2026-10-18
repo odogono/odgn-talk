@@ -516,6 +516,7 @@ pub const Group = struct {
     out: std.Io.Writer.Allocating,
     sink: TraceSink,
     context: ?*anyopaque,
+    flushing: bool = false,
     scripts: std.ArrayList(*Script) = .empty,
     pending: std.ArrayList(*Pending) = .empty,
     deciding: std.ArrayList(*Deciding) = .empty,
@@ -535,14 +536,20 @@ pub const Group = struct {
 
     /// Sends each complete Trace line to the sink.
     pub fn flush(g: *Group) void {
+        // A Trace sink may submit an input whose refusal also flushes. Keep
+        // one owner and reread the buffer after callbacks can append to it.
+        if (g.flushing) return;
+        g.flushing = true;
+        defer g.flushing = false;
         g.group.flushChargeRefusals();
-        const written = g.out.written();
         var start: usize = 0;
-        while (std.mem.indexOfScalarPos(u8, written, start, '\n')) |end| {
+        while (true) {
+            const written = g.out.written();
+            const end = std.mem.indexOfScalarPos(u8, written, start, '\n') orelse break;
             if (g.sink) |sink| sink(g.context, written[start..].ptr, end - start);
             start = end + 1;
         }
-        const rest = written[start..];
+        const rest = g.out.written()[start..];
         std.mem.copyForwards(u8, g.out.writer.buffer[0..rest.len], rest);
         g.out.writer.end = rest.len;
     }
@@ -1383,22 +1390,36 @@ export fn talk_pending_done(p: *const Pending) bool {
     return p.group.group.results.contains(p.id);
 }
 
-export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+fn pumpOptions(o: ?*const PumpOptions) PumpOptions {
+    return if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
+}
+
+fn checkPumpWorker(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions) HostErrorCode {
     g.group.checkWorker() catch |err| {
-        const options = if (o) |x| x.* else PumpOptions{ .fuel_slice = 0, .fuel_cap = 0 };
+        const options = pumpOptions(o);
         const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
         model.dates.validateInstant(clock) catch return status(err);
         g.group.refuseWorker(.{ .pump = .{ .now = clock, .slice = options.fuel_slice, .cap = options.fuel_cap } });
         g.flush();
         return status(err);
     };
-    if (g.memory.refused) return .out_of_memory;
+    return .ok;
+}
+
+export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+    const code = checkPumpWorker(g, seconds, micros, o);
+    if (code != .ok) return code;
     defer g.flush();
+    return pumpOwned(g, seconds, micros, o, out);
+}
+
+fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: ?*PumpResult) HostErrorCode {
+    if (g.memory.refused) return .out_of_memory;
     const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(clock) catch return .invalid_value;
-    const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
+    const options = pumpOptions(o);
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
-    g.group.pumpWith(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
+    g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
     // A C Host answers inside its calls, so a crossing pause here is only
     // `defer_crossings`' (a testing aid): take the Pump up again at once.
     while (g.group.pumpPaused()) g.group.resumePump() catch |err| return status(err);
@@ -1414,6 +1435,49 @@ export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions
         r.next_deadline_micros = deadline.micros;
     }
     return .ok;
+}
+
+const CombinedAdmission = union(enum) {
+    script: struct { s: *Script, m: *const Message },
+    object: struct { to: *objects.Object, m: *const Message },
+    function: struct { f: *Value, args: ?[*]const *Value, len: usize, limits: ?*const LimitOverride },
+};
+
+fn admissionPump(g: *Group, admission: CombinedAdmission, seconds: i64, micros: i32, o: ?*const PumpOptions, id: ?*Buffer, out: *?*Pending, result_: ?*PumpResult) HostErrorCode {
+    if (id) |b| b.* = .{};
+    out.* = null;
+    if (result_) |r| r.* = std.mem.zeroes(PumpResult);
+    const worker = checkPumpWorker(g, seconds, micros, o);
+    if (worker != .ok) return worker;
+    var notify = false;
+    // Readiness may start another worker synchronously, so release first.
+    defer if (notify) {
+        if (g.group.on_ready) |ready| ready(g.group.ready_context);
+    };
+    g.group.worker_claimed = true;
+    defer g.group.worker_claimed = false;
+    defer g.flush();
+    const admitted = switch (admission) {
+        .script => |x| talk_script_request(x.s, x.m, id, out),
+        .object => |x| talk_request(g, x.to, x.m, id, out),
+        .function => |x| talk_group_call(g, x.f, x.args, x.len, x.limits, id, out),
+    };
+    if (admitted != .ok) return admitted;
+    const code = pumpOwned(g, seconds, micros, o, result_);
+    notify = code != .ok;
+    return code;
+}
+
+export fn talk_script_request_pump(s: *Script, m: *const Message, seconds: i64, micros: i32, o: ?*const PumpOptions, id: ?*Buffer, out: *?*Pending, result_: ?*PumpResult) HostErrorCode {
+    return admissionPump(s.group, .{ .script = .{ .s = s, .m = m } }, seconds, micros, o, id, out, result_);
+}
+
+export fn talk_request_pump(g: *Group, to: *objects.Object, m: *const Message, seconds: i64, micros: i32, o: ?*const PumpOptions, id: ?*Buffer, out: *?*Pending, result_: ?*PumpResult) HostErrorCode {
+    return admissionPump(g, .{ .object = .{ .to = to, .m = m } }, seconds, micros, o, id, out, result_);
+}
+
+export fn talk_call_pump(g: *Group, f: *Value, args: ?[*]const *Value, len: usize, limits: ?*const LimitOverride, seconds: i64, micros: i32, o: ?*const PumpOptions, id: ?*Buffer, out: *?*Pending, result_: ?*PumpResult) HostErrorCode {
+    return admissionPump(g, .{ .function = .{ .f = f, .args = args, .len = len, .limits = limits } }, seconds, micros, o, id, out, result_);
 }
 
 /// Replaces a Library the Group holds, a worker call: the Libraries that

@@ -7,7 +7,7 @@ behind the gate decision.
 
 ## Implemented foundation
 
-- Private native Go combined admission/Pump helpers claim one worker guard,
+- Native Go combined admission/Pump helpers claim one worker guard,
   preserve input ordering, retain the admitted Pending on Pump refusal, and
   notify OnReady only after releasing the worker on that refusal. Function
   staleness remains a drain-time failure. An unsupported backend refuses before
@@ -21,11 +21,12 @@ behind the gate decision.
 - The native combined Request and Function benchmarks are separate from the
   unchanged public `BackendRequest` benchmark.
 
-The native helpers stayed private until the gate decision, so the public Host
-declarations land together. Publishing only the proposed Go declarations
-would immediately violate the repository's required Go/C API comparison. The
-comparison remains unchanged; no missing C implementation is hidden by a stub
-or an exception.
+The native helpers stayed private until the gate decision. Go now publishes
+Script/Group `RequestPump` and Group `CallPump` beside equivalent C declarations
+and implementations, preserving the required Go/C API comparison. The adapter
+negotiates fields by default; explicit JSON mode still refuses combined calls
+before admission. Public Host tests cover both native Go and the adapter, and
+C tests cover output ownership, partial success and worker callback exclusion.
 
 ## Integrated transport (#1253)
 
@@ -44,7 +45,7 @@ or an exception.
   the token.
 - The Go adapter negotiates the candidate named by `TALK_ZIG_REQUEST_PUMP`
   (`map` or `fields`). Ordinary Requests, Function calls and Pumps then use
-  binary frames, and the private `requestPump`/`callPump` helpers use the
+  binary frames, and the public `RequestPump`/`CallPump` APIs use the
   combined messages after the ordinary Go-side admission checks. The Host
   registers each combined Pending before sending it. A cancellation queued
   before the token retires is rewritten to the delivery id at transmission.
@@ -170,7 +171,8 @@ tracked in #1267.
 
 ## Remaining implementation
 
-Steps 1–3 below are done in #1253. Step 4 is measured above, and failed; step 5 is blocked.
+Steps 1–3 below are done in #1253. Step 4 passed the amended gate in #1268.
+The Go/C part of step 5 is implemented; TS and Elixir rollout remains.
 
 1. Integrate both binary frame candidates into the Go adapter and Zig Session,
    using typed Values and Reports rather than JSON transcoding. Preserve binary
@@ -182,7 +184,8 @@ Steps 1–3 below are done in #1253. Step 4 is measured above, and failed; step 
 4. Run the existing and combined Request gates on all three platforms, record
    Function measurements, profile, and perform the agreed one optimization pass
    if needed. Select the envelope by the ADR's rule.
-5. Only after passage, publish and implement the Go, TS, Elixir and C APIs;
-   verify transferred-buffer browser interoperability and Elixir handle lifetime.
+5. Go and C public APIs are implemented after the amended gate passed. TS and
+   Elixir APIs, transferred-buffer browser interoperability and Elixir handle
+   lifetime remain their separate rollout steps.
 6. Accept/supersede the ADRs only with the required evidence. Keep #1245 and
    #1103 open meanwhile.

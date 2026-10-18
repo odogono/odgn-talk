@@ -1,5 +1,3 @@
-// Private experiment helpers for #1245. Publish the proposed Host APIs only
-// after the Go/Zig performance gates pass and the other declarations can land.
 package northtalk
 
 import (
@@ -8,16 +6,21 @@ import (
 	"time"
 )
 
-// requestPump admits a Request and performs one Pump while holding the Group's
+// RequestPump admits a Request and performs one Pump while holding the Group's
 // worker guard. The Pending may remain unsettled. If Pump refuses after
 // admission, the nonempty id and Pending are returned alongside its error.
-func (s *Script) requestPump(ctx context.Context, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
+// Like Group.RequestPump, this is a worker call; admission refusal returns no
+// id or Pending and does not Pump.
+func (s *Script) RequestPump(ctx context.Context, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
 	return s.group.requestPump(ctx, s, nil, m, now, o)
 }
 
-// requestPump is Request followed by one Pump under a single worker guard.
+// RequestPump is Request followed by one Pump under a single worker guard.
 // Other queued work keeps its ordering; this does not wait for the result.
-func (g *Group) requestObjectPump(ctx context.Context, to *Object, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
+// On admission refusal the id and Pending are empty and no Pump runs. A Pump
+// refusal retains the admitted id and Pending alongside the error. Like Pump,
+// this is a worker call. Unsupported backends refuse before admission.
+func (g *Group) RequestPump(ctx context.Context, to *Object, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
 	return g.requestPump(ctx, nil, to, m, now, o)
 }
 
@@ -53,9 +56,11 @@ func (g *Group) requestPump(ctx context.Context, s *Script, to *Object, m Messag
 	})
 }
 
-// callPump admits a Function call and performs one ordinary Pump. Staleness
-// and arity retain Call's drain-time and execution-time behavior.
-func (g *Group) callPump(ctx context.Context, fn Value, args []Value, limits *LimitOverride, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
+// CallPump admits a Function call and performs one ordinary Pump. Staleness
+// and arity retain Call's drain-time and execution-time behavior. This is a
+// worker call; admission and Pump refusals have RequestPump's partial-success
+// contract, and the Pending can remain unsettled after the single Pump.
+func (g *Group) CallPump(ctx context.Context, fn Value, args []Value, limits *LimitOverride, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
 	if g.backend != nil {
 		if b, ok := g.backend.(combinedBackend); ok {
 			return b.pumpCombined("combined Function call and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {

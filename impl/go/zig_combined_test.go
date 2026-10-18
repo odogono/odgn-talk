@@ -43,6 +43,13 @@ func zigCombinedLayouts(t *testing.T, f func(t *testing.T)) {
 	}
 }
 
+func TestZigCombinedPublicTargets(t *testing.T) {
+	zigCombinedLayouts(t, func(t *testing.T) {
+		t.Run("object", testCombinedObjectRequest)
+		t.Run("arity", testCombinedCallArityAtExecution)
+	})
+}
+
 func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 	zigCombinedLayouts(t, func(t *testing.T) {
 		ready := 0
@@ -58,7 +65,7 @@ func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 		}
 		ready = 0
 		trace.take()
-		id, p, result, err := s.requestPump(nil, Message{Name: "accumulate", Args: []Value{Int(3)}}, time.Unix(1, 0), PumpOptions{})
+		id, p, result, err := s.RequestPump(nil, Message{Name: "accumulate", Args: []Value{Int(3)}}, time.Unix(1, 0), PumpOptions{})
 		if err != nil || id != "d2" || p == nil || len(result.Reports) == 0 {
 			t.Fatalf("%s %v %+v %v", id, p, result, err)
 		}
@@ -81,7 +88,7 @@ func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 		// A Function call through call-pump, then its staleness at the drain.
 		g = New().NewGroup(GroupOptions{})
 		home, fn := exportFunction(t, g, "on exported\n return given: 5\nend exported", Limits{})
-		_, p, _, err = g.callPump(nil, fn, nil, nil, time.Unix(2, 0), PumpOptions{})
+		_, p, _, err = g.CallPump(nil, fn, nil, nil, time.Unix(2, 0), PumpOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,7 +98,7 @@ func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 		if _, err := home.Reload("on other\nend other", ResetVariables); err != nil {
 			t.Fatal(err)
 		}
-		id, p, _, err = g.callPump(nil, fn, nil, nil, time.Unix(3, 0), PumpOptions{})
+		id, p, _, err = g.CallPump(nil, fn, nil, nil, time.Unix(3, 0), PumpOptions{})
 		if err != nil || id == "" || p == nil {
 			t.Fatalf("staleness rejected during admission: %s %v", id, err)
 		}
@@ -108,7 +115,7 @@ func TestZigCombinedRefusalsBeforeAdmission(t *testing.T) {
 		var inner error
 		def, err := New().DefineCapability("api", Operation{Name: "read", Mode: Immediate, Result: NumberShape, Do: func(c *Call, args []Value) (Value, error) {
 			// A competing worker, combined or not, is refused before admission.
-			_, refused, _, err := s.requestPump(nil, Message{Name: "ping"}, time.Unix(1, 0), PumpOptions{})
+			_, refused, _, err := s.RequestPump(nil, Message{Name: "ping"}, time.Unix(1, 0), PumpOptions{})
 			inner = err
 			if refused != nil {
 				t.Error("refused worker returned a Pending")
@@ -123,7 +130,7 @@ func TestZigCombinedRefusalsBeforeAdmission(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, p, _, err := s.requestPump(nil, Message{Name: "go"}, time.Unix(1, 0), PumpOptions{})
+		_, p, _, err := s.RequestPump(nil, Message{Name: "go"}, time.Unix(1, 0), PumpOptions{})
 		if err != nil || !isZigReentrant(inner) {
 			t.Fatalf("combined %v, competing %v", err, inner)
 		}
@@ -134,11 +141,11 @@ func TestZigCombinedRefusalsBeforeAdmission(t *testing.T) {
 		if _, err := s.Deliver(Message{Name: "ping"}); err != nil {
 			t.Fatal(err)
 		}
-		id, p, _, err := s.requestPump(nil, Message{Name: "ping"}, time.Unix(2, 0), PumpOptions{})
+		id, p, _, err := s.RequestPump(nil, Message{Name: "ping"}, time.Unix(2, 0), PumpOptions{})
 		if !errors.Is(err, ErrMailboxFull) || id != "" || p != nil {
 			t.Fatalf("mailbox refusal: %s %v %v", id, p, err)
 		}
-		id, p, _, err = g.callPump(nil, Int(1), nil, nil, time.Unix(2, 0), PumpOptions{})
+		id, p, _, err = g.CallPump(nil, Int(1), nil, nil, time.Unix(2, 0), PumpOptions{})
 		if err == nil || id != "" || p != nil {
 			t.Fatalf("invalid Function: %s %v %v", id, p, err)
 		}
@@ -182,7 +189,7 @@ func TestZigCombinedPumpRefusalRetainsAdmission(t *testing.T) {
 			now time.Time
 			o   PumpOptions
 		}{{now.Add(-time.Second), PumpOptions{}}, {now, PumpOptions{FuelSlice: -1}}, {time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), PumpOptions{}}} {
-			id, p, _, err := s.requestPump(nil, Message{Name: "ping"}, refused.now, refused.o)
+			id, p, _, err := s.RequestPump(nil, Message{Name: "ping"}, refused.now, refused.o)
 			if err == nil || id == "" || p == nil {
 				t.Fatalf("lost admission: %s %v %v", id, p, err)
 			}
@@ -211,7 +218,7 @@ func TestZigCombinedOnePumpCanLeavePending(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, p, r, err := s.requestPump(nil, Message{Name: "ping"}, time.Unix(1, 0), PumpOptions{FuelSlice: 1})
+		_, p, r, err := s.RequestPump(nil, Message{Name: "ping"}, time.Unix(1, 0), PumpOptions{FuelSlice: 1})
 		if err != nil || p == nil || r.State != Sliced {
 			t.Fatal(r, err)
 		}
@@ -266,7 +273,7 @@ func TestZigCombinedNeedsAndTokenCancellation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		id, p, _, err := s.requestPump(ctx, Message{Name: "inc", Args: []Value{Int(1)}}, time.Unix(1, 0), PumpOptions{})
+		id, p, _, err := s.RequestPump(ctx, Message{Name: "inc", Args: []Value{Int(1)}}, time.Unix(1, 0), PumpOptions{})
 		if err != nil || id != "d2" {
 			t.Fatal(id, err)
 		}
@@ -305,7 +312,7 @@ func TestZigCombinedLateCancellationUsesDeliveryID(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		// A refused Pump leaves the admitted input queued and retires the token.
-		id, p, _, err := s.requestPump(ctx, Message{Name: "go"}, time.Unix(1, 0), PumpOptions{FuelSlice: -1})
+		id, p, _, err := s.RequestPump(ctx, Message{Name: "go"}, time.Unix(1, 0), PumpOptions{FuelSlice: -1})
 		if err == nil || id != "d1" || p == nil {
 			t.Fatal(id, p, err)
 		}
@@ -357,11 +364,23 @@ func TestCombinedUnsupportedBackendDoesNotAdmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, p, _, err := s.requestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
-	if err == nil || id != "" || p != nil {
-		t.Fatalf("unsupported call admitted: %s %v %v", id, p, err)
+	for _, call := range []func() (DeliveryID, *Pending, PumpResult, error){
+		func() (DeliveryID, *Pending, PumpResult, error) {
+			return s.RequestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
+		},
+		func() (DeliveryID, *Pending, PumpResult, error) {
+			return g.RequestPump(nil, nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
+		},
+		func() (DeliveryID, *Pending, PumpResult, error) {
+			return g.CallPump(nil, Int(1), nil, nil, time.Now(), PumpOptions{})
+		},
+	} {
+		id, p, _, err := call()
+		if err == nil || id != "" || p != nil {
+			t.Fatalf("unsupported call admitted: %s %v %v", id, p, err)
+		}
 	}
-	id, _, err = s.Request(nil, Message{Name: "ping"})
+	id, _, err := s.Request(nil, Message{Name: "ping"})
 	if err != nil || id != "d1" {
 		t.Fatalf("unsupported call consumed delivery: %s %v", id, err)
 	}

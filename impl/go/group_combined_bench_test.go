@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// BenchmarkBackendRequestPump exercises the private combined-operation
-// experiment on each backend. BackendRequest remains the unchanged public
+// BenchmarkBackendRequestPump exercises the public combined-operation
+// API on each backend. BackendRequest remains the unchanged public
 // separate-call gate. Unsupported backends fail rather than report fallback
 // timings under the combined operation's name.
 func BenchmarkBackendRequestPump(b *testing.B) {
@@ -22,7 +22,7 @@ func BenchmarkBackendRequestPump(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		start := time.Now()
-		_, p, _, err := s.requestPump(nil, m, now, PumpOptions{})
+		_, p, _, err := s.RequestPump(nil, m, now, PumpOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func BenchmarkBackendCallPump(b *testing.B) {
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		_, p, _, err := g.callPump(nil, fn, nil, nil, now, PumpOptions{})
+		_, p, _, err := g.CallPump(nil, fn, nil, nil, now, PumpOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -21,7 +21,7 @@ func TestCombinedRequestAdmissionAndPump(t *testing.T) {
 		t.Fatal(err)
 	}
 	ready = 0
-	id, p, result, err := s.requestPump(nil, Message{Name: "accumulate", Args: []Value{Int(3)}}, time.Now(), PumpOptions{})
+	id, p, result, err := s.RequestPump(nil, Message{Name: "accumulate", Args: []Value{Int(3)}}, time.Now(), PumpOptions{})
 	if err != nil || id == "" || p == nil || len(result.Reports) == 0 {
 		t.Fatalf("%s %v %+v %v", id, p, result, err)
 	}
@@ -50,7 +50,7 @@ func TestCombinedPumpRefusalRetainsAdmission(t *testing.T) {
 	if _, err := g.Pump(now, PumpOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	id, p, _, err := s.requestPump(nil, Message{Name: "ping"}, now.Add(-time.Second), PumpOptions{})
+	id, p, _, err := s.RequestPump(nil, Message{Name: "ping"}, now.Add(-time.Second), PumpOptions{})
 	if err == nil || id == "" || p == nil {
 		t.Fatalf("lost admission: %s %v %v", id, p, err)
 	}
@@ -82,7 +82,7 @@ func TestCombinedRefusalDoesNotAdmit(t *testing.T) {
 	if err := g.beginWorker(); err != nil {
 		t.Fatal(err)
 	}
-	id, p, _, err := s.requestPump(context.Background(), Message{Name: "ping"}, time.Now(), PumpOptions{})
+	id, p, _, err := s.RequestPump(context.Background(), Message{Name: "ping"}, time.Now(), PumpOptions{})
 	g.endWorker()
 	if err == nil || id != "" || p != nil || g.nextDelivery != 0 {
 		t.Fatalf("worker refusal admitted: %s %v %v", id, p, err)
@@ -90,7 +90,7 @@ func TestCombinedRefusalDoesNotAdmit(t *testing.T) {
 	if _, err := s.Deliver(Message{Name: "ping"}); err != nil {
 		t.Fatal(err)
 	}
-	id, p, _, err = s.requestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
+	id, p, _, err = s.RequestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
 	if err != ErrMailboxFull || id != "" || p != nil || g.nextDelivery != 1 {
 		t.Fatalf("mailbox refusal: %s %v %v", id, p, err)
 	}
@@ -104,7 +104,7 @@ func TestCombinedCallInvalidValueDoesNotPump(t *testing.T) {
 		t.Skip("native combined implementation")
 	}
 	g := New().NewGroup(GroupOptions{})
-	id, p, _, err := g.callPump(nil, Int(1), nil, nil, time.Now(), PumpOptions{})
+	id, p, _, err := g.CallPump(nil, Int(1), nil, nil, time.Now(), PumpOptions{})
 	if err == nil || id != "" || p != nil || !g.clock.IsZero() {
 		t.Fatalf("%s %v %v", id, p, err)
 	}
@@ -120,7 +120,7 @@ func TestCombinedFunctionCallAndStaleness(t *testing.T) {
 	}
 	g := New().NewGroup(GroupOptions{})
 	home, fn := exportFunction(t, g, "on exported\n return given: 5\nend exported", Limits{})
-	_, p, _, err := g.callPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
+	_, p, _, err := g.CallPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestCombinedFunctionCallAndStaleness(t *testing.T) {
 	if _, err := home.Reload("on other\nend other", ResetVariables); err != nil {
 		t.Fatal(err)
 	}
-	id, p, _, err := g.callPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
+	id, p, _, err := g.CallPump(nil, fn, nil, nil, time.Unix(0, 0), PumpOptions{})
 	if err != nil || id == "" || p == nil {
 		t.Fatalf("staleness rejected during admission: %s %v", id, err)
 	}
@@ -149,7 +149,7 @@ func TestCombinedOnePumpCanLeavePending(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	_, p, r, err := s.requestPump(nil, Message{Name: "ping"}, now, PumpOptions{FuelSlice: 1})
+	_, p, r, err := s.RequestPump(nil, Message{Name: "ping"}, now, PumpOptions{FuelSlice: 1})
 	if err != nil || p == nil {
 		t.Fatal(err)
 	}
@@ -183,8 +183,72 @@ func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, p, _, err := s.requestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{FuelSlice: -1})
+	_, p, _, err := s.RequestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{FuelSlice: -1})
 	if err == nil || p == nil {
 		t.Fatal("expected admitted request and refused Pump", err)
+	}
+}
+
+// These acceptance cases run unchanged on native Go and the negotiated Zig
+// backend, through the same public calls a Host uses.
+func TestCombinedObjectRequest(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
+	}
+	testCombinedObjectRequest(t)
+}
+
+func testCombinedObjectRequest(t *testing.T) {
+	core := New()
+	g := core.NewGroup(GroupOptions{})
+	kind := objectKindForTest(t, core, "combined-item")
+	owner, err := g.Object(kind, "owner", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := g.Object(kind, "child", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.SetParent(child, owner); err != nil {
+		t.Fatal(err)
+	}
+	_, err = g.Load(LoadOptions{Name: "s", Owner: owner, Source: "on ping\n return the id of the target\nend ping\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, p, r, err := g.RequestPump(nil, child, Message{Name: "ping"}, time.Unix(1, 0), PumpOptions{})
+	if err != nil || id == "" || p == nil || len(r.Reports) == 0 {
+		t.Fatalf("%s %v %+v %v", id, p, r, err)
+	}
+	if v, e := p.Result(); e != nil || v.String() != `"child"` {
+		t.Fatal(v, e)
+	}
+}
+
+func TestCombinedCallArityAtExecution(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native Host; TestZigCombinedPublicTargets runs the same case on negotiated guests")
+	}
+	testCombinedCallArityAtExecution(t)
+}
+
+func testCombinedCallArityAtExecution(t *testing.T) {
+	g := New().NewGroup(GroupOptions{})
+	_, fn := exportFunction(t, g, "function sum a, b = 5\n return a + b\nend sum\non exported\n return sum\nend exported", Limits{})
+	_, p, _, err := g.CallPump(nil, fn, []Value{Int(2)}, nil, time.Unix(1, 0), PumpOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, e := p.Result(); e != nil || !v.Equal(Int(7)) {
+		t.Fatal(v, e)
+	}
+	id, p, r, err := g.CallPump(nil, fn, nil, nil, time.Unix(1, 0), PumpOptions{})
+	if err != nil || id == "" || p == nil {
+		t.Fatalf("arity refused admission: %s %v", id, err)
+	}
+	_, failure := p.Result()
+	if failure == nil || failure.Data.Get("error").Get("code").String() != `"wrong arity"` {
+		t.Fatal(failure, r)
 	}
 }

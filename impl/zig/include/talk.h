@@ -1290,11 +1290,22 @@ talk_host_error_code talk_load(talk_group *g, const talk_load_options *o, talk_s
 talk_host_error_code talk_script_deliver(talk_script *s, const talk_message *m, talk_owned_bytes *id);
 /* Queues a Request; *out settles when a Pump ends its Run. */
 talk_host_error_code talk_script_request(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* Worker calls: admit once, then perform exactly one ordinary Pump. Earlier
+ * inputs keep their order; *out can remain unsettled. Admission refusal clears
+ * id, *out and result and does not Pump. On Pump refusal, id and *out remain
+ * owned by the caller and the admitted input stays queued; result is empty.
+ * Release id, *out and result->reports by the ordinary release functions.
+ * o and result may be NULL. Initial OnReady is omitted; a refused Pump notifies
+ * readiness after releasing the worker. */
+talk_host_error_code talk_script_request_pump(talk_script *s, const talk_message *m, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_owned_bytes *id, talk_pending **out, talk_pump_result *result);
 /* Calls a Function Value from the Host: a Request to its Home Script, the
  * Host Input call-value. *out settles when a Pump ends its Run. A value this
  * Group didn't make is TALK_INVALID_VALUE; a stale one runs nothing. id, if
  * not NULL, receives the delivery id. limits may be NULL. */
 talk_host_error_code talk_group_call(talk_group *g, talk_value *fn, talk_value *const *args, size_t len, const talk_limit_override *limits, talk_owned_bytes *id, talk_pending **out);
+/* talk_script_request_pump's contract, calling a Function Value. Staleness
+ * fails at drain and arity at execution, as with talk_group_call. */
+talk_host_error_code talk_call_pump(talk_group *g, talk_value *fn, talk_value *const *args, size_t len, const talk_limit_override *limits, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_owned_bytes *id, talk_pending **out, talk_pump_result *result);
 /* Queues a Decision to the Script; *out settles when a Pump seals it. */
 talk_host_error_code talk_script_decide(talk_script *s, const talk_message *m, talk_owned_bytes *id, talk_deciding **out);
 /* Queues revoking the Script's named Grant. Later calls through it raise
@@ -1404,6 +1415,8 @@ talk_host_error_code talk_dispose(talk_group *g, talk_object *o);
  * Script, or its nearest ancestor's, when the queue is drained. */
 talk_host_error_code talk_deliver(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id);
 talk_host_error_code talk_request(talk_group *g, talk_object *to, const talk_message *m, talk_owned_bytes *id, talk_pending **out);
+/* talk_script_request_pump's contract, addressing a Host Object. */
+talk_host_error_code talk_request_pump(talk_group *g, talk_object *to, const talk_message *m, int64_t seconds, int32_t micros, const talk_pump_options *o, talk_owned_bytes *id, talk_pending **out, talk_pump_result *result);
 /* A Decision to a Host Object: it routes like talk_deliver, and the first
  * `, deciding` clause it reaches holds its Verdict until the end of that
  * Run's first Segment. */

@@ -1,8 +1,8 @@
 # Binary Request and Pump exchanges
 
 **Status: accepted, with the fields envelope selected. The Zig Session and the
-experimental Go adapter implement both candidates behind negotiation; public
-Host APIs follow.** This is
+experimental Go adapter implement both candidates behind negotiation. Go and C
+publish the combined Host APIs; TS and Elixir follow separately.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s contract, under
 [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.

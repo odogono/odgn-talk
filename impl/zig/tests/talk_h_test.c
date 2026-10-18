@@ -127,6 +127,150 @@ static int group_test(void) {
     return bad;
 }
 
+/* Combined calls keep their worker until final Trace observation. */
+struct combined_observer {
+    talk_group *group;
+    talk_script *script;
+    int probe, ready;
+};
+
+static void combined_record(void *context, const char *line, size_t len) {
+    struct combined_observer *observer = context;
+    record(NULL, line, len);
+    if (!observer->probe) return;
+    observer->probe = 0;
+    talk_message ping = {"ping", 4, NULL, 0, NULL};
+    talk_owned_bytes id = {0};
+    talk_pending *pending = NULL;
+    talk_pump_result result = {0};
+    expect(talk_script_request_pump(observer->script, &ping, 10, 0, NULL, &id, &pending, &result) == TALK_REENTRANT_CALL,
+           "final Trace still holds the combined worker");
+    expect(id.data == NULL && pending == NULL && result.reports == NULL,
+           "competing combined worker admits nothing");
+}
+
+static void combined_ready(void *context) {
+    struct combined_observer *observer = context;
+    observer->ready++;
+    uint8_t fingerprint[32];
+    expect(talk_fingerprint(observer->group, fingerprint) == TALK_OK,
+           "Pump refusal publishes readiness after worker release");
+}
+
+static void combined_number(talk_pending *pending, int64_t want) {
+    talk_value *value = NULL;
+    const talk_decimal *decimal = NULL;
+    int64_t number = 0;
+    expect(talk_pending_done(pending) && talk_pending_result(pending, &value) == TALK_OK &&
+           talk_value_as_dec(value, &decimal) && talk_decimal_int64(decimal, &number) == TALK_OK && number == want,
+           "combined Pending has its ordinary result");
+    talk_value_release(value);
+}
+
+static int combined_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    struct combined_observer observer = {0};
+    talk_group_options options = {"combined", 8, combined_record, &observer, NULL, 0, 0};
+    if (talk_new_group(core, &options, &observer.group) != TALK_OK) return 1;
+    talk_group *group = observer.group;
+    talk_group_on_ready(group, combined_ready, &observer);
+    talk_object_kind_def kind_def = {"item", 4, NULL, 0, NULL, NULL, 0, NULL};
+    talk_object_kind *kind = NULL;
+    expect(talk_define_object_kind(core, &kind_def, &kind) == TALK_OK, "combined Object kind");
+    talk_object *owner = NULL, *child = NULL;
+    expect(talk_group_object(group, kind, "owner", 5, NULL, &owner) == TALK_OK, "combined owner");
+    expect(talk_group_object(group, kind, "child", 5, NULL, &child) == TALK_OK, "combined child");
+    expect(talk_set_parent(group, child, owner) == TALK_OK, "combined path");
+    const char *source =
+        "script variable total = 0\n"
+        "function sum a, b = 5\n return a + b\nend sum\n"
+        "on exported\n return sum\nend exported\n"
+        "on ping\n add 1 to total\n return total\nend ping\n"
+        "on slow\n repeat 100 times\n end repeat\n return 42\nend slow\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, owner, NULL, 0, NULL};
+    expect(talk_load(group, &load, &observer.script) == TALK_OK, "load combined Script");
+    talk_script *script = observer.script;
+    talk_message ping = {"ping", 4, NULL, 0, NULL};
+    talk_pending *earlier = NULL, *pending = NULL;
+    expect(talk_script_request(script, &ping, NULL, &earlier) == TALK_OK, "earlier Request");
+    talk_owned_bytes id = {0};
+    talk_pump_result result = {0};
+    observer.probe = 1;
+    expect(talk_script_request_pump(script, &ping, 10, 0, NULL, &id, &pending, &result) == TALK_OK, "combined Script Request");
+    expect(id.len == 2 && memcmp(id.data, "d2", 2) == 0 && result.reports != NULL && !observer.probe, "combined id, Reports and final callback");
+    combined_number(earlier, 1);
+    combined_number(pending, 2);
+    expect(observer.ready == 0, "combined initial admission omits OnReady");
+    talk_pending_release(earlier);
+    talk_pending_release(pending);
+    talk_reports_release(result.reports);
+    talk_owned_bytes_release(&id);
+    expect(talk_request_pump(group, child, &ping, 10, 0, NULL, NULL, &pending, NULL) == TALK_OK, "combined Object Request climbs");
+    combined_number(pending, 3);
+    talk_pending_release(pending);
+    talk_message invalid = {"ping:", 5, NULL, 0, NULL};
+    expect(talk_script_request(script, &ping, NULL, &earlier) == TALK_OK, "work before refused admission");
+    expect(talk_script_request_pump(script, &invalid, 10, 0, NULL, &id, &pending, &result) == TALK_INVALID_VALUE &&
+           id.data == NULL && pending == NULL && result.reports == NULL && !talk_pending_done(earlier), "admission refusal does not Pump");
+    talk_pending_release(earlier);
+    talk_pump_options invalid_options = {-1, 0};
+    for (int i = 0; i < 3; i++) {
+        expect(talk_script_request_pump(script, &ping, i == 0 ? 9 : 10, i == 2 ? -1 : 0,
+               i == 1 ? &invalid_options : NULL, &id, &pending, &result) == (i == 0 ? TALK_CLOCK_BACKWARDS : TALK_INVALID_VALUE), "combined Pump refusal");
+        expect(id.len != 0 && pending != NULL && result.reports == NULL && !talk_pending_done(pending), "Pump refusal retains admission");
+        expect(observer.ready == i + 1, "Pump refusal notifies once");
+        expect(talk_pump(group, 10, 0, NULL, NULL) == TALK_OK && talk_pending_done(pending), "later Pump executes retained input");
+        talk_pending_release(pending);
+        talk_owned_bytes_release(&id);
+    }
+    talk_message slow = {"slow", 4, NULL, 0, NULL};
+    talk_pump_options slice = {1, 0};
+    expect(talk_script_request_pump(script, &slow, 10, 0, &slice, &id, &pending, &result) == TALK_OK &&
+           result.state == TALK_SLICED && !talk_pending_done(pending), "combined call performs only one Pump");
+    talk_reports_release(result.reports);
+    expect(talk_cancel_delivery(group, (const char *)id.data, id.len) == TALK_OK && talk_pump(group, 10, 0, NULL, NULL) == TALK_OK,
+           "combined Pending cancellation uses ordinary delivery id");
+    expect_pending_nothing(pending, "cancelled combined Request settles");
+    talk_pending_release(pending);
+    talk_owned_bytes_release(&id);
+    talk_message exported = {"exported", 8, NULL, 0, NULL};
+    expect(talk_script_request_pump(script, &exported, 10, 0, NULL, NULL, &pending, NULL) == TALK_OK, "export Function with combined Request");
+    talk_value *fn = NULL, *two = NULL;
+    expect(talk_pending_result(pending, &fn) == TALK_OK, "read Function");
+    talk_pending_release(pending);
+    talk_int(2, &two);
+    talk_value *args[] = {two};
+    expect(talk_call_pump(group, fn, args, 1, NULL, 10, 0, NULL, NULL, &pending, NULL) == TALK_OK, "combined Function call retains defaults");
+    combined_number(pending, 7);
+    talk_pending_release(pending);
+    expect(talk_call_pump(group, fn, NULL, 0, NULL, 10, 0, NULL, &id, &pending, &result) == TALK_OK && pending != NULL && id.len != 0,
+           "wrong arity is admitted");
+    const talk_report *reports = NULL;
+    size_t count = talk_reports_items(result.reports, &reports);
+    int wrong_arity = 0;
+    for (size_t i = 0; i < count; i++) if (reports[i].kind == TALK_REPORT_RUN_END) {
+        const talk_run_end *end = &reports[i].as.run_end;
+        if (end->outcome == TALK_ERRORED && end->error != NULL && end->error->code_len == 11 && memcmp(end->error->code, "wrong arity", 11) == 0) wrong_arity = 1;
+    }
+    expect(wrong_arity, "wrong arity fails during execution");
+    talk_reports_release(result.reports);
+    talk_pending_release(pending);
+    talk_owned_bytes_release(&id);
+    const char *replacement = "on ping\nend ping\n";
+    expect(talk_script_reload(script, replacement, strlen(replacement), TALK_RESET_VARIABLES, NULL, NULL) == TALK_OK, "stale combined Function");
+    expect(talk_call_pump(group, fn, NULL, 0, NULL, 10, 0, NULL, &id, &pending, NULL) == TALK_OK && pending != NULL && id.len != 0,
+           "stale Function admitted before drain");
+    expect_pending_nothing(pending, "stale Function settles unsuccessfully at drain");
+    talk_pending_release(pending);
+    talk_owned_bytes_release(&id);
+    talk_value_release(two);
+    talk_value_release(fn);
+    talk_group_release(group);
+    talk_core_release(core);
+    return 0;
+}
+
 /* Failed Requests and Function calls still end their direct C Pending. */
 static int pending_failure_test(void) {
     talk_core *core = talk_new();
@@ -2978,5 +3122,6 @@ int main(void) {
     expect(host_command_test() == 0, "a Host Command is called by its name, checked as its ask, refused on a Reserved Word, and declared to Libraries and the Host Manifest");
     expect(manifest_test() == 0, "the Host Manifest is the same bytes from the same definitions, in name order, with Operation documentation");
     expect(object_test() == 0, "a Request to a Host Object climbs to its Owning Script, which sets and reads a property");
+    expect(combined_test() == 0, "combined public Request and Function APIs");
     return failures == 0 ? 0 : 1;
 }

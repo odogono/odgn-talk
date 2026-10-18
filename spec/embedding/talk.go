@@ -892,6 +892,15 @@ func (g *Group) Deliver(to *Object, m Message) (DeliveryID, error)
 // reports a RunEnd with outcome Cancelled and no Run or Handler.
 func (g *Group) Request(ctx context.Context, to *Object, m Message) (DeliveryID, *Pending, error)
 
+// RequestPump is a worker call: admit one Request, then perform exactly one
+// ordinary Pump under the same worker guard. Earlier inputs keep their order;
+// the Pending can remain unsettled. Admission refusal returns no id or Pending
+// and does not Pump. Pump refusal retains the admitted id and Pending alongside
+// the error, leaving the input queued. Initial OnReady is omitted; a Pump
+// refusal notifies readiness after releasing the worker. Unsupported backends
+// refuse before admission, without an automatic Request/Pump fallback.
+func (g *Group) RequestPump(ctx context.Context, to *Object, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error)
+
 // Broadcast reaches only the Scripts that want the message when the queue is
 // drained. Each recipient's `run end` report carries its own Delivery id and
 // this broadcast id. Any goroutine.
@@ -902,6 +911,11 @@ func (g *Group) Broadcast(m Message) (BroadcastID, error)
 // drained, and a stale value rejects the Pending with `send failed`, reason
 // `function gone`, before anything runs. Any goroutine.
 func (g *Group) Call(ctx context.Context, fn Value, args []Value, limits *LimitOverride) (DeliveryID, *Pending, error)
+
+// CallPump admits a Function call and performs one Pump, with RequestPump's
+// worker and partial-success contract. Staleness is checked at drain and arity
+// at execution, as for Call; neither becomes an admission-time check.
+func (g *Group) CallPump(ctx context.Context, fn Value, args []Value, limits *LimitOverride, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error)
 
 // Pending settles when a Pump ends the Run it started.
 type Pending struct { /* opaque */
@@ -1050,6 +1064,10 @@ func (s *Script) Revoke(grantName string)
 // Deliver and Request address the Script rather than an object.
 func (s *Script) Deliver(m Message) (DeliveryID, error)
 func (s *Script) Request(ctx context.Context, m Message) (DeliveryID, *Pending, error)
+
+// RequestPump addresses the Script, with Group.RequestPump's worker and
+// partial-success contract.
+func (s *Script) RequestPump(ctx context.Context, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error)
 func (s *Script) Decide(ctx context.Context, m Message) (DeliveryID, *Deciding, error)
 
 type Counters struct {
