@@ -43,6 +43,7 @@ import { renderRichText } from './rich-text-dom';
 import { ElementTextControls, InPlaceTextEditor } from './text-editor';
 import { mountProjectTitle } from './project-title';
 import { mountPageStrip } from './page-strip';
+import { mountEditMenu } from './edit-menu';
 import { KIND_NAMES, mountInfoPanel, type NameRefusal } from './info-panel';
 
 const KIND_ICONS: Record<ElementKind, string> = {
@@ -302,12 +303,17 @@ export const mountStack = (
       unmountTitle();
       unmountInfo();
       unmountStrip();
+      unmountEditMenu();
       images.dispose();
     }
   });
   let readOnly = options.readOnly ?? false;
-  let playing: PlayMode | undefined;
+  const playing = signal<PlayMode | undefined>(undefined);
   editor.readOnly = readOnly;
+  const unmountEditMenu = mountEditMenu(
+    byId('edit-menu').querySelector<HTMLElement>('.menu-commands')!,
+    { editor, playing },
+  );
   const desk = byId('desk');
   const stage = byId('stage');
   const pageNode = byId('page');
@@ -473,7 +479,6 @@ export const mountStack = (
       drawPage();
     }
     drawNavigation();
-    drawCommands();
     drawTextControls();
     scripts.sync();
     for (const listener of redrawListeners) {
@@ -558,10 +563,7 @@ export const mountStack = (
     draw();
   };
 
-  info.addEventListener('focusout', () => {
-    finishFieldEdit();
-    drawCommands();
-  });
+  info.addEventListener('focusout', finishFieldEdit);
   info.addEventListener('submit', event => event.preventDefault());
   info.addEventListener('input', event => {
     const target = event.target as HTMLInputElement;
@@ -773,7 +775,8 @@ export const mountStack = (
       node,
       byId('text-toolbar'),
       historyOf(element),
-      drawCommands,
+      // The Edit menu follows the editor's history signals itself.
+      () => {},
       () => {
         closeText();
         draw();
@@ -1027,25 +1030,6 @@ export const mountStack = (
     front: () => editor.orderLayers('front'),
     back: () => editor.orderLayers('back'),
   };
-  const commandButtons = [
-    ...document.querySelectorAll<HTMLButtonElement>('[data-command]'),
-  ];
-  const drawCommands = () => {
-    for (const button of commandButtons) {
-      const command = button.dataset.command as EditingCommand;
-      const enabled: Partial<Record<EditingCommand, boolean>> = {
-        undo: editor.canUndo,
-        redo: editor.canRedo,
-        delete: editor.canDelete,
-        duplicate: true,
-      };
-      // Browsing hides the Page, so only Script edits can be undone.
-      button.disabled =
-        editor.readOnly ||
-        (playing === 'browse' && command !== 'undo' && command !== 'redo') ||
-        !(enabled[command] ?? editor.selection.length > 0);
-    }
-  };
   const runCommand = (command: EditingCommand) => {
     finishFieldEdit();
     edit(commands[command]);
@@ -1062,7 +1046,7 @@ export const mountStack = (
 
   // Ignore all editor shortcuts while typing, including the Script editor.
   document.addEventListener('keydown', event => {
-    if (playing) {
+    if (playing.peek()) {
       return;
     }
     const target = event.target as HTMLElement;
@@ -1128,18 +1112,19 @@ export const mountStack = (
       stopPreview();
       closeText();
       byId('edit-menu').removeAttribute('open');
-      playing = mode;
-      editor.readOnly = readOnly || playing === 'present';
+      playing.value = mode;
+      editor.readOnly = readOnly || mode === 'present';
       draw();
     },
     setReadOnly(value: boolean) {
       readOnly = value;
-      if ((value || playing === 'present') === editor.readOnly) {
+      const presenting = playing.peek() === 'present';
+      if ((value || presenting) === editor.readOnly) {
         return;
       }
       finishFieldEdit();
       closeText();
-      editor.readOnly = value || playing === 'present';
+      editor.readOnly = value || presenting;
       draw();
     },
   };

@@ -1,7 +1,9 @@
 // The Errors window: Script problems from the last Play Session, kept after
 // it ends, each linking to its authored Script and line.
+import { signal, type Signal } from '@preact/signals';
 import { type Immutable } from 'immer';
-import { byId, h } from './dom';
+import { render } from 'preact';
+import { byId } from './dom';
 import { type Page, type Project } from './model';
 import { ownerById, scriptPage, type ScriptOwner } from './script-manifest';
 import { bringWindowForward } from './windows';
@@ -16,32 +18,86 @@ export type ScriptProblem = {
 /** Where an owner was when its problem was reported, to find it after undo. */
 type Location = { name: string; page?: string };
 
+/** A problem as listed, labelled when it was reported. */
+type ReportedProblem = ScriptProblem & {
+  key: number;
+  label: string;
+  /** Set once opening it found its owner gone from the Project. */
+  vanished: boolean;
+  where: Location;
+};
+
 const isProject = (owner: ScriptOwner): owner is Immutable<Project> =>
   'pages' in owner;
 const isPage = (owner: ScriptOwner): owner is Immutable<Page> =>
   'elements' in owner;
 
+const ErrorsPanel = ({
+  problems,
+  onClear,
+  onOpen,
+}: {
+  onClear: () => void;
+  onOpen: (problem: ReportedProblem) => void;
+  problems: Signal<readonly ReportedProblem[]>;
+}) => {
+  const list = problems.value;
+  return (
+    <>
+      <p className="muted" hidden={list.length > 0} id="errors-empty">
+        No errors. Script errors from browsing or presenting appear here.
+      </p>
+      <ol id="error-list">
+        {list.map(problem => (
+          <li key={problem.key}>
+            <button
+              disabled={problem.vanished}
+              onClick={() => onOpen(problem)}
+              title={
+                problem.vanished
+                  ? 'This is no longer in the Project'
+                  : 'Open this Script'
+              }
+              type="button"
+            >
+              <span className="where">{problem.label}</span>
+              <span>{problem.message}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <button id="clear-errors" onClick={onClear} type="button">
+        Clear
+      </button>
+    </>
+  );
+};
+
 export class ErrorsWindow {
-  readonly #list = byId('error-list');
   readonly #window = byId('errors-window');
-  #count = 0;
+  readonly #problems = signal<readonly ReportedProblem[]>([]);
+  #nextKey = 0;
 
   constructor(readonly shell: StackShell) {
     byId('close-errors').addEventListener('click', () => {
       this.#window.hidden = true;
     });
-    byId('clear-errors').addEventListener('click', () => this.clear());
-    this.clear();
+    render(
+      <ErrorsPanel
+        onClear={() => this.clear()}
+        onOpen={problem => this.#open(problem)}
+        problems={this.#problems}
+      />,
+      byId('errors-panel'),
+    );
   }
 
   get count(): number {
-    return this.#count;
+    return this.#problems.value.length;
   }
 
   clear(): void {
-    this.#count = 0;
-    this.#list.replaceChildren();
-    byId('errors-empty').hidden = false;
+    this.#problems.value = [];
   }
 
   /** Adds problems, showing the window when it was empty. */
@@ -49,14 +105,13 @@ export class ErrorsWindow {
     if (!problems.length) {
       return;
     }
-    if (!this.#count || this.#window.hidden) {
+    if (!this.count || this.#window.hidden) {
       this.#window.hidden = false;
       bringWindowForward(this.#window);
     }
-    this.#count += problems.length;
-    byId('errors-empty').hidden = true;
     const project = this.shell.editor.project;
-    this.#list.append(
+    this.#problems.value = [
+      ...this.#problems.value,
       ...problems.map(problem => {
         const page = scriptPage(project, problem.owner);
         const where: Location = {
@@ -76,23 +131,26 @@ export class ErrorsWindow {
         ]
           .filter(Boolean)
           .join(', ');
-        const button = h(
-          'button',
-          { type: 'button', title: 'Open this Script' },
-          h('span', { class: 'where' }, label),
-          h('span', {}, problem.message),
-        );
-        button.addEventListener('click', () => {
-          const owner = this.#find(problem.owner, where);
-          if (owner) {
-            this.shell.openScript(owner, problem.line);
-          } else {
-            button.disabled = true;
-            button.title = 'This is no longer in the Project';
-          }
-        });
-        return h('li', {}, button);
+        return {
+          ...problem,
+          key: this.#nextKey++,
+          label,
+          vanished: false,
+          where,
+        };
       }),
+    ];
+  }
+
+  /** Opens the problem's Script, or disables it once its owner has gone. */
+  #open(problem: ReportedProblem): void {
+    const owner = this.#find(problem.owner, problem.where);
+    if (owner) {
+      this.shell.openScript(owner, problem.line);
+      return;
+    }
+    this.#problems.value = this.#problems.value.map(p =>
+      p.key === problem.key ? { ...p, vanished: true } : p,
     );
   }
 

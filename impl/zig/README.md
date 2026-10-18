@@ -691,7 +691,9 @@ its Group: each `run end` with its result, error or limit, `stop`,
 `unhandled`, `call failed`, `effect failure`, `decided`, and a queued input
 the Pump refused. A Pump's result also gives its next deadline. The Group
 collects reports whether or not it writes a Trace, and charges nothing for
-them. Each Host call that returns reports ends with Run accounting's tail:
+them. Direct C Pending handles currently report done only for successful returns;
+failed Runs are observable through their typed Reports
+([#1195](https://github.com/odogono/odgn-talk/issues/1195)). Each Host call that returns reports ends with Run accounting's tail:
 `run started` and `run discarded` join the other reports as they happen, then
 come a `run accounting` row for each Run started, charged, ended or discarded,
 in the order the Runs were made, and `causal work` for each root whose work
@@ -703,6 +705,15 @@ run against the exports. Loading a Script parses, checks and lowers it, runs its
 uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
+
+C Requests and Host Function Value calls settle their `talk_pending` when the
+Delivery finishes, including errors, Limit Faults, cancellation, dropped or
+unhandled messages, stale Function calls and Stop/Reload/library-replacement
+discards. `talk_pending_done` distinguishes an open Request from a settled one;
+`talk_pending_result` gives an owned successful result, or Nothing while open
+or after an unsuccessful outcome. Run failure details remain in the typed Reports.
+Climbing the Message Path and Rewind keep the Request open, as does Reload for
+messages it keeps in the mailbox. Settlement survives releasing the Reports and later Pumps.
 
 `talk_inspect` is the Host Input `vars`: it writes each Script's `vars`
 record and, when asked, returns the `talk_inspection` a REPL renders `:vars`,
@@ -876,9 +887,10 @@ messages are left out of the Trace, since their wording is outside parity.
 An error Run's `, during` message map stays available in locally called `error`
 clauses, including later clauses after a pattern or Guard fails. Helper calls,
 captured Lambdas and Fuel slicing retain it. A Host-delivered `error` message
-has no such metadata and binds Nothing. For errors from Function Value calls,
-the required `{fn, args}` metadata remains a separate correction
-([#1084](https://github.com/odogono/odgn-talk/issues/1084)).
+has no such metadata and binds Nothing. Message failures bind `{name, args}`;
+Function Value call failures bind `{fn, args}`, retaining the original Function
+Value and its captures. Save/Restore preserves this metadata in failed Runs,
+queued errors and locally called error Handlers.
 
 Text Patterns run on chapter 8's Pike VM ([matcher](src/machine/matcher.zig)).
 A pattern value keeps its canonical source, so the matcher reads it back,
@@ -1183,6 +1195,10 @@ An extension's diagnostics and errors are placed in its own source, under its
 unit name. Dispatch, `wait for` tables and Command Calls look across all the
 Script's units, since each Handler is in one of them. The extended Script's
 identity hashes the previous identity, `extend` and the extension's own.
+
+Inherited Constant links split `@<unit>:<name>` at the final colon, preserving
+Host-chosen Script names containing colons, dots or slashes across successive
+extensions. The same behavior reaches Elixir through the WASI reactor.
 
 `talk_script_reload` builds the new code in a detached Script against the
 Script's kept, unrevoked Grants, objects and owner, and runs its initialiser

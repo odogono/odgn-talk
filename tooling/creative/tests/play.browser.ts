@@ -369,10 +369,15 @@ export const runBrowserTests = async () => {
   button.script = 'on click\n put missing into x\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
-  const errorLink = [
-    ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
-  ].find(b => b.textContent?.includes('unknown name'))!;
-  assert(errorLink, 'Load error missing from the Errors window');
+  const findErrorLink = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
+    ].find(b => b.textContent?.includes('unknown name'));
+  // The Errors window renders with Preact after the problems are reported.
+  await until(() => !!findErrorLink()).catch(() => {
+    throw new Error('Load error missing from the Errors window');
+  });
+  const errorLink = findErrorLink()!;
   errorLink.click();
   const view = EditorView.findFromDOM(
     document.querySelector('.script-window .cm-editor')!,
@@ -403,10 +408,13 @@ export const runBrowserTests = async () => {
         'none',
     'Browse did not play in place',
   );
-  assert(
-    document.querySelectorAll('#error-list li').length === 1,
-    'Browse did not start with fresh errors',
-  );
+  await until(
+    () =>
+      !errorLink.isConnected &&
+      document.querySelectorAll('#error-list li').length === 1,
+  ).catch(() => {
+    throw new Error('Browse did not start with fresh errors');
+  });
   assert(!view.state.readOnly, 'Script editor read-only while browsing');
   shell.editor.edit(({ project }) => {
     project.pages[0]!.elements.find(e => e.name === button.name)!.script =
@@ -429,9 +437,10 @@ export const runBrowserTests = async () => {
     'Esc did not leave Browse',
   );
   mode('Browse').click();
-  assert(
-    !document.querySelectorAll('#error-list li').length,
-    'Fixed Script still reported',
+  await until(() => !document.querySelectorAll('#error-list li').length).catch(
+    () => {
+      throw new Error('Fixed Script still reported');
+    },
   );
   readerButton().click();
   await until(() => readerButton().textContent === 'Fixed');
@@ -595,6 +604,13 @@ export const runKeyBrowserTests = async () => {
   };
   toggle.click();
   assert(!press(), 'An unhandled arrow key was claimed');
+  const unhandledRelease = new KeyboardEvent('keyup', {
+    key: 'ArrowDown',
+    bubbles: true,
+    cancelable: true,
+  });
+  reader.dispatchEvent(unhandledRelease);
+  assert(!unhandledRelease.defaultPrevented, 'An unhandled keyUp was claimed');
   toggle.click();
   project.pages[0]!.script =
     'on keyDown key\n set the label of last to key\nend keyDown';
@@ -626,6 +642,140 @@ export const runKeyBrowserTests = async () => {
   last().dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
   assert(document.activeElement === reader, 'A pointer click kept focus');
   toggle.click();
+  // keyUp has its own Handler and claims only Page keys on its path.
+  project.pages[0]!.script = '';
+  project.script = `on keyUp key
+ set the label of element "last" of page1 to the label of element "last" of page1 & " up " & key
+end keyUp`;
+  shell.editor.replaceProject(project);
+  toggle.click();
+  const keyEvent = (
+    type: 'keydown' | 'keyup',
+    key = 'ArrowDown',
+    target: HTMLElement = reader,
+    repeat = false,
+  ) => {
+    const event = new KeyboardEvent(type, {
+      key,
+      code: key,
+      repeat,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  assert(!keyEvent('keydown'), 'A keyUp Handler claimed keyDown');
+  assert(keyEvent('keyup'), 'A Project keyUp Handler did not claim keyUp');
+  await until(() => last().textContent === 'Button up ArrowDown');
+  // Text receives both messages while retaining normal browser editing.
+  toggle.click();
+  const input = createElement('text', 'input1');
+  if (input.kind === 'text') {
+    input.editable = true;
+  }
+  input.script = `on keyDown key
+ set the label of last to "text down " & key
+end keyDown
+on keyUp key
+ set the label of last to the label of last & " text up " & key
+end keyUp`;
+  project.pages[0]!.elements.push(input);
+  shell.editor.replaceProject(project);
+  toggle.click();
+  const field = document.querySelector<HTMLElement>(
+    '#reader [data-element="input1"]',
+  )!;
+  field.focus();
+  assert(!keyEvent('keydown', 'a', field), 'Text keyDown lost its default');
+  await until(() => last().textContent === 'text down a');
+  assert(!keyEvent('keyup', 'a', field), 'Text keyUp lost its default');
+  await until(() => last().textContent === 'text down a text up a');
+  // Losing focus releases every held key once, to its original recipient.
+  keyEvent('keydown', 'a', field);
+  await until(() => last().textContent === 'text down a');
+  reader.focus();
+  await until(() => last().textContent === 'text down a text up a');
+  keyEvent('keyup', 'a');
+  // Repeats remain keyDown messages; simultaneous keys release independently.
+  keyEvent('keydown', 'ArrowLeft');
+  keyEvent('keydown', 'ArrowRight');
+  window.dispatchEvent(new Event('blur'));
+  await until(() =>
+    last().textContent!.endsWith(' up ArrowLeft up ArrowRight'),
+  );
+  const released = last().textContent;
+  keyEvent('keyup', 'ArrowLeft');
+  keyEvent('keyup', 'ArrowRight');
+  window.dispatchEvent(new Event('blur'));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(last().textContent === released, 'A held key was released twice');
+  keyEvent('keydown', 'ArrowLeft', reader, true);
+  keyEvent('keyup', 'ArrowLeft');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(last().textContent === released, 'A stale repeat started a held key');
+  // Hidden tabs release keys too, even when the browser sends no keyup.
+  keyEvent('keydown', 'h');
+  Object.defineProperty(document, 'hidden', {
+    value: true,
+    configurable: true,
+  });
+  try {
+    document.dispatchEvent(new Event('visibilitychange'));
+  } finally {
+    Reflect.deleteProperty(document, 'hidden');
+  }
+  await until(() => last().textContent === released + ' up h');
+  toggle.click();
+  project.pages[0]!.script = `on keyDown key
+ set the label of last to the label of last & " down " & key
+end keyDown`;
+  shell.editor.replaceProject(project);
+  toggle.click();
+  keyEvent('keydown', 'x');
+  keyEvent('keydown', 'x', reader, true);
+  keyEvent('keyup', 'x');
+  await until(() => last().textContent === 'Button down x down x up x');
+  // Both phases of keyboard button activation stay out of Page key Handlers.
+  last().focus();
+  keyEvent('keydown', ' ', last());
+  keyEvent('keyup', ' ', last());
+  await until(() => last().textContent === 'clicked');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(last().textContent === 'clicked', 'Button activation sent a keyUp');
+  reader.focus();
+  keyEvent('keydown', 'z');
+  // A stopped session's release must not reach the next one.
+  toggle.click();
+  toggle.click();
+  keyEvent('keyup', 'z');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(
+    last().textContent === 'Button',
+    'A stale keyUp reached a new session',
+  );
+  toggle.click();
+  // A held key must not start auto-repeating into a different Page.
+  project.pages[0]!.script = `on keyDown key
+ tell pages to show page2
+end keyDown`;
+  const next = createPage('page2');
+  next.script =
+    'on keyDown key\n set the background of me to "red"\nend keyDown';
+  project.pages.push(next);
+  shell.editor.replaceProject(project);
+  toggle.click();
+  keyEvent('keydown', 'n');
+  await until(() => !document.querySelector('#reader [data-element="last"]'));
+  keyEvent('keydown', 'n', reader, true);
+  keyEvent('keyup', 'n');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert(
+    (document.querySelector('#reader .page') as HTMLElement).style
+      .background !== 'red',
+    'A held key repeated into the new Page',
+  );
+  toggle.click();
   return {
     passed: true,
     checks: [
@@ -633,6 +783,13 @@ export const runKeyBrowserTests = async () => {
       'handled keys are claimed',
       'Space on a focused button only clicks',
       'a pointer click returns focus to the Page',
+      'keyUp routes through the Project and claims only handled Page keys',
+      'editable text receives both key messages without losing defaults',
+      'focus changes and window blur release held keys exactly once',
+      'auto-repeat is unchanged and simultaneous keys release independently',
+      'button activation sends neither keyDown nor keyUp to the Page',
+      'hidden tabs release keys and stopped sessions discard them',
+      'Page navigation requires a fresh key press',
     ],
   };
 };

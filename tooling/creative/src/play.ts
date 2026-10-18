@@ -66,6 +66,7 @@ export type PlayMessage =
   | 'pointerEnter'
   | 'pointerLeave'
   | 'keyDown'
+  | 'keyUp'
   | 'textChanged'
   | 'frame';
 

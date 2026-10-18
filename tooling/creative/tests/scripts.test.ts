@@ -157,6 +157,8 @@ on any message m
 end any message
 on keyDown key
 end keyDown
+on keyUp key
+end keyUp
 constant example = "on fake"
 `;
     const data = scriptManifest(project, owner);
@@ -171,6 +173,7 @@ constant example = "on fake"
     expect(data.messages.find(m => m.name === 'keyDown')!.args).toEqual([
       'text',
     ]);
+    expect(data.messages.find(m => m.name === 'keyUp')!.args).toEqual(['text']);
     expect(manifest.messages).not.toContain('fake');
     expect(manifest.messages).not.toContain('any');
     expect(

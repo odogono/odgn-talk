@@ -333,12 +333,9 @@ class Reader {
         if (this.peek('<object ')) {
           return this.object();
         }
-        if (!this.match(/[A-Z_a-z]\w*/y)) {
-          this.fail('expected a target');
-        }
-        return;
+        return this.id();
       case 'at':
-        if (!this.match(/[A-Z_a-z]\w*(\+\d+)?(:[A-Z_a-z]\w*)?:\d+/y)) {
+        if (!this.match(/\w[\w+./:-]*:\d+/y)) {
           this.fail('expected a code position');
         }
         return;

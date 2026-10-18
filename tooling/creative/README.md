@@ -14,9 +14,10 @@ ids, so Script windows follow their owners across edits and history; ids never
 enter `.folio` files or browser storage. Intake copies the supplied Project,
 and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
 
-The Project title, [Info panel](src/info-panel.tsx) and
-[Page strip](src/page-strip.tsx) are Preact components
-written in TSX, observing the editor signals through `@preact/signals`. Live
+The Project title, [Info panel](src/info-panel.tsx),
+[Page strip](src/page-strip.tsx), [Edit menu](src/edit-menu.tsx) commands
+and the [Projects window's lists](src/projects-window.tsx) are Preact components
+written in TSX, observing signals through `@preact/signals`. Live
 edits, undo/redo and Project loads update them independently of the shell
 redraw. Info reconciles its controls in place, keeping focus, caret, selection
 and composing text while the Page and strip update. Its read-only state disables
@@ -25,7 +26,15 @@ app and browser-test builds compile imported TSX with Preact's automatic JSX
 runtime. Each strip miniature is memoised by its immutable Page value and the
 design width, with session-local Page ids keeping it attached across reorders.
 Editing one Page redraws only its miniature; navigation and unrelated Project
-edits retain all miniatures.
+edits retain all miniatures. The Edit menu enables each command from the
+selection, the undo history, read-only state and the Play mode.
+
+The [Errors window](src/errors.tsx) is a Preact component too. It renders a
+signal holding the reported problems, each labelled with its owner and line
+when it was reported. New problems are appended without rebuilding the earlier
+ones, and a problem whose owner has left the Project is disabled when opened.
+The notice, save, storage, read-only, orphan, update and offline banners stay
+direct DOM: each sets its text and toggles `hidden`, with nothing to rebuild.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -122,7 +131,12 @@ source require placing the editor cursor explicitly and choosing **Use current
 cursor and preview**. No duplicate handler is added. **Insert action** applies
 one undoable edit and selects the inserted source; it remains freely editable,
 with no connection to the picker. Changing the Script after preview requires
-another preview.
+another preview. The picker is a Preact component
+([`src/recipe-picker.tsx`](src/recipe-picker.tsx)): its action, target, text,
+position, preview and status are component state, so changing the action
+updates the controls in place and keeps the typed text. Changing any input
+clears the preview. Closing the picker unmounts it; the CodeMirror Script stays
+imperative and the insertion is one `view.dispatch`.
 
 Page names are unique across the Project. Element names are unique on their
 Page and cannot collide with any Page name. Both avoid reserved words and Host
@@ -135,7 +149,8 @@ source (see [Delays with `wait`](#delays-with-wait)).
 
 Recipe unit tests check source, literal values, target filtering, placement,
 names and execution through the Play Host. Browser checks cover Info, previews,
-explicit placement, selection, undo/redo, stale previews and read-only windows.
+explicit placement, selection, undo/redo, stale previews, in-place updates
+that keep typed text, and read-only windows.
 
 Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
@@ -202,7 +217,12 @@ The design is sections 4–6 of
 The stores are [`src/storage.ts`](src/storage.ts), the scheduling
 [`src/autosave.ts`](src/autosave.ts), one-editor-per-Project
 [`src/edit-lock.ts`](src/edit-lock.ts), and the windows and banners
-[`src/projects.ts`](src/projects.ts). Beside each stored version, a
+[`src/projects.ts`](src/projects.ts). The Project, Earlier Versions and Example
+Projects lists are Preact components in
+[`src/projects-window.tsx`](src/projects-window.tsx), following signals for the
+records, versions, current Project, edit lock and the row being renamed or
+deleted, so a reload updates rows in place and a rename field keeps what was
+typed. Beside each stored version, a
 `summaries` record keeps its time, Page count and asset hashes, so listing,
 trimming and freeing unused assets never read whole models. All but the windows are tested
 without a DOM against `tests/fake-indexeddb.ts`, a small in-memory
@@ -467,7 +487,16 @@ undo/redo and Project replacement through the real shell and Preact title.
 The [`info-panel` suite](tests/info-panel.browser.ts) checks live field focus,
 caret and selection, composition events, uncommitted names, name refusals and
 suggestions, history, selection changes and read-only controls for every Element
-kind.
+kind. The [`edit-menu` suite](tests/edit-menu.browser.ts) checks that the Edit
+menu's commands follow the selection, undo and redo from the menu and keys,
+read-only state, Browse and Present.
+The [`errors` suite](tests/errors.browser.ts) checks that problems append
+with their labels, open their Script, are disabled once their owner has gone,
+and that Clear and Close behave as before.
+The [`projects-window` suite](tests/projects-window.browser.ts) runs on
+`/projects-window-test.html` and checks that the Project and version lists
+keep their rows, and a rename field its focus, caret and typed text, while the
+records, current Project, edit lock and previewed version change.
 
 ## Play
 
@@ -479,12 +508,25 @@ Tools, Script and Errors windows still open (the Edit menu offers only Undo and 
 Group and a disposable copy of the Project. The Project receives `startPlay`,
 and the Page receives `openPage`. Click and pointer messages follow the Core's
 Element → Page → Project Message Path. A touch tap sends `pointerEnter`, `click`,
-then `pointerLeave`. `keyDown` reports the browser key to focused editable text,
-or to the Page, without preventing normal typing. A key sent to the Page when
-a `keyDown` Handler is on its Message Path loses its browser default, so arrow
-keys and space drive a game rather than scroll; with no such Handler they
-scroll as usual. Enter or Space on a focused button sends it `click` and no
-`keyDown`, and a pointer click on a button returns focus to the Page. Reader-editable text opens
+then `pointerLeave`. `keyDown key` and `keyUp key` report a pressed and released
+browser key (`event.key`) to focused editable text, otherwise to the Page.
+Each takes one text argument. Editable text keeps normal typing; a Page key
+event loses its browser default only when that message's Handler is on the
+Page's Message Path (Page or Project Script). This lets arrow keys and space
+drive a game rather than scroll; unhandled events keep their defaults.
+Operating-system auto-repeat continues to send `keyDown`, with no additional
+argument. Scripts can use `keyDown` and `keyUp` to track several held keys and
+implement their own repeat timing through `frame`.
+
+Focus changes, window blur and hiding the tab send one `keyUp` for each held
+key to its original recipient, using the key reported on its first `keyDown`
+even if modifiers have changed. Later physical releases and repeats are
+ignored until a fresh press. Page navigation also releases held keys along the
+old Page's Message Path to any surviving Project Handler. Stopping Play
+discards held keys, so releases
+cannot reach a new session. Enter or Space on a focused button sends it
+`click` and neither key message; a pointer click returns focus to the Page.
+Reader-editable text opens
 the formatting toolbar on focus: select text for bold, italic, underline or
 colour, align paragraphs, or use Clear, Paragraph, Undo and Redo. Done hides the toolbar; focusing
 the text again reopens it. Typing, formatting, paste and reader undo/redo send

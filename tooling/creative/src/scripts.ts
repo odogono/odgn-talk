@@ -12,7 +12,7 @@ import {
 } from './code-window';
 import { h } from './dom';
 import { bringWindowForward } from './windows';
-import { openRecipePicker } from './recipe-picker';
+import { closeRecipePicker, openRecipePicker } from './recipe-picker';
 import type { StackEditor } from './editing';
 import {
   ownerById,
@@ -71,6 +71,7 @@ export class ScriptWindows {
       return;
     }
     this.#windows.delete(id);
+    closeRecipePicker(win.recipes);
     win.server.lsp.close(win.uri);
     win.server.dispose();
     win.view.destroy();
@@ -254,12 +255,12 @@ export class ScriptWindows {
           continue;
         }
         if (owner.name !== win.owner.name) {
-          win.recipes.replaceChildren();
+          closeRecipePicker(win.recipes);
         }
         win.owner = owner;
         win.addAction.disabled = this.editor.readOnly;
         if (this.editor.readOnly) {
-          win.recipes.replaceChildren();
+          closeRecipePicker(win.recipes);
         }
         const project = this.editor.project;
         const page = scriptPage(project, owner);
@@ -292,7 +293,7 @@ export class ScriptWindows {
         const manifest = scriptManifest(project, owner);
         const configure = JSON.stringify(manifest);
         if (configure !== win.manifest) {
-          win.recipes.replaceChildren();
+          closeRecipePicker(win.recipes);
           win.manifest = configure;
           win.server.configure(manifest);
         }

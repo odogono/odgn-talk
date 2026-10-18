@@ -132,19 +132,29 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Menus
 
-- [menus.ts](src/menus.ts): the header's Folio, File and Edit menus and the
-  About window; the Window menu is in [windows.ts](src/windows.ts).
+- [menus.ts](src/menus.ts): opening and closing the header's Folio, File
+  and Edit menus, and the About window; the Window menu is in
+  [windows.ts](src/windows.ts). The Folio and File menus are static HTML.
+- [edit-menu.tsx](src/edit-menu.tsx): the Preact Edit menu commands, enabled
+  from the editor signals and the shell's `playing` signal. Clicks and
+  shortcuts run through `runCommand` in [stack.ts](src/stack.ts).
 - [shortcuts.ts](src/shortcuts.ts): the editing shortcuts the Edit menu
-  shares. Tests: [shortcuts.test.ts](tests/shortcuts.test.ts).
+  shares.
+- Tests: [shortcuts.test.ts](tests/shortcuts.test.ts),
+  [edit-menu.browser.ts](tests/edit-menu.browser.ts).
 - First check: `bun test tooling/creative/tests/shortcuts.test.ts`.
 
 ## Errors window
 
-- [errors.ts](src/errors.ts): the last Play Session's Script problems, kept
-  after it ends, each linking to its Script and line. The problems come from
-  `PlayProblem` in [play.ts](src/play.ts).
+- [errors.tsx](src/errors.tsx): the last Play Session's Script problems, kept
+  after it ends, each linking to its Script and line. `ErrorsWindow` keeps
+  them in a signal, labelled when reported, and the Preact `ErrorsPanel`
+  renders `#errors-panel` (the empty note, `#error-list` and Clear) from it.
+  The problems come from `PlayProblem` in [play.ts](src/play.ts).
 - Tests: problem reporting in [play.test.ts](tests/play.test.ts); the window
-  in [play.browser.ts](tests/play.browser.ts).
+  in [errors.browser.ts](tests/errors.browser.ts) (append, labels, opening,
+  vanished owners, Clear and Close) and, during Play,
+  [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts`.
 
 ## User prompts
@@ -162,8 +172,10 @@ List files with `rg --files tooling/creative` before opening one by name.
   Manifest for its language-server workspace (ADR 0084), data only.
 - [script-names.ts](src/script-names.ts): binding and name checks.
 - [scripts.ts](src/scripts.ts): one editor and workspace per Script.
-- [recipes.ts](src/recipes.ts) and [recipe-picker.ts](src/recipe-picker.ts):
-  Script Recipes.
+- [recipes.ts](src/recipes.ts): Script Recipe targets, source and placement.
+  [recipe-picker.tsx](src/recipe-picker.tsx): the Preact Recipe picker, with
+  its choices, preview and status as component state; it reads the CodeMirror
+  view and inserts through `view.dispatch`.
 - The Core's Manifest export is [manifest.ts](../../impl/ts/src/manifest.ts);
   the format is [the Host Manifest](../../spec/09-embedding.md#the-host-manifest-format).
 - Tests: [scripts.test.ts](tests/scripts.test.ts),
@@ -176,12 +188,16 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [storage.ts](src/storage.ts) (IndexedDB), [autosave.ts](src/autosave.ts),
   [edit-lock.ts](src/edit-lock.ts), [projects.ts](src/projects.ts) (the
-  Projects window and banners).
+  Projects window's actions, banners and the signals its lists follow).
+- [projects-window.tsx](src/projects-window.tsx): the Preact Project,
+  Earlier Versions and Example Projects lists, keyed by Project id and version
+  `seq`; a rename field keeps its focus and typed text while the list reloads.
 - Tests: [storage.test.ts](tests/storage.test.ts) over
   [fake-indexeddb.ts](tests/fake-indexeddb.ts),
   [autosave.test.ts](tests/autosave.test.ts),
   [edit-lock.test.ts](tests/edit-lock.test.ts),
-  [storage.browser.ts](tests/storage.browser.ts).
+  [storage.browser.ts](tests/storage.browser.ts),
+  [projects-window.browser.ts](tests/projects-window.browser.ts).
 - First check: `bun test tooling/creative/tests/storage.test.ts`.
 
 ## Offline, service worker and files on disk

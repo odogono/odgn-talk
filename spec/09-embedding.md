@@ -261,6 +261,7 @@ An Object Kind may also declare an ordered, named Object Collection, which
 ## Loading and Libraries
 
 - **`Load`** compiles a Script, checks it against its Grants, Libraries and well-known objects, runs its initialiser and adds it to the Group. A rejected Script is a `LoadError`, with its diagnostics ([chapter 2](02-grammar.md#load-time-diagnostics)).
+- **Script naming:** the Host chooses a Script's name; it need not be a language Name. Colons, dots and slashes are allowed, as in `page:page1` and `element:page.one/button:primary`. Loading, linking, Reload and Extend preserve the whole name; punctuation in it does not name a Library or an imported definition.
 - **Libraries:** `CompileLibrary(src, imports, declarations)` checks Capability calls against explicit Operation modes and argument Shapes, and compiles one once per process, and `AddLibrary` and `ReplaceLibrary` add it to a Group ([chapter 7](07-libraries-and-the-standard-library.md)).
 - **Reload and extend** change a loaded Script's code ([chapter 10](10-save-and-restore.md#reload-and-extend)).
 - **Stop** ends a Script: its running, parked and suspended Runs are discarded with no `finally`, and messages left in its mailbox are dropped ([chapter 6](06-errors-and-limits.md#cancellation-and-stop)).
