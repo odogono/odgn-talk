@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .wasi) {
         // A WASI reactor: no `_start`, and the `talk_*` exports kept. It
         // ships without debug sections, as the Go reactor's `-s -w` does.
-        core.strip = true;
+        core.strip = b.option(bool, "strip", "Omit WASI debug sections (default: true)") orelse true;
         const module = b.addExecutable(.{ .name = "talk", .root_module = core });
         // The stack lives in linear memory, where Zig's default 16 MiB would
         // be most of an instance. Source recursion stops at its 128-level

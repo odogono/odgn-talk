@@ -416,9 +416,19 @@ Typed CallFailed reports name the Capability definition, while Trace and
 ScriptError fields continue to name the Grant.
 
 `zig build corpus -- --defer-crossings` defers each eligible crossing once and
-holds every Trace unchanged. It is stripped of debug sections and has a 1 MiB stack, since the
+holds every Trace unchanged. The WASI reactor ships stripped of debug sections
+and has a 1 MiB stack, since the
 stack sits in linear memory: source recursion stops at the depth guards, and
 Values are walked from heap work lists, never by native recursion.
+For guest function profiling, build a separate diagnostic artifact with
+`zig build -Dtarget=wasm32-wasi -Dstrip=false -p /tmp/northtalk-profile`.
+This keeps safety checks and optimization unchanged and retains function names
+for wazero listeners. From the repository root, run
+`NORTHTALK_PROFILE_GUEST=/tmp/northtalk-profile/bin/talk.wasm go -C impl/go test ./internal/zigwasm -run '^TestGuestRequestProfile$' -v`.
+The opt-in harness times a request and Pump in separate runs for parsing,
+execution, Report writing and transport functions; nested timings overlap and
+listener overhead must be checked against its uninstrumented run. Ordinary
+acceptance skips this diagnostic. Shipped artifacts use the default strip setting.
 For the Message Layer, supply WASI imports and call `_initialize` once before
 serial export calls. `talk_buffer(n) -> i32` reserves the input frame's bytes;
 write JSON without a length prefix. Zero or more than 64 MiB returns 0, which
