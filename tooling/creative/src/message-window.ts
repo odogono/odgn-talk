@@ -24,16 +24,15 @@ import {
 import { h } from './dom';
 import { MESSAGE_FIRST_LINE, messageParts } from './message-script';
 import { runInEdit, type MessageReply } from './message';
-import { type PlaySession } from './play';
 import { scriptManifest } from './script-manifest';
 import { bringWindowForward, setWindowOpener } from './windows';
 import { type StackShell } from './stack';
 
 export type MessageTarget = {
-  /** Lets the session run the command it was just given. */
-  ran(): void;
-  /** The browsing session, if any; commands run there when it is. */
-  session(): PlaySession | undefined;
+  /** The playing session's Page name, if any; commands run there when it is. */
+  pageName(): string | undefined;
+  /** Runs a command in the playing session, which may take a while to answer. */
+  run(text: string): Promise<MessageReply>;
 };
 
 const HISTORY = 50;
@@ -122,7 +121,7 @@ export const mountMessageWindow = (
   /** The Page commands run on: the session's while browsing, else Edit's. */
   const page = () => {
     const project = shell.editor.project;
-    const name = target.session()?.page.name;
+    const name = target.pageName();
     return project.pages.find(p => p.name === name) ?? shell.editor.page;
   };
   /** Refreshes the names and Host Manifest for the current Page. */
@@ -149,28 +148,12 @@ export const mountMessageWindow = (
   };
 
   const run = async (text: string): Promise<MessageReply> => {
-    const play = target.session();
-    if (!play) {
+    if (target.pageName() === undefined) {
       const reply = await runInEdit(shell.editor, text);
       shell.redraw();
       return reply;
     }
-    const started = play.runMessage(text);
-    if (!started.ok) {
-      return { error: started.error };
-    }
-    target.ran();
-    return started.result.then(
-      value => ({
-        text:
-          value.kind === 'nothing'
-            ? undefined
-            : (value.asText() ?? String(value)),
-      }),
-      (error: unknown) => ({
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    return target.run(text);
   };
 
   const submit = () => {

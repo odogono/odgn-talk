@@ -198,6 +198,11 @@ export class PlaySession {
   ): void {
     this.#tree.replaceRichText(element, value);
   }
+  /** A reader's edit to editable text: the new text, then `textChanged`. */
+  editText(element: Immutable<TextElement>, next: Immutable<RichText>): void {
+    this.replaceRichText(element, next);
+    this.send(element, 'textChanged');
+  }
   reorder(parent: TreeParent, order: readonly Immutable<Element>[]): void {
     this.#tree.reorder(parent, order);
   }

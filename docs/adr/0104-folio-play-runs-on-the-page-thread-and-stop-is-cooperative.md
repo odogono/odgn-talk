@@ -23,3 +23,4 @@ What that does not cover is one instruction or Host Crossing whose elapsed time 
 - Narrows ADR 0093: leaving Play does not wait for a Script to cooperate, but it relies on Pump slices and Fuel-metered Host Crossings to yield the page thread.
 - The Variables window ([#1141](https://github.com/odogono/odgn-talk/issues/1141)) reads the Group with `inspect()` in-process.
 - A shared worker supervisor for browser Hosts in `@northtalk/tooling` is tracked in [#1216](https://github.com/odogono/odgn-talk/issues/1216). The Playground, which already runs its Session Host in a worker, adopts it for Cancel, Restart and Run fresh. Folio's adoption is tracked in [#1225](https://github.com/odogono/odgn-talk/issues/1225); if Folio adopts it, a new record supersedes this one.
+- Superseded by [ADR 0107](0107-folio-play-runs-in-a-supervised-worker.md): Folio runs Play in a supervised worker, and Stop ends it after 500 ms without an acknowledgement.

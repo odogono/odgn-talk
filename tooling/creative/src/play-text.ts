@@ -1,15 +1,23 @@
 import type { Immutable } from 'immer';
 // Reader history belongs to a Play Session, never the authored editor.
-import { type RichText, type TextElement } from './model';
-import { type PlaySession } from './play';
+import { type Element, type RichText, type TextElement } from './model';
 import { renormalizeRichText, type TextHistory } from './rich-text';
+
+/** What reader history needs of Play: the Play Session, or the page's mirror of it. */
+export type ReaderTextPlay = {
+  editText(element: Immutable<TextElement>, next: Immutable<RichText>): void;
+  elementsOf(): readonly Immutable<Element>[];
+  isVisible(element: Immutable<TextElement>): boolean;
+  readonly navigating: boolean;
+  readonly stopped: boolean;
+};
 
 export class ReaderTextHistory implements TextHistory {
   #undo: Immutable<RichText>[] = [];
   #redo: Immutable<RichText>[] = [];
   #current: Immutable<RichText>;
   constructor(
-    readonly play: PlaySession,
+    readonly play: ReaderTextPlay,
     readonly element: Immutable<TextElement>,
   ) {
     this.#current = element.richText;
@@ -41,9 +49,8 @@ export class ReaderTextHistory implements TextHistory {
     ) {
       return false;
     }
-    this.play.replaceRichText(this.element, next);
+    this.play.editText(this.element, next);
     this.#current = this.element.richText;
-    this.play.send(this.element, 'textChanged');
     return true;
   }
   set(text: RichText): void {
