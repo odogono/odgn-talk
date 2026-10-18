@@ -6462,13 +6462,15 @@ pub const Group = struct {
     /// Cancellation makes a parked Run ready for cleanup. The next parked
     /// Run must wait until every unparked Run of the clause has ended.
     fn releaseParked(g: *Group, s: *Script, library: ?*Library, body: u32) !void {
-        for (s.live.items) |r| if (r.clause_body == body and r.clause_unit == library and !r.parked) return;
-        for (s.live.items) |r| if (r.clause_body == body and r.clause_unit == library and r.parked) {
-            r.parked = false;
-            r.resume_with = .unparked;
-            try s.work.append(g.gpa, .{ .run = r });
-            return;
+        var first: ?*Run = null;
+        for (s.live.items) |r| if (r.clause_body == body and r.clause_unit == library) {
+            if (!r.parked) return;
+            if (first == null) first = r;
         };
+        const r = first orelse return;
+        r.parked = false;
+        r.resume_with = .unparked;
+        try s.work.append(g.gpa, .{ .run = r });
     }
 
     /// A parked (or just unparked) Run has not executed its first body
@@ -6624,8 +6626,7 @@ pub const Group = struct {
             // The owner's own continuation is under its first dispatch;
             // each activation's under the next, the last's in the frame.
             var own_stack: []const Slot = f.stack.items;
-            var own_place: u32 = f.pc -| 1;
-            if (i == run.frames.items.len - 1 and run.resume_with != null and run.resume_with.? == .cancelled) own_place = cancellationPlace(run);
+            var own_place: u32 = if (i == run.frames.items.len - 1 and run.resume_with != null and run.resume_with.? == .cancelled) cancellationPlace(run) else f.pc -| 1;
             var previous: ?*const Dispatch = null;
             for (dispatches) |*c| if (c.* == .dispatch and c.dispatch.owner == i) {
                 const d = &c.dispatch;

@@ -212,8 +212,7 @@ end work
 }
 
 func TestCancellingParkedRunKeepsClauseQueueAndCommittedState(t *testing.T) {
-	var trace lines
-	g := New().NewGroup(GroupOptions{Trace: &trace})
+	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: `script variable seen = []
 on work n, queued
  try
