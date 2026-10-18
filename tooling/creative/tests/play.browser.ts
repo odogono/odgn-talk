@@ -369,10 +369,15 @@ export const runBrowserTests = async () => {
   button.script = 'on click\n put missing into x\nend click';
   shell.editor.replaceProject(project);
   toggle.click();
-  const errorLink = [
-    ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
-  ].find(b => b.textContent?.includes('unknown name'))!;
-  assert(errorLink, 'Load error missing from the Errors window');
+  const findErrorLink = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>('#error-list button'),
+    ].find(b => b.textContent?.includes('unknown name'));
+  // The Errors window renders with Preact after the problems are reported.
+  await until(() => !!findErrorLink()).catch(() => {
+    throw new Error('Load error missing from the Errors window');
+  });
+  const errorLink = findErrorLink()!;
   errorLink.click();
   const view = EditorView.findFromDOM(
     document.querySelector('.script-window .cm-editor')!,
@@ -403,10 +408,13 @@ export const runBrowserTests = async () => {
         'none',
     'Browse did not play in place',
   );
-  assert(
-    document.querySelectorAll('#error-list li').length === 1,
-    'Browse did not start with fresh errors',
-  );
+  await until(
+    () =>
+      !errorLink.isConnected &&
+      document.querySelectorAll('#error-list li').length === 1,
+  ).catch(() => {
+    throw new Error('Browse did not start with fresh errors');
+  });
   assert(!view.state.readOnly, 'Script editor read-only while browsing');
   shell.editor.edit(({ project }) => {
     project.pages[0]!.elements.find(e => e.name === button.name)!.script =
@@ -429,9 +437,10 @@ export const runBrowserTests = async () => {
     'Esc did not leave Browse',
   );
   mode('Browse').click();
-  assert(
-    !document.querySelectorAll('#error-list li').length,
-    'Fixed Script still reported',
+  await until(() => !document.querySelectorAll('#error-list li').length).catch(
+    () => {
+      throw new Error('Fixed Script still reported');
+    },
   );
   readerButton().click();
   await until(() => readerButton().textContent === 'Fixed');

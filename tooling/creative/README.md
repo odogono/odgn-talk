@@ -29,6 +29,13 @@ Editing one Page redraws only its miniature; navigation and unrelated Project
 edits retain all miniatures. The Edit menu enables each command from the
 selection, the undo history, read-only state and the Play mode.
 
+The [Errors window](src/errors.tsx) is a Preact component too. It renders a
+signal holding the reported problems, each labelled with its owner and line
+when it was reported. New problems are appended without rebuilding the earlier
+ones, and a problem whose owner has left the Project is disabled when opened.
+The notice, save, storage, read-only, orphan, update and offline banners stay
+direct DOM: each sets its text and toggles `hidden`, with nothing to rebuild.
+
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
 - The editor layout and Script windows: the [UI prototype's verdict](https://github.com/odogono/odgn-talk/issues/154#issuecomment-6141500821).
@@ -478,6 +485,9 @@ suggestions, history, selection changes and read-only controls for every Element
 kind. The [`edit-menu` suite](tests/edit-menu.browser.ts) checks that the Edit
 menu's commands follow the selection, undo and redo from the menu and keys,
 read-only state, Browse and Present.
+The [`errors` suite](tests/errors.browser.ts) checks that problems append
+with their labels, open their Script, are disabled once their owner has gone,
+and that Clear and Close behave as before.
 
 ## Play
 

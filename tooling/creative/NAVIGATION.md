@@ -146,11 +146,15 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Errors window
 
-- [errors.ts](src/errors.ts): the last Play Session's Script problems, kept
-  after it ends, each linking to its Script and line. The problems come from
-  `PlayProblem` in [play.ts](src/play.ts).
+- [errors.tsx](src/errors.tsx): the last Play Session's Script problems, kept
+  after it ends, each linking to its Script and line. `ErrorsWindow` keeps
+  them in a signal, labelled when reported, and the Preact `ErrorsPanel`
+  renders `#errors-panel` (the empty note, `#error-list` and Clear) from it.
+  The problems come from `PlayProblem` in [play.ts](src/play.ts).
 - Tests: problem reporting in [play.test.ts](tests/play.test.ts); the window
-  in [play.browser.ts](tests/play.browser.ts).
+  in [errors.browser.ts](tests/errors.browser.ts) (append, labels, opening,
+  vanished owners, Clear and Close) and, during Play,
+  [play.browser.ts](tests/play.browser.ts).
 - First check: `bun test tooling/creative/tests/play.test.ts`.
 
 ## User prompts
