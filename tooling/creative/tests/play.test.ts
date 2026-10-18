@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { text } from '@northtalk/ts';
 import { createElement, createPage, createProject, textOf } from '../src/model';
 import { definesHandler, PlaySession } from '../src/play';
 
@@ -914,6 +915,26 @@ test('handles looks along the Message Path to the Project', () => {
   expect(handled.handles(handled.page, 'keyDown')).toBe(true);
   expect(handled.handles(handled.page.elements[1]!, 'keyDown')).toBe(true);
 });
+
+for (const level of ['element', 'page', 'project']) {
+  test(`keyUp carries its key to the ${level} Handler through Core parents`, () => {
+    const project = fixture();
+    const page = project.pages[0]!;
+    const field = page.elements[1]!;
+    const owner =
+      level === 'element' ? field : level === 'page' ? page : project;
+    owner.script = `on keyUp key
+ set the background of page1 to key
+end keyUp`;
+    const play = new PlaySession(project);
+    expect(play.handles(play.page.elements[1]!, 'keyUp')).toBe(true);
+    play.send(play.page.elements[1]!, 'keyUp', [text('ArrowLeft')]);
+    drain(play);
+    expect(play.page.background).toBe('ArrowLeft');
+    expect(play.problems).toEqual([]);
+    play.stop(0n);
+  });
+}
 
 test('a seeded session repeats its random draws', () => {
   const roll = (seed?: bigint) => {
