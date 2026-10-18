@@ -24,12 +24,8 @@ func rewriteSaveVersions(t *testing.T, saved []byte, versions Versions) []byte {
 			}
 		})
 	}
-	// snapshot.zig: NTZS, format (ULEB128), language (length + UTF-8),
-	// Cost Model (ULEB128), state, then SHA-256 of all preceding bytes.
-	if len(saved) < 36 || string(saved[:4]) != "NTZS" {
-		t.Fatal("expected a Zig save")
-	}
-	r := bytes.NewReader(saved[4 : len(saved)-sha256.Size])
+	payload := zigSavePayload(t, saved)
+	r := bytes.NewReader(payload[4:])
 	readInt := func() uint64 {
 		t.Helper()
 		n, err := binary.ReadUvarint(r)
@@ -59,8 +55,23 @@ func rewriteSaveVersions(t *testing.T, saved []byte, versions Versions) []byte {
 	out = binary.AppendUvarint(out, uint64(len(language)))
 	out = append(out, language...)
 	out = binary.AppendUvarint(out, costModel)
-	stateAt := len(saved) - sha256.Size - r.Len()
-	out = append(out, saved[stateAt:len(saved)-sha256.Size]...)
-	digest := sha256.Sum256(out)
-	return append(out, digest[:]...)
+	out = append(out, payload[len(payload)-r.Len():]...)
+	return signZigSave(out)
+}
+
+// snapshot.zig: NTZS, format (ULEB128), language (length + UTF-8),
+// Cost Model (ULEB128), state, then SHA-256 of all preceding bytes.
+// zigSavePayload returns everything before the digest.
+func zigSavePayload(t *testing.T, saved []byte) []byte {
+	t.Helper()
+	if len(saved) < 4+sha256.Size || string(saved[:4]) != "NTZS" {
+		t.Fatal("expected a Zig save")
+	}
+	return saved[:len(saved)-sha256.Size]
+}
+
+// signZigSave appends the digest to a copy of payload.
+func signZigSave(payload []byte) []byte {
+	digest := sha256.Sum256(payload)
+	return append(bytes.Clone(payload), digest[:]...)
 }
