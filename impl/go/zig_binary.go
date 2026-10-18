@@ -916,6 +916,25 @@ func (b *zigGroup) zbDecode(span []byte, dst reflect.Value) error {
 	return nil
 }
 
+// zbDecodeValues reads a list of Values, as zbDecode would into a []Value,
+// without reflection; a missing list stays nil.
+func (b *zigGroup) zbDecodeValues(span []byte) ([]Value, error) {
+	if span == nil {
+		return nil, nil
+	}
+	items, err := zbItems(span)
+	if err != nil {
+		return nil, fmt.Errorf("expected Zig list for []Value")
+	}
+	vs := make([]Value, len(items))
+	for i, item := range items {
+		if vs[i], err = b.zbDecodeValue(item); err != nil {
+			return nil, err
+		}
+	}
+	return vs, nil
+}
+
 func (b *zigGroup) zbDecodeStruct(view zbView, dst reflect.Value) error {
 	fields := zigFields(dst.Type())
 	for i, f := range fields.fields {
@@ -955,7 +974,7 @@ func (b *zigGroup) zbDecodeReport(row zbView, report Report) error {
 	case *RunStarted:
 		r.RunAncestry = ancestry()
 		r.Script, r.Run, r.Delivery, r.Selector = text("script"), RunID(text("run")), DeliveryID(text("delivery")), text("selector")
-		if err = b.zbDecode(row.get("args"), reflect.ValueOf(&r.Args).Elem()); err == nil {
+		if r.Args, err = b.zbDecodeValues(row.get("args")); err == nil {
 			err = b.zbDecode(row.get("fn"), reflect.ValueOf(&r.Function).Elem())
 		}
 	case *RunAccounting:
