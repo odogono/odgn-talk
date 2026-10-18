@@ -1,0 +1,36 @@
+Main binary filename not available.
+Type: delay
+Showing nodes accounting for 2306.49us, 91.27% of 2526.97us total
+Dropped 40 nodes (cum <= 12.63us)
+Showing top 30 nodes out of 107
+      flat  flat%   sum%        cum   cum%
+ 1403.07us 55.52% 55.52%  1403.07us 55.52%  runtime.systemstack_switch
+  292.16us 11.56% 67.09%   292.16us 11.56%  github.com/tetratelabs/wazero/internal/engine/wazevo.(*callEngine).callWithStack.func1
+  144.06us  5.70% 72.79%   144.06us  5.70%  runtime.traceLocker.stack
+   94.53us  3.74% 76.53%    94.53us  3.74%  runtime.gcTrigger.test
+   43.71us  1.73% 78.26%    43.71us  1.73%  runtime.goschedIfBusy
+   42.82us  1.69% 79.95%    42.82us  1.69%  runtime.convTstring
+   41.98us  1.66% 81.61%    48.70us  1.93%  github.com/odogono/odgn-talk/impl/go.zigReply.get.func1
+   40.51us  1.60% 83.22%   151.87us  6.01%  runtime.growslice
+   31.23us  1.24% 84.45%    31.23us  1.24%  runtime.Gosched
+   29.57us  1.17% 85.62%    29.57us  1.17%  internal/runtime/maps.(*Map).putSlotSmallFastStr
+   26.75us  1.06% 86.68%    26.75us  1.06%  math/big.divisors
+   26.50us  1.05% 87.73%   732.61us 28.99%  runtime.gcMarkDone
+   22.34us  0.88% 88.61%   339.46us 13.43%  github.com/odogono/odgn-talk/impl/go/internal/zigwasm.(*Reactor).Frame
+   21.12us  0.84% 89.45%    21.12us  0.84%  github.com/odogono/odgn-talk/impl/go.zigSkip
+   13.12us  0.52% 89.97%    15.62us  0.62%  runtime.newobject
+    6.53us  0.26% 90.23%   407.62us 16.13%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).export
+    6.53us  0.26% 90.48%   278.02us 11.00%  runtime.mapassign_faststr
+    6.40us  0.25% 90.74%    76.22us  3.02%  github.com/odogono/odgn-talk/impl/go.zigReply.get
+    5.76us  0.23% 90.97%   108.42us  4.29%  github.com/tetratelabs/wazero/internal/wasm/binary.decodeCode
+    4.48us  0.18% 91.14%    56.77us  2.25%  github.com/odogono/odgn-talk/impl/go.zigJSON
+    3.33us  0.13% 91.27%    43.84us  1.73%  github.com/tetratelabs/wazero/internal/wasm.evaluateConstExprInModuleInstance
+         0     0% 91.27%  1125.25us 44.53%  github.com/odogono/odgn-talk/bench/go.(*Loaded).Run
+         0     0% 91.27%  1347.71us 53.33%  github.com/odogono/odgn-talk/bench/go.BenchmarkRun.func1
+         0     0% 91.27%   222.46us  8.80%  github.com/odogono/odgn-talk/bench/go.Check
+         0     0% 91.27%   222.46us  8.80%  github.com/odogono/odgn-talk/bench/go.Load
+         0     0% 91.27%  1125.25us 44.53%  github.com/odogono/odgn-talk/bench/go.pump
+         0     0% 91.27%   222.46us  8.80%  github.com/odogono/odgn-talk/impl/go.(*Core).NewGroup
+         0     0% 91.27%  1125.25us 44.53%  github.com/odogono/odgn-talk/impl/go.(*Group).Pump
+         0     0% 91.27%  1125.25us 44.53%  github.com/odogono/odgn-talk/impl/go.(*Group).pumpOwned
+         0     0% 91.27%   688.06us 27.23%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).callback

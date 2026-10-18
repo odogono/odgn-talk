@@ -1,0 +1,19 @@
+native-tests.txt: PASS
+ok  	github.com/odogono/odgn-talk/impl/go	9.475s
+adapter-fields-tests.txt: PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.265s
+ok  	github.com/odogono/odgn-talk/impl/go	5.160s
+adapter-json-tests.txt: PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.170s
+ok  	github.com/odogono/odgn-talk/impl/go	4.861s
+adapter-map-tests.txt: PASS
+ok  	github.com/odogono/odgn-talk/impl/go	0.157s
+ok  	github.com/odogono/odgn-talk/impl/go	4.981s
+adapter-race-tests.txt: PASS
+ok  	github.com/odogono/odgn-talk/impl/go	1.491s
+ok  	github.com/odogono/odgn-talk/impl/go	10.318s
+CGO_ENABLED=0 go vet -tags talk_zig_experimental . ./internal/zigwasm: PASS
+Native full Corpus --check-passing: PASS (446 cases)
+Extra adapter full Corpus: NOT ACCEPTED; baseline and changed builds both fail builtins/random, then panic on limits/persistent-state-minimum (issues #1285/#1286)
+Focused callback/Reply regressions: PASS on baseline overlay and changed code
+Performance assertions: <=3x native remains unmet; see paired.txt and the research note

@@ -1,0 +1,32 @@
+Main binary filename not available.
+Type: delay
+Showing nodes accounting for 184156.85us, 99.10% of 185821.66us total
+Dropped 133 nodes (cum <= 929.11us)
+      flat  flat%   sum%        cum   cum%
+162674.51us 87.54% 87.54% 162674.51us 87.54%  runtime.chansend1
+19424.87us 10.45% 98.00% 19424.87us 10.45%  runtime.selectnbsend
+ 1986.43us  1.07% 99.07%  1986.43us  1.07%  runtime.systemstack_switch
+      64us 0.034% 99.10%  1040.19us  0.56%  runtime.gcMarkDone
+    7.04us 0.0038% 99.10% 164338.57us 88.44%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1
+         0     0% 99.10% 19588.71us 10.54%  github.com/odogono/odgn-talk/impl/go.(*Call).Answer
+         0     0% 99.10% 19588.71us 10.54%  github.com/odogono/odgn-talk/impl/go.(*Call).AnswerWithCost
+         0     0% 99.10% 19588.71us 10.54%  github.com/odogono/odgn-talk/impl/go.(*Call).queueSettlement
+         0     0% 99.10% 163835.02us 88.17%  github.com/odogono/odgn-talk/impl/go.(*Group).Pump
+         0     0% 99.10% 163835.02us 88.17%  github.com/odogono/odgn-talk/impl/go.(*Group).pumpOwned
+         0     0% 99.10% 162767.57us 87.59%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).callback
+         0     0% 99.10% 164088.97us 88.30%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchangeFrame
+         0     0% 99.10%  1278.21us  0.69%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).export
+         0     0% 99.10%  1085.12us  0.58%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).frame
+         0     0% 99.10% 163835.02us 88.17%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pump
+         0     0% 99.10% 163835.02us 88.17%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pumpBinary
+         0     0% 99.10% 19424.87us 10.45%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).ready
+         0     0% 99.10% 19588.71us 10.54%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).settleCall
+         0     0% 99.10% 162721.74us 87.57%  github.com/odogono/odgn-talk/impl/go.invokeOperation
+         0     0% 99.10% 19600.67us 10.55%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1.1
+         0     0% 99.10% 162672.40us 87.54%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1.2
+         0     0% 99.10% 19424.87us 10.45%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendDeferredCall.func1.3
+         0     0% 99.10% 164043.85us 88.28%  github.com/odogono/odgn-talk/impl/go_test.deferredRequest
+         0     0% 99.10%  1339.97us  0.72%  runtime.gcBgMarkWorker
+         0     0% 99.10%   976.19us  0.53%  runtime.gcMarkTermination
+         0     0% 99.10% 164451.79us 88.50%  testing.(*B).run1.func1
+         0     0% 99.10% 164457.17us 88.50%  testing.(*B).runN

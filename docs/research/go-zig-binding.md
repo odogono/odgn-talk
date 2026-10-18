@@ -302,6 +302,102 @@ measured 2.8 µs would not bring a 21 µs public request down to the roughly
 11 µs allowed by native's 3.7–3.8 µs result. The remaining Go-side and guest
 costs still need attention before a wire-format or retirement decision.
 
+### Host callback profiling and envelope scans, 2026-10-18
+
+Measured against `63675505`, after #1273, on Apple M5, Go 1.27.2 and wazero
+v1.12.0, with `CGO_ENABLED=0`, the default fields exchange and a warm compilation
+cache. The guest artifact is unchanged, source `870efbff`, SHA-256
+`9c8d0925b5e063e4aa0a62c7566a6b9e721aba13f3b697e71a8735325032f1b4`.
+Raw native/before/after output, paired reports, benchstat comparisons, profile
+summaries and reproduction scripts are in
+[`2026-10-18-local-host-callback-darwin-arm64`](../../bench/results/go-zig-adapter/2026-10-18-local-host-callback-darwin-arm64/).
+
+The initial four-round baseline reproduced the misses: immediate callbacks
+6.04× native, properties 4.70×, conversion 3.30× and deferred calls 3.41×.
+The short deferred samples ranged from 1.95× to 3.71×, so the final experiment
+uses longer samples. These are local diagnostic measurements, not the
+required-platform acceptance for #1103.
+
+In the immediate workload, repeated `zigReply.get` calls account for 19% of
+sampled CPU, and `zigSkip` alone for 11.5%. Each Operation need was walked again
+for every Call field. Reading all its raw spans in one pass removes that repeated
+work. Property callbacks now read their envelope once too, instead of allocating
+and copying a temporary member list to distinguish getters from setters. Explicit
+null still denotes a setter; duplicate members retain first-member semantics.
+Value Encoding validation, callbacks and their admission/Trace ordering are
+unchanged. No Message Layer or guest change is needed.
+
+The final comparison rotates native, unchanged adapter and changed adapter
+processes through eight rounds at each of `GOMAXPROCS=3` and `10`. Each Host
+sample has 100 Runs (500 crossings per Run except the empty `host/pump` Handler);
+Backend samples have 10,000 iterations. Reported paired ratios are medians of
+per-round mean operation times, not latency percentiles. Benchstat comparisons
+remain alongside them:
+
+- Immediate callbacks: 4.467 → 3.964 ms at 3 processors (−11.3%, p=0.010),
+  and 4.686 → 4.122 ms at 10 (−12.0%, p<0.001). Paired reductions are 10.9%
+  and 12.1%. Allocation is unchanged.
+- Property callbacks: 2.490 → 2.421 ms (−2.7%, p=0.005), and
+  2.618 → 2.512 ms (−4.0%, p<0.001). Each Run saves 152,000 bytes (20.5%)
+  and 2,500 allocations (11.1%): 304 bytes and five allocations per crossing.
+- Conversion: 8.325 → 7.728 ms (−7.2%, p<0.001), and
+  8.608 → 7.901 ms (−8.2%, p<0.001), without changing its actual Value codec.
+- Sixteen-Group throughput: +2.8% at 3 processors (p<0.001), and +4.2% at
+  10 (p=0.001); paired improvements are 2.6% and 3.4%.
+- Deferred calls: no significant change at 3 processors (p=0.328); −3.5%
+  at 10 is borderline (p=0.050). There is no claim of a reliable deferred win.
+- Empty Pump shows no significant change at either processor count. The
+  unchanged Request control, collected at 10 processors, remains 8.70 µs
+  (p=0.574). Native uses the same unmodified binary throughout.
+
+The after-profile reduces `zigReply.get` below the top 25 sampled nodes;
+`zigSkip` falls to 3.9%. External/compiled guest code remains prominent (57%),
+but ordinary Go pprof does not identify guest functions, so it does not establish
+which guest activity to optimize next. Percentages from different captures are
+diagnostic, not an additive wall-time breakdown.
+
+Deferred scheduler traces at 20,000 iterations attribute 162.7 ms (8.1 µs per
+iteration) of runnable-to-running delay to the channel send under the adapter's
+callback. The matched native trace has 54.8 ms (2.7 µs per iteration). These are
+instrumented scheduling delays, not CPU costs or guaranteed removable latency.
+The immediate trace does not show a comparable callback handoff cost: ordinary
+paused Operation needs run directly in the exchange loop. Skipping or moving a
+callback goroutine is therefore not supported as a general fix by these profiles.
+
+Reproduce from the repository root, after its setup checks:
+
+```sh
+results=bench/results/go-zig-adapter/2026-10-18-local-host-callback-darwin-arm64
+python3 "$results/build.py" /tmp/callback-binaries
+python3 "$results/measure.py" /tmp/callback-p3 --bin-dir /tmp/callback-binaries --procs 3
+python3 "$results/measure.py" /tmp/callback-p10 --bin-dir /tmp/callback-binaries --procs 10
+```
+
+The build script overlays only the two changed implementation files from the
+recorded baseline; it leaves the checkout intact. Original 3-processor results
+predate addition of the Request control to the runner. For CPU/allocation
+profiles use the `before-host.test` or `after-host.test` binary with
+`-test.run='^$' -test.bench='^BenchmarkRun$/^host$/^immediate$'`
+and `-test.benchtime=1000x -test.cpuprofile=FILE -test.memprofile=FILE`.
+For scheduler traces use the corresponding Backend binary with
+`-test.bench='^BenchmarkBackendDeferredCall$/^history=0$'`, 20,000 iterations
+and `-test.trace=FILE`; inspect it with `go tool trace -pprof=sched`.
+
+The native Go suite, adapter acceptance in JSON/map/fields modes and fields
+acceptance with the race detector pass. Added callback-envelope cases check
+Host context, Fuel refusal, escaped/duplicate keys and null setter dispatch.
+Native full Corpus also passes. An additional full Corpus run through the
+adapter reproduces two unchanged-baseline failures: the missing Group seed
+([#1285](https://github.com/odogono/odgn-talk/issues/1285)) and a 64 MiB inspection
+frame panic in `limits/persistent-state-minimum`
+([#1286](https://github.com/odogono/odgn-talk/issues/1286)). Full adapter Corpus
+acceptance remains #1055; the selected acceptance suite is the check passed here.
+This remains partial #1103 work: paired local ratios are about 5.5× for
+immediate callbacks, 4.5× for properties, 3.0× for conversion and 3.5–3.7×
+for deferred calls. Further work should separate guest callback
+parsing/serialization from execution, and investigate the deferred settlement
+handoff independently. Required-platform acceptance still needs fresh CI evidence.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)

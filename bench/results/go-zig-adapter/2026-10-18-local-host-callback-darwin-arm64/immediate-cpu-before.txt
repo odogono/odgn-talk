@@ -1,0 +1,38 @@
+File: zig-host.test
+Type: cpu
+Time: 2026-10-18 21:50:39 BST
+Duration: 4.78s, Total samples = 4.09s (85.51%)
+Showing nodes accounting for 3.57s, 87.29% of 4.09s total
+Dropped 136 nodes (cum <= 0.02s)
+Showing top 30 nodes out of 105
+      flat  flat%   sum%        cum   cum%
+     1.85s 45.23% 45.23%      1.85s 45.23%  runtime._ExternalCode
+     0.47s 11.49% 56.72%      0.47s 11.49%  github.com/odogono/odgn-talk/impl/go.zigSkip
+     0.23s  5.62% 62.35%      0.23s  5.62%  runtime.memmove
+     0.18s  4.40% 66.75%      0.18s  4.40%  github.com/odogono/odgn-talk/impl/go.zigSpace (inline)
+     0.11s  2.69% 69.44%      0.11s  2.69%  internal/bytealg.IndexByteString
+     0.10s  2.44% 71.88%      0.94s 22.98%  github.com/odogono/odgn-talk/impl/go.zigReply.members
+     0.07s  1.71% 73.59%      0.11s  2.69%  runtime.mallocgcTinySC2
+     0.05s  1.22% 74.82%      0.14s  3.42%  github.com/odogono/odgn-talk/impl/go.zigKeyIs
+     0.05s  1.22% 76.04%      0.05s  1.22%  runtime.kevent
+     0.05s  1.22% 77.26%      0.05s  1.22%  runtime.madvise
+     0.04s  0.98% 78.24%      0.13s  3.18%  github.com/odogono/odgn-talk/impl/go.zigJSON
+     0.04s  0.98% 79.22%      0.14s  3.42%  github.com/odogono/odgn-talk/impl/go.zigReply.get.func1
+     0.04s  0.98% 80.20%      0.04s  0.98%  github.com/odogono/odgn-talk/impl/go.zigValidString
+     0.04s  0.98% 81.17%      0.28s  6.85%  runtime.mallocgc
+     0.03s  0.73% 81.91%      0.07s  1.71%  github.com/odogono/odgn-talk/impl/go.zigReply.lookup.func1
+     0.03s  0.73% 82.64%      0.03s  0.73%  internal/runtime/atomic.(*UnsafePointer).Load (inline)
+     0.03s  0.73% 83.37%      0.03s  0.73%  runtime.memequal
+     0.02s  0.49% 83.86%      1.29s 31.54%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).callback
+     0.02s  0.49% 84.35%      0.78s 19.07%  github.com/odogono/odgn-talk/impl/go.zigReply.get
+     0.02s  0.49% 84.84%      0.05s  1.22%  runtime.mallocgcSmallScanNoHeader
+     0.02s  0.49% 85.33%      0.03s  0.73%  sync.(*Pool).Get
+     0.01s  0.24% 85.57%      0.51s 12.47%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).export
+     0.01s  0.24% 85.82%      0.08s  1.96%  github.com/odogono/odgn-talk/impl/go.zigValidate
+     0.01s  0.24% 86.06%      0.06s  1.47%  github.com/odogono/odgn-talk/impl/go.zigValidate.func2
+     0.01s  0.24% 86.31%      0.04s  0.98%  github.com/odogono/odgn-talk/impl/go/internal/decimal.Number.coefficientInt
+     0.01s  0.24% 86.55%      0.11s  2.69%  github.com/odogono/odgn-talk/impl/go/internal/value.encodeLeaf
+     0.01s  0.24% 86.80%      0.03s  0.73%  internal/runtime/maps.(*Map).getWithoutKeySmallFastStr
+     0.01s  0.24% 87.04%      0.04s  0.98%  math/big.(*Int).exp
+     0.01s  0.24% 87.29%      0.03s  0.73%  runtime.mallocgcSmallScanNoHeaderSC4
+         0     0% 87.29%      0.12s  2.93%  bytes.IndexByte (inline)

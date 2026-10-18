@@ -194,6 +194,21 @@ func zigShape(s shape.Shape, depth int) (any, error) {
 	}
 }
 
+// Operation and release needs share this envelope. Read its spans once rather
+// than walking the whole JSON object again for each Call field.
+type zigCallNeed struct {
+	script, grant, now, reason, operation, capability, args zigReply
+	call, automatic, scope, run, segment, fuelLeft          zigReply
+}
+
+var zigCallNeedKeys = []string{"script", "grant", "now", "reason", "operation", "capability", "args", "call", "automatic", "scope", "run", "segment", "fuelLeft"}
+
+func zigReadCallNeed(need zigReply) zigCallNeed {
+	var f [13]zigReply
+	need.lookup(zigCallNeedKeys, f[:])
+	return zigCallNeed{script: f[0], grant: f[1], now: f[2], reason: f[3], operation: f[4], capability: f[5], args: f[6], call: f[7], automatic: f[8], scope: f[9], run: f[10], segment: f[11], fuelLeft: f[12]}
+}
+
 func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 	kind := zigText(need.get("m"))
 	if kind == "trace" {
@@ -211,11 +226,12 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 	if kind != "op" && kind != "release" {
 		return nil, backendUnsupported("Host callback " + kind)
 	}
-	s := b.group.Script(zigText(need.get("script")))
+	n := zigReadCallNeed(need)
+	s := b.group.Script(zigText(n.script))
 	if s == nil {
 		return nil, fmt.Errorf("Zig callback names an unknown Script")
 	}
-	grantName := zigText(need.get("grant"))
+	grantName := zigText(n.grant)
 	grant := s.grants[grantName]
 	if grant == nil {
 		return nil, fmt.Errorf("Zig callback names an unknown Grant")
@@ -224,11 +240,11 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 		if grant.definition.release == nil {
 			return nil, fmt.Errorf("Zig release names a Grant without a release hook")
 		}
-		now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
+		now, err := time.Parse(time.RFC3339Nano, zigText(n.now))
 		if err != nil {
 			return nil, err
 		}
-		reason := ReleaseReason(zigText(need.get("reason")))
+		reason := ReleaseReason(zigText(n.reason))
 		switch reason {
 		case ReleaseStop, ReleaseReload, ReleaseRevoke, ReleaseDisable:
 		default:
@@ -237,36 +253,36 @@ func (b *zigGroup) callback(need zigReply) (map[string]any, error) {
 		invokeReleaseHook(grant.definition.release, GrantContext{Group: b.group, ScriptName: s.name, GrantName: grantName, Binding: grant.binding, Now: now, Reason: reason})
 		return map[string]any{}, nil
 	}
-	name := zigText(need.get("operation"))
+	name := zigText(n.operation)
 	op, ok := grant.definition.ops[name]
-	if !ok || !grant.operations[name] || zigText(need.get("capability")) != b.reg.handle(grant.definition) {
+	if !ok || !grant.operations[name] || zigText(n.capability) != b.reg.handle(grant.definition) {
 		return nil, fmt.Errorf("Zig callback does not match its Grant")
 	}
 	var args []Value
-	for _, raw := range need.get("args").items() {
+	for _, raw := range n.args.items() {
 		v, err := b.decodeValue(raw)
 		if err != nil {
 			detail := err.Error()
-			b.failureDetails[CallID(zigText(need.get("call")))] = detail
+			b.failureDetails[CallID(zigText(n.call))] = detail
 			return map[string]any{"hostError": detail}, nil
 		}
 		args = append(args, v)
 	}
-	now, err := time.Parse(time.RFC3339Nano, zigText(need.get("now")))
+	now, err := time.Parse(time.RFC3339Nano, zigText(n.now))
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := operationContext(op.Mode)
-	automatic, _ := need.get("automatic").boolean()
+	automatic, _ := n.automatic.boolean()
 	if automatic {
 		ctx = context.Background()
 	}
-	c := &Call{automatic: automatic, scopeName: zigText(need.get("scope")), group: b.group, scriptName: s.name, runID: RunID(zigText(need.get("run"))), grantName: grantName, binding: grant.binding, id: CallID(zigText(need.get("call"))), segmentID: zigText(need.get("segment")), now: now, context: ctx, starting: true}
+	c := &Call{automatic: automatic, scopeName: zigText(n.scope), group: b.group, scriptName: s.name, runID: RunID(zigText(n.run)), grantName: grantName, binding: grant.binding, id: CallID(zigText(n.call)), segmentID: zigText(n.segment), now: now, context: ctx, starting: true}
 	var left int64
-	limited := need.get("fuelLeft").present()
+	limited := n.fuelLeft.present()
 	if limited {
 		var ok bool
-		if left, ok = need.get("fuelLeft").int64(); !ok {
+		if left, ok = n.fuelLeft.int64(); !ok {
 			return nil, fmt.Errorf("Zig callback has an invalid fuelLeft")
 		}
 	}
