@@ -61,10 +61,10 @@ Files, grammar, or lowering.
 
 ## Waits, suspending Calls and their abandonment
 
-- Implementation: [Group](src/group.ts) (`pending`, `settle`, `settleReply`, `forgetWait`, `ScriptState.waiters`), [Run](src/machine.ts) (`pendingCall`, `discard`, `abandonJoin`). [ADR 0105](../../docs/adr/0105-each-core-keeps-its-waits-in-one-wait-table-module.md) gives these one Wait table module; the TS move is [#1223](https://github.com/odogono/odgn-talk/issues/1223).
+- Implementation: [the Wait table](src/waits.ts) (pending calls and replies, timers and their order, `wait for` waiters, Join settlement and cuts, abandonment with a reason, the awaited-call query, and save export/import), [Group](src/group.ts) (`suspended`, `settleReply`, `fireTimer`, `forgetWait`: scheduling and Trace writes), [Run](src/machine.ts) (`pendingCall`, `discard`, `abandonJoin`: the Run's own suspension and open Join). The ownership boundary follows [ADR 0105](../../docs/adr/0105-each-core-keeps-its-waits-in-one-wait-table-module.md).
 - Rules: [Suspension Points](../../spec/05-handlers-messages-and-scheduling.md#suspension-points)
-- Tests and cases: [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts)
-- First check: `bun test impl/ts/tests/group.test.ts`
+- Tests and cases: [Wait table tests](tests/waits.test.ts), [Group tests](tests/group.test.ts), [Capability tests](tests/capabilities.test.ts)
+- First check: `bun test impl/ts/tests/waits.test.ts impl/ts/tests/group.test.ts`
 
 ## Capability Scopes, Segment-bound effects and Coordinators
 
