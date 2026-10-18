@@ -1439,7 +1439,8 @@ pub const Group = struct {
     scratch: std.heap.ArenaAllocator,
     /// The Fuel of the Pump in progress.
     pump_fuel: u64 = 0,
-    /// Request results by delivery id, for the Host.
+    /// Settled Request results by delivery id, for the Host. Unsuccessful
+    /// Requests retain Nothing; Run failure details stay in the Reports.
     results: std.AutoHashMapUnmanaged(u64, *Value) = .empty,
     /// Sealed Decisions by delivery id, and Broadcast Decisions by broadcast
     /// id, for the Host.
@@ -3125,6 +3126,7 @@ pub const Group = struct {
 
     /// Reports a Delivery cancelled in its mailbox, with no Run.
     fn cancelQueued(g: *Group, x: *Script, d: Delivery) !void {
+        try g.settleRequest(d);
         if (g.trace) |out| {
             out.print("run outcome=cancelled delivery=d{d}", .{d.id}) catch {};
             if (d.broadcast != 0) out.print(" broadcast=b{d}", .{d.broadcast}) catch {};
@@ -3963,6 +3965,7 @@ pub const Group = struct {
                     return;
                 }
                 const s = g.script(d.script) orelse {
+                    try g.settleRequest(d.delivery);
                     g.releaseDelivery(d.delivery);
                     return;
                 };
@@ -3971,6 +3974,7 @@ pub const Group = struct {
                 if (d.delivery.function) |f| if (s.stopped != null or g.codeOf(f) == null or g.functionBody(g.codeOf(f).?) == null) {
                     g.write("note d{d} kind=function-gone\n", .{d.delivery.id});
                     try g.gone_calls.append(g.gpa, d.delivery.id);
+                    try g.settleRequest(d.delivery);
                     g.releaseDelivery(d.delivery);
                     return;
                 };
@@ -6189,15 +6193,27 @@ pub const Group = struct {
             .returned => |v| if (d.waits) {
                 try g.reply(d, .{ .reply = v });
             } else if (d.request) try g.results.put(g.gpa, d.id, v) else v.release(),
-            .faulted => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } }),
+            .faulted => {
+                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "limit fault", .err = null } });
+                try g.settleRequest(d);
+            },
             // A message no clause took, or one passed, climbs the path.
             // A Broadcast never climbs: its open Verdict is allowed here.
             .unhandled, .clause_failed, .passed => if (d.broadcast == 0) {
                 try g.climb(s, run.id, d);
             } else if (d.decision) try g.takePart(d, .allowed),
-            .dropped => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } }),
-            .cancelled => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } }),
-            .effect_failed => if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } }),
+            .dropped => {
+                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "dropped", .err = null } });
+                try g.settleRequest(d);
+            },
+            .cancelled => {
+                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "cancelled", .err = null } });
+                try g.settleRequest(d);
+            },
+            .effect_failed => {
+                if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "effect failed", .err = null } });
+                try g.settleRequest(d);
+            },
             // `veto` ends the Run with result Nothing.
             .vetoed => |reason| {
                 reason.release();
@@ -6210,6 +6226,7 @@ pub const Group = struct {
                 // An uncaught error sends the Script its `error` message,
                 // unless the Run was handling one.
                 if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "errored", .err = e.retain() } });
+                try g.settleRequest(d);
                 // A Run handling an `error` message, the Core's or a Host's,
                 // sends none: there is no chain.
                 if (!d.internal_error and !std.mem.eql(u8, d.message, "error")) {
@@ -6319,6 +6336,7 @@ pub const Group = struct {
             g.discardRun(r, how.discard);
             const d = r.delivery;
             if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
+            try g.settleRequest(d);
             s.fuel_total += r.fuel;
             s.alloc_total += r.alloc;
         }
@@ -6398,6 +6416,7 @@ pub const Group = struct {
     /// reason `stopped`, and its Decision settles undecided, `cancelled`.
     fn settleDropped(g: *Group, s: *Script, d: Delivery) !void {
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "stopped", .err = null } });
+        try g.settleRequest(d);
         if (d.decision) try g.takePart(d, .{ .undecided = .{ .script = s.name, .run = "", .outcome = "cancelled" } });
         g.releaseDelivery(d);
     }
@@ -6486,6 +6505,7 @@ pub const Group = struct {
     /// The end of a message's path: the `unhandled` report, and `send
     /// failed` for a sender that waits. Takes it.
     fn unhandled(g: *Group, d: Delivery) !void {
+        try g.settleRequest(d);
         if (g.trace) |out| {
             out.writeAll("unhandled") catch {};
             if (d.from == null and d.id > 0) out.print(" d{d}", .{d.id}) catch {};
@@ -6502,6 +6522,18 @@ pub const Group = struct {
         if (d.waits) try g.reply(d, .{ .send_failed = .{ .reason = "unhandled", .err = null } });
         // A Decision that reaches the end of its path is allowed.
         if (d.decision) try g.takePart(d, .allowed);
+    }
+
+    /// Ends a Host Request without a returned Value. Presence in `results`
+    /// means settled even for Nothing; climbing the Message Path and Rewind do not settle.
+    fn settleRequest(g: *Group, d: Delivery) !void {
+        if (!d.request or d.waits) return;
+        const slot = try g.results.getOrPut(g.gpa, d.id);
+        if (slot.found_existing) return;
+        slot.value_ptr.* = nothing(g.gpa) catch |err| {
+            g.results.removeByPtr(slot.key_ptr);
+            return err;
+        };
     }
 
     fn reportUnhandled(g: *Group, d: Delivery) !void {
