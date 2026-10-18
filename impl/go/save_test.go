@@ -128,6 +128,7 @@ func TestRestorePreemptedOpenJoin(t *testing.T) {
 }
 
 func TestRestoreRejectsMalformedFrames(t *testing.T) {
+	skipNativeSave(t)
 	c := New()
 	g := c.NewGroup(GroupOptions{})
 	s, e := g.Load(LoadOptions{Name: "s", Source: "on spin\n repeat forever\n end repeat\nend spin"})
@@ -245,11 +246,35 @@ func TestRestorePendingSettlementsAndObjectIdentity(t *testing.T) {
 
 // Saves are Core-specific (ADR 0008). Change only the Cost Model header and
 // integrity digest so both backends exercise the same mismatch policy.
+// skipNativeSave skips a test that forges a native Go save's JSON payload
+// under the Zig adapter, whose saves are the binary NTZS envelope (ADR 0008).
+func skipNativeSave(t *testing.T) {
+	t.Helper()
+	if experimentalGroupFactory != nil {
+		t.Skip("native save format")
+	}
+}
+
 func rewriteSaveCostModel(t *testing.T, saved []byte) []byte {
 	t.Helper()
 	if !bytes.HasPrefix(saved, []byte("NTZS")) {
 		return rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
 	}
+	return rewriteZigSaveHeader(t, saved, func(language []byte, costModel uint64) ([]byte, uint64) { return language, costModel + 1 })
+}
+
+func rewriteSaveLanguage(t *testing.T, saved []byte, version string) []byte {
+	t.Helper()
+	if !bytes.HasPrefix(saved, []byte("NTZS")) {
+		return rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["Language"] = version })
+	}
+	return rewriteZigSaveHeader(t, saved, func(_ []byte, costModel uint64) ([]byte, uint64) { return []byte(version), costModel })
+}
+
+// rewriteZigSaveHeader changes the Language and Cost Model versions of a Zig
+// save and recomputes its trailing digest.
+func rewriteZigSaveHeader(t *testing.T, saved []byte, change func(language []byte, costModel uint64) ([]byte, uint64)) []byte {
+	t.Helper()
 	payload := saved[:len(saved)-sha256.Size]
 	at := 4
 	read := func() uint64 {
@@ -260,10 +285,16 @@ func rewriteSaveCostModel(t *testing.T, saved []byte) []byte {
 		at += n
 		return value
 	}
-	read()            // Save format.
-	at += int(read()) // Language version.
+	read() // Save format.
 	start := at
-	changed := binary.AppendUvarint(bytes.Clone(payload[:start]), read()+1)
+	size := int(read())
+	language := payload[at : at+size]
+	at += size
+	language, costModel := change(language, read())
+	changed := bytes.Clone(payload[:start])
+	changed = binary.AppendUvarint(changed, uint64(len(language)))
+	changed = append(changed, language...)
+	changed = binary.AppendUvarint(changed, costModel)
 	changed = append(changed, payload[at:]...)
 	digest := sha256.Sum256(changed)
 	return append(changed, digest[:]...)
@@ -362,7 +393,7 @@ func TestPreviousLanguageSaveRejectsOrRestoresVariablesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["Language"] = "1.0-rc.2" })
+	saved = rewriteSaveLanguage(t, saved, "1.0-rc.2")
 	_, _, err = c.Restore(saved, RestoreOptions{})
 	if e, ok := err.(*HostError); !ok || e.Code != SaveMismatch {
 		t.Fatalf("RejectMismatch: %v", err)
@@ -526,6 +557,7 @@ func TestSettleDuringSaveBeforeFirstRestoredPump(t *testing.T) {
 }
 
 func TestRestoreRejectsMalformedFunctionAndQuantity(t *testing.T) {
+	skipNativeSave(t)
 	c := New()
 	g := c.NewGroup(GroupOptions{})
 	_, err := g.Load(LoadOptions{Name: "s", Source: "script variable cb = given x: x\nscript variable distance = 3 m"})

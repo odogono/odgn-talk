@@ -219,6 +219,7 @@ func recoverySnapshotIn(t *testing.T, phase string) []byte {
 	return nil
 }
 func TestMalformedRecoverySnapshot(t *testing.T) {
+	skipNativeSave(t)
 	type object = map[string]any
 	cases := []struct {
 		name, phase string
@@ -430,6 +431,7 @@ func TestLibraryRecoverySnapshotEveryBoundary(t *testing.T) {
 }
 
 func TestRecoverySaveFormatRejectsPriorTransferLayout(t *testing.T) {
+	skipNativeSave(t)
 	saved, err := New().NewGroup(GroupOptions{}).Save()
 	if err != nil {
 		t.Fatal(err)
@@ -443,6 +445,7 @@ func TestRecoverySaveFormatRejectsPriorTransferLayout(t *testing.T) {
 }
 
 func TestSaveFormatRejectsPriorFunctionMetadataLayout(t *testing.T) {
+	skipNativeSave(t)
 	saved, err := New().NewGroup(GroupOptions{}).Save()
 	if err != nil {
 		t.Fatal(err)

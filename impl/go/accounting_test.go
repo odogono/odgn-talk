@@ -168,7 +168,7 @@ func TestAccountingVariablesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
+	saved = rewriteSaveCostModel(t, saved)
 	_, rejected, err := New().Restore(saved, RestoreOptions{})
 	if err == nil || len(rejected.Reports) != 0 {
 		t.Fatal(rejected, err)

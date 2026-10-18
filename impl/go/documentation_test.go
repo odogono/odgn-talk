@@ -22,6 +22,9 @@ func functionDocOf(t *testing.T, g *Group, name string) string {
 }
 
 func TestStaleFunctionValuesKeepTheirDocumentationThroughRestore(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native docs.Function; session.TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore covers the Zig adapter")
+	}
 	g := New().NewGroup(GroupOptions{Name: "g"})
 	s := joinLoad(t, g, "s", "--| Doubles.\nfunction double n\n  return n * 2\nend double\nscript variable f\nscript variable l\non setup\n  put double into f\n  put given x: x into l\nend setup", Limits{})
 	s.Deliver(Message{Name: "setup"})
@@ -52,6 +55,9 @@ func TestStaleFunctionValuesKeepTheirDocumentationThroughRestore(t *testing.T) {
 }
 
 func TestVariablesOnlyRestoreKeepsTheDocumentationOfTheSavedCode(t *testing.T) {
+	if experimentalGroupFactory != nil {
+		t.Skip("native docs.Function; session.TestFunctionDocumentationRetainsDefiningVersionsAcrossRestore covers the Zig adapter")
+	}
 	g := New().NewGroup(GroupOptions{Name: "g"})
 	s := joinLoad(t, g, "s", "--| Doubles.\nfunction double n\n  return n * 2\nend double\nscript variable f\non setup\n  put double into f\nend setup", Limits{})
 	s.Deliver(Message{Name: "setup"})
@@ -60,7 +66,7 @@ func TestVariablesOnlyRestoreKeepsTheDocumentationOfTheSavedCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
+	saved = rewriteSaveCostModel(t, saved)
 	copy, result, err := New().Restore(saved, RestoreOptions{Mismatch: VariablesOnly})
 	if err != nil || !result.VariablesOnly {
 		t.Fatal(result, err)
