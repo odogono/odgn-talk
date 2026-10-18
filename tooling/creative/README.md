@@ -14,8 +14,9 @@ ids, so Script windows follow their owners across edits and history; ids never
 enter `.folio` files or browser storage. Intake copies the supplied Project,
 and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
 
-The Project title, [Info panel](src/info-panel.tsx) and
-[Page strip](src/page-strip.tsx) are Preact components
+The Project title, [Info panel](src/info-panel.tsx),
+[Page strip](src/page-strip.tsx) and [Edit menu](src/edit-menu.tsx) commands
+are Preact components
 written in TSX, observing the editor signals through `@preact/signals`. Live
 edits, undo/redo and Project loads update them independently of the shell
 redraw. Info reconciles its controls in place, keeping focus, caret, selection
@@ -25,7 +26,8 @@ app and browser-test builds compile imported TSX with Preact's automatic JSX
 runtime. Each strip miniature is memoised by its immutable Page value and the
 design width, with session-local Page ids keeping it attached across reorders.
 Editing one Page redraws only its miniature; navigation and unrelated Project
-edits retain all miniatures.
+edits retain all miniatures. The Edit menu enables each command from the
+selection, the undo history, read-only state and the Play mode.
 
 The authored Project model and its zip file format — pure TypeScript with no UI — live in [`src/model.ts`](src/model.ts), [`src/project-file.ts`](src/project-file.ts) and [`src/zip.ts`](src/zip.ts) (#748). Reading a Project file refuses a newer `format`, encrypted or ZIP64 archives, and compression other than stored or deflate; an asset whose file is missing opens as reported in `missingAssets` rather than as an error. The design so far:
 
@@ -467,7 +469,9 @@ undo/redo and Project replacement through the real shell and Preact title.
 The [`info-panel` suite](tests/info-panel.browser.ts) checks live field focus,
 caret and selection, composition events, uncommitted names, name refusals and
 suggestions, history, selection changes and read-only controls for every Element
-kind.
+kind. The [`edit-menu` suite](tests/edit-menu.browser.ts) checks that the Edit
+menu's commands follow the selection, undo and redo from the menu and keys,
+read-only state, Browse and Present.
 
 ## Play
 

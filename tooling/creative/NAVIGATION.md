@@ -132,10 +132,16 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Menus
 
-- [menus.ts](src/menus.ts): the header's Folio, File and Edit menus and the
-  About window; the Window menu is in [windows.ts](src/windows.ts).
+- [menus.ts](src/menus.ts): opening and closing the header's Folio, File
+  and Edit menus, and the About window; the Window menu is in
+  [windows.ts](src/windows.ts). The Folio and File menus are static HTML.
+- [edit-menu.tsx](src/edit-menu.tsx): the Preact Edit menu commands, enabled
+  from the editor signals and the shell's `playing` signal. Clicks and
+  shortcuts run through `runCommand` in [stack.ts](src/stack.ts).
 - [shortcuts.ts](src/shortcuts.ts): the editing shortcuts the Edit menu
-  shares. Tests: [shortcuts.test.ts](tests/shortcuts.test.ts).
+  shares.
+- Tests: [shortcuts.test.ts](tests/shortcuts.test.ts),
+  [edit-menu.browser.ts](tests/edit-menu.browser.ts).
 - First check: `bun test tooling/creative/tests/shortcuts.test.ts`.
 
 ## Errors window
