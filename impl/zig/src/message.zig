@@ -5605,6 +5605,32 @@ test "Function Values cross as $function tokens, are called with call, and stay 
     try std.testing.expectEqualStrings("invalid value", forged.object.get("err").?.object.get("code").?.string);
 }
 
+test "Function error during retains the original opaque token and arguments" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\"}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"script variable caught\\non make n\\n return given x\\n  throw {{code: \\\"mine\\\", value: n + x}}\\n end given\\nend make\\non error e, during msg\\n put msg into caught\\nend error\\n\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"make\",\"args\":[11]}}}}", .{3}));
+    const made = (try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{4}))).object.get("result").?;
+    const fn_json = try std.fmt.allocPrint(c.arena.allocator(), "{f}", .{std.json.fmt(made, .{})});
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[7]}}", .{ 5, fn_json }));
+    _ = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{6}));
+    const view = try okOf(try c.send("{{\"m\":\"inspect\",\"ref\":{d},\"group\":\"g\"}}", .{7}));
+    const caught = view.object.get("scripts").?.array.items[0].object.get("vars").?.array.items[0].array.items[1];
+    try std.testing.expectEqual(@as(usize, 2), caught.object.count());
+    const retained = caught.object.get("fn") orelse return unexpected(caught);
+    try std.testing.expectEqualStrings(made.object.get("$function").?.array.items[2].string, retained.object.get("$function").?.array.items[2].string);
+    try std.testing.expectEqual(@as(i64, 7), caught.object.get("args").?.array.items[0].integer);
+    // The field is still a callable token, rather than a reconstructed display.
+    const retained_json = try std.fmt.allocPrint(c.arena.allocator(), "{f}", .{std.json.fmt(retained, .{})});
+    _ = try okOf(try c.send("{{\"m\":\"call\",\"ref\":{d},\"group\":\"g\",\"fn\":{s},\"args\":[7]}}", .{ 8, retained_json }));
+    const failed = try runEnd(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{9}));
+    try std.testing.expectEqualStrings("errored", failed.object.get("outcome").?.string);
+    try std.testing.expectEqual(@as(i64, 18), failed.object.get("error").?.object.get("value").?.integer);
+}
+
 test "core-message-v1 marks Core-raised error maps as $coreError" {
     const s = Session.init(std.testing.allocator).?;
     defer s.deinit();

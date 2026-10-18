@@ -689,7 +689,9 @@ its Group: each `run end` with its result, error or limit, `stop`,
 `unhandled`, `call failed`, `effect failure`, `decided`, and a queued input
 the Pump refused. A Pump's result also gives its next deadline. The Group
 collects reports whether or not it writes a Trace, and charges nothing for
-them. Each Host call that returns reports ends with Run accounting's tail:
+them. Direct C Pending handles currently report done only for successful returns;
+failed Runs are observable through their typed Reports
+([#1195](https://github.com/odogono/odgn-talk/issues/1195)). Each Host call that returns reports ends with Run accounting's tail:
 `run started` and `run discarded` join the other reports as they happen, then
 come a `run accounting` row for each Run started, charged, ended or discarded,
 in the order the Runs were made, and `causal work` for each root whose work
@@ -874,9 +876,10 @@ messages are left out of the Trace, since their wording is outside parity.
 An error Run's `, during` message map stays available in locally called `error`
 clauses, including later clauses after a pattern or Guard fails. Helper calls,
 captured Lambdas and Fuel slicing retain it. A Host-delivered `error` message
-has no such metadata and binds Nothing. For errors from Function Value calls,
-the required `{fn, args}` metadata remains a separate correction
-([#1084](https://github.com/odogono/odgn-talk/issues/1084)).
+has no such metadata and binds Nothing. Message failures bind `{name, args}`;
+Function Value call failures bind `{fn, args}`, retaining the original Function
+Value and its captures. Save/Restore preserves this metadata in failed Runs,
+queued errors and locally called error Handlers.
 
 Text Patterns run on chapter 8's Pike VM ([matcher](src/machine/matcher.zig)).
 A pattern value keeps its canonical source, so the matcher reads it back,

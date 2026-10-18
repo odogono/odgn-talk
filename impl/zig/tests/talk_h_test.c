@@ -1353,6 +1353,62 @@ static int object_elements_test(void) {
     return bad;
 }
 
+/* The C Host receives the actual Function Value in error metadata. */
+static int function_error_during_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source = "script variable caught\non exported captured\n return given x\n  throw {code: \"mine\", value: captured + x}\n end given\nend exported\non error e, during msg\n put msg into caught\nend error\non read\n return caught\nend read\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    int bad = talk_load(group, &load, &script) != TALK_OK;
+    talk_value *n = NULL;
+    bad |= talk_int(7, &n) != TALK_OK;
+    talk_value *args[] = {n};
+    talk_message exported = {"exported", 8, args, 1, NULL};
+    talk_pending *made = NULL, *failed = NULL, *read = NULL;
+    bad |= talk_script_request(script, &exported, NULL, &made) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    talk_value *fn = NULL, *caught = NULL, *retained = NULL, *received_args = NULL;
+    bad |= talk_pending_result(made, &fn) != TALK_OK || fn == NULL;
+    bad |= talk_group_call(group, fn, args, 1, NULL, NULL, &failed) != TALK_OK;
+    talk_pump_result pumped = {0};
+    bad |= talk_pump(group, 1790000000, 0, NULL, &pumped) != TALK_OK;
+    const talk_report *reports = NULL;
+    size_t count = talk_reports_items(pumped.reports, &reports);
+    bool errored = false;
+    for (size_t i = 0; i < count; i++) {
+        if (reports[i].kind == TALK_REPORT_RUN_END && reports[i].as.run_end.outcome == TALK_ERRORED) errored = true;
+    }
+    bad |= !errored;
+    talk_reports_release(pumped.reports);
+    talk_message message = {"read", 4, NULL, 0, NULL};
+    bad |= talk_script_request(script, &message, NULL, &read) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    bad |= talk_pending_result(read, &caught) != TALK_OK || caught == NULL;
+    bad |= talk_value_get(caught, "fn", 2, &retained) != TALK_OK;
+    bool equal = false;
+    bad |= talk_value_equal(fn, retained, &equal) != TALK_OK || !equal;
+    bad |= talk_value_get(caught, "args", 4, &received_args) != TALK_OK;
+    talk_value *expected_args = NULL;
+    bad |= talk_list(args, 1, &expected_args) != TALK_OK;
+    bad |= talk_value_equal(received_args, expected_args, &equal) != TALK_OK || !equal;
+    talk_value_release(expected_args);
+    talk_value_release(received_args);
+    talk_value_release(retained);
+    talk_value_release(caught);
+    talk_value_release(fn);
+    talk_value_release(n);
+    talk_pending_release(read);
+    talk_pending_release(failed);
+    talk_pending_release(made);
+    talk_group_release(group);
+    talk_core_release(core);
+    return bad;
+}
+
 /* Function Value calls follow talk.go and talk.ts (#1028): a Host call is
  * refused, with its records, for an override that loosens the Home Script's
  * limits or a full Home mailbox; a Script's call to a full Home raises
@@ -2656,6 +2712,7 @@ int main(void) {
     expect(slice_test() == 0, "a Run preempted by its Fuel Slice continues in a later Pump");
     expect(cancel_test() == 0, "a cancelled Run runs its finally on its Cleanup Budget, and a cancelled Request leaves the mailbox");
     expect(library_check_test() == 0, "Library checks refuse Joins, undeclared Grants and unknown imports' names as talk.go does");
+    expect(function_error_during_test() == 0, "Function error during retains fn and arguments through talk.h");
     expect(function_call_test() == 0, "Function Value calls refuse loose overrides and full or stopped Homes as talk.go does");
     expect(object_elements_test() == 0, "Object Collections are checked and copied at registration and answer their callbacks");
     expect(object_path_test() == 0, "Host Object costs, owners, full climbs and stopped receivers follow talk.go and talk.ts");

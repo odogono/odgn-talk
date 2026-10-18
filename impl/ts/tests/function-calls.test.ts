@@ -1,4 +1,4 @@
-import { operationalReports } from './operational-reports';
+import { operationalReports, operationalResult } from './operational-reports';
 import { describe, expect, test } from 'bun:test';
 import { functionValue } from '../src/values';
 import {
@@ -565,6 +565,67 @@ test('uncaught Function call errors expose fn and arguments through during', asy
   expect(failed.get('fn')).toBe(fn);
   expect(failed.get('args').toString()).toBe('[4]');
 });
+
+for (const sliced of [false, true]) {
+  for (const foreign of [false, true]) {
+    test(`Function during survives local calls, capture and restore (sliced ${sliced}, foreign ${foreign})`, async () => {
+      const { group, fn } = setup(`script variable original
+script variable saved
+script variable caught
+on exported
+ put 11 into captured
+ put given x
+  throw {code: "mine", value: captured + x}
+ end given into original
+ return original
+end exported
+on error "mine" where the fn of msg = original, during msg
+ put given: msg into saved
+ forward
+end error
+on forward
+ error {code: "local"}
+end forward
+on error "local" where false, during msg
+ throw "unreachable"
+end error
+on error "local", during msg
+ put [msg, saved()] into caught
+end error`);
+      const requested = foreign ? caller(group, fn) : group.call(fn, [num(7)]);
+      // Attach rejection handling before pumping the failing call.
+      const failure = expectSendFailed(requested.result, 'errored');
+      const options = sliced ? { fuelSlice: 1, fuelCap: 1 } : {};
+      let queued = false;
+      let restored = group;
+      let state = '';
+      for (let step = 0; step < 300 && state !== 'idle'; step++) {
+        restored = restore(group.save(), restoreOptions([])).group;
+        const a = group.pump(clock, options);
+        const b = restored.pump(clock, options);
+        expect(operationalResult(b)).toEqual(operationalResult(a));
+        queued ||= group
+          .inspect()
+          .scripts[0]!.mailbox.some(row => row.message.name === 'error');
+        state = a.state;
+      }
+      expect(state).toBe('idle');
+      for (const g of [group, restored]) {
+        const vars = g.inspect().scripts[0]!.vars;
+        const original = vars[0]![1];
+        const caught = vars[2]![1];
+        for (const i of [1, 2]) {
+          expect(caught.index(i).get('fn').equals(original)).toBe(true);
+          expect(caught.index(i).get('args').toString()).toBe('[7]');
+        }
+      }
+      if (sliced) {
+        expect(queued).toBe(true);
+      }
+      await failure;
+    });
+  }
+}
 
 describe('Function ownership at Host boundaries', () => {
   test('broadcasts refuse foreign handles before assigning an id', () => {
