@@ -1975,3 +1975,15 @@ replay and are required in the Go passing gate. Three keep their
 `standard-store-segments`, changed for #461, and the new
 `standard-store-coordinator` await review. That review remains separate from
 the memory Store's 32 store-kit sequences.
+
+### Combined admission and Pump experiment
+
+The [proposed binary-exchange contract](../../spec/embedding/request-pump-binary.md)
+has private native-Go experiment helpers and a `BackendRequestPump` benchmark.
+The helpers admit one input and perform one ordinary Pump under the worker guard.
+A Pending can remain unsettled; Pump failure retains the admitted input.
+They omit initial OnReady and notify after releasing the worker on Pump refusal.
+The experimental Zig backend refuses combined operations before admission; its
+binary transport is not implemented. These helpers are not public Go APIs.
+The proposed Go, TS, Elixir and C declarations remain unpublished until the
+performance gate, so the public cross-Host API checks retain their existing contract.

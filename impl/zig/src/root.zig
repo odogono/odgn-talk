@@ -7,6 +7,7 @@ pub const units = @import("units.zig");
 pub const builtins = @import("machine/builtins.zig");
 pub const display = @import("display.zig");
 pub const encoding = @import("encoding.zig");
+pub const binary_value = @import("binary_value.zig");
 pub const syntax = @import("syntax/syntax.zig");
 pub const check = @import("check/check.zig");
 pub const analysis = @import("analysis.zig");
@@ -53,6 +54,7 @@ test {
     _ = value;
     _ = display;
     _ = encoding;
+    _ = binary_value;
     _ = syntax;
     _ = check;
     _ = analysis;

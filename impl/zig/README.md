@@ -1589,3 +1589,13 @@ lower bound. The C API and Message Layer return `clock backwards` for a
 decrease. Without `crossing-trace-v1`, the Message Layer retains refusal Trace
 for its next successful reply; opted-in Hosts receive available records on the
 error reply itself. Early Load refusals record the attempted input and refusal.
+
+### Binary Value codec experiment
+
+`src/binary_value.zig` implements the Value items for the
+[proposed Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
+It preserves decimal scale, uses iterative traversal, and resolves Objects and
+Functions through the owning Group's hooks. It is not connected to the Session
+dispatcher: the reactor and sidecar do not advertise either candidate feature.
+The [experiment record](../../docs/research/request-pump-binary.md) distinguishes
+the tested codec foundation from transport and performance acceptance.
