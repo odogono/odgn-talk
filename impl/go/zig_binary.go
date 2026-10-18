@@ -733,6 +733,9 @@ func (b *zigGroup) zbPumpResult(p *zbPacket) (PumpResult, error) {
 	if err != nil || n > uint64(len(p.reports)) {
 		return result, errZigBinary
 	}
+	if n > 0 {
+		result.Reports = make([]Report, 0, n)
+	}
 	for range n {
 		var row zbView
 		var kind string

@@ -83,6 +83,10 @@ func (b *zigGroup) defineKind(kind *ObjectKind) error {
 func (b *zigGroup) syncKinds() error {
 	c := b.group.core
 	c.mu.Lock()
+	if len(c.objectKinds) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
 	kinds := make([]*ObjectKind, 0, len(c.objectKinds))
 	for _, k := range c.objectKinds {
 		kinds = append(kinds, k)
