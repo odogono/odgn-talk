@@ -1,0 +1,35 @@
+go: downloading golang.org/x/perf v0.0.0-20261009192801-be2c69fb417e
+go: downloading github.com/aclements/go-moremath v0.0.0-20210112150236-f10218a38794
+                     │ /Users/runner/work/_temp/results/base.txt │ /Users/runner/work/_temp/results/native.txt │
+                     │                  sec/op                   │       sec/op         vs base                │
+BackendRequest-3                                    9.907µ ± 37%          8.710µ ± 19%        ~ (p=0.190 n=10)
+BackendRequestPump-3                                                      8.880µ ± 43%
+BackendCallPump-3                                                         8.166µ ± 24%
+geomean                                             9.907µ                8.580µ        -12.08%
+
+                     │ /Users/runner/work/_temp/results/base.txt │ /Users/runner/work/_temp/results/native.txt │
+                     │                  p50-sec                  │       p50-sec         vs base               │
+BackendRequest-3                                    5.604µ ± 11%           5.396µ ±  9%  -3.71% (p=0.036 n=10)
+BackendRequestPump-3                                                       5.646µ ± 15%
+geomean                                             5.604µ                 5.519µ        -3.71%
+
+                     │ /Users/runner/work/_temp/results/base.txt │ /Users/runner/work/_temp/results/native.txt │
+                     │                  p99-sec                  │       p99-sec         vs base               │
+BackendRequest-3                                    75.67µ ± 43%           75.27µ ± 25%       ~ (p=0.481 n=10)
+BackendRequestPump-3                                                       72.29µ ± 27%
+geomean                                             75.67µ                 73.77µ        -0.52%
+
+                     │ /Users/runner/work/_temp/results/base.txt │ /Users/runner/work/_temp/results/native.txt │
+                     │                   B/op                    │         B/op          vs base               │
+BackendRequest-3                                    6.881Ki ± 0%           7.006Ki ± 0%  +1.82% (p=0.000 n=10)
+BackendRequestPump-3                                                       7.006Ki ± 0%
+BackendCallPump-3                                                          7.319Ki ± 0%
+geomean                                             6.881Ki                7.109Ki       +1.82%
+
+                     │ /Users/runner/work/_temp/results/base.txt │ /Users/runner/work/_temp/results/native.txt │
+                     │                 allocs/op                 │     allocs/op       vs base                 │
+BackendRequest-3                                      89.00 ± 0%           89.00 ± 0%       ~ (p=1.000 n=10) ¹
+BackendRequestPump-3                                                       89.00 ± 0%
+BackendCallPump-3                                                          79.00 ± 0%
+geomean                                               89.00                85.53       +0.00%
+¹ all samples are equal
