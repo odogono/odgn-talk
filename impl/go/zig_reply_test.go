@@ -3,9 +3,46 @@
 package northtalk
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// The request path decodes several Reports per Pump, including their embedded
+// ancestry. Keep the whole Report here so member staging shows up in benchmem.
+func BenchmarkZigReplyReport(b *testing.B) {
+	row, err := zigParseReply([]byte(`{"kind":"run started","script":"s","run":"s.r1","delivery":"d1","rootDelivery":"d1","parentRun":"","parentCall":"","selector":"ping","fn":null,"args":[41]}`))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		var report RunStarted
+		if err := zigDecode(row, reflect.ValueOf(&report).Elem()); err != nil {
+			b.Fatal(err)
+		}
+		if report.RootDelivery != "d1" || len(report.Args) != 1 {
+			b.Fatal(report)
+		}
+	}
+}
+
+func TestZigBackendReplyDecodesStructFields(t *testing.T) {
+	// Escaped keys, unknown nested members, embedded fields and nulls must keep
+	// their lookup semantics. The first matching member wins, even if null.
+	frame := strings.ReplaceAll(`{"unknown":{"script":"wrong"},"scr%u0069pt":"s","script":"later","rootDelivery":"d1","parentRun":null,"parentRun":"later","run":"s.r1","fn":null,"args":[41],"selector":"ping"}`, "%u", "\\"+"u")
+	row, err := zigParseReply([]byte(frame))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RunStarted
+	if err := zigDecode(row, reflect.ValueOf(&report).Elem()); err != nil {
+		t.Fatal(err)
+	}
+	if report.Script != "s" || report.Run != "s.r1" || report.RootDelivery != "d1" || report.ParentRun != "" || report.Function != nil || len(report.Args) != 1 || !report.Args[0].Equal(Int(41)) || report.Selector != "ping" {
+		t.Fatalf("decoded Report: %+v", report)
+	}
+}
 
 func TestZigBackendReplyRefusesMalformedFrames(t *testing.T) {
 	for _, frame := range []string{``, `{`, `{"a"}`, `{"a":1,}`, `[1 2]`, `{"a":01}`, `{"a":1.}`, `"\x"`, "\"\x01\"", `{"a":tru}`, `{} {}`, "\"\xff\"", `{"a":"\u12"}`} {

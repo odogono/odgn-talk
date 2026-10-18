@@ -1,0 +1,32 @@
+File: zig-after.test
+Type: cpu
+Time: 2026-10-18 11:46:39 BST
+Duration: 2.54s, Total samples = 1.92s (75.62%)
+Showing nodes accounting for 1.76s, 91.67% of 1.92s total
+Showing top 25 nodes out of 229
+      flat  flat%   sum%        cum   cum%
+     0.69s 35.94% 35.94%      0.69s 35.94%  runtime._ExternalCode
+     0.17s  8.85% 44.79%      0.17s  8.85%  github.com/odogono/odgn-talk/impl/go.zigSkip
+     0.16s  8.33% 53.12%      0.16s  8.33%  internal/runtime/atomic.(*UnsafePointer).Load (inline)
+     0.09s  4.69% 57.81%      0.09s  4.69%  runtime.memmove
+     0.08s  4.17% 61.98%      0.91s 47.40%  github.com/odogono/odgn-talk/impl/go_test.BenchmarkBackendRequest
+     0.08s  4.17% 66.15%      0.08s  4.17%  runtime.kevent
+     0.06s  3.12% 69.27%      0.06s  3.12%  runtime.memclrNoHeapPointers
+     0.06s  3.12% 72.40%      0.06s  3.12%  runtime.pthread_cond_signal
+     0.05s  2.60% 75.00%      0.08s  4.17%  github.com/odogono/odgn-talk/impl/go.zigKeyIs
+     0.05s  2.60% 77.60%      0.05s  2.60%  runtime.madvise
+     0.04s  2.08% 79.69%      0.04s  2.08%  runtime.ifaceeq
+     0.03s  1.56% 81.25%      0.11s  5.73%  github.com/odogono/odgn-talk/impl/go.zigReply.lookup.func1
+     0.03s  1.56% 82.81%      0.03s  1.56%  internal/bytealg.IndexByteString
+     0.03s  1.56% 84.38%      0.23s 11.98%  runtime.mallocgc
+     0.02s  1.04% 85.42%      0.03s  1.56%  github.com/odogono/odgn-talk/impl/go.zigValidate
+     0.02s  1.04% 86.46%      0.10s  5.21%  runtime.growslice
+     0.02s  1.04% 87.50%      0.02s  1.04%  runtime.step
+     0.01s  0.52% 88.02%      0.01s  0.52%  cmpbody
+     0.01s  0.52% 88.54%      0.29s 15.10%  github.com/odogono/odgn-talk/impl/go.zigDecodeResolving
+     0.01s  0.52% 89.06%      0.01s  0.52%  github.com/odogono/odgn-talk/impl/go.zigEnum
+     0.01s  0.52% 89.58%      0.05s  2.60%  github.com/odogono/odgn-talk/impl/go.zigJSON
+     0.01s  0.52% 90.10%      0.05s  2.60%  github.com/odogono/odgn-talk/impl/go.zigReply.items
+     0.01s  0.52% 90.62%      0.27s 14.06%  github.com/odogono/odgn-talk/impl/go.zigReply.members
+     0.01s  0.52% 91.15%      0.01s  0.52%  github.com/odogono/odgn-talk/impl/go.zigValidString
+     0.01s  0.52% 91.67%      0.02s  1.04%  github.com/odogono/odgn-talk/impl/go/internal/value.Value.Items

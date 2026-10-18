@@ -155,6 +155,87 @@ Two Loads stand out on macOS only: `Load/host/properties` is 52× and allocates
 2.4 MiB, and `Load/messaging/parents` is 25×. On Linux they are 6–12×. Linux
 arm64 is the worst platform for every per-request row.
 
+### Local reply-decoder profiling, 2026-10-18
+
+Measured at `833bf55f`, after #1236 stopped retaining released Request results,
+on Apple M5, darwin/arm64, Go 1.27.2, wazero v1.12.0, `CGO_ENABLED=0`, with a
+warm compilation cache. This is local optimization evidence, not a new
+three-platform acceptance run. The source change is in `impl/go/zig_backend.go`;
+the decoder benchmark and lookup regression case are in `impl/go/zig_reply_test.go`.
+Raw output, provenance, benchstat comparisons and profile summaries are in
+[`2026-10-18-local-reply-decode-darwin-arm64`](../../bench/results/go-zig-adapter/2026-10-18-local-reply-decode-darwin-arm64/).
+
+The request allocation profile puts 26% of sampled allocations in
+`zigReply.entries`: temporary member slices and copied keys created while
+decoding envelopes into Go structs. Struct decoding now caches its field keys
+and fills raw-byte spans in one member pass, using a stack buffer for up to
+16 fields and a heap fallback for larger structs. Embedded fields, escaped
+keys, unknown members and first-member lookup semantics are preserved. Value
+payloads still use the existing strict, iterative Value Encoding decoder.
+
+Eight samples per configuration alternate before/after/native processes,
+with fixed 2,000 iterations, separately at `GOMAXPROCS=3` and `10`:
+
+- Request: 24.18 → 23.29 µs at 3 processors (−3.7%, p=0.005), and
+  24.04 → 23.12 µs at 10 (−3.8%, p<0.001). Allocations fall from 266 to 190
+  and bytes from 12.2 KB to 6.9 KB on both configurations.
+- Deferred call, history=0: 55.90 → 54.42 µs at 3 processors (−2.6%, p<0.001).
+  The 55.56 → 54.36 µs change at 10 is not significant (p=0.234).
+  Allocations fall from 368 to 252 and bytes from 21.7 KB to 13.7 KB.
+- 16-Group throughput: no significant change at either processor count.
+  An earlier sequential run suggested a larger improvement; the alternating
+  measurements did not reproduce it, so it is not claimed.
+- A `RunStarted` Report decode, including ancestry and a numeric argument,
+  falls from 65 to 35 allocations and 3,489 to 672 bytes. Its median time
+  falls from 1.425 to 1.060 µs in five samples (p=0.008).
+
+The follow-up request allocation profile no longer lists `zigReply.entries`
+among its top allocation sites. Request serialization (`zigJSON`) and number
+conversion remain visible. The initial CPU profile shows 31% of samples as
+external code and 22% cumulatively under `zigDecodeResolving`; these samples
+do not separate guest JSON from guest execution. The shipped artifact is
+stripped, so this is not a guest-function profile.
+
+A 2,000-call deferred trace records 28.55 ms of runnable-to-running delay
+attributed to `zigGroup.callback`'s channel send, about 14.3 µs per iteration.
+This measures scheduler delay in the answering-goroutine handoff, not CPU
+time in the guest. It helps explain why decoder savings do not translate
+directly into deferred-call latency savings.
+
+The selected adapter acceptance suite passes with `CGO_ENABLED=0`, and again
+with `-race`; the full untagged Go suite passes too. These include public
+Report/Trace parity, persistence, Sessions, facilities and deep-reply tests.
+No Spec, wire format or guest artifact changes are needed.
+
+This does not complete #1103. Requests remain about 5.9–6.0× native and
+deferred calls about 6.2–6.4× in these matched local runs, above the ≤3×
+limits. Native Go remains outside the changed build-tagged code. The next
+profiling work should distinguish guest parsing/serialization from execution,
+and examine the deferred handoff; these measurements do not establish that
+binary frames would meet the limits. Required-platform acceptance still needs
+a fresh `go-zig-bench` run after the optimization lands.
+
+Reproduce request CPU/allocation capture with:
+
+```sh
+CGO_ENABLED=0 go -C impl/go test -c -tags talk_zig_experimental -o /tmp/zig-profile.test
+NORTHTALK_ZIG_CACHE_DIR=/tmp/zig-profile-cache /tmp/zig-profile.test \
+  -test.run '^$' -test.bench '^BenchmarkBackendRequest$' \
+  -test.benchtime 100000x -test.cpuprofile /tmp/request.cpu \
+  -test.memprofile /tmp/request.mem
+go tool pprof -top -alloc_objects /tmp/zig-profile.test /tmp/request.mem
+```
+
+Capture the deferred scheduler delay with the same binary:
+
+```sh
+NORTHTALK_ZIG_CACHE_DIR=/tmp/zig-profile-cache /tmp/zig-profile.test \
+  -test.run '^$' -test.bench '^BenchmarkBackendDeferredCall/history=0$' \
+  -test.benchtime 2000x -test.trace /tmp/deferred.trace
+go tool trace -pprof=sched /tmp/deferred.trace > /tmp/deferred-sched.pb.gz
+go tool pprof -top /tmp/zig-profile.test /tmp/deferred-sched.pb.gz
+```
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)

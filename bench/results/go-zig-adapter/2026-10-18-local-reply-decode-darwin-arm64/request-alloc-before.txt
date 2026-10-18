@@ -1,0 +1,32 @@
+File: zig.test
+Type: alloc_objects
+Time: 2026-10-18 11:41:52 BST
+Showing nodes accounting for 18544130, 91.54% of 20257087 total
+Dropped 84 nodes (cum <= 101285)
+Showing top 25 nodes out of 99
+      flat  flat%   sum%        cum   cum%
+   5347305 26.40% 26.40%    5347305 26.40%  github.com/odogono/odgn-talk/impl/go.zigReply.entries.func1
+   2334787 11.53% 37.92%    2334787 11.53%  github.com/odogono/odgn-talk/impl/go.zigJSON
+   1474579  7.28% 45.20%    1474579  7.28%  math/big.nat.make (inline)
+    824079  4.07% 49.27%   11037541 54.49%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pumpReceipt
+    800343  3.95% 53.22%    5144769 25.40%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).queue
+    737301  3.64% 56.86%     737301  3.64%  math/big.NewInt (inline)
+    720906  3.56% 60.42%     720906  3.56%  github.com/odogono/odgn-talk/impl/go.zigReply.text
+    688138  3.40% 63.82%     688138  3.40%  math/big.nat.itoa
+    557085  2.75% 66.57%    1695796  8.37%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).zigMessage
+    502476  2.48% 69.05%   13501302 66.65%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).pump
+    458758  2.26% 71.31%    3364255 16.61%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).decodeValue
+    458758  2.26% 73.58%   15407153 76.06%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).exchange
+    371378  1.83% 75.41%     480624  2.37%  github.com/odogono/odgn-talk/impl/go/internal/zigwasm.(*inlineIO).Write
+    365927  1.81% 77.22%     365927  1.81%  github.com/odogono/odgn-talk/impl/go.zigReply.items
+    360458  1.78% 79.00%     917522  4.53%  github.com/odogono/odgn-talk/impl/go/internal/decimal.pow10
+    349540  1.73% 80.72%     349540  1.73%  github.com/odogono/odgn-talk/impl/go/internal/value.Fields.Value
+    319896  1.58% 82.30%     577370  2.85%  github.com/odogono/odgn-talk/impl/go.(*zigGroup).queue.func1
+    288685  1.43% 83.73%     998697  4.93%  github.com/odogono/odgn-talk/impl/go/internal/zigwasm.(*Reactor).Frame
+    270351  1.33% 85.06%    2121778 10.47%  github.com/odogono/odgn-talk/impl/go/internal/decimal.Number.Rat
+    257474  1.27% 86.33%     257474  1.27%  context.AfterFunc
+    229382  1.13% 87.46%    2449465 12.09%  github.com/odogono/odgn-talk/impl/go/internal/decimal.Number.Integer
+    229379  1.13% 88.60%     710012  3.51%  github.com/tetratelabs/wazero/internal/engine/wazevo.(*callEngine).Call
+    203922  1.01% 89.60%    6560592 32.39%  github.com/odogono/odgn-talk/impl/go.(*Group).admit
+    196612  0.97% 90.57%     196612  0.97%  github.com/odogono/odgn-talk/impl/go/internal/value.Value.Items
+    196611  0.97% 91.54%     196611  0.97%  slices.Clone[go.shape.[]github.com/odogono/odgn-talk/impl/go/internal/value.Value,go.shape.struct { github.com/odogono/odgn-talk/impl/go/internal/value._ [0]func; Kind github.com/odogono/odgn-talk/impl/go/internal/value.Kind; CoreMessage bool; Bool bool; github.com/odogono/odgn-talk/impl/go/internal/value.data interface {} }] (inline)

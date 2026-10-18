@@ -1,0 +1,59 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+                                 │    native    │                  zig                  │
+                                 │    sec/op    │    sec/op      vs base                │
+BackendDeferredCall/history=0-3    8.534µ ±  3%   54.424µ ±  1%  +537.73% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3      8.826µ ±  3%   15.957µ ±  4%   +80.80% (p=0.000 n=8)
+BackendRequest-3                   3.927µ ±  8%   23.293µ ±  1%  +493.15% (p=0.000 n=8)
+BackendDeferredCall/history=0-10   8.796µ ± 14%   54.357µ ±  4%  +517.97% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10     6.675µ ± 34%    8.769µ ± 16%   +31.37% (p=0.038 n=8)
+BackendRequest-10                  3.885µ ±  2%   23.120µ ±  1%  +495.19% (p=0.000 n=8)
+geomean                            6.380µ          24.62µ        +285.94%
+
+                                 │    native    │                 zig                  │
+                                 │   p50-sec    │   p50-sec     vs base                │
+BackendDeferredCall/history=0-3    7.166µ ±  1%   53.062µ ± 1%  +640.47% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3      19.65µ ±  2%    45.67µ ± 2%  +132.46% (p=0.000 n=8)
+BackendRequest-3                   3.063µ ±  1%   22.333µ ± 1%  +629.24% (p=0.000 n=8)
+BackendDeferredCall/history=0-10   7.250µ ± 11%   53.063µ ± 3%  +631.90% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10     39.79µ ±  3%    50.42µ ± 3%   +26.70% (p=0.000 n=8)
+BackendRequest-10                  3.042µ ±  1%   22.229µ ± 1%  +630.74% (p=0.000 n=8)
+geomean                            8.505µ          38.42µ       +351.80%
+
+                                 │    native     │                 zig                  │
+                                 │    p99-sec    │    p99-sec     vs base               │
+BackendDeferredCall/history=0-3     54.81µ ± 14%   72.71µ ±  12%  +32.65% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3      3562.5µ ± 35%   243.0µ ±  33%  -93.18% (p=0.000 n=8)
+BackendRequest-3                    19.29µ ± 30%   31.83µ ±   8%  +65.01% (p=0.000 n=8)
+BackendDeferredCall/history=0-10    55.19µ ± 32%   74.56µ ±  52%  +35.11% (p=0.010 n=8)
+BackendMultiGroup/groups=16-10     2445.5µ ± 18%   515.8µ ± 166%  -78.91% (p=0.007 n=8)
+BackendRequest-10                   19.19µ ± 39%   31.75µ ±   3%  +65.47% (p=0.000 n=8)
+geomean                             146.2µ         93.93µ         -35.74%
+
+                                 │    native     │                 zig                  │
+                                 │     B/op      │     B/op       vs base               │
+BackendDeferredCall/history=0-3     13.33Ki ± 0%   13.36Ki ±  0%   +0.17% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3       14.15Ki ± 0%   13.03Ki ± 11%   -7.94% (p=0.000 n=8)
+BackendRequest-3                    6.881Ki ± 0%   6.714Ki ±  0%   -2.43% (p=0.000 n=8)
+BackendDeferredCall/history=0-10    13.34Ki ± 0%   13.36Ki ±  0%   +0.14% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10     14.158Ki ± 0%   8.875Ki ±  0%  -37.31% (p=0.000 n=8)
+BackendRequest-10                   6.889Ki ± 0%   6.718Ki ±  0%   -2.48% (p=0.000 n=8)
+geomean                             10.91Ki        9.881Ki         -9.46%
+
+                                 │   native   │                 zig                 │
+                                 │ allocs/op  │  allocs/op   vs base                │
+BackendDeferredCall/history=0-3    158.0 ± 0%    252.0 ± 0%   +59.49% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3      207.0 ± 0%    268.0 ± 0%   +29.47% (p=0.000 n=8)
+BackendRequest-3                   89.00 ± 0%   190.00 ± 0%  +113.48% (p=0.000 n=8)
+BackendDeferredCall/history=0-10   158.0 ± 0%    252.0 ± 0%   +59.49% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10     207.0 ± 0%    267.0 ± 0%   +28.99% (p=0.000 n=8)
+BackendRequest-10                  89.00 ± 0%   190.00 ± 0%  +113.48% (p=0.000 n=8)
+geomean                            142.8         234.0        +63.87%
+
+                               │    native     │                 zig                 │
+                               │     req/s     │    req/s      vs base               │
+BackendMultiGroup/groups=16-3    113.31k ±  2%   62.67k ± 12%  -44.69% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10    149.9k ± 35%   114.1k ± 21%  -23.89% (p=0.038 n=8)
+geomean                           130.3k         84.54k        -35.12%

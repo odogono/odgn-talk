@@ -1,0 +1,18 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+                  │    before    │                after                │
+                  │    sec/op    │    sec/op     vs base               │
+ZigReplyReport-10   1.425µ ± ∞ ¹   1.060µ ± ∞ ¹  -25.61% (p=0.008 n=5)
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                  │    before    │               after                │
+                  │     B/op     │    B/op      vs base               │
+ZigReplyReport-10   3489.0 ± ∞ ¹   672.0 ± ∞ ¹  -80.74% (p=0.008 n=5)
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                  │   before    │               after                │
+                  │  allocs/op  │  allocs/op   vs base               │
+ZigReplyReport-10   65.00 ± ∞ ¹   35.00 ± ∞ ¹  -46.15% (p=0.008 n=5)
+¹ need >= 6 samples for confidence interval at level 0.95

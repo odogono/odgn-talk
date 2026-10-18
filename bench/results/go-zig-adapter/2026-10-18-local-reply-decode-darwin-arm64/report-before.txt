@@ -1,0 +1,11 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkZigReplyReport-10    	  843735	      1468 ns/op	    3489 B/op	      65 allocs/op
+BenchmarkZigReplyReport-10    	  841868	      1425 ns/op	    3489 B/op	      65 allocs/op
+BenchmarkZigReplyReport-10    	  868303	      1422 ns/op	    3489 B/op	      65 allocs/op
+BenchmarkZigReplyReport-10    	  845920	      1406 ns/op	    3489 B/op	      65 allocs/op
+BenchmarkZigReplyReport-10    	  863140	      1427 ns/op	    3489 B/op	      65 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	6.420s
