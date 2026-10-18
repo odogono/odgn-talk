@@ -1112,7 +1112,14 @@ export class Parser {
       this.next('operator');
       timeout = this.expr();
     }
-    return { ...ev, k: 'WaitFor', timeout };
+    // A Guard comes after any timeout, so the timeout ends at `where` and an
+    // `or` in the Guard is boolean (ADR 0108).
+    let guard: Node | null = null;
+    if (this.atOperatorWord('where')) {
+      this.next('operator');
+      guard = this.expr();
+    }
+    return { ...ev, k: 'WaitFor', timeout, guard };
   }
 
   // `paid {order: o}`, `click from okButton`

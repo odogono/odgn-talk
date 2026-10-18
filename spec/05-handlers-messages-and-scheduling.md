@@ -165,7 +165,8 @@ A Function Value runs in its Home Script ([ADR 0025](../docs/adr/0025-lambdas-ar
 - **`it`:** a `wait for` that matches leaves the message in `it`, as the map `{name, args}`: its Selector as text (`"move:to:"`, or `"move"` for a message with no labels) and its arguments as a list.
 - **A timeout:** `wait for m or d` stops waiting after the exact duration `d`, with the same deadline rule as `wait`, and leaves Nothing in `it`. A `wait for` with no timeout can wait for ever. `MaxWait` doesn't apply to it.
 - **The block form:** `wait for` at the end of a line takes `when` branches, each an event with an optional Guard, and `after` branches, each a duration. The first branch to fire runs its body, the others are cancelled, and the Run goes on after the closing `end` (optionally `end wait`). A `when` that fires leaves its message in `it`, and an `after` leaves Nothing. When one message matches several `when` branches, the first in source order fires. When several `after` branches are due at the same Pump, the one with the earliest deadline fires, and of equal deadlines, the first in source order.
-- **Guards** on `when` branches follow the rules for Handler Guards. An error in one means the branch doesn't match.
+- **A Guard:** `wait for m where g` matches only a message for which `g` holds, as a `when` branch's Guard does. It goes after any timeout: `wait for m or d where g` ([ADR 0108](../docs/adr/0108-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)).
+- **Guards** on a one-line `wait for` and on `when` branches follow the rules for Handler Guards. An error in one means the wait, or the branch, doesn't match.
 - **Decisions:** a `wait for` that takes a Decision allows it at once ([ADR 0031](../docs/adr/0031-a-decisions-verdict-is-sealed-at-the-end-of-its-first-segment.md)).
 - **Not in Libraries:** `wait for` is a load error in Library code.
 

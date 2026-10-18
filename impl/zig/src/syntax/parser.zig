@@ -1013,7 +1013,11 @@ const Parser = struct {
             _ = try p.next(.operator);
             timeout = try p.expr();
         }
-        return p.stmt(first, .{ .wait_for = .{ .event = ev, .timeout = timeout } });
+        // A Guard comes after any timeout, so the timeout ends at `where` and
+        // an `or` in the Guard is boolean (ADR 0108).
+        var guard: ?ast.Guard = null;
+        if (try p.atWord("where", .operator)) guard = try p.guardClause();
+        return p.stmt(first, .{ .wait_for = .{ .event = ev, .timeout = timeout, .guard = guard } });
     }
 
     fn atFrom(p: *Parser) Allocator.Error!bool {
@@ -2383,6 +2387,16 @@ test "declarations and statements parse losslessly" {
         \\  send to board: move knight to "e4"
         \\  wait for move p to sq or 30 s
         \\end move
+    , "parses");
+}
+
+test "a one-line `wait for` takes a Guard after its timeout (ADR 0108)" {
+    try expectOutcome(
+        \\on t
+        \\  wait for pressed key where key = "Y"
+        \\  wait for move p to sq from me or 1 s where sq is not "e1" or p = 1
+        \\  if ready then wait for pressed key where key = "Y"
+        \\end t
     , "parses");
 }
 

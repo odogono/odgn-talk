@@ -149,6 +149,7 @@ on play
   move "knight" to "e4"
   send to me: move "rook" to "a1" and wait
   wait for move p to sq from me or 1 s
+  wait for move p to sq from me or 1 s where sq is not "e1" or p = 1
 end play`;
   const parsed = parseSource(source);
   expect(parsed.error).toBeNull();

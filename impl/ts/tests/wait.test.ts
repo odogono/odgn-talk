@@ -50,6 +50,56 @@ test('event Guard errors are recorded during observation before dispatch', () =>
   );
 });
 
+describe('a one-line `wait for` with a Guard (ADR 0108)', () => {
+  // The `watch` Run's result once `key` messages carrying each of `keys`
+  // have been dispatched in turn, or undefined while it still waits.
+  const watched = (wait: string, keys: string[], until = t0) => {
+    const g = newGroup({ name: 'g' });
+    const s = g.load({
+      name: 's',
+      source: `on watch\n  ${wait}\n  return it\nend watch\non key k\nend key\n`,
+    });
+    s.deliver({ name: 'watch' });
+    g.pump(t0);
+    let result: string | undefined;
+    const pump = (now: bigint) => {
+      for (const r of g.pump(now).reports) {
+        if (r.kind === 'run end' && r.run === 's/r1') {
+          result = r.result?.toString();
+        }
+      }
+    };
+    for (const k of keys) {
+      s.deliver({ name: 'key', args: [text(k)] });
+      pump(t0);
+    }
+    pump(until);
+    return result;
+  };
+
+  test('matches only a message its Guard holds for', () => {
+    expect(watched('wait for key k where k = "Y"', ['N'])).toBeUndefined();
+    expect(watched('wait for key k where k = "Y"', ['N', 'Y'])).toBe(
+      '{name: "key", args: ["Y"]}',
+    );
+  });
+
+  test('reads an `or` in the Guard as boolean', () => {
+    expect(
+      watched('wait for key k where k = "Y" or k = "N"', ['A', 'N']),
+    ).toBe('{name: "key", args: ["N"]}');
+  });
+
+  test('takes a timeout before the Guard', () => {
+    const wait = 'wait for key k or 5 s where k = "Y"';
+    expect(watched(wait, ['N'], at(4))).toBeUndefined();
+    expect(watched(wait, ['N'], at(5))).toBe('nothing');
+    expect(watched(wait, ['N', 'Y'], at(5))).toBe(
+      '{name: "key", args: ["Y"]}',
+    );
+  });
+});
+
 // Each load diagnostic as `code line:col`.
 const diagnostics = (source: string, libraries: Library[] = []) => {
   const group = newGroup({ name: 'g' });

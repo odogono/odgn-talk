@@ -1,0 +1,14 @@
+# wait-for-guard: a one-line `wait for` takes a Guard after any timeout, and
+# resumes only for a message the Guard holds for. An `or` in the Guard is
+# boolean, and the message still goes to the Handler Clauses (spec chapter 5,
+# `wait for` a message; ADR 0108).
+
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "keys"
+source = "keys.talk"

@@ -270,6 +270,7 @@ on play
  move "knight" to "e4"
  send to me: move "rook" to "a1" and wait
  wait for move p to sq from me or 1 s
+ wait for move p to sq from me or 1 s where sq is not "e1" or p = 1
 end play`
 	tree, err := Parse(source)
 	if err != nil {
@@ -311,6 +312,32 @@ func TestWhoseClauseShape(t *testing.T) {
 		}
 		if n.Token.Raw != "whose" {
 			t.Errorf("%s: at %q", tc.expression, n.Token.Raw)
+		}
+	}
+}
+
+// A one-line `wait for` takes its Guard after any timeout, so the timeout
+// ends at `where` and an `or` in the Guard is boolean (ADR 0108).
+func TestOneLineWaitForGuardFollowsTimeout(t *testing.T) {
+	for _, source := range []string{
+		"on t\n wait for key k where k = \"Y\" or k = \"N\"\nend t",
+		"on t\n wait for key k or 5 s where k = \"Y\" or k = \"N\"\nend t",
+		"on t\n if true then wait for key k where k = \"Y\"\nend t",
+	} {
+		tree, err := Parse(source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		wait := tree.Declarations[0].Body[0]
+		if wait.Kind == "if" {
+			continue
+		}
+		event := wait.Branches[0]
+		if event.Guard == nil || event.Guard.Kind != "binary" || event.Guard.Text != "or" {
+			t.Fatalf("%s: Guard %+v", source, event.Guard)
+		}
+		if strings.Contains(source, " or 5 s") != (len(wait.Children) == 1) {
+			t.Fatalf("%s: timeout %+v", source, wait.Children)
 		}
 	}
 }

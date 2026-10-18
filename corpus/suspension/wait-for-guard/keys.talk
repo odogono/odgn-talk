@@ -1,0 +1,17 @@
+-- keys.talk: the wait-for-guard case's waiting Script.
+
+script variable seen = []
+
+on answer
+  wait for key k where k = "Y" or k = "N"
+  put [it, k] after seen
+end answer
+
+on confirm
+  wait for key k or 5 s where k = "Y"
+  put it after seen
+end confirm
+
+on key k
+  put "handled " & k after seen
+end key
