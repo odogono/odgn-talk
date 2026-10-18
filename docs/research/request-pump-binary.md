@@ -1,9 +1,9 @@
 # Binary Request and Pump experiment: implementation status
 
 Work for [#1245](https://github.com/odogono/odgn-talk/issues/1245), under
-[proposed ADR 0110](../adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
-This is a partial implementation record, not performance acceptance or evidence
-that the target cannot be met. ADR 0098 remains accepted.
+[ADR 0110](../adr/0110-request-and-pump-have-an-optional-binary-exchange.md),
+which supersedes ADR 0098. It records the implementation and the measurements
+behind the gate decision.
 
 ## Implemented foundation
 
@@ -21,8 +21,8 @@ that the target cannot be met. ADR 0098 remains accepted.
 - The native combined Request and Function benchmarks are separate from the
   unchanged public `BackendRequest` benchmark.
 
-The native helpers remain private until the performance gate permits the public
-Host declarations to land together. Publishing only the proposed Go declarations
+The native helpers stayed private until the gate decision, so the public Host
+declarations land together. Publishing only the proposed Go declarations
 would immediately violate the repository's required Go/C API comparison. The
 comparison remains unchanged; no missing C implementation is hidden by a stub
 or an exception.
@@ -146,8 +146,27 @@ Go takes for the whole round trip. A transport-only pass can't reach the
 limit. Getting under 3× needs cheaper guest execution, or a cheaper wazero call
 and memory crossing, per Request. Either is outside this envelope experiment.
 
-Per the acceptance rule, broader implementation stops here for maintainer
-review. ADR 0110 stays proposed and ADR 0098 accepted. #1255–#1257 stay blocked.
+Under the original rule, that stopped broader implementation for maintainer
+review.
+
+**Gate decision.** The maintainer amended the gate (#1245). The exchange is
+accepted when it beats JSON by at least 25% in the same job on every platform
+for both Request benchmarks, with no native regression. Fields passes in both
+runs on every platform.
+
+| Run | Platform | JSON Request | Fields Request | Fields combined |
+| --- | --- | ---: | ---: | ---: |
+| Baseline | macOS arm64 | 46.0 | 31.0 (−33%) | 29.0 (−37%) |
+| | Linux arm64 | 73.6 | 50.1 (−32%) | 49.1 (−33%) |
+| | Linux amd64 | 54.7 | 35.6 (−35%) | 31.4 (−43%) |
+| Optimized | macOS arm64 | 48.0 | 28.2 (−41%) | 27.5 (−43%) |
+| | Linux arm64 | 72.3 | 45.6 (−37%) | 41.7 (−42%) |
+| | Linux amd64 | 98.0 | 71.3 (−27%) | 63.8 (−35%) |
+
+The combined Request is compared with JSON's separate Request and Pump, which
+does the same work. Fields is selected, and ADR 0110 is accepted, superseding
+ADR 0098. #1255–#1257 proceed. The ≤3×-native target is now a guest-cost goal
+tracked in #1267.
 
 ## Remaining implementation
 
