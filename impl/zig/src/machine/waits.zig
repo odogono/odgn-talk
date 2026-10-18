@@ -157,7 +157,6 @@ pub const Waits = struct {
     /// The caller holds input_lock throughout export and encoding.
     pub const Export = struct {
         table: *const Waits,
-        timers: u64,
         calls: std.ArrayList(*Call) = .empty,
 
         pub fn deinit(e: *Export, a: Allocator) void {
@@ -199,7 +198,7 @@ pub const Waits = struct {
     };
 
     pub fn exportState(w: *const Waits, a: Allocator, runs: anytype) !Export {
-        var e: Export = .{ .table = w, .timers = w.timers };
+        var e: Export = .{ .table = w };
         errdefer e.deinit(a);
         for (w.calls.items) |c| if (w.awaited(c, runs)) try e.calls.append(a, c);
         return e;
@@ -279,10 +278,7 @@ pub const Waits = struct {
     pub fn importedPending(w: *const Waits, a: Allocator, calls: []const *Call) !std.ArrayList([]const u8) {
         var ids: std.ArrayList([]const u8) = .empty;
         errdefer ids.deinit(a);
-        for (calls) |c| for (w.pending.items) |p| if (p.call == c) {
-            try ids.append(a, c.id);
-            break;
-        };
+        for (calls) |c| if (w.call(c.id) != null) try ids.append(a, c.id);
         std.mem.sort([]const u8, ids.items, {}, struct {
             fn less(_: void, x: []const u8, y: []const u8) bool {
                 return machine.callOrder(x, y);
@@ -752,7 +748,7 @@ test "save export compacts Call history and uses the same awaited query as retir
     var saved = try w.exportState(t.allocator, runs);
     defer saved.deinit(t.allocator);
     try t.expectEqualSlices(*Call, &.{ ready, member, pending }, saved.calls.items);
-    try t.expectEqual(@as(u64, 1), saved.timers);
+    try t.expectEqual(@as(u64, 1), saved.table.timers);
     try t.expectEqual(@as(usize, 4), w.calls.items.len);
 }
 
@@ -824,7 +820,7 @@ test "import preserves Wait order, deadlines and back-references independently o
     try t.expectEqual(&member, join.members.items[0].pending.?);
     var saved = try w.exportState(t.allocator, TestRuns{ .runs = &run_list });
     defer saved.deinit(t.allocator);
-    try t.expectEqual(@as(u64, 15), saved.timers);
+    try t.expectEqual(@as(u64, 15), saved.table.timers);
     var encoded: TestOrder = .{};
     defer encoded.tokens.deinit(t.allocator);
     try saved.writeOrder(&encoded, &run_list);

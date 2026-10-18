@@ -941,7 +941,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
-    try o.int(s.waits.timers);
+    try o.int(s.waits.table.timers);
     try o.int(g.run_order);
     try o.int(g.charge_counter);
     try o.int(g.random_state);
