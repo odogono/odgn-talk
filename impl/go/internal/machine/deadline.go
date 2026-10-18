@@ -21,21 +21,25 @@ func blockDeadline(stack []value.Value) *value.DeadlineData {
 	return nil
 }
 
-// millis is a duration in nanoseconds as a Quantity in `ms`, with no more
-// decimal places than it needs.
+// millis is a duration in nanoseconds as ms, or s if ms exceeds the number
+// range, with no more decimal places than it needs.
 func millis(ns *big.Int) value.Value {
 	n := new(big.Int).Abs(ns)
-	whole, rest := new(big.Int).QuoRem(n, big.NewInt(1_000_000), new(big.Int))
+	unit, scale, places := "ms", int64(1_000_000), 6
+	if new(big.Int).Quo(n, big.NewInt(scale)).Cmp(new(big.Int).Exp(big.NewInt(10), big.NewInt(34), nil)) >= 0 {
+		unit, scale, places = "s", 1_000_000_000, 9
+	}
+	whole, rest := new(big.Int).QuoRem(n, big.NewInt(scale), new(big.Int))
 	s := whole.String()
 	if rest.Sign() != 0 {
-		fraction := strings.TrimRight(leftPad(rest.String(), 6), "0")
+		fraction := strings.TrimRight(leftPad(rest.String(), places), "0")
 		s += "." + fraction
 	}
 	if ns.Sign() < 0 {
 		s = "-" + s
 	}
 	d, _ := decimal.Parse(s)
-	q, _ := value.NewQuantity(d, "ms")
+	q, _ := value.NewQuantity(d, unit)
 	return q
 }
 

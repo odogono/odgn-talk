@@ -1408,10 +1408,10 @@ export fn talk_pump(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions
         return .ok;
     };
     r.* = .{ .state = if (g.group.stoppedState()) .stopped else if (g.group.rewound) .rewound else if (g.group.sliced) .sliced else .idle, .fuel_used = @intCast(g.group.pump_fuel), .reports = reports };
-    if (g.group.next()) |deadline| {
+    if (g.group.nextInstant()) |deadline| {
         r.has_next_deadline = true;
-        r.next_deadline_seconds = @intCast(@divFloor(deadline, std.time.us_per_s));
-        r.next_deadline_micros = @intCast(@mod(deadline, std.time.us_per_s));
+        r.next_deadline_seconds = deadline.seconds;
+        r.next_deadline_micros = deadline.micros;
     }
     return .ok;
 }
@@ -2021,11 +2021,11 @@ fn runView(a: std.mem.Allocator, r: *const machine.Run) !RunView {
     if (r.waiting) |p| {
         // As the `seg` record shows it: a deadline of its own, never a
         // call's MaxWait.
-        if (p.deadline != std.math.maxInt(i128) and ((p.call == null and p.id.len == 0) or p.block)) {
+        if ((p.call == null and p.id.len == 0) or p.block) if (machine.deadlineInstant(p.deadline)) |at| {
             out.has_until = true;
-            out.until_seconds = @intCast(@divFloor(p.deadline, std.time.us_per_s));
-            out.until_micros = @intCast(@mod(p.deadline, std.time.us_per_s));
-        }
+            out.until_seconds = at.seconds;
+            out.until_micros = at.micros;
+        };
         if (p.call) |c| try calls.append(a, .{ .data = c.id.ptr, .len = c.id.len }) else if (p.id.len > 0) try calls.append(a, .{ .data = p.id.ptr, .len = p.id.len });
     }
     if (r.join) |j| for (j.members.items) |m| if (m.pending) |p| {

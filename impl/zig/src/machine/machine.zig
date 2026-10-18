@@ -39,8 +39,11 @@ const Value = model.Value;
 
 /// Something on a frame's operand stack: a Script value, or one of the
 /// internal values only instructions see.
-/// A Timeout Block's deadline, in microseconds, and its duration in ms.
-pub const Deadline = struct { at: i128, ms: u64 };
+/// A Timeout Block's mathematical deadline and duration, in microseconds.
+pub const Deadline = struct { at: DeadlineTicks, us: DeadlineTicks };
+
+/// Mathematical wait deadlines, wide enough for every 34-digit duration.
+pub const DeadlineTicks = wait_table.Ticks;
 
 pub const Slot = union(enum) {
     value: *Value,
@@ -404,7 +407,7 @@ pub const Waited = struct {
     grant: []const u8 = "",
     operation: []const u8 = "",
     decl: ?*const capabilities.Operation = null,
-    after_ms: u64 = 0,
+    after_us: DeadlineTicks = 0,
 };
 
 /// A Run's settled wait, which it resumes with.
@@ -451,14 +454,14 @@ pub const Pending = struct {
     /// A `send … and wait`'s call id; a Capability call's is its Call's.
     id: []const u8 = "",
     run: *Run,
-    deadline: i128,
+    deadline: DeadlineTicks,
     /// Of equal deadlines, the earlier set fires first.
     order: u64,
     call: ?*capabilities.Call = null,
     grant: []const u8 = "",
     operation: []const u8 = "",
     decl: ?*const capabilities.Operation = null,
-    after_ms: u64 = 0,
+    after_us: DeadlineTicks = 0,
     /// For a Join Member, its index among the Join's members.
     member: ?usize = null,
     /// Whether the deadline is a Timeout Block's, whose `after` it is.
@@ -485,7 +488,7 @@ pub const EventWait = struct {
 /// deadline.
 pub const EventBranch = union(enum) {
     when: struct { from: ?*Value, captures: []*Value },
-    after: i128,
+    after: DeadlineTicks,
 };
 
 /// No deadline: a `wait for` that can wait for ever.
@@ -4177,8 +4180,7 @@ pub const Group = struct {
         };
         g.pump_finishing = true;
         g.write("pumped state={s} fuel={d}", .{ if (g.stoppedState()) "stopped" else if (g.rewound) "rewound" else if (g.sliced) "sliced" else "idle", g.pump_fuel });
-        if (g.next()) |deadline| {
-            const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(deadline, std.time.us_per_s)), .micros = @intCast(@mod(deadline, std.time.us_per_s)) };
+        if (g.nextInstant()) |at| {
             const text = try model.dates.string(g.scratch.allocator(), model.dates.fields(at), true);
             g.write(" next={s}", .{text});
         }
@@ -4187,8 +4189,14 @@ pub const Group = struct {
     }
 
     /// The earliest deadline still pending.
-    pub fn next(g: *Group) ?i128 {
+    pub fn next(g: *Group) ?DeadlineTicks {
         return g.waits.next();
+    }
+
+    /// A deadline the Host can act on within the Clock range.
+    pub fn nextInstant(g: *Group) ?model.dates.Instant {
+        const at = g.next() orelse return null;
+        return deadlineInstant(at) orelse if (at < micros(g.clock)) g.clock else null;
     }
 
     /// A settled wait: it leaves the Wait table, and its Run becomes ready,
@@ -4847,7 +4855,7 @@ pub const Group = struct {
             },
             .broken => return try g.resumeRaise(run, pc, ins, g.hostErrorAt(waited)),
             .timeout => {
-                const after = try model.scalar(gpa, .{ .quantity = .{ .number = model.Decimal.fromInt(@as(i64, @intCast(waited.after_ms))), .unit = units.Unit.parse("ms") catch unreachable } });
+                const after = try durationValue(gpa, waited.after_us);
                 defer after.release();
                 const yes = try model.scalar(gpa, .{ .bool = true });
                 defer yes.release();
@@ -5021,10 +5029,10 @@ pub const Group = struct {
         } else try g.post(dest, d);
         if (!waits) return .next;
         if (member) {
-            try g.startMember(run, .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+            try g.startMember(run, .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_us = @as(DeadlineTicks, run.limits.max_wait_ms) * std.time.us_per_ms });
             return .next;
         }
-        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+        try g.suspendRun(run, "send-wait", .{ .id = from, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_us = @as(DeadlineTicks, run.limits.max_wait_ms) * std.time.us_per_ms });
         return .suspended;
     }
 
@@ -5040,7 +5048,7 @@ pub const Group = struct {
     /// `operation` for a Capability call.
     fn raiseDeadline(g: *Group, d: Deadline, where: ?[]const model.Pair) error{ Raised, OutOfMemory } {
         const gpa = g.gpa;
-        const after = model.scalar(gpa, .{ .quantity = .{ .number = model.Decimal.fromInt(@as(i64, @intCast(d.ms))), .unit = units.Unit.parse("ms") catch unreachable } }) catch return error.OutOfMemory;
+        const after = durationValue(gpa, d.us) catch return error.OutOfMemory;
         defer after.release();
         const yes = model.scalar(gpa, .{ .bool = true }) catch return error.OutOfMemory;
         defer yes.release();
@@ -5087,7 +5095,7 @@ pub const Group = struct {
         }
         // Each `from` names a Script, and each duration is exact.
         const now = micros(g.clock);
-        var deadline: i128 = never;
+        var deadline: DeadlineTicks = never;
         var fires: u32 = 0;
         var at: usize = 0;
         for (entry.branches, 1..) |b, number| switch (b) {
@@ -5098,7 +5106,7 @@ pub const Group = struct {
                 at += @as(usize, @intFromBool(w.from)) + w.captures;
             },
             .after => {
-                const ns = waitMillis(popped[at]) orelse return g.notDuration(popped[at]);
+                const ns = waitMicros(popped[at]) orelse return g.notDuration(popped[at]);
                 at += 1;
                 if (now + ns < deadline) {
                     deadline = now + ns;
@@ -5107,7 +5115,7 @@ pub const Group = struct {
             },
         };
         if (entry.timeout) {
-            const ns = waitMillis(popped[at]) orelse return g.notDuration(popped[at]);
+            const ns = waitMicros(popped[at]) orelse return g.notDuration(popped[at]);
             deadline = now + ns;
         }
         if (blockDeadline(frame)) |b| if (b.at <= now) {
@@ -5135,7 +5143,7 @@ pub const Group = struct {
                     held.* = .{ .when = .{ .from = from, .captures = captures } };
                 },
                 .after => {
-                    held.* = .{ .after = now + waitMillis(popped[at]).? };
+                    held.* = .{ .after = now + waitMicros(popped[at]).? };
                     at += 1;
                 },
             }
@@ -5451,7 +5459,7 @@ pub const Group = struct {
         if (blockDeadline(&run.frames.items[run.frames.items.len - 1])) |d| if (d.at <= p.deadline) {
             p.deadline = d.at;
             p.block = true;
-            p.after_ms = d.ms;
+            p.after_us = d.us;
         };
         g.waits.add(g.gpa, p) catch |e| {
             g.destroyPending(p);
@@ -5908,8 +5916,7 @@ pub const Group = struct {
                 out.writeAll(" value=") catch {};
                 display.writeTrace(out, outcome.vetoed) catch {};
             }
-            if (outcome == .suspended) if (run.waiting) |p| if (p.deadline != never and ((p.call == null and p.id.len == 0) or p.block)) {
-                const at: model.dates.Instant = .{ .seconds = @intCast(@divFloor(p.deadline, std.time.us_per_s)), .micros = @intCast(@mod(p.deadline, std.time.us_per_s)) };
+            if (outcome == .suspended) if (run.waiting) |p| if ((p.call == null and p.id.len == 0) or p.block) if (deadlineInstant(p.deadline)) |at| {
                 const text = model.dates.string(g.scratch.allocator(), model.dates.fields(at), true) catch "";
                 out.print(" until={s}", .{text}) catch {};
             };
@@ -6868,7 +6875,7 @@ pub const Group = struct {
             d.waits = true;
             d.function = fv.retain();
             try g.post(home, d);
-            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_ms = run.limits.max_wait_ms });
+            try g.suspendRun(run, "call-value-wait", .{ .id = id, .run = run, .deadline = micros(g.clock) + @as(i128, run.limits.max_wait_ms) * std.time.us_per_ms, .order = 0, .after_us = @as(DeadlineTicks, run.limits.max_wait_ms) * std.time.us_per_ms });
             return .suspended;
         }
         try g.callFunction(run, code.library, code.body, args);
@@ -8547,8 +8554,8 @@ pub const Group = struct {
             .timeout_start => {
                 const d = pop(frame);
                 defer d.release();
-                const ns = waitMillis(d) orelse return g.notDuration(d);
-                const own: Deadline = .{ .at = micros(g.clock) + ns, .ms = @intCast(@max(@divTrunc(ns, std.time.us_per_ms), 0)) };
+                const ns = waitMicros(d) orelse return g.notDuration(d);
+                const own: Deadline = .{ .at = micros(g.clock) + ns, .us = ns };
                 // An enclosing block's deadline that is no later stays.
                 const deadline = if (blockDeadline(frame)) |outer| (if (outer.at <= own.at) outer else own) else own;
                 try frame.stack.append(gpa, .{ .deadline = deadline });
@@ -8626,7 +8633,7 @@ pub const Group = struct {
             .wait => {
                 const d = pop(frame);
                 defer d.release();
-                const ns = waitMillis(d) orelse {
+                const ns = waitMicros(d) orelse {
                     if (d.data == .quantity) {
                         const e = try model.text(gpa, "s");
                         defer e.release();
@@ -9798,7 +9805,7 @@ pub const Group = struct {
             // abandon it, without committing the Segment first.
             if (pending) {
                 const after_ms = if (decl.max_pending_ms > 0) decl.max_pending_ms else run.limits.max_wait_ms;
-                const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_ms = after_ms };
+                const wait: Pending = .{ .run = run, .deadline = micros(g.clock) + @as(i128, after_ms) * std.time.us_per_ms, .order = 0, .call = call, .grant = grant_name, .operation = op_name, .decl = &granted.grant.capability.operations[index], .after_us = @as(DeadlineTicks, after_ms) * std.time.us_per_ms };
                 if (ins.op == .join_ask) try g.startMember(run, wait) else try g.suspendRun(run, "ask-wait", wait);
             }
         }
@@ -10572,6 +10579,49 @@ pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, l
 /// An Instant in microseconds since the epoch.
 pub fn micros(t: model.dates.Instant) i128 {
     return @as(i128, t.seconds) * std.time.us_per_s + t.micros;
+}
+
+/// A mathematical deadline is exposed as an Instant only inside its range.
+pub fn deadlineInstant(at: DeadlineTicks) ?model.dates.Instant {
+    if (at < -62135596800 * @as(DeadlineTicks, std.time.us_per_s) or at >= 253402300800 * @as(DeadlineTicks, std.time.us_per_s)) return null;
+    return .{ .seconds = @intCast(@divFloor(at, std.time.us_per_s)), .micros = @intCast(@mod(at, std.time.us_per_s)) };
+}
+
+/// Exact duration microseconds. A base-unit Decimal has at most 34 digits
+/// and a nonpositive exponent, so scaling by 10^6 fits well within i256.
+fn waitMicros(d: *const Value) ?DeadlineTicks {
+    if (d.data != .quantity) return null;
+    const q = d.data.quantity;
+    const second = units.Unit.parse("s") catch return null;
+    if (!q.unit.compatible(&second)) return null;
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const base = q.unit.toBase(arena.allocator(), q.number) catch return null;
+    var n: DeadlineTicks = @intCast(base.coefficient);
+    var e: i32 = base.exponent + 6;
+    while (e > 0) : (e -= 1) n *= 10;
+    if (e < -34) return 0;
+    if (e < 0) {
+        var divisor: DeadlineTicks = 1;
+        while (e < 0) : (e += 1) divisor *= 10;
+        const whole = @divTrunc(n, divisor);
+        const rest = @mod(n, divisor);
+        n = whole;
+        if (rest * 2 > divisor or (rest * 2 == divisor and @mod(whole, 2) == 1)) n += 1;
+    }
+    return if (base.negative) -n else n;
+}
+
+/// Timeout data prefers ms; use s when ms would exceed 34 digits.
+fn durationValue(gpa: Allocator, us: DeadlineTicks) !*Value {
+    for ([_]struct { exponent: i32, unit: []const u8 }{ .{ .exponent = -3, .unit = "ms" }, .{ .exponent = -6, .unit = "s" } }) |form| {
+        var n = @abs(us);
+        var exponent = form.exponent;
+        while (exponent < 0 and n % 10 == 0) : (exponent += 1) n /= 10;
+        if (n >= 10000000000000000000000000000000000) continue;
+        return model.scalar(gpa, .{ .quantity = .{ .number = .{ .coefficient = @intCast(n), .exponent = exponent, .negative = us < 0 }, .unit = units.Unit.parse(form.unit) catch unreachable } });
+    }
+    return error.OutOfMemory;
 }
 
 /// An exact duration in microseconds, rounded half to even, or null for

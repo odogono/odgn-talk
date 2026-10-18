@@ -27,8 +27,10 @@ pub const AbandonReason = enum {
     limit,
 };
 
+/// Mathematical microseconds, including deadlines outside the Clock range.
+pub const Ticks = i256;
 /// No deadline: a `wait for` that can wait for ever.
-pub const never: i128 = std.math.maxInt(i128);
+pub const never: Ticks = std.math.maxInt(Ticks);
 
 pub const Waits = struct {
     /// The Waits, in the order they began.
@@ -325,7 +327,7 @@ pub const Waits = struct {
             if (w.takeRun(run)) |bound| destroy(a, bound);
         } else {
             run.resume_with = with;
-            run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms };
+            run.waited = .{ .id = if (p.call) |c| c.id else p.id, .block = p.block, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_us = p.after_us };
         }
         return .{ .run = run, .member = p.member, .ready = true };
     }
@@ -358,7 +360,7 @@ pub const Waits = struct {
         try w.pending.ensureUnusedCapacity(a, 1);
         try join.members.ensureUnusedCapacity(a, 1);
         w.pending.appendAssumeCapacity(p);
-        join.members.appendAssumeCapacity(.{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_ms = p.after_ms } });
+        join.members.appendAssumeCapacity(.{ .pending = p, .waited = .{ .id = if (p.call) |c| c.id else p.id, .call = p.call, .grant = p.grant, .operation = p.operation, .decl = p.decl, .after_us = p.after_us } });
     }
 
     /// Takes a Wait out of the table, keeping the others in order, and
@@ -394,7 +396,7 @@ pub const Waits = struct {
 
     /// The Wait due first at `now`: by deadline, then by the order its
     /// deadline was set.
-    pub fn due(w: *const Waits, now: i128) ?*Pending {
+    pub fn due(w: *const Waits, now: Ticks) ?*Pending {
         var first: ?*Pending = null;
         for (w.pending.items) |p| {
             if (p.deadline > now) continue;
@@ -404,8 +406,8 @@ pub const Waits = struct {
     }
 
     /// The earliest deadline still pending.
-    pub fn next(w: *const Waits) ?i128 {
-        var best: ?i128 = null;
+    pub fn next(w: *const Waits) ?Ticks {
+        var best: ?Ticks = null;
         for (w.pending.items) |p| if (p.deadline != never and (best == null or p.deadline < best.?)) {
             // A preempted Run's Join hasn't reached its end, so its members'
             // waits aren't timers yet.
@@ -508,7 +510,7 @@ test "the Wait due first is by deadline, then by the order its deadline was set"
     w.take(&c);
     try t.expectEqual(@as(?*Pending, null), w.due(15));
     try t.expectEqual(&a, w.due(20).?);
-    try t.expectEqual(@as(?i128, 20), w.next());
+    try t.expectEqual(@as(?Ticks, 20), w.next());
 }
 
 test "a Join Member's Wait is referenced by its member until taken" {
@@ -533,7 +535,7 @@ test "a Join Member's Wait is referenced by its member until taken" {
     try t.expectEqual(@as(?*Pending, null), run.waiting);
     // A preempted Run's members aren't timers yet.
     run.continuing = true;
-    try t.expectEqual(@as(?i128, null), w.next());
+    try t.expectEqual(@as(?Ticks, null), w.next());
 }
 
 const TestRuns = struct {

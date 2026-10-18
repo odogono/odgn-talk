@@ -31,7 +31,7 @@ The state is defined abstractly. A Core may represent it any way it likes, as lo
   - an **iterator**: a list or range snapshot and a position, or a count left
   - a **replacement**: a text, its Matches, a position and the pieces so far
   - a **reader**: Bytes, a position and the bits left over from a bit field
-  - a **deadline**: a Timeout Block's deadline, as an Instant, and its duration in `ms` ([ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md))
+  - a **deadline**: a Timeout Block's mathematical microsecond deadline and its duration ([ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md))
 
 ## Code units
 
@@ -1095,7 +1095,7 @@ Cost Model **0**.
 | `send` | `20 + size(input) / 32` | `size(input)` | the message, whose size counts toward the receiver's mailbox |
 | `wait` | `10` | 0 |  |
 | `join` | `10` | `size(result)` |  |
-| `timeout` | `2` | `40` | a deadline holds an Instant and the block's duration in `ms` |
+| `timeout` | `2` | `40` | a deadline holds a mathematical microsecond count and the block's duration |
 | `catch-accept` | `1` | 0 |  |
 | `catch-next` | `1` | 0 |  |
 | `choose-offer` | `8 + count` | 0 |  |

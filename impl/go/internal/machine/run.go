@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/odogono/odgn-talk/impl/go/internal/generated"
 	"maps"
-	"math"
 	"math/big"
 	"slices"
 
@@ -387,7 +386,7 @@ func (r *Run) ExecuteHosted(slice int64, paid func(), send SendFunc, operation O
 			continue
 		}
 		foreign := r.foreignWaitCall(f, i)
-		if !Supported(i) || foreign && send == nil || r.unrepresentableWait(f, i) || sends(i.Op) && send == nil {
+		if !Supported(i) || foreign && send == nil || sends(i.Op) && send == nil {
 			r.Status = Blocked
 			break
 		}
@@ -1008,36 +1007,6 @@ func (r *Run) failClause() {
 	r.At = b.Code[caller.PC-1]
 	r.PC = b.First + caller.PC - 1
 	r.raise(failure("no match"))
-}
-
-// The embedding API uses time.Time for deadlines. Defer waits beyond its
-// representable range, without wrapping the timer or charging the instruction.
-func (r *Run) unrepresentableWait(f *Frame, i lower.Instruction) bool {
-	if r.ClockNS == nil {
-		return false
-	}
-	var deadline *big.Int
-	switch i.Op {
-	case generated.OpWait:
-		ns, err := waitNanos(f.Stack[len(f.Stack)-1])
-		if err != nil {
-			return false
-		}
-		deadline = new(big.Int).Add(r.ClockNS, ns)
-	case generated.OpWaitFor, generated.OpWaitForAny:
-		entry := f.Code.Unit.Events[i.Operands()[0].Index]
-		w, err := r.eventWait(i.Name, entry, f.Stack[len(f.Stack)-eventValueCount(entry):])
-		if err != nil || w.Deadline == nil {
-			return false
-		}
-		deadline = w.Deadline
-	default:
-		return false
-	}
-	seconds := new(big.Int).Div(deadline, big.NewInt(1e9))
-	// Go's signed seconds count starts at year 0001, 62135596800 seconds
-	// before the Unix epoch. Its upper bound must leave room for that offset.
-	return !seconds.IsInt64() || seconds.Cmp(big.NewInt(math.MaxInt64-62135596800)) > 0
 }
 
 // CurrentCode identifies the executing code unit independently of the Home Script.

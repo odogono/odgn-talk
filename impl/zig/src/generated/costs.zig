@@ -451,7 +451,7 @@ pub const costs: CostsTable = .{
             .key = "timeout",
             .fuel = "2",
             .alloc = "40",
-            .input = "a deadline holds an Instant and the block's duration in `ms`",
+            .input = "a deadline holds a mathematical microsecond count and the block's duration",
         },
         .{
             .key = "builtin.min",

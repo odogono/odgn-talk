@@ -131,7 +131,7 @@ was already stopped. Function Values made by the old code are stale afterwards.
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
-Saves are opaque `zig/12` bytes; native Go saves remain per-Core and cannot be
+Saves are opaque `zig/13` bytes; native Go saves remain per-Core and cannot be
 read by this backend. Restore compiles the supplied Libraries in its fresh
 guest, rebinds Grants and native Objects through the public callbacks, and
 returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and
@@ -372,8 +372,17 @@ against native Go with exact Trace, Fuel, typed Reports, futures and Inspection.
 Known execution differences remain outside the selection:
 allocation fault positions and Join accounting ([#1061](https://github.com/odogono/odgn-talk/issues/1061)),
 Send charging before delivery ([#1062](https://github.com/odogono/odgn-talk/issues/1062)),
-parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)),
-and out-of-range wait durations ([#1064](https://github.com/odogono/odgn-talk/issues/1064)).
+and parked-Run cancellation ([#1063](https://github.com/odogono/odgn-talk/issues/1063)).
+
+Valid `wait d` and timed message waits suspend and pay their charge even when
+their mathematical deadline lies outside the Clock's years 0001–9999. Such a
+wait has no inspectable `Until`; an unreachable future deadline has no
+`NextDeadline`, while one before the Clock range requests another Pump at the
+current reading. Earlier Timeout Blocks still win. Deadlines retain their
+exact ordering through save/restore, and Requests remain cancellable
+([#1064](https://github.com/odogono/odgn-talk/issues/1064),
+[#1260](https://github.com/odogono/odgn-talk/issues/1260)).
+
 Explicit Call answers/failures refuse foreign handles at admission on both Cores,
 including nested containers. The shared public Host checks that refusal leaves
 the Call pending and accepts a subsequent valid settlement. Native private-function

@@ -18,7 +18,7 @@ import (
 func runTriageBridgeCases(t *testing.T) []bridgeObservation {
 	t.Helper()
 	var out []bridgeObservation
-	for _, name := range []string{"broadcast during pump", "wait cancel committed", "wait cancel rollback", "wait cancel order", "clock refusal", "malformed immediate", "malformed start", "malformed fail"} {
+	for _, name := range []string{"broadcast during pump", "wait cancel committed", "wait cancel rollback", "wait cancel order", "wait range future", "wait range past", "wait range bounded", "wait range message", "wait range branches", "wait range timeout future", "wait range timeout past", "clock refusal", "malformed immediate", "malformed start", "malformed fail"} {
 		t.Run(name, func(t *testing.T) {
 			o := bridgeObservation{Name: "triage " + name}
 			var trace bridgeTrace
@@ -68,6 +68,42 @@ func runTriageBridgeCases(t *testing.T) []bridgeObservation {
 				}
 			}
 			switch name {
+			case "wait range future", "wait range past", "wait range bounded", "wait range message", "wait range branches", "wait range timeout future", "wait range timeout past":
+				body := "wait 1000000000000000000000000000000000 s"
+				switch name {
+				case "wait range past":
+					body = "wait -1000000000000000000000000000000000 s"
+				case "wait range bounded":
+					body = "with timeout of 1 s\n " + body + "\nend timeout"
+				case "wait range message":
+					body = "wait for ping or 1000000000000000000000000000000000 s"
+				case "wait range branches":
+					body = "wait for\n after -1000000000000000000000000000000000 s then\n return 1\n after -2000000000000000000000000000000000 s then\n return 2\nend wait"
+				case "wait range timeout future":
+					body = "with timeout of 1000000000000000000000000000000000 s\n wait 0 s\nend timeout"
+				case "wait range timeout past":
+					body = "try\n with timeout of -1000000000000000000000000000000000 s\n wait 0 s\n end timeout\ncatch e\n return e\nend try"
+				}
+				s := load("on nap\n "+body+"\n return 7\nend nap", talk.Limits{}, nil)
+				p := request(s, "nap")
+				pump(bridgeNow)
+				settled(p)
+				value(s.Counters())
+				pump(bridgeNow.Add(time.Second))
+				settled(p)
+				if name == "wait range message" {
+					if _, err := s.Deliver(talk.Message{Name: "ping"}); err != nil {
+						t.Fatal(err)
+					}
+					pump(bridgeNow.Add(2 * time.Second))
+					settled(p)
+				}
+				if runs := g.Inspect().Scripts[0].Runs; len(runs) > 0 {
+					s.CancelRun(runs[0].ID)
+					pump(bridgeNow.Add(2 * time.Second))
+					settled(p)
+				}
+				value(s.Counters())
 			case "broadcast during pump":
 				s := load("on go\n return 7\nend go", talk.Limits{}, nil)
 				queued := false

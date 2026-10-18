@@ -85,6 +85,7 @@ test {
     _ = @import("machine/elements_test.zig");
     _ = @import("machine/waits.zig");
     _ = @import("machine/wait_for_guard_test.zig");
+    _ = @import("machine/wait_range_test.zig");
     _ = @import("machine/list_write_test.zig");
     _ = @import("machine/text_concat_test.zig");
     _ = notify;

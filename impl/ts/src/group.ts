@@ -36,7 +36,7 @@ import {
   type HostErrorCode,
   type ScriptError as HostScriptError,
 } from './errors';
-import { formatInstant } from './dates';
+import { formatInstant, isInstant } from './dates';
 import { lowerTree } from './lowering';
 import {
   defaultLimits,
@@ -3898,7 +3898,13 @@ export class Group {
           ? 'sliced'
           : 'idle';
     this.rewound = false;
-    const next = this.waits.next();
+    const mathematicalNext = this.waits.next();
+    const next =
+      mathematicalNext === null || isInstant(mathematicalNext)
+        ? mathematicalNext
+        : mathematicalNext < now
+          ? now
+          : null;
     this.trace(
       recordLine(
         'pumped',
@@ -4221,7 +4227,7 @@ export class Group {
           ? { delivery: running.delivery.id }
           : {}),
         end,
-        ...(until === undefined ? {} : { until }),
+        ...(until === undefined || !isInstant(until) ? {} : { until }),
         calls: end === 'stop' ? [] : (this.waitView(running).calls ?? []),
       });
     const start: [string, string | null][] =
@@ -4319,7 +4325,12 @@ export class Group {
                 ? 'wait-for-any'
                 : suspendReasons[suspension.k],
             ],
-            ['until', deadline === null ? null : formatInstant(deadline)],
+            [
+              'until',
+              deadline === null || !isInstant(deadline)
+                ? null
+                : formatInstant(deadline),
+            ],
           ],
         ),
       );
@@ -4908,7 +4919,7 @@ export class Group {
         sus.k === 'wait-for' && sus.any
           ? 'wait-for-any'
           : suspendReasons[sus.k],
-      ...(until === undefined ? {} : { until }),
+      ...(until === undefined || !isInstant(until) ? {} : { until }),
       ...(calls.length ? { calls } : {}),
     };
   }
