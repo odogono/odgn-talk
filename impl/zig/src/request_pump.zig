@@ -282,13 +282,16 @@ pub const Reader = struct {
         return r.data[r.at - 1];
     }
     pub fn uint(r: *Reader) Error!u64 {
-        var n: u64 = 0;
+        return r.leb(u64);
+    }
+    fn leb(r: *Reader, comptime T: type) Error!T {
+        var n: T = 0;
         var shift: u7 = 0;
         var count: usize = 0;
         while (count < 10) : (count += 1) {
             const b = try r.byte();
-            if (shift == 63 and b > 1) return error.Malformed;
-            n |= @as(u64, b & 127) << @intCast(shift);
+            if (shift == 63 and b > std.math.maxInt(T) >> 63) return error.Malformed;
+            n |= @as(T, b & 127) << @intCast(shift);
             if (b < 128) {
                 if (count > 0 and b == 0) return error.Malformed;
                 return n;
@@ -296,6 +299,11 @@ pub const Reader = struct {
             shift += 7;
         }
         return error.Malformed;
+    }
+    fn negativeMagnitude(r: *Reader) Error!u65 {
+        const n = try r.leb(u65);
+        if (n == 0 or n > @as(u65, 1) << 64) return error.Malformed;
+        return n;
     }
     pub fn bytes(r: *Reader) Error![]const u8 {
         const n = try r.uint();
@@ -315,7 +323,7 @@ pub const Reader = struct {
             switch (t) {
                 0x00, 0x01, 0x02 => {},
                 0x03, 0x0b => _ = try r.uint(),
-                0x10 => if (try r.uint() == 0) return error.Malformed,
+                0x10 => _ = try r.negativeMagnitude(),
                 0x04, 0x05, 0x08, 0x0c, 0x0d, 0x12 => _ = try r.bytes(),
                 0x06, 0x07, 0x11, 0x13 => {
                     const n = try r.uint();
@@ -392,8 +400,8 @@ pub fn intOf(span: []const u8) Error!?i64 {
     var r = whole(span);
     const t = try r.byte();
     if (t != tag.integer and t != tag.negative) return error.Malformed;
-    const n = try r.uint();
-    if (!r.done() or (t == tag.negative and n == 0)) return error.Malformed;
+    const n = if (t == tag.negative) try r.negativeMagnitude() else @as(u65, try r.uint());
+    if (!r.done()) return error.Malformed;
     if (t == tag.integer) return if (n > std.math.maxInt(i64)) null else @intCast(n);
     return if (n > @as(u64, 1) << 63) null else @intCast(-@as(i128, n));
 }
@@ -482,4 +490,49 @@ test "instants round-trip through the writer and reader" {
         try w.instant(t);
         try std.testing.expectEqual(t, try instantOf(w.out.items));
     }
+}
+
+test "shared binary Value vectors cross the envelope" {
+    const a = std.testing.allocator;
+    const Vector = struct { json: []const u8, hex: []const u8 };
+    const parsed = try std.json.parseFromSlice([]Vector, a, @embedFile("request-pump-vectors"), .{});
+    defer parsed.deinit();
+    for (parsed.value) |vector| {
+        const want = try a.alloc(u8, vector.hex.len / 2);
+        defer a.free(want);
+        _ = try std.fmt.hexToBytes(want, vector.hex);
+        const v = try @import("encoding.zig").decode(a, vector.json, .{});
+        defer v.release();
+        var w = Writer.init(a);
+        defer w.deinit();
+        try w.value(v, .{});
+        try std.testing.expectEqualSlices(u8, want, w.out.items);
+        var r: Reader = .{ .data = want };
+        const span = try r.skip();
+        try std.testing.expect(r.done());
+        const back = try binary_value.decode(a, span, .{});
+        defer back.release();
+        const again = try binary_value.encode(a, back, .{});
+        defer a.free(again);
+        try std.testing.expectEqualSlices(u8, want, again);
+    }
+}
+
+test "envelope integer bounds and canonical magnitudes" {
+    for ([_][]const u8{
+        &.{ 0x10, 0 }, // Negative zero.
+        &.{ 0x10, 129, 128, 128, 128, 128, 128, 128, 128, 128, 2 }, // 2^64 + 1.
+        &.{ 0x10, 128, 128, 128, 128, 128, 128, 128, 128, 128, 3 }, // Above 2^64.
+        &.{ 0x10, 128, 128, 128, 128, 128, 128, 128, 128, 128, 130, 0 }, // Overlong 2^64.
+        &.{ 0x10, 128, 128, 128, 128, 128, 128, 128, 128, 128 }, // Truncated.
+        &.{ 0x10, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128 }, // Unterminated.
+        &.{ 0x03, 128, 128, 128, 128, 128, 128, 128, 128, 128, 2 }, // Positive 2^64.
+        &.{ 0x0b, 128, 128, 128, 128, 128, 128, 128, 128, 128, 2 }, // Instant above u64.
+        &.{ 0x06, 128, 128, 128, 128, 128, 128, 128, 128, 128, 2 }, // Count above u64.
+    }) |wire| {
+        var r: Reader = .{ .data = wire };
+        try std.testing.expectError(error.Malformed, r.skip());
+    }
+    const boundary = [_]u8{ 0x10, 128, 128, 128, 128, 128, 128, 128, 128, 128, 2 };
+    try std.testing.expectEqual(@as(?i64, null), try intOf(&boundary));
 }

@@ -361,6 +361,20 @@ func (r *zbReader) uvarint() (uint64, error) {
 	return n, nil
 }
 
+// Negative items allow one magnitude beyond uint64: exactly 2^64.
+func (r *zbReader) negativeMagnitude() error {
+	boundary := [...]byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02}
+	if bytes.HasPrefix(r.d[r.at:], boundary[:]) {
+		r.at += len(boundary)
+		return nil
+	}
+	n, err := r.uvarint()
+	if err != nil || n == 0 {
+		return errZigBinary
+	}
+	return nil
+}
+
 func (r *zbReader) bytes() ([]byte, error) {
 	n, err := r.uvarint()
 	if err != nil || n > uint64(len(r.d)-r.at) {
@@ -380,8 +394,10 @@ func (r *zbReader) skip() ([]byte, error) {
 		}
 		switch t {
 		case 0x00, 0x01, 0x02:
-		case 0x03, 0x0b, 0x10:
+		case 0x03, 0x0b:
 			_, err = r.uvarint()
+		case 0x10:
+			err = r.negativeMagnitude()
 		case 0x04, 0x05, 0x08, 0x0c, 0x0d, 0x12:
 			_, err = r.bytes()
 		case 0x06, 0x07, 0x11, 0x13:

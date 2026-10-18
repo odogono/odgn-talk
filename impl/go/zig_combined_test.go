@@ -50,6 +50,29 @@ func TestZigCombinedPublicTargets(t *testing.T) {
 	})
 }
 
+func TestZigCombinedIntegerBoundary(t *testing.T) {
+	zigCombinedLayouts(t, func(t *testing.T) {
+		g := New().NewGroup(GroupOptions{})
+		s, err := g.Load(LoadOptions{Name: "s", Source: "on echo v\n return v\nend echo"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, number := range []string{"-18446744073709551615", "-18446744073709551616", "-18446744073709551617"} {
+			v, err := DecodeValue([]byte(`{"$dec":"`+number+`"}`), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, pending, _, err := s.RequestPump(nil, Message{Name: "echo", Args: []Value{v}}, time.Unix(1, 0), PumpOptions{})
+			if err != nil {
+				t.Fatalf("%s: %v", number, err)
+			}
+			if back, err := pending.Result(); err != nil || !back.Equal(v) {
+				t.Fatalf("%s: %v: %v", number, back, err)
+			}
+		}
+	})
+}
+
 func TestZigCombinedRequestAdmitsOnceAndPumpsOnce(t *testing.T) {
 	zigCombinedLayouts(t, func(t *testing.T) {
 		ready := 0
