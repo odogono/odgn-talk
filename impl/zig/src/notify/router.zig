@@ -6,6 +6,7 @@
 //! over talk.h, as talk.go's `notify` package is over talk.go, and the Core
 //! takes no part in it.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const builtin = @import("builtin");
 const talk = @import("../talk.zig");
 const model = @import("../value.zig");
@@ -119,7 +120,7 @@ pub const Router = struct {
     /// registered a watch from it; by Script, in its Group's load order;
     /// then by named Grant and watch name, in code-point order.
     fn sort(r: *Router) void {
-        std.mem.sort(*Watch, r.watches.items, r, struct {
+        sorting.stable(*Watch, r.watches.items, r, struct {
             fn less(router: *Router, x: *Watch, y: *Watch) bool {
                 const gx = router.placeOf(x.group) orelse 0;
                 const gy = router.placeOf(y.group) orelse 0;
@@ -326,7 +327,7 @@ pub const Router = struct {
         if (keys_changed.len == 0) return;
         const sorted = try r.gpa.dupe([]const u8, keys_changed);
         defer r.gpa.free(sorted);
-        std.mem.sort([]const u8, sorted, {}, lessText);
+        sorting.stable([]const u8, sorted, {}, lessText);
         var i: usize = 0;
         while (i < r.watches.items.len) {
             const w = r.watches.items[i];

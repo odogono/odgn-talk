@@ -388,9 +388,29 @@ test "frame reuse across recursive Runs leaves captures intact and retention sta
     try std.testing.expectEqual(@as(usize, 0), memory.used);
 }
 
-fn callStorageAllocations(parent: Allocator) !void {
+/// A parent that never resizes in place. Whether the shared testing
+/// allocator can, depends on what earlier tests left in it, which would
+/// change how many allocations a run makes.
+const Unresizable = struct {
+    child: Allocator,
+
+    fn allocator(u: *Unresizable) Allocator {
+        return .{ .ptr = u, .vtable = &.{ .alloc = alloc, .resize = Allocator.noResize, .remap = Allocator.noRemap, .free = free } };
+    }
+    fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
+        const u: *Unresizable = @ptrCast(@alignCast(ctx));
+        return u.child.rawAlloc(len, alignment, ret_addr);
+    }
+    fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
+        const u: *Unresizable = @ptrCast(@alignCast(ctx));
+        u.child.rawFree(memory, alignment, ret_addr);
+    }
+};
+
+fn callStorageAllocations(failing: Allocator) !void {
     const machine = @import("machine.zig");
-    var memory: GroupAllocator = .init(parent, 1 << 20);
+    var parent: Unresizable = .{ .child = failing };
+    var memory: GroupAllocator = .init(parent.allocator(), 1 << 20);
     defer memory.deinit();
     var group: machine.Group = .init(memory.allocator(), null);
     defer group.deinit();

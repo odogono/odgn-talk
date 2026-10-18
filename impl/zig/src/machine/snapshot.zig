@@ -11,6 +11,7 @@
 //! the internal values a dispatch activation shares (iterators, readers and
 //! replacements) are saved once and referred to after.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const machine = @import("machine.zig");
 const model = @import("../value.zig");
@@ -2539,7 +2540,7 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(a);
         try runs.appendSlice(a, s.live.items);
-        std.mem.sort(*Run, runs.items, {}, struct {
+        sorting.stable(*Run, runs.items, {}, struct {
             fn less(_: void, p: *Run, q: *Run) bool {
                 return runNumber(p.id) < runNumber(q.id);
             }
@@ -2599,9 +2600,9 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
     }
     g.releaseInputs(g.inputs.items);
     g.inputs.clearRetainingCapacity();
-    std.mem.sort(u64, dropped.items, {}, std.sort.asc(u64));
+    sorting.stable(u64, dropped.items, {}, std.sort.asc(u64));
     for (dropped.items) |id| try out.dropped.append(a, try std.fmt.allocPrint(k, "d{d}", .{id}));
-    std.mem.sort([]const u8, out.abandoned.items, {}, struct {
+    sorting.stable([]const u8, out.abandoned.items, {}, struct {
         fn less(_: void, p: []const u8, q: []const u8) bool {
             return machine.callOrder(p, q);
         }

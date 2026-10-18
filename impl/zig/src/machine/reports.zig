@@ -7,6 +7,7 @@
 const std = @import("std");
 const model = @import("../value.zig");
 const objects = @import("objects.zig");
+const id_text = @import("../ids.zig");
 const Value = model.Value;
 
 /// Where a Run raised its error or faulted.
@@ -191,8 +192,9 @@ pub const Reports = struct {
         return r.arena.allocator().dupe(u8, s);
     }
 
-    pub fn print(r: *Reports, comptime fmt: []const u8, args: anytype) ![]const u8 {
-        return std.fmt.allocPrint(r.arena.allocator(), fmt, args);
+    /// An id the reports hold, such as `d12`.
+    pub fn id(r: *Reports, comptime prefix: []const u8, n: u64) ![]const u8 {
+        return id_text.alloc(r.arena.allocator(), "", prefix, n);
     }
 
     /// A reference to `v` the reports hold.

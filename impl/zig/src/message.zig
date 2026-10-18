@@ -10,6 +10,7 @@
 //! `ref`) are the transport's, outside parity: they are answered
 //! `{"kind":"protocol error","detail":…}` and the instance carries on.
 const std = @import("std");
+const sorting = @import("sort.zig");
 const builtin = @import("builtin");
 const model = @import("value.zig");
 const display = @import("display.zig");
@@ -165,7 +166,7 @@ const GroupEntry = struct {
     /// Actual abandonments in Call order, borrowed from `started`.
     fn abandonedIds(e: *GroupEntry, listed: *std.ArrayList([]const u8)) Allocator.Error!void {
         for (e.started.items) |id| if (e.isAbandoned(id)) try listed.append(e.gpa, id);
-        std.mem.sort([]const u8, listed.items, {}, struct {
+        sorting.stable([]const u8, listed.items, {}, struct {
             fn less(_: void, x: []const u8, y: []const u8) bool {
                 return machine.callOrder(x, y);
             }
@@ -5042,6 +5043,9 @@ fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
     }
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
+    // A one-Run Pump's reply is about 250 bytes; growing to it costs more
+    // than the bytes.
+    try w.out.ensureTotalCapacity(s.gpa, 512);
     if (!positional) {
         try w.begin(&.{}, false);
         try w.key("state");
@@ -5129,6 +5133,7 @@ fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, 
     const positional = b.layout == .fields;
     var w = rp.Writer.init(s.gpa);
     defer w.deinit();
+    try w.out.ensureTotalCapacity(s.gpa, 64 + if (fin.ok) |ok| ok.len else 0);
     try w.header(b.layout);
     if (positional) try w.byte(@backingInt(rp.Message.completion));
     try w.begin(rp.Message.completion.fields(), positional);

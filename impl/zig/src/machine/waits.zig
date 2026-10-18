@@ -3,6 +3,7 @@
 //! returns the Run and Join Member that answered; scheduling and Trace writes
 //! belong to the Group.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const machine = @import("machine.zig");
 const Pending = machine.Pending;
@@ -172,7 +173,7 @@ pub const Waits = struct {
             defer ids.deinit(a);
             var it = e.table.issued_calls.runs.keyIterator();
             while (it.next()) |id| try ids.append(a, id.*);
-            std.mem.sort([]const u8, ids.items, {}, struct {
+            sorting.stable([]const u8, ids.items, {}, struct {
                 fn less(_: void, x: []const u8, y: []const u8) bool {
                     return std.mem.lessThan(u8, x, y);
                 }
@@ -281,7 +282,7 @@ pub const Waits = struct {
         var ids: std.ArrayList([]const u8) = .empty;
         errdefer ids.deinit(a);
         for (calls) |c| if (w.call(c.id) != null) try ids.append(a, c.id);
-        std.mem.sort([]const u8, ids.items, {}, struct {
+        sorting.stable([]const u8, ids.items, {}, struct {
             fn less(_: void, x: []const u8, y: []const u8) bool {
                 return machine.callOrder(x, y);
             }

@@ -4,6 +4,7 @@
 //! Every diagnostic is reported, ordered by position and then by the order of
 //! the codes in the catalogue.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const ast = @import("../syntax/ast.zig");
 const lexer = @import("../syntax/lexer.zig");
@@ -303,7 +304,7 @@ pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocato
     var c: Checker = .{ .a = arena, .tree = tree, .context = context };
     try c.run();
     var lines = try lexer.Lines.init(arena, tree.source);
-    std.mem.sort(Diagnostic, c.diagnostics.items, &lines, Diagnostic.lessThan);
+    sorting.stable(Diagnostic, c.diagnostics.items, &lines, Diagnostic.lessThan);
     // One per construct: the same code at the same position once.
     var out: std.ArrayList(Diagnostic) = .empty;
     for (c.diagnostics.items) |d| {
