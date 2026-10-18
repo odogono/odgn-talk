@@ -2,11 +2,11 @@
 // Session and the clock that pumps it, applies the page's reader input, and
 // tells the page what to draw. Nothing here touches the DOM, so tests drive
 // it directly; `play.worker.ts` connects it to the worker's messages.
+import type { DeepReadonly } from './readonly';
 import {
   type Envelope,
   type Reply,
 } from '@northtalk/tooling/worker-supervisor';
-import { type Immutable } from 'immer';
 import { type Element, type Project } from './model';
 import { PlaySession, type PendingPrompt } from './play';
 import {
@@ -24,7 +24,7 @@ const wallClock = () =>
 
 /** An Element as the page receives it: a group without its members. */
 // Views cross `postMessage` as copies, so the readonly live node can go as is.
-const withoutMembers = (element: Immutable<Element>): Element =>
+const withoutMembers = (element: DeepReadonly<Element>): Element =>
   (element.kind === 'group' ? { ...element, members: [] } : element) as Element;
 
 /**
@@ -76,7 +76,7 @@ export class PlayHost {
   #sentPage: PlaySession['page'] | undefined;
   #sentState = '';
   #pageHandles = { keyDown: false, keyUp: false };
-  #edits = new WeakMap<Immutable<Element>, number>();
+  #edits = new WeakMap<DeepReadonly<Element>, number>();
   #problems = 0;
   #prompts = new WeakMap<PendingPrompt, number>();
   #nextPrompt = 1;

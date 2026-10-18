@@ -1,3 +1,4 @@
+import type { DeepReadonly } from './readonly';
 import { allElements, findElement, outerElement } from './tree/rules';
 // The Stack editor's state and edits (#749): which Page is showing, which
 // Elements are selected, and the moves, resizes, renames and Page edits the
@@ -8,7 +9,6 @@ import {
   signal,
   type ReadonlySignal,
 } from '@preact/signals-core';
-import { type Immutable } from 'immer';
 import { equal, ProjectTree, type TreeJournal } from './tree/project-tree';
 import {
   elementNamesTaken,
@@ -69,9 +69,9 @@ const namesExcept = (
 
 // Without a Project, only the Page's own Elements and reserved names are known.
 const elementNamesNear = (
-  page: Immutable<Page>,
+  page: DeepReadonly<Page>,
   current?: string,
-  project?: Immutable<Project>,
+  project?: DeepReadonly<Project>,
 ) =>
   project
     ? elementNamesTaken(project, page, current)
@@ -85,10 +85,10 @@ const elementNamesNear = (
  * Page. `current` is the Element's own name, which it may keep.
  */
 export const checkElementName = (
-  page: Immutable<Page>,
+  page: DeepReadonly<Page>,
   name: string,
   current?: string,
-  project?: Immutable<Project>,
+  project?: DeepReadonly<Project>,
 ): NameCheck =>
   checkName(
     name,
@@ -99,7 +99,7 @@ export const checkElementName = (
 
 /** Checks `name` for a Page: an identifier, unique within the Project. */
 export const checkPageName = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   name: string,
   current?: string,
 ): NameCheck =>
@@ -110,9 +110,9 @@ export const checkPageName = (
  * already has it.
  */
 export const labelSuggestion = (
-  page: Immutable<Page>,
-  button: Immutable<ButtonElement>,
-  project?: Immutable<Project>,
+  page: DeepReadonly<Page>,
+  button: DeepReadonly<ButtonElement>,
+  project?: DeepReadonly<Project>,
 ): string | undefined => {
   const suggestion = freshName(
     suggestName(button.label),
@@ -143,7 +143,7 @@ export const MIN_PAGE_HEIGHT = 160;
 type Box = Pick<Element, 'height' | 'left' | 'top' | 'width'>;
 
 /** The smallest size a resize leaves; a line may be flat in either direction. */
-const minimumSize = (element: Immutable<Element>) =>
+const minimumSize = (element: DeepReadonly<Element>) =>
   element.kind === 'line' ? 0 : 8;
 
 /**
@@ -195,14 +195,15 @@ type EditorPosition = {
   selection: string[];
 };
 export type EditorState = EditorPosition & {
-  project: Immutable<Project>;
+  project: DeepReadonly<Project>;
   revision: number;
 };
 type EditorTransaction = EditorPosition & {
-  readonly project: Immutable<Project>;
+  readonly project: DeepReadonly<Project>;
   readonly tree: ProjectTree;
 };
-type Root = Immutable<EditorState>;
+type Root = DeepReadonly<EditorState>;
+type PositionView = DeepReadonly<EditorPosition & { project: Project }>;
 type HistoryEntry = {
   after: EditorPosition;
   afterContent: number;
@@ -216,18 +217,17 @@ type PendingEdit = {
   changes: TreeJournal;
   keys: ReadonlySet<number>;
 };
-const copyPosition = (state: Immutable<EditorPosition>): EditorPosition => ({
+const copyPosition = (state: DeepReadonly<EditorPosition>): EditorPosition => ({
   pageIndex: state.pageIndex,
   pageSelected: state.pageSelected,
   scope: [...state.scope],
   selection: [...state.selection],
 });
-export const pageOf = (
-  state: Immutable<EditorPosition & { project: Immutable<Project> }>,
-) => state.project.pages[state.pageIndex]!;
+export const pageOf = (state: PositionView) =>
+  state.project.pages[state.pageIndex]!;
 const scopeElements = (
-  state: Immutable<EditorPosition & { project: Immutable<Project> }>,
-): readonly Immutable<Element>[] => {
+  state: PositionView,
+): readonly DeepReadonly<Element>[] => {
   let elements = pageOf(state).elements;
   for (const id of state.scope) {
     const group = elements.find(e => e.id === id);
@@ -239,11 +239,11 @@ const scopeElements = (
   return elements;
 };
 const scopeParent = (
-  state: Immutable<EditorPosition & { project: Immutable<Project> }>,
-): Immutable<Page | GroupElement> => {
-  let owner: Immutable<Page | GroupElement> = pageOf(state);
+  state: PositionView,
+): DeepReadonly<Page | GroupElement> => {
+  let owner: DeepReadonly<Page | GroupElement> = pageOf(state);
   for (const id of state.scope) {
-    const group: Immutable<Element> | undefined = (
+    const group: DeepReadonly<Element> | undefined = (
       'elements' in owner ? owner.elements : owner.members
     ).find(element => element.id === id);
     if (group?.kind !== 'group') {
@@ -253,13 +253,10 @@ const scopeParent = (
   }
   return owner;
 };
-export const selectedOf = (
-  state: Immutable<EditorPosition & { project: Immutable<Project> }>,
-) => scopeElements(state).filter(e => state.selection.includes(e.name));
-const elementOf = (
-  state: Immutable<EditorPosition & { project: Immutable<Project> }>,
-  name: string,
-) => findElement(pageOf(state).elements, name);
+export const selectedOf = (state: PositionView) =>
+  scopeElements(state).filter(e => state.selection.includes(e.name));
+const elementOf = (state: PositionView, name: string) =>
+  findElement(pageOf(state).elements, name);
 export type LayerOrder = 'forward' | 'backward' | 'front' | 'back';
 const CASCADE = 20;
 
@@ -295,7 +292,7 @@ export class StackEditor {
   generation = 0;
   #nextId = 0;
 
-  constructor(project: Immutable<Project>) {
+  constructor(project: DeepReadonly<Project>) {
     this.#reserveIds(project);
     this.#tree = new ProjectTree(project, () => ++this.#nextId);
     this.#state = signal<Root>(this.#view());
@@ -319,7 +316,7 @@ export class StackEditor {
     );
     this.#observeTree();
   }
-  #reserveIds(project: Immutable<Project>): void {
+  #reserveIds(project: DeepReadonly<Project>): void {
     for (const page of project.pages) {
       this.#nextId = Math.max(this.#nextId, page.id ?? 0);
       for (const element of allElements(page.elements)) {
@@ -386,10 +383,10 @@ export class StackEditor {
       }
     });
   }
-  get project(): Immutable<Project> {
+  get project(): DeepReadonly<Project> {
     return this.#tree.project;
   }
-  snapshot(): Immutable<Project> {
+  snapshot(): DeepReadonly<Project> {
     return this.#tree.snapshot();
   }
   stamp(): { generation: number; revision: number } {
@@ -403,7 +400,7 @@ export class StackEditor {
   capture(): {
     contentState: number;
     generation: number;
-    project: Immutable<Project>;
+    project: DeepReadonly<Project>;
     revision: number;
   } {
     return {
@@ -469,7 +466,7 @@ export class StackEditor {
     }
     this.#publish();
   }
-  replaceProject(project: Immutable<Project>): void {
+  replaceProject(project: DeepReadonly<Project>): void {
     batch(() => {
       this.generation++;
       this.#sequence++;
@@ -619,21 +616,21 @@ export class StackEditor {
   get pageIndex(): number {
     return this.state.value.pageIndex;
   }
-  get page(): Immutable<Page> {
+  get page(): DeepReadonly<Page> {
     return this.currentPage.value.page;
   }
   get selection(): readonly string[] {
     return this.state.value.selection;
   }
-  get selected(): Immutable<Element[]> {
+  get selected(): DeepReadonly<Element[]> {
     return this.selectedElements.value;
   }
-  element(name: string): Immutable<Element> | undefined {
+  element(name: string): DeepReadonly<Element> | undefined {
     return findElement(this.page.elements, name);
   }
 
   /** Text edits for a text Element on the showing Page, one undo step each. */
-  textHistory(element: Immutable<TextElement>): TextHistory {
+  textHistory(element: DeepReadonly<TextElement>): TextHistory {
     return new EditorTextHistory(this, element);
   }
 
@@ -682,7 +679,7 @@ export class StackEditor {
   get canUngroup(): boolean {
     return !this.readOnly && this.selected.some(e => e.kind === 'group');
   }
-  selectable(name: string): Immutable<Element> | undefined {
+  selectable(name: string): DeepReadonly<Element> | undefined {
     return outerElement(scopeElements(this.state.value), name);
   }
   enterGroup(name: string): void {
@@ -745,7 +742,7 @@ export class StackEditor {
   }
 
   /** Adds an Element of `kind` named like `button1`, and selects it. */
-  addElement(kind: ElementKind): Immutable<Element> {
+  addElement(kind: ElementKind): DeepReadonly<Element> {
     return this.edit(edit => {
       const page = pageOf(edit);
       const step = (page.elements.length % 10) * CASCADE;
@@ -927,7 +924,7 @@ export class StackEditor {
   }
 
   /** Adds a Page after the showing one, and shows it. */
-  addPage(): Immutable<Page> {
+  addPage(): DeepReadonly<Page> {
     return this.edit(edit => {
       const page = edit.tree.addPage(edit.pageIndex);
       edit.pageIndex++;
@@ -999,7 +996,7 @@ export class StackEditor {
     this.edit(draft => {
       const elements = [...scopeElements(draft)];
       const selection = new Set(draft.selection);
-      const selected = (element: Immutable<Element>) =>
+      const selected = (element: DeepReadonly<Element>) =>
         selection.has(element.name);
       if (order === 'front' || order === 'back') {
         const chosen = elements.filter(selected);
@@ -1030,10 +1027,10 @@ export class StackEditor {
 }
 
 class EditorTextHistory implements TextHistory {
-  #last: Immutable<TextElement>;
+  #last: DeepReadonly<TextElement>;
   constructor(
     readonly editor: StackEditor,
-    element: Immutable<TextElement>,
+    element: DeepReadonly<TextElement>,
   ) {
     const current = editor.element(element.name);
     this.#last = current?.kind === 'text' ? current : element;
@@ -1044,7 +1041,7 @@ class EditorTextHistory implements TextHistory {
   get canRedo(): boolean {
     return this.editor.canRedo;
   }
-  get element(): Immutable<TextElement> {
+  get element(): DeepReadonly<TextElement> {
     const found = allElements(this.editor.page.elements).find(
       e => e.id === this.#last.id,
     );
@@ -1053,7 +1050,7 @@ class EditorTextHistory implements TextHistory {
     }
     return this.#last;
   }
-  set(text: Immutable<RichText>): void {
+  set(text: DeepReadonly<RichText>): void {
     const target = this.element;
     const next = renormalizeRichText(text);
     if (

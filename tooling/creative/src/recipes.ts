@@ -1,7 +1,7 @@
+import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 // Recipes produce ordinary source. Placement is derived from the Core's lossless
 // parse, never from a textual search for a handler or its closing `end`.
-import { type Immutable } from 'immer';
 import {
   parseSource,
   type SyntaxElement,
@@ -31,7 +31,7 @@ export type RecipeTarget = {
   reference: string;
 };
 export const recipeTargets = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   owner: ScriptOwner,
   kind: RecipeKind,
 ): RecipeTarget[] => {
@@ -55,7 +55,7 @@ export const recipeTargets = (
       element =>
         kind !== 'text' || element.kind === 'button' || element.kind === 'text',
     )
-    .map((element: Immutable<Element>) => ({
+    .map((element: DeepReadonly<Element>) => ({
       name: element.name,
       reference: element === owner ? 'me' : element.name,
       ...(element.kind === 'button'

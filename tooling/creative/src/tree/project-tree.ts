@@ -1,4 +1,4 @@
-import { castDraft, freeze, type Draft, type Immutable } from 'immer';
+import type { DeepReadonly, Mutable } from '../readonly';
 import {
   createElement,
   createPage,
@@ -40,8 +40,8 @@ const domain = <T>(action: () => T): T => {
   }
 };
 
-export type TreeOwner = Immutable<Project | Page | Element>;
-export type TreeParent = Immutable<Page | GroupElement>;
+export type TreeOwner = DeepReadonly<Project | Page | Element>;
+export type TreeParent = DeepReadonly<Page | GroupElement>;
 type Owner = Project | Page | Element;
 type Parent = Page | GroupElement;
 type ChildrenKey = 'pages' | 'elements' | 'members';
@@ -51,7 +51,7 @@ type SavedNode = {
   key: number;
   value: Record<string, unknown>;
 };
-export type TreeChange = Immutable<
+export type TreeChange = DeepReadonly<
   | {
       after: unknown;
       before: unknown;
@@ -74,21 +74,21 @@ export type TreeChangeSet = {
   readonly changes: TreeJournal;
   readonly designWidth: boolean;
   readonly owners: readonly TreeOwner[];
-  readonly pages: readonly Immutable<Page>[];
+  readonly pages: readonly DeepReadonly<Page>[];
   readonly structure: boolean;
 };
 export type TreeHooks = {
   /** Must authorize before any size-dependent copying or staging. */
   authorize?: (fuel: number) => void;
   /** The root is not indexed/published yet. Install parents before children. */
-  install?: (root: Immutable<Element>, parent: TreeParent) => void;
+  install?: (root: DeepReadonly<Element>, parent: TreeParent) => void;
 };
 export type CloneResult = {
   readonly pairs: readonly (readonly [
-    Immutable<Element>,
-    Immutable<Element>,
+    DeepReadonly<Element>,
+    DeepReadonly<Element>,
   ])[];
-  readonly root: Immutable<Element>;
+  readonly root: DeepReadonly<Element>;
 };
 
 export const equal = (a: unknown, b: unknown): boolean => {
@@ -121,6 +121,16 @@ const geometryCopy = (node: Element): Element =>
     : { ...node };
 const detached = <T>(value: T): T =>
   value !== null && typeof value === 'object' ? structuredClone(value) : value;
+/** Freeze detached plain-data snapshots and history, never live owners. */
+const freeze = <T>(value: T): T => {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) {
+      freeze(child);
+    }
+  }
+  return value;
+};
 const ownSize = (value: unknown): number =>
   typeof value === 'number' || typeof value === 'boolean'
     ? 64
@@ -156,9 +166,9 @@ export class ProjectTree {
   #nextKey = 0;
   #names = new Map<Page, Map<string, Element>>();
   #ordered = new Map<Page, Element[]>();
-  #parents = new Map<Element, Parent>();
-  #pages = new Map<Element, Page>();
-  #outer = new Map<Element, Element>();
+  #parents = new Map<DeepReadonly<Element>, Parent>();
+  #pages = new Map<DeepReadonly<Element>, Page>();
+  #outer = new Map<DeepReadonly<Element>, Element>();
   #memberNames = new Map<GroupElement, Map<string, Element>>();
   #fields = new WeakMap<Element, Map<string, number>>();
   #ownWork = new WeakMap<Element, number>();
@@ -180,13 +190,13 @@ export class ProjectTree {
    * copy their text; immediate rollback and change notifications still work.
    */
   constructor(
-    project: Immutable<Project>,
+    project: DeepReadonly<Project>,
     allocateId?: () => number,
     recordHistory = true,
   ) {
     this.#recordHistory = recordHistory;
     checkHierarchy(project.pages.flatMap(page => page.elements));
-    this.#project = castDraft(detached(project));
+    this.#project = detached(project) as Project;
     this.#allocateId = allocateId;
     for (const page of this.#project.pages) {
       refreshBounds(page.elements);
@@ -197,11 +207,11 @@ export class ProjectTree {
     }
   }
 
-  get project(): Immutable<Project> {
+  get project(): DeepReadonly<Project> {
     return this.#project;
   }
-  snapshot(): Immutable<Project> {
-    return freeze(detached(this.#project), true);
+  snapshot(): DeepReadonly<Project> {
+    return freeze(detached(this.#project));
   }
   subscribe(listener: (change: TreeChangeSet) => void): () => void {
     this.#listeners.add(listener);
@@ -218,39 +228,40 @@ export class ProjectTree {
     const key = this.#keys.get(owner);
     return key !== undefined && this.#nodes.get(key) === owner;
   }
-  #mutable<T extends TreeOwner>(owner: T): Draft<T> {
+  /** Only the tree may turn an owned live view back into writable data. */
+  #mutable<T extends TreeOwner>(owner: T): Mutable<T> {
     if (!this.contains(owner)) {
       throw new TreeError('Unknown Project owner');
     }
-    return castDraft(owner);
+    return owner as Mutable<T>;
   }
-  parentOf(element: Immutable<Element>): TreeParent | undefined {
-    return this.#parents.get(castDraft(element));
+  parentOf(element: DeepReadonly<Element>): TreeParent | undefined {
+    return this.#parents.get(element);
   }
-  pageOf(element: Immutable<Element>): Immutable<Page> | undefined {
-    return this.#pages.get(castDraft(element));
+  pageOf(element: DeepReadonly<Element>): DeepReadonly<Page> | undefined {
+    return this.#pages.get(element);
   }
-  outerOf(element: Immutable<Element>): Immutable<Element> | undefined {
-    return this.#outer.get(castDraft(element));
+  outerOf(element: DeepReadonly<Element>): DeepReadonly<Element> | undefined {
+    return this.#outer.get(element);
   }
-  elementsOf(page: Immutable<Page>): readonly Immutable<Element>[] {
+  elementsOf(page: DeepReadonly<Page>): readonly DeepReadonly<Element>[] {
     return this.#ordered.get(this.#mutable(page))!;
   }
-  membersOf(parent: TreeParent): readonly Immutable<Element>[] {
+  membersOf(parent: TreeParent): readonly DeepReadonly<Element>[] {
     const node = this.#mutable(parent);
     return 'kind' in node ? node.members : this.#ordered.get(node)!;
   }
-  find(parent: TreeParent, name: string): Immutable<Element> | undefined {
+  find(parent: TreeParent, name: string): DeepReadonly<Element> | undefined {
     const node = this.#mutable(parent);
     return (
       'kind' in node ? this.#memberNames.get(node) : this.#names.get(node)
     )?.get(name);
   }
-  isVisible(element: Immutable<Element>): boolean {
+  isVisible(element: DeepReadonly<Element>): boolean {
     if (!this.pageOf(element)) {
       return false;
     }
-    let node: Immutable<Element | Page> = element;
+    let node: DeepReadonly<Element | Page> = element;
     while ('kind' in node) {
       if (!node.visible) {
         return false;
@@ -381,7 +392,7 @@ export class ProjectTree {
     }
   }
   #record(change: TreeChange): void {
-    this.#journal!.push(this.#recordHistory ? freeze(change, true) : change);
+    this.#journal!.push(this.#recordHistory ? freeze(change) : change);
   }
   #field(owner: Owner, field: string, next: unknown, replace = false): void {
     const record = owner as unknown as Record<string, unknown>;
@@ -446,7 +457,7 @@ export class ProjectTree {
         : {}),
     };
   }
-  #restore(saved: Immutable<SavedNode>): Owner {
+  #restore(saved: DeepReadonly<SavedNode>): Owner {
     const existing = this.#nodes.get(saved.key);
     if (existing) {
       return existing;
@@ -551,8 +562,8 @@ export class ProjectTree {
         true,
       );
     } else {
-      const saved = new Map<number, Immutable<SavedNode>>();
-      const visit = (node: Immutable<SavedNode>) => {
+      const saved = new Map<number, DeepReadonly<SavedNode>>();
+      const visit = (node: DeepReadonly<SavedNode>) => {
         saved.set(node.key, node);
         node.children?.forEach(visit);
       };
@@ -598,7 +609,7 @@ export class ProjectTree {
     this.#rollback = undefined;
     if (changes.length) {
       const event: TreeChangeSet = {
-        changes: this.#recordHistory ? freeze(changes, true) : [],
+        changes: this.#recordHistory ? freeze(changes) : [],
         owners: [...this.#changedOwners],
         pages: [...this.#changedPages],
         assets: this.#assetsChanged,
@@ -634,10 +645,10 @@ export class ProjectTree {
         fields.set(key, result.length);
         result.push(change);
       } else {
-        result[index] = freeze(
-          { ...result[index]!, after: change.after },
-          true,
-        ) as TreeChange;
+        result[index] = freeze({
+          ...result[index]!,
+          after: change.after,
+        }) as TreeChange;
       }
     }
     return result.filter(
@@ -730,14 +741,14 @@ export class ProjectTree {
     this.transaction(() => this.#field(this.#mutable(owner), 'script', source));
   }
   replaceRichText(
-    element: Immutable<TextElement>,
-    value: Immutable<RichText>,
+    element: DeepReadonly<TextElement>,
+    value: DeepReadonly<RichText>,
   ): void {
     this.transaction(() =>
       this.#field(this.#mutable(element), 'richText', value),
     );
   }
-  replaceText(element: Immutable<TextElement>, value: string): void {
+  replaceText(element: DeepReadonly<TextElement>, value: string): void {
     this.transaction(() => {
       const node = this.#mutable(element);
       const staged = { ...node };
@@ -745,7 +756,7 @@ export class ProjectTree {
       this.#field(node, 'richText', staged.richText, true);
     });
   }
-  setGeometry(element: Immutable<Element>, changes: Partial<Box>): void {
+  setGeometry(element: DeepReadonly<Element>, changes: Partial<Box>): void {
     this.transaction(() => {
       const node = this.#mutable(element);
       const outer = this.#outer.get(node)!;
@@ -794,7 +805,7 @@ export class ProjectTree {
     parent: Parent,
     element: Element,
     hooks: TreeHooks,
-  ): Immutable<Element> {
+  ): DeepReadonly<Element> {
     const page = 'elements' in parent ? parent : this.#pages.get(parent)!;
     const outer = 'elements' in parent ? undefined : this.#outer.get(parent)!;
     if (outer && 'kind' in parent) {
@@ -829,7 +840,7 @@ export class ProjectTree {
     parent: TreeParent,
     name?: string,
     hooks: TreeHooks = {},
-  ): Immutable<Element> {
+  ): DeepReadonly<Element> {
     return this.transaction(() => {
       const owner = this.#mutable(parent);
       const page = 'elements' in owner ? owner : this.#pages.get(owner)!;
@@ -846,7 +857,10 @@ export class ProjectTree {
       return this.#publish(owner, createElement(kind, nextName), hooks);
     });
   }
-  insert(parent: TreeParent, element: Immutable<Element>): Immutable<Element> {
+  insert(
+    parent: TreeParent,
+    element: DeepReadonly<Element>,
+  ): DeepReadonly<Element> {
     return this.transaction(() => {
       const owner = this.#mutable(parent);
       const page = 'elements' in owner ? owner : this.#pages.get(owner)!;
@@ -858,14 +872,14 @@ export class ProjectTree {
         }
         taken.add(member.name);
       }
-      const copy = castDraft(detached(element));
+      const copy = detached(element) as Element;
       for (const member of allElements([copy])) {
         delete member.id;
       }
       return this.#publish(owner, copy, {});
     });
   }
-  clone(element: Immutable<Element>, hooks: TreeHooks = {}): CloneResult {
+  clone(element: DeepReadonly<Element>, hooks: TreeHooks = {}): CloneResult {
     return this.transaction(() => {
       const node = this.#mutable(element);
       const parent = this.#parents.get(node)!;
@@ -903,9 +917,9 @@ export class ProjectTree {
     });
   }
   remove(
-    element: Immutable<Element>,
+    element: DeepReadonly<Element>,
     hooks: Pick<TreeHooks, 'authorize'> = {},
-  ): readonly Immutable<Element>[] {
+  ): readonly DeepReadonly<Element>[] {
     return this.transaction(() => {
       const node = this.#mutable(element);
       const page = this.#pages.get(node)!;
@@ -927,7 +941,7 @@ export class ProjectTree {
       return removed;
     });
   }
-  reorder(parent: TreeParent, order: readonly Immutable<Element>[]): void {
+  reorder(parent: TreeParent, order: readonly DeepReadonly<Element>[]): void {
     this.transaction(() => {
       const owner = this.#mutable(parent);
       const previous = children(owner);
@@ -935,14 +949,14 @@ export class ProjectTree {
       if (
         order.length !== previous.length ||
         new Set(order).size !== order.length ||
-        order.some(node => !siblings.has(castDraft(node)))
+        order.some(node => !siblings.has(node as Element))
       ) {
         throw new TreeError('Order must be an exact permutation of siblings');
       }
-      this.#children(owner, castDraft([...order]));
+      this.#children(owner, [...order] as Element[]);
     });
   }
-  rename(owner: Immutable<Page | Element>, name: string): void {
+  rename(owner: DeepReadonly<Page | Element>, name: string): void {
     this.transaction(() => {
       const node = this.#mutable(owner);
       const page = 'elements' in node ? node : this.#pages.get(node)!;
@@ -959,15 +973,15 @@ export class ProjectTree {
   }
   group(
     parent: TreeParent,
-    members: readonly Immutable<Element>[],
-  ): Immutable<GroupElement> {
+    members: readonly DeepReadonly<Element>[],
+  ): DeepReadonly<GroupElement> {
     return this.transaction(() => {
       const owner = this.#mutable(parent);
       const siblings = children(owner) as Element[];
       const selected = new Set(members);
       if (
         selected.size < 2 ||
-        members.some(member => !siblings.includes(castDraft(member)))
+        members.some(member => !siblings.includes(member as Element))
       ) {
         throw new TreeError('Grouping requires two or more siblings');
       }
@@ -1011,7 +1025,9 @@ export class ProjectTree {
       return group;
     });
   }
-  ungroup(element: Immutable<GroupElement>): readonly Immutable<Element>[] {
+  ungroup(
+    element: DeepReadonly<GroupElement>,
+  ): readonly DeepReadonly<Element>[] {
     return this.transaction(() => {
       const node = this.#mutable(element);
       const parent = this.#parents.get(node)!;
@@ -1029,7 +1045,7 @@ export class ProjectTree {
       return members;
     });
   }
-  addPage(after: number): Immutable<Page> {
+  addPage(after: number): DeepReadonly<Page> {
     return this.transaction(() => {
       const page = createPage(
         freshName(
@@ -1043,7 +1059,7 @@ export class ProjectTree {
       return page;
     });
   }
-  duplicatePage(page: Immutable<Page>, after: number): Immutable<Page> {
+  duplicatePage(page: DeepReadonly<Page>, after: number): DeepReadonly<Page> {
     return this.transaction(() => {
       const copy = duplicatePage(
         this.#mutable(page),
@@ -1055,7 +1071,7 @@ export class ProjectTree {
       return copy;
     });
   }
-  removePage(page: Immutable<Page>): void {
+  removePage(page: DeepReadonly<Page>): void {
     this.transaction(() => {
       this.#mutable(page);
       if (this.#project.pages.length === 1) {
@@ -1078,7 +1094,7 @@ export class ProjectTree {
       this.#children(this.#project, next);
     });
   }
-  addAsset(imported: Immutable<Asset>): Immutable<Asset> {
+  addAsset(imported: DeepReadonly<Asset>): DeepReadonly<Asset> {
     return this.transaction(() => {
       const existing = this.#project.assets.find(
         asset => asset.hash === imported.hash,
@@ -1098,7 +1114,7 @@ export class ProjectTree {
     });
   }
   /** Adopt detached Play results by authored id; unchanged owners stay live. */
-  adopt(project: Immutable<Project>): void {
+  adopt(project: DeepReadonly<Project>): void {
     checkHierarchy(project.pages.flatMap(page => page.elements));
     this.transaction(() => {
       const reconcile = (target: Owner, source: TreeOwner): void => {
@@ -1126,7 +1142,7 @@ export class ProjectTree {
             reconcile(existing, node);
             return existing;
           }
-          return castDraft(detached(node));
+          return detached(node) as Owner;
         });
         this.#children(target, next);
       };

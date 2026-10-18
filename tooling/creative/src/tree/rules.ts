@@ -1,6 +1,6 @@
 // Folio's ownership tree. Coordinates are always Page-relative; group boxes
 // and collection order are derived views, never a second ownership graph.
-import type { Immutable } from 'immer';
+import type { DeepReadonly } from '../readonly';
 import type { Element, GroupElement } from '../model';
 
 export const MAX_GROUP_ELEMENTS = 1024;
@@ -15,11 +15,11 @@ export const BOX_FIELDS = ['left', 'top', 'width', 'height'] as const;
 /** Postorder: back-to-front siblings, each group after its members. */
 export function allElements(elements: readonly Element[]): Element[];
 export function allElements(
-  elements: readonly Immutable<Element>[],
-): Immutable<Element>[];
+  elements: readonly DeepReadonly<Element>[],
+): DeepReadonly<Element>[];
 export function allElements(
-  elements: readonly Immutable<Element>[],
-): Immutable<Element>[] {
+  elements: readonly DeepReadonly<Element>[],
+): DeepReadonly<Element>[] {
   return elements.flatMap(e => [
     ...(e.kind === 'group' ? allElements(e.members) : []),
     e,
@@ -30,13 +30,13 @@ export function findElement(
   name: string,
 ): Element | undefined;
 export function findElement(
-  elements: readonly Immutable<Element>[],
+  elements: readonly DeepReadonly<Element>[],
   name: string,
-): Immutable<Element> | undefined;
+): DeepReadonly<Element> | undefined;
 export function findElement(
-  elements: readonly Immutable<Element>[],
+  elements: readonly DeepReadonly<Element>[],
   name: string,
-): Immutable<Element> | undefined {
+): DeepReadonly<Element> | undefined {
   for (const e of elements) {
     if (e.name === name) {
       return e;
@@ -53,10 +53,10 @@ export function findElement(
 
 /** Reject cycles/shared ownership and limits before traversing an intake tree. */
 export const checkHierarchy = (
-  elements: readonly Immutable<Element>[],
+  elements: readonly DeepReadonly<Element>[],
 ): void => {
-  const seen = new Set<Immutable<Element>>();
-  const visit = (e: Immutable<Element>, depth: number): number => {
+  const seen = new Set<DeepReadonly<Element>>();
+  const visit = (e: DeepReadonly<Element>, depth: number): number => {
     if (seen.has(e)) {
       throw new Error('An Element must have exactly one parent');
     }
@@ -172,7 +172,7 @@ export const updateGeometry = (
   }
 };
 
-export const outerElement = <T extends Immutable<Element>>(
+export const outerElement = <T extends DeepReadonly<Element>>(
   elements: readonly T[],
   name: string,
 ): T | undefined =>
@@ -202,10 +202,10 @@ export const groupElement = (
 
 /** Effective visibility for a rendered Page, without altering own flags. */
 export const elementVisibility = (
-  elements: readonly Immutable<Element>[],
+  elements: readonly DeepReadonly<Element>[],
 ): Map<string, boolean> => {
   const result = new Map<string, boolean>();
-  const visit = (e: Immutable<Element>, parent: boolean) => {
+  const visit = (e: DeepReadonly<Element>, parent: boolean) => {
     const visible = parent && e.visible;
     result.set(e.name, visible);
     if (e.kind === 'group') {
@@ -222,9 +222,9 @@ export const elementVisibility = (
 
 /** Innermost first, for authoring Message Path links. */
 export const containingGroups = (
-  elements: readonly Immutable<Element>[],
+  elements: readonly DeepReadonly<Element>[],
   name: string,
-): Immutable<GroupElement>[] => {
+): DeepReadonly<GroupElement>[] => {
   for (const e of elements) {
     if (e.name === name) {
       return [];

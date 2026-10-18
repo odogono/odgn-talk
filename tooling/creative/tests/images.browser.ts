@@ -1,9 +1,9 @@
-import { castDraft } from 'immer';
+import { thaw } from '../src/readonly';
 // Run on the dedicated test page described in README.md. Exercises real image
 // decoders, IndexedDB and the editor's picker/drop/export/import wiring.
 import { EditLock } from '../src/edit-lock';
 import { importImage } from '../src/images';
-import { createProject } from '../src/model';
+import { createProject, type Project } from '../src/model';
 import {
   readProjectFile,
   serializeProject,
@@ -385,7 +385,7 @@ export const runBrowserTests = async () => {
       );
     });
     await test('missing assets open as placeholders with Replace and survive re-export', async () => {
-      const missing = castDraft(structuredClone(shell.editor.project));
+      const missing = thaw<Project>(shell.editor.project);
       missing.name = 'Missing asset browser check';
       const file = await writeProjectFile(missing, new Map(), {
         allowMissing: true,

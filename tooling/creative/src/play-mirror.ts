@@ -3,7 +3,7 @@
 // from it without waiting for the worker. Each Element keeps one object per
 // name, and only fields whose value changed are replaced, so reader history
 // and drawn nodes keyed by Element survive the worker echoing an edit.
-import { type Immutable } from 'immer';
+import type { DeepReadonly } from './readonly';
 import { type Element, type RichText, type TextElement } from './model';
 import { type PlayView, type PromptView } from './play-protocol';
 import { type ReaderTextPlay } from './play-text';
@@ -109,7 +109,7 @@ export class PlayMirror implements ReaderTextPlay {
     return this.#order;
   }
 
-  isVisible(element: Immutable<Element>): boolean {
+  isVisible(element: DeepReadonly<Element>): boolean {
     return this.#shown.has(element as Element);
   }
 

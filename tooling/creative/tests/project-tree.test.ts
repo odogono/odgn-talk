@@ -1,6 +1,6 @@
-import { castDraft } from 'immer';
+import { thaw } from '../src/readonly';
 import { expect, spyOn, test } from 'bun:test';
-import { createElement, createProject } from '../src/model';
+import { createElement, createProject, type Element } from '../src/model';
 import { allElements, groupElement, refreshBounds } from '../src/tree/rules';
 import { ProjectTree, type TreeJournal } from '../src/tree/project-tree';
 
@@ -18,7 +18,7 @@ const fixture = () => {
 const check = (tree: ProjectTree) => {
   for (const page of tree.project.pages) {
     expect(tree.elementsOf(page)).toEqual(allElements(page.elements));
-    const copy = castDraft(structuredClone(page.elements));
+    const copy = thaw<Element[]>(page.elements);
     refreshBounds(copy);
     expect(page.elements).toEqual(copy);
     for (const element of tree.elementsOf(page)) {
@@ -290,4 +290,35 @@ test('structural change records identify removed descendants and their Page', ()
     expect(affected).toContain(owner);
   }
   expect(pages).toContain(page);
+});
+
+test('snapshots and history freeze detached data while live owners remain mutable', () => {
+  const tree = new ProjectTree(fixture());
+  const page = tree.project.pages[0]!;
+  const entry = tree.find(page, 'entry')!;
+  const snapshot = tree.snapshot();
+  expect(Object.isFrozen(snapshot)).toBe(true);
+  expect(Object.isFrozen(snapshot.pages[0]!.elements)).toBe(true);
+  let journal: TreeJournal = [];
+  const unsubscribe = tree.subscribe(change => {
+    journal = change.changes;
+  });
+  tree.setProperty(entry, 'text', 'changed');
+  unsubscribe();
+  const change = journal.find(
+    change => change.kind === 'field' && change.field === 'richText',
+  )!;
+  expect(Object.isFrozen(journal)).toBe(true);
+  expect(Object.isFrozen(change)).toBe(true);
+  if (change.kind !== 'field') {
+    throw new Error('expected rich text change');
+  }
+  expect(Object.isFrozen(change.after)).toBe(true);
+  expect(
+    Object.isFrozen((change.after as { runs: unknown[] }[])[0]!.runs[0]),
+  ).toBe(true);
+  expect(Object.isFrozen(entry)).toBe(false);
+  tree.setProperty(entry, 'text', 'later');
+  tree.replay(journal, false);
+  expect(tree.snapshot()).toEqual(snapshot);
 });

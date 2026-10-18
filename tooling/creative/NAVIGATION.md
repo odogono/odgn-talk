@@ -96,6 +96,8 @@ List files with `rg --files tooling/creative` before opening one by name.
   explicit mutations, copy work, batched changes and forward/inverse journals.
   [tree/rules.ts](src/tree/rules.ts) holds pure hierarchy/geometry rules and the
   1,024-node/depth-32 limits without runtime model imports.
+  [readonly.ts](src/readonly.ts) defines the `DeepReadonly` view contract and
+  `thaw`, the writable deep copy of a view.
 - [model.ts](src/model.ts) and [project-file.ts](src/project-file.ts): recursive
   copies and format-2 nested members/empty anchors; [editing.ts](src/editing.ts):
   entered scope, Group/Ungroup, history and sibling actions.

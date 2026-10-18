@@ -3,8 +3,8 @@
 // scheduling is `autosave.ts`, and one-editor-per-Project is `edit-lock.ts`;
 // this file connects them to the Stack shell. The lists are Preact
 // components in `projects-window.tsx`, following the signals kept here.
+import type { DeepReadonly } from './readonly';
 import { computed, signal } from '@preact/signals';
-import { type Immutable } from 'immer';
 import { Autosave, failureMessage, type AutosaveState } from './autosave';
 import {
   EditLock,
@@ -148,7 +148,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   // What the Projects and Earlier Versions lists show (projects-window.tsx).
   const currentId = signal(deps.initial.id);
   const preview = signal<
-    { latest: Immutable<Project>; savedAt: number; seq: number } | undefined
+    { latest: DeepReadonly<Project>; savedAt: number; seq: number } | undefined
   >(undefined);
   const orphaned = signal(false);
   const editing = signal(lock.editing);
@@ -412,7 +412,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     file: Uint8Array;
     id: string;
     missingNames: string[];
-    project: Immutable<Project>;
+    project: DeepReadonly<Project>;
     source: { contentState: number; generation: number };
   }> => {
     editor.finishPendingEdit();
@@ -560,7 +560,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     void drawStorageStatus();
   });
 
-  const loadAssets = async (project: Immutable<Project>): Promise<void> => {
+  const loadAssets = async (project: DeepReadonly<Project>): Promise<void> => {
     if (!storage) {
       return;
     }
@@ -785,7 +785,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
   /** Puts a loaded Project on the desk and makes it the one being edited. */
   const showLoaded = async (
     loaded: Omit<LoadedProject, 'project' | 'record'> & {
-      project: Immutable<Project>;
+      project: DeepReadonly<Project>;
       record?: ProjectRecord;
     },
     id: string,
@@ -990,7 +990,7 @@ export const mountProjects = (deps: ProjectsDeps): void => {
     (byId('new-project') as HTMLButtonElement).disabled = false;
   };
 
-  const exitPreview = (project: Immutable<Project>): void => {
+  const exitPreview = (project: DeepReadonly<Project>): void => {
     preview.value = undefined;
     byId('preview-note').hidden = true;
     editor.replaceProject(project);

@@ -1,6 +1,6 @@
 // Structured text edits and history (#751). Offsets count UTF-16 code units,
 // matching browser Ranges; a paragraph separator occupies one offset.
-import { type Immutable } from 'immer';
+import type { DeepReadonly } from './readonly';
 import {
   alignParagraph,
   isTextAlign,
@@ -15,7 +15,7 @@ export const TEXT_MARKS = ['bold', 'italic', 'underline'] as const;
 export type TextMark = (typeof TEXT_MARKS)[number];
 export type TextSelection = { end: number; start: number };
 
-const runsOf = (text: Immutable<RichText>): TextRun[] =>
+const runsOf = (text: DeepReadonly<RichText>): TextRun[] =>
   text.flatMap((p, i) => [...(i ? [{ text: '\n' }] : []), ...p.runs]);
 
 /** Keep only supported marks, merge adjacent equal runs, and split paragraphs. */
@@ -63,7 +63,7 @@ export const normalizeRichText = (runs: readonly TextRun[]): RichText => {
 };
 
 const slice = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   start: number,
   end = Infinity,
 ): TextRun[] => {
@@ -77,7 +77,7 @@ const slice = (
 };
 
 /** The index of the paragraph holding `offset`. */
-const paragraphAt = (text: Immutable<RichText>, offset: number): number => {
+const paragraphAt = (text: DeepReadonly<RichText>, offset: number): number => {
   let remaining = offset;
   for (const [i, p] of text.entries()) {
     const length = p.runs.reduce((n, r) => n + r.text.length, 0);
@@ -103,7 +103,7 @@ const withAligns = (
  * its alignment, and `middleAligns` aligns each paragraph the runs open.
  */
 const splice = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
   middle: TextRun[],
   middleAligns: (TextAlign | undefined)[],
@@ -129,7 +129,7 @@ const splice = (
  * paragraphs without an alignment take the one the selection starts in.
  */
 export const replaceTextRange = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
   inserted: RichText,
 ): RichText => {
@@ -144,7 +144,7 @@ export const replaceTextRange = (
 
 /** Apply or remove marks on a selection without changing its plain text. */
 export const styleTextRange = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
   style: TextStyle,
 ): RichText =>
@@ -165,7 +165,7 @@ export const styleTextRange = (
 
 /** Align every paragraph a selection touches, the caret's when it is empty. */
 export const alignTextRange = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
   align: TextAlign,
 ): RichText => {
@@ -182,7 +182,7 @@ export const alignTextRange = (
 
 /** The alignment shared by every paragraph a selection touches, if any. */
 export const rangeAlign = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
 ): TextAlign | undefined => {
   const aligns = new Set(
@@ -197,7 +197,7 @@ export const rangeAlign = (
 };
 
 export const rangeHasStyle = (
-  text: Immutable<RichText>,
+  text: DeepReadonly<RichText>,
   selection: TextSelection,
   mark: TextMark,
 ): boolean => {
@@ -208,7 +208,7 @@ export const rangeHasStyle = (
 };
 
 /** Reformats rich text from any source into the form `normalizeRichText` makes. */
-export const renormalizeRichText = (text: Immutable<RichText>): RichText =>
+export const renormalizeRichText = (text: DeepReadonly<RichText>): RichText =>
   withAligns(
     normalizeRichText(runsOf(text)),
     text.map(p => (isTextAlign(p.align) ? p.align : undefined)),
@@ -222,8 +222,8 @@ export type TextHistory = {
   readonly canRedo: boolean;
   readonly canUndo: boolean;
   /** Looked up on each read: undo can replace the Element's object. */
-  readonly element: Immutable<TextElement>;
+  readonly element: DeepReadonly<TextElement>;
   redo(): void;
-  set(text: Immutable<RichText>): void;
+  set(text: DeepReadonly<RichText>): void;
   undo(): void;
 };

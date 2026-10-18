@@ -1,5 +1,5 @@
+import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
-import { type Immutable } from 'immer';
 import { grammar } from '@northtalk/ts';
 import { isIdentifierName, type Page, type Project } from './model';
 import type { ScriptOwner } from './script-manifest';
@@ -14,8 +14,8 @@ export const reservedScriptNames: ReadonlySet<string> = new Set([
   'sound',
 ]);
 export const elementNamesTaken = (
-  project: Immutable<Project>,
-  page: Immutable<Page>,
+  project: DeepReadonly<Project>,
+  page: DeepReadonly<Page>,
   current?: string,
 ): Set<string> =>
   new Set([
@@ -26,7 +26,7 @@ export const elementNamesTaken = (
       .map(e => e.name),
   ]);
 export const pageNamesTaken = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
   current?: string,
 ): Set<string> =>
   new Set([
@@ -37,7 +37,7 @@ export const pageNamesTaken = (
 
 /** Imported Projects remain untouched; identify each owner requiring repair. */
 export const scriptNameProblems = (
-  project: Immutable<Project>,
+  project: DeepReadonly<Project>,
 ): { message: string; owner: ScriptOwner }[] => {
   const problems: { message: string; owner: ScriptOwner }[] = [];
   const check = (owner: ScriptOwner, label: string, collision: boolean) => {

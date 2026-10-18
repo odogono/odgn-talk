@@ -3,8 +3,8 @@
 // Script windows; presenting plays it full-window with the editor hidden.
 // The session runs in the Play worker (#1225); the page draws from its
 // mirror of Play State and posts reader input to the worker.
+import type { DeepReadonly } from './readonly';
 import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
-import { type Immutable } from 'immer';
 import { scriptNameProblems } from './script-names';
 import { byId, h } from './dom';
 import { ErrorsWindow } from './errors';
@@ -94,7 +94,7 @@ export const mountPlay = (shell: StackShell): void => {
   // The Project as it was when Play started, for assets and problem owners.
   let playing: Project | undefined;
   // Problem owners by the place the worker names, in the authored Project.
-  let owners: ReturnType<typeof scriptOwners<Immutable<Project>>> = [];
+  let owners: ReturnType<typeof scriptOwners<DeepReadonly<Project>>> = [];
   let mode: PlayMode | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
