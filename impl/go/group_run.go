@@ -900,8 +900,12 @@ func (g *Group) queueError(s *Script, x *execution) {
 	for j, v := range x.delivery.message.Args {
 		args[j] = v.inner
 	}
+	call := corevalue.Pair{Key: "name", Val: mustText(x.delivery.message.Name)}
+	if x.delivery.function != nil {
+		call = corevalue.Pair{Key: "fn", Val: *x.delivery.function}
+	}
 	during, _ := corevalue.NewMap([]corevalue.Pair{
-		{Key: "name", Val: mustText(x.delivery.message.Name)},
+		call,
 		{Key: "args", Val: corevalue.NewList(args)},
 	})
 	s.queue = append(s.queue, workItem{delivery: delivery{

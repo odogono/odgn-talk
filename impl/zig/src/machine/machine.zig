@@ -124,7 +124,7 @@ pub const Delivery = struct {
     args: []*Value,
     request: bool,
     /// For an `error` message: the message the failed Run was handling, as
-    /// `{name, args}`, which `, during` binds.
+    /// `{name, args}` or `{fn, args}`, which `, during` binds.
     during: ?*Value = null,
     /// The Run that sent the message, or for a `send … and wait` its call
     /// id; for an `error` message, the Run that errored.
@@ -6574,12 +6574,13 @@ pub const Group = struct {
         return s.handlerUnit(name, .handler) != null;
     }
 
-    /// A message as `{name, args}`, for `, during`.
+    /// The failed Delivery as `{name, args}` or `{fn, args}`, for `, during`.
     fn messageMap(g: *Group, d: Delivery) !*Value {
-        const name = try model.text(g.gpa, d.message);
-        defer name.release();
         const args = try model.list(g.gpa, d.args);
         defer args.release();
+        if (d.function) |f| return model.map(g.gpa, &.{ .{ .key = "fn", .value = f }, .{ .key = "args", .value = args } });
+        const name = try model.text(g.gpa, d.message);
+        defer name.release();
         return model.map(g.gpa, &.{ .{ .key = "name", .value = name }, .{ .key = "args", .value = args } });
     }
 
