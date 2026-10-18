@@ -56,12 +56,32 @@ export type ImageElement = ElementBase & {
   kind: 'image';
 };
 
+export const BUTTON_STYLES = [
+  'rounded',
+  'rectangle',
+  'shadowed',
+  'transparent',
+] as const;
+export type ButtonStyle = (typeof BUTTON_STYLES)[number];
+export const isButtonStyle = (value: unknown): value is ButtonStyle =>
+  BUTTON_STYLES.includes(value as ButtonStyle);
+export const BUTTON_STYLES_PROSE = `${BUTTON_STYLES.slice(0, -1).join(', ')} or ${BUTTON_STYLES.at(-1)}`;
+/** Button typography and style, also applied to buttons in older Projects. */
+export const BUTTON_DEFAULTS = {
+  font: 'system-ui, sans-serif',
+  textSize: 18,
+  style: 'rounded',
+} as const satisfies { font: string; style: ButtonStyle; textSize: number };
+
 export type ButtonElement = ElementBase & {
   fill: string;
+  font: string;
   kind: 'button';
-  /** What the reader sees; separate from the identifier `name`. */
+  /** Visible label, or accessible name when the button is transparent. */
   label: string;
+  style: ButtonStyle;
   textColor: string;
+  textSize: number;
 };
 
 export type RectangleElement = ElementBase & {
@@ -271,6 +291,7 @@ export const createElement = (kind: ElementKind, name: string): Element => {
         height: 44,
         label: 'Button',
         fill: '#2f6fed',
+        ...BUTTON_DEFAULTS,
         textColor: '#ffffff',
       };
     case 'rectangle':

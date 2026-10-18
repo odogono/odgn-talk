@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  BUTTON_STYLES,
   createElement,
   createProject,
   type ButtonElement,
@@ -147,6 +148,60 @@ const fileWithJson = async (json: unknown) =>
       method: 8,
     },
   ]);
+
+test('button styles and typography survive a Project file round trip', async () => {
+  const project = createProject('Buttons');
+  for (const style of BUTTON_STYLES) {
+    const button = createElement('button', style);
+    Object.assign(button, { style, font: 'Georgia, serif', textSize: 12.5 });
+    project.pages[0]!.elements.push(button);
+  }
+  const { project: loaded } = await readProjectFile(
+    await writeProjectFile(project, new Map()),
+  );
+  expect(loaded).toEqual(project);
+});
+
+for (const format of [1, 2]) {
+  test(`older format-${format} buttons keep their appearance in files and storage`, async () => {
+    const project = createProject('Old buttons');
+    project.pages[0]!.elements.push(createElement('button', 'go'));
+    const json = serializeProject(project) as {
+      format: number;
+      pages: { elements: Record<string, unknown>[] }[];
+    };
+    json.format = format;
+    const button = json.pages[0]!.elements[0]!;
+    for (const field of ['font', 'textSize', 'style']) {
+      delete button[field];
+    }
+    expect(validateProjectJson(json)).toEqual({ project });
+    expect(button).not.toHaveProperty('style');
+    expect((await readProjectFile(await fileWithJson(json))).project).toEqual(
+      project,
+    );
+  });
+}
+
+test('invalid button typography and styles report their property path', () => {
+  const project = createProject('Invalid buttons');
+  project.pages[0]!.elements.push(createElement('button', 'go'));
+  for (const [field, values] of Object.entries({
+    font: [null, 42],
+    textSize: [0, -1, Infinity, Number.NaN, null, '18'],
+    style: ['none', '', 'Rounded', null, 42],
+  })) {
+    for (const value of values) {
+      const json = serializeProject(project) as {
+        pages: { elements: Record<string, unknown>[] }[];
+      };
+      json.pages[0]!.elements[0]![field] = value;
+      expect(validateProjectJson(json)).toMatchObject({
+        issues: [{ path: `pages[0].elements[0].${field}` }],
+      });
+    }
+  }
+});
 
 for (const kind of ['rectangle', 'ellipse'] as const) {
   test(`${kind} border thickness survives a Project file round trip, including zero`, async () => {

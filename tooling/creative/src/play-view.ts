@@ -417,6 +417,7 @@ export const mountPlay = (shell: StackShell): void => {
       if (element.kind === 'button') {
         node.tabIndex = play.isVisible(element) ? 0 : -1;
         node.setAttribute('role', 'button');
+        node.setAttribute('aria-label', element.label || element.name);
       }
     }
   };

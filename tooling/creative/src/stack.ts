@@ -109,11 +109,15 @@ export const renderElement = (
       }
       break;
     case 'button':
+      node.classList.add(`button-${element.style}`);
       Object.assign(node.style, {
-        background: element.fill,
+        background:
+          element.style === 'transparent' ? 'transparent' : element.fill,
         color: element.textColor,
+        fontFamily: element.font,
+        fontSize: `${element.textSize}px`,
       });
-      node.append(element.label);
+      node.append(h('span', { class: 'button-label' }, element.label));
       break;
     case 'rectangle':
     case 'ellipse':
@@ -573,6 +577,8 @@ export const mountStack = (
             let minimum: number | undefined;
             if (key === 'thickness' && hasBorder(element)) {
               minimum = 0;
+            } else if (key === 'textSize' && element.kind === 'button') {
+              minimum = 1;
             }
             draft.tree.setProperty(
               element,

@@ -20,6 +20,55 @@ const drain = (play: PlaySession) => {
   throw new Error('Did not become idle');
 };
 
+test('Scripts read and write button typography and style only in Play State', () => {
+  const project = fixture();
+  const authored = project.pages[0]!.elements[0]!;
+  authored.script = `on click
+  set the font of me to "monospace"
+  set the textSize of me to the textSize of me + 6
+  set the style of me to "transparent"
+  set the label of me to the style of me
+end click`;
+  const play = new PlaySession(project);
+  const button = play.page.elements[0]!;
+  play.send(button, 'click');
+  drain(play);
+  expect(play.problems).toEqual([]);
+  expect(button).toMatchObject({
+    font: 'monospace',
+    textSize: 24,
+    style: 'transparent',
+    label: 'transparent',
+  });
+  play.stop(0n);
+  expect(authored).toMatchObject({
+    font: 'system-ui, sans-serif',
+    textSize: 18,
+    style: 'rounded',
+    label: 'Button',
+  });
+});
+
+for (const [property, value] of [
+  ['style', '"unknown"'],
+  ['textSize', '0'],
+  ['textSize', '-1'],
+]) {
+  test(`Scripts reject button ${property} = ${value} without changing it`, () => {
+    const project = fixture();
+    project.pages[0]!.elements[0]!.script = `on click\n set the ${property} of me to ${value}\nend click`;
+    const play = new PlaySession(project);
+    const button = play.page.elements[0]!;
+    play.send(button, 'click');
+    drain(play);
+    expect(play.problems).toMatchObject([
+      { line: 2, message: `"button" failed while doing "${property}"` },
+    ]);
+    expect(button).toMatchObject({ style: 'rounded', textSize: 18 });
+    play.stop(0n);
+  });
+}
+
 for (const kind of ['rectangle', 'ellipse'] as const) {
   test(`Scripts read and write ${kind} border thickness only in Play State`, () => {
     const project = createProject('Borders');

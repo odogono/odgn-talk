@@ -8,6 +8,9 @@ import { checkHierarchy, refreshBounds, MAX_GROUP_DEPTH } from './tree/rules';
 import {
   alignParagraph,
   ELEMENT_KINDS,
+  BUTTON_DEFAULTS,
+  BUTTON_STYLES_PROSE,
+  isButtonStyle,
   isIdentifierName,
   isTextAlign,
   projectWithoutIds,
@@ -317,14 +320,33 @@ const checkElement = (
       };
     case 'image':
       return { ...base, kind: k, image: c.str(e.image, `${path}.image`) ?? '' };
-    case 'button':
+    case 'button': {
+      const style = e.style === undefined ? BUTTON_DEFAULTS.style : e.style;
+      const validStyle = isButtonStyle(style);
+      if (!validStyle) {
+        c.fail(`${path}.style`, `expected ${BUTTON_STYLES_PROSE}`);
+      }
       return {
         ...base,
         kind: k,
         label: c.str(e.label, `${path}.label`) ?? '',
         fill: c.str(e.fill, `${path}.fill`) ?? '',
         textColor: c.str(e.textColor, `${path}.textColor`) ?? '',
+        // Projects authored before button typography and styles keep their look.
+        font:
+          c.str(
+            e.font === undefined ? BUTTON_DEFAULTS.font : e.font,
+            `${path}.font`,
+          ) ?? '',
+        textSize:
+          c.num(
+            e.textSize === undefined ? BUTTON_DEFAULTS.textSize : e.textSize,
+            `${path}.textSize`,
+            'positive',
+          ) ?? BUTTON_DEFAULTS.textSize,
+        style: validStyle ? style : BUTTON_DEFAULTS.style,
       };
+    }
     case 'rectangle':
     case 'ellipse':
       return {

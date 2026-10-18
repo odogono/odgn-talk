@@ -1,5 +1,7 @@
 import {
   hasBorder,
+  BUTTON_STYLES_PROSE,
+  isButtonStyle,
   isTextAlign,
   setTextAlign,
   textAlignOf,
@@ -122,7 +124,25 @@ const fields: Record<PropertyKind, Record<string, PropertyDescriptor>> = {
     editable: element('editable', 'boolean'),
   },
   image: { ...common, image: element('image', 'text') },
-  button: { ...common, label: element('label', 'text'), fill, textColor },
+  button: {
+    ...common,
+    label: element('label', 'text'),
+    fill,
+    textColor,
+    font: element('font', 'text'),
+    textSize: {
+      ...element('textSize', 'number'),
+      validate: (_owner, value) =>
+        Number(value) > 0 ? undefined : 'textSize must be above zero',
+    },
+    style: {
+      ...element('style', 'text'),
+      validate: (_owner, value) =>
+        isButtonStyle(value)
+          ? undefined
+          : `style must be ${BUTTON_STYLES_PROSE}`,
+    },
+  },
   rectangle: { ...common, fill, stroke, thickness },
   ellipse: { ...common, fill, stroke, thickness },
   line: { ...common, stroke, thickness },
