@@ -130,7 +130,7 @@ func TestSendBudgetFaultDoesNotDeliver(t *testing.T) {
 		if end.Outcome != LimitFault || end.Limit != tc.limit || end.Fuel != 6 || end.Alloc != 0 || end.At.Unit != "a" || end.At.PC != 4 || result.FuelUsed != 6 {
 			t.Fatal(end)
 		}
-		if g.Inspect().Scripts[1].Runs != nil || g.Script("b").Counters().Runs != 0 || strings.Contains(strings.Join(trace, "\n"), "send a/r1") {
+		if len(g.Inspect().Scripts[1].Runs) != 0 || g.Script("b").Counters().Runs != 0 || strings.Contains(strings.Join(trace, "\n"), "send a/r1") {
 			t.Fatal("budget fault delivered message")
 		}
 	}
