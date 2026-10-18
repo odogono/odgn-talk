@@ -576,6 +576,12 @@ export interface Message {
 
 /** Settles when a Pump ends the Run it started. Rejects with ScriptError `send failed`. */
 export interface Requested { id: string; result: Promise<Value> }
+/** Worker outcome. Pump refusal retains the Request and leaves it queued. */
+export type PumpedRequest =
+  | { admitted: false; error: unknown }
+  | { admitted: true; requested: Requested; pump:
+      | { ok: true; result: PumpResult }
+      | { ok: false; error: unknown } };
 
 /** Settles, never rejects, when a Pump seals the Verdict: often before the Run ends. */
 export interface Deciding { id: string; decided: Promise<Decided> }
@@ -626,6 +632,8 @@ export interface Group {
    * removes a Delivery still in the mailbox with a "cancelled" run end.
    */
   request(to: HostObject, m: Message, o?: { signal?: AbortSignal }): Requested;
+  /** Worker. Admit once, then perform one Pump; admission failure has no handle. */
+  requestPump(to: HostObject, m: Message, now: bigint, o?: PumpOptions & { signal?: AbortSignal }): PumpedRequest;
   broadcast(m: Message): string; // the broadcast id
   /**
    * Queued. Asks whether something may happen (ADR 0031). Aborting the signal
@@ -637,6 +645,8 @@ export interface Group {
   decideBroadcast(m: Message, o?: { signal?: AbortSignal }): Deciding;
   /** Queued. A Host call of a Function Value, shaped like request. */
   call(fn: Value, args: Value[], o?: { signal?: AbortSignal; limits?: LimitOverride }): Requested;
+  /** Worker. Function admission and one Pump, retaining all ordinary Call options. */
+  callPump(fn: Value, args: Value[], now: bigint, o?: PumpOptions & { signal?: AbortSignal; limits?: LimitOverride }): PumpedRequest;
   /** Worker. Synchronous. now is epoch microseconds; earlier than the last Pump's throws. */
   pump(now: bigint, o?: PumpOptions): PumpResult;
   /** Throws effects pending for live scopes, an enlisted participant or fatal effect uncertainty. */
@@ -703,6 +713,8 @@ export interface Script {
   revoke(grantName: string): void;
   deliver(m: Message): string;
   request(m: Message, o?: { signal?: AbortSignal }): Requested;
+  /** Worker. Request this Script and perform exactly one Pump. */
+  requestPump(m: Message, now: bigint, o?: PumpOptions & { signal?: AbortSignal }): PumpedRequest;
   decide(m: Message, o?: { signal?: AbortSignal }): Deciding;
 }
 

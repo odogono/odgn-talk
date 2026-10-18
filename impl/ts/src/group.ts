@@ -200,6 +200,14 @@ export type Decided = {
 };
 export type Deciding = { decided: Promise<Decided>; id: string };
 export type Requested = { id: string; result: Promise<Value> };
+/** Admission failure has no handle. A refused Pump retains the admitted Request. */
+export type PumpedRequest =
+  | { admitted: false; error: unknown }
+  | {
+      admitted: true;
+      pump: { ok: true; result: PumpResult } | { error: unknown; ok: false };
+      requested: Requested;
+    };
 export type RestoreOptions = GroupOptions & {
   grants(script: string, name: string): Grant<unknown> | undefined;
   libraries: readonly Library[];
@@ -608,6 +616,14 @@ export class Script {
     this.group.watchCancellation(delivery, o?.signal);
     return { id: delivery.id!, result };
   }
+  /** Worker. Request this Script and perform exactly one Pump. */
+  requestPump(
+    m: Message,
+    now: bigint,
+    o?: PumpOptions & CancellationOptions,
+  ): PumpedRequest {
+    return this.group.combine(() => this.request(m, o), now, o);
+  }
   reload(
     source: string,
     carry: CarryOver,
@@ -661,6 +677,8 @@ export class Group {
   private lastClock: bigint | null = null;
   private randomState = seedState(0n);
   private pumping = false;
+  private combining = false;
+  private combinedAdmission = false;
   private cleaning = false;
   private effectStateUnknown = false;
   private terminalReports: (() => void)[] | null = null;
@@ -2049,6 +2067,7 @@ export class Group {
   // Refusal is immediate at the API; inside a Pump its records land at the
   // crossing alongside urgent controls, in the order the Host made them.
   private recordRefusal(line: string, code: string) {
+    this.combinedAdmission = false;
     if (this.pumping) {
       this.inputs.push({ line, urgent: true, action: { k: 'refusal', code } });
     } else {
@@ -2099,7 +2118,7 @@ export class Group {
   }
 
   // Notify once per accepted Host Input, including urgent inputs drained in this Pump.
-  private queueInput(input: QueuedInput): void {
+  private queueInput(input: QueuedInput, notify = true): void {
     const landing = this.debugController?.current;
     // An input made at any pause lands there, between instructions, so its
     // line carries the instruction for replay (chapter 11).
@@ -2113,6 +2132,9 @@ export class Group {
       input.line += ` pc=${landing.pc}`;
     }
     this.inputs.push(input);
+    if (!notify) {
+      return;
+    }
     if (this.onReady) {
       if (this.pumping || this.cleaning) {
         // Host crossings may queue inputs. Notify after the Pump or replacement
@@ -2125,7 +2147,7 @@ export class Group {
   }
 
   private worker() {
-    if (this.pumping || this.cleaning) {
+    if (this.pumping || this.cleaning || this.combining) {
       throw new HostError('reentrant call');
     }
   }
@@ -3166,6 +3188,8 @@ export class Group {
     ballot?: Ballot,
     fn?: Value,
   ): Delivery {
+    const notify = !this.combinedAdmission;
+    this.combinedAdmission = false;
     const named = typeof to === 'string';
     const toText = named ? to : traceValue(to.handle.value);
     // The Script it routes to at the call, whose mailbox depth it counts
@@ -3235,10 +3259,13 @@ export class Group {
       state.incoming++;
     }
     this.ancestry(delivery);
-    this.queueInput({
-      line: this.deliveryLine(record, delivery.id, toText, m, fn),
-      action: { k: 'delivery', to, state: state ?? null, delivery },
-    });
+    this.queueInput(
+      {
+        line: this.deliveryLine(record, delivery.id, toText, m, fn),
+        action: { k: 'delivery', to, state: state ?? null, delivery },
+      },
+      notify,
+    );
     return delivery;
   }
 
@@ -3505,6 +3532,63 @@ export class Group {
     return { id: delivery.id!, result };
   }
 
+  /** Worker. Admit once, then Pump once; a Pump refusal retains the Request. */
+  requestPump(
+    to: HostObject,
+    m: Message,
+    now: bigint,
+    o?: PumpOptions & CancellationOptions,
+  ): PumpedRequest {
+    return this.combine(() => this.request(to, m, o), now, o);
+  }
+
+  /** Worker. A Function Call and one Pump, with ordinary Call options. */
+  callPump(
+    fn: Value,
+    args: Value[],
+    now: bigint,
+    o?: PumpOptions & CancellationOptions & { limits?: LimitOverride },
+  ): PumpedRequest {
+    return this.combine(() => this.call(fn, args, o), now, o);
+  }
+
+  /** @internal Shared with the Script target. */
+  combine(admit: () => Requested, now: bigint, o?: PumpOptions): PumpedRequest {
+    let requested: Requested;
+    try {
+      this.worker();
+    } catch (error) {
+      return { admitted: false, error };
+    }
+    this.combining = true;
+    this.combinedAdmission = true;
+    let refused = false;
+    try {
+      try {
+        requested = admit();
+      } catch (error) {
+        return { admitted: false, error };
+      }
+      this.combinedAdmission = false;
+      try {
+        return {
+          admitted: true,
+          requested,
+          pump: { ok: true, result: this.pumpWorker(now, o ?? {}) },
+        };
+      } catch (error) {
+        refused = true;
+        return { admitted: true, requested, pump: { ok: false, error } };
+      }
+    } finally {
+      this.combining = false;
+      this.combinedAdmission = false;
+      if (refused && this.onReady) {
+        queueMicrotask(this.onReady);
+      }
+    }
+  }
+
   /** Queued. Calls a Function Value as a Request to its Home Script. */
   call(
     fn: Value,
@@ -3749,6 +3833,10 @@ export class Group {
   /** Worker. One Clock reading, the queue drained, then turns until done (chapter 5). */
   pump(now: bigint, o: PumpOptions = {}): PumpResult {
     this.worker();
+    return this.pumpWorker(now, o);
+  }
+
+  private pumpWorker(now: bigint, o: PumpOptions): PumpResult {
     if (this.lastClock !== null && now < this.lastClock) {
       this.trace(
         recordLine(

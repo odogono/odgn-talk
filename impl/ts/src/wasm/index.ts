@@ -72,6 +72,7 @@ export type {
   PumpResult,
   Report,
   Requested,
+  PumpedRequest,
   RestoreOptions,
   RestoreResult,
   Settlement,

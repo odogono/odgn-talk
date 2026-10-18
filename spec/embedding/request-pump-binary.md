@@ -2,7 +2,8 @@
 
 **Status: accepted, with the fields envelope selected. The Zig Session and the
 experimental Go adapter implement both candidates behind negotiation. Go and C
-publish the combined Host APIs; TS and Elixir follow separately.** This is
+publish the combined Host APIs; TS publishes them on both Cores with a
+transferable browser codec. Elixir follows separately.** This is
 [#1245](https://github.com/odogono/odgn-talk/issues/1245)'s contract, under
 [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md).
 It does not change the accepted [binary-frames-v1](binary-frames.md) contract.
@@ -193,7 +194,14 @@ JSON form. A binary worker input waits for the export boundary instead.
 Go adds Script/Group `RequestPump` and Group `CallPump`, preserving their ordinary
 admission arguments and adding Clock/Pump options; results are delivery id,
 Pending, PumpResult and error. TS adds `requestPump`/`callPump` with structured
-admission and Pump outcomes. C uses corresponding functions and existing owned
+admission and Pump outcomes. Its `PumpedRequest` is either
+`{admitted: false, error}` or `{admitted: true, requested, pump}`, where `pump`
+is `{ok: true, result}` or `{ok: false, error}`. Group Request preserves its
+Object target; Script Request preserves its Script target. `now` precedes an
+options object combining Pump options, `signal` and Call's optional `limits`.
+A synchronous TS reactor orders an already-aborted signal's ordinary admission
+and cancellation before its one Pump; it still requires combined negotiation.
+C uses corresponding functions and existing owned
 id/Pending/output conventions. Elixir adds `request_pump`/`call_pump` with an
 explicit pending handle and Pump outcome. Do not hide admitted handles inside
 an otherwise ordinary thrown Pump error.
@@ -222,7 +230,7 @@ passing evidence.
 10–19% slower than fields, so fields is selected. The gate first asked for at
 most 3× native. That limit measures the Zig guest rather than the transport, and
 is now a separate goal ([ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md)).
-TS, Elixir and C implementations follow.
+Go, C and TS implementations publish the combined APIs; Elixir follows.
 
 Verify codec canonicality, deep Values, every Report, malformed recovery, mixed
 continuations, cancellation races, stale tokens, worker exclusion, partial

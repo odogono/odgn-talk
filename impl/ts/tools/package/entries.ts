@@ -3,6 +3,7 @@
 // corpus.toml, and only the workspace's tools use it.
 export const entries = {
   '.': 'src/index.ts',
+  './message-layer': 'src/message-layer.ts',
   './session': 'src/session/index.ts',
   './store': 'src/store/index.ts',
   './notify': 'src/notify/index.ts',

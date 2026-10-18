@@ -30,6 +30,7 @@ import type {
   PumpResult,
   Report,
   Requested,
+  PumpedRequest,
   RestoreOptions,
   RestoreResult,
   Settlement,
@@ -49,6 +50,7 @@ import { Session } from './session';
 import {
   boolOf,
   entriesOf,
+  Raw,
   field,
   has,
   intOf,
@@ -157,6 +159,21 @@ export class WasmScript {
   request(m: Message, o?: CancellationOptions): Requested {
     return this.group.ask({ to: { script: this.name } }, m, o);
   }
+  requestPump(
+    m: Message,
+    now: bigint,
+    o?: PumpOptions & CancellationOptions,
+  ): PumpedRequest {
+    return this.group.combined(
+      'request-pump',
+      () => ({
+        to: { script: this.name },
+        message: this.group.messageFrame(m),
+      }),
+      now,
+      o,
+    );
+  }
   decide(m: Message, o?: CancellationOptions): Deciding {
     return this.group.decision({ to: { script: this.name } }, m, o);
   }
@@ -211,6 +228,7 @@ export class WasmGroup {
   readonly #restored = new Map<string, Json>();
   #restoring: RestoreOptions | null = null;
   #exchanging = 0;
+  #combining = false;
   /** Answers given while their call was starting, sent once the exchange ends. */
   #deferred: (() => void)[] = [];
   readonly #codec: Codec;
@@ -252,14 +270,21 @@ export class WasmGroup {
   // ---------------------------------------------------------------------
 
   /** @internal One exchange for this Group, its needs answered here. */
-  send(m: string, fields: Record<string, Frame | undefined> = {}): Json {
+  send(
+    m: string,
+    fields: Record<string, Frame | undefined> = {},
+    receive?: (packet: Json) => void,
+  ): Json {
     this.#exchanging++;
     try {
       return this.#session.exchange(
         m,
         { group: this.name, ...fields },
         (need, packet) => this.#need(need, packet),
-        (packet, sent) => this.#observe(packet, sent),
+        (packet, sent) => {
+          receive?.(packet);
+          this.#observe(packet, sent);
+        },
       );
     } finally {
       this.#exchanging--;
@@ -278,6 +303,9 @@ export class WasmGroup {
    * `reentrant call`, with its refusal record, as the in-process Core does.
    */
   worker(m: string, fields: Record<string, Frame | undefined> = {}): Json {
+    if (this.#combining) {
+      throw new HostError('reentrant call');
+    }
     this.#session.syncKinds();
     return this.send(m, fields);
   }
@@ -287,7 +315,13 @@ export class WasmGroup {
     // or in the final reply of a Pump, Reload or Library replacement.
     this.#abandon(textsOf(field(packet, 'abandoned')));
     const ok = field(packet, 'ok');
-    if (m === 'pump' || m === 'reload' || m === 'replace-library') {
+    if (
+      m === 'pump' ||
+      m === 'request-pump' ||
+      m === 'call-pump' ||
+      m === 'reload' ||
+      m === 'replace-library'
+    ) {
       this.#abandon(textsOf(field(ok, 'abandoned')));
     }
     if (!this.#trace) {
@@ -319,7 +353,7 @@ export class WasmGroup {
       return;
     }
     // As in the TS Core, inputs queued during a Pump notify after it returns.
-    if (this.#exchanging) {
+    if (this.#exchanging || this.#combining) {
       queueMicrotask(this.#onReady);
     } else {
       this.#onReady();
@@ -891,7 +925,8 @@ export class WasmGroup {
   // Queued calls
   // ---------------------------------------------------------------------
 
-  #message(m: Message): Frame {
+  /** @internal Message data shared with the Script combined operation. */
+  messageFrame(m: Message): Frame {
     return {
       name: m.name,
       args: encodeAll(this.#codec, m.args ?? []),
@@ -928,7 +963,7 @@ export class WasmGroup {
   ): string {
     const ok = this.send(m, {
       ...fields,
-      ...(message ? { message: this.#message(message) } : {}),
+      ...(message ? { message: this.messageFrame(message) } : {}),
     });
     this.#ready();
     return textOf(field(ok, 'delivery')) ?? textOf(field(ok, 'broadcast'))!;
@@ -1093,6 +1128,176 @@ export class WasmGroup {
     return this.ask({ to: this.#target(to) }, m, o);
   }
 
+  requestPump(
+    to: HostObject,
+    m: Message,
+    now: bigint,
+    o?: PumpOptions & CancellationOptions,
+  ): PumpedRequest {
+    return this.combined(
+      'request-pump',
+      () => ({ to: this.#target(to), message: this.messageFrame(m) }),
+      now,
+      o,
+    );
+  }
+
+  callPump(
+    fn: Value,
+    args: Value[],
+    now: bigint,
+    o?: PumpOptions & CancellationOptions & { limits?: Message['limits'] },
+  ): PumpedRequest {
+    return this.combined(
+      'call-pump',
+      () => ({
+        fn: encode(this.#codec, fn),
+        args: encodeAll(this.#codec, args),
+        limits: o?.limits ? { ...o.limits } : undefined,
+      }),
+      now,
+      o,
+    );
+  }
+
+  /** @internal Shared by Script and Object targets. No fallback on old guests. */
+  combined(
+    m: string,
+    fields: () => Record<string, Frame | undefined>,
+    now: bigint,
+    o?: PumpOptions & CancellationOptions,
+  ): PumpedRequest {
+    if (this.#combining) {
+      return { admitted: false, error: new HostError('reentrant call') };
+    }
+    if (!this.#session.requestPump) {
+      return {
+        admitted: false,
+        error: new HostError(
+          'invalid value',
+          'talk.wasm lacks request-pump-fields-v1',
+        ),
+      };
+    }
+    this.#combining = true;
+    let requested: Requested | undefined;
+    let waiting!: Waiting;
+    const result = new Promise<Value>((resolve, reject) => {
+      waiting = { resolve, reject };
+    });
+    result.catch(() => {});
+    let sent = false;
+    let refused = false;
+    let cancelled = o?.signal?.aborted ?? false;
+    let token: Raw;
+    const cancel = () => {
+      if (!sent) {
+        cancelled = true;
+        return;
+      }
+      if (refused) {
+        return;
+      }
+      if (requested) {
+        if (this.#requests.has(requested.id)) {
+          this.control('cancel-delivery', { delivery: requested.id });
+        }
+      } else {
+        this.control('cancel-correlated', { token });
+      }
+    };
+    o?.signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      this.#session.syncKinds();
+      if (o?.signal?.aborted) {
+        // In a synchronous reactor an already-aborted signal must land before
+        // execution, rather than waiting for the first guest callback. This
+        // still admits once and Pumps once, on a negotiated guest only.
+        const ok = this.send(
+          m === 'request-pump' ? 'request' : 'call',
+          fields(),
+        );
+        const id = textOf(field(ok, 'delivery'))!;
+        requested = this.#waiting(id, o.signal);
+        const pumped = this.send('pump', {
+          now: formatInstant(now),
+          fuelSlice: o.fuelSlice,
+          fuelCap: o.fuelCap,
+        });
+        return {
+          admitted: true,
+          requested,
+          pump: { ok: true, result: this.#pumpResult(pumped) },
+        };
+      }
+      token = this.#session.nextToken();
+      const ok = this.send(
+        m,
+        {
+          ...fields(),
+          token,
+          now: formatInstant(now),
+          fuelSlice: o?.fuelSlice,
+          fuelCap: o?.fuelCap,
+        },
+        packet => {
+          sent = true;
+          const id = textOf(field(packet, 'delivery'));
+          if (id) {
+            const replyToken = field(packet, 'token');
+            if (
+              !replyToken ||
+              typeof replyToken !== 'object' ||
+              Array.isArray(replyToken) ||
+              replyToken.kind !== 'number' ||
+              replyToken.source !== token.json
+            ) {
+              throw new HostError(
+                'invalid value',
+                'The reply names another correlation token',
+              );
+            }
+            requested = { id, result };
+            this.#requests.set(id, waiting);
+          } else if (field(packet, 'need') === undefined) {
+            refused = true;
+          }
+          if (cancelled && !refused) {
+            cancelled = false;
+            cancel();
+          }
+        },
+      );
+      if (!requested) {
+        throw new HostError(
+          'invalid value',
+          'The combined reply omitted its delivery',
+        );
+      }
+      return {
+        admitted: true,
+        requested,
+        pump: { ok: true, result: this.#pumpResult(ok) },
+      };
+    } catch (error) {
+      if (!requested) {
+        return { admitted: false, error };
+      }
+      this.#ready();
+      return { admitted: true, requested, pump: { ok: false, error } };
+    } finally {
+      this.#combining = false;
+      if (!requested) {
+        o?.signal?.removeEventListener('abort', cancel);
+      } else {
+        requested.result.then(
+          () => o?.signal?.removeEventListener('abort', cancel),
+          () => o?.signal?.removeEventListener('abort', cancel),
+        );
+      }
+    }
+  }
+
   broadcast(m: Message): string {
     return this.queue('broadcast', {}, m);
   }
@@ -1124,6 +1329,10 @@ export class WasmGroup {
       fuelSlice: o?.fuelSlice,
       fuelCap: o?.fuelCap,
     });
+    return this.#pumpResult(ok);
+  }
+
+  #pumpResult(ok: Json): PumpResult {
     this.#restored.clear();
     const deadline = textOf(field(ok, 'nextDeadline'));
     return {

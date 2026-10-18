@@ -8,6 +8,7 @@ import * as setup from '@northtalk/ts/setup';
 import * as store from '@northtalk/ts/store';
 import * as debug from '@northtalk/ts/debug';
 import * as wasm from '@northtalk/ts/wasm';
+import * as messageLayer from '@northtalk/ts/message-layer';
 
 const expect = (ok, message) => {
   if (!ok) {
@@ -24,6 +25,7 @@ export const smoke = async () => {
     store,
     debug,
     wasm,
+    messageLayer,
   })) {
     expect(Object.keys(module).length > 0, `${name} exports nothing`);
   }
@@ -39,6 +41,20 @@ export const smoke = async () => {
   });
   group.pump(clock);
   expect((await reply.result).toString() === '5', 'Group request');
+  const combined = script.requestPump(
+    { name: 'total', args: [talk.num(20), talk.num(22)] },
+    clock,
+  );
+  expect(combined.admitted && combined.pump.ok, 'Combined Request/Pump');
+  expect(
+    (await combined.requested.result).toString() === '42',
+    'Combined result',
+  );
+  const buffer = messageLayer.encodeBinaryValue(talk.dec('0.00'));
+  expect(
+    messageLayer.decodeBinaryValue(buffer).toString() === '0.00',
+    'Binary codec',
+  );
   const host = new session.SessionHost({ now: () => clock });
   host.input('put 2 + 3 into x');
   expect(host.input('x * 2')[0] === '10', 'Session Entry');

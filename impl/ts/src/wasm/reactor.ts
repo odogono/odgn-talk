@@ -128,10 +128,15 @@ export class Reactor {
     this.#guard(() => exports._initialize());
   }
 
-  /** One frame of JSON in, its reply out. */
+  /** One JSON frame, retained for Hosts speaking only JSON. */
   frame(json: string): string {
+    const reply = this.frameBytes(encoder.encode(json));
+    return this.#guard(() => decoder.decode(new Uint8Array(reply)));
+  }
+
+  /** One mixed-transport frame; copy the reply before another export can run. */
+  frameBytes(bytes: Uint8Array): ArrayBuffer {
     const e = this.#exports;
-    const bytes = encoder.encode(json);
     const pointer = this.#guard(() => e.talk_buffer(bytes.length));
     // The guest never saw the frame, so the instance carries on.
     if (pointer === 0) {
@@ -142,7 +147,7 @@ export class Reactor {
       const packed = BigInt.asUintN(64, e.talk_send(bytes.length));
       const at = Number(packed >> 32n);
       const length = Number(packed & 0xff_ff_ff_ffn);
-      return decoder.decode(new Uint8Array(e.memory.buffer, at, length));
+      return new Uint8Array(e.memory.buffer, at, length).slice().buffer;
     });
   }
 
