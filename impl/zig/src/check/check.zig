@@ -92,7 +92,24 @@ comptime {
     }
 }
 
-pub const Diagnostic = struct { code: Code, offset: usize };
+pub const Diagnostic = struct {
+    code: Code,
+    offset: usize = 0,
+    /// An inherited veto keeps its position in the defining code unit.
+    inherited_position: ?lexer.Lines.Position = null,
+
+    pub fn position(d: Diagnostic, lines: *lexer.Lines) lexer.Lines.Position {
+        return d.inherited_position orelse lines.position(d.offset);
+    }
+
+    pub fn lessThan(lines: *lexer.Lines, x: Diagnostic, y: Diagnostic) bool {
+        const a = x.position(lines);
+        const b = y.position(lines);
+        if (a.line != b.line) return a.line < b.line;
+        if (a.column != b.column) return a.column < b.column;
+        return @backingInt(x.code) < @backingInt(y.code);
+    }
+};
 
 /// What the Host and the Group tell the loader.
 pub const Context = struct {
@@ -177,6 +194,9 @@ pub const Export = struct {
     required: usize = 0,
     total: usize = 0,
     may_suspend: bool = false,
+    /// A local call cannot enter a Handler containing these vetoes. Retain
+    /// their positions after its syntax tree is released, for later Extend.
+    vetoes: []const lexer.Lines.Position = &.{},
 };
 
 pub const Library = struct { name: []const u8, exports: []const Export };
@@ -282,16 +302,17 @@ pub const Result = struct {
 pub fn check(arena: Allocator, tree: *const ast.Tree, context: Context) Allocator.Error!Result {
     var c: Checker = .{ .a = arena, .tree = tree, .context = context };
     try c.run();
-    std.mem.sort(Diagnostic, c.diagnostics.items, {}, struct {
-        fn less(_: void, x: Diagnostic, y: Diagnostic) bool {
-            if (x.offset != y.offset) return x.offset < y.offset;
-            return @backingInt(x.code) < @backingInt(y.code);
-        }
-    }.less);
+    var lines = try lexer.Lines.init(arena, tree.source);
+    std.mem.sort(Diagnostic, c.diagnostics.items, &lines, Diagnostic.lessThan);
     // One per construct: the same code at the same position once.
     var out: std.ArrayList(Diagnostic) = .empty;
     for (c.diagnostics.items) |d| {
-        if (out.items.len > 0 and out.items[out.items.len - 1].code == d.code and out.items[out.items.len - 1].offset == d.offset) continue;
+        if (out.items.len > 0) {
+            const prev = out.items[out.items.len - 1];
+            const p = prev.position(&lines);
+            const q = d.position(&lines);
+            if (prev.code == d.code and p.line == q.line and p.column == q.column) continue;
+        }
         try out.append(arena, d);
     }
     return .{ .diagnostics = out.items, .needs = c.needs.items, .commands = c.commands, .refs = c.refs, .bodies = c.bodies.items, .suspends = c.suspends, .roots = c.roots };
@@ -323,6 +344,23 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
     }
     var handlers: std.StringHashMapUnmanaged(void) = .empty;
     defer handlers.deinit(scratch);
+    var vetoes: std.StringHashMapUnmanaged(std.ArrayList(lexer.Lines.Position)) = .empty;
+    defer {
+        var lists = vetoes.valueIterator();
+        while (lists.next()) |list| list.deinit(scratch);
+        vetoes.deinit(scratch);
+    }
+    var lines = try lexer.Lines.init(scratch, tree.source);
+    defer lines.deinit(scratch);
+    for (tree.declarations) |d| if (d.data == .handler) {
+        const h = d.data.handler;
+        const entry = try vetoes.getOrPut(scratch, tree.text(h.name));
+        if (!entry.found_existing) entry.value_ptr.* = .empty;
+        var tokens: std.ArrayList(Tok) = .empty;
+        defer tokens.deinit(scratch);
+        try vetoTokens(scratch, h.body, &tokens);
+        for (tokens.items) |t| try entry.value_ptr.append(scratch, lines.position(tree.tokens[t].start));
+    };
     for (tree.declarations) |d| {
         if (d.private != null) continue;
         switch (d.data) {
@@ -338,7 +376,12 @@ pub fn exportsWithScratch(arena: Allocator, scratch: Allocator, tree: *const ast
                 if (h.fallback) continue;
                 const name = tree.text(h.name);
                 const entry = try handlers.getOrPut(scratch, name);
-                if (!entry.found_existing) try out.append(scratch, .{ .name = name, .kind = .handler, .may_suspend = suspends.get(name) orelse false });
+                if (!entry.found_existing) try out.append(scratch, .{
+                    .name = name,
+                    .kind = .handler,
+                    .may_suspend = suspends.get(name) orelse false,
+                    .vetoes = try arena.dupe(lexer.Lines.Position, vetoes.get(name).?.items),
+                });
             },
             else => {},
         }
@@ -1332,6 +1375,7 @@ const Checker = struct {
             return;
         }
         if (c.importedHandler(c.text(cmd.name))) |ex| {
+            try c.inheritedVetoes(ex);
             if (ex.may_suspend and !waits) try c.report(.missing_and_wait, cmd.name);
             if (!ex.may_suspend and waits) try c.report(.needless_and_wait, cmd.name);
             if (ex.may_suspend) try c.intrinsic(s, first, w);
@@ -1406,6 +1450,10 @@ const Checker = struct {
         const im = c.inherited_handlers.get(sel) orelse c.imports.get(sel) orelse return null;
         const ex = im.export_ orelse return null;
         return if (ex.kind == .handler) ex else null;
+    }
+
+    fn inheritedVetoes(c: *Checker, ex: Export) Allocator.Error!void {
+        for (ex.vetoes) |p| try c.diagnostics.append(c.a, .{ .code = .veto_outside_a_decision, .inherited_position = p });
     }
 
     fn receiver(c: *Checker, s: *Scope, e: *const Expr) Allocator.Error!void {
@@ -2106,6 +2154,7 @@ const Checker = struct {
             .imported => {
                 const ex = c.importByName(name).?.export_;
                 if (ex) |x| {
+                    try c.inheritedVetoes(x);
                     if (x.kind == .function and (call.args.len < x.required or call.args.len > x.total)) try c.report(.wrong_argument_count, call.name);
                     if (x.may_suspend) try c.report(.cant_suspend_here, call.name);
                 }
@@ -2223,24 +2272,9 @@ const Checker = struct {
     }
 
     fn vetoes(c: *Checker, b: ast.Block) Allocator.Error!void {
-        for (b) |st| switch (st.data) {
-            .veto => try c.report(.veto_outside_a_decision, st.first),
-            .@"if" => |f| {
-                for (f.arms) |arm| try c.vetoes(arm.body);
-                if (f.@"else") |e| try c.vetoes(e);
-            },
-            .repeat => |r| try c.vetoes(r.body),
-            .match => |m| {
-                for (m.branches) |br| try c.vetoes(br.body);
-                if (m.@"else") |e| try c.vetoes(e);
-            },
-            .@"try" => |t| {
-                try c.vetoes(t.body);
-                for (t.catches) |k| try c.vetoes(k.body);
-                if (t.finally) |f| try c.vetoes(f.body);
-            },
-            else => {},
-        };
+        var tokens: std.ArrayList(Tok) = .empty;
+        try vetoTokens(c.a, b, &tokens);
+        for (tokens.items) |t| try c.report(.veto_outside_a_decision, t);
     }
 
     /// Whether a Suspension Point may have been reached after `b`, given
@@ -2307,6 +2341,33 @@ const Checker = struct {
     }
 };
 
+/// Walk statements without entering Lambda bodies, whose vetoes have their
+/// own scope checks. Keep local-call and inherited-call checking in agreement.
+fn vetoTokens(a: Allocator, b: ast.Block, out: *std.ArrayList(Tok)) Allocator.Error!void {
+    for (b) |st| switch (st.data) {
+        .veto => try out.append(a, st.first),
+        .@"if" => |f| {
+            for (f.arms) |arm| try vetoTokens(a, arm.body, out);
+            if (f.@"else") |e| try vetoTokens(a, e, out);
+        },
+        .repeat => |r| try vetoTokens(a, r.body, out),
+        .match => |m| {
+            for (m.branches) |br| try vetoTokens(a, br.body, out);
+            if (m.@"else") |e| try vetoTokens(a, e, out);
+        },
+        .@"try" => |t| {
+            try vetoTokens(a, t.body, out);
+            for (t.offers) |o| try vetoTokens(a, o.body, out);
+            for (t.catches) |k| try vetoTokens(a, k.body, out);
+            if (t.finally) |f| try vetoTokens(a, f.body, out);
+        },
+        .timeout => |t| try vetoTokens(a, t.body, out),
+        .wait_block => |w| for (w.branches) |br| try vetoTokens(a, br.body, out),
+        .join => |j| try vetoTokens(a, j.body, out),
+        else => {},
+    };
+}
+
 // ---------------------------------------------------------------- tests
 
 const testing = std.testing;
@@ -2363,7 +2424,7 @@ fn diagnose(a: Allocator, source: []const u8, context: Context) ![]const u8 {
         .tree => |*tree| {
             const checked = try check(arena.allocator(), tree, context);
             for (checked.diagnostics) |d| {
-                const p = lines.position(d.offset);
+                const p = d.position(&lines);
                 try out.print(a, "{s} at {d}:{d}\n", .{ d.code.spelling(), p.line, p.column });
             }
         },
@@ -2410,6 +2471,36 @@ test "extensions preserve inherited Handler and value lookup in either order" {
         try expectDiagnostics("on later\nfoo and wait\nend\n", context, "needless and wait at 2:1\n");
         try expectDiagnostics("function f\nbar and wait\nend\n", context, "can't suspend here at 2:1\n");
     }
+}
+
+test "inherited veto diagnostics retain all clauses and positions and deduplicate calls" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const source =
+        \\on guarded x, deciding
+        \\ if x then
+        \\  veto
+        \\ end if
+        \\end guarded
+        \\on guarded x, deciding
+        \\ try
+        \\  throw 1
+        \\ catch e
+        \\  veto
+        \\ end try
+        \\end guarded
+    ;
+    const tree = (try parser.parse(a, source)).tree;
+    const checked = try check(a, &tree, .{});
+    try testing.expectEqual(@as(usize, 0), checked.diagnostics.len);
+    const exported = try exportsWithScratch(a, testing.allocator, &tree, &checked);
+    const context: Context = .{ .inherited = &.{.{ .name = "guarded", .unit = "@s", .export_ = exported[0] }} };
+    try expectDiagnostics("on caller\n guarded true\n return guarded(true)\nend caller", context, "veto outside a decision at 3:3\nveto outside a decision at 10:3\n");
+    // Diagnostics in the new unit and inherited vetoes share position order.
+    try expectDiagnostics("on caller\n return absent + guarded(true)\nend caller", context, "unknown name at 2:9\nveto outside a decision at 3:3\nveto outside a decision at 10:3\n");
+    try expectDiagnostics("on caller\n return 1\nend caller", context, "");
+    try expectDiagnostics("on caller\n return given guarded: guarded()\nend caller", context, "");
 }
 
 test "Library Imports still clash with local Handlers" {

@@ -77,6 +77,7 @@ test {
     _ = @import("machine/clause_charge_test.zig");
     _ = @import("machine/error_during_test.zig");
     _ = @import("machine/lifecycle_test.zig");
+    _ = @import("machine/extend_veto_test.zig");
     _ = @import("machine/library_binding_test.zig");
     _ = @import("machine/crossing_test.zig");
     _ = @import("machine/elements_test.zig");

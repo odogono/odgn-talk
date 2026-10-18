@@ -160,7 +160,11 @@ A Handler may suspend when a clause holds a written Suspension Point, or a
 Command Call to a Handler that may, found over the call graph to a fixpoint.
 That decides `missing and wait`, `needless and wait` and `can't suspend here`.
 A `, deciding` Handler's `veto` and `pass` are checked over every path through
-its body for `after a suspension`.
+its body for `after a suspension`. Local calls, command or function-style, into
+a Handler containing `veto` report `veto outside a decision`. Handler exports
+retain veto positions across code units, so Extend applies the same check to
+inherited Handlers without retaining their syntax trees. Refused extensions
+leave code identity, Script Variables and existing Runs intact.
 
 Capability calls, `say` included, are checked only when the `Context` gives
 the Grants, `wrong argument` among them for a literal against an Operation's
