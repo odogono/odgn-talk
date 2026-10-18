@@ -210,7 +210,7 @@ func TestWaitForInvalidFilterRaisesBeforeRegistration(t *testing.T) {
 	}
 }
 
-func TestWaitForUnrepresentableTimeoutDefersUntouched(t *testing.T) {
+func TestWaitForBeyondClockRangeStillObservesMessages(t *testing.T) {
 	g := New().NewGroup(GroupOptions{})
 	s, err := g.Load(LoadOptions{Name: "s", Source: "on watch\n wait for go or 1000000000000000000000000000000000 s\nend watch\n"})
 	if err != nil {
@@ -218,7 +218,13 @@ func TestWaitForUnrepresentableTimeoutDefersUntouched(t *testing.T) {
 	}
 	s.Deliver(Message{Name: "watch"})
 	r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-	if err != nil || r.FuelUsed != 5 || !r.NextDeadline.IsZero() || len(g.Inspect().Scripts[0].Runs) != 1 || g.Inspect().Scripts[0].Runs[0].Status != Ready {
+	if err != nil || r.FuelUsed != 15 || !r.NextDeadline.IsZero() || len(g.Inspect().Scripts[0].Runs) != 1 || g.Inspect().Scripts[0].Runs[0].Status != Suspended {
+		t.Fatal(r, err)
+	}
+	if _, err := s.Deliver(Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := g.Pump(time.Unix(1, 0), PumpOptions{}); err != nil || len(g.Inspect().Scripts[0].Runs) != 0 || !r.NextDeadline.IsZero() {
 		t.Fatal(r, err)
 	}
 }

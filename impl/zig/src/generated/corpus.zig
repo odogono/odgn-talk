@@ -793,7 +793,7 @@ pub const corpus: CorpusTable = .{
                 .{
                     .key = "until",
                     .type = "instant",
-                    .is = "the deadline it waits for, if it has one: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's",
+                    .is = "the deadline it waits for, when representable as an Instant: the earliest of its own and any Timeout Block's it is written in. A call or a Join shows one only inside a Timeout Block, where a Join's is the block's",
                     .optional = true,
                 },
                 .{
@@ -1473,7 +1473,7 @@ pub const corpus: CorpusTable = .{
                 .{
                     .key = "next",
                     .type = "instant",
-                    .is = "the next deadline: the earliest timer the next Pump could fire, a `maxPending`, `MaxWait` or Timeout Block deadline included, if there is one",
+                    .is = "the next deadline: the earliest timer the next Pump could fire, a `maxPending`, `MaxWait` or Timeout Block deadline included. An unreachable future deadline is omitted; a deadline before the Clock range gives this Pump's Clock reading, requesting another Pump at that reading",
                     .optional = true,
                 },
             },

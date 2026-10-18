@@ -753,16 +753,22 @@ const inRangeDate = (make: () => Value): Value => {
 };
 // An exact duration in whole microseconds, rounded half-even.
 const durationUs = (q: QuantityRef): bigint => {
-  const us = roundTo(
-    multiply(inBase(q), {
-      negative: false,
-      coefficient: US_PER_SECOND,
-      exponent: 0,
-    }),
-    0,
-    'half even',
-  );
-  return (us.negative ? -1n : 1n) * us.coefficient;
+  const base = inBase(q);
+  const exponent = base.exponent + 6;
+  let us = base.coefficient;
+  if (exponent >= 0) {
+    us *= 10n ** BigInt(exponent);
+  } else if (exponent < -34) {
+    us = 0n;
+  } else {
+    const divisor = 10n ** BigInt(-exponent);
+    const whole = us / divisor;
+    const twice = 2n * (us % divisor);
+    us =
+      whole +
+      BigInt(twice > divisor || (twice === divisor && whole % 2n === 1n));
+  }
+  return base.negative ? -us : us;
 };
 /** `wait d`'s duration in microseconds; anything but an exact duration is `wrong kind`. */
 export const waitUs = (v: Value): bigint => {

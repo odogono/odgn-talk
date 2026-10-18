@@ -36,7 +36,7 @@ const Pending = machine.Pending;
 
 const magic = "NTZS";
 /// The save format this Core reads and writes; it reads no other.
-pub const format_version: u32 = 12;
+pub const format_version: u32 = 13;
 
 pub const Error = error{
     InvalidSave,
@@ -70,9 +70,9 @@ const Out = struct {
         }
     }
 
-    fn signed(o: *Out, v: i128) !void {
-        var buf: [16]u8 = undefined;
-        std.mem.writeInt(i128, &buf, v, .little);
+    fn signed(o: *Out, v: i256) !void {
+        var buf: [32]u8 = undefined;
+        std.mem.writeInt(i256, &buf, v, .little);
         try o.bytes.appendSlice(o.gpa, &buf);
     }
 
@@ -146,10 +146,10 @@ const In = struct {
         return @intCast(n);
     }
 
-    fn signed(i: *In) Error!i128 {
-        if (i.bytes.len - i.pos < 16) return error.InvalidSave;
-        const v = std.mem.readInt(i128, i.bytes[i.pos..][0..16], .little);
-        i.pos += 16;
+    fn signed(i: *In) Error!i256 {
+        if (i.bytes.len - i.pos < 32) return error.InvalidSave;
+        const v = std.mem.readInt(i256, i.bytes[i.pos..][0..32], .little);
+        i.pos += 32;
         return v;
     }
 
@@ -435,14 +435,21 @@ fn readOne(i: *In, gpa: Allocator, t: Tables, stack: *std.ArrayList(Reading)) Er
     };
 }
 
-/// A deadline in microseconds: none, or an Instant the Core can show.
-fn deadline(i: *In) Error!i128 {
-    const ns = try i.signed();
-    if (ns == std.math.maxInt(i128)) return ns;
-    const seconds = std.math.cast(i64, @divFloor(ns, std.time.us_per_s)) orelse return error.InvalidSave;
-    const at: model.dates.Instant = .{ .seconds = seconds, .micros = @intCast(@mod(ns, std.time.us_per_s)) };
-    model.dates.validateInstant(at) catch return error.InvalidSave;
-    return ns;
+/// A mathematical deadline, which may lie outside the Instant range.
+fn deadline(i: *In) Error!machine.DeadlineTicks {
+    const at = try i.signed();
+    // A 34-digit base duration scaled to microseconds, plus a Clock.
+    if (at != @import("waits.zig").never and @abs(at) > 10000000000000000000000000000000000000000 + 253402300800000000) return error.InvalidSave;
+    return at;
+}
+
+fn duration(i: *In) Error!machine.DeadlineTicks {
+    const us = try i.signed();
+    var n = @abs(us);
+    var exponent: i32 = -6;
+    while (exponent < 0 and n % 10 == 0) : (exponent += 1) n /= 10;
+    if (n >= 10000000000000000000000000000000000) return error.InvalidSave;
+    return us;
 }
 
 fn valueError(e: anyerror) Error {
@@ -587,7 +594,7 @@ const Saving = struct {
             .deadline => |d| {
                 try s.o.byte(4);
                 try s.o.signed(d.at);
-                try s.o.int(d.ms);
+                try s.o.signed(d.us);
             },
         };
     }
@@ -715,7 +722,7 @@ const Saving = struct {
         try s.o.str(w.grant);
         try s.o.str(w.operation);
         try s.o.flag(w.decl != null);
-        try s.o.int(w.after_ms);
+        try s.o.signed(w.after_us);
     }
 
     fn pending(s: *Saving, run: *const Run, p: ?*const Pending) !void {
@@ -728,7 +735,7 @@ const Saving = struct {
         try s.o.str(x.grant);
         try s.o.str(x.operation);
         try s.o.flag(x.decl != null);
-        try s.o.int(x.after_ms);
+        try s.o.signed(x.after_us);
         try s.o.ref(x.member);
         try s.o.flag(x.block);
         try s.o.int(x.branch);
@@ -1370,7 +1377,7 @@ const Restoring = struct {
         w.grant = try r.kept();
         w.operation = try r.kept();
         if (try r.i.flag()) w.decl = try r.decl(s, w.grant, w.operation);
-        w.after_ms = try r.i.int();
+        w.after_us = try duration(&r.i);
         return w;
     }
 
@@ -1388,7 +1395,7 @@ const Restoring = struct {
         p.grant = try r.kept();
         p.operation = try r.kept();
         if (try r.i.flag()) p.decl = try r.decl(run.script, p.grant, p.operation);
-        p.after_ms = try r.i.int();
+        p.after_us = try duration(&r.i);
         p.member = try r.i.ref(std.math.maxInt(u32));
         p.block = try r.i.flag();
         p.branch = try r.i.small(u32);
@@ -1503,7 +1510,7 @@ const Restoring = struct {
                     try r.replacements.append(a, x);
                     break :blk .{ .replacement = x };
                 },
-                4 => .{ .deadline = .{ .at = try deadline(&r.i), .ms = try r.i.int() } },
+                4 => .{ .deadline = .{ .at = try deadline(&r.i), .us = try duration(&r.i) } },
                 else => return error.InvalidSave,
             };
             out.appendAssumeCapacity(slot);
