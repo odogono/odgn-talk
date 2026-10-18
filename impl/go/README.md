@@ -151,6 +151,10 @@ including preempted open Joins and suspended waits. Adopted Calls keep their
 original Clock across later Pumps; reissued Start reads the new Pump Clock.
 Earlier Zig save layouts are refused with `invalid save`, even under
 VariablesOnly; drain old Groups on their old runtime or start fresh Groups.
+The adapter gate exercises language and Cost Model mismatches through each
+Core's own version header, including VariablesOnly accounting, rollback and
+stale Function metadata. Go JSON-layout mutation tests run natively; the
+adapter checks binary integrity, malformed state and prior-format refusal.
 Reissue Fuel faults inside Joins remain [#1068](https://github.com/odogono/odgn-talk/issues/1068),
 and uncaught lost-call error Data differs from native Go ([#1069](https://github.com/odogono/odgn-talk/issues/1069)).
 Save-record input-generating Trace sinks remain part of [#1051](https://github.com/odogono/odgn-talk/issues/1051).

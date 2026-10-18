@@ -3,9 +3,66 @@
 package northtalk
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestZigBackendRestoreRejectsMalformedSaves(t *testing.T) {
+	g := New().NewGroup(GroupOptions{})
+	s := joinLoad(t, g, "s", "script variable cb = given x: x\nscript variable distance = 3 m\non spin\n repeat forever\n end repeat\nend spin", Limits{})
+	s.Deliver(Message{Name: "spin"})
+	if _, err := g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 10}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := g.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := zigSavePayload(t, saved)
+	format, n := binary.Uvarint(payload[4:])
+	if n <= 0 {
+		t.Fatal("invalid save format header")
+	}
+	badMagic := bytes.Clone(payload)
+	badMagic[0] = 'X'
+	badDigest := bytes.Clone(saved)
+	badDigest[len(badDigest)-1] ^= 1
+	type malformedSave struct {
+		name string
+		save []byte
+	}
+	cases := []malformedSave{
+		{"magic", signZigSave(badMagic)},
+		{"digest", badDigest},
+		{"truncated digest", saved[:len(saved)-1]},
+		{"missing state", signZigSave(payload[:4+n])},
+		{"extra state", signZigSave(append(bytes.Clone(payload), 0))},
+	}
+	// Every prior format must remain invalid even under VariablesOnly. Re-sign
+	// each mutation so rejection tests the format, rather than its checksum.
+	for old := uint64(0); old < format; old++ {
+		out := binary.AppendUvarint(bytes.Clone(payload[:4]), old)
+		out = append(out, payload[4+n:]...)
+		cases = append(cases, malformedSave{fmt.Sprintf("format %d", old), signZigSave(out)})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, policy := range []MismatchPolicy{RejectMismatch, VariablesOnly} {
+				t.Run(fmt.Sprint(policy), func(t *testing.T) {
+					restored, result, err := New().Restore(tc.save, RestoreOptions{Mismatch: policy})
+					host, ok := err.(*HostError)
+					if !ok || host.Code != InvalidSave || restored != nil || len(result.Reports) != 0 {
+						t.Fatalf("malformed save accepted: %v, %#v, %v", restored, result, err)
+					}
+				})
+			}
+		})
+	}
+}
 
 // A transport fixture supplies the live participant that the public scoped
 // Capability attachment slice (#1050) will expose. The Save being checked is
