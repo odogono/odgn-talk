@@ -1286,9 +1286,10 @@ them, trusting none of their code positions: each Script Variable the new
 code declares takes its saved value, as a preempted Run's rollback would
 leave it, and each discarded Run's Fuel stays in its counters. The
 mailboxes, the input queue, whose lines it writes before its own, the Fuel
-Slice debt and every pending call go, and each open Decision settles
-undecided, `cancelled`, at the first Pump. A Script that no longer loads is
-`TALK_LOAD_REFUSED`, and carried variables over a cap
+Slice debt and every pending call go. `AbandonedCalls` includes pending
+Capability and Script calls, including Join members, and excludes Timers.
+Each open Decision settles undecided, `cancelled`, at the first Pump. A
+Script that no longer loads is `TALK_LOAD_REFUSED`, and carried variables over a cap
 `TALK_STATE_TOO_LARGE`. Then every Run is read and
 checked against its unit's code, Host Objects the Host's `resolve` refuses
 restore disposed, and the `restore` record lists the pending calls. Until
