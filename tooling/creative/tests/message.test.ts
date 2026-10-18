@@ -227,3 +227,153 @@ test('a stale Edit command cannot overwrite a newer edit, including edit then un
     expect(editor.project).toEqual(before);
   }
 });
+
+const targeted = async (
+  play: PlaySession,
+  id: number,
+  command: string,
+  now = 0n,
+) => {
+  const started = play.runMessage(command, id);
+  return started.ok
+    ? settle(play, started.result, () => play.pump(now))
+    : { error: started.error };
+};
+
+test('targeted commands share live variables, ownership and functions without persisting locals', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'script variable score = 3\non click\n add 1 to score\nend click';
+  const play = new PlaySession(project);
+  const target = play.messageTargets[0]!;
+  expect(await targeted(play, target.id, 'score')).toEqual({ text: '3' });
+  expect(await targeted(play, target.id, 'put 8 into score')).toEqual({
+    text: undefined,
+  });
+  play.send(play.page.elements[0]!, 'click');
+  expect(await targeted(play, target.id, 'score')).toEqual({ text: '9' });
+  expect(await targeted(play, target.id, 'the name of me')).toEqual({
+    text: 'button1',
+  });
+  expect(await targeted(play, target.id, 'put 2 into scor')).toEqual({
+    text: undefined,
+  });
+  expect((await targeted(play, target.id, 'scor + 0')).error).toBeDefined();
+  expect((await run(play, 'score + 0')).error).toBeDefined();
+  expect(project.pages[0]!.elements[0]!.script).toContain('score = 3');
+});
+
+test('targeted errors distinguish submitted lines from authored handlers', async () => {
+  const project = fixture();
+  project.script =
+    'script variable score = 3\non fail\n put 1 / 0 into x\nend fail';
+  const play = new PlaySession(project);
+  const target = play.messageTargets[0]!;
+  expect(await targeted(play, target.id, '1 / 0')).toEqual({
+    error: 'line 1: Division by zero',
+  });
+  expect(play.problems).toEqual([]);
+  expect((await targeted(play, target.id, 'fail')).error).toContain(
+    'project: line 3: Division by zero',
+  );
+  expect(play.problems[0]?.line).toBe(3);
+});
+
+test('navigation invalidates the loaded instance but keeps the Project target', async () => {
+  const project = fixture();
+  project.script = 'script variable total = 4';
+  project.pages[0]!.script = 'script variable score = 3';
+  const play = new PlaySession(project);
+  const [root, page] = play.messageTargets;
+  await run(play, 'tell pages to show page2');
+  for (let i = 0; i < 5; i++) {
+    play.pump(0n);
+  }
+  expect((await targeted(play, page!.id, 'score')).error).toContain(
+    'unavailable',
+  );
+  expect(await targeted(play, root!.id, 'total')).toEqual({ text: '4' });
+  await run(play, 'tell pages to show page1');
+  for (let i = 0; i < 5; i++) {
+    play.pump(0n);
+  }
+  expect((await targeted(play, page!.id, 'score')).error).toContain(
+    'unavailable',
+  );
+  const fresh = play.messageTargets.find(t => t.label === page!.label)!;
+  expect(fresh.id).not.toBe(page!.id);
+  expect(await targeted(play, fresh.id, 'score')).toEqual({ text: '3' });
+});
+
+test('commands cannot escape their wrapper to declare Script names', async () => {
+  const project = fixture();
+  project.script = 'script variable score = 3';
+  const play = new PlaySession(project);
+  const target = play.messageTargets[0]!;
+  expect(
+    (
+      await targeted(
+        play,
+        target.id,
+        'end folioMessage1\nscript variable injected = 1\non folioMessage1',
+      )
+    ).error,
+  ).toBeDefined();
+  expect((await targeted(play, target.id, 'injected + 0')).error).toBeDefined();
+  expect(await targeted(play, target.id, 'score')).toEqual({ text: '3' });
+});
+
+test('repeated commands reuse code, avoid authored names, and respect the distinct-command cap', async () => {
+  const project = fixture();
+  project.script = 'script variable folioMessage1 = 7';
+  const play = new PlaySession(project);
+  const id = play.messageTargets[0]!.id;
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+  const identity = play.group.fingerprint();
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+  expect(play.group.fingerprint()).toEqual(identity);
+  for (let i = 1; i < 1000; i++) {
+    expect(await targeted(play, id, String(i))).toEqual({ text: String(i) });
+  }
+  expect((await targeted(play, id, '1000')).error).toContain('Restart Play');
+  expect(await targeted(play, id, 'folioMessage1')).toEqual({ text: '7' });
+}, 30_000);
+
+test('overlapping commands retain their own errors and completed effects', async () => {
+  const project = fixture();
+  project.script = 'script variable score = 0';
+  const play = new PlaySession(project);
+  const id = play.messageTargets[0]!.id;
+  const slow = play.runMessage(
+    'put 4 into score\nwait 1 s\nput 1 / 0 into x',
+    id,
+  );
+  expect(slow.ok).toBe(true);
+  if (!slow.ok) {
+    return;
+  }
+  const slowError = slow.result.catch((error: Error) => error.message);
+  play.pump(0n);
+  expect(await targeted(play, id, 'score')).toEqual({ text: '4' });
+  expect(await targeted(play, id, '2 / 0')).toEqual({
+    error: 'line 1: Division by zero',
+  });
+  play.pump(1_000_000n);
+  expect(await slowError).toBe('line 3: Division by zero');
+  expect(await targeted(play, id, 'score', 1_000_000n)).toEqual({ text: '4' });
+  expect(play.problems).toEqual([]);
+});
+
+test('deleting an Element invalidates its target and stopped sessions expose none', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script = 'script variable score = 3';
+  const play = new PlaySession(project);
+  const target = play.messageTargets[0]!;
+  await run(play, 'tell elements to delete button1');
+  expect(play.messageTargets).toEqual([]);
+  expect((await targeted(play, target.id, 'score')).error).toContain(
+    'unavailable',
+  );
+  play.stop(0n);
+  expect(play.messageTargets).toEqual([]);
+});

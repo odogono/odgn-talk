@@ -44,7 +44,13 @@ import {
   scriptPage,
   type ScriptOwner as AuthoredOwner,
 } from './script-manifest';
-import { MESSAGE_FIRST_LINE, messageSource } from './message-script';
+import {
+  MESSAGE_FIRST_LINE,
+  MESSAGE_HANDLER_LIMIT,
+  messageHandler,
+  messageSource,
+  type LoadedMessageTarget,
+} from './message-script';
 import { isSoundAsset, SoundBoard, type SoundBackend } from './sounds';
 
 type ScriptOwner = DeepReadonly<Project | Page | Element>;
@@ -272,6 +278,7 @@ export class PlaySession {
             this.#frames.delete(name);
             this.group.script(name)?.stop('Element deleted');
             this.#scripts.delete(member);
+            this.#targets.delete(name);
           }
           this.group.dispose(this.#objects.get(member)!);
         }
@@ -644,13 +651,16 @@ export class PlaySession {
   }
 
   /**
-   * Runs a Message Box command against the showing Page, as an
-   * ownerless Script with the Page's names and every Grant. A line that is
-   * not a statement is tried as an expression, whose value is the result.
+   * Runs in a selected loaded Script, or in the ownerless showing-Page
+   * context by default. Targeted expressions are tried first so a bare
+   * Script Variable reads its value instead of sending a message.
    */
-  runMessage(command: string): MessageOutcome {
+  runMessage(command: string, target?: number): MessageOutcome {
     if (this.stopped || this.navigating) {
       return { ok: false, error: 'The Page is changing; try again.' };
+    }
+    if (target !== undefined) {
+      return this.#runTargetedMessage(command, target);
     }
     let first: string | undefined;
     for (const source of [
@@ -706,6 +716,110 @@ export class PlaySession {
     });
     return name;
   }
+  #targets = new Map<
+    string,
+    LoadedMessageTarget & { commands: Map<string, string>; next: number }
+  >();
+  #nextTarget = 0;
+  #commandUnits = new Set<string>();
+  #commandRequests = new Map<string, { error?: string }>();
+
+  get messageTargets(): LoadedMessageTarget[] {
+    return this.stopped
+      ? []
+      : [...this.#targets.values()].map(({ id, label, source, manifest }) => ({
+          id,
+          label,
+          source,
+          manifest,
+        }));
+  }
+
+  #runTargetedMessage(command: string, id: number): MessageOutcome {
+    const entry = [...this.#targets.entries()].find(
+      ([, target]) => target.id === id,
+    );
+    if (!entry) {
+      return {
+        ok: false,
+        error: 'The selected Script is unavailable. Choose a context.',
+      };
+    }
+    const [name, target] = entry;
+    const script = this.group.script(name)!;
+    let handler = target.commands.get(command);
+    if (!handler) {
+      if (target.commands.size >= MESSAGE_HANDLER_LIMIT) {
+        return {
+          ok: false,
+          error:
+            'This Script has reached 1,000 distinct commands. Restart Play to run a new command.',
+        };
+      }
+      handler = messageHandler(
+        target.source + JSON.stringify(target.manifest.objects),
+        target.next,
+      );
+      let first: string | undefined;
+      let extended = false;
+      for (const body of [`return ${command}`, command]) {
+        const source = `on ${handler}\n${body}\nend ${handler}`;
+        try {
+          // A command cannot escape its wrapper to add Script declarations.
+          const tree = parseSource(source).tree as CstNode | null;
+          if (
+            tree &&
+            tree.children?.filter(child => child.rule === 'Declaration')
+              .length !== 1
+          ) {
+            first ??= 'Only statements and expressions are allowed.';
+            continue;
+          }
+          script.extend(source);
+          extended = true;
+          break;
+        } catch (error) {
+          if (!(error instanceof LoadError)) {
+            return {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
+          first ??= error.diagnostics
+            .map(d => `line ${d.line - MESSAGE_FIRST_LINE + 1}: ${d.code}`)
+            .join('; ');
+        }
+      }
+      if (!extended) {
+        return { ok: false, error: first ?? 'Could not run' };
+      }
+      target.commands.set(command, handler);
+      target.next = Number(handler.slice('folioMessage'.length)) + 1;
+      this.#commandUnits.add(`${name}+${target.commands.size}`);
+    }
+    try {
+      const request = script.request({ name: handler });
+      const outcome: { error?: string } = {};
+      this.#commandRequests.set(request.id, outcome);
+      return {
+        ok: true,
+        result: request.result
+          .catch((error: unknown) => {
+            throw new Error(
+              outcome.error ??
+                (error instanceof Error ? error.message : String(error)),
+            );
+          })
+          .finally(() => this.#commandRequests.delete(request.id)),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   #messages = 0;
   #messageErrors = new Map<string, string>();
 
@@ -741,6 +855,12 @@ export class PlaySession {
       const objects = owner === this.project ? pages : pageObjects;
       try {
         this.#frames.delete(name);
+        this.#targets.delete(name);
+        for (const unit of this.#commandUnits) {
+          if (unit.startsWith(`${name}+`)) {
+            this.#commandUnits.delete(unit);
+          }
+        }
         const existing = this.group.script(name);
         if (existing) {
           existing.reload(owner.script, 'reset variables');
@@ -753,6 +873,14 @@ export class PlaySession {
             grants: this.#grants(),
           });
         }
+        this.#targets.set(name, {
+          id: ++this.#nextTarget,
+          label: name,
+          source: owner.script,
+          manifest: scriptManifest(this.project, owner),
+          commands: new Map(),
+          next: 1,
+        });
         if (definesHandler(owner.script, 'frame')) {
           this.#frames.set(name, { busy: false, last: undefined });
         }
@@ -783,6 +911,7 @@ export class PlaySession {
         this.sounds.stopOwner(name);
         this.#frames.delete(name);
         this.group.script(name)?.stop('Left Page');
+        this.#targets.delete(name);
       }
     }
     this.pageIndex = closing.target;
@@ -935,30 +1064,39 @@ export class PlaySession {
     }
     for (const report of result.reports) {
       if (
-        report.kind === 'run end' &&
-        report.script.startsWith(MESSAGE_SCRIPT) &&
-        (report.outcome === 'errored' || report.outcome === 'limit fault')
+        report.kind !== 'run end' ||
+        (report.outcome !== 'errored' && report.outcome !== 'limit fault')
       ) {
-        // The command sits below its wrapping Handler's first line.
-        const line =
-          (report.at?.line ?? MESSAGE_FIRST_LINE) - MESSAGE_FIRST_LINE + 1;
-        this.#messageErrors.set(
-          report.script,
-          `line ${line}: ${report.error?.message ?? `${report.limit} limit reached`}`,
-        );
+        continue;
       }
-      if (
-        report.kind === 'run end' &&
-        (report.outcome === 'errored' || report.outcome === 'limit fault') &&
-        // A command's errors go back to the Message Box.
-        !report.script.startsWith(MESSAGE_SCRIPT)
-      ) {
-        const owner = this.#owners.get(report.script)!;
-        this.problems.push({
-          owner: this.#authored.get(owner)!,
-          line: report.at?.line ?? 1,
-          message: report.error?.message ?? `${report.limit} limit reached`,
-        });
+      const error = report.error?.message ?? `${report.limit} limit reached`;
+      const command = report.delivery
+        ? this.#commandRequests.get(report.delivery)
+        : undefined;
+      const generated = report.at
+        ? this.#commandUnits.has(report.at.unit)
+        : command !== undefined;
+      const ownerless = report.script.startsWith(MESSAGE_SCRIPT);
+      const line = Math.max(
+        1,
+        (report.at?.line ?? MESSAGE_FIRST_LINE) -
+          (generated || ownerless ? MESSAGE_FIRST_LINE - 1 : 0),
+      );
+      if (command) {
+        command.error = `${generated ? '' : `${report.script}: `}line ${line}: ${error}`;
+      }
+      if (ownerless) {
+        this.#messageErrors.set(report.script, `line ${line}: ${error}`);
+      }
+      if (!ownerless && !generated) {
+        const owner = this.#owners.get(report.script);
+        if (owner) {
+          this.problems.push({
+            owner: this.#authored.get(owner) ?? owner,
+            line,
+            message: error,
+          });
+        }
       }
     }
     const target = this.#requestedPage;

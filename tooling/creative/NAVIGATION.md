@@ -147,10 +147,15 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [message.ts](src/message.ts): running one command against the Play Session
   or, in Edit, the Project as one undoable edit; no DOM.
-- [message-window.ts](src/message-window.ts): the window, built on
+- [message-script.ts](src/message-script.ts): command wrappers, loaded Script
+  editor contexts and the distinct-command limit; [play.ts](src/play.ts) owns
+  target instance identities, Extend and command result routing.
+- [message-window.ts](src/message-window.ts): the target selector and history, built on
   [code-window.ts](src/code-window.ts).
 - Tests: [message.test.ts](tests/message.test.ts),
-  `runMessageBoxBrowserTests` in [play.browser.ts](tests/play.browser.ts).
+  `runMessageBoxBrowserTests` in [play.browser.ts](tests/play.browser.ts),
+  and [message-targets.browser.ts](tests/message-targets.browser.ts) on
+  `/message-targets-test.html` for target lifetime, loaded scope and history.
 - First check: `bun test tooling/creative/tests/message.test.ts`.
 
 ## Windows and code windows

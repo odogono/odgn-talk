@@ -22,7 +22,12 @@ import {
   showCodeWindow,
 } from './code-window';
 import { h } from './dom';
-import { MESSAGE_FIRST_LINE, messageParts } from './message-script';
+import {
+  MESSAGE_FIRST_LINE,
+  messageParts,
+  messageHandler,
+  type LoadedMessageTarget,
+} from './message-script';
 import { runInEdit, type MessageReply } from './message';
 import { scriptManifest } from './script-manifest';
 import { bringWindowForward, setWindowOpener } from './windows';
@@ -31,27 +36,34 @@ import { type StackShell } from './stack';
 export type MessageTarget = {
   /** The playing session's Page name, if any; commands run there when it is. */
   pageName(): string | undefined;
+  run(text: string, session: number, target?: number): Promise<MessageReply>;
+  scripts(): LoadedMessageTarget[];
   /** Runs a command in the playing session, which may take a while to answer. */
-  run(text: string): Promise<MessageReply>;
+  session(): number | undefined;
 };
 
 const HISTORY = 50;
 const URI = 'creative:///message-box.talk';
 
 /** The command's span: the lines between the hidden prefix and suffix. */
-const commandRange = (doc: Text) =>
-  doc.lines > MESSAGE_FIRST_LINE
+const commandRange = (doc: Text, first = MESSAGE_FIRST_LINE) =>
+  doc.lines > first
     ? {
-        from: doc.line(MESSAGE_FIRST_LINE).from,
+        from: doc.line(first).from,
         to: doc.line(doc.lines).from - 1,
       }
     : { from: 0, to: doc.length };
 
 // Marks the Message Box's own rewrites of the hidden lines.
-const rewrite = Annotation.define<true>();
+const rewrite = Annotation.define<number>();
+const firstLine = StateField.define<number>({
+  create: () => MESSAGE_FIRST_LINE,
+  update: (value, tr) => tr.annotation(rewrite) ?? value,
+});
 
-const hide = (doc: Text) => {
-  const { from, to } = commandRange(doc);
+const hide = (state: EditorState) => {
+  const doc = state.doc;
+  const { from, to } = commandRange(doc, state.field(firstLine));
   const hidden = Decoration.replace({});
   return Decoration.set([
     ...(from > 0 ? [hidden.range(0, from)] : []),
@@ -60,8 +72,8 @@ const hide = (doc: Text) => {
 };
 
 const hiddenWrapper = StateField.define({
-  create: state => hide(state.doc),
-  update: (value, tr) => (tr.docChanged ? hide(tr.state.doc) : value),
+  create: state => hide(state),
+  update: (value, tr) => (tr.docChanged ? hide(tr.state) : value),
   provide: field => [
     EditorView.decorations.from(field),
     EditorView.atomicRanges.of(view => view.state.field(field)),
@@ -73,14 +85,17 @@ const protectWrapper = EditorState.changeFilter.of(tr => {
   if (tr.annotation(rewrite) || tr.startState.doc.lines <= MESSAGE_FIRST_LINE) {
     return true;
   }
-  const { from, to } = commandRange(tr.startState.doc);
+  const { from, to } = commandRange(
+    tr.startState.doc,
+    tr.startState.field(firstLine),
+  );
   return [0, from, to, tr.startState.doc.length];
 });
 
 export const mountMessageWindow = (
   shell: StackShell,
   target: MessageTarget,
-): void => {
+): (() => void) => {
   const win = codeWindow({
     id: 'message-window',
     className: 'message-window',
@@ -92,11 +107,22 @@ export const mountMessageWindow = (
   win.node.hidden = true;
   const log = h('ol', { class: 'message-log', 'aria-live': 'polite' });
   const parent = h('div', { class: 'code-editor' });
-  win.node.append(log, parent);
+  const selector = h('select', { 'aria-label': 'Message Box context' });
+  const submitButton = h('button', { type: 'button' }, 'Run');
+  const status = h('span', { role: 'status' });
+  win.node.append(
+    h('div', { class: 'message-context' }, selector, submitButton, status),
+    log,
+    parent,
+  );
   const server = languageServer();
   const { lsp } = server;
-  const history: string[] = [];
+  type Context = { id?: number; label: string; session: number | undefined };
+  const history: { context: Context; text: string }[] = [];
+  let selected: Context | undefined;
+  let generation = shell.editor.generation;
   let recalled = 0;
+  let choicesKey = '';
 
   const print = (className: string, text: string) => {
     log.append(h('li', { class: className }, text));
@@ -104,14 +130,21 @@ export const mountMessageWindow = (
       log.firstElementChild!.remove();
     }
     log.scrollTop = log.scrollHeight;
+    return log.lastElementChild!;
   };
 
   const command = () => {
-    const { from, to } = commandRange(view.state.doc);
+    const { from, to } = commandRange(
+      view.state.doc,
+      view.state.field(firstLine),
+    );
     return view.state.sliceDoc(from, to);
   };
   const setCommand = (text: string) => {
-    const { from, to } = commandRange(view.state.doc);
+    const { from, to } = commandRange(
+      view.state.doc,
+      view.state.field(firstLine),
+    );
     view.dispatch({
       changes: { from, to, insert: text },
       selection: { anchor: from + text.length },
@@ -126,66 +159,170 @@ export const mountMessageWindow = (
   };
   /** Refreshes the names and Host Manifest for the current Page. */
   const sync = () => {
+    if (generation !== shell.editor.generation) {
+      generation = shell.editor.generation;
+      history.length = 0;
+      recalled = 0;
+      selected = undefined;
+      log.replaceChildren();
+      setCommand('');
+    }
     const project = shell.editor.project;
     const showing = page();
-    server.configure(scriptManifest(project, showing));
-    const { prefix, suffix } = messageParts();
+    const session = target.session();
+    const scripts = target.scripts();
+    const loaded =
+      selected?.session === session && selected?.id !== undefined
+        ? scripts.find(script => script.id === selected!.id)
+        : undefined;
+    const available =
+      !selected ||
+      (selected.session === session &&
+        (selected.id === undefined || loaded !== undefined));
+    const nextChoicesKey = JSON.stringify([
+      session,
+      scripts.map(script => [script.id, script.label]),
+      selected,
+      available,
+    ]);
+    if (nextChoicesKey !== choicesKey) {
+      choicesKey = nextChoicesKey;
+      selector.replaceChildren(
+        h('option', { value: 'default' }, 'Default context'),
+      );
+      for (const script of scripts) {
+        selector.append(
+          h('option', { value: String(script.id) }, script.label),
+        );
+      }
+      if (selected && !available) {
+        selector.append(
+          h(
+            'option',
+            { value: 'unavailable' },
+            `${selected.label} (unavailable)`,
+          ),
+        );
+      }
+    }
+    selector.value = !available
+      ? 'unavailable'
+      : selected?.id === undefined
+        ? 'default'
+        : String(selected.id);
+    submitButton.disabled = !available;
+    view.contentDOM.setAttribute('aria-disabled', String(!available));
+    status.textContent = available ? '' : 'Choose a context to run.';
+    server.configure(loaded?.manifest ?? scriptManifest(project, showing));
+    const handler = loaded
+      ? messageHandler(loaded.source + JSON.stringify(loaded.manifest.objects))
+      : undefined;
+    const { prefix, suffix } = loaded
+      ? {
+          prefix: `${loaded.source}\non ${handler}\n`,
+          suffix: `\nend ${handler}`,
+        }
+      : messageParts();
     const doc = view.state.doc.toString();
     const text = command();
     if (doc !== prefix + text + suffix) {
       view.dispatch({
         changes: { from: 0, to: doc.length, insert: prefix + text + suffix },
         selection: { anchor: prefix.length + text.length },
-        annotations: rewrite.of(true),
+        annotations: rewrite.of(prefix.split('\n').length),
       });
     }
     // Keep the cursor in the command, never in the hidden lines.
-    const { from, to } = commandRange(view.state.doc);
+    const { from, to } = commandRange(
+      view.state.doc,
+      view.state.field(firstLine),
+    );
     const { head } = view.state.selection.main;
     if (head < from || head > to) {
       view.dispatch({ selection: { anchor: to } });
     }
   };
 
-  const run = async (text: string): Promise<MessageReply> => {
-    if (target.pageName() === undefined) {
+  const run = async (text: string, context: Context): Promise<MessageReply> => {
+    if (context.session === undefined) {
       const reply = await runInEdit(shell.editor, text);
       shell.redraw();
       return reply;
     }
-    return target.run(text);
+    return target.run(text, context.session, context.id);
   };
 
   const submit = () => {
+    sync();
     const text = command().trim();
-    if (!text) {
+    if (!text || submitButton.disabled) {
       return true;
     }
+    const context = selected ?? {
+      session: target.session(),
+      label: 'Default context',
+    };
     setCommand('');
-    if (history.at(-1) !== text) {
-      history.push(text);
-      history.splice(0, history.length - HISTORY);
+    const last = history.at(-1);
+    if (
+      !last ||
+      last.text !== text ||
+      last.context.session !== context.session ||
+      last.context.id !== context.id
+    ) {
+      history.push({ text, context });
+      history.splice(0, Math.max(0, history.length - HISTORY));
     }
     recalled = history.length;
-    print('command', text);
-    sync();
-    void run(text).then(reply => {
-      if (reply.error) {
-        print('error', reply.error);
-      } else if (reply.text !== undefined) {
-        print('result', reply.text);
-      }
-      sync();
-    });
+    const row = print('entry', '');
+    row.append(
+      h(
+        'div',
+        { class: 'context' },
+        `${context.label} · ${context.session === undefined ? 'Edit' : `Play ${context.session}`}`,
+      ),
+      h('div', { class: 'command' }, text),
+    );
+    void run(text, context)
+      .catch((error: unknown): MessageReply => ({
+        error: error instanceof Error ? error.message : String(error),
+      }))
+      .then(reply => {
+        if (reply.error) {
+          row.append(h('div', { class: 'error' }, reply.error));
+        } else if (reply.text !== undefined) {
+          row.append(h('div', { class: 'result' }, reply.text));
+        }
+        sync();
+      });
     return true;
   };
+  submitButton.addEventListener('click', submit);
+  selector.addEventListener('change', () => {
+    if (selector.value === 'unavailable') {
+      return;
+    }
+    const script = target
+      .scripts()
+      .find(script => String(script.id) === selector.value);
+    selected = script
+      ? { session: target.session(), id: script.id, label: script.label }
+      : undefined;
+    sync();
+    view.focus();
+  });
   // Up and Down recall earlier commands while the command is one line.
   const recall = (step: number) => () => {
     if (command().includes('\n') || !history.length) {
       return false;
     }
     recalled = Math.max(0, Math.min(history.length, recalled + step));
-    setCommand(history[recalled] ?? '');
+    const entry = history[recalled];
+    if (entry) {
+      selected = entry.context;
+    }
+    sync();
+    setCommand(entry?.text ?? '');
     return true;
   };
 
@@ -195,6 +332,7 @@ export const mountMessageWindow = (
     uri: URI,
     lsp,
     extensions: [
+      firstLine,
       hiddenWrapper,
       protectWrapper,
       // Below completion, whose Enter and arrows win while it is open.
@@ -222,7 +360,7 @@ export const mountMessageWindow = (
       return;
     }
     // Only the command's own lines; the hidden Handler isn't the author's.
-    const first = MESSAGE_FIRST_LINE - 1;
+    const first = view.state.field(firstLine) - 1;
     const last = view.state.doc.lines - 2;
     view.dispatch(
       diagnosticsSpec(
@@ -252,8 +390,7 @@ export const mountMessageWindow = (
   });
   view.contentDOM.addEventListener('focus', sync);
   shell.onRedraw(() => {
-    if (shown && !win.node.hidden) {
-      sync();
-    }
+    sync();
   });
+  return sync;
 };
