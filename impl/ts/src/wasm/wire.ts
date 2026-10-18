@@ -3,11 +3,15 @@
 // with duplicate keys refused, so a Value inside one decodes exactly.
 import { quoteJSON } from '../encoding';
 import {
+  JsonNumber,
+  JsonObject,
   isJsonNumber as isNumber,
   isJsonObject as isObject,
   readOrderedJSON,
   type Json,
 } from '../readers';
+import { valueNode } from '../request-pump-binary';
+import type { Value } from '../values';
 
 const raw = Symbol('raw JSON');
 const sep = Symbol('separator');
@@ -15,7 +19,11 @@ const sep = Symbol('separator');
 /** Text already in JSON, such as a Value Encoding, placed in a frame as is. */
 export class Raw {
   readonly [raw] = true;
-  constructor(readonly json: string) {}
+  /** `value`, when given, is the Value `json` encodes. */
+  constructor(
+    readonly json: string,
+    readonly value?: Value,
+  ) {}
 }
 
 export type Frame =
@@ -71,6 +79,39 @@ export const frameJSON = (frame: Frame): string => {
     }
   }
   return out.join('');
+};
+
+/** A frame as the reader's nodes, for the binary transport; Values stay Values. */
+export const frameTree = (frame: Frame): Json => {
+  let root!: Json;
+  const pending: [Frame, (j: Json) => void][] = [[frame, j => (root = j)]];
+  while (pending.length) {
+    const [next, assign] = pending.pop()!;
+    if (
+      next === null ||
+      typeof next === 'string' ||
+      typeof next === 'boolean'
+    ) {
+      assign(next);
+    } else if (typeof next === 'number') {
+      assign(new JsonNumber(JSON.stringify(next)));
+    } else if (raw in next) {
+      assign(next.value ? valueNode(next.value) : readReply(next.json));
+    } else if (Array.isArray(next)) {
+      const xs: Json[] = [];
+      assign(xs);
+      next.forEach((x, i) => pending.push([x, j => (xs[i] = j)]));
+    } else {
+      const pairs: [string, Json][] = [];
+      assign(new JsonObject(pairs));
+      Object.entries(next)
+        .filter(([, v]) => v !== undefined)
+        .forEach(([k, v], i) =>
+          pending.push([v as Frame, j => (pairs[i] = [k, j])]),
+        );
+    }
+  }
+  return root;
 };
 
 export type { Json };

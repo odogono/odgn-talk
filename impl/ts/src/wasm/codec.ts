@@ -6,7 +6,7 @@ import { encodeValue } from '../encoding';
 import { HostError } from '../errors';
 import type { HostObject } from '../objects';
 import { fromJson } from '../readers';
-import { functionValue, patternValue, type Value } from '../values';
+import { functionValue, patternValue, text, type Value } from '../values';
 import { quoteJSON } from '../encoding';
 import { Raw, type Json } from './wire';
 
@@ -73,7 +73,14 @@ export const encode = (codec: Codec, v: Value): Raw => {
       const code = f.code as GuestFunction;
       return `{"$function":[${quoteJSON(f.home)},${quoteJSON(other.toString())},${quoteJSON(code.token)}]}`;
     }),
+    v,
   );
+};
+
+/** A guest Function's binary payload: the parts its `$function` carries. */
+export const guestPayload = (f: Value): readonly Value[] => {
+  const code = f.asFunction()!.code as GuestFunction;
+  return [text(f.asFunction()!.home), text(f.toString()), text(code.token)];
 };
 
 export const encodeAll = (codec: Codec, vs: readonly Value[]): Raw[] =>

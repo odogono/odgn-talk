@@ -19,11 +19,13 @@ import {
   requestPumpFeature,
 } from '../request-pump-binary';
 import { standardChecks } from '../standard-capability-checks';
+import { guestPayload } from './codec';
 import { InstanceLostError, Reactor, type Diagnostics } from './reactor';
 import {
   Raw,
   field,
   frameJSON,
+  frameTree,
   intOf,
   plain,
   readReply,
@@ -174,10 +176,13 @@ export class Session {
     let initial = true;
     for (;;) {
       const binary = binaryExchange && initial;
-      const json = frameJSON(frame);
       const input = binary
-        ? new Uint8Array(encodeBinaryFrame(readReply(json)))
-        : encoder.encode(json);
+        ? new Uint8Array(
+            encodeBinaryFrame(frameTree(frame), {
+              encodeFunction: guestPayload,
+            }),
+          )
+        : encoder.encode(frameJSON(frame));
       const output = this.reactor.frameBytes(input);
       const binaryReply = isRequestPumpBinary(new Uint8Array(output));
       if (binaryReply && !binaryExchange) {

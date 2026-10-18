@@ -8,13 +8,36 @@ import {
   requestPumpFeature,
 } from '../src/request-pump-binary';
 import { JsonNumber, readOrderedJSON } from '../src/readers';
-import { frameJSON, plain, type Frame } from '../src/wasm/wire';
+import { encodeAll } from '../src/wasm/codec';
+import { frameJSON, frameTree, plain, type Frame } from '../src/wasm/wire';
 import { encodeBinaryValue } from '../src/binary-value';
-import { map, text } from '../src/values';
+import { bytes, list, map, text } from '../src/values';
+import { fromJson } from '../src/readers';
 import { Reactor } from '../src/wasm/reactor';
 import { createCore } from '../src/wasm/index';
 
 const frame = (data: Frame) => readOrderedJSON(frameJSON(data));
+test('a frame holding Values encodes as its Value Encoding would', () => {
+  const codec = { identity: {}, object: () => undefined };
+  const args = encodeAll(codec, [
+    text('é'),
+    list(map([['k', bytes(new Uint8Array([0, 255]))]])),
+    fromJson(readOrderedJSON('{"$dec":"1.50"}')),
+  ]);
+  const data: Frame = {
+    m: 'call-pump',
+    ref: 1,
+    group: 'g',
+    token: 2,
+    fn: { $object: ['K', 'id'] },
+    args,
+    now: '2026-01-01T00:00:00Z',
+    fuelSlice: 10,
+  };
+  expect(new Uint8Array(encodeBinaryFrame(frameTree(data)))).toEqual(
+    new Uint8Array(encodeBinaryFrame(frame(data))),
+  );
+});
 test('every specialized Report and nested Value survives the fields envelope', () => {
   const reports = binaryReports.map(([kind]) => ({ kind }));
   const full = [

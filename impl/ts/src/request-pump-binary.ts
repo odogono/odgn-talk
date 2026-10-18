@@ -23,7 +23,13 @@ import {
   isJsonObject as isObject,
   type Json,
 } from './readers';
-import { nothing, objectValue, patternValue, functionValue } from './values';
+import {
+  nothing,
+  objectValue,
+  patternValue,
+  functionValue,
+  type Value,
+} from './values';
 
 export const requestPumpFeature = 'request-pump-fields-v1';
 const prefix = [0x4e, 0x54, 0x42, 1, 1];
@@ -142,6 +148,16 @@ const field = (j: Json, k: string): Json | undefined =>
 const record = (pairs: [string, Json | undefined][]) =>
   new JsonObject(pairs.filter((p): p is [string, Json] => p[1] !== undefined));
 const coreErrorNodes = new WeakSet<JsonObject>();
+const valueNodes = new WeakMap<JsonObject, Value>();
+/**
+ * A frame node standing for a Host Value, so a Host that holds the Value
+ * skips its Value Encoding; Functions use the options' `encodeFunction`.
+ */
+export const valueNode = (v: Value): Json => {
+  const node = new JsonObject([]);
+  valueNodes.set(node, v);
+  return node;
+};
 const metadata = (o: BinaryValueOptions): BinaryValueOptions => ({
   ...o,
   object: (kind, id) => objectValue({ kind, id, handle: {} }),
@@ -151,6 +167,10 @@ const metadata = (o: BinaryValueOptions): BinaryValueOptions => ({
 // A Value Encoding node becomes an item without ever interpreting a Function
 // token as code. Validate metadata before an owner can resolve its identity.
 const jsonValueItem = (j: Json, o: BinaryValueOptions): BinaryItem => {
+  const held = isObject(j) ? valueNodes.get(j) : undefined;
+  if (held) {
+    return valueItem(held, o);
+  }
   const payloads = new WeakMap<object, ReturnType<typeof fromJson>[]>();
   const v = fromJson(
     j,
