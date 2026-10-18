@@ -162,8 +162,10 @@ List files with `rg --files tooling/creative` before opening one by name.
   Manifest for its language-server workspace (ADR 0084), data only.
 - [script-names.ts](src/script-names.ts): binding and name checks.
 - [scripts.ts](src/scripts.ts): one editor and workspace per Script.
-- [recipes.ts](src/recipes.ts) and [recipe-picker.ts](src/recipe-picker.ts):
-  Script Recipes.
+- [recipes.ts](src/recipes.ts): Script Recipe targets, source and placement.
+  [recipe-picker.tsx](src/recipe-picker.tsx): the Preact Recipe picker, with
+  its choices, preview and status as component state; it reads the CodeMirror
+  view and inserts through `view.dispatch`.
 - The Core's Manifest export is [manifest.ts](../../impl/ts/src/manifest.ts);
   the format is [the Host Manifest](../../spec/09-embedding.md#the-host-manifest-format).
 - Tests: [scripts.test.ts](tests/scripts.test.ts),
