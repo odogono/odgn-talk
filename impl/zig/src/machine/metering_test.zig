@@ -57,6 +57,12 @@ fn contains(trace: *std.Io.Writer.Allocating, text: []const u8) !void {
         return error.TestExpectedEqual;
     }
 }
+fn absent(trace: *std.Io.Writer.Allocating, text: []const u8) !void {
+    if (std.mem.indexOf(u8, trace.written(), text) != null) {
+        std.debug.print("unexpected {s} in:\n{s}", .{ text, trace.written() });
+        return error.TestExpectedEqual;
+    }
+}
 fn endReport(g: *machine.Group) !machine.report.RunEnd {
     for (g.reports.list.items) |r| if (r == .run_end) return r.run_end;
     return error.TestExpectedEqual;
@@ -91,8 +97,8 @@ test "Send charges before delivery or reply registration" {
             try t.expectEqual(@as(usize, 0), g.waits.pending.items.len);
             try t.expectEqual(@as(u64, 0), g.waits.timers);
             for (g.ids.items) |id| try t.expect(std.mem.indexOf(u8, id, ".c") == null);
-            try t.expect(std.mem.indexOf(u8, trace.written(), "send a/r1") == null);
-            try t.expect(std.mem.indexOf(u8, trace.written(), "abandon a/r1") == null);
+            try absent(&trace, "send a/r1");
+            try absent(&trace, "abandon a/r1");
             // The failed instruction must not leave delivery work for a later Pump.
             try g.pump(clock);
             try t.expectEqual(@as(u64, 0), g.pump_fuel);

@@ -236,7 +236,8 @@ func TestSendWaitPendingStateFaultAbandonsOnlyTheReply(t *testing.T) {
 }
 
 func TestSendWaitBudgetFaultDoesNotRegisterOrSend(t *testing.T) {
-	for _, limit := range []Limits{{FuelPerRun: 6}, {FuelPerRun: 27}, {AllocPerRun: 1}, {AllocPerRun: 47}, {FuelPerRun: 6, AllocPerRun: 1}} {
+	for _, tc := range sendBudgetFaults {
+		limit := tc.limits
 		var trace lines
 		g := New().NewGroup(GroupOptions{Trace: &trace})
 		a, err := g.Load(LoadOptions{Name: "a", Limits: limit, Source: "on go\n send ping with 7 to b and wait\nend go"})
@@ -249,15 +250,11 @@ func TestSendWaitBudgetFaultDoesNotRegisterOrSend(t *testing.T) {
 		}
 		a.Deliver(Message{Name: "go"})
 		r, err := g.Pump(time.Unix(0, 0), PumpOptions{})
-		if err != nil || len(operationalReports(r.Reports)) != 1 || operationalReports(r.Reports)[0].(*RunEnd).Outcome != LimitFault || r.FuelUsed != 6 || !r.NextDeadline.IsZero() {
+		if err != nil || len(operationalReports(r.Reports)) != 1 || r.FuelUsed != 6 || !r.NextDeadline.IsZero() {
 			t.Fatalf("%+v %v", r, err)
 		}
 		end := operationalReports(r.Reports)[0].(*RunEnd)
-		wantLimit := "alloc"
-		if limit.FuelPerRun != 0 {
-			wantLimit = "fuel"
-		}
-		if end.Limit != wantLimit || end.Fuel != 6 || end.Alloc != 0 || end.At.Unit != "a" || end.At.PC != 4 {
+		if end.Outcome != LimitFault || end.Limit != tc.limit || end.Fuel != 6 || end.Alloc != 0 || end.At.Unit != "a" || end.At.PC != 4 {
 			t.Fatal(end)
 		}
 		records := strings.Join(trace, "\n")
