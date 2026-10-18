@@ -146,7 +146,7 @@ Capability handles select callbacks; public Capability names participate in
 Fingerprints and declaration matching, independently of registration order.
 Save passes through live-effect refusals, with a transport fixture covering
 `effects pending`; public scoped/Segment attachments remain the separate
-slice. Restored Call Segment ids are reconstructed from retained Run state,
+slice. Saves retain each pending Call's Segment id,
 including preempted open Joins and suspended waits. Adopted Calls keep their
 original Clock across later Pumps; reissued Start reads the new Pump Clock.
 Earlier Zig save layouts are refused with `invalid save`, even under

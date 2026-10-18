@@ -77,6 +77,11 @@ const Out = struct {
         try o.bytes.appendSlice(o.gpa, &buf);
     }
 
+    fn instant(o: *Out, t: model.dates.Instant) !void {
+        try o.signed(t.seconds);
+        try o.int(@intCast(t.micros));
+    }
+
     fn flag(o: *Out, b: bool) !void {
         try o.byte(@intFromBool(b));
     }
@@ -147,6 +152,13 @@ const In = struct {
         const v = std.mem.readInt(i128, i.bytes[i.pos..][0..16], .little);
         i.pos += 16;
         return v;
+    }
+
+    fn instant(i: *In) Error!model.dates.Instant {
+        const seconds = std.math.cast(i64, try i.signed()) orelse return error.InvalidSave;
+        const micros = try i.int();
+        if (micros >= std.time.us_per_s) return error.InvalidSave;
+        return .{ .seconds = seconds, .micros = @intCast(micros) };
     }
 
     fn flag(i: *In) Error!bool {
@@ -927,8 +939,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(cost_model.version);
     try o.bytes.appendSlice(gpa, &print);
     try o.int(g.saves);
-    try o.signed(g.clock.seconds);
-    try o.int(@intCast(g.clock.micros));
+    try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
     try o.int(g.timers);
@@ -996,8 +1007,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         try o.str(c.script);
         try o.str(c.grant);
         try o.str(c.run);
-        try o.signed(c.now.seconds);
-        try o.int(@intCast(c.now.micros));
+        try o.str(c.segment);
+        try o.instant(c.now);
         try s.values(c.args);
         try o.int(c.charged);
     }
@@ -2193,10 +2204,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const saved_print = i.bytes[i.pos..][0..32].*;
     i.pos += 32;
     g.saves = try i.int();
-    const seconds = try i.signed();
-    const micros = try i.int();
-    if (micros >= std.time.us_per_s) return error.InvalidSave;
-    g.clock = .{ .seconds = std.math.cast(i64, seconds) orelse return error.InvalidSave, .micros = @intCast(micros) };
+    g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
     g.timers = try i.int();
@@ -2341,12 +2349,12 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
         x.script = try r.kept();
         x.grant = try r.kept();
         x.run = try r.kept();
-        const call_seconds = std.math.cast(i64, try i.signed()) orelse return error.InvalidSave;
-        const call_micros = try i.int();
-        if (call_micros >= std.time.us_per_s) return error.InvalidSave;
-        x.now = .{ .seconds = call_seconds, .micros = @intCast(call_micros) };
+        // The Segment which established the wait, within the Call's Run.
+        x.segment = try r.kept();
+        if (!std.mem.startsWith(u8, x.segment, x.run) or !std.mem.startsWith(u8, x.segment[x.run.len..], ".s")) return error.InvalidSave;
+        x.now = try i.instant();
         model.dates.validateInstant(x.now) catch return error.InvalidSave;
-        if (x.now.seconds > g.clock.seconds or (x.now.seconds == g.clock.seconds and x.now.micros > g.clock.micros)) return error.InvalidSave;
+        if (machine.micros(x.now) > machine.micros(g.clock)) return error.InvalidSave;
         x.args = try r.values();
         x.charged = try i.int();
         for (calls[0..n]) |y| if (std.mem.eql(u8, y.id, id)) return error.InvalidSave;
@@ -2500,13 +2508,6 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     const changed = try i.count();
     for (0..changed) |_| try g.changed_roots.put(a, try i.int(), {});
     if (i.pos != i.bytes.len) return error.InvalidSave;
-    // A pending call belongs to the Segment which established its wait.
-    // Suspended Runs have closed that Segment; a preempted open Join has
-    // not. Reconstruct its id from saved Run accounting.
-    for (g.pending.items) |p| if (p.call) |c| {
-        const segment = std.math.add(u32, p.run.segments, if (p.run.continuing) 1 else 0) catch return error.InvalidSave;
-        c.segment = try std.fmt.allocPrint(g.keep.allocator(), "{s}.s{d}", .{ p.run.id, segment });
-    };
     // Each call's Grant binding.
     for (calls) |c| {
         const s = g.script(c.script) orelse return error.InvalidSave;

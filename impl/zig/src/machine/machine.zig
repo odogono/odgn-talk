@@ -10675,7 +10675,7 @@ pub fn codeIdentity(name: []const u8, source: []const u8, kind: enum { script, l
 /// MaxWait's default, for a suspending call whose Operation sets no
 /// `maxPending`, until step 4 brings per-Script limits.
 /// An Instant in microseconds since the epoch.
-fn micros(t: model.dates.Instant) i128 {
+pub fn micros(t: model.dates.Instant) i128 {
     return @as(i128, t.seconds) * std.time.us_per_s + t.micros;
 }
 

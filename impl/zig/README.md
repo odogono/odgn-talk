@@ -286,9 +286,8 @@ The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
 uses Zig's opaque `zig/12` saves. Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
-Script/Object identities and pending Call metadata. Pending Segment ids are
-reconstructed from retained Run accounting, including preempted open Joins and
-suspended waits. Saves retain each pending Call's original Clock for adoption,
+Script/Object identities and pending Call metadata. Saves retain each
+pending Call's Segment id, including preempted open Joins and suspended waits. Saves retain each pending Call's original Clock for adoption,
 even after later Pumps; Reissue uses the first restored Pump's Clock. `zig/12`
 rejects earlier save layouts with `invalid save`, including under VariablesOnly;
 Hosts must drain existing Groups on their old runtime or start fresh Groups.
