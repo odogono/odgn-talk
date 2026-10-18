@@ -368,6 +368,10 @@ The full-size `lifecycle/restore` Run is also held below 20 MB of Host
 allocation, with 8,015 Fuel and 8,024 bytes of logical allocation pinned (#504).
 Timing comparisons remain advisory.
 
+The [Zig Wait table measurements](results/2026-10-18-zig-wait-table.md)
+record paired timings, allocation parity and byte-identical Trace/save probes
+for [#1220](https://github.com/odogono/odgn-talk/issues/1220).
+
 ## Peer Languages
 
 Each port is idiomatic rather than a literal translation of the Script, so that it shows what a user of that language would see. Native Go and TS are the ceilings for their Cores. No runner uses a JIT except native TS on Bun.

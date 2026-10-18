@@ -915,7 +915,7 @@ pub fn effectsPending(g: *const Group) bool {
     @constCast(g).input_lock.lock();
     defer @constCast(g).input_lock.unlock();
     for (g.charge_requests.items) |q| if (!q.done.load(.acquire)) return true;
-    for (g.pending.items) |p| if (p.decl) |op| if (op.metering != null) return true;
+    for (g.waits.items()) |p| if (p.decl) |op| if (op.metering != null) return true;
     for (g.scripts.items) |s| for (s.live.items) |r| {
         if (r.scopes.items.len > 0 or r.participant != null) return true;
     };
@@ -942,7 +942,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.instant(g.clock);
     try o.int(g.deliveries);
     try o.int(g.broadcasts);
-    try o.int(g.timers);
+    try o.int(g.waits.order());
     try o.int(g.run_order);
     try o.int(g.charge_counter);
     try o.int(g.random_state);
@@ -1082,8 +1082,8 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }
     // The waits with deadlines, in the order they were set: each by its Run
     // and, for a Join Member, its member.
-    try o.int(g.pending.items.len);
-    for (g.pending.items) |p| {
+    try o.int(g.waits.items().len);
+    for (g.waits.items()) |p| {
         try o.int(std.mem.indexOfScalar(*Run, s.runs.items, p.run).?);
         try o.ref(p.member);
     }
@@ -1442,7 +1442,7 @@ const Restoring = struct {
             const branches = try a.alloc(machine.EventBranch, n);
             var made: usize = 0;
             errdefer {
-                r.g.releaseHeld(branches[0..made]);
+                machine.releaseHeld(branches[0..made], r.g.gpa);
                 a.free(branches);
             }
             for (branches) |*b| {
@@ -1697,7 +1697,7 @@ const Restoring = struct {
         x.segment_fuel = try r.i.int();
         x.segment_alloc = try r.i.int();
         x.started = try r.i.flag();
-        x.waiting = try r.pending(x);
+        r.g.waits.restoreRun(x, try r.pending(x));
         // A Run's own wait is no Join Member's.
         if (x.waiting) |p| if (p.member != null) return error.InvalidSave;
         x.resume_with = try r.resumeWith();
@@ -1710,9 +1710,9 @@ const Restoring = struct {
             x.join = j;
             const n = try r.i.count();
             for (0..n) |m| {
-                try j.members.append(a, .{ .pending = null, .waited = .{} });
+                try j.members.append(a, .{ .waited = .{} });
                 const member = &j.members.items[m];
-                member.pending = try r.pending(x);
+                r.g.waits.restoreMember(x, m, try r.pending(x));
                 if (member.pending) |p| if (p.member == null or p.member.? != m) return error.InvalidSave;
                 member.waited = try r.waited(s);
                 member.with = try r.resumeWith();
@@ -2210,7 +2210,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     g.clock = try i.instant();
     g.deliveries = try i.int();
     g.broadcasts = try i.int();
-    g.timers = try i.int();
+    g.waits.restoreOrder(try i.int());
     g.run_order = try i.int();
     g.charge_counter = try i.int();
     g.random_state = try i.wide();
@@ -2441,7 +2441,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     }
     // The waits, in the order they were set, each once.
     const pending_count = try i.count();
-    try g.pending.ensureTotalCapacity(a, pending_count);
+    try g.waits.reserveRestore(a, pending_count);
     for (0..pending_count) |_| {
         const x = r.runs.items[try i.index(r.runs.items.len)];
         const p = if (try i.ref(std.math.maxInt(u32))) |m| blk: {
@@ -2449,8 +2449,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             if (m >= j.members.items.len) return error.InvalidSave;
             break :blk j.members.items[m].pending orelse return error.InvalidSave;
         } else x.waiting orelse return error.InvalidSave;
-        if (std.mem.indexOfScalar(*Pending, g.pending.items, p) != null) return error.InvalidSave;
-        g.pending.appendAssumeCapacity(p);
+        try g.waits.restoreEntry(p);
     }
     const ids = try i.count();
     for (0..ids) |_| {
@@ -2522,7 +2521,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     // The calls that still pend.
     var pending_ids: std.ArrayList([]const u8) = .empty;
     errdefer pending_ids.deinit(a);
-    for (calls) |c| for (g.pending.items) |p| if (p.call == c) {
+    for (calls) |c| for (g.waits.items()) |p| if (p.call == c) {
         try pending_ids.append(a, c.id);
         break;
     };
@@ -2825,15 +2824,15 @@ test "pending Calls retain their crossing Clock and Segment through restore" {
         _ = try g.deliver("s", "go", &.{}, false);
         try g.pump(.{ .seconds = -2, .micros = 123456 });
         try g.pumpWith(original, if (join) 40 else 0, 0);
-        try testing.expectEqual(@as(usize, 1), g.pending.items.len);
-        try testing.expectEqual(join, g.pending.items[0].run.continuing);
-        const call = g.pending.items[0].call.?;
+        try testing.expectEqual(@as(usize, 1), g.waits.items().len);
+        try testing.expectEqual(join, g.waits.items()[0].run.continuing);
+        const call = g.waits.items()[0].call.?;
         try testing.expectEqualStrings("s/r1.s2", call.segment);
         // The ordinary wait stays pending across multiple later Pumps.
         // Keep the Join preempted by spending only one instruction's Fuel.
         try g.pumpWith(later, if (join) 1 else 0, 0);
         if (!join) try g.pump(.{ .seconds = 0, .micros = 999999 });
-        try testing.expectEqual(join, g.pending.items[0].run.continuing);
+        try testing.expectEqual(join, g.waits.items()[0].run.continuing);
         try testing.expectEqualStrings("s/r1.s2", call.segment);
         const bytes = try save(&g, gpa, try g.groupFingerprint());
         defer gpa.free(bytes);
@@ -2890,7 +2889,7 @@ test "a variables-only restore keeps Script Variables and discards the rest" {
     try testing.expectEqual(@as(usize, 4), result.discarded.len);
     try testing.expectEqual(@as(usize, 1), result.dropped.len);
     for (restored.scripts.items) |x| try testing.expectEqual(@as(usize, 0), x.live.items.len);
-    try testing.expectEqual(@as(usize, 0), restored.pending.items.len);
+    try testing.expectEqual(@as(usize, 0), restored.waits.items().len);
     try restored.pump(.{ .seconds = 1790000010, .micros = 0 });
 }
 

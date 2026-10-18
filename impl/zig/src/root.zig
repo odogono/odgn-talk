@@ -58,6 +58,7 @@ test {
     _ = analysis;
     _ = lower;
     _ = machine;
+    _ = @import("machine/waits.zig");
     _ = @import("machine/chunks.zig");
     _ = @import("machine/binary.zig");
     _ = @import("machine/convert.zig");

@@ -1588,7 +1588,7 @@ pub export fn talk_restore(c: *Core, save: ?[*]const u8, len: usize, o: *const R
         r.pending = c.gpa.alloc(PendingCall, g.group.restored.?.pending.items.len) catch break :blk false;
         for (g.group.restored.?.pending.items, r.pending) |id, *p| {
             const call = g.group.callById(id).?;
-            const operation = for (g.group.pending.items) |w| {
+            const operation = for (g.group.waits.items()) |w| {
                 if (w.call == call) break w.operation;
             } else "";
             p.* = .{ .id = id.ptr, .id_len = id.len, .script = call.script.ptr, .script_len = call.script.len, .grant = call.grant.ptr, .grant_len = call.grant.len, .operation = operation.ptr, .operation_len = operation.len };
