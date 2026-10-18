@@ -108,6 +108,53 @@ Under #1054, a failed limit blocks adapter expansion until an alternative passes
 it: an optimized Message Layer, direct WASM exports, or cgo as an optional
 backend only.
 
+### Remeasurement after #1101, 2026-10-18
+
+The same workflow, [run 39088047462](https://github.com/odogono/odgn-talk/actions/runs/39088047462),
+on `main` at `21412294`. That includes #1101, and the #1103 changes merged so far:
+#1105, #1106, #1107, #1122, #1153 and #1154. The embedded artifact is built from
+`19de8411` by Zig 0.17.0 (wasm32-wasi, ReleaseSafe, sha256
+`febe1f49da54d22737351379a16eb4c09bca063de0ea6591a07e034784329b30`). The Linux
+amd64 runner was an AMD EPYC 9V45, not the 7763 of the first run. Results are in
+[ci-linux-amd64](../../bench/results/go-zig-adapter/2026-10-18-ci-linux-amd64/),
+[ci-linux-arm64](../../bench/results/go-zig-adapter/2026-10-18-ci-linux-arm64/) and
+[ci-darwin-arm64](../../bench/results/go-zig-adapter/2026-10-18-ci-darwin-arm64/).
+
+Eight limits now pass and seven miss. Native Go's fuel and logical bytes match
+Zig's on every Run, as before.
+
+| Workload | Measure | Limit | Linux amd64 | Linux arm64 | macOS CI | Result |
+|---|---|---|---|---|---|---|
+| Warm execution | worst Run of core, collections, macro, excluding `fib@slice` | ≤ 2× | 1.78× | 1.41× | 0.98× | Pass |
+| Restore | `lifecycle/restore` | ≤ 1.5× | 0.18× | 0.17× | 0.12× | Pass |
+| Large Load | `lifecycle/load-large` | ≤ 2.5× | 2.02× | 1.43× | 1.11× | Pass |
+| Load into a new Group | `Load/core/loop` | ≤ 3× | 2.58× | 4.33× | 1.98× | Miss |
+| Group on shared code | `GroupInstantiation` | ≤ 10× | 6.1× | 9.2× | 14.4× | Miss |
+| Cold start | first Group, warm `NORTHTALK_ZIG_CACHE_DIR` | ≤ 250 ms | 28 ms | 43 ms | 49 ms | Pass |
+| Immediate Capability call | `BackendRequest`, `host/immediate`, `host/properties`, `host/pump` | ≤ 3× | 5.6–7.2× | 4.9–9.2× | 4.0–6.2× | Miss |
+| Value conversion | `host/conversion` | ≤ 3× | 3.5× | 3.8× | 2.3× | Miss |
+| Deferred call | `BackendDeferredCall/history=0` | ≤ 3× | 5.7× | 13.0× | 6.3× | Miss |
+| Deferred call with age | Zig `history=5000` ÷ `history=0` | ≤ 1.2× | 1.00× | 1.00× | 1.03× | Pass |
+| Rollback | `lifecycle/rollback` | ≤ 2× | 4.7× | 5.6× | 3.9× | Miss |
+| Messaging | `messaging/*` | ≤ 2× | 1.8–2.4× | 1.5–2.4× | 1.3–2.1× | Miss |
+| Multi-Group throughput | `BackendMultiGroup/groups=16` req/s | ≥ 0.5× | 0.37× | 0.30× | 0.69× | Miss |
+| Tail latency | `BackendRequest` p99 | ≤ 3× | 2.1× | 2.8× | 2.7× | Pass |
+| Retained memory | `BackendRetainedMemory` heap per Group | ≤ 4× | 1.7× | 1.7× | 1.7× | Pass |
+
+The absolute figures on Linux amd64, native then Zig:
+
+- Request round trip 5.9 µs / 34.5 µs, p99 35 µs / 75 µs, 89 / 266 allocations.
+- Deferred call 15.8 µs / 90.6 µs, and 90.3 µs after 5000 earlier calls.
+- 16 Groups 78.0k / 28.9k requests per second.
+- Group instantiation 5.5 µs / 33.5 µs, with 6.3 KiB / 54.8 KiB allocated.
+- Retained per Group 61 KiB / 104 KiB heap.
+- Cold start: first Group 0.20 ms / 28 ms with a warm cache and 0.19 ms / 0.93 s
+  without, a second Group on the same Core 25 µs / 550 µs.
+
+Two Loads stand out on macOS only: `Load/host/properties` is 52× and allocates
+2.4 MiB, and `Load/messaging/parents` is 25×. On Linux they are 6–12×. Linux
+arm64 is the worst platform for every per-request row.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)

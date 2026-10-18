@@ -1,0 +1,460 @@
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRequest-4        	    2000	     84348 ns/op	     79698 p50-ns	    149188 p99-ns	   13703 B/op	     266 allocs/op
+BenchmarkBackendRequest-4        	    2000	     83126 ns/op	     76234 p50-ns	    161509 p99-ns	   13700 B/op	     266 allocs/op
+BenchmarkBackendRequest-4        	    2000	     85913 ns/op	     77946 p50-ns	    163045 p99-ns	   13700 B/op	     266 allocs/op
+BenchmarkBackendRequest-4        	    2000	     87403 ns/op	     80770 p50-ns	    157436 p99-ns	   13700 B/op	     266 allocs/op
+BenchmarkBackendRequest-4        	    2000	     84139 ns/op	     76842 p50-ns	    150228 p99-ns	   13700 B/op	     266 allocs/op
+BenchmarkBackendDeferredCall/history=0-4         	    2000	    306492 ns/op	    303584 p50-ns	    408867 p99-ns	   24029 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=0-4         	    2000	    311402 ns/op	    307833 p50-ns	    399659 p99-ns	   24040 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=0-4         	    2000	    308828 ns/op	    303513 p50-ns	    401851 p99-ns	   24037 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=0-4         	    2000	    313836 ns/op	    309040 p50-ns	    395411 p99-ns	   24067 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=0-4         	    2000	    314795 ns/op	    310649 p50-ns	    400843 p99-ns	   24067 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=5000-4      	    2000	    314092 ns/op	    309776 p50-ns	    398107 p99-ns	   22937 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=5000-4      	    2000	    311786 ns/op	    306985 p50-ns	    386931 p99-ns	   22949 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=5000-4      	    2000	    309083 ns/op	    304721 p50-ns	    380283 p99-ns	   22916 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=5000-4      	    2000	    307363 ns/op	    303137 p50-ns	    373579 p99-ns	   22918 B/op	     369 allocs/op
+BenchmarkBackendDeferredCall/history=5000-4      	    2000	    312415 ns/op	    307609 p50-ns	    379635 p99-ns	   22934 B/op	     369 allocs/op
+BenchmarkBackendMultiGroup/groups=1-4            	    2000	    190775 ns/op	    182902 p50-ns	    285521 p99-ns	      5242 req/s	   17578 B/op	     345 allocs/op
+BenchmarkBackendMultiGroup/groups=1-4            	    2000	    182786 ns/op	    176037 p50-ns	    270192 p99-ns	      5471 req/s	   17578 B/op	     345 allocs/op
+BenchmarkBackendMultiGroup/groups=1-4            	    2000	    185426 ns/op	    178925 p50-ns	    273576 p99-ns	      5393 req/s	   17578 B/op	     345 allocs/op
+BenchmarkBackendMultiGroup/groups=1-4            	    2000	    172300 ns/op	    164725 p50-ns	    246839 p99-ns	      5804 req/s	   17578 B/op	     345 allocs/op
+BenchmarkBackendMultiGroup/groups=1-4            	    2000	    191390 ns/op	    185157 p50-ns	    286512 p99-ns	      5225 req/s	   17578 B/op	     345 allocs/op
+BenchmarkBackendMultiGroup/groups=4-4            	    2000	     60589 ns/op	    231286 p50-ns	    500102 p99-ns	     16505 req/s	   20201 B/op	     344 allocs/op
+BenchmarkBackendMultiGroup/groups=4-4            	    2000	     56860 ns/op	    212974 p50-ns	    413804 p99-ns	     17587 req/s	   20200 B/op	     344 allocs/op
+BenchmarkBackendMultiGroup/groups=4-4            	    2000	     55677 ns/op	    211294 p50-ns	    499134 p99-ns	     17961 req/s	   20201 B/op	     344 allocs/op
+BenchmarkBackendMultiGroup/groups=4-4            	    2000	     54842 ns/op	    208549 p50-ns	    401460 p99-ns	     18234 req/s	   20201 B/op	     344 allocs/op
+BenchmarkBackendMultiGroup/groups=4-4            	    2000	     56064 ns/op	    208838 p50-ns	    523951 p99-ns	     17837 req/s	   20200 B/op	     344 allocs/op
+BenchmarkBackendMultiGroup/groups=16-4           	    2000	     54062 ns/op	    205062 p50-ns	  20412611 p99-ns	     18497 req/s	   20144 B/op	     343 allocs/op
+BenchmarkBackendMultiGroup/groups=16-4           	    2000	     55057 ns/op	    202942 p50-ns	  20539414 p99-ns	     18163 req/s	   20159 B/op	     343 allocs/op
+BenchmarkBackendMultiGroup/groups=16-4           	    2000	     54667 ns/op	    207230 p50-ns	  21763240 p99-ns	     18293 req/s	   20155 B/op	     343 allocs/op
+BenchmarkBackendMultiGroup/groups=16-4           	    2000	     57506 ns/op	    218671 p50-ns	  24417194 p99-ns	     17390 req/s	   20140 B/op	     342 allocs/op
+BenchmarkBackendMultiGroup/groups=16-4           	    2000	     56369 ns/op	    213630 p50-ns	  20432282 p99-ns	     17740 req/s	   20148 B/op	     343 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	19.445s
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkGroupInstantiation-4   	     200	   7486033 ns/op	  563240 B/op	    1129 allocs/op
+BenchmarkGroupInstantiation-4   	     200	     83882 ns/op	   54592 B/op	     105 allocs/op
+BenchmarkGroupInstantiation-4   	     200	     88644 ns/op	   55059 B/op	     117 allocs/op
+BenchmarkGroupInstantiation-4   	     200	     91931 ns/op	   55007 B/op	     116 allocs/op
+BenchmarkGroupInstantiation-4   	     200	     86600 ns/op	   55062 B/op	     117 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	1.583s
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+BenchmarkBackendRetainedMemory-4   	       3	 732501940 ns/op	    106797 heap-B/group
+BenchmarkBackendRetainedMemory-4   	       3	 235093765 ns/op	    106792 heap-B/group
+BenchmarkBackendRetainedMemory-4   	       3	 229913309 ns/op	    106792 heap-B/group
+BenchmarkBackendRetainedMemory-4   	       3	 230507128 ns/op	    106792 heap-B/group
+BenchmarkBackendRetainedMemory-4   	       3	 231844249 ns/op	    106792 heap-B/group
+BenchmarkBackendColdStart/cache=none-4         	       3	1484686458 ns/op	1473264587 first-group-ns	1484685600 process-ns	    802139 second-group-ns
+BenchmarkBackendColdStart/cache=none-4         	       3	1482575295 ns/op	1471683958 first-group-ns	1482574479 process-ns	    590643 second-group-ns
+BenchmarkBackendColdStart/cache=none-4         	       3	1476056979 ns/op	1465703207 first-group-ns	1476056288 process-ns	    567282 second-group-ns
+BenchmarkBackendColdStart/cache=none-4         	       3	1480884026 ns/op	1470281527 first-group-ns	1480883192 process-ns	    606706 second-group-ns
+BenchmarkBackendColdStart/cache=none-4         	       3	1469533140 ns/op	1458419315 first-group-ns	1469532444 process-ns	    799122 second-group-ns
+BenchmarkBackendColdStart/cache=warm-4         	       3	  48912295 ns/op	  43575238 first-group-ns	  48911583 process-ns	    658888 second-group-ns
+BenchmarkBackendColdStart/cache=warm-4         	       3	  47774556 ns/op	  42783437 first-group-ns	  47773804 process-ns	    605918 second-group-ns
+BenchmarkBackendColdStart/cache=warm-4         	       3	  48812306 ns/op	  43423348 first-group-ns	  48811495 process-ns	    594022 second-group-ns
+BenchmarkBackendColdStart/cache=warm-4         	       3	  47774751 ns/op	  42911792 first-group-ns	  47774007 process-ns	    629511 second-group-ns
+BenchmarkBackendColdStart/cache=warm-4         	       3	  47664671 ns/op	  42580929 first-group-ns	  47663876 process-ns	    845019 second-group-ns
+PASS
+ok  	github.com/odogono/odgn-talk/impl/go	35.491s
+goos: linux
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/bench/go
+BenchmarkLoad/core/loop-4         	       1	1459468642 ns/op	104195760 B/op	  206022 allocs/op
+BenchmarkLoad/core/loop-4         	    8200	    213966 ns/op	   23724 B/op	     105 allocs/op
+BenchmarkLoad/core/loop-4         	    7591	    212864 ns/op	   25308 B/op	     109 allocs/op
+BenchmarkLoad/core/loop-4         	    7966	    214747 ns/op	   24367 B/op	     108 allocs/op
+BenchmarkLoad/core/loop-4         	    8017	    217091 ns/op	   24277 B/op	     109 allocs/op
+BenchmarkLoad/core/fib-4          	    7309	    225939 ns/op	   26043 B/op	     110 allocs/op
+BenchmarkLoad/core/fib-4          	    8050	    219569 ns/op	   24138 B/op	     107 allocs/op
+BenchmarkLoad/core/fib-4          	    7786	    227667 ns/op	   24810 B/op	     109 allocs/op
+BenchmarkLoad/core/fib-4          	    7557	    227597 ns/op	   25365 B/op	     109 allocs/op
+BenchmarkLoad/core/fib-4          	    7657	    222010 ns/op	   25094 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10-4 	    7606	    224870 ns/op	   25230 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10-4 	    7675	    223885 ns/op	   25051 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10-4 	    7780	    223430 ns/op	   24799 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10-4 	    7842	    220418 ns/op	   24658 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10-4 	    7124	    219701 ns/op	   26550 B/op	     110 allocs/op
+BenchmarkLoad/core/fib@slice=100-4         	    7320	    223405 ns/op	   25944 B/op	     108 allocs/op
+BenchmarkLoad/core/fib@slice=100-4         	    7370	    225749 ns/op	   25822 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=100-4         	    7392	    217667 ns/op	   25768 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=100-4         	    8083	    227168 ns/op	   24069 B/op	     107 allocs/op
+BenchmarkLoad/core/fib@slice=100-4         	    7807	    221180 ns/op	   24763 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=1000-4        	    6942	    222906 ns/op	   25795 B/op	     111 allocs/op
+BenchmarkLoad/core/fib@slice=1000-4        	    6652	    226168 ns/op	   27939 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=1000-4        	    7126	    220846 ns/op	   26452 B/op	     108 allocs/op
+BenchmarkLoad/core/fib@slice=1000-4        	    7074	    221362 ns/op	   26640 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=1000-4        	    6949	    226135 ns/op	   27009 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10000-4       	    6981	    223219 ns/op	   26903 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10000-4       	    6900	    225327 ns/op	   25845 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10000-4       	    7652	    221911 ns/op	   23882 B/op	     107 allocs/op
+BenchmarkLoad/core/fib@slice=10000-4       	    7393	    217885 ns/op	   25786 B/op	     109 allocs/op
+BenchmarkLoad/core/fib@slice=10000-4       	    7616	    220508 ns/op	   25183 B/op	     108 allocs/op
+BenchmarkLoad/core/calls-4                 	    6952	    228496 ns/op	   28000 B/op	     111 allocs/op
+BenchmarkLoad/core/calls-4                 	    7376	    229395 ns/op	   26754 B/op	     109 allocs/op
+BenchmarkLoad/core/calls-4                 	    7346	    229987 ns/op	   26867 B/op	     110 allocs/op
+BenchmarkLoad/core/calls-4                 	    7496	    229700 ns/op	   26465 B/op	     109 allocs/op
+BenchmarkLoad/core/calls-4                 	    7206	    229361 ns/op	   27266 B/op	     110 allocs/op
+BenchmarkLoad/core/lambdas-4               	    6891	    239058 ns/op	   28165 B/op	     110 allocs/op
+BenchmarkLoad/core/lambdas-4               	    6956	    231764 ns/op	   27947 B/op	     110 allocs/op
+BenchmarkLoad/core/lambdas-4               	    6901	    232481 ns/op	   26817 B/op	     110 allocs/op
+BenchmarkLoad/core/lambdas-4               	    7353	    235551 ns/op	   26811 B/op	     109 allocs/op
+BenchmarkLoad/core/lambdas-4               	    7057	    236102 ns/op	   27678 B/op	     110 allocs/op
+BenchmarkLoad/numbers/add-4                	    7508	    220434 ns/op	   25448 B/op	     108 allocs/op
+BenchmarkLoad/numbers/add-4                	    7532	    215887 ns/op	   25407 B/op	     109 allocs/op
+BenchmarkLoad/numbers/add-4                	    7710	    221619 ns/op	   24956 B/op	     108 allocs/op
+BenchmarkLoad/numbers/add-4                	    7981	    219788 ns/op	   24393 B/op	     110 allocs/op
+BenchmarkLoad/numbers/add-4                	    7368	    216023 ns/op	   31873 B/op	     107 allocs/op
+BenchmarkLoad/numbers/multiply-4           	    6746	    216115 ns/op	   34291 B/op	     109 allocs/op
+BenchmarkLoad/numbers/multiply-4           	    7084	    225175 ns/op	   29801 B/op	     109 allocs/op
+BenchmarkLoad/numbers/multiply-4           	    6403	    211379 ns/op	   28776 B/op	     109 allocs/op
+BenchmarkLoad/numbers/multiply-4           	    7429	    222189 ns/op	   25739 B/op	     110 allocs/op
+BenchmarkLoad/numbers/multiply-4           	    6892	    217420 ns/op	   27136 B/op	     108 allocs/op
+BenchmarkLoad/numbers/divide-4             	    7329	    220028 ns/op	   25962 B/op	     109 allocs/op
+BenchmarkLoad/numbers/divide-4             	    7244	    220504 ns/op	   26111 B/op	     107 allocs/op
+BenchmarkLoad/numbers/divide-4             	    7695	    222909 ns/op	   24974 B/op	     108 allocs/op
+BenchmarkLoad/numbers/divide-4             	    7983	    217593 ns/op	   24318 B/op	     108 allocs/op
+BenchmarkLoad/numbers/divide-4             	    8094	    224315 ns/op	   28263 B/op	     109 allocs/op
+BenchmarkLoad/numbers/quantity-4           	    5943	    237533 ns/op	   31504 B/op	     111 allocs/op
+BenchmarkLoad/numbers/quantity-4           	    6463	    245977 ns/op	   29588 B/op	     112 allocs/op
+BenchmarkLoad/numbers/quantity-4           	    5794	    244388 ns/op	   32047 B/op	     109 allocs/op
+BenchmarkLoad/numbers/quantity-4           	    6355	    240905 ns/op	   29918 B/op	     110 allocs/op
+BenchmarkLoad/numbers/quantity-4           	    5940	    247407 ns/op	   29926 B/op	     109 allocs/op
+BenchmarkLoad/text/build-4                 	    8296	    222457 ns/op	   23639 B/op	     108 allocs/op
+BenchmarkLoad/text/build-4                 	    8252	    221457 ns/op	   23776 B/op	     109 allocs/op
+BenchmarkLoad/text/build-4                 	    8192	    220742 ns/op	   23905 B/op	     109 allocs/op
+BenchmarkLoad/text/build-4                 	    7927	    227547 ns/op	   24501 B/op	     109 allocs/op
+BenchmarkLoad/text/build-4                 	    8364	    223624 ns/op	   23513 B/op	     108 allocs/op
+BenchmarkLoad/text/iterate-4               	    7906	    227485 ns/op	   31173 B/op	     109 allocs/op
+BenchmarkLoad/text/iterate-4               	    7136	    228263 ns/op	   32236 B/op	     111 allocs/op
+BenchmarkLoad/text/iterate-4               	    7072	    235736 ns/op	   32421 B/op	     110 allocs/op
+BenchmarkLoad/text/iterate-4               	    6920	    230444 ns/op	   28185 B/op	     112 allocs/op
+BenchmarkLoad/text/iterate-4               	    7020	    225072 ns/op	   34093 B/op	     107 allocs/op
+BenchmarkLoad/text/index-4                 	    6186	    231259 ns/op	   25308 B/op	     112 allocs/op
+BenchmarkLoad/text/index-4                 	    6912	    230380 ns/op	   27135 B/op	     109 allocs/op
+BenchmarkLoad/text/index-4                 	    6916	    228970 ns/op	   27061 B/op	     107 allocs/op
+BenchmarkLoad/text/index-4                 	    6613	    232774 ns/op	   28098 B/op	     109 allocs/op
+BenchmarkLoad/text/index-4                 	    7095	    231799 ns/op	   25360 B/op	     109 allocs/op
+BenchmarkLoad/text/patterns-4              	    6411	    248114 ns/op	   29749 B/op	     111 allocs/op
+BenchmarkLoad/text/patterns-4              	    6897	    240319 ns/op	   26784 B/op	     109 allocs/op
+BenchmarkLoad/text/patterns-4              	    6354	    241726 ns/op	   27107 B/op	     111 allocs/op
+BenchmarkLoad/text/patterns-4              	    6265	    235708 ns/op	   28731 B/op	     109 allocs/op
+BenchmarkLoad/text/patterns-4              	    6711	    240676 ns/op	   28669 B/op	     109 allocs/op
+BenchmarkLoad/text/graphemes-4             	    7141	    229780 ns/op	   27409 B/op	     109 allocs/op
+BenchmarkLoad/text/graphemes-4             	    6862	    231186 ns/op	   25712 B/op	     112 allocs/op
+BenchmarkLoad/text/graphemes-4             	    6558	    226961 ns/op	   29208 B/op	     109 allocs/op
+BenchmarkLoad/text/graphemes-4             	    7068	    231680 ns/op	   27663 B/op	     110 allocs/op
+BenchmarkLoad/text/graphemes-4             	    7255	    235968 ns/op	   27126 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-build-4     	    7804	    219076 ns/op	   25667 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-build-4     	    8024	    216074 ns/op	   25177 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-build-4     	    7846	    215753 ns/op	   25608 B/op	     110 allocs/op
+BenchmarkLoad/collections/list-build-4     	    7654	    221001 ns/op	   26065 B/op	     110 allocs/op
+BenchmarkLoad/collections/list-build-4     	    7464	    220202 ns/op	   26540 B/op	     110 allocs/op
+BenchmarkLoad/collections/list-append-4    	    6231	    244566 ns/op	   29051 B/op	     111 allocs/op
+BenchmarkLoad/collections/list-append-4    	    5666	    244637 ns/op	   31083 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-append-4    	    5803	    242362 ns/op	   32112 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-append-4    	    6192	    248313 ns/op	   29215 B/op	     112 allocs/op
+BenchmarkLoad/collections/list-append-4    	    5640	    236513 ns/op	   29529 B/op	     107 allocs/op
+BenchmarkLoad/collections/map-build-4      	    5962	    235564 ns/op	   29903 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-build-4      	    6547	    241613 ns/op	   27920 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-build-4      	    5845	    243631 ns/op	   31876 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-build-4      	    6262	    245828 ns/op	   30296 B/op	     111 allocs/op
+BenchmarkLoad/collections/map-build-4      	    5886	    239164 ns/op	   30146 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-update-4    	    5662	    239674 ns/op	   32646 B/op	     110 allocs/op
+BenchmarkLoad/collections/list-update-4    	    5788	    239924 ns/op	   32076 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-update-4    	    5421	    237112 ns/op	   33736 B/op	     109 allocs/op
+BenchmarkLoad/collections/list-update-4    	    6354	    241585 ns/op	   29892 B/op	     110 allocs/op
+BenchmarkLoad/collections/list-update-4    	    6316	    241722 ns/op	   30036 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-update-4     	    4944	    252811 ns/op	   36303 B/op	     109 allocs/op
+BenchmarkLoad/collections/map-update-4     	    4940	    254315 ns/op	   36354 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-update-4     	    5362	    253629 ns/op	   34095 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-update-4     	    5544	    255267 ns/op	   31579 B/op	     110 allocs/op
+BenchmarkLoad/collections/map-update-4     	    5661	    256511 ns/op	   32704 B/op	     110 allocs/op
+BenchmarkLoad/collections/iterate-4        	    4665	    268192 ns/op	   38144 B/op	     108 allocs/op
+BenchmarkLoad/collections/iterate-4        	    4761	    265638 ns/op	   37598 B/op	     110 allocs/op
+BenchmarkLoad/collections/iterate-4        	    4848	    265383 ns/op	   37052 B/op	     110 allocs/op
+BenchmarkLoad/collections/iterate-4        	    4858	    268355 ns/op	   37011 B/op	     110 allocs/op
+BenchmarkLoad/collections/iterate-4        	    4663	    264538 ns/op	   38230 B/op	     110 allocs/op
+BenchmarkLoad/host/immediate-4             	    4573	    320845 ns/op	   51746 B/op	     283 allocs/op
+BenchmarkLoad/host/immediate-4             	    5055	    316200 ns/op	   57529 B/op	     279 allocs/op
+BenchmarkLoad/host/immediate-4             	    4632	    321881 ns/op	   51340 B/op	     283 allocs/op
+BenchmarkLoad/host/immediate-4             	    4749	    322739 ns/op	   50419 B/op	     279 allocs/op
+BenchmarkLoad/host/immediate-4             	    4876	    320997 ns/op	   49696 B/op	     280 allocs/op
+BenchmarkLoad/host/suspending-4            	    5013	    323714 ns/op	   48894 B/op	     280 allocs/op
+BenchmarkLoad/host/suspending-4            	    5198	    318856 ns/op	   56586 B/op	     281 allocs/op
+BenchmarkLoad/host/suspending-4            	    4483	    318438 ns/op	   52269 B/op	     280 allocs/op
+BenchmarkLoad/host/suspending-4            	    4851	    321030 ns/op	   49830 B/op	     280 allocs/op
+BenchmarkLoad/host/suspending-4            	    4948	    322684 ns/op	   49273 B/op	     280 allocs/op
+BenchmarkLoad/host/properties-4            	    2234	    561253 ns/op	 2459878 B/op	    1054 allocs/op
+BenchmarkLoad/host/properties-4            	    2902	    562649 ns/op	 2459629 B/op	    1048 allocs/op
+BenchmarkLoad/host/properties-4            	    2887	    537796 ns/op	 2459467 B/op	    1043 allocs/op
+BenchmarkLoad/host/properties-4            	    3058	    481821 ns/op	 2459758 B/op	    1051 allocs/op
+BenchmarkLoad/host/properties-4            	    2811	    452055 ns/op	 2459088 B/op	    1034 allocs/op
+BenchmarkLoad/host/conversion-4            	    4236	    338942 ns/op	   95337 B/op	     275 allocs/op
+BenchmarkLoad/host/conversion-4            	    4394	    342928 ns/op	  112903 B/op	     280 allocs/op
+BenchmarkLoad/host/conversion-4            	    4225	    353782 ns/op	   66200 B/op	     291 allocs/op
+BenchmarkLoad/host/conversion-4            	    4389	    353093 ns/op	   53994 B/op	     283 allocs/op
+BenchmarkLoad/host/conversion-4            	    4225	    352019 ns/op	   55204 B/op	     282 allocs/op
+BenchmarkLoad/host/pump-4                  	   10000	    161075 ns/op	   16904 B/op	     106 allocs/op
+BenchmarkLoad/host/pump-4                  	   10000	    160807 ns/op	   17008 B/op	     108 allocs/op
+BenchmarkLoad/host/pump-4                  	   10000	    153123 ns/op	   16979 B/op	     108 allocs/op
+BenchmarkLoad/host/pump-4                  	   10000	    159406 ns/op	   17020 B/op	     109 allocs/op
+BenchmarkLoad/host/pump-4                  	   10000	    163836 ns/op	   17069 B/op	     110 allocs/op
+BenchmarkLoad/macro/transform-4            	    5912	    257419 ns/op	   31749 B/op	     111 allocs/op
+BenchmarkLoad/macro/transform-4            	    5300	    249444 ns/op	   27701 B/op	     110 allocs/op
+BenchmarkLoad/macro/transform-4            	    5191	    255926 ns/op	   28150 B/op	     111 allocs/op
+BenchmarkLoad/macro/transform-4            	    5035	    256909 ns/op	   28789 B/op	     111 allocs/op
+BenchmarkLoad/macro/transform-4            	    5290	    257658 ns/op	   34460 B/op	     108 allocs/op
+BenchmarkLoad/macro/report-4               	    6314	    233473 ns/op	   30096 B/op	     111 allocs/op
+BenchmarkLoad/macro/report-4               	    6409	    233193 ns/op	   29696 B/op	     110 allocs/op
+BenchmarkLoad/macro/report-4               	    6624	    235954 ns/op	   28959 B/op	     109 allocs/op
+BenchmarkLoad/macro/report-4               	    6868	    233141 ns/op	   28196 B/op	     109 allocs/op
+BenchmarkLoad/macro/report-4               	    6669	    231872 ns/op	   28855 B/op	     110 allocs/op
+BenchmarkLoad/macro/game-tick-4            	    5004	    269169 ns/op	   28795 B/op	     109 allocs/op
+BenchmarkLoad/macro/game-tick-4            	    4881	    269726 ns/op	   36698 B/op	     109 allocs/op
+BenchmarkLoad/macro/game-tick-4            	    5076	    268328 ns/op	   28542 B/op	     110 allocs/op
+BenchmarkLoad/macro/game-tick-4            	    4899	    269978 ns/op	   32924 B/op	     109 allocs/op
+BenchmarkLoad/macro/game-tick-4            	    5104	    273098 ns/op	   35477 B/op	     110 allocs/op
+BenchmarkLoad/messaging/sends-4            	    3589	    355257 ns/op	   40099 B/op	     178 allocs/op
+BenchmarkLoad/messaging/sends-4            	    3984	    348833 ns/op	   39037 B/op	     175 allocs/op
+BenchmarkLoad/messaging/sends-4            	    3996	    350820 ns/op	   38925 B/op	     174 allocs/op
+BenchmarkLoad/messaging/sends-4            	    4082	    348871 ns/op	   38349 B/op	     174 allocs/op
+BenchmarkLoad/messaging/sends-4            	    3909	    352738 ns/op	   39543 B/op	     175 allocs/op
+BenchmarkLoad/messaging/parents-4          	    2044	    607327 ns/op	 2466128 B/op	    1181 allocs/op
+BenchmarkLoad/messaging/parents-4          	    2354	    601724 ns/op	 2466022 B/op	    1178 allocs/op
+BenchmarkLoad/messaging/parents-4          	    2563	    580939 ns/op	 2465826 B/op	    1173 allocs/op
+BenchmarkLoad/messaging/parents-4          	    2654	    493497 ns/op	 2466220 B/op	    1183 allocs/op
+BenchmarkLoad/messaging/parents-4          	    2590	    464399 ns/op	 2465510 B/op	    1165 allocs/op
+BenchmarkLoad/messaging/joins-4            	    3769	    362708 ns/op	   95289 B/op	     162 allocs/op
+BenchmarkLoad/messaging/joins-4            	    3840	    362443 ns/op	   94169 B/op	     173 allocs/op
+BenchmarkLoad/messaging/joins-4            	    4039	    374515 ns/op	   58994 B/op	     178 allocs/op
+BenchmarkLoad/messaging/joins-4            	    3776	    373087 ns/op	   40816 B/op	     179 allocs/op
+BenchmarkLoad/messaging/joins-4            	    3764	    376662 ns/op	   40816 B/op	     177 allocs/op
+BenchmarkLoad/messaging/suspend-4          	    7482	    224942 ns/op	   26426 B/op	     108 allocs/op
+BenchmarkLoad/messaging/suspend-4          	    7030	    222197 ns/op	   27630 B/op	     108 allocs/op
+BenchmarkLoad/messaging/suspend-4          	    6841	    220030 ns/op	   26972 B/op	     110 allocs/op
+BenchmarkLoad/messaging/suspend-4          	    6656	    216857 ns/op	   27474 B/op	     109 allocs/op
+BenchmarkLoad/messaging/suspend-4          	    6898	    225562 ns/op	   28120 B/op	     110 allocs/op
+BenchmarkLoad/lifecycle/load-small-4       	   10000	    176110 ns/op	   16978 B/op	     107 allocs/op
+BenchmarkLoad/lifecycle/load-small-4       	   10000	    176273 ns/op	   17075 B/op	     110 allocs/op
+BenchmarkLoad/lifecycle/load-small-4       	   10000	    181264 ns/op	   17039 B/op	     109 allocs/op
+BenchmarkLoad/lifecycle/load-small-4       	   10000	    182594 ns/op	   17037 B/op	     109 allocs/op
+BenchmarkLoad/lifecycle/load-small-4       	   10000	    176791 ns/op	   17039 B/op	     109 allocs/op
+BenchmarkLoad/lifecycle/load-large-4       	     270	   4276153 ns/op	  903635 B/op	     221 allocs/op
+BenchmarkLoad/lifecycle/load-large-4       	     271	   4287003 ns/op	  948007 B/op	     119 allocs/op
+BenchmarkLoad/lifecycle/load-large-4       	     274	   4265632 ns/op	  938628 B/op	     120 allocs/op
+BenchmarkLoad/lifecycle/load-large-4       	     272	   4284939 ns/op	  945195 B/op	     120 allocs/op
+BenchmarkLoad/lifecycle/load-large-4       	     270	   4290424 ns/op	  951689 B/op	     120 allocs/op
+BenchmarkLoad/lifecycle/restore-4          	    4592	    287415 ns/op	   48364 B/op	     106 allocs/op
+BenchmarkLoad/lifecycle/restore-4          	    4524	    277391 ns/op	   49084 B/op	     109 allocs/op
+BenchmarkLoad/lifecycle/restore-4          	    4297	    283704 ns/op	   48696 B/op	     110 allocs/op
+BenchmarkLoad/lifecycle/restore-4          	    4454	    284107 ns/op	   49768 B/op	     110 allocs/op
+BenchmarkLoad/lifecycle/restore-4          	    4070	    273777 ns/op	   42673 B/op	     110 allocs/op
+BenchmarkLoad/lifecycle/rollback-4         	    3205	    395120 ns/op	   66914 B/op	     286 allocs/op
+BenchmarkLoad/lifecycle/rollback-4         	    3135	    403824 ns/op	   67703 B/op	     280 allocs/op
+BenchmarkLoad/lifecycle/rollback-4         	    3313	    406548 ns/op	   65357 B/op	     283 allocs/op
+BenchmarkLoad/lifecycle/rollback-4         	    3236	    407241 ns/op	   66282 B/op	     280 allocs/op
+BenchmarkLoad/lifecycle/rollback-4         	    3069	    403468 ns/op	   68627 B/op	     279 allocs/op
+BenchmarkRun/core/loop-4                   	     208	   5738456 ns/op	     48016 fuel/op	     64000 logical-B/op	       119.5 ns/fuel	   14523 B/op	     309 allocs/op
+BenchmarkRun/core/loop-4                   	     208	   5712647 ns/op	     48016 fuel/op	     64000 logical-B/op	       119.0 ns/fuel	   14523 B/op	     309 allocs/op
+BenchmarkRun/core/loop-4                   	     208	   5724347 ns/op	     48016 fuel/op	     64000 logical-B/op	       119.2 ns/fuel	   14523 B/op	     309 allocs/op
+BenchmarkRun/core/loop-4                   	     208	   5735814 ns/op	     48016 fuel/op	     64000 logical-B/op	       119.5 ns/fuel	   14524 B/op	     309 allocs/op
+BenchmarkRun/core/loop-4                   	     208	   5726270 ns/op	     48016 fuel/op	     64000 logical-B/op	       119.3 ns/fuel	   14524 B/op	     309 allocs/op
+BenchmarkRun/core/fib-4                    	     264	   4529071 ns/op	     46365 fuel/op	     47328 logical-B/op	        97.68 ns/fuel	   13467 B/op	     291 allocs/op
+BenchmarkRun/core/fib-4                    	     264	   4514289 ns/op	     46365 fuel/op	     47328 logical-B/op	        97.36 ns/fuel	   13467 B/op	     291 allocs/op
+BenchmarkRun/core/fib-4                    	     264	   4528772 ns/op	     46365 fuel/op	     47328 logical-B/op	        97.68 ns/fuel	   13466 B/op	     291 allocs/op
+BenchmarkRun/core/fib-4                    	     264	   4531779 ns/op	     46365 fuel/op	     47328 logical-B/op	        97.74 ns/fuel	   13466 B/op	     291 allocs/op
+BenchmarkRun/core/fib-4                    	     265	   4508480 ns/op	     46365 fuel/op	     47328 logical-B/op	        97.24 ns/fuel	   13466 B/op	     291 allocs/op
+BenchmarkRun/core/fib@slice=10-4           	       9	 120313020 ns/op	     46365 fuel/op	     47328 logical-B/op	      2595 ns/fuel	21309661 B/op	  394336 allocs/op
+BenchmarkRun/core/fib@slice=10-4           	       9	 117877119 ns/op	     46365 fuel/op	     47328 logical-B/op	      2542 ns/fuel	21309595 B/op	  394336 allocs/op
+BenchmarkRun/core/fib@slice=10-4           	       9	 120109416 ns/op	     46365 fuel/op	     47328 logical-B/op	      2591 ns/fuel	21309577 B/op	  394336 allocs/op
+BenchmarkRun/core/fib@slice=10-4           	       9	 113838889 ns/op	     46365 fuel/op	     47328 logical-B/op	      2455 ns/fuel	21309572 B/op	  394336 allocs/op
+BenchmarkRun/core/fib@slice=10-4           	       8	 126627903 ns/op	     46365 fuel/op	     47328 logical-B/op	      2731 ns/fuel	21310389 B/op	  394333 allocs/op
+BenchmarkRun/core/fib@slice=100-4          	      75	  16334357 ns/op	     46365 fuel/op	     47328 logical-B/op	       352.3 ns/fuel	 2153708 B/op	   39647 allocs/op
+BenchmarkRun/core/fib@slice=100-4          	      70	  16970046 ns/op	     46365 fuel/op	     47328 logical-B/op	       366.0 ns/fuel	 2153643 B/op	   39647 allocs/op
+BenchmarkRun/core/fib@slice=100-4          	      72	  16636925 ns/op	     46365 fuel/op	     47328 logical-B/op	       358.8 ns/fuel	 2153664 B/op	   39647 allocs/op
+BenchmarkRun/core/fib@slice=100-4          	      74	  16715281 ns/op	     46365 fuel/op	     47328 logical-B/op	       360.5 ns/fuel	 2153688 B/op	   39647 allocs/op
+BenchmarkRun/core/fib@slice=100-4          	      75	  16294215 ns/op	     46365 fuel/op	     47328 logical-B/op	       351.4 ns/fuel	 2153718 B/op	   39647 allocs/op
+BenchmarkRun/core/fib@slice=1000-4         	     201	   5906522 ns/op	     46365 fuel/op	     47328 logical-B/op	       127.4 ns/fuel	  227276 B/op	    4250 allocs/op
+BenchmarkRun/core/fib@slice=1000-4         	     202	   5880444 ns/op	     46365 fuel/op	     47328 logical-B/op	       126.8 ns/fuel	  227276 B/op	    4250 allocs/op
+BenchmarkRun/core/fib@slice=1000-4         	     202	   5846257 ns/op	     46365 fuel/op	     47328 logical-B/op	       126.1 ns/fuel	  227275 B/op	    4250 allocs/op
+BenchmarkRun/core/fib@slice=1000-4         	     205	   5848261 ns/op	     46365 fuel/op	     47328 logical-B/op	       126.1 ns/fuel	  227274 B/op	    4250 allocs/op
+BenchmarkRun/core/fib@slice=1000-4         	     205	   5824272 ns/op	     46365 fuel/op	     47328 logical-B/op	       125.6 ns/fuel	  227271 B/op	    4250 allocs/op
+BenchmarkRun/core/fib@slice=10000-4        	     253	   4722906 ns/op	     46365 fuel/op	     47328 logical-B/op	       101.9 ns/fuel	   32419 B/op	     638 allocs/op
+BenchmarkRun/core/fib@slice=10000-4        	     252	   4742217 ns/op	     46365 fuel/op	     47328 logical-B/op	       102.3 ns/fuel	   32420 B/op	     638 allocs/op
+BenchmarkRun/core/fib@slice=10000-4        	     253	   4736655 ns/op	     46365 fuel/op	     47328 logical-B/op	       102.2 ns/fuel	   32419 B/op	     638 allocs/op
+BenchmarkRun/core/fib@slice=10000-4        	     252	   4746199 ns/op	     46365 fuel/op	     47328 logical-B/op	       102.4 ns/fuel	   32420 B/op	     638 allocs/op
+BenchmarkRun/core/fib@slice=10000-4        	     252	   4739748 ns/op	     46365 fuel/op	     47328 logical-B/op	       102.2 ns/fuel	   32420 B/op	     638 allocs/op
+BenchmarkRun/core/calls-4                  	     276	   4321039 ns/op	     46018 fuel/op	     32072 logical-B/op	        93.90 ns/fuel	   13720 B/op	     294 allocs/op
+BenchmarkRun/core/calls-4                  	     277	   4315049 ns/op	     46018 fuel/op	     32072 logical-B/op	        93.77 ns/fuel	   13719 B/op	     294 allocs/op
+BenchmarkRun/core/calls-4                  	     277	   4318512 ns/op	     46018 fuel/op	     32072 logical-B/op	        93.84 ns/fuel	   13719 B/op	     294 allocs/op
+BenchmarkRun/core/calls-4                  	     277	   4320114 ns/op	     46018 fuel/op	     32072 logical-B/op	        93.88 ns/fuel	   13720 B/op	     294 allocs/op
+BenchmarkRun/core/calls-4                  	     277	   4322454 ns/op	     46018 fuel/op	     32072 logical-B/op	        93.93 ns/fuel	   13719 B/op	     294 allocs/op
+BenchmarkRun/core/lambdas-4                	     199	   6019263 ns/op	     58027 fuel/op	     64120 logical-B/op	       103.7 ns/fuel	   14194 B/op	     301 allocs/op
+BenchmarkRun/core/lambdas-4                	     198	   6027714 ns/op	     58027 fuel/op	     64120 logical-B/op	       103.9 ns/fuel	   14195 B/op	     301 allocs/op
+BenchmarkRun/core/lambdas-4                	     198	   6022564 ns/op	     58027 fuel/op	     64120 logical-B/op	       103.8 ns/fuel	   14195 B/op	     301 allocs/op
+BenchmarkRun/core/lambdas-4                	     198	   6022899 ns/op	     58027 fuel/op	     64120 logical-B/op	       103.8 ns/fuel	   14195 B/op	     301 allocs/op
+BenchmarkRun/core/lambdas-4                	     199	   6013371 ns/op	     58027 fuel/op	     64120 logical-B/op	       103.6 ns/fuel	   14194 B/op	     301 allocs/op
+BenchmarkRun/numbers/add-4                 	     398	   3017344 ns/op	     26030 fuel/op	     32104 logical-B/op	       115.9 ns/fuel	   13379 B/op	     290 allocs/op
+BenchmarkRun/numbers/add-4                 	     397	   3012547 ns/op	     26030 fuel/op	     32104 logical-B/op	       115.7 ns/fuel	   13380 B/op	     290 allocs/op
+BenchmarkRun/numbers/add-4                 	     397	   3009287 ns/op	     26030 fuel/op	     32104 logical-B/op	       115.6 ns/fuel	   13380 B/op	     290 allocs/op
+BenchmarkRun/numbers/add-4                 	     397	   3013844 ns/op	     26030 fuel/op	     32104 logical-B/op	       115.8 ns/fuel	   13380 B/op	     290 allocs/op
+BenchmarkRun/numbers/add-4                 	     397	   3007591 ns/op	     26030 fuel/op	     32104 logical-B/op	       115.5 ns/fuel	   13380 B/op	     290 allocs/op
+BenchmarkRun/numbers/multiply-4            	     584	   2046518 ns/op	     18031 fuel/op	     32104 logical-B/op	       113.5 ns/fuel	   12938 B/op	     282 allocs/op
+BenchmarkRun/numbers/multiply-4            	     585	   2040184 ns/op	     18031 fuel/op	     32104 logical-B/op	       113.1 ns/fuel	   12938 B/op	     282 allocs/op
+BenchmarkRun/numbers/multiply-4            	     584	   2038737 ns/op	     18031 fuel/op	     32104 logical-B/op	       113.1 ns/fuel	   12937 B/op	     282 allocs/op
+BenchmarkRun/numbers/multiply-4            	     585	   2043382 ns/op	     18031 fuel/op	     32104 logical-B/op	       113.3 ns/fuel	   12938 B/op	     282 allocs/op
+BenchmarkRun/numbers/multiply-4            	     584	   2040393 ns/op	     18031 fuel/op	     32104 logical-B/op	       113.2 ns/fuel	   12937 B/op	     282 allocs/op
+BenchmarkRun/numbers/divide-4              	     538	   2214296 ns/op	     18031 fuel/op	     32104 logical-B/op	       122.8 ns/fuel	   12945 B/op	     281 allocs/op
+BenchmarkRun/numbers/divide-4              	     538	   2214629 ns/op	     18031 fuel/op	     32104 logical-B/op	       122.8 ns/fuel	   12945 B/op	     281 allocs/op
+BenchmarkRun/numbers/divide-4              	     538	   2215189 ns/op	     18031 fuel/op	     32104 logical-B/op	       122.9 ns/fuel	   12945 B/op	     281 allocs/op
+BenchmarkRun/numbers/divide-4              	     540	   2214854 ns/op	     18031 fuel/op	     32104 logical-B/op	       122.8 ns/fuel	   12945 B/op	     281 allocs/op
+BenchmarkRun/numbers/divide-4              	     540	   2215615 ns/op	     18031 fuel/op	     32104 logical-B/op	       122.9 ns/fuel	   12945 B/op	     281 allocs/op
+BenchmarkRun/numbers/quantity-4            	     583	   2043733 ns/op	     14579 fuel/op	     40088 logical-B/op	       140.2 ns/fuel	   12749 B/op	     278 allocs/op
+BenchmarkRun/numbers/quantity-4            	     585	   2037718 ns/op	     14579 fuel/op	     40088 logical-B/op	       139.8 ns/fuel	   12749 B/op	     278 allocs/op
+BenchmarkRun/numbers/quantity-4            	     585	   2042796 ns/op	     14579 fuel/op	     40088 logical-B/op	       140.1 ns/fuel	   12749 B/op	     278 allocs/op
+BenchmarkRun/numbers/quantity-4            	     585	   2042357 ns/op	     14579 fuel/op	     40088 logical-B/op	       140.1 ns/fuel	   12749 B/op	     278 allocs/op
+BenchmarkRun/numbers/quantity-4            	     585	   2040175 ns/op	     14579 fuel/op	     40088 logical-B/op	       139.9 ns/fuel	   12749 B/op	     278 allocs/op
+BenchmarkRun/text/build-4                  	    1665	    722550 ns/op	     28928 fuel/op	    383838 logical-B/op	        24.98 ns/fuel	   12336 B/op	     273 allocs/op
+BenchmarkRun/text/build-4                  	    1630	    726066 ns/op	     28928 fuel/op	    383838 logical-B/op	        25.10 ns/fuel	   12337 B/op	     273 allocs/op
+BenchmarkRun/text/build-4                  	    1642	    728136 ns/op	     28928 fuel/op	    383838 logical-B/op	        25.17 ns/fuel	   12337 B/op	     273 allocs/op
+BenchmarkRun/text/build-4                  	    1640	    728868 ns/op	     28928 fuel/op	    383838 logical-B/op	        25.20 ns/fuel	   12337 B/op	     273 allocs/op
+BenchmarkRun/text/build-4                  	    1660	    722413 ns/op	     28928 fuel/op	    383838 logical-B/op	        24.97 ns/fuel	   12337 B/op	     273 allocs/op
+BenchmarkRun/text/iterate-4                	     356	   3347676 ns/op	     30318 fuel/op	     95272 logical-B/op	       110.4 ns/fuel	   13342 B/op	     288 allocs/op
+BenchmarkRun/text/iterate-4                	     356	   3351636 ns/op	     30318 fuel/op	     95272 logical-B/op	       110.5 ns/fuel	   13341 B/op	     288 allocs/op
+BenchmarkRun/text/iterate-4                	     356	   3354129 ns/op	     30318 fuel/op	     95272 logical-B/op	       110.6 ns/fuel	   13342 B/op	     288 allocs/op
+BenchmarkRun/text/iterate-4                	     355	   3369172 ns/op	     30318 fuel/op	     95272 logical-B/op	       111.1 ns/fuel	   13342 B/op	     288 allocs/op
+BenchmarkRun/text/iterate-4                	     356	   3363163 ns/op	     30318 fuel/op	     95272 logical-B/op	       110.9 ns/fuel	   13342 B/op	     288 allocs/op
+BenchmarkRun/text/index-4                  	     282	   4246553 ns/op	     26640 fuel/op	     51072 logical-B/op	       159.4 ns/fuel	   13137 B/op	     284 allocs/op
+BenchmarkRun/text/index-4                  	     283	   4230185 ns/op	     26640 fuel/op	     51072 logical-B/op	       158.8 ns/fuel	   13137 B/op	     284 allocs/op
+BenchmarkRun/text/index-4                  	     283	   4219862 ns/op	     26640 fuel/op	     51072 logical-B/op	       158.4 ns/fuel	   13136 B/op	     284 allocs/op
+BenchmarkRun/text/index-4                  	     283	   4232934 ns/op	     26640 fuel/op	     51072 logical-B/op	       158.9 ns/fuel	   13136 B/op	     284 allocs/op
+BenchmarkRun/text/index-4                  	     284	   4214392 ns/op	     26640 fuel/op	     51072 logical-B/op	       158.2 ns/fuel	   13137 B/op	     284 allocs/op
+BenchmarkRun/text/patterns-4               	     314	   3805927 ns/op	     13818 fuel/op	    231372 logical-B/op	       275.4 ns/fuel	   12545 B/op	     273 allocs/op
+BenchmarkRun/text/patterns-4               	     314	   3801797 ns/op	     13818 fuel/op	    231372 logical-B/op	       275.1 ns/fuel	   12545 B/op	     273 allocs/op
+BenchmarkRun/text/patterns-4               	     315	   3803445 ns/op	     13818 fuel/op	    231372 logical-B/op	       275.3 ns/fuel	   12545 B/op	     273 allocs/op
+BenchmarkRun/text/patterns-4               	     314	   3806130 ns/op	     13818 fuel/op	    231372 logical-B/op	       275.4 ns/fuel	   12545 B/op	     273 allocs/op
+BenchmarkRun/text/patterns-4               	     314	   3807904 ns/op	     13818 fuel/op	    231372 logical-B/op	       275.6 ns/fuel	   12546 B/op	     273 allocs/op
+BenchmarkRun/text/graphemes-4              	     175	   6828109 ns/op	     43518 fuel/op	    147572 logical-B/op	       156.9 ns/fuel	   13965 B/op	     296 allocs/op
+BenchmarkRun/text/graphemes-4              	     175	   6836314 ns/op	     43518 fuel/op	    147572 logical-B/op	       157.1 ns/fuel	   13964 B/op	     296 allocs/op
+BenchmarkRun/text/graphemes-4              	     175	   6845864 ns/op	     43518 fuel/op	    147572 logical-B/op	       157.3 ns/fuel	   13965 B/op	     296 allocs/op
+BenchmarkRun/text/graphemes-4              	     175	   6848260 ns/op	     43518 fuel/op	    147572 logical-B/op	       157.4 ns/fuel	   13965 B/op	     296 allocs/op
+BenchmarkRun/text/graphemes-4              	     175	   6835358 ns/op	     43518 fuel/op	    147572 logical-B/op	       157.1 ns/fuel	   13964 B/op	     296 allocs/op
+BenchmarkRun/collections/list-build-4      	     873	   1362619 ns/op	     19091 fuel/op	   3022112 logical-B/op	        71.37 ns/fuel	   12833 B/op	     278 allocs/op
+BenchmarkRun/collections/list-build-4      	     874	   1361944 ns/op	     19091 fuel/op	   3022112 logical-B/op	        71.34 ns/fuel	   12833 B/op	     278 allocs/op
+BenchmarkRun/collections/list-build-4      	     879	   1364324 ns/op	     19091 fuel/op	   3022112 logical-B/op	        71.46 ns/fuel	   12832 B/op	     278 allocs/op
+BenchmarkRun/collections/list-build-4      	     874	   1364227 ns/op	     19091 fuel/op	   3022112 logical-B/op	        71.46 ns/fuel	   12833 B/op	     278 allocs/op
+BenchmarkRun/collections/list-build-4      	     879	   1365363 ns/op	     19091 fuel/op	   3022112 logical-B/op	        71.52 ns/fuel	   12833 B/op	     278 allocs/op
+BenchmarkRun/collections/list-append-4     	     206	   5767393 ns/op	     52056 fuel/op	     80200 logical-B/op	       110.8 ns/fuel	   47043 B/op	     311 allocs/op
+BenchmarkRun/collections/list-append-4     	     207	   5748583 ns/op	     52056 fuel/op	     80200 logical-B/op	       110.4 ns/fuel	   46886 B/op	     311 allocs/op
+BenchmarkRun/collections/list-append-4     	     207	   5756481 ns/op	     52056 fuel/op	     80200 logical-B/op	       110.6 ns/fuel	   46886 B/op	     311 allocs/op
+BenchmarkRun/collections/list-append-4     	     207	   5757244 ns/op	     52056 fuel/op	     80200 logical-B/op	       110.6 ns/fuel	   46886 B/op	     311 allocs/op
+BenchmarkRun/collections/list-append-4     	     207	   5762522 ns/op	     52056 fuel/op	     80200 logical-B/op	       110.7 ns/fuel	   46887 B/op	     311 allocs/op
+BenchmarkRun/collections/map-build-4       	     517	   2329147 ns/op	     14094 fuel/op	     24920 logical-B/op	       165.3 ns/fuel	   12816 B/op	     277 allocs/op
+BenchmarkRun/collections/map-build-4       	     512	   2319591 ns/op	     14094 fuel/op	     24920 logical-B/op	       164.6 ns/fuel	   12817 B/op	     277 allocs/op
+BenchmarkRun/collections/map-build-4       	     517	   2329377 ns/op	     14094 fuel/op	     24920 logical-B/op	       165.3 ns/fuel	   12816 B/op	     277 allocs/op
+BenchmarkRun/collections/map-build-4       	     513	   2331511 ns/op	     14094 fuel/op	     24920 logical-B/op	       165.4 ns/fuel	   12817 B/op	     277 allocs/op
+BenchmarkRun/collections/map-build-4       	     513	   2322725 ns/op	     14094 fuel/op	     24920 logical-B/op	       164.8 ns/fuel	   12817 B/op	     277 allocs/op
+BenchmarkRun/collections/list-update-4     	     339	   3530417 ns/op	     28553 fuel/op	     24328 logical-B/op	       123.6 ns/fuel	   13735 B/op	     293 allocs/op
+BenchmarkRun/collections/list-update-4     	     338	   3537359 ns/op	     28553 fuel/op	     24328 logical-B/op	       123.9 ns/fuel	   13735 B/op	     293 allocs/op
+BenchmarkRun/collections/list-update-4     	     339	   3534136 ns/op	     28553 fuel/op	     24328 logical-B/op	       123.8 ns/fuel	   13734 B/op	     293 allocs/op
+BenchmarkRun/collections/list-update-4     	     339	   3531929 ns/op	     28553 fuel/op	     24328 logical-B/op	       123.7 ns/fuel	   13734 B/op	     293 allocs/op
+BenchmarkRun/collections/list-update-4     	     333	   3563872 ns/op	     28553 fuel/op	     24328 logical-B/op	       124.8 ns/fuel	   13737 B/op	     293 allocs/op
+BenchmarkRun/collections/map-update-4      	     788	   1516617 ns/op	      8056 fuel/op	     12432 logical-B/op	       188.3 ns/fuel	   12643 B/op	     275 allocs/op
+BenchmarkRun/collections/map-update-4      	     792	   1511400 ns/op	      8056 fuel/op	     12432 logical-B/op	       187.6 ns/fuel	   12643 B/op	     275 allocs/op
+BenchmarkRun/collections/map-update-4      	     784	   1515030 ns/op	      8056 fuel/op	     12432 logical-B/op	       188.1 ns/fuel	   12644 B/op	     275 allocs/op
+BenchmarkRun/collections/map-update-4      	     789	   1514692 ns/op	      8056 fuel/op	     12432 logical-B/op	       188.0 ns/fuel	   12644 B/op	     275 allocs/op
+BenchmarkRun/collections/map-update-4      	     793	   1509063 ns/op	      8056 fuel/op	     12432 logical-B/op	       187.3 ns/fuel	   12643 B/op	     275 allocs/op
+BenchmarkRun/collections/iterate-4         	     129	   9184890 ns/op	     89459 fuel/op	    200319 logical-B/op	       102.7 ns/fuel	   16405 B/op	     339 allocs/op
+BenchmarkRun/collections/iterate-4         	     129	   9180579 ns/op	     89459 fuel/op	    200319 logical-B/op	       102.6 ns/fuel	   16405 B/op	     339 allocs/op
+BenchmarkRun/collections/iterate-4         	     129	   9191723 ns/op	     89459 fuel/op	    200319 logical-B/op	       102.7 ns/fuel	   16405 B/op	     339 allocs/op
+BenchmarkRun/collections/iterate-4         	     129	   9187102 ns/op	     89459 fuel/op	    200319 logical-B/op	       102.7 ns/fuel	   16405 B/op	     339 allocs/op
+BenchmarkRun/collections/iterate-4         	     129	   9178590 ns/op	     89459 fuel/op	    200319 logical-B/op	       102.6 ns/fuel	   16405 B/op	     339 allocs/op
+BenchmarkRun/host/immediate-4              	      93	  12873925 ns/op	     13518 fuel/op	     16072 logical-B/op	       952.4 ns/fuel	 1088606 B/op	   39739 allocs/op
+BenchmarkRun/host/immediate-4              	      84	  13368072 ns/op	     13518 fuel/op	     16072 logical-B/op	       988.9 ns/fuel	 1088618 B/op	   39739 allocs/op
+BenchmarkRun/host/immediate-4              	      90	  12852700 ns/op	     13518 fuel/op	     16072 logical-B/op	       950.8 ns/fuel	 1088621 B/op	   39739 allocs/op
+BenchmarkRun/host/immediate-4              	      90	  12839081 ns/op	     13518 fuel/op	     16072 logical-B/op	       949.8 ns/fuel	 1088615 B/op	   39739 allocs/op
+BenchmarkRun/host/immediate-4              	      87	  12754904 ns/op	     13518 fuel/op	     16072 logical-B/op	       943.5 ns/fuel	 1088626 B/op	   39739 allocs/op
+BenchmarkRun/host/suspending-4             	      25	  42917772 ns/op	     13518 fuel/op	     16072 logical-B/op	      3175 ns/fuel	 5221672 B/op	   96470 allocs/op
+BenchmarkRun/host/suspending-4             	      25	  44544769 ns/op	     13518 fuel/op	     16072 logical-B/op	      3295 ns/fuel	 5221692 B/op	   96471 allocs/op
+BenchmarkRun/host/suspending-4             	      25	  45309979 ns/op	     13518 fuel/op	     16072 logical-B/op	      3352 ns/fuel	 5221684 B/op	   96470 allocs/op
+BenchmarkRun/host/suspending-4             	      24	  45456768 ns/op	     13518 fuel/op	     16072 logical-B/op	      3363 ns/fuel	 4902488 B/op	   96476 allocs/op
+BenchmarkRun/host/suspending-4             	      25	  45131221 ns/op	     13518 fuel/op	     16072 logical-B/op	      3339 ns/fuel	 5221681 B/op	   96470 allocs/op
+BenchmarkRun/host/properties-4             	     165	   7230687 ns/op	      9018 fuel/op	     16072 logical-B/op	       801.8 ns/fuel	  764502 B/op	   24896 allocs/op
+BenchmarkRun/host/properties-4             	     165	   7226388 ns/op	      9018 fuel/op	     16072 logical-B/op	       801.3 ns/fuel	  764513 B/op	   24896 allocs/op
+BenchmarkRun/host/properties-4             	     164	   7270769 ns/op	      9018 fuel/op	     16072 logical-B/op	       806.3 ns/fuel	  764511 B/op	   24894 allocs/op
+BenchmarkRun/host/properties-4             	     164	   7272538 ns/op	      9018 fuel/op	     16072 logical-B/op	       806.4 ns/fuel	  764512 B/op	   24894 allocs/op
+BenchmarkRun/host/properties-4             	     165	   7236858 ns/op	      9018 fuel/op	     16072 logical-B/op	       802.5 ns/fuel	  764507 B/op	   24896 allocs/op
+BenchmarkRun/host/conversion-4             	      39	  28744020 ns/op	     25018 fuel/op	    225572 logical-B/op	      1149 ns/fuel	 5599678 B/op	  119236 allocs/op
+BenchmarkRun/host/conversion-4             	      40	  28084119 ns/op	     25018 fuel/op	    225572 logical-B/op	      1123 ns/fuel	 5599664 B/op	  119236 allocs/op
+BenchmarkRun/host/conversion-4             	      39	  29219868 ns/op	     25018 fuel/op	    225572 logical-B/op	      1168 ns/fuel	 5599677 B/op	  119236 allocs/op
+BenchmarkRun/host/conversion-4             	      39	  28677538 ns/op	     25018 fuel/op	    225572 logical-B/op	      1146 ns/fuel	 5599665 B/op	  119236 allocs/op
+BenchmarkRun/host/conversion-4             	      36	  29188413 ns/op	     25018 fuel/op	    225572 logical-B/op	      1167 ns/fuel	 5599695 B/op	  119236 allocs/op
+BenchmarkRun/host/pump-4                   	   15519	     77542 ns/op	         7.000 fuel/op	         0 logical-B/op	     11077 ns/fuel	   11572 B/op	     235 allocs/op
+BenchmarkRun/host/pump-4                   	   15582	     76573 ns/op	         7.000 fuel/op	         0 logical-B/op	     10939 ns/fuel	   11572 B/op	     235 allocs/op
+BenchmarkRun/host/pump-4                   	   15447	     76833 ns/op	         7.000 fuel/op	         0 logical-B/op	     10976 ns/fuel	   11572 B/op	     235 allocs/op
+BenchmarkRun/host/pump-4                   	   15883	     75821 ns/op	         7.000 fuel/op	         0 logical-B/op	     10832 ns/fuel	   11572 B/op	     235 allocs/op
+BenchmarkRun/host/pump-4                   	   15172	     78056 ns/op	         7.000 fuel/op	         0 logical-B/op	     11151 ns/fuel	   11572 B/op	     235 allocs/op
+BenchmarkRun/macro/transform-4             	     567	   2098082 ns/op	     20664 fuel/op	   6418202 logical-B/op	       101.5 ns/fuel	   18000 B/op	     279 allocs/op
+BenchmarkRun/macro/transform-4             	     567	   2099412 ns/op	     20664 fuel/op	   6418202 logical-B/op	       101.6 ns/fuel	   18000 B/op	     279 allocs/op
+BenchmarkRun/macro/transform-4             	     565	   2090032 ns/op	     20664 fuel/op	   6418202 logical-B/op	       101.1 ns/fuel	   18019 B/op	     279 allocs/op
+BenchmarkRun/macro/transform-4             	     571	   2097881 ns/op	     20664 fuel/op	   6418202 logical-B/op	       101.5 ns/fuel	   17964 B/op	     279 allocs/op
+BenchmarkRun/macro/transform-4             	     568	   2100122 ns/op	     20664 fuel/op	   6418202 logical-B/op	       101.6 ns/fuel	   17991 B/op	     279 allocs/op
+BenchmarkRun/macro/report-4                	     451	   2658049 ns/op	     86555 fuel/op	   1291900 logical-B/op	        30.71 ns/fuel	   12442 B/op	     272 allocs/op
+BenchmarkRun/macro/report-4                	     447	   2668301 ns/op	     86555 fuel/op	   1291900 logical-B/op	        30.83 ns/fuel	   12443 B/op	     272 allocs/op
+BenchmarkRun/macro/report-4                	     450	   2665677 ns/op	     86555 fuel/op	   1291900 logical-B/op	        30.80 ns/fuel	   12441 B/op	     272 allocs/op
+BenchmarkRun/macro/report-4                	     448	   2667715 ns/op	     86555 fuel/op	   1291900 logical-B/op	        30.82 ns/fuel	   12442 B/op	     272 allocs/op
+BenchmarkRun/macro/report-4                	     446	   2670947 ns/op	     86555 fuel/op	   1291900 logical-B/op	        30.86 ns/fuel	   12443 B/op	     272 allocs/op
+BenchmarkRun/macro/game-tick-4             	     122	   9799103 ns/op	     67042 fuel/op	     80270 logical-B/op	       146.2 ns/fuel	   14616 B/op	     306 allocs/op
+BenchmarkRun/macro/game-tick-4             	     122	   9772495 ns/op	     67042 fuel/op	     80270 logical-B/op	       145.8 ns/fuel	   14615 B/op	     306 allocs/op
+BenchmarkRun/macro/game-tick-4             	     122	   9779653 ns/op	     67042 fuel/op	     80270 logical-B/op	       145.9 ns/fuel	   14615 B/op	     306 allocs/op
+BenchmarkRun/macro/game-tick-4             	     121	   9827271 ns/op	     67042 fuel/op	     80270 logical-B/op	       146.6 ns/fuel	   14619 B/op	     306 allocs/op
+BenchmarkRun/macro/game-tick-4             	     122	   9788054 ns/op	     67042 fuel/op	     80270 logical-B/op	       146.0 ns/fuel	   14616 B/op	     306 allocs/op
+BenchmarkRun/messaging/sends-4             	      32	  36023667 ns/op	     67518 fuel/op	     96072 logical-B/op	       533.5 ns/fuel	12539119 B/op	  208768 allocs/op
+BenchmarkRun/messaging/sends-4             	      32	  36050918 ns/op	     67518 fuel/op	     96072 logical-B/op	       533.9 ns/fuel	12539137 B/op	  208768 allocs/op
+BenchmarkRun/messaging/sends-4             	      32	  36073583 ns/op	     67518 fuel/op	     96072 logical-B/op	       534.3 ns/fuel	12539133 B/op	  208768 allocs/op
+BenchmarkRun/messaging/sends-4             	      32	  36208785 ns/op	     67518 fuel/op	     96072 logical-B/op	       536.3 ns/fuel	12539135 B/op	  208768 allocs/op
+BenchmarkRun/messaging/sends-4             	      32	  35982924 ns/op	     67518 fuel/op	     96072 logical-B/op	       532.9 ns/fuel	12539112 B/op	  208767 allocs/op
+BenchmarkRun/messaging/parents-4           	      31	  37943863 ns/op	     67518 fuel/op	     96072 logical-B/op	       562.0 ns/fuel	14018336 B/op	  208769 allocs/op
+BenchmarkRun/messaging/parents-4           	      31	  37923779 ns/op	     67518 fuel/op	     96072 logical-B/op	       561.7 ns/fuel	14018353 B/op	  208769 allocs/op
+BenchmarkRun/messaging/parents-4           	      31	  37813326 ns/op	     67518 fuel/op	     96072 logical-B/op	       560.0 ns/fuel	14018354 B/op	  208769 allocs/op
+BenchmarkRun/messaging/parents-4           	      31	  38009606 ns/op	     67518 fuel/op	     96072 logical-B/op	       563.0 ns/fuel	14018342 B/op	  208769 allocs/op
+BenchmarkRun/messaging/parents-4           	      31	  38007959 ns/op	     67518 fuel/op	     96072 logical-B/op	       562.9 ns/fuel	14018353 B/op	  208769 allocs/op
+BenchmarkRun/messaging/joins-4             	      20	  56025209 ns/op	    127218 fuel/op	    244872 logical-B/op	       440.4 ns/fuel	19500694 B/op	  333524 allocs/op
+BenchmarkRun/messaging/joins-4             	      20	  55967604 ns/op	    127218 fuel/op	    244872 logical-B/op	       439.9 ns/fuel	19500624 B/op	  333524 allocs/op
+BenchmarkRun/messaging/joins-4             	      20	  55865850 ns/op	    127218 fuel/op	    244872 logical-B/op	       439.1 ns/fuel	19500673 B/op	  333524 allocs/op
+BenchmarkRun/messaging/joins-4             	      20	  55855657 ns/op	    127218 fuel/op	    244872 logical-B/op	       439.1 ns/fuel	19500635 B/op	  333524 allocs/op
+BenchmarkRun/messaging/joins-4             	      20	  55880962 ns/op	    127218 fuel/op	    244872 logical-B/op	       439.3 ns/fuel	19500680 B/op	  333524 allocs/op
+BenchmarkRun/messaging/suspend-4           	      19	  62172204 ns/op	     48018 fuel/op	     32072 logical-B/op	      1295 ns/fuel	 9361036 B/op	  174287 allocs/op
+BenchmarkRun/messaging/suspend-4           	      18	  64071683 ns/op	     48018 fuel/op	     32072 logical-B/op	      1334 ns/fuel	 9361342 B/op	  174287 allocs/op
+BenchmarkRun/messaging/suspend-4           	      19	  60942387 ns/op	     48018 fuel/op	     32072 logical-B/op	      1269 ns/fuel	 9361154 B/op	  174288 allocs/op
+BenchmarkRun/messaging/suspend-4           	      18	  62636184 ns/op	     48018 fuel/op	     32072 logical-B/op	      1304 ns/fuel	 9361314 B/op	  174287 allocs/op
+BenchmarkRun/messaging/suspend-4           	      19	  60491337 ns/op	     48018 fuel/op	     32072 logical-B/op	      1260 ns/fuel	 9361198 B/op	  174288 allocs/op
+BenchmarkRun/lifecycle/load-small-4        	   15602	     77095 ns/op	         7.000 fuel/op	         0 logical-B/op	     11014 ns/fuel	   12148 B/op	     259 allocs/op
+BenchmarkRun/lifecycle/load-small-4        	   15073	     79052 ns/op	         7.000 fuel/op	         0 logical-B/op	     11293 ns/fuel	   12148 B/op	     259 allocs/op
+BenchmarkRun/lifecycle/load-small-4        	   15438	     77216 ns/op	         7.000 fuel/op	         0 logical-B/op	     11031 ns/fuel	   12148 B/op	     259 allocs/op
+BenchmarkRun/lifecycle/load-small-4        	   15297	     78451 ns/op	         7.000 fuel/op	         0 logical-B/op	     11207 ns/fuel	   12148 B/op	     259 allocs/op
+BenchmarkRun/lifecycle/load-small-4        	   15885	     76196 ns/op	         7.000 fuel/op	         0 logical-B/op	     10885 ns/fuel	   12148 B/op	     259 allocs/op
+BenchmarkRun/lifecycle/load-large-4        	    1261	    943525 ns/op	      4609 fuel/op	     16742 logical-B/op	       204.7 ns/fuel	   12357 B/op	     265 allocs/op
+BenchmarkRun/lifecycle/load-large-4        	    1260	    938663 ns/op	      4609 fuel/op	     16742 logical-B/op	       203.7 ns/fuel	   12356 B/op	     265 allocs/op
+BenchmarkRun/lifecycle/load-large-4        	    1272	    941058 ns/op	      4609 fuel/op	     16742 logical-B/op	       204.2 ns/fuel	   12357 B/op	     265 allocs/op
+BenchmarkRun/lifecycle/load-large-4        	    1257	    945860 ns/op	      4609 fuel/op	     16742 logical-B/op	       205.2 ns/fuel	   12356 B/op	     265 allocs/op
+BenchmarkRun/lifecycle/load-large-4        	    1261	    938025 ns/op	      4609 fuel/op	     16742 logical-B/op	       203.5 ns/fuel	   12357 B/op	     265 allocs/op
+BenchmarkRun/lifecycle/restore-4           	     168	   7013307 ns/op	      8015 fuel/op	      8024 logical-B/op	       875.0 ns/fuel	 9657273 B/op	    1216 allocs/op
+BenchmarkRun/lifecycle/restore-4           	     165	   7051870 ns/op	      8015 fuel/op	      8024 logical-B/op	       879.8 ns/fuel	 9663647 B/op	    1216 allocs/op
+BenchmarkRun/lifecycle/restore-4           	     164	   7119953 ns/op	      8015 fuel/op	      8024 logical-B/op	       888.3 ns/fuel	 9665799 B/op	    1216 allocs/op
+BenchmarkRun/lifecycle/restore-4           	     169	   7034395 ns/op	      8015 fuel/op	      8024 logical-B/op	       877.7 ns/fuel	 9759241 B/op	    1216 allocs/op
+BenchmarkRun/lifecycle/restore-4           	     166	   7049805 ns/op	      8015 fuel/op	      8024 logical-B/op	       879.6 ns/fuel	 9661490 B/op	    1216 allocs/op
+BenchmarkRun/lifecycle/rollback-4          	       4	 265982234 ns/op	    102023 fuel/op	     40888 logical-B/op	      2607 ns/fuel	41710890 B/op	  520235 allocs/op
+BenchmarkRun/lifecycle/rollback-4          	       4	 267224384 ns/op	    102023 fuel/op	     40888 logical-B/op	      2619 ns/fuel	41710866 B/op	  520234 allocs/op
+BenchmarkRun/lifecycle/rollback-4          	       4	 266156948 ns/op	    102023 fuel/op	     40888 logical-B/op	      2609 ns/fuel	41710898 B/op	  520235 allocs/op
+BenchmarkRun/lifecycle/rollback-4          	       4	 272124298 ns/op	    102023 fuel/op	     40888 logical-B/op	      2667 ns/fuel	41710910 B/op	  520235 allocs/op
+BenchmarkRun/lifecycle/rollback-4          	       4	 268754388 ns/op	    102023 fuel/op	     40888 logical-B/op	      2634 ns/fuel	41710894 B/op	  520235 allocs/op
+PASS
+ok  	github.com/odogono/odgn-talk/bench/go	532.596s
