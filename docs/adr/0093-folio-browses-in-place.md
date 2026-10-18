@@ -13,3 +13,5 @@ The escape path in ADR 0086 stands. Stop still silences audio first and requests
 We considered keeping Play as a separate full-window mode with an in-place Stop, which kept one way to run a Project but meant hiding every authoring window to try one button. We also considered reloading a Script into the running session when it is edited, as close to HyperCard's fix-and-click loop as possible; running handlers, Script Variables and pending waits make the result hard to predict, so a fresh session is the boundary.
 
 Narrowed by [ADR 0101](0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md): authored Pages and Elements keep their identity through their session-local ids, not as the same objects; the written-back Project is a new value.
+
+Narrowed by [ADR 0104](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md): Play runs on the page thread, with no worker to terminate. Leaving does not wait for a Script to cooperate, but it does rely on Pump slices and Fuel-metered Host Crossings to yield the page thread.
