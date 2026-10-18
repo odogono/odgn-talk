@@ -316,6 +316,7 @@ recovery-offers/cleanup-restore
 recovery-offers/costs
 recovery-offers/nested
 reload/decomposed-source
+reload/extend-script-name
 reload/extend-shared-names
 reload/extend-units
 reload/extension-state-cap

@@ -1182,6 +1182,10 @@ unit name. Dispatch, `wait for` tables and Command Calls look across all the
 Script's units, since each Handler is in one of them. The extended Script's
 identity hashes the previous identity, `extend` and the extension's own.
 
+Inherited Constant links split `@<unit>:<name>` at the final colon, preserving
+Host-chosen Script names containing colons, dots or slashes across successive
+extensions. The same behavior reaches Elixir through the WASI reactor.
+
 `talk_script_reload` builds the new code in a detached Script against the
 Script's kept, unrevoked Grants, objects and owner, and runs its initialiser
 between Pumps, with no Fuel Slice or Fuel cap. With `TALK_CARRY_VARIABLES`,

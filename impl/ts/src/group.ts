@@ -2519,7 +2519,9 @@ export class Group {
     const links = new Map<string, Code>();
     for (const [i, unit] of s.units.entries()) {
       const code = s.loaded.units[i]!;
-      const key = `@${code.name}`;
+      // Earlier units use private keys, so Host-chosen Script names cannot
+      // collide with the `library:name` encoding (including its dot rule).
+      const key = `@${i}`;
       links.set(key, code);
       for (const [library, linked] of code.libraries) {
         links.set(library, linked);

@@ -152,6 +152,25 @@ describe('Reload', () => {
 });
 
 describe('Extend', () => {
+  test.each(['page:page1', 'page.one', 'element:page.one/button:primary'])(
+    'keeps inherited definitions separate from Libraries for Script %s',
+    name => {
+      const { g } = setup();
+      const s = g.load({
+        name,
+        source: 'constant k = 3\nfunction plus x = k\n  return x + k\nend plus',
+      });
+      s.extend('constant next = k + 1');
+      s.extend(
+        'script variable result = k + next\non hello\n  return [result, plus(), plus(next)]\nend hello',
+      );
+      s.deliver({ name: 'hello' });
+      const r = operationalReports(g.pump(0n).reports)[0]!;
+      expect(r).toMatchObject({ outcome: 'completed' });
+      expect('result' in r && r.result!.toString()).toBe('[7, 6, 7]');
+    },
+  );
+
   test('adds a separate unit, resolves existing names, preserves Runs and Function Values', () => {
     const { g, trace } = setup();
     const s = g.load({

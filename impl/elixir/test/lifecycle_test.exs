@@ -2,6 +2,24 @@ defmodule NorthTalk.LifecycleTest do
   use ExUnit.Case, async: true
   alias NorthTalk.{Call, Capability, Effect, HostError, Release, Result, ScriptError}
 
+  test "extends a Script with punctuation in its name and inherited Constants" do
+    owner = start_supervised!({NorthTalk, drive: :auto})
+    group = NorthTalk.new_group!(owner, "g", [])
+    name = "element:page.one/button:primary"
+
+    NorthTalk.load!(group, name, "constant k = 3\nfunction plus x = k\n  return x + k\nend plus", [])
+    assert :ok = NorthTalk.extend(group, name, "constant next = k + 1")
+
+    assert :ok =
+             NorthTalk.extend(
+               group,
+               name,
+               "script variable result = k + next\non hello\n  return [result, plus(), plus(next)]\nend hello"
+             )
+
+    assert {:ok, %Result{value: [7, 6, 7]}} = NorthTalk.request(group, name, "hello")
+  end
+
   # A file-like resource: `open` opens a scope that `close` closes, and every
   # crossing is sent to the binding, a pid, in the order it happens.
   defmodule Resource do

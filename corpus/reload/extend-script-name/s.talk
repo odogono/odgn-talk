@@ -1,0 +1,4 @@
+constant k = 3
+function plus x = k
+  return x + k
+end plus

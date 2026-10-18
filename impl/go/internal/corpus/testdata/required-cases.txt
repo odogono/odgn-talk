@@ -143,6 +143,7 @@ trace load-diagnostics/unknown-name
 trace load-diagnostics/unterminated-interpolation
 trace load-diagnostics/wrong-argument-count
 encoding quantities/value-encoding
+trace reload/extend-script-name
 trace reload/extend-units
 trace reload/extension-state-cap
 trace reload/replacement-transitive

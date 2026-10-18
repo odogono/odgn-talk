@@ -122,6 +122,10 @@ collection only to a guest offering `object-elements-v1`, and answers its
 
 `exportManifest({ kind, version, grants, libraries, messages, objectKinds, objects })` returns compact JSON with one trailing LF for the Host to write to `<kind>.talk-manifest.json`. Optional collections default to empty arrays. Declarations, receiving kinds and parent kinds are sorted in code-point order; argument Shapes, map fields and alternatives retain declaration order. Properties include `name`, `shape` (default `"value"`), `readOnly`, `getCost` and `setCost` (default zero Fuel and allocation). Operation Declarations use the same data helpers as saves and Group Fingerprints, with non-empty plain-text `description` and source-text `examples` appended only in the manifest. `defineCapability` validates these fields; rewording them leaves saves, restore matching and Group Fingerprints unchanged. Bindings, native objects and executable Host callbacks never appear, and export never calls them. The manifest is tooling-only and outside Trace parity.
 
+`Script.extend` links earlier code through private unit keys, so Host-chosen
+Script names containing colons, dots or slashes preserve inherited Constants,
+functions and parameter defaults across successive extensions.
+
 ## The Zig reactor in a browser
 
 `@northtalk/ts/wasm` offers this package's embedding API over the [Zig Core](../zig/README.md)'s `wasm32-wasi` reactor and its [Message Layer](../../spec/09-embedding.md#the-message-layer), so a browser Host can run either Core ([ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md)). Its Values, Shapes, errors and Capability and Object Kind constructors are this package's own, so a Host switches Cores by its import:

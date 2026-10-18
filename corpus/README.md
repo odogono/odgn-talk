@@ -101,6 +101,12 @@ Before pushing, run `bun run corpus:check`,
 
 ## Case navigation
 
+`reload/extend-script-name` (#1140, #1203) covers a Host-chosen Script name
+containing colons, a dot and a slash, with inherited Constants and function
+defaults across two extensions and runtime error positions in the extension.
+Current support is described in the [TS](../impl/ts/README.md) and
+[Zig](../impl/zig/README.md#the-machine) guides.
+
 The `text-model/folded-comparisons` Trace Case (#903) covers folded equality,
 all four ordering instructions, nested values and Function captures, simple
 Unicode folding, membership, literal tests and folded Character visit charges,
