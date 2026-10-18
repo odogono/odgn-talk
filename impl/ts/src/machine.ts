@@ -103,6 +103,13 @@ import {
 } from './values';
 import type { PatternElement } from './view';
 import { stateOf, type ObjectState } from './objects';
+import {
+  abandon,
+  abandonMembers,
+  abandonSuspension,
+  suspensionCall,
+  type AbandonReason,
+} from './waits';
 
 export type LimitName =
   | 'fuelPerRun'
@@ -1116,7 +1123,7 @@ export class Run {
       this.effectStateUnknown = true;
     }
     this.rollbackParticipant();
-    const pending = this.discard();
+    const pending = this.discard('effect-failed');
     this.records.push(...pending.map(id => ({ kind: 'abandon' as const, id })));
     this.script.variables = [...this.segmentBase];
     this.outcome = { kind: 'effect failed', effect: failure };
@@ -1466,7 +1473,7 @@ export class Run {
       }
       this.fault('fuelPerRun', this.frame.code.unit.code[this.frame.pc]!);
       if (suspension?.k === 'ask') {
-        abort.abort();
+        abandon(abort, 'limit');
         this.faultAbandons.push(id);
       }
       failure = { k: 'wake' };
@@ -1779,7 +1786,7 @@ export class Run {
   }
 
   /** Roll back the active Segment and abandon every pending call without unwinding. */
-  discard(betweenSegments = false): string[] {
+  discard(reason: AbandonReason, betweenSegments = false): string[] {
     const debug = machineDebug.get(this);
     if (debug) {
       debug.pending = null;
@@ -1788,34 +1795,26 @@ export class Run {
     if (!betweenSegments && !this.suspended && !this.resumption && !this.done) {
       this.script.variables = [...this.segmentBase];
     }
-    const pending = this.suspended;
-    const members = this.resumption
-      ? []
-      : (this.join?.members.filter(m => m.answer === undefined && !m.reply) ??
-        []);
+    const join = this.resumption ? null : this.join;
     this.join = null;
-    for (const member of members) {
-      member.abort?.abort();
-    }
+    const members = abandonMembers(join?.members ?? [], reason);
     // Fail-fast abandonment happened at input drain, but its records would
     // normally wait for resume. Keep them when that resume is discarded.
     const ids = [
       ...this.cancellationAbandons,
       ...(this.resumption?.k === 'join-failed'
         ? this.resumption.abandon
-        : members.map(m => m.id)),
+        : members),
     ];
     this.cancellationAbandons = [];
     if (this.crossingCall) {
-      this.crossingCall.abort.abort();
+      abandon(this.crossingCall.abort, reason);
       ids.push(this.crossingCall.id);
       this.crossingCall = null;
     }
-    if (pending?.k === 'ask') {
-      pending.abort.abort();
-      ids.push(pending.call.id);
-    } else if (pending?.k === 'send' || pending?.k === 'call-value') {
-      ids.push(pending.id);
+    const own = abandonSuspension(this.suspended, reason);
+    if (own !== undefined) {
+      ids.push(own);
     }
     this.suspended = null;
     this.resumption = null;
@@ -1902,7 +1901,7 @@ export class Run {
       this.abandonScopes(name => this.enrolled(name));
       this.rollbackParticipant();
     }
-    this.cancellationAbandons = this.discard(betweenSegments);
+    this.cancellationAbandons = this.discard('cancelled', betweenSegments);
     this.segment++;
     this.cancellation = blocks;
     this.cancellationOwners = owners;
@@ -2407,11 +2406,9 @@ export class Run {
       this.charging &&
       this.persistentState() + this.size(s) > this.limits.persistentState
     ) {
-      if (s.k === 'ask') {
-        s.abort.abort();
-        this.faultAbandons.push(s.call.id);
-      } else if (s.k === 'send' || s.k === 'call-value') {
-        this.faultAbandons.push(s.id);
+      const own = abandonSuspension(s, 'limit');
+      if (own !== undefined) {
+        this.faultAbandons.push(own);
       }
       throw new LimitFaultError('persistentState', this.frame.pc);
     }
@@ -2514,12 +2511,8 @@ export class Run {
       return;
     }
     if (r.k === 'timeout') {
-      this.abandoning =
-        s.k === 'ask'
-          ? [s.call.id]
-          : s.k === 'send' || s.k === 'call-value'
-            ? [s.id]
-            : [];
+      const own = suspensionCall(s);
+      this.abandoning = own === undefined ? [] : [own];
     }
     const value = this.settled(s.k === 'ask' ? s.call : null, r);
     if (s.k !== 'wait') {
@@ -3053,21 +3046,16 @@ export class Run {
         return;
       }
     }
-    for (const id of this.abandonJoin()) {
+    for (const id of this.abandonJoin('join-ended')) {
       this.records.push({ kind: 'abandon', id });
     }
   }
 
   // Abandon the open Join's members, signalling their Capability calls.
-  private abandonJoin(): string[] {
-    const members = (this.join?.members ?? []).filter(
-      member => member.answer === undefined && !member.reply,
-    );
+  private abandonJoin(reason: AbandonReason): string[] {
+    const join = this.join;
     this.join = null;
-    for (const member of members) {
-      member.abort?.abort();
-    }
-    return members.map(member => member.id);
+    return abandonMembers(join?.members ?? [], reason);
   }
 
   private fault(limit: LimitName, ins: Instruction) {
@@ -3088,7 +3076,7 @@ export class Run {
       this.cancellation = [];
     }
     // A Join's members are abandoned, after the fault (chapter 5, Joins).
-    this.faultAbandons.push(...this.abandonJoin());
+    this.faultAbandons.push(...this.abandonJoin('limit'));
     const code = this.frame.code;
     const handler = this.frame.handler;
     const rollback = this.script.variableNames.filter(

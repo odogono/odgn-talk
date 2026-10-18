@@ -46,7 +46,6 @@ import {
   type LimitName,
   type Limits,
   type Outcome,
-  type Member,
   type Resumption,
   type RunRecord,
   Run,
@@ -54,6 +53,15 @@ import {
   type Suspension,
   type Script as Loaded,
 } from './machine';
+import {
+  abandon,
+  Waits,
+  type JoinWait as WaitJoin,
+  type Pending as WaitPending,
+  type Timer as WaitTimer,
+  type TimerAction as WaitTimerAction,
+  type Waiter as WaitWaiter,
+} from './waits';
 import {
   type Grant,
   type Call,
@@ -432,54 +440,11 @@ const sameClause = (a: Running, b: Running): boolean =>
   a.run.fallback === b.run.fallback &&
   (a.run.fallback || a.delivery.message === b.delivery.message) &&
   a.run.clauseNumber === b.run.clauseNumber;
-// A timer (chapter 5, A Pump): fired in deadline order, then set order.
-type TimerAction =
-  | { k: 'wake'; running: Running; s: ScriptState }
-  | {
-      branch: number;
-      k: 'event';
-      s: ScriptState;
-      waiter: ScriptState['waiters'][number];
-    }
-  | {
-      abort?: AbortController;
-      /** A Timeout Block's duration, when its deadline is this call's. */
-      deadline?: Value;
-      id: string;
-      k: 'call';
-      ms: number;
-    }
-  /** A Timeout Block's deadline ending a wait, a `wait for` or a Join. */
-  | {
-      after: Value;
-      join?: JoinWait;
-      k: 'deadline';
-      running: Running;
-      s: ScriptState;
-      waiter?: ScriptState['waiters'][number];
-    };
-type Timer = {
-  action: TimerAction;
-  deadline: bigint;
-  live: boolean;
-  running?: Running;
-  seq: number;
-};
-// A suspended Join: its members, the answers in so far, and its Timeout
-// Block's deadline timer, if it has one.
-type JoinWait = {
-  answers: Map<string, Resumption>;
-  deadline?: Timer;
-  members: Member[];
-};
-// A suspended Run waiting on a call: an Operation's answer, or a reply.
-type Pending = {
-  /** For a Join Member, its Join. */
-  join?: JoinWait;
-  running: Running;
-  s: ScriptState;
-  timer: Timer;
-};
+type Timer = WaitTimer<Running, ScriptState>;
+type TimerAction = WaitTimerAction<Running, ScriptState>;
+type JoinWait = WaitJoin<Running, ScriptState>;
+type Pending = WaitPending<Running, ScriptState>;
+type Waiter = WaitWaiter<Running, ScriptState>;
 type SourceUnit = {
   identity: string;
   imports: readonly Library[];
@@ -517,8 +482,6 @@ type ScriptState = {
   /** Grant names without a Host implementation in this restored Group. */
   unbound: Set<string>;
   units: SourceUnit[];
-  /** Its pending `wait for`s, in the order the waits began. */
-  waiters: { running: Running; timers: Timer[] }[];
 };
 type InputAction =
   | { code: string; k: 'refusal' }
@@ -684,15 +647,13 @@ export class Group {
   private readonly onReady: (() => void) | undefined;
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
-  private readonly pending = new Map<string, Pending>();
+  private readonly waits = new Waits<Running, ScriptState>();
   private readonly functionGroup = {};
   private readonly objects = new Map<string, ObjectState>();
   // The reports of the Pump draining the input queue.
   private drainReports: Report[] = [];
   private accounting = emptyAccounting();
   private discardReason = 'stop';
-  private timers: Timer[] = [];
-  private timerSeq = 0;
   private inputs: QueuedInput[] = [];
   private deliveries = 0;
   private broadcasts = 0;
@@ -994,6 +955,7 @@ export class Group {
       );
       throw new HostError('effects pending');
     }
+    const { timers, pending, timerSeq } = this.waits.exportState();
     const state = {
       scripts: this.scripts.map(s => ({
         name: s.name,
@@ -1012,7 +974,7 @@ export class Group {
         stopped: s.stopped,
         stopReason: s.stopReason,
         suspended: s.suspended,
-        waiters: s.waiters,
+        waiters: this.waits.waitersOf(s),
         revoked: s.revoked,
         disabled: s.disabled,
       })),
@@ -1022,11 +984,11 @@ export class Group {
         urgent: input.urgent,
         line: typeof input.line === 'string' ? input.line : undefined,
       })),
-      timers: this.timers.filter(t => t.live),
-      pending: this.pending,
+      timers,
+      pending,
       deliveries: this.deliveries,
       broadcasts: this.broadcasts,
-      timerSeq: this.timerSeq,
+      timerSeq,
       lastClock: this.lastClock,
       randomState: this.randomState,
       discardedDecisions: this.discardedDecisions,
@@ -1318,7 +1280,7 @@ export class Group {
     group.broadcasts = state.broadcasts;
     group.lastClock = state.lastClock;
     group.randomState = state.randomState;
-    group.timerSeq = state.timerSeq;
+    group.waits.importTimerSeq(state.timerSeq);
     group.saves = Number(saved.id.slice(1));
     for (const [i, runtime] of state.scripts.entries()) {
       const script = group.scripts[i]!;
@@ -1365,8 +1327,8 @@ export class Group {
           stopped: runtime.stopped,
           stopReason: runtime.stopReason,
           suspended: runtime.suspended,
-          waiters: runtime.waiters,
         });
+        group.waits.importWaiters(script, runtime.waiters);
         script.loaded.live = runtime.live;
         runtime.definitions.forEach((values, j) => {
           script.loaded.units[j]!.definitions.splice(
@@ -1404,10 +1366,7 @@ export class Group {
         }
       }
     } else {
-      for (const [id, pending] of state.pending) {
-        group.pending.set(id, pending);
-      }
-      group.timers = state.timers;
+      group.waits.importWaits(state.pending, state.timers);
       group.inputs = state.inputs.map(input => ({
         ...input,
         line:
@@ -1550,27 +1509,24 @@ export class Group {
     }
   }
 
-  // A pending call's Run: suspended on it, or preempted in the open Join
-  // that started it, which a save keeps too (chapter 10, What a save holds).
   private pendingCall(
     id: string,
   ): { running: Running; s: ScriptState } | undefined {
-    return this.pending.get(id) ?? this.openJoinCalls().get(id);
+    return this.waits.awaited(id, () => this.holders());
   }
 
-  private openJoinCalls(): Map<string, { running: Running; s: ScriptState }> {
-    return new Map(
-      this.scripts.flatMap(s =>
-        this.runsOf(s).flatMap(running =>
-          running.run.openJoinCalls().map(m => [m.id, { running, s }] as const),
-        ),
-      ),
-    );
+  // Every Run of every Script, with its Script.
+  private *holders(): Generator<{ running: Running; s: ScriptState }> {
+    for (const s of this.scripts) {
+      for (const running of this.runsOf(s)) {
+        yield { running, s };
+      }
+    }
   }
 
   private pendingOperations(): PendingCall[] {
-    return [...this.pending, ...this.openJoinCalls()]
-      .sort(([a], [b]) => compareCallIds(a, b))
+    return this.waits
+      .awaitedCalls(() => this.holders(), compareCallIds)
       .flatMap(([id, pending]) => {
         const context = pending.running.run.pendingCall(id)?.call;
         if (!context) {
@@ -1837,19 +1793,7 @@ export class Group {
   private forgetWait(s: ScriptState, running: Running) {
     s.suspended.delete(running);
     s.parked = s.parked.filter(r => r !== running);
-    for (const waiter of s.waiters.filter(w => w.running === running)) {
-      this.endWaiter(s, waiter);
-    }
-    for (const timer of this.timers) {
-      if (timer.running === running) {
-        timer.live = false;
-      }
-    }
-    for (const [id, p] of this.pending) {
-      if (p.running === running) {
-        this.pending.delete(id);
-      }
-    }
+    this.waits.forget(s, running);
   }
 
   private cancelRunning(s: ScriptState, running: Running) {
@@ -1887,7 +1831,7 @@ export class Group {
   private rewindRunning(s: ScriptState, running: Running) {
     this.rewound = true;
     // A parked Run is between Segments: other Runs may have committed since.
-    const pending = running.run.discard(running.parked);
+    const pending = running.run.discard('rewound', running.parked);
     this.finalizeEffects(running, true);
     this.forgetWait(s, running);
     this.accumulateRunCosts(s, running.run);
@@ -1937,7 +1881,7 @@ export class Group {
     for (const r of runs) {
       this.accumulateRunCosts(s, r.run);
       pendingCalls.push(
-        ...r.run.discard(r.parked || r.resuming || r.cleanupReady),
+        ...r.run.discard('stopped', r.parked || r.resuming || r.cleanupReady),
       );
       this.finalizeEffects(r, true);
       this.forgetWait(s, r);
@@ -2298,7 +2242,6 @@ export class Group {
     }
     this.scripts.push({
       name: o.name,
-      waiters: [],
       suspended: new Set(),
       unbound: new Set(),
       objects: o.objects ?? {},
@@ -2427,7 +2370,6 @@ export class Group {
       queue: [],
       suspended: new Set(),
       parked: [],
-      waiters: [],
       units: [
         {
           source,
@@ -3015,16 +2957,6 @@ export class Group {
     receiver.queue.push(delivery);
   }
 
-  private timer(
-    deadline: bigint,
-    action: TimerAction,
-    running?: Running,
-  ): Timer {
-    const t = { deadline, action, live: true, seq: this.timerSeq++, running };
-    this.timers.push(t);
-    return t;
-  }
-
   private fireTimer(timer: Timer) {
     const action = timer.action;
     switch (action.k) {
@@ -3032,14 +2964,14 @@ export class Group {
         this.ready(action.s, action.running, { k: 'wake' });
         break;
       case 'event':
-        this.endWaiter(action.s, action.waiter);
+        this.waits.endWaiter(action.s, action.waiter);
         this.ready(action.s, action.waiter.running, {
           k: 'event-timeout',
           branch: action.branch,
         });
         break;
       case 'call':
-        action.abort?.abort();
+        abandon(action.abort, 'timeout');
         this.settleReply(action.id, {
           k: 'timeout',
           after: action.ms,
@@ -3050,20 +2982,13 @@ export class Group {
         // What the Run waits on is abandoned, a Join's pending members in
         // start order (ADR 0073).
         if (action.waiter) {
-          this.endWaiter(action.s, action.waiter);
+          this.waits.endWaiter(action.s, action.waiter);
         }
-        const abandon = (action.join?.members ?? []).filter(m =>
-          this.pending.has(m.id),
-        );
-        for (const m of abandon) {
-          this.pending.get(m.id)!.timer.live = false;
-          this.pending.delete(m.id);
-          m.abort?.abort();
-        }
+        const cut = this.waits.cut(action.join?.members ?? [], 'timeout');
         this.ready(action.s, action.running, {
           k: 'deadline',
           after: action.after,
-          abandon: abandon.map(m => m.id),
+          abandon: cut.map(m => m.id),
         });
         break;
       }
@@ -3080,66 +3005,12 @@ export class Group {
 
   // A call's answer or failure, or a reply; one no longer pending is noted.
   private settleReply(id: string, r: Resumption) {
-    const p = this.pending.get(id);
-    if (!p) {
-      for (const s of this.scripts) {
-        for (const running of this.runsOf(s)) {
-          if (running.run.replyToOpenJoin(id, r)) {
-            return;
-          }
-        }
-      }
-      if (r.k === 'answer' || r.k === 'fail') {
-        this.trace(recordLine('note', [id], [['kind', 'late-answer']]));
-      }
-      return;
+    const settled = this.waits.settle(id, r, () => this.holders());
+    if (settled.k === 'ready') {
+      this.ready(settled.s, settled.running, settled.r);
+    } else if (settled.k === 'late' && (r.k === 'answer' || r.k === 'fail')) {
+      this.trace(recordLine('note', [id], [['kind', 'late-answer']]));
     }
-    this.pending.delete(id);
-    p.timer.live = false;
-    if (!p.join) {
-      this.ready(p.s, p.running, r);
-      return;
-    }
-    // A Join Member: it waits for all, or fails fast (chapter 5, Joins).
-    const { members, answers } = p.join;
-    const index = members.findIndex(m => m.id === id);
-    if (r.k === 'answer' || r.k === 'reply') {
-      answers.set(id, r);
-      members[index]!.answer = r.value;
-      if (answers.size === members.length) {
-        if (p.join.deadline) {
-          p.join.deadline.live = false;
-        }
-        this.ready(p.s, p.running, {
-          k: 'joined',
-          answers: members.map(m => answers.get(m.id)!),
-        });
-      }
-      return;
-    }
-    const abandon = members.filter(m => m.id !== id && this.pending.has(m.id));
-    for (const m of abandon) {
-      this.pending.get(m.id)!.timer.live = false;
-      this.pending.delete(m.id);
-      m.abort?.abort();
-    }
-    if (p.join.deadline) {
-      p.join.deadline.live = false;
-    }
-    this.ready(p.s, p.running, {
-      k: 'join-failed',
-      index: index + 1,
-      failure: r,
-      // A member that timed out is abandoned too, first.
-      abandon: [...(r.k === 'timeout' ? [id] : []), ...abandon.map(m => m.id)],
-    });
-  }
-
-  private endWaiter(s: ScriptState, waiter: ScriptState['waiters'][number]) {
-    for (const t of waiter.timers) {
-      t.live = false;
-    }
-    s.waiters = s.waiters.filter(w => w !== waiter);
   }
 
   // A message being dispatched resumes every pending `wait for` of its
@@ -3147,7 +3018,7 @@ export class Group {
   private observe(s: ScriptState, delivery: Delivery) {
     const from = delivery.from?.split('/')[0] ?? null;
     let fuel = 0;
-    for (const waiter of s.waiters) {
+    for (const waiter of this.waits.waitersOf(s)) {
       const before = waiter.running.run.fuel;
       const records = waiter.running.run.records.length;
       const fired = waiter.running.run.matchEvent(
@@ -3159,7 +3030,7 @@ export class Group {
       fuel += waiter.running.run.fuel - before;
       this.writeRecords(waiter.running, records);
       if (fired) {
-        this.endWaiter(s, waiter);
+        this.waits.endWaiter(s, waiter);
         this.seal(delivery, { verdict: 'allowed' });
         this.ready(s, waiter.running, fired);
       }
@@ -3186,15 +3057,15 @@ export class Group {
       }) as TimerAction;
     if (sus.k === 'wait') {
       if (ends(now + sus.us)) {
-        return this.timer(block!.at, deadline(), running).deadline;
+        return this.waits.timer(block!.at, deadline(), running).deadline;
       }
-      return this.timer(now + sus.us, { k: 'wake', s, running }, running)
+      return this.waits.timer(now + sus.us, { k: 'wake', s, running }, running)
         .deadline;
     }
     if (sus.k === 'wait-for') {
       // A timeout, and each `after` branch, is a timer; the first to fire
       // ends the wait, as a matching message does.
-      const waiter = { running, timers: [] as Timer[] };
+      const waiter: Waiter = { running, timers: [] };
       const own = [
         ...(sus.timeout === null ? [] : [sus.timeout]),
         ...sus.afters.map(after => after.us),
@@ -3204,9 +3075,9 @@ export class Group {
       );
       if (ends(own)) {
         waiter.timers.push(
-          this.timer(block!.at, deadline({ waiter }), running),
+          this.waits.timer(block!.at, deadline({ waiter }), running),
         );
-        s.waiters.push(waiter);
+        this.waits.addWaiter(s, waiter);
         return block!.at;
       }
       const fire = (branch: number): TimerAction => ({
@@ -3216,14 +3087,16 @@ export class Group {
         branch,
       });
       if (sus.timeout !== null) {
-        waiter.timers.push(this.timer(now + sus.timeout, fire(0), running));
+        waiter.timers.push(
+          this.waits.timer(now + sus.timeout, fire(0), running),
+        );
       }
       for (const after of sus.afters) {
         waiter.timers.push(
-          this.timer(now + after.us, fire(after.branch), running),
+          this.waits.timer(now + after.us, fire(after.branch), running),
         );
       }
-      s.waiters.push(waiter);
+      this.waits.addWaiter(s, waiter);
       return waiter.timers.reduce<bigint | null>(
         (min, t) => (min === null || t.deadline < min ? t.deadline : min),
         null,
@@ -3238,17 +3111,17 @@ export class Group {
       // Set first, so that it fires before a member's timer at the same
       // deadline.
       if (block) {
-        join.deadline = this.timer(block.at, deadline({ join }), running);
+        join.deadline = this.waits.timer(block.at, deadline({ join }), running);
       }
       // A member's wait started with its call, which a preempted Join made
       // in an earlier Pump.
       for (const m of sus.members) {
-        const timer = this.timer(
+        const timer = this.waits.timer(
           m.at,
           { k: 'call', id: m.id, ms: m.ms },
           running,
         );
-        this.pending.set(m.id, { s, running, timer, join });
+        this.waits.add(m.id, s, running, timer, join);
       }
       for (const { id, reply } of running.run.takeJoinReplies()) {
         this.settleReply(id, reply);
@@ -3259,7 +3132,7 @@ export class Group {
     const ms = sus.k === 'ask' ? sus.ms : running.run.limits.maxWaitMs;
     const own = now + BigInt(ms) * 1000n;
     const bounded = ends(own);
-    const timer = this.timer(
+    const timer = this.waits.timer(
       bounded ? block!.at : own,
       {
         k: 'call',
@@ -3270,7 +3143,7 @@ export class Group {
       },
       running,
     );
-    this.pending.set(id, { s, running, timer });
+    this.waits.add(id, s, running, timer);
     // A call's own deadline is shown only inside a Timeout Block.
     return block ? timer.deadline : null;
   }
@@ -3482,11 +3355,13 @@ export class Group {
         s =>
           !s.stopped &&
           (s.loaded.clauses.has(m.name) ||
-            s.waiters.some(
-              w =>
-                w.running.run.suspended?.k === 'wait-for' &&
-                w.running.run.suspended.whens.some(b => b.message === m.name),
-            )),
+            this.waits
+              .waitersOf(s)
+              .some(
+                w =>
+                  w.running.run.suspended?.k === 'wait-for' &&
+                  w.running.run.suspended.whens.some(b => b.message === m.name),
+              )),
       )
       .map(s => {
         const ballot: Ballot | undefined = decision ? { decision } : undefined;
@@ -3962,22 +3837,9 @@ export class Group {
     }
     this.discardedDecisions = [];
     // Due timers fire in deadline order, then in the order they were set.
-    const due = this.timers
-      .filter(t => t.live && t.deadline <= now)
-      .sort((a, b) =>
-        a.deadline < b.deadline
-          ? -1
-          : a.deadline > b.deadline
-            ? 1
-            : a.seq - b.seq,
-      );
-    for (const t of due) {
-      if (t.live) {
-        t.live = false;
-        this.fireTimer(t);
-      }
+    for (const t of this.waits.takeDue(now)) {
+      this.fireTimer(t);
     }
-    this.timers = this.timers.filter(t => t.live);
     let fuel = [...this.drainCharges.values()].reduce(
       (sum, cost) => sum + cost,
       0,
@@ -4036,11 +3898,7 @@ export class Group {
           ? 'sliced'
           : 'idle';
     this.rewound = false;
-    this.timers = this.timers.filter(t => t.live);
-    const next = this.timers.reduce<bigint | null>(
-      (min, t) => (min === null || t.deadline < min ? t.deadline : min),
-      null,
-    );
+    const next = this.waits.next();
     this.trace(
       recordLine(
         'pumped',
@@ -5035,28 +4893,15 @@ export class Group {
     if (!sus) {
       return {};
     }
-    const deadlines = this.timers
-      .filter(
-        t =>
-          t.live &&
-          t.running === running &&
-          (t.action.k === 'wake' ||
-            t.action.k === 'event' ||
-            t.action.k === 'deadline' ||
-            // A call's own deadline shows only inside a Timeout Block.
-            (t.action.k === 'call' && !!sus.deadline && sus.k !== 'join')),
-      )
-      .map(t => t.deadline);
-    const until = deadlines.length
-      ? deadlines.reduce((a, b) => (b < a ? b : a))
-      : undefined;
+    // A call's own deadline shows only inside a Timeout Block.
+    const until = this.waits.until(running, !!sus.deadline && sus.k !== 'join');
     const calls =
       sus.k === 'ask'
         ? [sus.call.id]
         : sus.k === 'send' || sus.k === 'call-value'
           ? [sus.id]
           : sus.k === 'join'
-            ? sus.members.map(m => m.id).filter(id => this.pending.has(id))
+            ? this.waits.pendingMembers(sus.members).map(m => m.id)
             : [];
     return {
       wait:
@@ -5298,7 +5143,6 @@ type SavedScriptState = Pick<
   | 'stopped'
   | 'stopReason'
   | 'suspended'
-  | 'waiters'
   | 'revoked'
   | 'disabled'
 > & {
@@ -5306,6 +5150,7 @@ type SavedScriptState = Pick<
   live: boolean;
   variableNames: string[];
   variables: Value[];
+  waiters: Waiter[];
 };
 type SavedState = {
   accounting: AccountingState;
