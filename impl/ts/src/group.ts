@@ -659,7 +659,7 @@ export class Group {
     this.settleReply(id, reply);
   }
   readonly name: string;
-  private readonly trace: (line: string) => void;
+  private readonly trace: ((line: string) => void) | undefined;
   private readonly onReady: (() => void) | undefined;
   private readonly scripts: ScriptState[] = [];
   private readonly libraries = new Map<string, Library>();
@@ -963,8 +963,8 @@ export class Group {
         this.runsOf(s).some(r => r.run.hasOpenScopes || r.run.hasParticipant),
       )
     ) {
-      this.trace(recordLine('save', [id], [], true));
-      this.trace(
+      this.trace?.(recordLine('save', [id], [], true));
+      this.trace?.(
         recordLine(
           'refused',
           [],
@@ -1053,7 +1053,7 @@ export class Group {
       graph: saveGraph(state, this.snapshotReferences()),
     };
     const payload = JSON.stringify(saved);
-    this.trace(recordLine('save', [id], [], true));
+    this.trace?.(recordLine('save', [id], [], true));
     return new TextEncoder().encode(
       JSON.stringify({ hash: sha256(payload), payload }),
     );
@@ -1069,11 +1069,13 @@ export class Group {
     const group = new Group({
       name: o.name,
       onReady: o.onReady,
-      trace: line => {
-        if (emitting) {
-          o.trace?.(line);
-        }
-      },
+      trace: o.trace
+        ? line => {
+            if (emitting) {
+              o.trace?.(line);
+            }
+          }
+        : undefined,
     });
     const disposed: [string, string][] = [];
     const unbound: string[] = [];
@@ -1606,7 +1608,7 @@ export class Group {
         } else {
           s.queue = s.queue.filter(q => q !== item);
           d.unsubscribe?.();
-          this.trace(
+          this.trace?.(
             recordLine(
               'run',
               [],
@@ -1679,7 +1681,7 @@ export class Group {
   private applyInput(action: InputAction) {
     switch (action.k) {
       case 'refusal':
-        this.trace(
+        this.trace?.(
           recordLine('refused', [], [['code', JSON.stringify(action.code)]]),
         );
         break;
@@ -1711,7 +1713,7 @@ export class Group {
         if (running?.run.rewindable && !s.stopped) {
           this.rewindRunning(s, running);
         } else {
-          this.trace(
+          this.trace?.(
             recordLine('note', [action.id], [['kind', 'not-rewindable']]),
           );
         }
@@ -1746,7 +1748,7 @@ export class Group {
           delivery.fn &&
           !(delivery.fn.asFunction()!.code as { home: Loaded }).home.live
         ) {
-          this.trace(
+          this.trace?.(
             recordLine('note', [delivery.id], [['kind', 'function-gone']]),
           );
           this.answer(delivery, { kind: 'function gone' });
@@ -1780,7 +1782,7 @@ export class Group {
             code,
             detail: 'invalid queued parent relationship',
           });
-          this.trace(
+          this.trace?.(
             recordLine('refused', [], [['code', JSON.stringify(code)]]),
           );
         } else {
@@ -1856,7 +1858,7 @@ export class Group {
     this.accountEnd(running, 'discarded', 'rewind');
     this.debugController?.ended(running.run);
     for (const id of pending) {
-      this.trace(recordLine('abandon', [id], []));
+      this.trace?.(recordLine('abandon', [id], []));
     }
     s.parked = s.parked.filter(r => r !== running);
     s.queue = s.queue.filter(q => q !== running);
@@ -2006,7 +2008,7 @@ export class Group {
     releaseReason: ReleaseReason = 'stop',
   ) {
     this.releaseGrants(s, releaseReason);
-    this.trace(
+    this.trace?.(
       recordLine(
         'stopped',
         [s.name],
@@ -2071,8 +2073,8 @@ export class Group {
     if (this.pumping) {
       this.inputs.push({ line, urgent: true, action: { k: 'refusal', code } });
     } else {
-      this.trace(line);
-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      this.trace?.(line);
+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));
     }
   }
 
@@ -2081,7 +2083,8 @@ export class Group {
       const urgent = this.inputs.filter(i => i.urgent);
       this.inputs = this.inputs.filter(i => !i.urgent);
       for (const input of urgent) {
-        this.trace(typeof input.line === 'string' ? input.line : input.line());
+        const line = typeof input.line === 'string' ? input.line : input.line();
+        this.trace?.(line);
         this.applyInput(input.action);
       }
     }
@@ -2099,13 +2102,16 @@ export class Group {
       }
       this.randomState = seedState(options.seed);
     }
-    this.trace = line => {
-      if (this.drainingTrace) {
-        this.drainingTrace.push(line);
-      } else {
-        options.trace?.(line);
-      }
-    };
+    // Optional calls also skip formatting and Trace-only state traversal.
+    this.trace = options.trace
+      ? line => {
+          if (this.drainingTrace) {
+            this.drainingTrace.push(line);
+          } else {
+            options.trace!(line);
+          }
+        }
+      : undefined;
   }
 
   script(name: string): Script | undefined {
@@ -2190,8 +2196,8 @@ export class Group {
       counters.fuelTotal += run.fuel;
       counters.allocTotal += run.alloc;
     }
-    this.trace(recordLine('counters', [name], [], true));
-    this.trace(
+    this.trace?.(recordLine('counters', [name], [], true));
+    this.trace?.(
       recordLine(
         'counters',
         [name],
@@ -2243,7 +2249,9 @@ export class Group {
       undefined,
       propertyChecks(o.objects ?? {}, o.owner),
     );
-    this.trace(recordLine('load', [o.name], [['identity', p.identity]], true));
+    this.trace?.(
+      recordLine('load', [o.name], [['identity', p.identity]], true),
+    );
     const limits = { ...defaultLimits, ...o.limits };
     const loaded = this.loadPrepared(o.name, p, limits);
     const used = o.grantsAsUsed
@@ -2348,7 +2356,7 @@ export class Group {
   private writeDiagnostics(error: unknown) {
     if (error instanceof LoadError) {
       for (const d of error.diagnostics) {
-        this.trace(
+        this.trace?.(
           recordLine(
             'diag',
             [d.unit],
@@ -2433,7 +2441,7 @@ export class Group {
       (carry === 'carry variables' || extensions.length > 0) &&
       loaded.variablesSize() > s.limits.persistentState
     ) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'refused',
           [],
@@ -2456,7 +2464,7 @@ export class Group {
     this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
     const p = prepare('script', name, source, this.libraries);
-    this.trace(
+    this.trace?.(
       recordLine(
         'reload',
         [name],
@@ -2610,7 +2618,7 @@ export class Group {
           n => Object.hasOwn(existing, n) || Object.hasOwn(s.objects, n),
         )
       ) {
-        this.trace(
+        this.trace?.(
           recordLine('refused', [], [['code', JSON.stringify('name reused')]]),
         );
         throw new HostError('name reused');
@@ -2626,7 +2634,7 @@ export class Group {
       s.loaded.variablesSize() +
       extension.variablesSize();
     if (checkState && state > s.limits.persistentState) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'refused',
           [],
@@ -2655,7 +2663,7 @@ export class Group {
     this.requireKnownEffects();
     const s = this.scripts.find(s => s.name === name)!;
     const p = this.extension(s, source);
-    this.trace(
+    this.trace?.(
       recordLine(
         'extend',
         [name],
@@ -2730,11 +2738,11 @@ export class Group {
    */
   addLibrary(l: Library): void {
     this.worker();
-    this.trace(
+    this.trace?.(
       recordLine('add-library', [l.name], [['identity', identityOf(l)]], true),
     );
     const refuse = (code: HostErrorCode, message: string): never => {
-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw new HostError(code, message);
     };
     if (stdlibNames.has(l.name)) {
@@ -2760,7 +2768,7 @@ export class Group {
   replaceLibrary(l: Library, carry: CarryOver): Report[] {
     this.worker();
     this.requireKnownEffects();
-    this.trace(
+    this.trace?.(
       recordLine(
         'replace-library',
         [l.name],
@@ -2773,7 +2781,7 @@ export class Group {
       ),
     );
     const refuse = (code: HostErrorCode): never => {
-      this.trace(recordLine('refused', [], [['code', JSON.stringify(code)]]));
+      this.trace?.(recordLine('refused', [], [['code', JSON.stringify(code)]]));
       throw new HostError(code);
     };
     if (stdlibNames.has(l.name)) {
@@ -3031,7 +3039,7 @@ export class Group {
     if (settled.k === 'ready') {
       this.ready(settled.s, settled.running, settled.r);
     } else if (settled.k === 'late' && (r.k === 'answer' || r.k === 'fail')) {
-      this.trace(recordLine('note', [id], [['kind', 'late-answer']]));
+      this.trace?.(recordLine('note', [id], [['kind', 'late-answer']]));
     }
   }
 
@@ -3469,7 +3477,7 @@ export class Group {
       vetoes,
       undecided,
     };
-    this.trace(
+    this.trace?.(
       recordLine(
         'decided',
         [decision.id],
@@ -3739,7 +3747,7 @@ export class Group {
   // A message past the last Owning Script: `unhandled`, and a `send … and
   // wait` or Request for it fails with `send failed`.
   private unhandled(delivery: Delivery, reports: Report[], run?: string) {
-    this.trace(
+    this.trace?.(
       recordLine(
         'unhandled',
         [delivery.id],
@@ -3838,7 +3846,7 @@ export class Group {
 
   private pumpWorker(now: bigint, o: PumpOptions): PumpResult {
     if (this.lastClock !== null && now < this.lastClock) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'pump',
           [],
@@ -3850,7 +3858,7 @@ export class Group {
           true,
         ),
       );
-      this.trace(recordLine('refused', [], [['code', '"clock backwards"']]));
+      this.trace?.(recordLine('refused', [], [['code', '"clock backwards"']]));
       throw new HostError('clock backwards');
     }
     this.pumping = true;
@@ -3878,6 +3886,7 @@ export class Group {
     this.drainingTrace = outputLines;
     try {
       for (const input of drained) {
+        // A deferred line also selects Broadcast recipients at drain time.
         inputLines.push(
           typeof input.line === 'string' ? input.line : input.line(),
         );
@@ -3887,9 +3896,9 @@ export class Group {
       this.drainingTrace = null;
     }
     for (const line of inputLines) {
-      this.trace(line);
+      this.trace?.(line);
     }
-    this.trace(
+    this.trace?.(
       recordLine(
         'pump',
         [],
@@ -3902,7 +3911,7 @@ export class Group {
       ),
     );
     for (const line of outputLines) {
-      this.trace(line);
+      this.trace?.(line);
     }
     if (firstRestorePump) {
       for (const id of [...this.unsettled].sort(compareCallIds)) {
@@ -3993,7 +4002,7 @@ export class Group {
         : mathematicalNext < now
           ? now
           : null;
-    this.trace(
+    this.trace?.(
       recordLine(
         'pumped',
         [],
@@ -4246,14 +4255,14 @@ export class Group {
     }
     let outcome = run.ended;
     if (outcome?.kind === 'completed' && outcome.veto && !run.openVerdict) {
-      this.trace(recordLine('note', [running.id], [['kind', 'no-verdict']]));
+      this.trace?.(recordLine('note', [running.id], [['kind', 'no-verdict']]));
     }
     if (outcome) {
       this.debugController?.ended(run);
       s.suspended.delete(running);
     }
     if (outcome?.kind === 'limit fault') {
-      this.trace(
+      this.trace?.(
         recordLine(
           'fault',
           [running.id],
@@ -4266,12 +4275,12 @@ export class Group {
         ),
       );
       for (const id of run.faultAbandons) {
-        this.trace(recordLine('abandon', [id], []));
+        this.trace?.(recordLine('abandon', [id], []));
       }
     }
     if (outcome?.kind === 'cancelled' && outcome.cleanupFailed) {
       const failed = outcome.cleanupFailed;
-      this.trace(
+      this.trace?.(
         recordLine(
           'cleanup-failed',
           [running.id],
@@ -4319,7 +4328,7 @@ export class Group {
         calls: end === 'stop' ? [] : (this.waitView(running).calls ?? []),
       });
     const start: [string, string | null][] =
-      how === 'start'
+      this.trace && how === 'start'
         ? [
             ['delivery', running.delivery.id],
             ['broadcast', running.delivery.broadcast ?? null],
@@ -4339,12 +4348,14 @@ export class Group {
             ],
           ]
         : [];
-    const stretch: [string, string][] = [
-      ['fuel', String(run.fuel - fuel0)],
-      ['alloc', String(run.alloc - alloc0)],
-    ];
+    const stretch: [string, string][] = this.trace
+      ? [
+          ['fuel', String(run.fuel - fuel0)],
+          ['alloc', String(run.alloc - alloc0)],
+        ]
+      : [];
     if (running.rewound) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'seg',
           [running.id, how],
@@ -4360,7 +4371,7 @@ export class Group {
       return;
     }
     if (s.stopped) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'seg',
           [running.id, how],
@@ -4380,7 +4391,7 @@ export class Group {
     if (running.parked && !outcome) {
       s.queue.shift();
       s.parked.push(running);
-      this.trace(
+      this.trace?.(
         recordLine(
           'seg',
           [running.id, how],
@@ -4399,7 +4410,7 @@ export class Group {
       const suspension = run.suspended;
       s.queue.shift();
       const deadline = this.suspended(s, running, suspension);
-      this.trace(
+      this.trace?.(
         recordLine(
           'seg',
           [running.id, how],
@@ -4433,7 +4444,7 @@ export class Group {
       return;
     }
     if (!outcome) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'preempt',
           [running.id, how],
@@ -4444,7 +4455,7 @@ export class Group {
       return;
     }
     s.queue.shift();
-    this.trace(
+    this.trace?.(
       recordLine(
         'seg',
         [running.id, how],
@@ -4483,7 +4494,7 @@ export class Group {
 
   private writeCancellationAbandons(run: Run) {
     for (const id of run.cancellationAbandons) {
-      this.trace(recordLine('abandon', [id], []));
+      this.trace?.(recordLine('abandon', [id], []));
     }
     run.cancellationAbandons = [];
   }
@@ -4545,7 +4556,7 @@ export class Group {
       running.recordsWritten = i + 1;
       const rec = run.records[i]!;
       if (rec.kind === 'scope') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'scope',
             [rec.id],
@@ -4559,7 +4570,7 @@ export class Group {
         continue;
       }
       if (rec.kind === 'effect') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'effect',
             [rec.segment],
@@ -4573,7 +4584,7 @@ export class Group {
         continue;
       }
       if (rec.kind === 'effect-failure') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'effect-failure',
             [running.id],
@@ -4607,11 +4618,11 @@ export class Group {
         continue;
       }
       if (rec.kind === 'abandon') {
-        this.trace(recordLine('abandon', [rec.id], []));
+        this.trace?.(recordLine('abandon', [rec.id], []));
         continue;
       }
       if (rec.kind === 'unhandled') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'unhandled',
             [],
@@ -4634,7 +4645,7 @@ export class Group {
         continue;
       }
       if (rec.kind === 'prop') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'prop',
             [running.id],
@@ -4651,7 +4662,7 @@ export class Group {
         continue;
       }
       if (rec.kind === 'call') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'call',
             [rec.id],
@@ -4670,14 +4681,14 @@ export class Group {
       }
       if (rec.kind === 'call-failed') {
         if (rec.id) {
-          this.trace(recordLine('call-failed', [rec.id], [['op', rec.op]]));
+          this.trace?.(recordLine('call-failed', [rec.id], [['op', rec.op]]));
           this.observer?.({ k: 'call', call: rec.id, run: running.id });
         }
         this.drainReports.push(this.callFailed(run.script.name, rec));
         continue;
       }
       if (rec.kind === 'send') {
-        this.trace(
+        this.trace?.(
           recordLine(
             'send',
             [rec.id ?? running.id],
@@ -4696,7 +4707,7 @@ export class Group {
         continue;
       }
       if (rec.kind === 'offer-chosen' || rec.kind === 'offer-entered') {
-        this.trace(
+        this.trace?.(
           recordLine(
             rec.kind,
             [running.id],
@@ -4722,7 +4733,7 @@ export class Group {
       }
       const at = `${rec.unit}:${rec.pc}`;
       const pos = `${rec.line}:${rec.col}`;
-      this.trace(
+      this.trace?.(
         rec.kind === 'raise'
           ? recordLine(
               'raise',
@@ -4773,7 +4784,7 @@ export class Group {
     const error = outcome.kind === 'errored' ? outcome.error : null;
     const limit =
       outcome.kind === 'limit fault' ? limitWord(outcome.limit) : null;
-    this.trace(
+    this.trace?.(
       recordLine(
         'run',
         [running.id],
@@ -4874,7 +4885,7 @@ export class Group {
       const waiting =
         s.queue.filter(item => !('run' in item)).length + s.incoming;
       if (waiting >= s.limits.mailboxDepth) {
-        this.trace(
+        this.trace?.(
           recordLine('note', [running.id], [['kind', 'error-dropped']]),
         );
       } else {
@@ -4932,7 +4943,9 @@ export class Group {
       const waiting =
         next.s.queue.filter(item => !('run' in item)).length + next.s.incoming;
       if (waiting >= next.s.limits.mailboxDepth) {
-        this.trace(recordLine('note', [running.id], [['kind', 'climb-full']]));
+        this.trace?.(
+          recordLine('note', [running.id], [['kind', 'climb-full']]),
+        );
         this.unhandled(delivery, reports, running.id);
         return;
       }
@@ -5075,10 +5088,10 @@ export class Group {
 
   inspect(): Inspection {
     this.worker();
-    this.trace(recordLine('vars', [], [], true));
+    this.trace?.(recordLine('vars', [], [], true));
     const view = this.inspection();
     for (const s of view.scripts) {
-      this.trace(
+      this.trace?.(
         recordLine(
           'vars',
           [s.name],

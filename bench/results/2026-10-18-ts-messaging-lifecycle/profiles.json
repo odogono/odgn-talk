@@ -1,0 +1,698 @@
+[
+  {
+    "variant": "before",
+    "benchmark": "messaging/suspend",
+    "file": "before-messaging-suspend.cpuprofile.gz",
+    "samples": 2167,
+    "profileRun": {
+      "name": "messaging/suspend",
+      "runs": 300,
+      "checked": {
+        "alloc": 32072,
+        "fuel": 48018,
+        "outcome": "completed",
+        "result": "2001000"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 791,
+        "percent": 36.5
+      },
+      "recordLine": {
+        "samples": 226,
+        "percent": 10.43
+      },
+      "traceValue": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "formatInstant": {
+        "samples": 564,
+        "percent": 26.03
+      },
+      "persistentState": {
+        "samples": 149,
+        "percent": 6.88
+      },
+      "size": {
+        "samples": 231,
+        "percent": 10.66
+      },
+      "accountingTail": {
+        "samples": 99,
+        "percent": 4.57
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "before",
+    "benchmark": "messaging/sends",
+    "file": "before-messaging-sends.cpuprofile.gz",
+    "samples": 2170,
+    "profileRun": {
+      "name": "messaging/sends",
+      "runs": 233,
+      "checked": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 310,
+        "percent": 14.29
+      },
+      "recordLine": {
+        "samples": 256,
+        "percent": 11.8
+      },
+      "traceValue": {
+        "samples": 54,
+        "percent": 2.49
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 143,
+        "percent": 6.59
+      },
+      "size": {
+        "samples": 158,
+        "percent": 7.28
+      },
+      "accountingTail": {
+        "samples": 55,
+        "percent": 2.53
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "before",
+    "benchmark": "messaging/joins",
+    "file": "before-messaging-joins.cpuprofile.gz",
+    "samples": 2264,
+    "profileRun": {
+      "name": "messaging/joins",
+      "runs": 164,
+      "checked": {
+        "alloc": 244872,
+        "fuel": 127218,
+        "outcome": "completed",
+        "result": "361200"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 343,
+        "percent": 15.15
+      },
+      "recordLine": {
+        "samples": 282,
+        "percent": 12.46
+      },
+      "traceValue": {
+        "samples": 61,
+        "percent": 2.69
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 109,
+        "percent": 4.81
+      },
+      "size": {
+        "samples": 42,
+        "percent": 1.86
+      },
+      "accountingTail": {
+        "samples": 72,
+        "percent": 3.18
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "before",
+    "benchmark": "messaging/parents",
+    "file": "before-messaging-parents.cpuprofile.gz",
+    "samples": 2188,
+    "profileRun": {
+      "name": "messaging/parents",
+      "runs": 173,
+      "checked": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 300,
+        "percent": 13.71
+      },
+      "recordLine": {
+        "samples": 259,
+        "percent": 11.84
+      },
+      "traceValue": {
+        "samples": 41,
+        "percent": 1.87
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 277,
+        "percent": 12.66
+      },
+      "size": {
+        "samples": 273,
+        "percent": 12.48
+      },
+      "accountingTail": {
+        "samples": 51,
+        "percent": 2.33
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "before",
+    "benchmark": "lifecycle/restore",
+    "file": "before-lifecycle-restore.cpuprofile.gz",
+    "samples": 2069,
+    "profileRun": {
+      "name": "lifecycle/restore",
+      "runs": 337,
+      "checked": {
+        "alloc": 8024,
+        "fuel": 8015,
+        "outcome": "completed",
+        "result": "125250"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "recordLine": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "traceValue": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 288,
+        "percent": 13.92
+      },
+      "size": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "accountingTail": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 559,
+        "percent": 27.02
+      },
+      "sha256": {
+        "samples": 361,
+        "percent": 17.45
+      }
+    }
+  },
+  {
+    "variant": "before",
+    "benchmark": "lifecycle/rollback",
+    "file": "before-lifecycle-rollback.cpuprofile.gz",
+    "samples": 2642,
+    "profileRun": {
+      "name": "lifecycle/rollback",
+      "runs": 66,
+      "checked": {
+        "alloc": 40888,
+        "fuel": 102023,
+        "outcome": "completed",
+        "result": "300"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 335,
+        "percent": 12.68
+      },
+      "recordLine": {
+        "samples": 262,
+        "percent": 9.92
+      },
+      "traceValue": {
+        "samples": 73,
+        "percent": 2.76
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 26,
+        "percent": 0.98
+      },
+      "size": {
+        "samples": 108,
+        "percent": 4.09
+      },
+      "accountingTail": {
+        "samples": 1,
+        "percent": 0.04
+      },
+      "capability": {
+        "samples": 1114,
+        "percent": 42.17
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "messaging/suspend",
+    "file": "after-messaging-suspend.cpuprofile.gz",
+    "samples": 2096,
+    "profileRun": {
+      "name": "messaging/suspend",
+      "runs": 472,
+      "checked": {
+        "alloc": 32072,
+        "fuel": 48018,
+        "outcome": "completed",
+        "result": "2001000"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 3,
+        "percent": 0.14
+      },
+      "recordLine": {
+        "samples": 2,
+        "percent": 0.1
+      },
+      "traceValue": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 30,
+        "percent": 1.43
+      },
+      "size": {
+        "samples": 235,
+        "percent": 11.21
+      },
+      "accountingTail": {
+        "samples": 228,
+        "percent": 10.88
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "messaging/sends",
+    "file": "after-messaging-sends.cpuprofile.gz",
+    "samples": 2123,
+    "profileRun": {
+      "name": "messaging/sends",
+      "runs": 303,
+      "checked": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 3,
+        "percent": 0.14
+      },
+      "recordLine": {
+        "samples": 2,
+        "percent": 0.09
+      },
+      "traceValue": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 45,
+        "percent": 2.12
+      },
+      "size": {
+        "samples": 126,
+        "percent": 5.93
+      },
+      "accountingTail": {
+        "samples": 83,
+        "percent": 3.91
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "messaging/joins",
+    "file": "after-messaging-joins.cpuprofile.gz",
+    "samples": 2221,
+    "profileRun": {
+      "name": "messaging/joins",
+      "runs": 202,
+      "checked": {
+        "alloc": 244872,
+        "fuel": 127218,
+        "outcome": "completed",
+        "result": "361200"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 2,
+        "percent": 0.09
+      },
+      "recordLine": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "traceValue": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 55,
+        "percent": 2.48
+      },
+      "size": {
+        "samples": 32,
+        "percent": 1.44
+      },
+      "accountingTail": {
+        "samples": 78,
+        "percent": 3.51
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "messaging/parents",
+    "file": "after-messaging-parents.cpuprofile.gz",
+    "samples": 2150,
+    "profileRun": {
+      "name": "messaging/parents",
+      "runs": 269,
+      "checked": {
+        "alloc": 96072,
+        "fuel": 67518,
+        "outcome": "completed",
+        "result": "1125750"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "recordLine": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "traceValue": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 155,
+        "percent": 7.21
+      },
+      "size": {
+        "samples": 216,
+        "percent": 10.05
+      },
+      "accountingTail": {
+        "samples": 80,
+        "percent": 3.72
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "lifecycle/restore",
+    "file": "after-lifecycle-restore.cpuprofile.gz",
+    "samples": 2074,
+    "profileRun": {
+      "name": "lifecycle/restore",
+      "runs": 339,
+      "checked": {
+        "alloc": 8024,
+        "fuel": 8015,
+        "outcome": "completed",
+        "result": "125250"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "recordLine": {
+        "samples": 1,
+        "percent": 0.05
+      },
+      "traceValue": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 298,
+        "percent": 14.37
+      },
+      "size": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "accountingTail": {
+        "samples": 4,
+        "percent": 0.19
+      },
+      "capability": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "restoreGraph": {
+        "samples": 577,
+        "percent": 27.82
+      },
+      "sha256": {
+        "samples": 417,
+        "percent": 20.11
+      }
+    }
+  },
+  {
+    "variant": "after",
+    "benchmark": "lifecycle/rollback",
+    "file": "after-lifecycle-rollback.cpuprofile.gz",
+    "samples": 2649,
+    "profileRun": {
+      "name": "lifecycle/rollback",
+      "runs": 63,
+      "checked": {
+        "alloc": 40888,
+        "fuel": 102023,
+        "outcome": "completed",
+        "result": "300"
+      }
+    },
+    "inclusive": {
+      "traceFormatting": {
+        "samples": 68,
+        "percent": 2.57
+      },
+      "recordLine": {
+        "samples": 53,
+        "percent": 2.0
+      },
+      "traceValue": {
+        "samples": 15,
+        "percent": 0.57
+      },
+      "formatInstant": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "persistentState": {
+        "samples": 3,
+        "percent": 0.11
+      },
+      "size": {
+        "samples": 92,
+        "percent": 3.47
+      },
+      "accountingTail": {
+        "samples": 8,
+        "percent": 0.3
+      },
+      "capability": {
+        "samples": 1456,
+        "percent": 54.96
+      },
+      "restoreGraph": {
+        "samples": 0,
+        "percent": 0.0
+      },
+      "sha256": {
+        "samples": 0,
+        "percent": 0.0
+      }
+    }
+  }
+]
