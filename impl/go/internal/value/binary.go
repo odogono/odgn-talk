@@ -3,6 +3,7 @@ package value
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -247,6 +248,14 @@ func DecodeBinary(data []byte, resolve func(string, string) (Value, error), func
 				n, e := r.uint()
 				if e != nil || tag == 16 && n == 0 {
 					return invalid()
+				}
+				if n <= math.MaxInt64 {
+					i := int64(n)
+					if tag == 16 {
+						i = -i
+					}
+					v = Fields{Kind: Number, Number: decimal.FromInt(i)}.Value()
+					break
 				}
 				s = strconv.FormatUint(n, 10)
 				if tag == 16 {
