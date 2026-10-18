@@ -543,8 +543,10 @@ pub const Group = struct {
         defer g.flushing = false;
         g.group.flushChargeRefusals();
         var start: usize = 0;
-        while (std.mem.indexOfScalarPos(u8, g.out.written(), start, '\n')) |end| {
-            if (g.sink) |sink| sink(g.context, g.out.written()[start..].ptr, end - start);
+        while (true) {
+            const written = g.out.written();
+            const end = std.mem.indexOfScalarPos(u8, written, start, '\n') orelse break;
+            if (g.sink) |sink| sink(g.context, written[start..].ptr, end - start);
             start = end + 1;
         }
         const rest = g.out.written()[start..];
@@ -1388,9 +1390,13 @@ export fn talk_pending_done(p: *const Pending) bool {
     return p.group.group.results.contains(p.id);
 }
 
+fn pumpOptions(o: ?*const PumpOptions) PumpOptions {
+    return if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
+}
+
 fn checkPumpWorker(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions) HostErrorCode {
     g.group.checkWorker() catch |err| {
-        const options = if (o) |x| x.* else PumpOptions{ .fuel_slice = 0, .fuel_cap = 0 };
+        const options = pumpOptions(o);
         const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
         model.dates.validateInstant(clock) catch return status(err);
         g.group.refuseWorker(.{ .pump = .{ .now = clock, .slice = options.fuel_slice, .cap = options.fuel_cap } });
@@ -1411,7 +1417,7 @@ fn pumpOwned(g: *Group, seconds: i64, micros: i32, o: ?*const PumpOptions, out: 
     if (g.memory.refused) return .out_of_memory;
     const clock = model.dates.Instant{ .seconds = seconds, .micros = micros };
     model.dates.validateInstant(clock) catch return .invalid_value;
-    const options: PumpOptions = if (o) |x| x.* else .{ .fuel_slice = 0, .fuel_cap = 0 };
+    const options = pumpOptions(o);
     if (options.fuel_slice < 0 or options.fuel_cap < 0) return .invalid_value;
     g.group.pumpOwned(clock, @intCast(options.fuel_slice), @intCast(options.fuel_cap)) catch |err| return status(err);
     // A C Host answers inside its calls, so a crossing pause here is only
