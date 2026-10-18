@@ -946,10 +946,10 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     try o.int(g.run_order);
     try o.int(g.charge_counter);
     try o.int(g.random_state);
-    try o.int(g.issued_calls.runs.count());
+    try o.int(g.waits.issued_calls.runs.count());
     var issued: std.ArrayList([]const u8) = .empty;
     defer issued.deinit(gpa);
-    var ids = g.issued_calls.runs.keyIterator();
+    var ids = g.waits.issued_calls.runs.keyIterator();
     while (ids.next()) |id| try issued.append(gpa, id.*);
     std.mem.sort([]const u8, issued.items, {}, struct {
         fn less(_: void, x: []const u8, y: []const u8) bool {
@@ -958,7 +958,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     }.less);
     for (issued.items) |id| {
         try o.str(id);
-        const ranges = g.issued_calls.runs.get(id).?.items;
+        const ranges = g.waits.issued_calls.runs.get(id).?.items;
         try o.int(ranges.len);
         for (ranges) |range| {
             try o.int(range.first);
@@ -1000,7 +1000,7 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
         }
     }
     // The calls a Run still waits on, with their arguments.
-    for (g.calls.items) |c| if (waitedOn(g, c)) try s.calls.append(gpa, c);
+    for (g.waits.calls.items) |c| if (machine.wait_table.Waits.awaitedByRun(c, g.liveRuns())) try s.calls.append(gpa, c);
     try o.int(s.calls.items.len);
     for (s.calls.items) |c| {
         try o.str(c.id);
@@ -1138,19 +1138,6 @@ pub fn save(g: *Group, gpa: Allocator, print: [32]u8) ![]u8 {
     std.crypto.hash.sha2.Sha256.hash(o.bytes.items, &digest, .{});
     try o.bytes.appendSlice(gpa, &digest);
     return o.bytes.toOwnedSlice(gpa);
-}
-
-/// Whether a Run still waits on the call, or is ready with its answer.
-fn waitedOn(g: *const Group, c: *const capabilities.Call) bool {
-    for (g.scripts.items) |s| for (s.live.items) |r| {
-        if (r.waiting) |p| if (p.call == c) return true;
-        if (r.waited.call == c) return true;
-        if (r.join) |j| for (j.members.items) |m| {
-            if (m.waited.call == c) return true;
-            if (m.pending) |p| if (p.call == c) return true;
-        };
-    };
-    return false;
 }
 
 // ---------------------------------------------------------------- restoring
@@ -1442,7 +1429,7 @@ const Restoring = struct {
             const branches = try a.alloc(machine.EventBranch, n);
             var made: usize = 0;
             errdefer {
-                r.g.releaseHeld(branches[0..made]);
+                machine.wait_table.releaseHeld(r.g.gpa, branches[0..made]);
                 a.free(branches);
             }
             for (branches) |*b| {
@@ -2218,7 +2205,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
     for (0..issued_count) |_| {
         const run = try a.dupe(u8, try i.str());
         errdefer a.free(run);
-        if (run.len == 0 or g.issued_calls.runs.contains(run)) return error.InvalidSave;
+        if (run.len == 0 or g.waits.issued_calls.runs.contains(run)) return error.InvalidSave;
         var ranges: std.ArrayList(issued_calls.Range) = .empty;
         errdefer ranges.deinit(a);
         const count = try i.count();
@@ -2230,7 +2217,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
                 error.OutOfMemory => error.OutOfMemory,
             };
         }
-        try g.issued_calls.runs.put(a, run, ranges);
+        try g.waits.issued_calls.runs.put(a, run, ranges);
     }
     if (!std.mem.eql(u8, language, version.language) or costs_version != cost_model.version) r.mismatch = true;
     // Libraries, matched by identity to those the Host passes.
@@ -2344,7 +2331,7 @@ pub fn restore(g: *Group, bytes: []const u8, options: Options, result: *Result) 
             return e;
         };
         x.* = .{ .id = id, .script = "", .grant = "", .binding = null, .now = g.clock, .left = null, .starting = false, .group = g, .owner = g, .gpa = a };
-        g.addCall(x) catch |e| {
+        g.waits.addCall(a, x) catch |e| {
             a.free(id);
             a.destroy(x);
             return e;
