@@ -737,20 +737,25 @@ func (b *zigGroup) decode(src zigReply, dst reflect.Value) error {
 	return zigDecodeResolving(src, dst, b)
 }
 
-// zigField is one struct field's envelope key.
+// zigField identifies one destination field in an envelope struct.
 type zigField struct {
 	index     int
-	name, key string
+	name      string
 	anonymous bool
 }
 
-var zigFieldCache sync.Map // reflect.Type -> []zigField
+type zigStructFields struct {
+	fields []zigField
+	keys   []string
+}
 
-func zigFields(t reflect.Type) []zigField {
+var zigFieldCache sync.Map // reflect.Type -> zigStructFields
+
+func zigFields(t reflect.Type) zigStructFields {
 	if cached, ok := zigFieldCache.Load(t); ok {
-		return cached.([]zigField)
+		return cached.(zigStructFields)
 	}
-	var fields []zigField
+	var fields zigStructFields
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.Name == "Reports" {
@@ -763,7 +768,12 @@ func zigFields(t reflect.Type) []zigField {
 		if f.Name == "Function" {
 			key = "fn"
 		}
-		fields = append(fields, zigField{i, f.Name, key, f.Anonymous})
+		fields.fields = append(fields.fields, zigField{i, f.Name, f.Anonymous})
+		if f.Anonymous {
+			// Embedded fields read the enclosing object themselves.
+			key = ""
+		}
+		fields.keys = append(fields.keys, key)
 	}
 	zigFieldCache.Store(t, fields)
 	return fields
@@ -853,22 +863,24 @@ func zigDecodeResolving(src zigReply, dst reflect.Value, b *zigGroup) error {
 		if !src.isMap() {
 			return fmt.Errorf("invalid Zig %s", dst.Type())
 		}
-		members := src.entries()
-		for _, f := range zigFields(dst.Type()) {
+		fields := zigFields(dst.Type())
+		// Most envelopes fit on the stack. Read spans in one pass without
+		// allocating a member list or copying every key, including unknown ones.
+		var local [16]zigReply
+		values := local[:]
+		if len(fields.fields) > len(values) {
+			values = make([]zigReply, len(fields.fields))
+		}
+		values = values[:len(fields.fields)]
+		src.lookup(fields.keys, values)
+		for i, f := range fields.fields {
 			if f.anonymous {
 				if err := zigDecodeResolving(src, dst.Field(f.index), b); err != nil {
 					return err
 				}
 				continue
 			}
-			var val zigReply
-			for _, m := range members {
-				if m.Key == f.key {
-					val = m.Val
-					break
-				}
-			}
-			if err := zigDecodeResolving(val, dst.Field(f.index), b); err != nil {
+			if err := zigDecodeResolving(values[i], dst.Field(f.index), b); err != nil {
 				return fmt.Errorf("%s: %w", f.name, err)
 			}
 		}
