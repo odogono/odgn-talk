@@ -6,13 +6,19 @@ Implementers and agents: start with the [task map](NAVIGATION.md); to run Folio 
 
 The page is the Stack editor shell ([#749](https://github.com/odogono/odgn-talk/issues/749)) on the last Project used, autosaved in the browser ([#752](https://github.com/odogono/odgn-talk/issues/752); see [Saving](#saving)). The Page sits on a desk at the Project's design width, scaled down to fit narrower windows. The Tools window switches between **Browse** and **Edit** (see [Play](#play)) and adds text, image, button, rectangle, ellipse and line Elements; Image opens a file picker; dropping image files on the Page adds them at the drop position (see [Images and portable Projects](#images-and-portable-projects)). The Info window edits the selected Element's name, position, size and kind's properties, or the Page's and Project's when nothing is selected. It validates names against Script bindings and Page/Element names (see [Script Recipes](#script-recipes)), and offers an available name instead, including one from a button's label. Click selects an Element, Shift-click selects several, and clicking empty space selects the Page. Drag Elements to move them, drag a handle to resize, and use the arrow keys to nudge, with Shift for 10 px. The strip of Pages adds, shows and reorders Pages by dragging. Windows are dragged by their title bars and stay where they're put. Every window shares one title bar with a close box ([`src/windows.ts`](src/windows.ts)), and Info, Script windows and the Message Box resize from their bottom-right corner; the **Window** menu shows and hides Tools, Info, the Message Box and Errors, with a tick beside each one showing, and a closed Tools or Info window stays closed after a reload. The header's **Folio** menu opens About Folio, and the **File** menu holds **New Project**, **Import Project…**, **Projects…**, **Earlier Versions…** and, where the browser can save to disk, **Save** and **Save As…**. The Edit menu duplicates the selected Elements, or the Page when no Elements are selected, deletes the selected Elements, or the Page only once it is selected (click empty space, press Escape or choose it in the strip), and changes Element layer order. Element copies have fresh names and move 20 px down and right; Page copies keep their layout, with independent Elements and Scripts. The last Page cannot be deleted. Undo and redo cover every authored edit, including a whole drag or Info field change as one step, and restore the Project and selection exactly. Use ⌘D to duplicate, Delete or Backspace to delete, and ⌘Z / ⇧⌘Z to undo / redo (Control also works). Shortcuts leave inputs and editable text to their own keyboard handling. The selection and edits live in [`src/editing.ts`](src/editing.ts), which is tested without a DOM, and the shell that draws them in [`src/stack.ts`](src/stack.ts). Each authored Script opens in its own floating window on the [shared editor](../editor/); see [Scripts](#scripts).
 
-The editor holds one deeply frozen `{ project, pageIndex, scope, selection, pageSelected }`
-value in a signal. Edits run on Immer drafts, and undo/redo retain earlier
-roots with unchanged Pages and Elements shared between them. The imperative
-shell follows the state through effects. Pages and Elements have session-local
-ids, so Script windows follow their owners across edits and history; ids never
-enter `.folio` files or browser storage. Intake copies the supplied Project,
-and Play keeps its own mutable copy ([ADR 0101](../../docs/adr/0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md)).
+Edit and each Play Session own separate persistent [`ProjectTree`](src/tree/project-tree.ts)
+instances. The tree owns Project mutations, hierarchy, indexed collections,
+geometry and copy-work accounting. Its views are deeply readonly in TypeScript
+and remain live; use explicit operations to change them and `snapshot()` when
+retaining an earlier value or crossing an asynchronous boundary. Live nodes
+keep their identity during ordinary edits; reacquire collections after structural
+changes. The editor keeps selection, showing Page and entered scope separately,
+adapts batched tree changes to signals, and records forward/inverse changes for
+undo. A whole drag or Info field edit remains one undo step. Finishing any edit
+at its starting content preserves redo. Pages and Elements have stable
+session-local IDs across history; IDs never enter `.folio` files or browser
+storage. The ownership and notification choices are recorded in
+[ADR 0106](../../docs/adr/0106-folio-edit-and-play-share-a-mutable-project-tree.md).
 
 The Project title, [Info panel](src/info-panel.tsx),
 [Page strip](src/page-strip.tsx), [Edit menu](src/edit-menu.tsx) commands
@@ -23,8 +29,8 @@ redraw. Info reconciles its controls in place, keeping focus, caret, selection
 and composing text while the Page and strip update. Its read-only state disables
 authored edits while leaving Script viewing and sound previews available. The
 app and browser-test builds compile imported TSX with Preact's automatic JSX
-runtime. Each strip miniature is memoised by its immutable Page value and the
-design width, with session-local Page ids keeping it attached across reorders.
+runtime. Each strip miniature is memoised by its Page rendering revision, asset revision
+and design width, with session-local Page ids keeping it attached across reorders.
 Editing one Page redraws only its miniature; navigation and unrelated Project
 edits retain all miniatures. The Edit menu enables each command from the
 selection, the undo history, read-only state and the Play mode.
@@ -636,12 +642,15 @@ by the next session or by opening another Project.
 HyperCard. Press Enter to run a command, such as
 `set the visible of button1 to false`, or an expression, such as
 `the label of button1`, whose value is printed; Up and Down recall earlier
-lines. While browsing, commands run in the Play Session with the showing
+lines. While
+browsing, commands run in the Play Session with the showing
 Page's names and every Grant, and their effects are Play State. In Edit, the
 command runs in a session copied from the Project that sends no events; when
 it finishes, its changes become one undoable authored edit, Script windows
 stay attached, and a navigation moves the editor to that Page. A failing
-command changes nothing and prints its error and line; waits and `user`
+command changes nothing and prints its error and line. If another authored
+edit occurs while the command runs, its result is refused with a retry message
+rather than overwriting newer work; waits and `user`
 prompts only run while browsing. [`src/message.ts`](src/message.ts) holds the logic, tested without a
 DOM.
 

@@ -416,9 +416,11 @@ export const runBrowserTests = async () => {
     throw new Error('Browse did not start with fresh errors');
   });
   assert(!view.state.readOnly, 'Script editor read-only while browsing');
-  shell.editor.edit(({ project }) => {
-    project.pages[0]!.elements.find(e => e.name === button.name)!.script =
-      'on click\n set the label of me to "Fixed"\nend click';
+  shell.editor.edit(({ project, tree }) => {
+    tree.setScript(
+      project.pages[0]!.elements.find(e => e.name === button.name)!,
+      'on click\n set the label of me to "Fixed"\nend click',
+    );
   });
   readerButton().click();
   await new Promise(resolve => setTimeout(resolve, 50));

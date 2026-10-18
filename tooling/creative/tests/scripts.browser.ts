@@ -247,7 +247,7 @@ export const runBrowserTests = async () => {
       'One undo restores the starting owner',
     );
   });
-  await test('authored text keeps its editable DOM through immutable updates', () => {
+  await test('authored text keeps its editable DOM through live updates', () => {
     open('text1');
     const node = document.querySelector<HTMLElement>(
       '#page [data-element="text1"]',

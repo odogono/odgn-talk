@@ -1,4 +1,4 @@
-import { allElements, GEOMETRY_FUEL, PROPERTY_FUEL } from './hierarchy';
+import { allElements, GEOMETRY_FUEL, PROPERTY_FUEL } from './tree/rules';
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
 import { type Immutable } from 'immer';

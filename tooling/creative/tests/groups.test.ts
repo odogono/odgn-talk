@@ -1,3 +1,4 @@
+import { castDraft } from 'immer';
 import { expect, test } from 'bun:test';
 import { StackEditor } from '../src/editing';
 import {
@@ -6,7 +7,7 @@ import {
   groupElement,
   refreshBounds,
   updateGeometry,
-} from '../src/hierarchy';
+} from '../src/tree/rules';
 import { createElement, createProject, type Element } from '../src/model';
 import { runInEdit, settle, type MessageReply } from '../src/message';
 import { PlaySession } from '../src/play';
@@ -59,7 +60,7 @@ test('Group collapses interleaved siblings at the frontmost selected layer and U
   const project = createProject('Group');
   project.pages[0]!.elements = [leaf('a'), leaf('b'), leaf('c')];
   const editor = new StackEditor(project);
-  const original = editor.project;
+  const original = editor.snapshot();
   const id = editor.element('a')!.id!;
   editor.click('a');
   editor.click('c', { shift: true });
@@ -72,7 +73,7 @@ test('Group collapses interleaved siblings at the frontmost selected layer and U
   expect(ownerById(editor.project, id)?.name).toBe('a');
   expect(editor.selected.map(e => e.name)).toEqual(['group1']);
   editor.undo();
-  expect(editor.project).toBe(original);
+  expect(editor.project).toEqual(original);
   editor.redo();
   expect(editor.element('a')!.id).toBe(id);
 });
@@ -86,7 +87,7 @@ test('entered scope controls insertion, selection, movement and history; Page na
   expect(editor.selection).toEqual(['inner']);
   editor.enterGroup('inner');
   editor.click('c');
-  const c = editor.element('c')!;
+  const c = structuredClone(editor.element('c')!);
   const added = editor.addElement('rectangle');
   expect(editor.element('inner')).toMatchObject({
     members: [{ name: 'c' }, { name: added.name }],
@@ -113,12 +114,12 @@ test('entered scope controls insertion, selection, movement and history; Page na
 
 test('ungroup carries only the removed visibility mask, preserves member ids, and restores Scripts on Undo', () => {
   const editor = new StackEditor(fixture());
-  editor.edit(({ project }) => {
+  editor.edit(({ project, tree }) => {
     const group = project.pages[0]!.elements[1]!;
-    group.visible = false;
-    group.script = 'on click\nend';
+    tree.setProperty(group, 'visible', false);
+    tree.setScript(group, 'on click\nend');
   });
-  const before = editor.project;
+  const before = editor.snapshot();
   const id = editor.element('b')!.id;
   editor.click('panel');
   editor.ungroupSelection();
@@ -132,13 +133,13 @@ test('ungroup carries only the removed visibility mask, preserves member ids, an
   expect(editor.element('inner')!.visible).toBe(false);
   expect(editor.element('c')!.visible).toBe(true);
   editor.undo();
-  expect(editor.project).toBe(before);
+  expect(editor.project).toEqual(before);
 });
 
 test('recursive Duplicate translates each leaf once, changes every name/id and keeps Script source', () => {
   const editor = new StackEditor(fixture());
-  editor.edit(({ project }) => {
-    project.pages[0]!.elements[1]!.script = 'on click\n hide b\nend';
+  editor.edit(({ project, tree }) => {
+    tree.setScript(project.pages[0]!.elements[1]!, 'on click\n hide b\nend');
   });
   const source = editor.element('panel')!;
   editor.click('panel');
@@ -158,8 +159,8 @@ test('recursive Duplicate translates each leaf once, changes every name/id and k
 
 test('format 2 persists nested membership and empty anchors, strips all ids and migrates leaf Projects', async () => {
   const editor = new StackEditor(fixture());
-  editor.edit(({ project }) => {
-    project.pages[0]!.elements.push(groupElement('empty', []));
+  editor.edit(({ project, tree }) => {
+    tree.insert(project.pages[0]!, groupElement('empty', []));
   });
   const json = serializeProject(editor.project);
   expect(json.format).toBe(2);
@@ -311,7 +312,7 @@ test('incremental Play indexes match a full rebuild after nested create, clone a
   const matchesRebuild = async () => {
     const elements = play.page.elements;
     expect(play.elementsOf()).toEqual(allElements(elements));
-    const rebuilt = structuredClone(elements);
+    const rebuilt = castDraft(structuredClone(elements));
     refreshBounds(rebuilt);
     expect(elements).toEqual(rebuilt);
     for (const e of allElements(elements)) {
@@ -355,17 +356,17 @@ test('failed geometry preflight changes nothing and Edit Message Box preserves r
   expect(root).toEqual(before);
   const editor = new StackEditor(fixture());
   const id = editor.element('c')!.id;
-  const original = editor.project;
+  const original = editor.snapshot();
   expect(await runInEdit(editor, 'set the left of panel to 200')).toEqual({
     text: undefined,
   });
   expect(editor.element('c')).toMatchObject({ id, left: 300 });
   editor.undo();
-  expect(editor.project).toBe(original);
+  expect(editor.project).toEqual(original);
   expect(
     (await runInEdit(editor, 'set the width of panel to 999')).error,
   ).toBeDefined();
-  expect(editor.project).toBe(original);
+  expect(editor.project).toEqual(original);
 });
 
 test('browser storage and earlier versions round-trip group membership and empty anchors', async () => {
@@ -420,9 +421,9 @@ test('nested clone growth and editor insertion reject the next node without chan
   ];
   const editor = new StackEditor(project);
   editor.enterGroup('full');
-  const before = editor.project;
+  const before = editor.snapshot();
   expect(() => editor.addElement('button')).toThrow('1024');
-  expect(editor.project).toBe(before);
+  expect(editor.project).toEqual(before);
   const play = new PlaySession(project);
   const unchanged = structuredClone(play.project);
   expect((await run(play, 'ask elements to clone b0')).error).toBeDefined();

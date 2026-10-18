@@ -1,3 +1,4 @@
+import type { Immutable } from 'immer';
 // Browser driving and reader input stay outside the testable Play Session.
 // Browsing plays the Project in place on the desk, beside the Tools and
 // Script windows; presenting plays it full-window with the editor hidden.
@@ -88,7 +89,7 @@ export const mountPlay = (shell: StackShell): void => {
   // Physical key codes keep releases paired if modifiers change event.key.
   const heldKeys = new Map<
     string,
-    { key: string; target: PlaySession['page'] | TextElement }
+    { key: string; target: PlaySession['page'] | Immutable<TextElement> }
   >();
   const releaseKeys = () => {
     // send ignores input during closePage; keep releases until navigation
@@ -102,8 +103,8 @@ export const mountPlay = (shell: StackShell): void => {
     heldKeys.clear();
     schedule();
   };
-  const renderedElements = new WeakMap<HTMLElement, Element>();
-  const histories = new Map<TextElement, ReaderTextHistory>();
+  const renderedElements = new WeakMap<HTMLElement, Immutable<Element>>();
+  const histories = new Map<Immutable<TextElement>, ReaderTextHistory>();
   const closeText = () => {
     const editor = activeText;
     activeText = undefined;
@@ -120,7 +121,7 @@ export const mountPlay = (shell: StackShell): void => {
     }
     toolbar.hidden = true;
   };
-  const openText = (node: HTMLElement, element: TextElement) => {
+  const openText = (node: HTMLElement, element: Immutable<TextElement>) => {
     if (
       !session ||
       session.stopped ||

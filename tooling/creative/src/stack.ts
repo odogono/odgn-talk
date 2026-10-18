@@ -1,9 +1,4 @@
-import {
-  allElements,
-  elementVisibility,
-  outerElement,
-  updateGeometry,
-} from './hierarchy';
+import { allElements, elementVisibility } from './tree/rules';
 // The Stack editor shell (#749), in the layout the UI prototype chose for
 // #154: the Page on a desk, floating Tools and Info windows, and a strip of
 // Pages. The edits themselves live in `editing.ts`; this file draws them and
@@ -28,8 +23,6 @@ import {
   ELEMENT_KINDS,
   hasBorder,
   isTextAlign,
-  replacePlainText,
-  setTextAlign,
   type Element,
   type ElementKind,
   type Page,
@@ -567,39 +560,44 @@ export const mountStack = (
               key === 'width' || key === 'height'
                 ? Math.max(element.kind === 'line' ? 0 : 1, Number(value))
                 : Number(value);
-            updateGeometry(
-              outerElement(page.elements, element.name)!,
-              element,
-              {
-                [key]: next,
-              },
-            );
+            draft.tree.setGeometry(element, { [key]: next });
           } else if (key === 'text' && element.kind === 'text') {
             if (textOf(element) !== value) {
-              replacePlainText(element, String(value));
+              draft.tree.setProperty(element, 'text', String(value));
             }
           } else if (key === 'textAlign' && element.kind === 'text') {
             if (isTextAlign(value)) {
-              setTextAlign(element, value);
+              draft.tree.setProperty(element, 'textAlign', value);
             }
           } else {
             let minimum: number | undefined;
             if (key === 'thickness' && hasBorder(element)) {
               minimum = 0;
             }
-            (element as Record<string, unknown>)[key] =
+            draft.tree.setProperty(
+              element,
+              key,
               minimum === undefined
                 ? value
-                : Math.max(minimum, value as number);
+                : Math.max(minimum, value as number),
+            );
           }
         } else if (key === 'pageHeight') {
-          page.height = Math.max(MIN_PAGE_HEIGHT, value as number);
+          draft.tree.setProperty(
+            page,
+            'height',
+            Math.max(MIN_PAGE_HEIGHT, value as number),
+          );
         } else if (key === 'background') {
-          page.background = String(value);
+          draft.tree.setProperty(page, 'background', String(value));
         } else if (key === 'projectName') {
-          project.name = String(value);
+          draft.tree.setProjectName(String(value));
         } else if (key === 'designWidth') {
-          project.designWidth = Math.max(MIN_PAGE_WIDTH, value as number);
+          draft.tree.setProperty(
+            project,
+            'designWidth',
+            Math.max(MIN_PAGE_WIDTH, value as number),
+          );
         }
       });
     } catch (error) {
@@ -883,6 +881,7 @@ export const mountStack = (
       return;
     }
     const page = editor.page;
+    let expected = editor.stamp();
     const target = replacement ? editor.element(replacement) : undefined;
     const messages: string[] = [];
     for (const file of files) {
@@ -891,13 +890,18 @@ export const mountStack = (
         // The picker/decoder may outlive a Page switch or edit-lock loss.
         if (
           editor.readOnly ||
-          editor.page !== page ||
-          (target && !allElements(page.elements).includes(target))
+          !editor.isCurrent(expected) ||
+          editor.page.id !== page.id ||
+          (target &&
+            !allElements(editor.page.elements).some(
+              element => element.id === target.id,
+            ))
         ) {
           return;
         }
         images.add(imported);
         edit(() => editor.setImage(imported.asset, replacement, position));
+        expected = editor.stamp();
         messages.push(...imported.warnings);
       } catch (error) {
         messages.push(String(error));

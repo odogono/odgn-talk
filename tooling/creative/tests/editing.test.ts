@@ -270,35 +270,29 @@ test('changing Page clears the selection', () => {
   expect(editor.page.elements).toEqual([]);
 });
 
-test('state is copied, deeply frozen, and shares untouched Pages and Elements', () => {
-  const project = createProject('Immutable');
+test('live views are independently owned, preserve node identities, and snapshots stay detached', () => {
+  const project = createProject('Live');
   project.pages[0]!.elements.push(
     createElement('button', 'button1'),
     createElement('text', 'text1'),
   );
   project.pages.push(createPage('other'));
   const editor = new StackEditor(project);
-  const before = editor.state.value;
+  const button = editor.element('button1')!;
+  const page = editor.page;
+  const before = editor.snapshot();
   project.name = 'External change';
-  expect(editor.project.name).toBe('Immutable');
-  expect(Object.isFrozen(project)).toBe(false);
+  expect(editor.project.name).toBe('Live');
+  expect(Object.isFrozen(editor.project)).toBe(false);
   expect(() => {
-    // @ts-expect-error The live Project is deeply immutable.
-    editor.project.name = 'Forbidden';
-  }).toThrow();
-  expect(() => {
-    // @ts-expect-error Nested arrays are immutable too.
-    editor.page.elements.push(createElement('button', 'forbidden'));
-  }).toThrow();
-  expect(() => {
-    // @ts-expect-error Selection belongs to the immutable root.
+    // @ts-expect-error Interaction metadata remains immutable.
     editor.state.value.selection.push('forbidden');
   }).toThrow();
   editor.renameElement('button1', 'renamed');
-  expect(editor.state.value).not.toBe(before);
-  expect(editor.project.pages[1]).toBe(before.project.pages[1]);
-  expect(editor.page.elements[1]).toBe(before.project.pages[0]!.elements[1]);
-  expect(before.project.pages[0]!.elements[0]!.name).toBe('button1');
+  expect(editor.element('renamed')).toBe(button);
+  expect(editor.page).toBe(page);
+  expect(before.pages[0]!.elements[0]!.name).toBe('button1');
   editor.undo();
-  expect(editor.state.value).toBe(before);
+  expect(editor.project).toEqual(before);
+  expect(editor.element('button1')!.id).toBe(button.id);
 });

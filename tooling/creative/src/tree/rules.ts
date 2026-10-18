@@ -1,7 +1,7 @@
 // Folio's ownership tree. Coordinates are always Page-relative; group boxes
 // and collection order are derived views, never a second ownership graph.
 import type { Immutable } from 'immer';
-import type { Element, GroupElement } from './model';
+import type { Element, GroupElement } from '../model';
 
 export const MAX_GROUP_ELEMENTS = 1024;
 export const MAX_GROUP_DEPTH = 32;
@@ -10,6 +10,7 @@ export const MAX_GROUP_DEPTH = 32;
 export const GEOMETRY_FUEL = MAX_GROUP_ELEMENTS * 8;
 export const PROPERTY_FUEL = MAX_GROUP_DEPTH * 8;
 export type Box = Pick<Element, 'left' | 'top' | 'width' | 'height'>;
+export const BOX_FIELDS = ['left', 'top', 'width', 'height'] as const;
 
 /** Postorder: back-to-front siblings, each group after its members. */
 export function allElements(elements: readonly Element[]): Element[];

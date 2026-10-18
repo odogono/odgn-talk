@@ -1,3 +1,4 @@
+import { castDraft } from 'immer';
 import { expect, test } from 'bun:test';
 import { parseSource } from '@northtalk/ts';
 import {
@@ -205,12 +206,12 @@ test('creation and rename avoid reserved bindings and Page/Element collisions', 
     expect(editor.renameElement('door', name).ok).toBe(false);
   }
   expect(editor.renamePage('remote').ok).toBe(false);
-  editor.edit(({ project }) => {
-    project.pages[1]!.name = 'button1';
-  });
+  const imported = castDraft(structuredClone(editor.project));
+  imported.pages[1]!.name = 'button1';
+  editor.replaceProject(imported);
   expect(editor.addElement('button').name).toBe('button2');
-  editor.edit(({ project }) => {
-    project.pages[0]!.elements.push(createElement('button', 'page4'));
+  editor.edit(({ project, tree }) => {
+    tree.insert(project.pages[0]!, createElement('button', 'page4'));
   });
   expect(editor.addPage().name).toBe('page5');
 });

@@ -197,8 +197,8 @@ export const runBrowserTests = async () => {
     input.value = 'typedName';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.setSelectionRange(1, 5);
-    shell.editor.edit(({ project }) => {
-      project.name = 'Unrelated change';
+    shell.editor.edit(({ tree }) => {
+      tree.setProjectName('Unrelated change');
     });
     await settle();
     assert(

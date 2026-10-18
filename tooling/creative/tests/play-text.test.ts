@@ -98,7 +98,8 @@ test('format-only edits send textChanged and identical edits do not', () => {
   history.set([{ runs: [{ text: 'Authored', bold: true }] }]);
   drain(play);
   expect(output.label).toBe('Authored');
-  output.label = 'No change';
+  play.runMessage('set the label of output to "No change"');
+  drain(play);
   history.set([{ runs: [{ text: 'Authored', bold: true }] }]);
   drain(play);
   expect(output.label).toBe('No change');
@@ -107,10 +108,13 @@ test('format-only edits send textChanged and identical edits do not', () => {
 test('a Script replacing the same plain text clears formatting and resets reader history', () => {
   const { play, element, history } = fixture();
   history.set([{ runs: [{ text: 'Authored', bold: true }] }]);
-  element.script += '\non click\n set the text of me to "Authored"\nend click';
   play.group
     .script('element:page1/journal')!
-    .reload(element.script!, 'reset variables');
+    .reload(
+      element.script! +
+        '\non click\n set the text of me to "Authored"\nend click',
+      'reset variables',
+    );
   play.send(element, 'click');
   drain(play);
   expect(element.richText).toEqual(richTextFromPlainText('Authored'));
@@ -138,9 +142,11 @@ for (const blocked of [
     } else if (blocked === 'other Page') {
       play.pageIndex = 1;
     } else if (blocked === 'read-only') {
-      element.editable = false;
+      play.runMessage('set the editable of journal to false');
+      drain(play);
     } else {
-      element.visible = false;
+      play.runMessage('hide journal');
+      drain(play);
     }
     const original = structuredClone(element.richText);
     history.set(richTextFromPlainText('Rejected'));

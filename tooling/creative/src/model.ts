@@ -1,7 +1,7 @@
 // The authored Project model (#748): pure data, no UI and no Play State
 // (ADR 0041). Element kinds and properties follow #735, decisions 2-5.
 import { castDraft, current, isDraft, type Immutable } from 'immer';
-import { allElements } from './hierarchy';
+import { allElements } from './tree/rules';
 
 /** One run of uniformly styled text inside a paragraph. */
 export type TextRun = {

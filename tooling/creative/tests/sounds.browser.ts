@@ -114,9 +114,11 @@ export const runBrowserTests = async () => {
   });
 
   await test('a Script loops the sound in Play and Stop silences it', () => {
-    shell.editor.edit(({ project }) => {
-      project.pages[0]!.elements[0]!.script =
-        'on click\n tell sound to loop "waves"\nend click';
+    shell.editor.edit(({ project, tree }) => {
+      tree.setScript(
+        project.pages[0]!.elements[0]!,
+        'on click\n tell sound to loop "waves"\nend click',
+      );
     });
     const play = new PlaySession(shell.editor.project, 0, {
       soundBackend: browserSoundBackend(asset => shell.images.url(asset)),

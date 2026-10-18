@@ -1,4 +1,4 @@
-import { groupElement } from '../hierarchy';
+import { groupElement } from '../tree/rules';
 // The Tetris Example Project (#1114): a game loop on Folio's `frame`
 // message (ADR 0095), driven by arrow keys. The board is 200 rectangles
 // drawn here in advance; the Page Script keeps the game in lists and only

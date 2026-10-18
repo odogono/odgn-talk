@@ -52,8 +52,8 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Play Session and reader input
 
-- [play.ts](src/play.ts): the Play Session, its Group, the disposable Project
-  copy, the `PlayMessage` list (`startPlay`, `openPage`, `click`, …) and
+- [play.ts](src/play.ts): the Play Session, its Group, Core handles and lifecycle
+  wiring, the `PlayMessage` list (`startPlay`, `openPage`, `click`, …) and
   `send`, Page navigation, `wait`, dynamic Elements, and `frame` delivery
   (`definesHandler`, `wantsFrames`, `frame`; ADR 0095).
 - [play-view.ts](src/play-view.ts): Browse and Present in the browser,
@@ -69,7 +69,11 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 - [model.ts](src/model.ts): Projects, Pages, Elements and their properties;
   pure data, no Play State ([ADR 0041](../../docs/adr/0041-authored-projects-are-separate-from-temporary-play-state.md)).
-- [editing.ts](src/editing.ts): selection and authored edits, undo and redo.
+- [editing.ts](src/editing.ts): authoring interaction state, tree transactions,
+  grouped change history, signal adapters and generation/revision/content tokens.
+  `editor.project` is a readonly live view; use `snapshot()` or `capture()` to
+  retain data for asynchronous work. Never write through it or retain old
+  `state.value` as a document snapshot.
 - [project-file.ts](src/project-file.ts) over [zip.ts](src/zip.ts): the
   `.folio` file.
 - Tests: [model.test.ts](tests/model.test.ts),
@@ -81,17 +85,20 @@ List files with `rg --files tooling/creative` before opening one by name.
 
 ## Group Elements
 
-- [hierarchy.ts](src/hierarchy.ts): membership traversal, bounds and geometry
-  preflight, visibility, the 1,024-node and depth-32 limits.
+- [tree/project-tree.ts](src/tree/project-tree.ts): the persistent mutable
+  Project authority shared by Edit and Play, readonly live views, indexes,
+  explicit mutations, copy work, batched changes and forward/inverse journals.
+  [tree/rules.ts](src/tree/rules.ts) holds pure hierarchy/geometry rules and the
+  1,024-node/depth-32 limits without runtime model imports.
 - [model.ts](src/model.ts) and [project-file.ts](src/project-file.ts): recursive
   copies and format-2 nested members/empty anchors; [editing.ts](src/editing.ts):
   entered scope, Group/Ungroup, history and sibling actions.
-- [play.ts](src/play.ts): indexed Page/group collections, message parents,
-  recursive clone/delete, geometry costs and operation preflight.
+- [play.ts](src/play.ts): the Core adapter for tree collections and operations,
+  parent-first handle installation, Fuel authorization and lifecycle effects.
 - [stack.ts](src/stack.ts), [edit-menu.tsx](src/edit-menu.tsx),
   [info-panel.tsx](src/info-panel.tsx) and [play-view.ts](src/play-view.ts):
   outlines, empty markers, entry/exit, menu commands, Info and reader input.
-- First check: `bun test tooling/creative/tests/groups.test.ts`.
+- First check: `bun test tooling/creative/tests/project-tree.test.ts tooling/creative/tests/groups.test.ts`.
 - Browser: `groups` suite on `/groups-test.html`; also run `edit-menu`,
   `play`, its Elements/key/Message Box exports, and `tetris`.
 

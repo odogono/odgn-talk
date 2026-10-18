@@ -16,8 +16,7 @@ import {
 } from '../src/rich-text-dom';
 import { InPlaceTextEditor } from '../src/text-editor';
 
-// Text history over a one-Element Project; undo replaces the Element's
-// object, so tests read it through `history.element`.
+// Text history resolves its owner by stable id, including after restoration.
 const historyFor = (element: TextElement) => {
   const project = createProject('Browser');
   project.pages[0]!.elements.push(element);
