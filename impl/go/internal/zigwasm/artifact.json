@@ -1,7 +1,7 @@
 {
-  "sourceCommit": "e1179cc0c4bfb18a21b035cac57a60ea98705240",
+  "sourceCommit": "55d01c93fa662a01eb88f20fdc54a688bac1dd11",
   "zig": "0.17.0",
   "target": "wasm32-wasi",
   "optimize": "safe",
-  "sha256": "bb2f9cd59384de059277bf3083e016729fe6eef8244ea698236491b38cb8cced"
+  "sha256": "ad27fc0130585f9421ac254e209bb38d131c0cdc4cf0eb2a6bd3bde038fa58a7"
 }
