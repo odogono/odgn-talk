@@ -69,6 +69,16 @@ export type Registry = {
   readonly kinds: readonly ObjectKind[];
 };
 
+// Methods whose first frame goes binary once Request/Pump binary is negotiated.
+const binaryMethods = new Set([
+  'request',
+  'call',
+  'pump',
+  'request-pump',
+  'call-pump',
+]);
+const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true });
 const failure = (err: Json): Error => {
   const kind = textOf(field(err, 'kind'));
   if (kind === 'host error') {
@@ -160,16 +170,14 @@ export class Session {
   ): Json {
     const ref = ++this.#ref;
     let frame: Record<string, Frame | undefined> = { m, ref, ...fields };
-    const binaryExchange =
-      this.requestPump &&
-      ['request', 'call', 'pump', 'request-pump', 'call-pump'].includes(m);
+    const binaryExchange = this.requestPump && binaryMethods.has(m);
     let initial = true;
     for (;;) {
       const binary = binaryExchange && initial;
       const json = frameJSON(frame);
       const input = binary
         ? new Uint8Array(encodeBinaryFrame(readReply(json)))
-        : new TextEncoder().encode(json);
+        : encoder.encode(json);
       const output = this.reactor.frameBytes(input);
       const binaryReply = isRequestPumpBinary(new Uint8Array(output));
       if (binaryReply && !binaryExchange) {
@@ -177,7 +185,7 @@ export class Session {
       }
       const packet = binaryReply
         ? decodeBinaryFrame(output)
-        : readReply(new TextDecoder('utf-8', { fatal: true }).decode(output));
+        : readReply(decoder.decode(output));
       initial = false;
       if (intOf(field(packet, 'ref')) !== ref) {
         throw new InstanceLostError(`The reply to ${m} has another ref`);

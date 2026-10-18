@@ -3,10 +3,10 @@
 // with duplicate keys refused, so a Value inside one decodes exactly.
 import { quoteJSON } from '../encoding';
 import {
+  isJsonNumber as isNumber,
+  isJsonObject as isObject,
   readOrderedJSON,
   type Json,
-  type JsonNumber,
-  type JsonObject,
 } from '../readers';
 
 const raw = Symbol('raw JSON');
@@ -75,18 +75,6 @@ export const frameJSON = (frame: Frame): string => {
 
 export type { Json };
 export const readReply = (s: string): Json => readOrderedJSON(s);
-
-// The reader's nodes say what they are.
-const isObject = (j: Json | undefined): j is JsonObject =>
-  typeof j === 'object' &&
-  j !== null &&
-  !Array.isArray(j) &&
-  j.kind === 'object';
-const isNumber = (j: Json | undefined): j is JsonNumber =>
-  typeof j === 'object' &&
-  j !== null &&
-  !Array.isArray(j) &&
-  j.kind === 'number';
 
 /** A member of a JSON object, or undefined. */
 export const field = (j: Json | undefined, key: string): Json | undefined => {

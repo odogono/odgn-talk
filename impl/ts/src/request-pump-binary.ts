@@ -15,7 +15,14 @@ import {
   type BinaryValueOptions,
 } from './binary-value';
 import { formatInstant, parseInstant } from './dates';
-import { JsonNumber, JsonObject, fromJson, type Json } from './readers';
+import {
+  JsonNumber,
+  JsonObject,
+  fromJson,
+  isJsonNumber as isNumber,
+  isJsonObject as isObject,
+  type Json,
+} from './readers';
 import { nothing, objectValue, patternValue, functionValue } from './values';
 
 export const requestPumpFeature = 'request-pump-fields-v1';
@@ -129,16 +136,6 @@ export const binaryReports: readonly (readonly [string, readonly string[]])[] =
     ['host error', ['code', 'detail']],
     ['charge result', ['request', 'call', 'fuel', 'status']],
   ];
-const isObject = (j: Json | undefined): j is JsonObject =>
-  typeof j === 'object' &&
-  j !== null &&
-  !Array.isArray(j) &&
-  j.kind === 'object';
-const isNumber = (j: Json | undefined): j is JsonNumber =>
-  typeof j === 'object' &&
-  j !== null &&
-  !Array.isArray(j) &&
-  j.kind === 'number';
 const object = (j: Json): JsonObject => (isObject(j) ? j : binaryFailure());
 const field = (j: Json, k: string): Json | undefined =>
   object(j).pairs.find(([key]) => key === k)?.[1];

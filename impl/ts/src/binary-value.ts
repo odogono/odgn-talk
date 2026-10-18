@@ -4,6 +4,7 @@ import { checkSource } from './checker';
 import { patternSource } from './canonical';
 import { viewSource } from './view';
 import { normalizeNFC } from './unicode';
+import { decodeUtf8 } from './operations';
 import {
   Value,
   bool,
@@ -35,7 +36,6 @@ export type BinaryValueOptions = {
 const coreErrors = new WeakSet<Value>();
 const max = 2n ** 64n;
 const encoder = new TextEncoder();
-const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 export const binaryFailure = (): never =>
   invalidValue('Malformed canonical binary item');
 export const children = (item: BinaryItem): BinaryItem[] => {
@@ -184,7 +184,7 @@ export class BinaryReader {
         if (tag === 8) {
           item.data = data.slice();
         } else {
-          const s = decoder.decode(data);
+          const s = decodeUtf8(data) ?? binaryFailure();
           if (tag !== 18 && normalizeNFC(s) !== s) {
             binaryFailure();
           }
