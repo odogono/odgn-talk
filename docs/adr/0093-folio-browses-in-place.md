@@ -15,3 +15,5 @@ We considered keeping Play as a separate full-window mode with an in-place Stop,
 Narrowed by [ADR 0101](0101-folio-editor-state-is-an-immutable-value-observed-through-signals.md): authored Pages and Elements keep their identity through their session-local ids, not as the same objects; the written-back Project is a new value.
 
 Narrowed by [ADR 0104](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md): Play runs on the page thread, with no worker to terminate. Leaving does not wait for a Script to cooperate, but it does rely on Pump slices and Fuel-metered Host Crossings to yield the page thread.
+
+Amended by [ADR 0108](0108-folio-message-box-commands-can-extend-a-chosen-script.md): while browsing, the Message Box can target a loaded Script by extending it with a command Handler. The ownerless context remains the default.
