@@ -1,0 +1,95 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+                                    │   before    │               after               │
+                                    │   sec/op    │   sec/op     vs base              │
+BackendRequest-3                      22.42µ ± 1%   21.26µ ± 1%  -5.18% (p=0.010 n=8)
+BackendDeferredCall/history=0-3       58.99µ ± 7%   58.28µ ± 1%  -1.19% (p=0.010 n=8)
+BackendDeferredCall/history=5000-3    58.98µ ± 1%   58.28µ ± 1%  -1.19% (p=0.000 n=8)
+BackendMultiGroup/groups=1-3          45.02µ ± 2%   42.15µ ± 1%  -6.37% (p=0.000 n=8)
+BackendMultiGroup/groups=4-3          15.85µ ± 2%   14.91µ ± 1%  -5.89% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3         15.44µ ± 2%   14.54µ ± 1%  -5.88% (p=0.000 n=8)
+BackendRequest-10                     22.64µ ± 1%   21.38µ ± 1%  -5.58% (p=0.000 n=8)
+BackendDeferredCall/history=0-10      59.62µ ± 1%   58.32µ ± 0%  -2.19% (p=0.000 n=8)
+BackendDeferredCall/history=5000-10   59.09µ ± 9%   58.34µ ± 1%  -1.27% (p=0.021 n=8)
+BackendMultiGroup/groups=1-10         44.90µ ± 1%   42.52µ ± 1%  -5.30% (p=0.000 n=8)
+BackendMultiGroup/groups=4-10         12.07µ ± 1%   11.42µ ± 1%  -5.38% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10        7.458µ ± 3%   7.042µ ± 2%  -5.58% (p=0.000 n=8)
+geomean                               28.41µ        27.20µ       -4.27%
+
+                                    │    before    │               after               │
+                                    │   p50-sec    │   p50-sec    vs base              │
+BackendRequest-3                      21.71µ ±  2%   20.54µ ± 1%  -5.37% (p=0.006 n=8)
+BackendDeferredCall/history=0-3       58.63µ ± 10%   58.23µ ± 1%  -0.68% (p=0.022 n=8)
+BackendDeferredCall/history=5000-3    58.27µ ±  1%   58.27µ ± 1%       ~ (p=0.899 n=8)
+BackendMultiGroup/groups=1-3          44.10µ ±  1%   41.52µ ± 1%  -5.86% (p=0.000 n=8)
+BackendMultiGroup/groups=4-3          45.65µ ±  1%   42.85µ ± 1%  -6.12% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3         45.13µ ±  2%   42.48µ ± 1%  -5.86% (p=0.000 n=8)
+BackendRequest-10                     21.77µ ±  1%   20.56µ ± 1%  -5.55% (p=0.000 n=8)
+BackendDeferredCall/history=0-10      58.96µ ±  1%   58.13µ ± 2%  -1.41% (p=0.000 n=8)
+BackendDeferredCall/history=5000-10   58.44µ ±  9%   58.42µ ± 1%       ~ (p=0.940 n=8)
+BackendMultiGroup/groups=1-10         44.06µ ±  1%   41.65µ ± 1%  -5.48% (p=0.000 n=8)
+BackendMultiGroup/groups=4-10         45.48µ ±  1%   43.02µ ± 1%  -5.41% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10        48.31µ ±  1%   46.08µ ± 1%  -4.61% (p=0.000 n=8)
+geomean                               43.73µ         42.03µ       -3.90%
+
+                                    │    before     │                after                │
+                                    │    p99-sec    │   p99-sec     vs base               │
+BackendRequest-3                       29.81µ ±  6%   28.77µ ± 12%        ~ (p=0.425 n=8)
+BackendDeferredCall/history=0-3        72.46µ ±  5%   69.81µ ±  5%        ~ (p=0.161 n=8)
+BackendDeferredCall/history=5000-3     65.38µ ±  3%   63.33µ ±  3%   -3.12% (p=0.000 n=8)
+BackendMultiGroup/groups=1-3           53.46µ ±  4%   52.56µ ±  4%        ~ (p=0.234 n=8)
+BackendMultiGroup/groups=4-3           82.81µ ± 27%   79.00µ ±  9%        ~ (p=0.645 n=8)
+BackendMultiGroup/groups=16-3         101.02µ ± 32%   70.27µ ± 19%  -30.44% (p=0.028 n=8)
+BackendRequest-10                      32.35µ ±  7%   29.48µ ±  7%   -8.88% (p=0.005 n=8)
+BackendDeferredCall/history=0-10       74.29µ ± 12%   70.08µ ±  4%   -5.66% (p=0.050 n=8)
+BackendDeferredCall/history=5000-10    65.96µ ±  4%   64.29µ ±  2%        ~ (p=0.078 n=8)
+BackendMultiGroup/groups=1-10          55.85µ ±  6%   52.25µ ±  6%   -6.45% (p=0.050 n=8)
+BackendMultiGroup/groups=4-10          81.69µ ± 11%   79.46µ ± 34%        ~ (p=1.000 n=8)
+BackendMultiGroup/groups=16-10         229.4µ ± 40%   214.9µ ± 40%        ~ (p=0.645 n=8)
+geomean                                68.40µ         63.62µ         -6.98%
+
+                                    │    before     │                 after                 │
+                                    │     B/op      │     B/op       vs base                │
+BackendRequest-3                      6.714Ki ±  0%   6.714Ki ±  0%       ~ (p=1.000 n=8)
+BackendDeferredCall/history=0-3       13.35Ki ±  0%   13.35Ki ±  0%  -0.04% (p=0.002 n=8)
+BackendDeferredCall/history=5000-3    13.63Ki ±  0%   13.62Ki ±  0%  -0.03% (p=0.001 n=8)
+BackendMultiGroup/groups=1-3          10.14Ki ±  0%   10.14Ki ±  0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=4-3          13.04Ki ± 11%   13.04Ki ±  0%       ~ (p=0.215 n=8)
+BackendMultiGroup/groups=16-3         10.88Ki ±  7%   10.15Ki ± 14%       ~ (p=0.552 n=8)
+BackendRequest-10                     6.716Ki ±  0%   6.716Ki ±  0%       ~ (p=0.569 n=8)
+BackendDeferredCall/history=0-10      13.36Ki ±  0%   13.35Ki ±  0%  -0.03% (p=0.048 n=8)
+BackendDeferredCall/history=5000-10   13.63Ki ±  0%   13.62Ki ±  0%       ~ (p=0.163 n=8)
+BackendMultiGroup/groups=1-10         10.14Ki ±  0%   10.14Ki ±  0%       ~ (p=1.000 n=8)
+BackendMultiGroup/groups=4-10         14.50Ki ± 10%   14.51Ki ± 10%       ~ (p=0.893 n=8)
+BackendMultiGroup/groups=16-10        8.876Ki ±  0%   8.876Ki ±  0%       ~ (p=0.528 n=8)
+geomean                               10.90Ki         10.83Ki        -0.58%
+¹ all samples are equal
+
+                                    │   before   │               after                │
+                                    │ allocs/op  │ allocs/op   vs base                │
+BackendRequest-3                      190.0 ± 0%   190.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendDeferredCall/history=0-3       252.0 ± 0%   252.0 ± 0%       ~ (p=1.000 n=8)
+BackendDeferredCall/history=5000-3    253.0 ± 0%   253.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=1-3          269.0 ± 0%   269.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=4-3          268.0 ± 0%   268.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=16-3         268.0 ± 0%   268.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendRequest-10                     190.0 ± 0%   190.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendDeferredCall/history=0-10      252.0 ± 0%   252.0 ± 0%       ~ (p=1.000 n=8)
+BackendDeferredCall/history=5000-10   253.0 ± 0%   253.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=1-10         269.0 ± 0%   269.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=4-10         268.0 ± 0%   268.0 ± 0%       ~ (p=1.000 n=8) ¹
+BackendMultiGroup/groups=16-10        267.0 ± 0%   267.0 ± 0%       ~ (p=1.000 n=8) ¹
+geomean                               248.2        248.2       +0.00%
+¹ all samples are equal
+
+                               │   before    │               after               │
+                               │    req/s    │    req/s     vs base              │
+BackendMultiGroup/groups=1-3     22.21k ± 1%   23.73k ± 1%  +6.81% (p=0.000 n=8)
+BackendMultiGroup/groups=4-3     63.11k ± 1%   67.06k ± 0%  +6.26% (p=0.000 n=8)
+BackendMultiGroup/groups=16-3    64.75k ± 1%   68.80k ± 1%  +6.24% (p=0.000 n=8)
+BackendMultiGroup/groups=1-10    22.27k ± 2%   23.52k ± 1%  +5.60% (p=0.000 n=8)
+BackendMultiGroup/groups=4-10    82.86k ± 1%   87.57k ± 1%  +5.69% (p=0.000 n=8)
+BackendMultiGroup/groups=16-10   134.1k ± 9%   142.0k ± 1%  +5.90% (p=0.000 n=8)
+geomean                          53.12k        56.35k       +6.08%

@@ -1,0 +1,139 @@
+Installed 2 packages in 1ms
+{
+  "wasm": "impl/go/internal/zigwasm/talk.wasm",
+  "sha256": "9f46632673f179f73e4c7dfd98c6e8227061db1155b8e1dc3fd5ef8901c50624",
+  "wasmtime": "49.0.0",
+  "brotli": "1.2.0",
+  "python": "3.14.8",
+  "zlib": "1.2.12",
+  "checks": "passed",
+  "instance": {
+    "linearMemory": 2162688,
+    "group": {
+      "used": 3522,
+      "peak": 6896,
+      "cap": 268435456,
+      "refused": false
+    },
+    "fuel": 7
+  },
+  "instanceWithStdlib": {
+    "linearMemory": 3473408,
+    "group": {
+      "used": 7954,
+      "peak": 11328,
+      "cap": 268435456,
+      "refused": false
+    },
+    "fuel": 337
+  },
+  "containment": {
+    "used": 530339,
+    "peak": 793845,
+    "cap": 1048576,
+    "refused": true
+  },
+  "mapContainment": {
+    "used": 36538,
+    "peak": 65468,
+    "cap": 65536,
+    "refused": true
+  },
+  "nesting": {
+    "parentheses": 62,
+    "lists": 62,
+    "blocks": 125
+  },
+  "largeLoads": {
+    "blank": {
+      "sourceBytes": 1048576,
+      "seconds": 0.0448,
+      "retainedBytes": 1574052,
+      "groupPeakBytes": 64035630,
+      "linearMemory": 165871616
+    },
+    "handlers50000": {
+      "sourceBytes": 1027780,
+      "seconds": 0.0792,
+      "retainedBytes": 25624730,
+      "groupPeakBytes": 119229682,
+      "linearMemory": 162070528
+    },
+    "handlers100000": {
+      "sourceBytes": 2077780,
+      "seconds": 0.1847,
+      "retainedBytes": 51405980,
+      "groupPeakBytes": 189851730,
+      "linearMemory": 254869504
+    }
+  },
+  "messageLayer": {
+    "hello": {
+      "language": "1.0-rc.3",
+      "costModel": "0",
+      "unicode": "18.0.0",
+      "core": "zig/0.0.0",
+      "saveFormat": "zig/12",
+      "features": [
+        "paused-inputs-v1",
+        "abandoned-before-needs-v1",
+        "crossing-trace-v1",
+        "climb-v1",
+        "function-gone-v1",
+        "function-metadata-v1",
+        "core-message-v1",
+        "standard-refinements-v1",
+        "restore-bindings-v1",
+        "analysis-v1",
+        "group-exchanges-v1",
+        "object-elements-v1",
+        "queued-inputs-v1",
+        "inline-inputs-v1"
+      ]
+    },
+    "linearMemory": 2228224
+  },
+  "metering": {
+    "acceptedFuel": 17,
+    "outcomes": [
+      "accepted",
+      "limit",
+      "inactive"
+    ]
+  },
+  "supportedLimits": {
+    "refusedProfiles": 29,
+    "callDepth": 1000,
+    "freshLoad": "passed"
+  },
+  "textContainment": [
+    {
+      "allocPerRun": 16777216,
+      "cap": 134217728,
+      "linearMemory": [
+        35848192,
+        35848192,
+        35848192
+      ]
+    },
+    {
+      "allocPerRun": 268435456,
+      "cap": 1073741824,
+      "linearMemory": [
+        539164672,
+        539164672,
+        539164672
+      ]
+    }
+  ],
+  "characterIndexing": {
+    "runs": 3,
+    "fuel": 141,
+    "alloc": 1014
+  },
+  "bytes": {
+    "raw": 3154152,
+    "gzip9": 1061015,
+    "brotli11": 732197
+  }
+}

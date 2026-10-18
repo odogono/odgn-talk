@@ -1,0 +1,16 @@
+Build Summary: 12/12 steps succeeded
+test success
++- run test cached
+|  +- compile test safe native cached 49ms MaxRSS:33M
++- run test cached
+|  +- compile test safe native cached 52ms MaxRSS:33M
+|     +- translate-c cached 39ms MaxRSS:32M
++- run test cached
+|  +- compile test safe native cached 52ms MaxRSS:33M
+|     +- translate-c (reused)
++- run exe talk-h-test success 45ms
+   +- compile exe talk-h-test safe native cached 46ms MaxRSS:33M
+      +- WriteFile cached
+      +- compile lib talk-test safe native cached 48ms MaxRSS:33M
+      +- compile lib talk-test safe native (reused)
+

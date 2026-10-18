@@ -1,0 +1,176 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22465 ns/op	     21167 p50-ns	     31167 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     58911 ns/op	     58500 p50-ns	     72959 p99-ns	   13671 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     58584 ns/op	     57584 p50-ns	     64125 p99-ns	   13952 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     45391 ns/op	     43542 p50-ns	     52292 p99-ns	     22031 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     16007 ns/op	     45708 p50-ns	     88333 p99-ns	     62474 req/s	   13352 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15482 ns/op	     45125 p50-ns	    115375 p99-ns	     64592 req/s	   10395 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22893 ns/op	     22292 p50-ns	     30166 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     59519 ns/op	     58333 p50-ns	     71959 p99-ns	   13675 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     59260 ns/op	     58166 p50-ns	     66417 p99-ns	   13955 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     45024 ns/op	     44333 p50-ns	     52875 p99-ns	     22211 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15945 ns/op	     45916 p50-ns	     82417 p99-ns	     62716 req/s	   13351 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15580 ns/op	     45500 p50-ns	    146292 p99-ns	     64186 req/s	   11878 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22394 ns/op	     21708 p50-ns	     28125 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     59136 ns/op	     58916 p50-ns	     72958 p99-ns	   13677 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     59050 ns/op	     58583 p50-ns	     65417 p99-ns	   13954 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     44238 ns/op	     43583 p50-ns	     51459 p99-ns	     22605 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15713 ns/op	     45541 p50-ns	     83417 p99-ns	     63643 req/s	   11876 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15349 ns/op	     45125 p50-ns	     68625 p99-ns	     65151 req/s	   10396 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22364 ns/op	     21708 p50-ns	     30417 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     58941 ns/op	     58458 p50-ns	     73791 p99-ns	   13675 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     58566 ns/op	     57958 p50-ns	     64791 p99-ns	   13953 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     44585 ns/op	     43875 p50-ns	     56625 p99-ns	     22429 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15637 ns/op	     45208 p50-ns	     60041 p99-ns	     63950 req/s	   13351 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15431 ns/op	     44958 p50-ns	    120708 p99-ns	     64805 req/s	   11881 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22204 ns/op	     21500 p50-ns	     29750 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     59029 ns/op	     58750 p50-ns	     69292 p99-ns	   13673 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     58715 ns/op	     57792 p50-ns	     64667 p99-ns	   13954 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     45014 ns/op	     44333 p50-ns	     54750 p99-ns	     22215 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15833 ns/op	     45584 p50-ns	     97167 p99-ns	     63160 req/s	   13360 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15314 ns/op	     44750 p50-ns	    116000 p99-ns	     65301 req/s	   10399 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22402 ns/op	     21666 p50-ns	     29333 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     54776 ns/op	     52916 p50-ns	     68875 p99-ns	   13683 B/op	     253 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     58912 ns/op	     58375 p50-ns	     65333 p99-ns	   13951 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     44526 ns/op	     43791 p50-ns	     53959 p99-ns	     22459 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15553 ns/op	     45000 p50-ns	     80500 p99-ns	     64297 req/s	   13351 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15180 ns/op	     44416 p50-ns	     75125 p99-ns	     65877 req/s	   11877 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22495 ns/op	     21709 p50-ns	     29875 p99-ns	    6875 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     58936 ns/op	     58833 p50-ns	     70125 p99-ns	   13671 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     59616 ns/op	     58500 p50-ns	     67708 p99-ns	   13953 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     45234 ns/op	     44500 p50-ns	     53875 p99-ns	     22107 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15858 ns/op	     45833 p50-ns	     83208 p99-ns	     63060 req/s	   13351 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15473 ns/op	     45167 p50-ns	     68833 p99-ns	     64631 req/s	   11880 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-3        	    2000	     22445 ns/op	     21709 p50-ns	     28125 p99-ns	    6878 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-3         	    2000	     59361 ns/op	     58875 p50-ns	     73708 p99-ns	   13676 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-3      	    2000	     59835 ns/op	     59250 p50-ns	     67125 p99-ns	   13956 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-3            	    2000	     45066 ns/op	     44500 p50-ns	     53042 p99-ns	     22190 req/s	   10382 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-3            	    2000	     15923 ns/op	     46042 p50-ns	     74375 p99-ns	     62802 req/s	   13351 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-3           	    2000	     15455 ns/op	     45375 p50-ns	     86667 p99-ns	     64705 req/s	   10394 B/op	     268 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22753 ns/op	     22041 p50-ns	     31792 p99-ns	    6877 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59703 ns/op	     59458 p50-ns	     71250 p99-ns	   13674 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59089 ns/op	     58416 p50-ns	     65666 p99-ns	   13952 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     44725 ns/op	     43875 p50-ns	     56167 p99-ns	     22359 req/s	   10384 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     11993 ns/op	     45417 p50-ns	     73792 p99-ns	     83382 req/s	   14859 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7423 ns/op	     48167 p50-ns	    260417 p99-ns	    134719 req/s	    9089 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22759 ns/op	     22042 p50-ns	     31583 p99-ns	    6877 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59537 ns/op	     58667 p50-ns	     82917 p99-ns	   13679 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59139 ns/op	     58542 p50-ns	     66000 p99-ns	   13953 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     45150 ns/op	     44458 p50-ns	     58208 p99-ns	     22148 req/s	   10384 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     12065 ns/op	     45917 p50-ns	     90750 p99-ns	     82884 req/s	   14853 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7486 ns/op	     48625 p50-ns	    223000 p99-ns	    133583 req/s	    9089 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22582 ns/op	     21708 p50-ns	     32416 p99-ns	    6877 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59215 ns/op	     58625 p50-ns	     69833 p99-ns	   13677 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59264 ns/op	     58208 p50-ns	     66709 p99-ns	   13954 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     44912 ns/op	     43958 p50-ns	     55584 p99-ns	     22266 req/s	   10384 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     11937 ns/op	     45209 p50-ns	     88875 p99-ns	     83772 req/s	   14850 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7449 ns/op	     48125 p50-ns	    223833 p99-ns	    134254 req/s	    9092 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22471 ns/op	     21708 p50-ns	     30125 p99-ns	    6877 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59532 ns/op	     58875 p50-ns	     77125 p99-ns	   13678 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     53936 ns/op	     53209 p50-ns	     63583 p99-ns	   13955 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     45793 ns/op	     45208 p50-ns	     52500 p99-ns	     21837 req/s	   10386 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     12073 ns/op	     45917 p50-ns	     80458 p99-ns	     82831 req/s	   14854 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      8213 ns/op	     49000 p50-ns	    682042 p99-ns	    121763 req/s	    9084 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22454 ns/op	     21583 p50-ns	     34583 p99-ns	    6879 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59751 ns/op	     59250 p50-ns	     74875 p99-ns	   13675 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59418 ns/op	     58666 p50-ns	     66583 p99-ns	   13953 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     44836 ns/op	     44042 p50-ns	     56125 p99-ns	     22304 req/s	   10383 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     11994 ns/op	     45334 p50-ns	     82917 p99-ns	     83378 req/s	   14855 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7481 ns/op	     48458 p50-ns	    235042 p99-ns	    133677 req/s	    9089 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22610 ns/op	     21750 p50-ns	     33958 p99-ns	    6879 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     65078 ns/op	     59334 p50-ns	    137625 p99-ns	   13707 B/op	     253 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59084 ns/op	     58041 p50-ns	     66209 p99-ns	   13955 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     44644 ns/op	     43875 p50-ns	     53375 p99-ns	     22400 req/s	   10384 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     12124 ns/op	     45333 p50-ns	    106542 p99-ns	     82480 req/s	   13380 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7466 ns/op	     48167 p50-ns	    289667 p99-ns	    133939 req/s	    9089 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22671 ns/op	     21792 p50-ns	     32292 p99-ns	    6877 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59726 ns/op	     58750 p50-ns	     73708 p99-ns	   13681 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59018 ns/op	     58666 p50-ns	     65917 p99-ns	   13955 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     44894 ns/op	     44083 p50-ns	     61458 p99-ns	     22275 req/s	   10384 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     12159 ns/op	     45875 p50-ns	     74875 p99-ns	     82241 req/s	   14853 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7225 ns/op	     48375 p50-ns	    138709 p99-ns	    138407 req/s	    9073 B/op	     267 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10         	    2000	     22900 ns/op	     21917 p50-ns	     34125 p99-ns	    6879 B/op	     190 allocs/op
+BenchmarkBackendDeferredCall/history=0-10         	    2000	     59474 ns/op	     59042 p50-ns	     70958 p99-ns	   13675 B/op	     252 allocs/op
+BenchmarkBackendDeferredCall/history=5000-10      	    2000	     59010 ns/op	     58459 p50-ns	     65750 p99-ns	   13956 B/op	     253 allocs/op
+BenchmarkBackendMultiGroup/groups=1-10            	    2000	     45054 ns/op	     44209 p50-ns	     55416 p99-ns	     22196 req/s	   10383 B/op	     269 allocs/op
+BenchmarkBackendMultiGroup/groups=4-10            	    2000	     12080 ns/op	     45542 p50-ns	     76292 p99-ns	     82781 req/s	   14853 B/op	     268 allocs/op
+BenchmarkBackendMultiGroup/groups=16-10           	    2000	      7420 ns/op	     48250 p50-ns	    170041 p99-ns	    134763 req/s	    9089 B/op	     267 allocs/op
+PASS

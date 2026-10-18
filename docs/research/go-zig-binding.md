@@ -236,6 +236,70 @@ go tool trace -pprof=sched /tmp/deferred.trace > /tmp/deferred-sched.pb.gz
 go tool pprof -top /tmp/zig-profile.test /tmp/deferred-sched.pb.gz
 ```
 
+### Guest profiling and untraced Pumps, 2026-10-18
+
+The next pass starts at #1239's merge, `f59c5d36`. A separate safe WASI build
+with `-Dstrip=false` retains function names for wazero listeners. The opt-in
+`TestGuestRequestProfile` harness in `impl/go/internal/zigwasm/guest_profile_test.go`
+replays a Request and Pump with the adapter's negotiated features and a null
+inline admission reply. It warms 1,000 requests, then measures 20,000, installing
+a listener on one function family at a time. Three before/after samples alternate
+between baseline and changed guests. These are inclusive timings, overlap at
+nested calls, and include listener overhead; they are diagnostic evidence, not
+an additive CPU breakdown. Optimizer-inlined functions may have no listener
+calls: the unobserved `message.decodeValue` frame does not mean conversion is free.
+The [Zig guide](../../impl/zig/README.md#building-and-testing) has reproduction commands.
+
+Before → after median time per Request/Pump pair:
+
+- JSON parsing: 2.86 → 2.81 µs, three calls (Request, Pump, inline reply).
+- `Group.pumpWith`: 4.02 → 3.32 µs, one call, including inline polling.
+- Report serialization (`writeHeld`): 0.891 → 0.890 µs.
+- `Group.flush`: 0.455 → 0.085 µs across three calls.
+- Reply completion (`finishOk`, including its flush): 0.297 → 0.129 µs.
+- The two `sendExport` calls: 11.35 → 10.09 µs in total.
+
+The avoidable work was in untraced Pumps: the Message Layer always installs a
+Trace sink because Loads need its diagnostic records. It also formatted and
+buffered Pump records, flushed them into the entry, then discarded them because
+`entry.traced` was false. `runPump` now temporarily disables the machine writer
+for untraced Pumps, restoring it on every return, including a paused crossing.
+Load/change-code workers retain diagnostic collection; traced Pumps retain
+their existing writer and crossing behavior. The regression test
+`untraced Pump skips machine Trace formatting but keeps Reports` fails before
+the change at 264 formatted bytes and passes after at zero with result 42.
+
+The production artifact is rebuilt from source commit `174f0206`, still safe
+and stripped, SHA-256 `9f46632673f179f73e4c7dfd98c6e8227061db1155b8e1dc3fd5ef8901c50624`.
+Both checked-in Go copies have identical bytes and provenance. The Elixir
+release pin changes with a future reactor release, as before.
+
+The public-API performance verdict uses the shipped artifacts, not the
+instrumented diagnostic builds: Apple M5, Go 1.27.2, wazero v1.12.0,
+`CGO_ENABLED=0`, warm compilation cache, fixed 2,000 iterations and eight
+alternating native/before/after samples at each processor count:
+
+- Request: 22.42 → 21.26 µs at `GOMAXPROCS=3` (−5.2%, p=0.010), and
+  22.64 → 21.38 µs at `10` (−5.6%, p<0.001).
+- Deferred call, history=0: 58.99 → 58.28 µs at `3` (−1.2%, p=0.010), and
+  59.62 → 58.32 µs at `10` (−2.2%, p<0.001). Aged calls remain flat.
+- 16-Group throughput rises about 6% at both processor counts (p<0.001).
+  There is no Go-side allocation reduction: the removed allocations were in
+  the guest, outside Go's benchmark allocation counters.
+
+Raw results, profile output, artifact hashes and comparisons are in
+[`2026-10-18-local-untraced-pump-darwin-arm64`](../../bench/results/go-zig-adapter/2026-10-18-local-untraced-pump-darwin-arm64/).
+Zig unit/C checks, both WASI checks, all ten native sidecar protocol tests,
+and the selected Go adapter acceptance suite pass; the adapter suite also
+passes with `-race`. The ordinary test suite skips the opt-in profiler.
+
+This is another partial #1103 improvement. Requests remain 5.7× native and
+deferred calls 7.0–7.1× in this local run; this is not required-platform
+acceptance. Parsing is still a material guest cost, but removing all of its
+measured 2.8 µs would not bring a 21 µs public request down to the roughly
+11 µs allowed by native's 3.7–3.8 µs result. The remaining Go-side and guest
+costs still need attention before a wire-format or retirement decision.
+
 ## Cancellation before subsequent callbacks, 2026-10-15
 
 After #971 merged as `e9b8aa57`, its [embedded probe CI](https://github.com/odogono/odgn-talk/actions/runs/38716047470)

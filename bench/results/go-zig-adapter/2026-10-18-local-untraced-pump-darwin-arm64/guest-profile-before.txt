@@ -1,0 +1,99 @@
+=== RUN   TestGuestRequestProfile
+=== RUN   TestGuestRequestProfile/none
+    guest_profile_test.go:103: STAGE none total_ns/op=11898 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/message.sendExport
+    guest_profile_test.go:103: STAGE message.sendExport total_ns/op=12036 measured_ns/op=11171 calls/op=2.0
+=== RUN   TestGuestRequestProfile/json.static.parseFromSlice
+    guest_profile_test.go:103: STAGE json.static.parseFromSlice total_ns/op=12172 measured_ns/op=2861 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.decodeValue
+    guest_profile_test.go:103: STAGE message.decodeValue total_ns/op=12041 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/machine.machine.Group.pumpWith
+    guest_profile_test.go:103: STAGE machine.machine.Group.pumpWith total_ns/op=12187 measured_ns/op=3971 calls/op=1.0
+=== RUN   TestGuestRequestProfile/talk.Group.flush
+    guest_profile_test.go:103: STAGE talk.Group.flush total_ns/op=12433 measured_ns/op=445 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.writeHeld
+    guest_profile_test.go:103: STAGE message.writeHeld total_ns/op=12260 measured_ns/op=906 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.finishOk
+    guest_profile_test.go:103: STAGE message.finishOk total_ns/op=12215 measured_ns/op=297 calls/op=2.0
+=== RUN   TestGuestRequestProfile/message.inlinePoll
+    guest_profile_test.go:103: STAGE message.inlinePoll total_ns/op=12334 measured_ns/op=600 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.queuedReply
+    guest_profile_test.go:103: STAGE message.queuedReply total_ns/op=12203 measured_ns/op=1131 calls/op=1.0
+--- PASS: TestGuestRequestProfile (9.27s)
+    --- PASS: TestGuestRequestProfile/none (0.95s)
+    --- PASS: TestGuestRequestProfile/message.sendExport (0.92s)
+    --- PASS: TestGuestRequestProfile/json.static.parseFromSlice (0.92s)
+    --- PASS: TestGuestRequestProfile/message.decodeValue (0.92s)
+    --- PASS: TestGuestRequestProfile/machine.machine.Group.pumpWith (0.92s)
+    --- PASS: TestGuestRequestProfile/talk.Group.flush (0.93s)
+    --- PASS: TestGuestRequestProfile/message.writeHeld (0.92s)
+    --- PASS: TestGuestRequestProfile/message.finishOk (0.93s)
+    --- PASS: TestGuestRequestProfile/message.inlinePoll (0.92s)
+    --- PASS: TestGuestRequestProfile/message.queuedReply (0.92s)
+PASS
+=== RUN   TestGuestRequestProfile
+=== RUN   TestGuestRequestProfile/none
+    guest_profile_test.go:103: STAGE none total_ns/op=18361 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/message.sendExport
+    guest_profile_test.go:103: STAGE message.sendExport total_ns/op=12176 measured_ns/op=11353 calls/op=2.0
+=== RUN   TestGuestRequestProfile/json.static.parseFromSlice
+    guest_profile_test.go:103: STAGE json.static.parseFromSlice total_ns/op=12373 measured_ns/op=2869 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.decodeValue
+    guest_profile_test.go:103: STAGE message.decodeValue total_ns/op=12288 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/machine.machine.Group.pumpWith
+    guest_profile_test.go:103: STAGE machine.machine.Group.pumpWith total_ns/op=12597 measured_ns/op=4077 calls/op=1.0
+=== RUN   TestGuestRequestProfile/talk.Group.flush
+    guest_profile_test.go:103: STAGE talk.Group.flush total_ns/op=12671 measured_ns/op=455 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.writeHeld
+    guest_profile_test.go:103: STAGE message.writeHeld total_ns/op=12272 measured_ns/op=873 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.finishOk
+    guest_profile_test.go:103: STAGE message.finishOk total_ns/op=12204 measured_ns/op=295 calls/op=2.0
+=== RUN   TestGuestRequestProfile/message.inlinePoll
+    guest_profile_test.go:103: STAGE message.inlinePoll total_ns/op=11905 measured_ns/op=586 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.queuedReply
+    guest_profile_test.go:103: STAGE message.queuedReply total_ns/op=12141 measured_ns/op=1132 calls/op=1.0
+--- PASS: TestGuestRequestProfile (9.50s)
+    --- PASS: TestGuestRequestProfile/none (1.05s)
+    --- PASS: TestGuestRequestProfile/message.sendExport (0.94s)
+    --- PASS: TestGuestRequestProfile/json.static.parseFromSlice (0.93s)
+    --- PASS: TestGuestRequestProfile/message.decodeValue (0.94s)
+    --- PASS: TestGuestRequestProfile/machine.machine.Group.pumpWith (0.94s)
+    --- PASS: TestGuestRequestProfile/talk.Group.flush (0.93s)
+    --- PASS: TestGuestRequestProfile/message.writeHeld (0.93s)
+    --- PASS: TestGuestRequestProfile/message.finishOk (0.94s)
+    --- PASS: TestGuestRequestProfile/message.inlinePoll (0.94s)
+    --- PASS: TestGuestRequestProfile/message.queuedReply (0.95s)
+PASS
+=== RUN   TestGuestRequestProfile
+=== RUN   TestGuestRequestProfile/none
+    guest_profile_test.go:103: STAGE none total_ns/op=12629 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/message.sendExport
+    guest_profile_test.go:103: STAGE message.sendExport total_ns/op=12470 measured_ns/op=11647 calls/op=2.0
+=== RUN   TestGuestRequestProfile/json.static.parseFromSlice
+    guest_profile_test.go:103: STAGE json.static.parseFromSlice total_ns/op=12176 measured_ns/op=2825 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.decodeValue
+    guest_profile_test.go:103: STAGE message.decodeValue total_ns/op=11764 measured_ns/op=0 calls/op=0.0
+=== RUN   TestGuestRequestProfile/machine.machine.Group.pumpWith
+    guest_profile_test.go:103: STAGE machine.machine.Group.pumpWith total_ns/op=12460 measured_ns/op=4017 calls/op=1.0
+=== RUN   TestGuestRequestProfile/talk.Group.flush
+    guest_profile_test.go:103: STAGE talk.Group.flush total_ns/op=12990 measured_ns/op=456 calls/op=3.0
+=== RUN   TestGuestRequestProfile/message.writeHeld
+    guest_profile_test.go:103: STAGE message.writeHeld total_ns/op=11986 measured_ns/op=891 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.finishOk
+    guest_profile_test.go:103: STAGE message.finishOk total_ns/op=12772 measured_ns/op=305 calls/op=2.0
+=== RUN   TestGuestRequestProfile/message.inlinePoll
+    guest_profile_test.go:103: STAGE message.inlinePoll total_ns/op=12761 measured_ns/op=629 calls/op=1.0
+=== RUN   TestGuestRequestProfile/message.queuedReply
+    guest_profile_test.go:103: STAGE message.queuedReply total_ns/op=12497 measured_ns/op=1177 calls/op=1.0
+--- PASS: TestGuestRequestProfile (9.50s)
+    --- PASS: TestGuestRequestProfile/none (0.93s)
+    --- PASS: TestGuestRequestProfile/message.sendExport (0.94s)
+    --- PASS: TestGuestRequestProfile/json.static.parseFromSlice (0.96s)
+    --- PASS: TestGuestRequestProfile/message.decodeValue (0.94s)
+    --- PASS: TestGuestRequestProfile/machine.machine.Group.pumpWith (0.94s)
+    --- PASS: TestGuestRequestProfile/talk.Group.flush (0.94s)
+    --- PASS: TestGuestRequestProfile/message.writeHeld (0.92s)
+    --- PASS: TestGuestRequestProfile/message.finishOk (0.98s)
+    --- PASS: TestGuestRequestProfile/message.inlinePoll (0.98s)
+    --- PASS: TestGuestRequestProfile/message.queuedReply (0.96s)
+PASS

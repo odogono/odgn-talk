@@ -1,0 +1,126 @@
+{
+  "before": {
+    "none": {
+      "total_ns/op_median": 12629,
+      "measured_ns/op_median": 0,
+      "calls/op": 0.0,
+      "samples": 3
+    },
+    "message.sendExport": {
+      "total_ns/op_median": 12176,
+      "measured_ns/op_median": 11353,
+      "calls/op": 2.0,
+      "samples": 3
+    },
+    "json.static.parseFromSlice": {
+      "total_ns/op_median": 12176,
+      "measured_ns/op_median": 2861,
+      "calls/op": 3.0,
+      "samples": 3
+    },
+    "message.decodeValue": {
+      "total_ns/op_median": 12041,
+      "measured_ns/op_median": 0,
+      "calls/op": 0.0,
+      "samples": 3
+    },
+    "machine.machine.Group.pumpWith": {
+      "total_ns/op_median": 12460,
+      "measured_ns/op_median": 4017,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "talk.Group.flush": {
+      "total_ns/op_median": 12671,
+      "measured_ns/op_median": 455,
+      "calls/op": 3.0,
+      "samples": 3
+    },
+    "message.writeHeld": {
+      "total_ns/op_median": 12260,
+      "measured_ns/op_median": 891,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "message.finishOk": {
+      "total_ns/op_median": 12215,
+      "measured_ns/op_median": 297,
+      "calls/op": 2.0,
+      "samples": 3
+    },
+    "message.inlinePoll": {
+      "total_ns/op_median": 12334,
+      "measured_ns/op_median": 600,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "message.queuedReply": {
+      "total_ns/op_median": 12203,
+      "measured_ns/op_median": 1132,
+      "calls/op": 1.0,
+      "samples": 3
+    }
+  },
+  "after": {
+    "none": {
+      "total_ns/op_median": 10516,
+      "measured_ns/op_median": 0,
+      "calls/op": 0.0,
+      "samples": 3
+    },
+    "message.sendExport": {
+      "total_ns/op_median": 10931,
+      "measured_ns/op_median": 10086,
+      "calls/op": 2.0,
+      "samples": 3
+    },
+    "json.static.parseFromSlice": {
+      "total_ns/op_median": 10956,
+      "measured_ns/op_median": 2814,
+      "calls/op": 3.0,
+      "samples": 3
+    },
+    "message.decodeValue": {
+      "total_ns/op_median": 10696,
+      "measured_ns/op_median": 0,
+      "calls/op": 0.0,
+      "samples": 3
+    },
+    "machine.machine.Group.pumpWith": {
+      "total_ns/op_median": 10847,
+      "measured_ns/op_median": 3317,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "talk.Group.flush": {
+      "total_ns/op_median": 11164,
+      "measured_ns/op_median": 85,
+      "calls/op": 3.0,
+      "samples": 3
+    },
+    "message.writeHeld": {
+      "total_ns/op_median": 10866,
+      "measured_ns/op_median": 890,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "message.finishOk": {
+      "total_ns/op_median": 11132,
+      "measured_ns/op_median": 129,
+      "calls/op": 2.0,
+      "samples": 3
+    },
+    "message.inlinePoll": {
+      "total_ns/op_median": 10880,
+      "measured_ns/op_median": 591,
+      "calls/op": 1.0,
+      "samples": 3
+    },
+    "message.queuedReply": {
+      "total_ns/op_median": 10958,
+      "measured_ns/op_median": 1121,
+      "calls/op": 1.0,
+      "samples": 3
+    }
+  }
+}
