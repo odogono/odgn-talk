@@ -7,6 +7,7 @@ import { createWorkbench } from './workbench';
 import { writeTranscript, type UserPrompt } from '@northtalk/ts/session';
 import { libraryUri, type Position } from '@northtalk/tooling/lsp';
 import { readDictionary } from '@northtalk/tooling/dictionary';
+import { WorkerSupervisor } from '@northtalk/tooling/worker-supervisor';
 import type { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { planApply, splitDeclarations } from './declarations';
@@ -29,12 +30,11 @@ import { EXAMPLES, exampleById, type Example } from './examples';
 import { decodeLink, encodeLink, type Shared } from './link';
 import type {
   ConsoleLine,
-  FromSession,
+  Prompt,
   ReplayView,
   SessionRequest,
   SessionResponse,
   SessionState,
-  ToSession,
 } from './protocol';
 import {
   SESSION_TAB,
@@ -64,24 +64,48 @@ const SCRIPT_URI = 'playground:///session.talk';
 
 // ------------------------------------------------------------- workers
 
-const sessionWorker = new Worker('./session.worker.js', { type: 'module' });
+// Cancel, Restart and Run fresh are supervised: a session worker that
+// doesn't answer one within 500 ms is ended, and a fresh session starts in a
+// new worker (#1216).
+const session = new WorkerSupervisor<SessionRequest, SessionResponse>({
+  spawn: () => new Worker('./session.worker.js', { type: 'module' }),
+  ended: { t: 'error', message: 'The session worker was terminated.' },
+  onMessage: response => receive(response),
+  onTerminated: () => void recover(),
+});
 const lsp = new LspClient(new Worker('./lsp.worker.js', { type: 'module' }));
 
-let nextId = 1;
-const waiting = new Map<number, (response: SessionResponse) => void>();
-sessionWorker.onmessage = ({
-  data: { id, response },
-}: MessageEvent<FromSession>) => {
-  receive(response);
-  if (id !== undefined) {
-    waiting.get(id)?.(response);
-    waiting.delete(id);
+const call = (request: SessionRequest) => session.call(request);
+// Whether a supervised request waits for its reply; input waits with it.
+let stopping = false;
+const supervise = async (
+  request: SessionRequest,
+): Promise<SessionResponse | null> => {
+  if (stopping) {
+    return null;
+  }
+  stopping = true;
+  renderPrompt();
+  try {
+    return await session.supervise(request);
+  } finally {
+    stopping = false;
+    renderPrompt();
   }
 };
-const call = (request: SessionRequest): Promise<SessionResponse> => {
-  const id = nextId++;
-  sessionWorker.postMessage({ id, request } satisfies ToSession);
-  return new Promise(resolve => waiting.set(id, resolve));
+// A fresh session in the new worker, from the tabs and the Setup, without
+// the launch line, which may be what hung.
+const recover = async () => {
+  await call({
+    t: 'open',
+    slots: loadStoreSlots(),
+    shared: { ...currentTabs(), setup: sessionSetup },
+  });
+  applied(await call({ t: 'fresh', tabs: currentTabs(), launch: '' }));
+  note(
+    'The session did not answer within 500 ms, so it was ended. A fresh session started from the tabs; the launch line was not run.',
+    'warning',
+  );
 };
 
 // ------------------------------------------------------------- tabs
@@ -517,7 +541,8 @@ userDialog.onclose = () => {
   ].map(input =>
     question.k === 'choose' ? question.items[Number(input.value)]! : '',
   );
-  void call({
+  const answer = how !== 'ok' ? supervise : call;
+  void answer({
     t: 'answer',
     answer:
       how !== 'ok'
@@ -532,6 +557,24 @@ userDialog.onclose = () => {
               ? picked
               : (picked[0] ?? null),
   });
+};
+
+let shownPrompt: Prompt = 'entry';
+const renderPrompt = () => {
+  $('prompt-label').textContent = stopping
+    ? 'Stopping…'
+    : {
+        entry: '>',
+        continue: '|',
+        read: '<',
+        user: '?',
+        sleeping: '(waiting)',
+        paused: '(paused)',
+      }[shownPrompt];
+  // Lines typed while the session sleeps wait their turn; a prompt is
+  // answered in its dialog.
+  ($('prompt') as HTMLInputElement).disabled =
+    stopping || shownPrompt === 'paused' || shownPrompt === 'user';
 };
 
 const render = (state: SessionState) => {
@@ -561,18 +604,8 @@ const render = (state: SessionState) => {
   if (state.prompt !== 'continue') {
     $('pending').textContent = '';
   }
-  $('prompt-label').textContent = {
-    entry: '>',
-    continue: '|',
-    read: '<',
-    user: '?',
-    sleeping: '(waiting)',
-    paused: '(paused)',
-  }[state.prompt];
-  // Lines typed while the session sleeps wait their turn; a prompt is
-  // answered in its dialog.
-  ($('prompt') as HTMLInputElement).disabled =
-    state.prompt === 'paused' || state.prompt === 'user';
+  shownPrompt = state.prompt;
+  renderPrompt();
   renderQuestion(state.question);
   savedLibraries = state.savedLibraries;
   syncScript(state.source);
@@ -960,7 +993,10 @@ $('fix-cancel').onclick = () => {
   $('fix-confirm').hidden = true;
 };
 const restart = async () => {
-  applied(await call({ t: 'restart', tabs: currentTabs() }));
+  const response = await supervise({ t: 'restart', tabs: currentTabs() });
+  if (response) {
+    applied(response);
+  }
 };
 const saveActive = async () => {
   const tab = tabs[active]!;
@@ -976,10 +1012,17 @@ const saveActive = async () => {
 };
 
 launch.oninput = scheduleAutosave;
-$('fresh').onclick = async () =>
-  applied(
-    await call({ t: 'fresh', tabs: currentTabs(), launch: launch.value }),
-  );
+const runFresh = async () => {
+  const response = await supervise({
+    t: 'fresh',
+    tabs: currentTabs(),
+    launch: launch.value,
+  });
+  if (response) {
+    applied(response);
+  }
+};
+$('fresh').onclick = runFresh;
 $('canvas-example').onclick = () => void loadExample(exampleById('shapes')!);
 
 // ------------------------------------------------------------- examples
@@ -1021,9 +1064,7 @@ const loadExample = async (example: Example) => {
   if (example.draws) {
     workbench.selectInspector('canvas');
   }
-  applied(
-    await call({ t: 'fresh', tabs: currentTabs(), launch: launch.value }),
-  );
+  await runFresh();
 };
 
 // A menu of groups, each opening a submenu of examples. Arrow keys move
@@ -1295,7 +1336,7 @@ promptInput.onpaste = async event => {
 };
 promptInput.onkeydown = event => {
   if (event.key === 'Escape') {
-    void call({ t: 'cancel' });
+    void supervise({ t: 'cancel' });
   } else if (event.key === 'ArrowUp' && historyAt > 0) {
     promptInput.value = history[--historyAt]!;
     event.preventDefault();
@@ -1304,7 +1345,7 @@ promptInput.onkeydown = event => {
     event.preventDefault();
   }
 };
-$('cancel').onclick = () => void call({ t: 'cancel' });
+$('cancel').onclick = () => void supervise({ t: 'cancel' });
 
 // Grants
 $('grant-form').onsubmit = event => {

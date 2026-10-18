@@ -152,9 +152,9 @@ Files, grammar, or lowering.
 
 ## Sessions, Transcripts and CLI
 
-- Implementation: [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [CLI](../../tooling/cli/)
+- Implementation: [Setup and Group construction](src/setup.ts), [Session Host](src/session/host.ts), [observation](src/session/observe.ts), [`:describe`](src/session/describe.ts), [inspection](src/session/inspect.ts), [Transcript codec/replay](src/session/transcript.ts), [Session Driver](../../tooling/stack/src/session-driver.ts), [worker supervisor](../../tooling/stack/src/worker-supervisor.ts), [CLI](../../tooling/cli/)
 - Rules: [sessions and tooling](../../spec/12-sessions-and-tooling.md), [Session observation](../../spec/session-observation.md)
-- Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [Session corpus](../../corpus/sessions/)
+- Tests and cases: [Session tests](tests/session.test.ts), [Transcript tests](tests/transcript.test.ts), [Session Driver tests](../../tooling/stack/tests/session-driver.test.ts), [worker supervisor tests](../../tooling/stack/tests/worker-supervisor.test.ts), [Session corpus](../../corpus/sessions/)
 - First check: `bun test impl/ts/tests/session.test.ts impl/ts/tests/transcript.test.ts`
 
 ## Formatting source

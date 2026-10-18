@@ -20,6 +20,10 @@ belong to [`tooling/cli`](../cli/). Tooling output is outside conformance parity
 
 `@northtalk/tooling/session-driver` is the loop the REPL and the [Playground](../playground/) share over a Session Host. It collects multiline Entries, including `:fuel`, answers `:help` from [`session.toml`](../../spec/data/session.toml) and `:quit`, and wakes the session at its deadlines. Lines typed while the session sleeps wait their turn; lines typed while a debugger holds it paused are refused. `interrupt()` is `:cancel` of the Run the prompt waits for, or drops an unfinished Entry, and `end()` enters an unfinished Entry once queued lines have run. While the Foreground Run waits on a `user` prompt, it emits a `question` event once, and takes the answer from `answer(value)`, as a dialog gives it, or from a typed line through the caller's `answerLine`; without one, typed lines are refused. The caller supplies the Clock and timers and reads its output, note, question and prompt events.
 
+## Worker supervisor
+
+`@northtalk/tooling/worker-supervisor` is a page's side of a browser Host that runs in a worker ([#1216](https://github.com/odogono/odgn-talk/issues/1216)). `call(request)` posts `{ id, request }` and resolves with the worker's reply that carries the same id; messages without an id go to `onMessage`. `supervise(request)` is `call` with a deadline, 500 ms by default. A worker reads no message while it runs, so its reply is the acknowledgement. Without a reply in time, the supervisor terminates the worker, resolves every pending request with the caller's `ended` response, drops the old worker's late messages, spawns another and calls `onTerminated`. Each app keeps its own Host and protocol in the worker, and decides what follows a termination. The [Playground](../playground/) supervises Cancel, Restart and Run fresh.
+
 ## Formatter
 
 ```ts
