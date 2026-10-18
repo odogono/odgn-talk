@@ -10,6 +10,6 @@ test_suspending_start_accepts_answer_and_charge_then_next_pump (__main__.Checks.
 test_truncation_has_failure_status_and_stderr (__main__.Checks.test_truncation_has_failure_status_and_stderr) ... ok
 
 ----------------------------------------------------------------------
-Ran 10 tests in 0.466s
+Ran 10 tests in 0.596s
 
 OK

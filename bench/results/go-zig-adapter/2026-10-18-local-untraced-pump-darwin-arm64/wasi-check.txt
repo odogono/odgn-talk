@@ -1,7 +1,6 @@
-Installed 2 packages in 7ms
 {
   "wasm": "impl/go/internal/zigwasm/talk.wasm",
-  "sha256": "9f46632673f179f73e4c7dfd98c6e8227061db1155b8e1dc3fd5ef8901c50624",
+  "sha256": "0fbdeb4bb67ca70c444d944960356ef4c4efb0cc75b75276e9103ff289d67ea4",
   "wasmtime": "49.0.0",
   "brotli": "1.2.0",
   "python": "3.14.8",
@@ -48,13 +47,13 @@ Installed 2 packages in 7ms
     "blank": {
       "sourceBytes": 1048576,
       "outcome": "loaded",
-      "seconds": 0.1,
+      "seconds": 0.077,
       "memoryGrowthBytes": 168820736
     },
     "handlers": {
       "sourceBytes": 2077780,
       "outcome": "loaded",
-      "seconds": 0.202,
+      "seconds": 0.23,
       "memoryGrowthBytes": 266076160
     },
     "chain": {
@@ -71,8 +70,8 @@ Installed 2 packages in 7ms
     }
   },
   "bytes": {
-    "raw": 3154152,
-    "gzip9": 1061015,
-    "brotli11": 732197
+    "raw": 3154218,
+    "gzip9": 1061074,
+    "brotli11": 732091
   }
 }

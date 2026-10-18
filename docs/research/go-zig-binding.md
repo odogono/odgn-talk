@@ -269,8 +269,10 @@ their existing writer and crossing behavior. The regression test
 `untraced Pump skips machine Trace formatting but keeps Reports` fails before
 the change at 264 formatted bytes and passes after at zero with result 42.
 
-The production artifact is rebuilt from source commit `174f0206`, still safe
-and stripped, SHA-256 `9f46632673f179f73e4c7dfd98c6e8227061db1155b8e1dc3fd5ef8901c50624`.
+The diagnostic after-build is from `174f0206`. The final production artifact
+additionally limits writer restoration to untraced Groups, from source commit
+`6974f1eb`, still safe and stripped, SHA-256
+`0fbdeb4bb67ca70c444d944960356ef4c4efb0cc75b75276e9103ff289d67ea4`.
 Both checked-in Go copies have identical bytes and provenance. The Elixir
 release pin changes with a future reactor release, as before.
 
@@ -279,11 +281,11 @@ instrumented diagnostic builds: Apple M5, Go 1.27.2, wazero v1.12.0,
 `CGO_ENABLED=0`, warm compilation cache, fixed 2,000 iterations and eight
 alternating native/before/after samples at each processor count:
 
-- Request: 22.42 → 21.26 µs at `GOMAXPROCS=3` (−5.2%, p=0.010), and
-  22.64 → 21.38 µs at `10` (−5.6%, p<0.001).
-- Deferred call, history=0: 58.99 → 58.28 µs at `3` (−1.2%, p=0.010), and
-  59.62 → 58.32 µs at `10` (−2.2%, p<0.001). Aged calls remain flat.
-- 16-Group throughput rises about 6% at both processor counts (p<0.001).
+- Request: 22.62 → 21.57 µs at `GOMAXPROCS=3` (−4.6%, p<0.001), and
+  22.77 → 21.58 µs at `10` (−5.2%, p<0.001).
+- Deferred call, history=0: 59.64 → 57.64 µs at `3` (−3.4%, p=0.021), and
+  59.40 → 57.80 µs at `10` (−2.7%, p<0.001). No history-related growth is observed.
+- 16-Group throughput rises 5.6% at `3` (p<0.001) and 4.4% at `10` (p=0.007).
   There is no Go-side allocation reduction: the removed allocations were in
   the guest, outside Go's benchmark allocation counters.
 
@@ -293,8 +295,8 @@ Zig unit/C checks, both WASI checks, all ten native sidecar protocol tests,
 and the selected Go adapter acceptance suite pass; the adapter suite also
 passes with `-race`. The ordinary test suite skips the opt-in profiler.
 
-This is another partial #1103 improvement. Requests remain 5.7× native and
-deferred calls 7.0–7.1× in this local run; this is not required-platform
+This is another partial #1103 improvement. Requests remain 5.8× native and
+deferred calls 6.6–6.9× in this local run; this is not required-platform
 acceptance. Parsing is still a material guest cost, but removing all of its
 measured 2.8 µs would not bring a 21 µs public request down to the roughly
 11 µs allowed by native's 3.7–3.8 µs result. The remaining Go-side and guest
