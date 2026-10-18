@@ -356,8 +356,9 @@ An internally generated error Run retains its `during` message map through local
 `error` calls, helper calls, later clauses and captured Lambdas, including across
 Fuel slicing. Host-delivered `error` messages bind Nothing. Shared public Hosts
 compare both cases against native Go with exact Trace, Fuel, typed Reports,
-futures and inspected state. Function-call error metadata still needs the
-chapter 6 `{fn, args}` correction in both Cores ([#1084](https://github.com/odogono/odgn-talk/issues/1084)).
+futures and inspected state. Function-call errors retain the original Function
+Value in `{fn, args}` metadata, including its captures. Save/Restore retains this
+metadata in the failed Run, queued error and locally called error Handler.
 
 Known execution differences remain outside the selection:
 inherited veto checking on Extend ([#1060](https://github.com/odogono/odgn-talk/issues/1060)),
@@ -1703,8 +1704,9 @@ A resumed parked Run starts a new Segment snapshot and keeps its Run budgets.
 An uncaught error queues a separate `error` message behind the existing mailbox
 messages, with the failed Run as its sender. Error Handler Clauses use ordinary
 Destructuring and Guards, including the text-code shorthand. Their `during`
-binding holds the failed message before Guard tests and survives clause skips,
-local calls and preemption. An unmatched internal error never reports `unhandled`,
+binding holds `{name, args}` for a message or `{fn, args}` for a Function Value
+call, with the original Function Value and captures. It is available before Guard
+tests and survives clause skips, local calls, preemption and Save/Restore. An unmatched internal error never reports `unhandled`,
 and an error Run that errors sends no further message. A full mailbox, including
 reserved Host inputs, drops the error with an `error-dropped` Trace note. Queued
 errors count toward Persistent State and can resume pending `wait for error`
