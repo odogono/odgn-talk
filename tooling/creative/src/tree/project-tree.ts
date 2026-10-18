@@ -16,12 +16,13 @@ import {
   type RichText,
   type TextElement,
 } from '../model';
-import { elementNamesTaken, pageNamesTaken } from '../script-names';
+import { reservedScriptNames } from '../script-names';
 import {
   allElements,
   checkHierarchy,
   children,
   childrenKey,
+  geometryChanges,
   geometryCopy,
   isGroupElement,
   refreshBounds,
@@ -73,6 +74,7 @@ export type TreeChange = DeepReadonly<
 export type TreeJournal = readonly TreeChange[];
 export type TreeChangeSet = {
   readonly assets: boolean;
+  /** Synchronous live payloads. Retaining consumers must detach their history. */
   readonly changes: TreeJournal;
   readonly designWidth: boolean;
   readonly owners: readonly TreeOwner[];
@@ -117,10 +119,10 @@ export const equal = (a: unknown, b: unknown): boolean => {
     keys.every(key => equal(left[key], right[key]))
   );
 };
-const detached = <T>(value: T): T =>
+export const detached = <T>(value: T): T =>
   value !== null && typeof value === 'object' ? structuredClone(value) : value;
 /** Freeze detached plain-data snapshots and history, never live owners. */
-const freeze = <T>(value: T): T => {
+export const freeze = <T>(value: T): T => {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
     for (const child of Object.values(value)) {
@@ -140,17 +142,14 @@ const ownSize = (value: unknown): number =>
  */
 export class ProjectTree {
   #project: Project;
-  #recordHistory: boolean;
-  /** History payloads must outlive later live mutation; Play skips the copy. */
-  #keep<T>(value: T): T {
-    return this.#recordHistory ? detached(value) : value;
-  }
+  #trackWork: boolean;
   #allocateId: (() => number) | undefined;
   #keys = new WeakMap<object, number>();
   #nodes = new Map<number, Owner>();
   #ids = new Map<number, Owner>();
   #nextKey = 0;
   #names = new Map<Page, Map<string, Element>>();
+  #nameMembers = new Map<Page, Map<string, Set<Element>>>();
   #ordered = new Map<Page, Element[]>();
   #parents = new Map<DeepReadonly<Element>, Parent>();
   #pages = new Map<DeepReadonly<Element>, Page>();
@@ -171,16 +170,16 @@ export class ProjectTree {
   #inHook = false;
 
   /**
-   * Copy intake once. Edit supplies its monotonic owner-id allocator. Play
-   * disables durable journal payloads so deleting metered subtrees does not
-   * copy their text; immediate rollback and change notifications still work.
+   * Copy intake once. Edit supplies its monotonic owner-id allocator. Only
+   * Play tracks copy work for Fuel authorization. Events are synchronous;
+   * durable history belongs to the retaining consumer.
    */
   constructor(
     project: DeepReadonly<Project>,
     allocateId?: () => number,
-    recordHistory = true,
+    { trackWork = false }: { trackWork?: boolean } = {},
   ) {
-    this.#recordHistory = recordHistory;
+    this.#trackWork = trackWork;
     checkHierarchy(project.pages.flatMap(page => page.elements));
     this.#project = detached(project) as Project;
     this.#allocateId = allocateId;
@@ -281,7 +280,7 @@ export class ProjectTree {
     }
   }
   #initWork(element: Element): void {
-    if (this.#fields.has(element)) {
+    if (!this.#trackWork || this.#fields.has(element)) {
       return;
     }
     const fields = new Map(
@@ -296,46 +295,27 @@ export class ProjectTree {
     );
   }
   #indexPage(page: Page): void {
-    const old = this.#ordered.get(page) ?? [];
     const ordered = allElements(page.elements);
-    const active = new Set(ordered);
-    for (const node of old) {
-      if (!active.has(node)) {
-        this.#parents.delete(node);
-        this.#pages.delete(node);
-        this.#outer.delete(node);
-        this.#memberNames.delete(node as GroupElement);
-        this.#nodes.delete(this.#keys.get(node)!);
-        if (node.id !== undefined) {
-          this.#ids.delete(node.id);
-        }
-      }
-    }
     this.#ordered.set(page, ordered);
     // Invalid imported names remain repairable in Edit. Play validates names
     // before constructing a tree; its collection keys are therefore unique.
     this.#names.set(page, new Map(ordered.map(node => [node.name, node])));
+    this.#nameMembers.set(page, new Map());
+    for (const node of ordered) {
+      this.#addName(page, node);
+    }
     const visit = (node: Element, parent: Parent, outer: Element): void => {
       this.#register(node);
       this.#parents.set(node, parent);
       this.#pages.set(node, page);
       this.#outer.set(node, outer);
-      this.#initWork(node);
-      let size = 1;
-      let work = this.#ownWork.get(node)!;
       if (isGroupElement(node)) {
-        this.#memberNames.set(
-          node,
-          new Map(node.members.map(member => [member.name, member])),
-        );
+        this.#indexMembers(node);
         for (const member of node.members) {
           visit(member, node, outer);
-          size += this.#size.get(member)!;
-          work += this.#work.get(member)!;
         }
       }
-      this.#size.set(node, size);
-      this.#work.set(node, work);
+      this.#totals(node);
     };
     for (const element of page.elements) {
       visit(element, page, element);
@@ -352,7 +332,99 @@ export class ProjectTree {
       }
     }
   }
+  #syncName(page: Page, name: string): void {
+    const members = this.#nameMembers.get(page)!.get(name);
+    const names = this.#names.get(page)!;
+    if (!members?.size) {
+      this.#nameMembers.get(page)!.delete(name);
+      names.delete(name);
+    } else if (members.size === 1) {
+      names.set(name, members.values().next().value!);
+    } else {
+      // Conflicting imported names remain repairable. Match the last node in
+      // postorder, as a full index does; valid Projects never take this path.
+      const ordered = this.#ordered.get(page)!;
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const node = ordered[i]!;
+        if (members.has(node)) {
+          names.set(name, node);
+          break;
+        }
+      }
+    }
+  }
+  #addName(page: Page, node: Element): void {
+    const names = this.#nameMembers.get(page)!;
+    const members = names.get(node.name) ?? new Set<Element>();
+    members.add(node);
+    names.set(node.name, members);
+  }
+  #renameIndex(node: Element, before: string, after: string): void {
+    const page = this.#pages.get(node)!;
+    this.#nameMembers.get(page)!.get(before)?.delete(node);
+    this.#addName(page, node);
+    this.#syncName(page, before);
+    this.#syncName(page, after);
+    const parent = this.#parents.get(node)!;
+    if ('kind' in parent) {
+      this.#indexMembers(parent);
+    }
+  }
+  /** Duplicate member names resolve to the last member, as a full index does. */
+  #indexMembers(group: GroupElement): void {
+    this.#memberNames.set(
+      group,
+      new Map(group.members.map(member => [member.name, member])),
+    );
+  }
+  #elementNames(page: Page): Set<string> {
+    return new Set([
+      ...reservedScriptNames,
+      ...this.#project.pages.map(page => page.name),
+      ...this.#names.get(page)!.keys(),
+    ]);
+  }
+  #pageNames(): Set<string> {
+    const names = new Set([
+      ...reservedScriptNames,
+      ...this.#project.pages.map(page => page.name),
+    ]);
+    for (const page of this.#project.pages) {
+      for (const name of this.#names.get(page)!.keys()) {
+        names.add(name);
+      }
+    }
+    return names;
+  }
+  #unregister(node: Element): void {
+    this.#nodes.delete(this.#keys.get(node)!);
+    if (node.id !== undefined) {
+      this.#ids.delete(node.id);
+    }
+    this.#memberNames.delete(node as GroupElement);
+    this.#parents.delete(node);
+    this.#pages.delete(node);
+    this.#outer.delete(node);
+  }
+  #totals(node: Element): void {
+    this.#initWork(node);
+    let size = 1;
+    let work = this.#ownWork.get(node) ?? 0;
+    if (isGroupElement(node)) {
+      for (const member of node.members) {
+        size += this.#size.get(member)!;
+        work += this.#work.get(member) ?? 0;
+      }
+    }
+    this.#size.set(node, size);
+    if (this.#trackWork) {
+      this.#work.set(node, work);
+    }
+  }
   #updateWork(element: Element, field: string): void {
+    if (!this.#trackWork) {
+      return;
+    }
     this.#initWork(element);
     const fields = this.#fields.get(element)!;
     const size = ownSize(
@@ -378,22 +450,22 @@ export class ProjectTree {
     }
   }
   #record(change: TreeChange): void {
-    this.#journal!.push(this.#recordHistory ? freeze(change) : change);
+    this.#journal!.push(change);
   }
   #field(owner: Owner, field: string, next: unknown, replace = false): void {
     const record = owner as unknown as Record<string, unknown>;
     if (!replace && equal(record[field], next)) {
       return;
     }
+    const value = detached(next);
     this.#record({
       kind: 'field',
       owner: this.#keys.get(owner)!,
       field,
-      before: this.#keep(record[field]),
-      after: this.#keep(next),
+      before: record[field],
+      after: value,
     });
-    // Immediate rollback restores the exact live references. History uses
-    // the detached record above and may revive objects by stable identity.
+    // Immediate rollback restores the exact live references.
     const previous = record[field];
     const present = Object.hasOwn(record, field);
     this.#rollback!.push(() => {
@@ -406,13 +478,13 @@ export class ProjectTree {
         this.#updateWork(owner, field);
       }
       if (field === 'name' && 'kind' in owner) {
-        this.#indexPage(this.#pages.get(owner)!);
+        this.#renameIndex(owner, next as string, previous as string);
       }
     });
     if (next === undefined) {
       delete record[field];
     } else {
-      record[field] = detached(next);
+      record[field] = value;
     }
     if ('kind' in owner) {
       this.#updateWork(owner, field);
@@ -425,15 +497,13 @@ export class ProjectTree {
     }
     this.#touch(owner);
     if (field === 'name' && 'kind' in owner) {
-      this.#indexPage(this.#pages.get(owner)!);
+      this.#renameIndex(owner, previous as string, next as string);
     }
   }
   #saveNode(owner: Owner): SavedNode {
     const field = childrenKey(owner);
     const value = Object.fromEntries(
-      Object.entries(owner)
-        .filter(([key]) => key !== field)
-        .map(([key, value]) => [key, this.#keep(value)]),
+      Object.entries(owner).filter(([key]) => key !== field),
     );
     return {
       key: this.#keys.get(owner)!,
@@ -470,10 +540,12 @@ export class ProjectTree {
     ) {
       return;
     }
-    next.forEach(node => this.#register(node, undefined, true));
+    const previousSet = new Set(previous);
+    next
+      .filter(node => !previousSet.has(node))
+      .forEach(node => this.#register(node, undefined, true));
     const before = previous.map(node => this.#keys.get(node)!);
     const after = next.map(node => this.#keys.get(node)!);
-    const previousSet = new Set(previous);
     const nextSet = new Set(next);
     const changed = [
       ...previous.filter(node => !nextSet.has(node)),
@@ -502,21 +574,14 @@ export class ProjectTree {
   }
   #writeChildren(owner: Owner, next: Owner[]): void {
     const previous = children(owner);
-    next.forEach(node => this.#register(node, undefined, true));
     (owner as unknown as Record<string, Owner[]>)[childrenKey(owner)!] = next;
     if ('pages' in owner) {
       const retained = new Set(next);
+      const existing = new Set(previous);
       for (const page of previous as Page[]) {
         if (!retained.has(page)) {
           for (const element of this.#ordered.get(page) ?? []) {
-            this.#nodes.delete(this.#keys.get(element)!);
-            if (element.id !== undefined) {
-              this.#ids.delete(element.id);
-            }
-            this.#memberNames.delete(element as GroupElement);
-            this.#parents.delete(element);
-            this.#pages.delete(element);
-            this.#outer.delete(element);
+            this.#unregister(element);
           }
           this.#nodes.delete(this.#keys.get(page)!);
           if (page.id !== undefined) {
@@ -524,15 +589,104 @@ export class ProjectTree {
           }
           this.#ordered.delete(page);
           this.#names.delete(page);
+          this.#nameMembers.delete(page);
         }
       }
       for (const page of next as Page[]) {
-        this.#indexPage(page);
+        if (!existing.has(page)) {
+          this.#register(page);
+          this.#indexPage(page);
+        }
       }
     } else {
-      this.#indexPage(
-        'elements' in owner ? owner : this.#pages.get(owner as Element)!,
-      );
+      const parent = owner as Parent;
+      const page = 'elements' in parent ? parent : this.#pages.get(parent)!;
+      const ordered = this.#ordered.get(page)!;
+      let start = 0;
+      while (
+        start < previous.length &&
+        start < next.length &&
+        previous[start] === next[start]
+      ) {
+        start++;
+      }
+      let oldEnd = previous.length;
+      let newEnd = next.length;
+      while (
+        oldEnd > start &&
+        newEnd > start &&
+        previous[oldEnd - 1] === next[newEnd - 1]
+      ) {
+        oldEnd--;
+        newEnd--;
+      }
+      const removed = allElements(previous.slice(start, oldEnd) as Element[]);
+      const roots = next.slice(start, newEnd) as Element[];
+      const added = allElements(roots);
+      // A group's postorder slot immediately follows its descendants. At a
+      // Page boundary the insertion point is the end of its ordered view.
+      const offset = removed.length
+        ? ordered.indexOf(removed[0]!)
+        : start > 0
+          ? ordered.indexOf(previous[start - 1] as Element) + 1
+          : 'kind' in parent
+            ? ordered.indexOf(parent) - (this.#size.get(parent)! - 1)
+            : 0;
+      if (added.length <= MAX_GROUP_ELEMENTS) {
+        ordered.splice(offset, removed.length, ...added);
+      } else {
+        // Pages have no node limit; avoid a function-argument limit when a
+        // large Page's order changes.
+        this.#ordered.set(page, [
+          ...ordered.slice(0, offset),
+          ...added,
+          ...ordered.slice(offset + removed.length),
+        ]);
+      }
+      const retained = new Set(added);
+      const affectedNames = new Set<string>();
+      for (const node of removed) {
+        affectedNames.add(node.name);
+        if (!retained.has(node)) {
+          this.#nameMembers.get(page)!.get(node.name)?.delete(node);
+          this.#unregister(node);
+        }
+      }
+      const visit = (node: Element, parent: Parent, outer: Element): void => {
+        this.#register(node);
+        this.#parents.set(node, parent);
+        this.#pages.set(node, page);
+        this.#outer.set(node, outer);
+        this.#addName(page, node);
+        affectedNames.add(node.name);
+        if (isGroupElement(node)) {
+          this.#indexMembers(node);
+          for (const member of node.members) {
+            visit(member, node, outer);
+          }
+        }
+        this.#totals(node);
+      };
+      for (const node of roots) {
+        const outer = 'kind' in parent ? this.#outer.get(parent)! : node;
+        if (
+          this.#parents.get(node) !== parent ||
+          this.#outer.get(node) !== outer
+        ) {
+          visit(node, parent, outer);
+        }
+      }
+      for (const name of affectedNames) {
+        this.#syncName(page, name);
+      }
+      if ('kind' in parent) {
+        this.#indexMembers(parent);
+      }
+      let ancestor: Parent | undefined = parent;
+      while (ancestor && 'kind' in ancestor) {
+        this.#totals(ancestor);
+        ancestor = this.#parents.get(ancestor);
+      }
     }
   }
   #apply(change: TreeChange, forward: boolean): void {
@@ -595,7 +749,7 @@ export class ProjectTree {
     this.#rollback = undefined;
     if (changes.length) {
       const event: TreeChangeSet = {
-        changes: this.#recordHistory ? freeze(changes) : [],
+        changes,
         owners: [...this.#changedOwners],
         pages: [...this.#changedPages],
         assets: this.#assetsChanged,
@@ -614,33 +768,6 @@ export class ProjectTree {
         this.#apply(change, forward);
       }
     });
-  }
-  /** Compact scalar runs, retaining structural ordering and detached payloads. */
-  compact(journal: TreeJournal): TreeJournal {
-    const result: TreeChange[] = [];
-    let fields = new Map<string, number>();
-    for (const change of journal) {
-      if (change.kind === 'children') {
-        fields = new Map();
-        result.push(change);
-        continue;
-      }
-      const key = `${change.owner}:${change.field}`;
-      const index = fields.get(key);
-      if (index === undefined) {
-        fields.set(key, result.length);
-        result.push(change);
-      } else {
-        result[index] = freeze({
-          ...result[index]!,
-          after: change.after,
-        }) as TreeChange;
-      }
-    }
-    return result.filter(
-      change =>
-        change.kind === 'children' || !equal(change.before, change.after),
-    );
   }
   isNetZero(journal: TreeJournal, startingKeys: ReadonlySet<number>): boolean {
     const fields = new Map<
@@ -716,18 +843,17 @@ export class ProjectTree {
   setGeometry(element: DeepReadonly<Element>, changes: Partial<Box>): void {
     this.transaction(() => {
       const node = this.#mutable(element);
-      const outer = this.#outer.get(node)!;
-      const staged = geometryCopy(outer);
-      const originals = allElements([outer]);
-      const copies = allElements([staged]);
-      const target = copies[originals.indexOf(node)]!;
-      domain(() => updateGeometry(staged, target, changes));
-      originals.forEach((original, i) => {
-        const copy = copies[i]!;
+      const boxes = domain(() =>
+        geometryChanges(node, changes, element => {
+          const parent = this.#parents.get(element);
+          return parent && 'kind' in parent ? parent : undefined;
+        }),
+      );
+      for (const [original, box] of boxes) {
         for (const field of BOX_FIELDS) {
-          this.#field(original, field, copy[field]);
+          this.#field(original, field, box[field]);
         }
-      });
+      }
     });
   }
   #refreshAncestors(element: Element): void {
@@ -801,7 +927,7 @@ export class ProjectTree {
     return this.transaction(() => {
       const owner = this.#mutable(parent);
       const page = 'elements' in owner ? owner : this.#pages.get(owner)!;
-      const taken = elementNamesTaken(this.#project, page);
+      const taken = this.#elementNames(page);
       const nextName = name ?? freshName(`${kind}1`, taken);
       if (!isIdentifierName(nextName) || taken.has(nextName)) {
         throw new TreeError('Element name is unavailable');
@@ -822,7 +948,7 @@ export class ProjectTree {
       const owner = this.#mutable(parent);
       const page = 'elements' in owner ? owner : this.#pages.get(owner)!;
       checkHierarchy([element]);
-      const taken = elementNamesTaken(this.#project, page);
+      const taken = this.#elementNames(page);
       for (const member of allElements([element])) {
         if (!isIdentifierName(member.name) || taken.has(member.name)) {
           throw new TreeError('Element name is unavailable');
@@ -849,14 +975,11 @@ export class ProjectTree {
         throw new TreeError('Cloning would exceed the group Element limit');
       }
       const cost =
-        this.#work.get(node)! +
-        this.#work.get(outer)! +
+        (this.#work.get(node) ?? 0) +
+        (this.#work.get(outer) ?? 0) +
         this.#ordered.get(page)!.length * 8;
       this.#hook(hooks.authorize ? () => hooks.authorize!(cost) : undefined);
-      const copy = duplicateElement(
-        node,
-        elementNamesTaken(this.#project, page),
-      );
+      const copy = duplicateElement(node, this.#elementNames(page));
       domain(() =>
         updateGeometry(copy, copy, {
           left: copy.left + 20,
@@ -916,16 +1039,23 @@ export class ProjectTree {
   rename(owner: DeepReadonly<Page | Element>, name: string): void {
     this.transaction(() => {
       const node = this.#mutable(owner);
-      const page = 'elements' in node ? node : this.#pages.get(node)!;
-      const taken =
-        'elements' in node
-          ? pageNamesTaken(this.#project, node.name)
-          : elementNamesTaken(this.#project, page, node.name);
-      if (!isIdentifierName(name) || taken.has(name)) {
+      const isPage = 'elements' in node;
+      const pageConflict = this.#project.pages.some(
+        page => page.name === name && (isPage ? page.name !== node.name : true),
+      );
+      const elementConflict = isPage
+        ? this.#project.pages.some(page => this.#names.get(page)!.has(name))
+        : name !== node.name &&
+          this.#names.get(this.#pages.get(node)!)!.has(name);
+      if (
+        !isIdentifierName(name) ||
+        reservedScriptNames.has(name) ||
+        pageConflict ||
+        elementConflict
+      ) {
         throw new TreeError('Name is unavailable');
       }
       this.#field(node, 'name', name);
-      this.#indexPage(page);
     });
   }
   group(
@@ -949,7 +1079,7 @@ export class ProjectTree {
         .filter(node => !selected.has(node)).length;
       const group = createElement(
         'group',
-        freshName('group1', elementNamesTaken(this.#project, page)),
+        freshName('group1', this.#elementNames(page)),
       ) as GroupElement;
       group.members = chosen;
       refreshBounds([group]);
@@ -1005,10 +1135,7 @@ export class ProjectTree {
   addPage(after: number): DeepReadonly<Page> {
     return this.transaction(() => {
       const page = createPage(
-        freshName(
-          `page${this.#project.pages.length + 1}`,
-          pageNamesTaken(this.#project),
-        ),
+        freshName(`page${this.#project.pages.length + 1}`, this.#pageNames()),
       );
       const next = [...this.#project.pages];
       next.splice(after + 1, 0, page);
@@ -1018,10 +1145,7 @@ export class ProjectTree {
   }
   duplicatePage(page: DeepReadonly<Page>, after: number): DeepReadonly<Page> {
     return this.transaction(() => {
-      const copy = duplicatePage(
-        this.#mutable(page),
-        pageNamesTaken(this.#project),
-      );
+      const copy = duplicatePage(this.#mutable(page), this.#pageNames());
       const next = [...this.#project.pages];
       next.splice(after + 1, 0, copy);
       this.#children(this.#project, next);
@@ -1089,11 +1213,16 @@ export class ProjectTree {
           return;
         }
         const previous = children(target);
+        const byId = new Map(
+          previous
+            .filter(node => 'id' in node && node.id !== undefined)
+            .map(node => [(node as Page | Element).id!, node]),
+        );
         const incoming = (sourceRecord[key] as TreeOwner[]) ?? [];
         const next = incoming.map(node => {
           const existing =
             'id' in node && node.id !== undefined
-              ? previous.find(old => 'id' in old && old.id === node.id)
+              ? byId.get(node.id)
               : undefined;
           if (existing) {
             reconcile(existing, node);
@@ -1104,10 +1233,6 @@ export class ProjectTree {
         this.#children(target, next);
       };
       reconcile(this.#project, project);
-      checkHierarchy(this.#project.pages.flatMap(page => page.elements));
-      for (const page of this.#project.pages) {
-        this.#indexPage(page);
-      }
     });
   }
 }

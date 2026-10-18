@@ -50,10 +50,17 @@ export function allElements(
 export function allElements(
   elements: readonly DeepReadonly<Element>[],
 ): DeepReadonly<Element>[] {
-  return elements.flatMap(e => [
-    ...(e.kind === 'group' ? allElements(e.members) : []),
-    e,
-  ]);
+  const result: DeepReadonly<Element>[] = [];
+  const visit = (nodes: readonly DeepReadonly<Element>[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'group') {
+        visit(node.members);
+      }
+      result.push(node);
+    }
+  };
+  visit(elements);
+  return result;
 }
 export function findElement(
   elements: readonly Element[],
@@ -160,26 +167,22 @@ export const refreshBounds = (elements: Element[]): void => {
   }
 };
 
-/** Stage only geometry, then publish once every descendant/ancestor is valid. */
-export const updateGeometry = (
-  root: Element,
+/** Stage the moved subtree and ancestor bounds without copying live owners. */
+export const geometryChanges = (
   target: Element,
   changes: Partial<Box>,
-): void => {
+  parentOf: (node: Element) => GroupElement | undefined,
+): Map<Element, Box> => {
   if (
     target.kind === 'group' &&
     (changes.width !== undefined || changes.height !== undefined)
   ) {
     throw new Error('Group width and height are read-only');
   }
-  const nodes = allElements([root]);
-  const moved = new Set<Element>(
-    target.kind === 'group' ? allElements([target]) : [target],
-  );
   const dx = (changes.left ?? target.left) - target.left;
   const dy = (changes.top ?? target.top) - target.top;
   const boxes = new Map<Element, Box>();
-  for (const e of nodes) {
+  const stage = (e: Element): void => {
     let box: Box = {
       left: e.left,
       top: e.top,
@@ -187,8 +190,9 @@ export const updateGeometry = (
       height: e.height,
     };
     if (e.kind === 'group' && e.members.length) {
+      e.members.forEach(stage);
       box = union(e.members.map(m => boxes.get(m)!));
-    } else if (moved.has(e)) {
+    } else {
       box =
         target.kind === 'group'
           ? { ...box, left: box.left + dx, top: box.top + dy }
@@ -196,9 +200,40 @@ export const updateGeometry = (
     }
     finiteBox(box);
     boxes.set(e, box);
+  };
+  stage(target);
+  let parent = parentOf(target);
+  while (parent) {
+    const box = union(
+      parent.members.map(member => boxes.get(member) ?? member),
+    );
+    finiteBox(box);
+    boxes.set(parent, box);
+    parent = parentOf(parent);
   }
-  for (const [e, box] of boxes) {
-    Object.assign(e, box);
+  return boxes;
+};
+
+/** Standalone geometry update for detached model data. */
+export const updateGeometry = (
+  root: Element,
+  target: Element,
+  changes: Partial<Box>,
+): void => {
+  const parents = new Map<Element, GroupElement>();
+  const visit = (node: Element): void => {
+    if (node.kind === 'group') {
+      for (const member of node.members) {
+        parents.set(member, node);
+        visit(member);
+      }
+    }
+  };
+  visit(root);
+  for (const [node, box] of geometryChanges(target, changes, node =>
+    parents.get(node),
+  )) {
+    Object.assign(node, box);
   }
 };
 

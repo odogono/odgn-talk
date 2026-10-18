@@ -13,8 +13,16 @@ and remain live; use explicit operations to change them and `snapshot()` when
 retaining an earlier value or crossing an asynchronous boundary. Live nodes
 keep their identity during ordinary edits; reacquire collections after structural
 changes. The editor keeps selection, showing Page and entered scope separately,
-adapts batched tree changes to signals, and records forward/inverse changes for
-undo. A whole drag or Info field edit remains one undo step. Finishing any edit
+adapts batched tree changes to signals, folds incoming field changes incrementally,
+and detaches the completed forward/inverse journal for undo. The tree publishes
+synchronous change payloads; consumers retaining durable history use
+[`detachJournal`](src/tree/history.ts). Field values are replaced atomically,
+so pending history can retain its endpoints until the edit finishes.
+Copy-work accounting is enabled only for Play. Renames update the affected name
+entries, structural edits index the changed subtree, and geometry stages the
+moved subtree and its ancestor bounds. The [write benchmark](tools/bench-project-tree.md)
+measures large-Page drag and typing bursts and checks their copy budget.
+A whole drag or Info field edit remains one undo step. Finishing any edit
 at its starting content preserves redo. Pages and Elements have stable
 session-local IDs across history; IDs never enter `.folio` files or browser
 storage. The ownership and notification choices are recorded in
