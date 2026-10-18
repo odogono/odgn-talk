@@ -1604,7 +1604,11 @@ error reply itself. Early Load refusals record the attempted input and refusal.
 `src/binary_value.zig` implements the Value items for the
 [proposed Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
 It preserves decimal scale, uses iterative traversal, and resolves Objects and
-Functions through the owning Group's hooks. It is not connected to the Session
-dispatcher: the reactor and sidecar do not advertise either candidate feature.
+Functions through the owning Group's hooks. `src/request_pump.zig` holds both
+candidates' envelope reader and writer. The Session offers both features at
+`hello` and fixes the chosen one for the Session. It then serves binary
+`request`, `call`, `pump`, `request-pump` and `call-pump` frames, keeps each
+Group exchange's layout across JSON needs, and accepts `cancel-correlated` by
+token until the final reply.
 The [experiment record](../../docs/research/request-pump-binary.md) distinguishes
 the tested codec foundation from transport and performance acceptance.

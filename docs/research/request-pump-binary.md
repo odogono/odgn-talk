@@ -27,6 +27,52 @@ would immediately violate the repository's required Go/C API comparison. The
 comparison remains unchanged; no missing C implementation is hidden by a stub
 or an exception.
 
+## Integrated transport (#1253)
+
+- The Zig Session offers both candidates at `hello`, refuses both together, and
+  fixes the chosen one for the Session. It decodes `request`, `call`, `pump`,
+  `request-pump` and `call-pump` straight into typed inputs and Values, and
+  writes admission and final Pump replies, every Report included, without
+  JSON. The JSON and binary admissions share one implementation.
+- A binary exchange keeps its layout across JSON needs, Trace pauses and Grant
+  releases, per Group. Its final reply then carries the abandonment notices.
+  Malformed envelopes are JSON protocol errors and change nothing.
+- Combined inputs are refused as competing workers before admission while a
+  worker is open. They admit once, bind their token before anything runs, and
+  Pump once. An unusable Clock or Fuel option refuses the Pump after admission.
+  `cancel-correlated` is `cancel-delivery` by token. The final reply retires
+  the token.
+- The Go adapter negotiates the candidate named by `TALK_ZIG_REQUEST_PUMP`
+  (`map` or `fields`). Ordinary Requests, Function calls and Pumps then use
+  binary frames, and the private `requestPump`/`callPump` helpers use the
+  combined messages after the ordinary Go-side admission checks. The Host
+  registers each combined Pending before sending it. A cancellation queued
+  before the token retires is rewritten to the delivery id at transmission.
+- Inline admission remains JSON: a queued ordinary binary input crosses in its
+  JSON form, and a binary worker input waits for the export boundary.
+
+The whole `zig-experimental-check.sh` selection, Sessions, Corpus parity,
+driver, Store, tenants and sqlite included, passes with `CGO_ENABLED=0` in
+JSON, map and fields modes. CI now runs it in both binary modes too.
+
+### Local integration smoke measurements
+
+[Raw output and environment](../../bench/results/go-zig-adapter/1253-integration-smoke/)
+record five 2,000-iteration samples per backend on Apple M5, darwin/arm64,
+with a hand-built Zig artifact. Medians, in ns/op:
+
+| Workload | Native | Zig JSON | Zig map | Zig fields |
+| --- | ---: | ---: | ---: | ---: |
+| `BackendRequest` (unchanged) | 3,272 | 20,442 | 15,141 | 12,520 |
+| Combined Request | 5,002 | – | 13,732 | 11,359 |
+| Combined Function call | 3,297 | – | 18,252 | 15,759 |
+
+These are not gate evidence. Only one platform ran, with no unchanged-base
+regression comparison and no controlled ordering. Locally, the combined Request is
+under 3× native and the unchanged Request is not. A combined Function call
+spends most of its extra time building and reading the opaque Function token.
+#1254 measures all three platforms and makes the agreed optimization pass.
+
 ## Local native smoke measurements
 
 [Raw output](../../bench/results/go-zig-adapter/1245-native-foundation/native.txt)
@@ -63,6 +109,8 @@ A five-second Go decoder fuzz run completed 1,356,781 executions without failure
 Spec generation, repository checks, formatting and documentation links pass.
 
 ## Remaining implementation
+
+Steps 1–3 below are done in #1253, as described above.
 
 1. Integrate both binary frame candidates into the Go adapter and Zig Session,
    using typed Values and Reports rather than JSON transcoding. Preserve binary

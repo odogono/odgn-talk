@@ -188,22 +188,3 @@ func TestCombinedRefusalNotifiesAfterWorkerRelease(t *testing.T) {
 		t.Fatal("expected admitted request and refused Pump", err)
 	}
 }
-
-func TestCombinedUnsupportedBackendDoesNotAdmit(t *testing.T) {
-	if experimentalGroupFactory == nil {
-		t.Skip("requires experimental backend")
-	}
-	g := New().NewGroup(GroupOptions{})
-	s, err := g.Load(LoadOptions{Name: "s", Source: "on ping\n return 42\nend ping\n"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	id, p, _, err := s.requestPump(nil, Message{Name: "ping"}, time.Now(), PumpOptions{})
-	if err == nil || id != "" || p != nil {
-		t.Fatalf("unsupported call admitted: %s %v %v", id, p, err)
-	}
-	id, _, err = s.Request(nil, Message{Name: "ping"})
-	if err != nil || id != "d1" {
-		t.Fatalf("unsupported call consumed delivery: %s %v", id, err)
-	}
-}

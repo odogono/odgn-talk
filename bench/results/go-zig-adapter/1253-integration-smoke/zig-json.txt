@@ -1,0 +1,10 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequest-10    	    2000	     20992 ns/op	     20208 p50-ns	     33125 p99-ns	    6932 B/op	     192 allocs/op
+BenchmarkBackendRequest-10    	    2000	     20400 ns/op	     20084 p50-ns	     26166 p99-ns	    6930 B/op	     192 allocs/op
+BenchmarkBackendRequest-10    	    2000	     20503 ns/op	     20208 p50-ns	     26375 p99-ns	    6930 B/op	     192 allocs/op
+BenchmarkBackendRequest-10    	    2000	     20391 ns/op	     19875 p50-ns	     26042 p99-ns	    6930 B/op	     192 allocs/op
+BenchmarkBackendRequest-10    	    2000	     20442 ns/op	     20250 p50-ns	     26500 p99-ns	    6930 B/op	     192 allocs/op
+PASS

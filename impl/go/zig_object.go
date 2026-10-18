@@ -325,48 +325,56 @@ func wireDisplay(f *corevalue.FunctionData) string {
 // becomes an opaque value of this Group: its Code is the guest's token, so
 // equal tokens are equal values, and its display is the guest's.
 func (b *zigGroup) decodeValue(raw []byte) (Value, error) {
-	resolve := func(kind, id string) (corevalue.Value, error) {
-		o, ok := b.resolve(kind, id)
-		if !ok {
-			return corevalue.Value{}, fmt.Errorf("object not resolved")
-		}
-		return o.Value().inner, nil
-	}
-	v, err := corevalue.DecodeWire(raw, resolve, func(payload corevalue.Value) (corevalue.Value, error) {
-		parts := payload.Items()
-		if (len(parts) != 3 && len(parts) != 6 && len(parts) != 7) || parts[0].Kind != corevalue.Text || parts[1].Kind != corevalue.Text || parts[2].Kind != corevalue.Text {
-			return corevalue.Value{}, fmt.Errorf("invalid $function tag")
-		}
-		fn := &corevalue.FunctionData{Home: parts[0].Text(), CodeState: corevalue.WireFunction{Display: parts[1].Text()}, Code: parts[2].Text(), Group: b.group}
-		if len(parts) >= 6 {
-			if (parts[3].Kind != corevalue.Nothing && parts[3].Kind != corevalue.Text) || parts[4].Kind != corevalue.Number || parts[5].Kind != corevalue.Number {
-				return corevalue.Value{}, fmt.Errorf("invalid $function metadata")
-			}
-			required, requiredErr := parts[4].Number().Int64()
-			total, totalErr := parts[5].Number().Int64()
-			if requiredErr != nil || totalErr != nil || required < 0 || total < required || int64(int(total)) != total {
-				return corevalue.Value{}, fmt.Errorf("invalid $function arity")
-			}
-			if parts[3].Kind == corevalue.Text {
-				fn.Name = parts[3].Text()
-			}
-			fn.Required, fn.Total = int(required), int(total)
-		}
-		if len(parts) == 7 {
-			if parts[6].Kind != corevalue.Bytes || len(parts[6].Bytes()) != 32 {
-				return corevalue.Value{}, fmt.Errorf("invalid $function source identity")
-			}
-			wire := fn.CodeState.(corevalue.WireFunction)
-			copy(wire.Unit[:], parts[6].Bytes())
-			wire.HasUnit = true
-			fn.CodeState = wire
-		}
-		return corevalue.Fields{Kind: corevalue.Function, Function: fn}.Value(), nil
+	v, err := corevalue.DecodeWire(raw, b.zigResolveObject, func(payload corevalue.Value) (corevalue.Value, error) {
+		return b.zigFunction(payload.Items())
 	})
 	if err != nil {
 		return Nothing, &HostError{InvalidValue, err.Error()}
 	}
 	return Value{v}, nil
+}
+
+// zigResolveObject is a guest Object handle's registered Value.
+func (b *zigGroup) zigResolveObject(kind, id string) (corevalue.Value, error) {
+	o, ok := b.resolve(kind, id)
+	if !ok {
+		return corevalue.Value{}, fmt.Errorf("object not resolved")
+	}
+	return o.Value().inner, nil
+}
+
+// zigFunction is a guest Function payload's opaque Value of this Group: its
+// Code is the guest's token, so equal tokens are equal values, and its
+// display is the guest's.
+func (b *zigGroup) zigFunction(parts []corevalue.Value) (corevalue.Value, error) {
+	if (len(parts) != 3 && len(parts) != 6 && len(parts) != 7) || parts[0].Kind != corevalue.Text || parts[1].Kind != corevalue.Text || parts[2].Kind != corevalue.Text {
+		return corevalue.Value{}, fmt.Errorf("invalid $function tag")
+	}
+	fn := &corevalue.FunctionData{Home: parts[0].Text(), CodeState: corevalue.WireFunction{Display: parts[1].Text()}, Code: parts[2].Text(), Group: b.group}
+	if len(parts) >= 6 {
+		if (parts[3].Kind != corevalue.Nothing && parts[3].Kind != corevalue.Text) || parts[4].Kind != corevalue.Number || parts[5].Kind != corevalue.Number {
+			return corevalue.Value{}, fmt.Errorf("invalid $function metadata")
+		}
+		required, requiredErr := parts[4].Number().Int64()
+		total, totalErr := parts[5].Number().Int64()
+		if requiredErr != nil || totalErr != nil || required < 0 || total < required || int64(int(total)) != total {
+			return corevalue.Value{}, fmt.Errorf("invalid $function arity")
+		}
+		if parts[3].Kind == corevalue.Text {
+			fn.Name = parts[3].Text()
+		}
+		fn.Required, fn.Total = int(required), int(total)
+	}
+	if len(parts) == 7 {
+		if parts[6].Kind != corevalue.Bytes || len(parts[6].Bytes()) != 32 {
+			return corevalue.Value{}, fmt.Errorf("invalid $function source identity")
+		}
+		wire := fn.CodeState.(corevalue.WireFunction)
+		copy(wire.Unit[:], parts[6].Bytes())
+		wire.HasUnit = true
+		fn.CodeState = wire
+	}
+	return corevalue.Fields{Kind: corevalue.Function, Function: fn}.Value(), nil
 }
 func (b *zigGroup) zigScriptFailure(e *ScriptError) (map[string]any, error) {
 	if !utf8.ValidString(e.Code) || !utf8.ValidString(e.Message) {

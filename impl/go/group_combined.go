@@ -24,14 +24,27 @@ func (g *Group) requestObjectPump(ctx context.Context, to *Object, m Message, no
 // combinedBackend is optional: old guests must refuse before admission rather
 // than emulate the combined operation with two independent exchanges.
 type combinedBackend interface {
-	requestPump(context.Context, *Script, *Object, Message, time.Time, PumpOptions) (DeliveryID, *Pending, PumpResult, error)
-	callPump(context.Context, Value, []Value, *LimitOverride, time.Time, PumpOptions) (DeliveryID, *Pending, PumpResult, error)
+	// pumpCombined claims the worker as Pump does, then admits through the
+	// ordinary checks; the backend's admission also performs the one Pump.
+	pumpCombined(what string, now time.Time, o PumpOptions, admit func(*combinedPump) (DeliveryID, *Pending, error)) (DeliveryID, *Pending, PumpResult, error)
+	queueCombined(s *Script, to *Object, fn *Value, m Message, ctx context.Context, name string, c *combinedPump) (DeliveryID, *Pending, error)
+}
+
+// combinedPump carries a combined call's Pump inputs through ordinary
+// admission, and its outcome back: a refusal after admission is err.
+type combinedPump struct {
+	now     time.Time
+	options PumpOptions
+	result  PumpResult
+	err     error
 }
 
 func (g *Group) requestPump(ctx context.Context, s *Script, to *Object, m Message, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
 	if g.backend != nil {
 		if b, ok := g.backend.(combinedBackend); ok {
-			return b.requestPump(ctx, s, to, m, now, o)
+			return b.pumpCombined("combined Request and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
+				return g.admitWithReady(s, m, ctx, true, nil, delivery{target: to, path: s == nil, combined: c}, false)
+			})
 		}
 		return "", nil, PumpResult{}, backendUnsupported("combined Request and Pump")
 	}
@@ -45,12 +58,14 @@ func (g *Group) requestPump(ctx context.Context, s *Script, to *Object, m Messag
 func (g *Group) callPump(ctx context.Context, fn Value, args []Value, limits *LimitOverride, now time.Time, o PumpOptions) (DeliveryID, *Pending, PumpResult, error) {
 	if g.backend != nil {
 		if b, ok := g.backend.(combinedBackend); ok {
-			return b.callPump(ctx, fn, args, limits, now, o)
+			return b.pumpCombined("combined Function call and Pump", now, o, func(c *combinedPump) (DeliveryID, *Pending, error) {
+				return g.callWithReady(ctx, fn, args, limits, false, c)
+			})
 		}
 		return "", nil, PumpResult{}, backendUnsupported("combined Function call and Pump")
 	}
 	return g.admitPump(now, o, func() (DeliveryID, *Pending, error) {
-		return g.callWithReady(ctx, fn, args, limits, false)
+		return g.callWithReady(ctx, fn, args, limits, false, nil)
 	})
 }
 

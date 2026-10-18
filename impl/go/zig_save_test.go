@@ -30,7 +30,7 @@ func TestZigBackendSaveRefusesLiveEffects(t *testing.T) {
 	fields := map[string]any{"m": "pump", "ref": int64(100), "group": b.groupHandle(), "now": "2026-10-15T12:00:00Z", "fuelSlice": 30}
 	completed := false
 	for i := 0; i < 10; i++ {
-		packet, err := b.frame(fields)
+		packet, err := b.frame(zigOut{fields: fields})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -22,6 +22,8 @@ const standard = @import("machine/standard.zig");
 const sqlite = @import("machine/sqlite.zig");
 const generated_diagnostics = @import("generated/diagnostics.zig");
 const analysis = @import("analysis.zig");
+const binary_value = @import("binary_value.zig");
+const rp = @import("request_pump.zig");
 
 const Allocator = std.mem.Allocator;
 const Value = model.Value;
@@ -151,12 +153,7 @@ const GroupEntry = struct {
     fn writeAbandoned(e: *GroupEntry, o: *Out) Allocator.Error!void {
         var listed: std.ArrayList([]const u8) = .empty;
         defer listed.deinit(e.gpa);
-        for (e.started.items) |id| if (e.isAbandoned(id)) try listed.append(e.gpa, id);
-        std.mem.sort([]const u8, listed.items, {}, struct {
-            fn less(_: void, x: []const u8, y: []const u8) bool {
-                return machine.callOrder(x, y);
-            }
-        }.less);
+        try e.abandonedIds(&listed);
         try o.raw(",\"abandoned\":[");
         for (listed.items, 0..) |id, k| {
             if (k > 0) try o.raw(",");
@@ -165,15 +162,32 @@ const GroupEntry = struct {
         try o.raw("]");
     }
 
+    /// Actual abandonments in Call order, borrowed from `started`.
+    fn abandonedIds(e: *GroupEntry, listed: *std.ArrayList([]const u8)) Allocator.Error!void {
+        for (e.started.items) |id| if (e.isAbandoned(id)) try listed.append(e.gpa, id);
+        std.mem.sort([]const u8, listed.items, {}, struct {
+            fn less(_: void, x: []const u8, y: []const u8) bool {
+                return machine.callOrder(x, y);
+            }
+        }.less);
+    }
+
     /// A queued answer is no longer cancellable only once its Run consumes it.
-    fn writeSettled(e: *GroupEntry, o: *Out) Allocator.Error!void {
-        try o.raw(",\"settled\":[");
-        var first = true;
+    fn settledIds(e: *GroupEntry, listed: *std.ArrayList([]const u8)) Allocator.Error!void {
         for (e.started.items) |id| {
             const c = e.group.group.callById(id) orelse continue;
             if (!c.settlement_consumed or c.abandoned.load(.acquire)) continue;
-            if (!first) try o.raw(",");
-            first = false;
+            try listed.append(e.gpa, id);
+        }
+    }
+
+    fn writeSettled(e: *GroupEntry, o: *Out) Allocator.Error!void {
+        var listed: std.ArrayList([]const u8) = .empty;
+        defer listed.deinit(e.gpa);
+        try e.settledIds(&listed);
+        try o.raw(",\"settled\":[");
+        for (listed.items, 0..) |id, k| {
+            if (k > 0) try o.raw(",");
             try o.text(id);
         }
         try o.raw("]");
@@ -286,6 +300,9 @@ const Exchange = struct {
     held: ?HeldReply = null,
     held_ref: i64 = 0,
     release_continuation: bool = false,
+    /// A binary exchange (#1245): its layout, kept across JSON needs so its
+    /// final reply uses it, and a combined one's delivery and token.
+    bin: ?BinExchange = null,
 
     /// Whether the exchange waits for a result from the Host.
     fn open(x: *const Exchange) bool {
@@ -297,7 +314,8 @@ const Exchange = struct {
         if (x.answer) |*a| a.release(gpa);
         for (x.releases.items) |*r| r.deinit(gpa);
         x.releases.deinit(gpa);
-        if (x.held) |h| gpa.free(h.frame);
+        if (x.held) |*h| h.deinit(gpa);
+        if (x.bin) |b| if (b.delivery) |d| gpa.free(d);
         x.* = .{};
     }
 };
@@ -350,6 +368,11 @@ pub const Session = struct {
     /// `queued-inputs-v1`: Trace-silent pending Host Input queries.
     queued_inputs: bool = false,
     reply_error: bool = false,
+    /// The binary Request/Pump candidate chosen at hello (#1245), fixed
+    /// for the Session once chosen.
+    request_pump: ?rp.Layout = null,
+    /// Combined exchanges' correlation tokens, bound until their final reply.
+    bindings: std.ArrayList(Binding) = .empty,
     /// Lifecycle contexts, owned here: one per Segment Capability, and one
     /// per named Segment Coordinator.
     effect_contexts: std.ArrayList(*EffectContext) = .empty,
@@ -367,6 +390,8 @@ pub const Session = struct {
     pub fn deinit(s: *Session) void {
         const gpa = s.gpa;
         s.x.deinit(gpa);
+        for (s.bindings.items) |b| gpa.free(b.delivery);
+        s.bindings.deinit(gpa);
         if (s.restoring) |*r| r.deinit();
         for (s.effect_contexts.items) |c| {
             if (c.coordinator) |n| gpa.free(n);
@@ -678,7 +703,10 @@ fn writeFunctionLegacy(context: ?*anyopaque, w: *std.Io.Writer, v: *const Value)
     return writeFunctionWith(@ptrCast(@alignCast(context.?)), w, v, false);
 }
 
-fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: bool) encoding.Error!void {
+/// Where a Function Value's code is, and its token, owned by `s.gpa`.
+const FunctionToken = struct { entry: *GroupEntry, index: usize, token: []u8 };
+
+fn functionToken(s: *Session, v: *const Value) encoding.Error!FunctionToken {
     const f = v.data.function;
     var at: ?struct { *GroupEntry, usize } = null;
     for (s.groups.items) |e| {
@@ -699,8 +727,15 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
     iw.writeAll("}") catch return error.OutOfMemory;
     const codec = std.base64.standard.Encoder;
     const token = try s.gpa.alloc(u8, codec.calcSize(inner.written().len));
-    defer s.gpa.free(token);
     _ = codec.encode(token, inner.written());
+    return .{ .entry = found[0], .index = found[1], .token = token };
+}
+
+fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: bool) encoding.Error!void {
+    const f = v.data.function;
+    const found = try functionToken(s, v);
+    defer s.gpa.free(found.token);
+    const token = found.token;
     w.writeAll("{\"$function\":[") catch return error.WriteFailed;
     std.json.Stringify.value(f.home, .{}, w) catch return error.WriteFailed;
     w.writeAll(",") catch return error.WriteFailed;
@@ -708,7 +743,7 @@ fn writeFunctionWith(s: *Session, w: *std.Io.Writer, v: *const Value, metadata: 
     w.writeAll(",") catch return error.WriteFailed;
     std.json.Stringify.value(token, .{}, w) catch return error.WriteFailed;
     if (metadata) {
-        const code = found[0].group.group.functions.items[found[1]];
+        const code = found.entry.group.group.functions.items[found.index];
         w.writeAll(",") catch return error.WriteFailed;
         if (code.name.len == 0) {
             w.writeAll("null") catch return error.WriteFailed;
@@ -1896,7 +1931,7 @@ fn pumpOk(s: *Session, ref: i64, entry: *GroupEntry) []u8 {
 /// Runs or resumes a Pump until it ends or pauses at a crossing, and
 /// writes its reply.
 fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model.dates.Instant, slice: u64, cap: u64) []u8 {
-    if (entry.group.memory.refused) return hostError(s.gpa, ref, .out_of_memory);
+    if (entry.group.memory.refused) return pumpFailure(s, ref, entry, .out_of_memory);
     s.x.in_pump = true;
     s.x.exchange_pump = true;
     s.x.exchange_entry = entry;
@@ -1915,12 +1950,16 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     defer if (!entry.traced) {
         mg.trace = trace;
     };
-    if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
+    if (resuming) mg.resumePump() catch |e| return pumpFailure(s, ref, entry, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return pumpFailure(s, ref, entry, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
         s.x.paused_ref = ref;
         return pausedReply(s, ref);
     }
+    if (s.x.bin != null) return holdBinary(s, ref, entry, binaryPumpOk(s, entry) catch {
+        endBinary(s);
+        return oomReply();
+    });
     return holdForReleases(s, ref, entry, pumpOk(s, ref, entry), .ok);
 }
 
@@ -1973,7 +2012,18 @@ fn withBufferedTrace(s: *Session, entry: *GroupEntry, reply: []u8) []u8 {
 }
 
 const ReplyFields = enum { ok, outer, plain };
-const HeldReply = struct { frame: []u8, entry: *GroupEntry, fields: ReplyFields };
+const HeldReply = struct {
+    frame: []u8,
+    entry: *GroupEntry,
+    fields: ReplyFields,
+    /// A binary exchange's final reply, assembled when it is sent.
+    bin: ?BinFinal = null,
+
+    fn deinit(h: *HeldReply, gpa: Allocator) void {
+        gpa.free(h.frame);
+        if (h.bin) |*b| b.deinit(gpa);
+    }
+};
 
 /// Attach abandonment only to the reply being emitted, after release ordering
 /// is settled. A held reply must not consume notifications before its release.
@@ -2033,7 +2083,8 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     s.x.held = null;
     if (s.x.release_continuation) {
         s.x.release_continuation = false;
-        s.gpa.free(reply.frame);
+        var spent = reply;
+        spent.deinit(s.gpa);
         s.x.paused_ref = null;
         const entry = s.x.exchange_entry.?;
         entry.group.group.release_pause = false;
@@ -2045,6 +2096,10 @@ fn releaseResultReply(s: *Session, ref: i64) []u8 {
     }
     if (s.x.exchange_entry) |e| e.group.group.release_pause = false;
     if (s.x.paused_ref == null) s.x.exchange_entry = null;
+    if (reply.bin) |fin| {
+        s.gpa.free(reply.frame);
+        return emitFinal(s, reply.entry, ref, fin, true);
+    }
     return withAbandoned(s, reply.entry, reply.frame, reply.fields);
 }
 
@@ -2152,7 +2207,7 @@ fn helloReply(s: *Session, ref: i64) []u8 {
     o.text(v.save_format) catch return oomReply();
     o.raw(",\"features\":[\"paused-inputs-v1\",\"abandoned-before-needs-v1\",\"crossing-trace-v1\",\"climb-v1\",\"function-gone-v1\",\"function-metadata-v1\",\"core-message-v1\",\"standard-refinements-v1\",\"restore-bindings-v1\",\"analysis-v1\",\"group-exchanges-v1\",\"object-elements-v1\",\"queued-inputs-v1\"") catch return oomReply();
     if (s.inline_io != null) o.raw(",\"inline-inputs-v1\"") catch return oomReply();
-    o.raw("]") catch return oomReply();
+    o.raw(",\"" ++ rp.feature_map ++ "\",\"" ++ rp.feature_fields ++ "\"]") catch return oomReply();
     return finishOk(s, &o, null);
 }
 
@@ -2681,13 +2736,38 @@ fn loadReply(s: *Session, msg: Json, ref: i64) []u8 {
 /// How a queued message asks: `deliver`, `request`, `decide` or `broadcast`.
 const Asking = enum { deliver, request, decide, broadcast };
 
+/// Who a queued input addresses: every Script, one Script or a Host Object.
+const Target = union(enum) { all, script: *talk.Script, object: *objects.Object };
+
+/// A message's `limits`: none, a representable override, or the sentinel
+/// for one the binding can't represent, refused with the fields it read.
+const Override = union(enum) { none, given: talk.LimitOverride, refused: ?machine.RefusedOverride };
+
+/// An admitted input's owned id, or why it was refused.
+const Admitted = union(enum) { id: talk.Buffer, code: talk.HostErrorCode };
+
+fn overrideOfJson(j: ?Json) Override {
+    var slot: talk.LimitOverride = undefined;
+    const o = overrideOf(j, &slot) catch {
+        // Any non-map override, such as `[]`, is a sentinel for one the
+        // adapter can't represent; it is written as the empty override.
+        var refused: machine.RefusedOverride = .{};
+        if (j) |raw| if (raw == .object) {
+            inline for (machine.override_fields) |f| {
+                if (raw.object.get(f.ts)) |x| @field(refused, f.field) = asInt(x);
+            }
+        };
+        return .{ .refused = refused };
+    };
+    return if (o) |x| .{ .given = x.* } else .none;
+}
+
 fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
     // A Broadcast, or a Broadcast Decision, has no `to`; otherwise `to`
     // names a Script or a Host Object, never both.
     const to_all = how == .broadcast or (how == .decide and (asBool(field(msg, "broadcast")) orelse false));
-    var script: ?*talk.Script = null;
-    var target: ?*objects.Object = null;
+    var target: Target = .all;
     if (to_all) {
         if (field(msg, "to") != null) return hostError(s.gpa, ref, .invalid_value);
     } else {
@@ -2695,9 +2775,9 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
         if (field(to, "script")) |j| {
             if (field(to, "object") != null) return hostError(s.gpa, ref, .invalid_value);
             const script_name = asText(j) orelse return hostError(s.gpa, ref, .invalid_value);
-            script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value);
+            target = .{ .script = Direct.groupScript(entry.group, script_name.ptr, script_name.len) orelse return hostError(s.gpa, ref, .invalid_value) };
         } else {
-            target = objectOf(entry, field(to, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value);
+            target = .{ .object = objectOf(entry, field(to, "object") orelse return hostError(s.gpa, ref, .invalid_value)) orelse return hostError(s.gpa, ref, .invalid_value) };
         }
     }
     const message = field(msg, "message") orelse return hostError(s.gpa, ref, .invalid_value);
@@ -2721,42 +2801,10 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
             made += 1;
         }
     }
-    var override_slot: talk.LimitOverride = undefined;
-    const override = overrideOf(field(message, "limits"), &override_slot) catch {
-        // Any non-map override, such as `[]`, is a sentinel for one the
-        // adapter can't represent; it is written as the empty override.
-        var refused: ?machine.RefusedOverride = null;
-        if (field(message, "limits")) |raw| {
-            refused = .{};
-            if (raw == .object) {
-                inline for (machine.override_fields) |f| {
-                    if (raw.object.get(f.ts)) |x| @field(refused.?, f.field) = asInt(x);
-                }
-            }
-        }
-        if (to_all) {
-            entry.group.group.refuseBroadcast(mname, args, how == .decide, refused, "invalid value");
-        } else if (how != .broadcast) {
-            const d: machine.Delivery = .{ .id = 0, .message = mname, .args = args, .request = how == .request, .decision = how == .decide, .target = target };
-            entry.group.group.refuseOverride(if (script) |sc| sc.name else "", d, refused, "invalid value");
-        }
-        return hostError(s.gpa, ref, .invalid_value);
+    var id = switch (admitQueued(entry, how, target, mname, args, overrideOfJson(field(message, "limits")))) {
+        .id => |id| id,
+        .code => |code| return hostError(s.gpa, ref, code),
     };
-    const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
-    var id: talk.Buffer = .{};
-    // Pending Requests and Decisions belong to the Group, which reports
-    // how they end; the handles aren't needed here.
-    var pending: ?*talk.Pending = null;
-    var deciding: ?*talk.Deciding = null;
-    const code = switch (how) {
-        .deliver => if (script) |sc| Direct.scriptDeliver(sc, &m, &id) else Direct.deliver(entry.group, target.?, &m, &id),
-        .request => if (script) |sc| Direct.scriptRequest(sc, &m, &id, &pending) else Direct.request(entry.group, target.?, &m, &id, &pending),
-        .decide => if (to_all) Direct.decideBroadcast(entry.group, &m, &id, &deciding) else if (script) |sc| Direct.scriptDecide(sc, &m, &id, &deciding) else Direct.decide(entry.group, target.?, &m, &id, &deciding),
-        .broadcast => Direct.broadcast(entry.group, &m, &id),
-    };
-    if (code != .ok) return hostError(s.gpa, ref, code);
-    // Nothing reads a Request's result through its handle here.
-    Direct.pendingRelease(pending);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -2766,8 +2814,59 @@ fn queuedReply(s: *Session, msg: Json, ref: i64, how: Asking) []u8 {
     return finishOk(s, &o, entry);
 }
 
+/// Admits a Delivery, Request, Decision or Broadcast with the ordinary
+/// checks and records, whichever frame carried it.
+fn admitQueued(entry: *GroupEntry, how: Asking, target: Target, mname: []const u8, args: []*Value, limits: Override) Admitted {
+    var override_slot: talk.LimitOverride = undefined;
+    const override: ?*talk.LimitOverride = switch (limits) {
+        .none => null,
+        .given => |o| blk: {
+            override_slot = o;
+            break :blk &override_slot;
+        },
+        .refused => |refused| {
+            if (target == .all) {
+                entry.group.group.refuseBroadcast(mname, args, how == .decide, refused, "invalid value");
+            } else if (how != .broadcast) {
+                const d: machine.Delivery = .{ .id = 0, .message = mname, .args = args, .request = how == .request, .decision = how == .decide, .target = if (target == .object) target.object else null };
+                entry.group.group.refuseOverride(if (target == .script) target.script.name else "", d, refused, "invalid value");
+            }
+            return .{ .code = .invalid_value };
+        },
+    };
+    const m: talk.Message = .{ .name = mname.ptr, .name_len = mname.len, .args = if (args.len == 0) null else args.ptr, .args_len = args.len, .limits = override };
+    var id: talk.Buffer = .{};
+    // Pending Requests and Decisions belong to the Group, which reports
+    // how they end; the handles aren't needed here.
+    var pending: ?*talk.Pending = null;
+    var deciding: ?*talk.Deciding = null;
+    const code = switch (how) {
+        .deliver => switch (target) {
+            .script => |sc| Direct.scriptDeliver(sc, &m, &id),
+            .object => |o| Direct.deliver(entry.group, o, &m, &id),
+            .all => unreachable,
+        },
+        .request => switch (target) {
+            .script => |sc| Direct.scriptRequest(sc, &m, &id, &pending),
+            .object => |o| Direct.request(entry.group, o, &m, &id, &pending),
+            .all => unreachable,
+        },
+        .decide => switch (target) {
+            .all => Direct.decideBroadcast(entry.group, &m, &id, &deciding),
+            .script => |sc| Direct.scriptDecide(sc, &m, &id, &deciding),
+            .object => |o| Direct.decide(entry.group, o, &m, &id, &deciding),
+        },
+        .broadcast => Direct.broadcast(entry.group, &m, &id),
+    };
+    if (code != .ok) return .{ .code = code };
+    // Nothing reads a Request's result through its handle here.
+    Direct.pendingRelease(pending);
+    return .{ .id = id };
+}
+
 fn pumpReply(s: *Session, msg: Json, ref: i64) []u8 {
     const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    endBinary(s);
     const now_text = asText(field(msg, "now")) orelse return hostError(s.gpa, ref, .invalid_value);
     const now = model.dates.parseInstant(now_text) catch return hostError(s.gpa, ref, .invalid_value);
     model.dates.validateInstant(now) catch return hostError(s.gpa, ref, .invalid_value);
@@ -3799,26 +3898,10 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
             };
         }
     }
-    var override_slot: talk.LimitOverride = undefined;
-    const override = overrideOf(field(msg, "limits"), &override_slot) catch {
-        // The sentinel for an override the binding can't represent.
-        var refused: ?machine.RefusedOverride = null;
-        if (field(msg, "limits")) |raw| {
-            refused = .{};
-            if (raw == .object) {
-                inline for (machine.override_fields) |fl| {
-                    if (raw.object.get(fl.ts)) |x| @field(refused.?, fl.field) = asInt(x);
-                }
-            }
-        }
-        entry.group.group.refuseCall(f, args.items, refused, "invalid value");
-        return hostError(s.gpa, ref, .invalid_value);
+    var id = switch (admitCall(entry, f, args.items, overrideOfJson(field(msg, "limits")))) {
+        .id => |id| id,
+        .code => |code| return hostError(s.gpa, ref, code),
     };
-    var id: talk.Buffer = .{};
-    var pending: ?*talk.Pending = null;
-    const code = Direct.call(entry.group, f, args.items.ptr, args.items.len, override, &id, &pending);
-    if (code != .ok) return hostError(s.gpa, ref, code);
-    Direct.pendingRelease(pending);
     defer Direct.ownedBytesRelease(&id);
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -3826,6 +3909,30 @@ fn callReply(s: *Session, msg: Json, ref: i64) []u8 {
     o.raw("\"delivery\":") catch {};
     o.text(if (id.data) |d| d[0..id.len] else "") catch {};
     return finishOk(s, &o, entry);
+}
+
+/// Admits a Function call with the ordinary checks and records. Staleness
+/// is found at the drain, and arity when it runs.
+fn admitCall(entry: *GroupEntry, f: *Value, args: []*Value, limits: Override) Admitted {
+    var override_slot: talk.LimitOverride = undefined;
+    const override: ?*talk.LimitOverride = switch (limits) {
+        .none => null,
+        .given => |o| blk: {
+            override_slot = o;
+            break :blk &override_slot;
+        },
+        .refused => |refused| {
+            // The sentinel for an override the binding can't represent.
+            entry.group.group.refuseCall(f, args, refused, "invalid value");
+            return .{ .code = .invalid_value };
+        },
+    };
+    var id: talk.Buffer = .{};
+    var pending: ?*talk.Pending = null;
+    const code = Direct.call(entry.group, f, args.ptr, args.len, override, &id, &pending);
+    if (code != .ok) return .{ .code = code };
+    Direct.pendingRelease(pending);
+    return .{ .id = id };
 }
 
 /// `export-manifest`: `kind`, `version`, `grants` (`{name: handle}`),
@@ -4110,6 +4217,8 @@ pub fn handle(s: *Session, frame: []const u8) []u8 {
     s.reply_error = false;
     const previous_ref = s.active_ref;
     defer s.active_ref = previous_ref;
+    // The binary prefix is not JSON: identify it before UTF-8 or JSON.
+    if (std.mem.startsWith(u8, frame, rp.prefix[0..3])) return handleBinary(s, frame);
     const reply = handleFrame(s, frame);
     if (!s.crossing_trace or !s.reply_error) return reply;
     // Errors retain the records made by the refused Host Input. Callback
@@ -4205,9 +4314,15 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
             var group_exchanges = s.group_exchanges;
             var object_elements = s.object_elements;
             var queued_inputs = s.queued_inputs;
+            var request_pump: ?rp.Layout = null;
             for (features.array.items) |feature| {
                 const name = asText(feature) orelse return protocolError(s.gpa, ref, "features must be text names");
-                if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
+                if (std.mem.eql(u8, name, rp.feature_map) or std.mem.eql(u8, name, rp.feature_fields)) {
+                    // The candidates are mutually exclusive, and neither
+                    // implies `binary-frames-v1`, which this Core lacks.
+                    if (request_pump != null) return protocolError(s.gpa, ref, "request-pump candidates are mutually exclusive");
+                    request_pump = if (std.mem.eql(u8, name, rp.feature_map)) .map else .fields;
+                } else if (std.mem.eql(u8, name, "abandoned-before-needs-v1")) {
                     early = true;
                 } else if (std.mem.eql(u8, name, "crossing-trace-v1")) {
                     crossing_trace = true;
@@ -4233,6 +4348,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
                     // This feature adds declaration and binding fields, with no per-Group state.
                 } else if (!std.mem.eql(u8, name, "paused-inputs-v1") and !std.mem.eql(u8, name, "restore-bindings-v1")) return protocolError(s.gpa, ref, "unsupported feature");
             }
+            if (request_pump) |chosen| if (s.request_pump) |held| if (held != chosen) return protocolError(s.gpa, ref, "the request-pump candidate is fixed for the Session");
+            if (request_pump != null) s.request_pump = request_pump;
             s.early_abandoned = early;
             s.crossing_trace = crossing_trace;
             s.climb = climb;
@@ -4334,6 +4451,8 @@ fn dispatch(s: *Session, msg: Json, ref: i64, m: []const u8, frame: []const u8) 
         return scriptControlReply(s, msg, ref, .revoke);
     } else if (std.mem.eql(u8, m, "cancel-delivery")) {
         return cancelDeliveryReply(s, msg, ref);
+    } else if (s.request_pump != null and std.mem.eql(u8, m, "cancel-correlated")) {
+        return cancelCorrelatedReply(s, msg, ref);
     }
     return protocolError(s.gpa, ref, "unknown or unsupported message");
 }
@@ -4374,6 +4493,7 @@ fn dropGroupReply(s: *Session, msg: Json, ref: i64) []u8 {
         _ = s.groups.orderedRemove(i);
         break;
     };
+    unbindGroup(s, entry);
     entry.destroy();
     var o = Out.init(s.gpa);
     defer o.deinit();
@@ -4387,32 +4507,41 @@ fn pausedAdmission(s: *Session, msg: Json, ref: i64, m: []const u8, worker_ref: 
     const group = groupOf(s, msg) orelse return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
     if (group != entry) return protocolError(s.gpa, ref, "a paused input must address the worker's Group");
     const worker = messageIn(m, &.{ "load", "reload", "extend", "add-library", "replace-library", "pump", "save", "fingerprint", "inspect", "grants", "counters" });
-    if (!worker and !messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
-    const mg = &entry.group.group;
-    const pumping = mg.pumping;
-    const trace = mg.trace;
-    // A WASM export has returned, but its Host callback has not. Admission
-    // must use the same control queue and Trace hold as native callbacks.
-    mg.pumping = s.x.exchange_pump;
-    if (mg.pumping and !s.inline_active and mg.held_trace == null and trace != null) {
-        if (mg.held == null) mg.held = .init(mg.gpa);
-        mg.held_trace = trace;
-    }
-    if (mg.held_trace != null) mg.trace = &mg.held.?.writer;
-    s.admitting = true;
-    const old_inline = mg.inline_admitting;
-    mg.inline_admitting = s.inline_active;
-    defer {
-        mg.inline_admitting = old_inline;
-        s.admitting = false;
-        mg.pumping = pumping;
-        mg.trace = trace;
-    }
+    if (!worker and !messageIn(m, &.{ "deliver", "request", "broadcast", "decide", "call", "set-parent", "dispose", "stop", "cancel-run", "rewind-run", "revoke", "answer", "fail", "cancel-delivery", "cancel-correlated", "queued-inputs", "request-charge", "settle", "object" })) return protocolError(s.gpa, ref, "a worker is waiting for its result");
+    const held = enterPaused(s, entry);
+    defer leavePaused(s, held);
     if (worker) {
         recordWorkerRefusal(s, entry, msg, m);
         return hostError(s.gpa, ref, .reentrant_call);
     }
     return dispatch(s, msg, ref, m, &.{});
+}
+
+/// What admission during a paused worker changes, to restore after it.
+const Paused = struct { entry: *GroupEntry, pumping: bool, trace: ?*std.Io.Writer, old_inline: bool };
+
+/// A WASM export has returned, but its Host callback has not. Admission
+/// must use the same control queue and Trace hold as native callbacks.
+fn enterPaused(s: *Session, entry: *GroupEntry) Paused {
+    const mg = &entry.group.group;
+    const held: Paused = .{ .entry = entry, .pumping = mg.pumping, .trace = mg.trace, .old_inline = mg.inline_admitting };
+    mg.pumping = s.x.exchange_pump;
+    if (mg.pumping and !s.inline_active and mg.held_trace == null and held.trace != null) {
+        if (mg.held == null) mg.held = .init(mg.gpa);
+        mg.held_trace = held.trace;
+    }
+    if (mg.held_trace != null) mg.trace = &mg.held.?.writer;
+    s.admitting = true;
+    mg.inline_admitting = s.inline_active;
+    return held;
+}
+
+fn leavePaused(s: *Session, held: Paused) void {
+    const mg = &held.entry.group.group;
+    mg.inline_admitting = held.old_inline;
+    s.admitting = false;
+    mg.pumping = held.pumping;
+    mg.trace = held.trace;
 }
 
 fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8) void {
@@ -4444,6 +4573,923 @@ fn recordWorkerRefusal(s: *Session, entry: *GroupEntry, msg: Json, m: []const u8
             g.refuseWorker(.{ .replace_library = .{ .library = library, .carry = carry == .carry_variables } });
         }
     }
+}
+
+// ------------------------------------- binary Request/Pump exchanges (#1245)
+
+/// A binary exchange's layout; a combined one's delivery and token, which
+/// its final reply carries and then retires.
+const BinExchange = struct {
+    layout: rp.Layout,
+    delivery: ?[]u8 = null,
+    token: u64 = 0,
+};
+
+/// A binary final Pump reply's parts, assembled with its abandonment
+/// notices only when it is sent. `ok` is the fields candidate's state …
+/// gone items, or the map candidate's whole `ok` map with its Trace.
+const BinFinal = struct {
+    ok: ?[]u8 = null,
+    err: ?[]u8 = null,
+    trace: ?[]u8 = null,
+
+    fn deinit(f: *BinFinal, gpa: Allocator) void {
+        for ([_]?[]u8{ f.ok, f.err, f.trace }) |b| if (b) |x| gpa.free(x);
+        f.* = .{};
+    }
+};
+
+/// A combined exchange's token, bound to its admitted delivery.
+const Binding = struct { token: u64, entry: *GroupEntry, delivery: []u8 };
+
+fn bindingOf(s: *Session, token: u64) ?usize {
+    for (s.bindings.items, 0..) |b, i| if (b.token == token) return i;
+    return null;
+}
+
+/// Forgets a Group's bindings when the Group is dropped.
+fn unbindGroup(s: *Session, entry: *GroupEntry) void {
+    var i: usize = 0;
+    while (i < s.bindings.items.len) {
+        if (s.bindings.items[i].entry == entry) {
+            s.gpa.free(s.bindings.orderedRemove(i).delivery);
+        } else i += 1;
+    }
+}
+
+/// Ends the loaded binary exchange, retiring its token.
+fn endBinary(s: *Session) void {
+    const b = s.x.bin orelse return;
+    s.x.bin = null;
+    if (b.token != 0) if (bindingOf(s, b.token)) |i| s.gpa.free(s.bindings.orderedRemove(i).delivery);
+    if (b.delivery) |d| s.gpa.free(d);
+}
+
+fn binOptions(s: *Session, core_errors: bool) binary_value.EncodeOptions {
+    return .{ .functions = .{ .context = s, .payload = functionPayload }, .core_errors = core_errors, .function_metadata = s.function_metadata };
+}
+
+/// The binary Function payload: home, display and token, then under
+/// `function-metadata-v1` name, arity and the raw source identity.
+fn functionPayload(context: ?*anyopaque, a: Allocator, v: *const Value) anyerror!*Value {
+    const s: *Session = @ptrCast(@alignCast(context.?));
+    const t = functionToken(s, v) catch |e| return if (e == error.OutOfMemory) error.OutOfMemory else error.InvalidValue;
+    defer s.gpa.free(t.token);
+    const f = v.data.function;
+    var items: [7]*Value = undefined;
+    var n: usize = 0;
+    defer for (items[0..n]) |x| x.release();
+    items[n] = try model.text(a, f.home);
+    n += 1;
+    items[n] = try model.text(a, f.display);
+    n += 1;
+    items[n] = try model.text(a, t.token);
+    n += 1;
+    if (s.function_metadata) {
+        const code = t.entry.group.group.functions.items[t.index];
+        items[n] = if (code.name.len == 0) try model.scalar(a, .nothing) else try model.text(a, code.name);
+        n += 1;
+        items[n] = try model.scalar(a, .{ .number = model.Decimal.fromInt(code.required) });
+        n += 1;
+        items[n] = try model.scalar(a, .{ .number = model.Decimal.fromInt(code.total) });
+        n += 1;
+        items[n] = try model.bytes(a, &code.unit);
+        n += 1;
+    }
+    return model.list(a, items[0..n]);
+}
+
+/// A Value a reply can't encode is Nothing, as JSON's is `null`.
+fn binValue(w: *rp.Writer, s: *Session, v: *const Value, core_errors: bool) Allocator.Error!void {
+    w.value(v, binOptions(s, core_errors)) catch |e| switch (e) {
+        error.InvalidValue => try w.nothing(),
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+}
+
+fn binOptional(w: *rp.Writer, name: []const u8, text: []const u8) Allocator.Error!void {
+    if (text.len == 0) return;
+    try w.key(name);
+    try w.ptext(text);
+}
+
+fn binEffect(w: *rp.Writer, e: machine.report.EffectFailure) Allocator.Error!void {
+    try w.key("script");
+    try w.ptext(e.script);
+    try w.key("run");
+    try w.ptext(e.run);
+    try w.key("grant");
+    try w.ptext(e.grant);
+    try w.key("segment");
+    try w.ptext(e.segment);
+    try w.key("phase");
+    try w.ptext(e.phase);
+    try w.key("status");
+    try w.ptext(e.status);
+    try binOptional(w, "scope", e.scope);
+}
+
+fn binAncestry(w: *rp.Writer, a: machine.report.Ancestry) Allocator.Error!void {
+    try w.key("rootDelivery");
+    try w.ptext(a.root);
+    try binOptional(w, "parentRun", a.parent_run);
+    try binOptional(w, "parentCall", a.parent_call);
+}
+
+/// One Report: the fields candidate's report tag and positional list, or
+/// the map candidate's map of the JSON Report's fields. Nested records
+/// keep their ordinary map shapes in both.
+fn binReport(w: *rp.Writer, s: *Session, report: machine.report.Report, climbed: bool, positional: bool) Allocator.Error!void {
+    const kind: rp.Report = switch (report) {
+        .run_end => .run_end,
+        .run_started => .run_started,
+        .run_discarded => .run_discarded,
+        .run_accounting => .run_accounting,
+        .causal_work => .causal_work,
+        .stop => .stop,
+        .unhandled => .unhandled,
+        .call_failed => .call_failed,
+        .effect_failure => .effect_failure,
+        .decided => .decided,
+        .host_error => .host_error,
+        .charge_result => .charge_result,
+    };
+    if (positional) try w.byte(@backingInt(kind));
+    try w.begin(kind.fields(), positional);
+    if (!positional) {
+        try w.key("kind");
+        try w.ptext(kind.kind());
+    }
+    switch (report) {
+        .charge_result => |r| {
+            try w.key("request");
+            try w.ptext(r.request);
+            try w.key("call");
+            try w.ptext(r.call);
+            try w.key("fuel");
+            try w.int(r.fuel);
+            try w.key("status");
+            try w.ptext(@tagName(r.status));
+        },
+        .run_end => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try binOptional(w, "run", r.run);
+            try binOptional(w, "delivery", r.delivery);
+            try binOptional(w, "broadcast", r.broadcast);
+            try binOptional(w, "handler", r.handler);
+            if (r.fallback) {
+                try w.key("fallback");
+                try w.boolean(true);
+            }
+            if (climbed and r.climbed) {
+                try w.key("climbed");
+                try w.boolean(true);
+            }
+            try w.key("outcome");
+            try w.ptext(outcomeWord(r.outcome));
+            if (r.result) |v| {
+                try w.key("result");
+                try binValue(w, s, v, s.core_errors);
+            }
+            if (r.err) |v| {
+                // A plain error record, as in JSON: never core-marked.
+                try w.key("error");
+                try binValue(w, s, v, false);
+            }
+            try binOptional(w, "limit", r.limit);
+            if (r.effect) |e| {
+                try w.key("effect");
+                try w.begin(&.{}, false);
+                try binEffect(w, e);
+                try w.end();
+            }
+            if (r.cleanup_failed) |c| {
+                try w.key("cleanupFailed");
+                try w.begin(&.{}, false);
+                if (c.code.len > 0) {
+                    try w.key("code");
+                    try w.ptext(c.code);
+                } else {
+                    try w.key("limit");
+                    try w.ptext(c.limit);
+                }
+                try w.end();
+            }
+            if (r.at.unit.len > 0) {
+                try w.key("at");
+                try w.begin(&.{}, false);
+                try w.key("unit");
+                try w.ptext(r.at.unit);
+                try w.key("line");
+                try w.int(r.at.line);
+                try w.key("col");
+                try w.int(r.at.column);
+                try w.key("handler");
+                try w.ptext(r.at.handler);
+                try w.key("pc");
+                try w.int(r.at.pc);
+                try w.end();
+            }
+            try w.key("fuel");
+            try w.int(r.fuel);
+            try w.key("alloc");
+            try w.int(r.alloc);
+        },
+        .stop => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try w.key("reason");
+            try w.ptext(r.reason);
+            try w.key("discardedRuns");
+            try w.ptexts(r.discarded_runs);
+            try w.key("droppedMessages");
+            try w.ptexts(r.dropped_messages);
+            try w.key("pendingCalls");
+            try w.ptexts(r.pending_calls);
+        },
+        .unhandled => |r| {
+            try w.key("delivery");
+            try w.ptext(r.delivery);
+            try w.key("message");
+            try w.begin(&.{}, false);
+            try w.key("name");
+            try w.ptext(r.message);
+            try w.key("args");
+            try w.list(r.args.len);
+            for (r.args) |v| try binValue(w, s, v, s.core_errors);
+            try w.end();
+            if (r.target) |t| {
+                try w.key("target");
+                try binValue(w, s, t.value, s.core_errors);
+            }
+        },
+        .call_failed => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try w.key("call");
+            try w.ptext(r.call);
+            try w.key("operation");
+            try w.begin(&.{}, false);
+            try w.key("capability");
+            try w.ptext(r.capability);
+            try w.key("operation");
+            try w.ptext(r.operation);
+            try w.end();
+            try w.key("detail");
+            try w.ptext(r.detail);
+        },
+        .effect_failure => |e| try binEffect(w, e),
+        .decided => |r| {
+            try binOptional(w, "delivery", r.delivery);
+            try binOptional(w, "broadcast", r.broadcast);
+            try w.key("verdict");
+            try w.ptext(@tagName(r.verdict));
+            try w.key("vetoes");
+            try w.list(r.vetoes.len);
+            for (r.vetoes) |v| {
+                try w.begin(&.{}, false);
+                try w.key("script");
+                try w.ptext(v.script);
+                try w.key("run");
+                try w.ptext(v.run);
+                try w.key("reason");
+                try binValue(w, s, v.reason, s.core_errors);
+                try w.end();
+            }
+            try w.key("undecided");
+            try w.list(r.undecided.len);
+            for (r.undecided) |u| {
+                try w.begin(&.{}, false);
+                try w.key("script");
+                try w.ptext(u.script);
+                try w.key("run");
+                try w.ptext(u.run);
+                try w.key("outcome");
+                try w.ptext(outcomeWord(u.outcome));
+                try w.end();
+            }
+        },
+        .run_started => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try w.key("run");
+            try w.ptext(r.run);
+            try w.key("args");
+            try w.list(r.args.len);
+            for (r.args) |v| try binValue(w, s, v, s.core_errors);
+            try binAncestry(w, r.ancestry);
+            try binOptional(w, "delivery", r.delivery);
+            try binOptional(w, "selector", r.selector);
+            if (r.function) |f| {
+                try w.key("fn");
+                try binValue(w, s, f, s.core_errors);
+            }
+        },
+        .run_discarded => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try w.key("run");
+            try w.ptext(r.run);
+            try w.key("reason");
+            try w.ptext(r.reason);
+            try binAncestry(w, r.ancestry);
+        },
+        .run_accounting => |r| {
+            try w.key("script");
+            try w.ptext(r.script);
+            try w.key("run");
+            try w.ptext(r.run);
+            try w.key("fuel");
+            try w.int(r.fuel);
+            try w.key("state");
+            try w.ptext(@tagName(r.state));
+            try binAncestry(w, r.ancestry);
+        },
+        .causal_work => |r| {
+            try w.key("rootDelivery");
+            try w.ptext(r.root);
+            try w.key("liveRuns");
+            try w.int(r.live_runs);
+            try w.key("queuedMessages");
+            try w.int(r.queued_messages);
+            try w.key("discardedMessages");
+            try w.int(r.discarded_messages);
+        },
+        .host_error => |r| {
+            try w.key("code");
+            try w.ptext(r.code);
+            try binOptional(w, "detail", r.detail);
+        },
+    }
+    try w.end();
+}
+
+/// An ordinary error object: `kind`, and a host error's `code` and `detail`.
+fn binError(w: *rp.Writer, code: talk.HostErrorCode) Allocator.Error!void {
+    try w.begin(&.{}, false);
+    try w.key("kind");
+    if (code == .err_mailbox_full) {
+        try w.ptext("mailbox full");
+    } else {
+        const name = talk.hostCodeName(code);
+        try w.ptext("host error");
+        try w.key("code");
+        try w.ptext(name);
+        try w.key("detail");
+        try w.ptext(name);
+    }
+    try w.end();
+}
+
+fn binTrace(w: *rp.Writer, lines: []const []const u8) Allocator.Error!void {
+    try w.ptexts(lines);
+}
+
+/// The Trace an error reply carries: only to an opted-in Host, as JSON's.
+fn errorTrace(s: *Session, entry: ?*GroupEntry) Allocator.Error!?[]u8 {
+    const e = entry orelse return null;
+    if (!s.crossing_trace) return null;
+    e.group.flush();
+    if (!e.traced or e.pending_trace.items.len == 0) return null;
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    try binTrace(&w, e.pending_trace.items);
+    const out = try w.finish();
+    freeTrace(s.gpa, takeTrace(e));
+    return out;
+}
+
+/// The Trace a successful reply carries, taken as finishOk takes it.
+fn okTrace(s: *Session, entry: *GroupEntry) Allocator.Error!?[]u8 {
+    if (s.admitting) return null;
+    entry.group.flush();
+    const lines = takeTrace(entry);
+    defer freeTrace(s.gpa, lines);
+    if (!entry.traced or lines.len == 0) return null;
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    try binTrace(&w, lines);
+    return try w.finish();
+}
+
+/// An admission reply: the fields candidate's `81`, or the map candidate's
+/// `{ref, ok: {delivery, trace?}}` / `{ref, err, trace?}`.
+fn binAdmission(s: *Session, layout: rp.Layout, ref: i64, entry: ?*GroupEntry, admitted: Admitted) []u8 {
+    return binAdmissionOrError(s, layout, ref, entry, admitted) catch oomReply();
+}
+
+fn binAdmissionOrError(s: *Session, layout: rp.Layout, ref: i64, entry: ?*GroupEntry, admitted: Admitted) Allocator.Error![]u8 {
+    const positional = layout == .fields;
+    const trace = switch (admitted) {
+        .id => try okTrace(s, entry.?),
+        .code => try errorTrace(s, entry),
+    };
+    defer if (trace) |t| s.gpa.free(t);
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    try w.header(layout);
+    if (positional) try w.byte(@backingInt(rp.Message.admission));
+    try w.begin(rp.Message.admission.fields(), positional);
+    try w.key("ref");
+    try w.int(ref);
+    switch (admitted) {
+        .id => |id| {
+            const text = if (id.data) |d| d[0..id.len] else "";
+            if (positional) {
+                try w.key("delivery");
+                try w.ptext(text);
+            } else {
+                try w.key("ok");
+                try w.begin(&.{}, false);
+                try w.key("delivery");
+                try w.ptext(text);
+                if (trace) |t| {
+                    try w.key("trace");
+                    try w.raw(t);
+                }
+                try w.end();
+            }
+        },
+        .code => |code| {
+            try w.key("err");
+            try binError(&w, code);
+        },
+    }
+    if (trace) |t| if (positional or admitted == .code) {
+        try w.key("trace");
+        try w.raw(t);
+    };
+    try w.end();
+    return w.finish();
+}
+
+/// The Pump outcome a final reply carries, as pumpOk and finishOk write it.
+fn binaryPumpOk(s: *Session, entry: *GroupEntry) Allocator.Error!BinFinal {
+    const positional = s.x.bin.?.layout == .fields;
+    const mg = &entry.group.group;
+    // Stale Function Value calls rejected `function gone` with no report.
+    var gone = rp.Writer.init(s.gpa);
+    defer gone.deinit();
+    {
+        const ids = &mg.gone_calls;
+        defer ids.clearRetainingCapacity();
+        if (entry.gone) {
+            try gone.list(ids.items.len);
+            var buf: [24]u8 = undefined;
+            for (ids.items) |id| try gone.ptext(std.fmt.bufPrint(&buf, "d{d}", .{id}) catch unreachable);
+        }
+    }
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    if (!positional) {
+        try w.begin(&.{}, false);
+        try w.key("state");
+    }
+    try w.ptext(if (mg.stoppedState()) "stopped" else if (mg.rewound) "rewound" else if (mg.sliced) "sliced" else "idle");
+    if (mg.nextInstant()) |at| {
+        if (!positional) try w.key("nextDeadline");
+        try w.instant(at);
+    } else if (positional) try w.nothing();
+    if (!positional) try w.key("fuelUsed");
+    try w.int(mg.pump_fuel);
+    // The accounting tail first, as the JSON reply writes it.
+    mg.accountingTail();
+    var held = mg.reports.take();
+    defer held.deinit();
+    if (!positional) try w.key("reports");
+    try w.list(held.list.items.len);
+    for (held.list.items) |r| try binReport(&w, s, r, entry.climb, positional);
+    if (entry.gone) {
+        if (!positional) try w.key("gone");
+        try w.raw(gone.out.items);
+    } else if (positional) try w.nothing();
+    var fin: BinFinal = .{};
+    errdefer fin.deinit(s.gpa);
+    const trace = try okTrace(s, entry);
+    if (positional) {
+        fin.trace = trace;
+    } else if (trace) |t| {
+        defer s.gpa.free(t);
+        try w.key("trace");
+        try w.raw(t);
+    }
+    if (!positional) try w.end();
+    fin.ok = try w.finish();
+    return fin;
+}
+
+/// A final reply that is the Pump's refusal, whether it never started or
+/// an admitted combined input stays queued.
+fn pumpFailure(s: *Session, ref: i64, entry: *GroupEntry, code: talk.HostErrorCode) []u8 {
+    if (s.x.bin == null) return hostError(s.gpa, ref, code);
+    var fin: BinFinal = .{};
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    binError(&w, code) catch return oomReply();
+    fin.err = w.finish() catch return oomReply();
+    fin.trace = errorTrace(s, entry) catch {
+        fin.deinit(s.gpa);
+        return oomReply();
+    };
+    return emitFinal(s, entry, ref, fin, false);
+}
+
+/// As holdForReleases: Grant releases go before the final reply.
+fn holdBinary(s: *Session, ref: i64, entry: *GroupEntry, fin: BinFinal) []u8 {
+    if (s.x.releases.items.len == 0) {
+        if (s.x.paused_ref == null) s.x.exchange_entry = null;
+        return emitFinal(s, entry, ref, fin, true);
+    }
+    const frame = s.gpa.alloc(u8, 0) catch {
+        var spent = fin;
+        spent.deinit(s.gpa);
+        endBinary(s);
+        return oomReply();
+    };
+    s.x.held = .{ .frame = frame, .entry = entry, .fields = .ok, .bin = fin };
+    s.x.held_ref = ref;
+    return releaseNeed(s, ref);
+}
+
+/// Sends a binary exchange's final reply: the fields candidate's `82`, or
+/// the map candidate's `{ref, delivery?, token?, ok | err, abandoned,
+/// settled?, trace?}`. It ends the exchange and retires its token.
+fn emitFinal(s: *Session, entry: *GroupEntry, ref: i64, fin_in: BinFinal, abandoned: bool) []u8 {
+    var fin = fin_in;
+    defer fin.deinit(s.gpa);
+    const reply = finalFrame(s, entry, ref, &fin, abandoned) catch return oomReply();
+    if (abandoned) entry.forgetAbandoned();
+    endBinary(s);
+    return reply;
+}
+
+fn finalFrame(s: *Session, entry: ?*GroupEntry, ref: i64, fin: *const BinFinal, abandoned: bool) Allocator.Error![]u8 {
+    const b = s.x.bin.?;
+    const positional = b.layout == .fields;
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    try w.header(b.layout);
+    if (positional) try w.byte(@backingInt(rp.Message.completion));
+    try w.begin(rp.Message.completion.fields(), positional);
+    try w.key("ref");
+    try w.int(ref);
+    if (b.delivery) |d| {
+        try w.key("delivery");
+        try w.ptext(d);
+    }
+    if (b.token != 0) {
+        try w.key("token");
+        try w.int(b.token);
+    }
+    if (fin.ok) |ok| {
+        if (positional) {
+            try w.fieldsRaw("state", 5, ok);
+        } else {
+            try w.key("ok");
+            try w.raw(ok);
+        }
+    }
+    if (fin.err) |e| {
+        try w.key("err");
+        try w.raw(e);
+    }
+    if (abandoned) {
+        var ids: std.ArrayList([]const u8) = .empty;
+        defer ids.deinit(s.gpa);
+        try entry.?.abandonedIds(&ids);
+        try w.key("abandoned");
+        try w.ptexts(ids.items);
+        if (s.crossing_trace) {
+            ids.clearRetainingCapacity();
+            try entry.?.settledIds(&ids);
+            try w.key("settled");
+            try w.ptexts(ids.items);
+        }
+    }
+    if (fin.trace) |t| {
+        try w.key("trace");
+        try w.raw(t);
+    }
+    try w.end();
+    return w.finish();
+}
+
+/// A binary input, validated whole before anything executes.
+const BinInput = struct {
+    m: rp.Message,
+    ref: i64,
+    entry: *GroupEntry,
+    token: u64 = 0,
+    target: Target = .all,
+    name: []const u8 = "",
+    args: []*Value = &.{},
+    function: ?*Value = null,
+    limits: Override = .none,
+    now: model.dates.Instant = .{ .seconds = 0, .micros = 0 },
+    slice: u64 = 0,
+    cap: u64 = 0,
+    /// A combined input's Pump inputs it can't use: admitted, its Pump is
+    /// then refused, as an ordinary Pump with them would be.
+    pump_refusal: ?talk.HostErrorCode = null,
+
+    fn deinit(in: *BinInput, gpa: Allocator) void {
+        for (in.args) |v| v.release();
+        gpa.free(in.args);
+        if (in.function) |f| f.release();
+    }
+};
+
+const BinRead = union(enum) { input: BinInput, reply: []u8 };
+
+/// A refusal before execution, in the reply format of the input's exchange.
+fn binRefusal(s: *Session, layout: rp.Layout, m: rp.Message, ref: i64, entry: ?*GroupEntry, code: talk.HostErrorCode) []u8 {
+    if (m != .pump) return binAdmission(s, layout, ref, entry, .{ .code = code });
+    const saved = s.x.bin;
+    s.x.bin = .{ .layout = layout };
+    defer s.x.bin = saved;
+    var fin: BinFinal = .{};
+    var w = rp.Writer.init(s.gpa);
+    defer w.deinit();
+    binError(&w, code) catch return oomReply();
+    fin.err = w.finish() catch return oomReply();
+    fin.trace = errorTrace(s, entry) catch {
+        fin.deinit(s.gpa);
+        return oomReply();
+    };
+    defer fin.deinit(s.gpa);
+    return finalFrame(s, entry, ref, &fin, false) catch oomReply();
+}
+
+fn handleBinary(s: *Session, frame: []const u8) []u8 {
+    handling = s;
+    defer handling = null;
+    if (!std.mem.startsWith(u8, frame, rp.prefix)) return protocolError(s.gpa, 0, "unknown binary frame version");
+    const layout = s.request_pump orelse return protocolError(s.gpa, 0, "binary frames were not negotiated");
+    if (frame.len < rp.prefix.len + 1 or frame[rp.prefix.len] != @backingInt(layout)) return protocolError(s.gpa, 0, "the binary layout was not negotiated");
+    var in = switch (readBinary(s, layout, frame[rp.prefix.len + 1 ..])) {
+        .input => |in| in,
+        .reply => |reply| return reply,
+    };
+    defer in.deinit(s.gpa);
+    s.active_ref = in.ref;
+    const ref = in.ref;
+    if (s.group_exchanges and s.restoring == null) loadExchange(s, in.entry);
+    if (s.restoring != null) return protocolError(s.gpa, ref, "a restore is waiting for its resolve-result");
+    if (s.x.held != null) return binaryPaused(s, layout, &in, s.x.held_ref);
+    if (s.x.paused_ref) |paused| return binaryPaused(s, layout, &in, paused);
+    return binaryDispatch(s, layout, &in);
+}
+
+/// As pausedAdmission: inputs join the paused worker's queue; another
+/// worker, combined ones included, is refused before admission.
+fn binaryPaused(s: *Session, layout: rp.Layout, in: *BinInput, worker_ref: i64) []u8 {
+    if (in.ref == worker_ref) return protocolError(s.gpa, in.ref, "the worker ref is reserved for its result");
+    const entry = s.x.exchange_entry orelse return protocolError(s.gpa, in.ref, "no paused worker");
+    if (in.entry != entry) return protocolError(s.gpa, in.ref, "a paused input must address the worker's Group");
+    const held = enterPaused(s, entry);
+    defer leavePaused(s, held);
+    if (in.m == .pump or in.m == .request_pump or in.m == .call_pump) {
+        entry.group.group.refuseWorker(.{ .pump = .{ .now = in.now, .slice = @intCast(@min(in.slice, std.math.maxInt(i64))), .cap = @intCast(@min(in.cap, std.math.maxInt(i64))) } });
+        return binRefusal(s, layout, in.m, in.ref, entry, .reentrant_call);
+    }
+    return binaryDispatch(s, layout, in);
+}
+
+fn binaryDispatch(s: *Session, layout: rp.Layout, in: *BinInput) []u8 {
+    const entry = in.entry;
+    switch (in.m) {
+        .request => return binAdmissionOwned(s, layout, in.ref, entry, admitQueued(entry, .request, in.target, in.name, in.args, in.limits)),
+        .call => return binAdmissionOwned(s, layout, in.ref, entry, admitCall(entry, in.function.?, in.args, in.limits)),
+        .pump => {
+            endBinary(s);
+            s.x.bin = .{ .layout = layout };
+            return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
+        },
+        .request_pump, .call_pump => {
+            if (bindingOf(s, in.token) != null) return protocolError(s.gpa, in.ref, "the token is already bound");
+            const admitted = if (in.m == .request_pump) admitQueued(entry, .request, in.target, in.name, in.args, in.limits) else admitCall(entry, in.function.?, in.args, in.limits);
+            var id = switch (admitted) {
+                .id => |id| id,
+                .code => return binAdmission(s, layout, in.ref, entry, admitted),
+            };
+            defer Direct.ownedBytesRelease(&id);
+            const text = if (id.data) |d| d[0..id.len] else "";
+            // Bind before anything runs or reaches a callback.
+            const delivery = s.gpa.dupe(u8, text) catch return oomReply();
+            const bound = s.gpa.dupe(u8, text) catch {
+                s.gpa.free(delivery);
+                return oomReply();
+            };
+            s.bindings.append(s.gpa, .{ .token = in.token, .entry = entry, .delivery = bound }) catch {
+                s.gpa.free(delivery);
+                s.gpa.free(bound);
+                return oomReply();
+            };
+            endBinary(s);
+            s.x.bin = .{ .layout = layout, .delivery = delivery, .token = in.token };
+            if (in.pump_refusal) |code| return pumpFailure(s, in.ref, entry, code);
+            return runPump(s, in.ref, entry, false, in.now, in.slice, in.cap);
+        },
+        .admission, .completion => unreachable,
+    }
+}
+
+fn binAdmissionOwned(s: *Session, layout: rp.Layout, ref: i64, entry: *GroupEntry, admitted: Admitted) []u8 {
+    var a = admitted;
+    defer if (a == .id) Direct.ownedBytesRelease(&a.id);
+    return binAdmission(s, layout, ref, entry, a);
+}
+
+/// Reads and validates a whole binary input. A malformed envelope is a
+/// JSON protocol error; a well-formed input refused before execution gets
+/// its exchange's binary reply.
+fn readBinary(s: *Session, layout: rp.Layout, payload: []const u8) BinRead {
+    var spans: [12]?[]const u8 = undefined;
+    var r: rp.Reader = .{ .data = payload };
+    const m: rp.Message = blk: {
+        if (layout == .fields) {
+            const t = r.byte() catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+            const m = std.enums.fromInt(rp.Message, t) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+            if (m == .admission or m == .completion) return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+            r.record(m.fields(), true, spans[0..m.fields().len]) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+            break :blk m;
+        }
+        var all: [rp.Message.input_fields.len]?[]const u8 = undefined;
+        r.record(rp.Message.input_fields, false, &all) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+        const name = rp.ptextOf(all[0] orelse return .{ .reply = protocolError(s.gpa, 0, "no message name") }) catch return .{ .reply = protocolError(s.gpa, 0, "malformed binary frame") };
+        const m = rp.Message.ofName(name) orelse return .{ .reply = protocolError(s.gpa, 0, "unknown binary message") };
+        for (rp.Message.input_fields[1..], all[1..]) |k, span| {
+            const i = for (m.fields(), 0..) |f, i| {
+                if (std.mem.eql(u8, f, k)) break i;
+            } else {
+                if (span != null) return .{ .reply = protocolError(s.gpa, 0, "a field the message does not have") };
+                continue;
+            };
+            spans[i] = span;
+        }
+        break :blk m;
+    };
+    const names = m.fields();
+    const Get = struct {
+        names: []const []const u8,
+        spans: []const ?[]const u8,
+        fn get(g: @This(), k: []const u8) ?[]const u8 {
+            for (g.names, 0..) |n, i| if (std.mem.eql(u8, n, k)) return g.spans[i];
+            return null;
+        }
+    };
+    const g: Get = .{ .names = names, .spans = spans[0..names.len] };
+    if (!r.done()) return .{ .reply = protocolError(s.gpa, 0, "bytes after the frame's item") };
+    const ref = (rp.intOf(g.get("ref") orelse return .{ .reply = protocolError(s.gpa, 0, "no ref") }) catch null) orelse return .{ .reply = protocolError(s.gpa, 0, "no ref") };
+    const group = rp.ptextOf(g.get("group") orelse return .{ .reply = binRefusal(s, layout, m, ref, null, .invalid_value) }) catch return malformedFrame(s, ref);
+    const entry = s.groupNamed(group) orelse return .{ .reply = binRefusal(s, layout, m, ref, null, .invalid_value) };
+    var in: BinInput = .{ .m = m, .ref = ref, .entry = entry };
+    var ok = false;
+    defer if (!ok) in.deinit(s.gpa);
+    const refuse = struct {
+        fn code(s_: *Session, l: rp.Layout, in_: *const BinInput, c: talk.HostErrorCode) BinRead {
+            return .{ .reply = binRefusal(s_, l, in_.m, in_.ref, in_.entry, c) };
+        }
+    };
+    if (m == .request_pump or m == .call_pump) {
+        in.token = rp.uintOf(g.get("token") orelse return malformedFrame(s, ref)) catch return malformedFrame(s, ref);
+        if (in.token == 0) return malformedFrame(s, ref);
+    }
+    if (m == .request or m == .request_pump) {
+        const to = g.get("to") orelse return refuse.code(s, layout, &in, .invalid_value);
+        var t: [2]?[]const u8 = undefined;
+        var tr: rp.Reader = .{ .data = to };
+        tr.record(&.{ "script", "object" }, false, &t) catch return malformedFrame(s, ref);
+        if ((t[0] == null) == (t[1] == null)) return refuse.code(s, layout, &in, .invalid_value);
+        if (t[0]) |span| {
+            const name = rp.ptextOf(span) catch return malformedFrame(s, ref);
+            in.target = .{ .script = Direct.groupScript(entry.group, name.ptr, name.len) orelse return refuse.code(s, layout, &in, .invalid_value) };
+        } else {
+            entry.wrong_group = false;
+            const v = binary_value.decode(s.gpa, t[1].?, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, layout, &in, binDecodeError(e, entry));
+            defer v.release();
+            if (v.data != .object) return refuse.code(s, layout, &in, .invalid_value);
+            in.target = .{ .object = objectNamed(entry, v.data.object.kind, v.data.object.id) orelse return refuse.code(s, layout, &in, .invalid_value) };
+        }
+        const message = g.get("message") orelse return refuse.code(s, layout, &in, .invalid_value);
+        var mf: [3]?[]const u8 = undefined;
+        var mr: rp.Reader = .{ .data = message };
+        mr.record(&.{ "name", "args", "limits" }, false, &mf) catch return malformedFrame(s, ref);
+        in.name = rp.ptextOf(mf[0] orelse return refuse.code(s, layout, &in, .invalid_value)) catch return malformedFrame(s, ref);
+        if (readArgs(s, entry, mf[1], &in.args)) |code| return refuse.code(s, layout, &in, code);
+        in.limits = (overrideOfBinary(mf[2]) catch return malformedFrame(s, ref));
+    } else if (m == .call or m == .call_pump) {
+        const span = g.get("fn") orelse return refuse.code(s, layout, &in, .invalid_value);
+        entry.wrong_group = false;
+        in.function = binary_value.decode(s.gpa, span, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| return refuse.code(s, layout, &in, binDecodeError(e, entry));
+        if (readArgs(s, entry, g.get("args"), &in.args)) |code| return refuse.code(s, layout, &in, code);
+        in.limits = (overrideOfBinary(g.get("limits")) catch return malformedFrame(s, ref));
+    }
+    if (m == .pump or m == .request_pump or m == .call_pump) {
+        if (pumpInputs(&in, g.get("now"), g.get("fuelSlice"), g.get("fuelCap"))) |code| {
+            if (m == .pump) return refuse.code(s, layout, &in, code);
+            in.pump_refusal = code;
+        }
+    }
+    ok = true;
+    return .{ .input = in };
+}
+
+fn malformedFrame(s: *Session, ref: i64) BinRead {
+    return .{ .reply = protocolError(s.gpa, ref, "malformed binary frame") };
+}
+
+/// The host error for a binary Value decodeValue's rules refuse.
+fn binDecodeError(e: anyerror, entry: *GroupEntry) talk.HostErrorCode {
+    if (e == error.OutOfMemory) return .out_of_memory;
+    if (entry.wrong_group) return .wrong_group;
+    return .invalid_value;
+}
+
+/// Reads a Pump's Clock and Fuel options; the refusal code, or null.
+fn pumpInputs(in: *BinInput, now: ?[]const u8, slice: ?[]const u8, cap: ?[]const u8) ?talk.HostErrorCode {
+    in.now = rp.instantOf(now orelse return .invalid_value) catch return .invalid_value;
+    model.dates.validateInstant(in.now) catch return .invalid_value;
+    if (slice) |x| in.slice = rp.uintOf(x) catch return .invalid_value;
+    if (cap) |x| in.cap = rp.uintOf(x) catch return .invalid_value;
+    return null;
+}
+
+/// A Host Object by kind and id, as objectOf finds one.
+fn objectNamed(entry: *GroupEntry, kind: []const u8, id: []const u8) ?*objects.Object {
+    var out: ?*objects.Object = null;
+    return if (Direct.objectById(entry.group, kind.ptr, kind.len, id.ptr, id.len, &out)) out else null;
+}
+
+/// Decodes a list of Values into `out`; the refusal code, or null.
+fn readArgs(s: *Session, entry: *GroupEntry, span: ?[]const u8, out: *[]*Value) ?talk.HostErrorCode {
+    const given = span orelse return null;
+    if (!rp.isList(given)) return .invalid_value;
+    const items = rp.listOf(given, s.gpa) catch |e| return if (e == error.OutOfMemory) .out_of_memory else .invalid_value;
+    defer s.gpa.free(items);
+    const args = s.gpa.alloc(*Value, items.len) catch return .out_of_memory;
+    var made: usize = 0;
+    for (items, args) |item, *slot| {
+        entry.wrong_group = false;
+        slot.* = binary_value.decode(s.gpa, item, .{ .resolver = resolverOf(entry), .function_metadata = s.function_metadata }) catch |e| {
+            for (args[0..made]) |v| v.release();
+            s.gpa.free(args);
+            return binDecodeError(e, entry);
+        };
+        made += 1;
+    }
+    out.* = args;
+    return null;
+}
+
+/// A binary `limits`: a map of integer fields, or any other item as the
+/// sentinel for an override the binding can't represent.
+fn overrideOfBinary(span: ?[]const u8) rp.Error!Override {
+    const given = span orelse return .none;
+    if (!rp.isMap(given)) return .{ .refused = .{} };
+    const names = comptime blk: {
+        var xs: [machine.override_fields.len][]const u8 = undefined;
+        for (machine.override_fields, 0..) |f, i| xs[i] = f.ts;
+        const out = xs;
+        break :blk &out;
+    };
+    var fields: [names.len]?[]const u8 = undefined;
+    var r: rp.Reader = .{ .data = given };
+    try r.record(names, false, &fields);
+    var o: talk.LimitOverride = .{};
+    var refused: machine.RefusedOverride = .{};
+    var bad = false;
+    var any = false;
+    inline for (machine.override_fields, 0..) |f, i| if (fields[i]) |x| {
+        const n = rp.intOf(x) catch null;
+        @field(refused, f.field) = n;
+        if (n == null or n.? < 0) {
+            bad = true;
+        } else {
+            @field(o, f.field) = n.?;
+            o.set |= f.bit;
+            any = true;
+        }
+    };
+    if (bad) return .{ .refused = refused };
+    return if (any) .{ .given = o } else .none;
+}
+
+/// `cancel-correlated`: cancels a combined input by its token, exactly as
+/// `cancel-delivery` cancels its delivery.
+fn cancelCorrelatedReply(s: *Session, msg: Json, ref: i64) []u8 {
+    const entry = groupOf(s, msg) orelse return hostError(s.gpa, ref, .invalid_value);
+    const token = asU64(field(msg, "token")) orelse return protocolError(s.gpa, ref, "a token is a positive integer");
+    const i = bindingOf(s, token) orelse return protocolError(s.gpa, ref, "an unknown or retired token");
+    const b = s.bindings.items[i];
+    if (b.entry != entry) return protocolError(s.gpa, ref, "the token belongs to another Group");
+    const code = Direct.cancelDelivery(entry.group, b.delivery.ptr, b.delivery.len);
+    if (code != .ok) return hostError(s.gpa, ref, code);
+    var o = Out.init(s.gpa);
+    defer o.deinit();
+    beginOk(&o, ref) catch return oomReply();
+    return finishOk(s, &o, entry);
 }
 
 // ---------------------------------------------------------- wasm exports
@@ -6783,4 +7829,326 @@ test "without group-exchanges-v1 one paused Pump holds every Group and drop-grou
     _ = (try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"a\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{40})).object.get("need").?;
     try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"b\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{41})));
     _ = try runEnd(try c.sendRef(40, "{{\"m\":\"op-result\",\"ref\":{d},\"result\":2}}", .{40}));
+}
+
+// ------------------------------------- binary Request/Pump exchange tests
+
+/// Views a binary reply as JSON: positional records by their field names,
+/// Reports with their `kind`, and Value items other than scalars as
+/// `{"$raw": bytes}`. A JSON reply is parsed as it is.
+fn binReply(c: *Client, frame: []const u8) !Json {
+    const a = c.arena.allocator();
+    const sent = handle(c.s, frame);
+    defer freeReply(c.s.gpa, sent);
+    const reply = try a.dupe(u8, sent);
+    if (!std.mem.startsWith(u8, reply, rp.prefix)) return (try std.json.parseFromSlice(Json, a, reply, .{})).value;
+    const fields = reply[rp.prefix.len] == @backingInt(rp.Layout.fields);
+    var r: rp.Reader = .{ .data = reply[rp.prefix.len + 1 ..] };
+    var v: Json = undefined;
+    if (fields) {
+        const m = std.enums.fromInt(rp.Message, try r.byte()) orelse return error.TestUnexpectedResult;
+        v = try viewRecord(a, &r, m.fields());
+        try v.object.put(a, "binary", .{ .string = if (m == .admission) "admission" else "completion" });
+    } else v = try viewItem(a, &r, false);
+    try std.testing.expect(r.done());
+    return v;
+}
+
+fn viewRecord(a: Allocator, r: *rp.Reader, names: []const []const u8) anyerror!Json {
+    if (try r.byte() != rp.tag.list or try r.uint() != names.len) return error.TestUnexpectedResult;
+    var obj: std.json.ObjectMap = .empty;
+    for (names) |n| {
+        const v = try viewItem(a, r, std.mem.eql(u8, n, "reports"));
+        if (v != .null) try obj.put(a, n, v);
+    }
+    return .{ .object = obj };
+}
+
+fn viewItem(a: Allocator, r: *rp.Reader, positional_reports: bool) anyerror!Json {
+    const start = r.at;
+    switch (try r.byte()) {
+        0x00 => return .null,
+        0x01 => return .{ .bool = false },
+        0x02 => return .{ .bool = true },
+        0x03 => return .{ .integer = @intCast(try r.uint()) },
+        0x10 => return .{ .integer = -@as(i64, @intCast(try r.uint())) },
+        0x04, 0x05, 0x12 => return .{ .string = try r.bytes() },
+        0x0b => {
+            const u = try r.uint();
+            return .{ .integer = @as(i64, @intCast(u >> 1)) ^ -@as(i64, @intCast(u & 1)) };
+        },
+        0x06 => {
+            var xs = std.json.Array.init(a);
+            for (0..try r.uint()) |_| {
+                if (positional_reports) {
+                    const kind = std.enums.fromInt(rp.Report, try r.byte()) orelse return error.TestUnexpectedResult;
+                    var rec = try viewRecord(a, r, kind.fields());
+                    try rec.object.put(a, "kind", .{ .string = kind.kind() });
+                    try xs.append(rec);
+                } else try xs.append(try viewItem(a, r, false));
+            }
+            return .{ .array = xs };
+        },
+        0x07 => {
+            var obj: std.json.ObjectMap = .empty;
+            for (0..try r.uint()) |_| {
+                if (try r.byte() != rp.tag.text) return error.TestUnexpectedResult;
+                const k = try r.bytes();
+                try obj.put(a, k, try viewItem(a, r, false));
+            }
+            return .{ .object = obj };
+        },
+        else => {
+            r.at = start;
+            var obj: std.json.ObjectMap = .empty;
+            try obj.put(a, "$raw", .{ .string = try r.skip() });
+            return .{ .object = obj };
+        },
+    }
+}
+
+/// Starts a binary input frame of either candidate.
+fn binInput(w: *rp.Writer, layout: rp.Layout, m: rp.Message, ref: i64, group: []const u8) !void {
+    try w.header(layout);
+    if (layout == .fields) try w.byte(@backingInt(m));
+    try w.begin(m.fields(), layout == .fields);
+    if (layout == .map) {
+        try w.key("m");
+        try w.ptext(m.name());
+    }
+    try w.key("ref");
+    try w.int(ref);
+    try w.key("group");
+    try w.ptext(group);
+}
+
+/// A Request or request-pump input, with the Script, message and arguments.
+fn binRequest(a: Allocator, layout: rp.Layout, m: rp.Message, ref: i64, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
+    return binRequestTo(a, layout, m, ref, "g", token, script, name, args, now_s);
+}
+
+fn binRequestTo(a: Allocator, layout: rp.Layout, m: rp.Message, ref: i64, group: []const u8, token: u64, script: []const u8, name: []const u8, args: []const i64, now_s: i64) ![]u8 {
+    var w = rp.Writer.init(a);
+    defer w.deinit();
+    try binInput(&w, layout, m, ref, group);
+    if (token != 0) {
+        try w.key("token");
+        try w.int(token);
+    }
+    try w.key("to");
+    try w.begin(&.{}, false);
+    try w.key("script");
+    try w.ptext(script);
+    try w.end();
+    try w.key("message");
+    try w.begin(&.{}, false);
+    try w.key("name");
+    try w.ptext(name);
+    try w.key("args");
+    try w.list(args.len);
+    for (args) |n| try w.int(n);
+    try w.end();
+    if (m != .request) {
+        try w.key("now");
+        try w.instant(.{ .seconds = now_s, .micros = 0 });
+    }
+    try w.end();
+    return w.finish();
+}
+
+fn binPump(a: Allocator, layout: rp.Layout, ref: i64, now_s: i64) ![]u8 {
+    var w = rp.Writer.init(a);
+    defer w.deinit();
+    try binInput(&w, layout, .pump, ref, "g");
+    try w.key("now");
+    try w.instant(.{ .seconds = now_s, .micros = 0 });
+    try w.end();
+    return w.finish();
+}
+
+fn binHello(c: *Client, ref: i64, feature: []const u8) !Json {
+    return c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"crossing-trace-v1\",\"function-metadata-v1\",\"core-message-v1\",\"group-exchanges-v1\",\"{s}\"]}}", .{ ref, feature });
+}
+
+fn reportOf(reply: Json, kind: []const u8) !Json {
+    const ok = reply.object.get("ok") orelse reply;
+    for (ok.object.get("reports").?.array.items) |r| if (std.mem.eql(u8, r.object.get("kind").?.string, kind)) return r;
+    return unexpected(reply);
+}
+
+const now_2026: i64 = 1791633600;
+
+test "request-pump negotiation is exclusive, fixed for the Session and required" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{1}));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binPump(a, .map, 2, now_2026))));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"request-pump-map-v1\",\"request-pump-fields-v1\"]}}", .{3})));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[\"request-pump-map-v1\",\"binary-frames-v1\"]}}", .{4})));
+    try std.testing.expect(s.request_pump == null);
+    const hello = try okOf(try binHello(&c, 5, "request-pump-map-v1"));
+    var offered: usize = 0;
+    for (hello.object.get("features").?.array.items) |f| {
+        if (std.mem.eql(u8, f.string, rp.feature_map) or std.mem.eql(u8, f.string, rp.feature_fields)) offered += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), offered);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binHello(&c, 6, "request-pump-fields-v1")));
+    _ = try okOf(try binHello(&c, 7, "request-pump-map-v1"));
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1,\"features\":[]}}", .{8}));
+    try std.testing.expectEqual(rp.Layout.map, s.request_pump.?);
+    // The other layout, another version and a lone prefix are refused.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binPump(a, .fields, 9, now_2026))));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, "NTB\x02\x00\x00")));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, "NTB\x01")));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":1}}", .{10})));
+}
+
+test "binary Requests, Pumps and combined Requests in both candidates" {
+    for ([_]rp.Layout{ .map, .fields }) |layout| {
+        const s = Session.init(std.testing.allocator).?;
+        defer s.deinit();
+        var c = Client.init(s);
+        defer c.deinit();
+        const a = c.arena.allocator();
+        _ = try okOf(try binHello(&c, 1, if (layout == .map) rp.feature_map else rp.feature_fields));
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\",\"trace\":true}}", .{2}));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on inc n\\n  return n + 1\\nend inc\\n\"}}", .{3}));
+        // An ordinary Request is admitted.
+        const admitted = try binReply(&c, try binRequest(a, layout, .request, 4, 0, "s", "inc", &.{-3}, 0));
+        const adm = if (layout == .map) try okOf(admitted) else admitted;
+        try std.testing.expectEqualStrings("d1", adm.object.get("delivery").?.string);
+        // Its Pump ends in a binary completion carrying typed Reports.
+        const pumped = try binReply(&c, try binPump(a, layout, 5, now_2026));
+        try std.testing.expectEqual(@as(i64, 5), pumped.object.get("ref").?.integer);
+        const ok = if (layout == .map) try okOf(pumped) else pumped;
+        try std.testing.expectEqualStrings("idle", ok.object.get("state").?.string);
+        try std.testing.expect(pumped.object.get("delivery") == null and pumped.object.get("token") == null);
+        try std.testing.expectEqual(@as(usize, 0), pumped.object.get("abandoned").?.array.items.len);
+        const end = try reportOf(pumped, "run end");
+        try std.testing.expectEqualStrings("d1", end.object.get("delivery").?.string);
+        try std.testing.expectEqual(@as(i64, -2), end.object.get("result").?.integer);
+        // A combined Request admits once, Pumps once, and carries its token.
+        const both = try binReply(&c, try binRequest(a, layout, .request_pump, 6, 41, "s", "inc", &.{1}, now_2026 + 1));
+        errdefer std.debug.print("combined reply: {f}\n", .{std.json.fmt(both, .{})});
+        try std.testing.expectEqualStrings("d2", both.object.get("delivery").?.string);
+        try std.testing.expectEqual(@as(i64, 41), both.object.get("token").?.integer);
+        try std.testing.expectEqual(@as(i64, 2), (try reportOf(both, "run end")).object.get("result").?.integer);
+        var traced_request = false;
+        const trace = (if (layout == .map) try okOf(both) else both).object.get("trace").?.array.items;
+        for (trace) |line| {
+            if (std.mem.startsWith(u8, line.string, "> request d2 to=s")) traced_request = true;
+            try std.testing.expect(!std.mem.containsAtLeast(u8, line.string, 1, "request-pump"));
+        }
+        try std.testing.expect(traced_request);
+        // Its token is retired with its final reply.
+        try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":41}}", .{7})));
+        try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
+        // A Function Value crosses back into call-pump as its own item.
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"m\",\"source\":\"on make n\\n  return given x: x + n\\nend make\\n\"}}", .{8}));
+        const made = try binReply(&c, try binRequest(a, layout, .request_pump, 9, 42, "m", "make", &.{5}, now_2026 + 2));
+        const raw = (try reportOf(made, "run end")).object.get("result").?.object.get("$raw").?.string;
+        try std.testing.expectEqual(@as(u8, 0x13), raw[0]);
+        var w = rp.Writer.init(a);
+        try binInput(&w, layout, .call_pump, 10, "g");
+        try w.key("token");
+        try w.int(43);
+        try w.key("fn");
+        try w.raw(raw);
+        try w.key("args");
+        try w.list(1);
+        try w.int(3);
+        try w.key("now");
+        try w.instant(.{ .seconds = now_2026 + 3, .micros = 0 });
+        try w.end();
+        const called = try binReply(&c, try w.finish());
+        try std.testing.expectEqualStrings("d4", called.object.get("delivery").?.string);
+        try std.testing.expectEqual(@as(i64, 8), (try reportOf(called, "run end")).object.get("result").?.integer);
+    }
+}
+
+test "malformed binary frames are JSON protocol errors and change nothing" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    _ = try okOf(try binHello(&c, 1, rp.feature_fields));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"g\",\"name\":\"g\"}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on inc n\\n  return n + 1\\nend inc\\n\"}}", .{3}));
+    const good = try binRequest(a, .fields, .request_pump, 4, 9, "s", "inc", &.{1}, now_2026);
+    const extra = try std.mem.concat(a, u8, &.{ good, &.{0} });
+    const wrong_tag = try a.dupe(u8, good);
+    wrong_tag[rp.prefix.len + 1] = 0x81;
+    const short = good[0 .. good.len - 1];
+    const bad_count = try a.dupe(u8, good);
+    bad_count[rp.prefix.len + 3] -= 1;
+    for ([_][]const u8{ extra, wrong_tag, short, bad_count, "NTB\x01\x01\x7f" }) |frame| {
+        const reply = try binReply(&c, frame);
+        try std.testing.expectEqualStrings("protocol error", try errKind(reply));
+    }
+    // A duplicate or zero token, before admission.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequest(a, .fields, .request_pump, 5, 0, "s", "inc", &.{1}, now_2026))));
+    // A refused admission neither Pumps nor binds its token.
+    const refused = try binReply(&c, try binRequest(a, .fields, .request_pump, 6, 9, "nobody", "inc", &.{1}, now_2026));
+    try std.testing.expectEqualStrings("admission", refused.object.get("binary").?.string);
+    try std.testing.expectEqualStrings("invalid value", refused.object.get("err").?.object.get("code").?.string);
+    try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
+    // Nothing consumed a delivery id.
+    const both = try binReply(&c, good);
+    try std.testing.expectEqualStrings("d1", both.object.get("delivery").?.string);
+}
+
+test "a combined exchange pauses at JSON needs, takes token cancellation and ends in binary" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    const a = c.arena.allocator();
+    _ = try okOf(try binHello(&c, 0, rp.feature_map));
+    _ = try okOf(try c.send("{{\"m\":\"define-capability\",\"ref\":{d},\"name\":\"api\",\"ops\":[{{\"name\":\"read\",\"mode\":\"immediate\",\"result\":\"number\"}}]}}", .{1}));
+    const grant = try okOf(try c.send("{{\"m\":\"grant\",\"ref\":{d},\"capability\":\"api\",\"ops\":\"all\"}}", .{2}));
+    for ([_][]const u8{ "g", "h" }) |group| {
+        _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"group\":\"{s}\",\"name\":\"{s}\",\"trace\":true}}", .{ 3, group, group }));
+        _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"{s}\",\"name\":\"s\",\"grants\":{{\"api\":{d}}},\"source\":\"on go\\n ask api to read\\n return it\\nend go\\non inc n\\n return n + 1\\nend inc\"}}", .{ 4, group, grant.object.get("grant").?.integer }));
+    }
+    // Earlier work stays ahead: the combined input waits behind it.
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"go\"}}}}", .{5}));
+    const need = try binReply(&c, try binRequest(a, .map, .request_pump, 6, 77, "s", "inc", &.{1}, now_2026));
+    try std.testing.expectEqualStrings("op", need.object.get("need").?.object.get("m").?.string);
+    try std.testing.expectEqual(@as(usize, 1), s.bindings.items.len);
+    // The token is active: a duplicate is refused, another Group can't use it.
+    try std.testing.expectEqualStrings("protocol error", try errKind(try binReply(&c, try binRequestTo(a, .map, .request_pump, 7, "h", 77, "s", "inc", &.{}, now_2026))));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"h\",\"token\":77}}", .{8})));
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":78}}", .{9})));
+    // A competing Pump, ordinary or combined, is refused before admission.
+    const competing = try binReply(&c, try binPump(a, .map, 10, now_2026));
+    try std.testing.expectEqualStrings("reentrant call", competing.object.get("err").?.object.get("code").?.string);
+    const competing_both = try binReply(&c, try binRequest(a, .map, .request_pump, 11, 79, "s", "inc", &.{}, now_2026));
+    try std.testing.expectEqualStrings("reentrant call", competing_both.object.get("err").?.object.get("code").?.string);
+    try std.testing.expectEqual(@as(usize, 1), s.bindings.items.len);
+    // Cancellation by token is admitted while the worker waits at its need.
+    _ = try okOf(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":77}}", .{12}));
+    // The JSON result resumes it; the final reply is binary, carrying the token.
+    var done = try binReply(&c, "{\"m\":\"op-result\",\"ref\":6,\"group\":\"g\",\"result\":7}");
+    // Crossing Trace pauses add further JSON continuations.
+    while (done.object.get("need")) |n| {
+        try std.testing.expectEqualStrings("trace", n.object.get("m").?.string);
+        done = try binReply(&c, "{\"m\":\"trace-result\",\"ref\":6,\"group\":\"g\"}");
+    }
+    try std.testing.expectEqualStrings("d2", done.object.get("delivery").?.string);
+    try std.testing.expectEqual(@as(i64, 77), done.object.get("token").?.integer);
+    try std.testing.expectEqual(@as(i64, 7), (try reportOf(done, "run end")).object.get("result").?.integer);
+    try std.testing.expectEqual(@as(usize, 0), s.bindings.items.len);
+    try std.testing.expectEqualStrings("protocol error", try errKind(try c.send("{{\"m\":\"cancel-correlated\",\"ref\":{d},\"group\":\"g\",\"token\":77}}", .{13})));
+    // A later JSON Pump replies in JSON. As cancel-delivery, the queued
+    // cancellation lands at its drain, with cancel-delivery's own record.
+    const next = try okOf(try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-10T12:00:00Z\"}}", .{14}));
+    var cancelled = false;
+    for (next.object.get("trace").?.array.items) |line| {
+        if (std.mem.eql(u8, line.string, "> cancel-delivery d2")) cancelled = true;
+    }
+    if (!cancelled) return unexpected(next);
 }

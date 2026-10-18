@@ -1,0 +1,20 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/odogono/odgn-talk/impl/go
+cpu: Apple M5
+BenchmarkBackendRequestPump-10    	    2000	     11734 ns/op	     11167 p50-ns	     18667 p99-ns	    5689 B/op	      99 allocs/op
+BenchmarkBackendRequestPump-10    	    2000	     11490 ns/op	     11166 p50-ns	     16583 p99-ns	    5706 B/op	      99 allocs/op
+BenchmarkBackendRequestPump-10    	    2000	     11256 ns/op	     10916 p50-ns	     15000 p99-ns	    5724 B/op	      99 allocs/op
+BenchmarkBackendRequestPump-10    	    2000	     11267 ns/op	     11125 p50-ns	     13959 p99-ns	    5743 B/op	      99 allocs/op
+BenchmarkBackendRequestPump-10    	    2000	     11359 ns/op	     11333 p50-ns	     14583 p99-ns	    5687 B/op	      99 allocs/op
+BenchmarkBackendCallPump-10       	    2000	     15738 ns/op	    7301 B/op	     124 allocs/op
+BenchmarkBackendCallPump-10       	    2000	     15749 ns/op	    7357 B/op	     124 allocs/op
+BenchmarkBackendCallPump-10       	    2000	     15759 ns/op	    7338 B/op	     124 allocs/op
+BenchmarkBackendCallPump-10       	    2000	     15788 ns/op	    7320 B/op	     124 allocs/op
+BenchmarkBackendCallPump-10       	    2000	     15999 ns/op	    7320 B/op	     124 allocs/op
+BenchmarkBackendRequest-10        	    2000	     12520 ns/op	     12125 p50-ns	     16708 p99-ns	    6978 B/op	     120 allocs/op
+BenchmarkBackendRequest-10        	    2000	     12360 ns/op	     12000 p50-ns	     16083 p99-ns	    6997 B/op	     120 allocs/op
+BenchmarkBackendRequest-10        	    2000	     12582 ns/op	     12209 p50-ns	     17375 p99-ns	    6978 B/op	     120 allocs/op
+BenchmarkBackendRequest-10        	    2000	     12426 ns/op	     12084 p50-ns	     17375 p99-ns	    6997 B/op	     120 allocs/op
+BenchmarkBackendRequest-10        	    2000	     12699 ns/op	     12417 p50-ns	     16292 p99-ns	    6960 B/op	     120 allocs/op
+PASS
