@@ -222,6 +222,7 @@ defmodule NorthTalk.RequestPumpTest do
           true,
           9_007_199_254_740_993,
           -18_446_744_073_709_551_615,
+          -18_446_744_073_709_551_616,
           123_456_789_012_345_678_901_234_567_890,
           Decimal.new("-0.50"),
           Decimal.new("0.0"),
@@ -239,11 +240,6 @@ defmodule NorthTalk.RequestPumpTest do
       expected = if value == "é", do: "é", else: value
       assert {:ok, %Result{value: ^expected}} = NorthTalk.await(pending)
     end
-
-    # The Zig reader stops at magnitude 2^64 - 1; the spec allows 2^64 (#1274). Its
-    # refusal of the frame changes nothing.
-    assert {:error, %HostError{code: "protocol error"}} =
-             NorthTalk.request_pump(group, "s", "echo", [-18_446_744_073_709_551_616], now: @t0)
 
     deep = Enum.reduce(1..5_000, 0, fn _, v -> [v] end)
     {:ok, %Pumped{pending: pending}} = NorthTalk.request_pump(group, "s", "echo", [deep], now: @t0)
