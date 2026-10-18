@@ -111,6 +111,13 @@ it; cached reruns print nothing, so save the first `zig build test 2>&1` to a fi
 - Tests and cases: [replay](src/corpus/replay.zig), [talk.h replay](src/corpus/talk_replay.zig), [C Host tests](tests/talk_h_test.c)
 - First check: `cd impl/zig && zig build corpus -- text-model`
 
+## Waits, suspending Calls and their abandonment
+
+- Implementation: [machine](src/machine/machine.zig) (`Pending`, `addCall`, `abandonCall`, `retireCalls`, `callAwaited`), [Calls](src/machine/capabilities.zig), [issued Calls](src/machine/issued_calls.zig), [saves](src/machine/snapshot.zig). These are moving into one Wait table module ([ADR 0105](../../docs/adr/0105-each-core-keeps-its-waits-in-one-wait-table-module.md), [#1218](https://github.com/odogono/odgn-talk/issues/1218)).
+- Rules: [Suspension Points](../../spec/05-handlers-messages-and-scheduling.md#suspension-points), [the Trace](../../spec/11-the-trace-and-conformance.md#the-trace)
+- Tests and cases: [metering tests](src/machine/metering_test.zig), [crossing tests](src/machine/crossing_test.zig), [lifecycle tests](src/machine/lifecycle_test.zig), [C Host tests](tests/talk_h_test.c)
+- First check: `cd impl/zig && zig build test`
+
 ## Metered Operations and request admission
 
 - Implementation: [machine](src/machine/machine.zig), [declarations and Calls](src/machine/capabilities.zig), [SQLite factory](src/talk.zig), [Message Layer](src/message.zig)
