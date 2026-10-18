@@ -2340,7 +2340,7 @@ export class BodyCompiler {
     if (s.from) {
       this.expr(s.from);
     }
-    const { body, binds, captures } = this.eventBody(s, null);
+    const { body, binds, captures } = this.eventBody(s, s.guard);
     if (s.timeout) {
       this.expr(s.timeout);
     }

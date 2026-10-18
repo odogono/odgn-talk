@@ -851,7 +851,10 @@ func (p *parser) tryStatement() *Node {
 	n.End = p.closing("try")
 	return n
 }
-func (p *parser) event(t Token) *Node {
+
+// event parses a `wait for` event. A block `when` branch takes its Guard
+// here; a one-line wait takes it after any timeout (ADR 0109).
+func (p *parser) event(t Token, guard bool) *Node {
 	e := node("event", t)
 	name := p.name()
 	if name.Raw == "all" {
@@ -875,7 +878,7 @@ func (p *parser) event(t Token) *Node {
 		p.take(Operand)
 		e.Children = []*Node{p.chunkLevel()}
 	}
-	if p.accept("where") {
+	if guard && p.accept("where") {
 		e.Guard = p.expression()
 	}
 	return e
@@ -912,7 +915,7 @@ func (p *parser) waitStatement(inline bool) *Node {
 			t := p.peek(Operand)
 			var b *Node
 			if p.accept("when") {
-				b = p.event(t)
+				b = p.event(t, true)
 			} else {
 				p.expect("after")
 				b = node("after", t)
@@ -925,9 +928,13 @@ func (p *parser) waitStatement(inline bool) *Node {
 		n.End = p.closing("wait")
 		return n
 	}
-	n.Branches = []*Node{p.event(n.Token)}
+	e := p.event(n.Token, false)
+	n.Branches = []*Node{e}
 	if p.accept("or") {
 		n.Children = []*Node{p.expression()}
+	}
+	if p.accept("where") {
+		e.Guard = p.expression()
 	}
 	return n
 }

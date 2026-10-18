@@ -1207,6 +1207,7 @@ const Checker = struct {
                 if (c.context.library) try c.report(.not_in_a_library, first);
                 try c.event(s, wf.event);
                 if (wf.timeout) |e| try c.expr(s, e, .normal);
+                if (wf.guard) |g| try c.expr(s, g.condition, .guard);
                 try c.intrinsic(s, first, w);
                 if (w.join != null) try c.report(.not_in_a_join, first);
             },
@@ -2527,6 +2528,18 @@ test "names resolve, and unknown ones are reported" {
         \\  return absent
         \\end t
     , .{}, "unknown name at 9:10\n");
+}
+
+test "a one-line `wait for`'s Guard has a Guard's restrictions and its event's bindings" {
+    try expectDiagnostics(
+        \\function f x
+        \\ return x
+        \\end f
+        \\on t
+        \\ wait for go n or 1 s where n > 0 and f(n)
+        \\ wait for go n where m > 0
+        \\end t
+    , .{}, "not in a guard at 5:39\nunknown name at 6:22\n");
 }
 
 test "Lambdas capture and may not write captured locals" {

@@ -233,7 +233,13 @@ export type Stmt =
   /** A `tell` block's lines, each the call the checker chose (ADR 0063). */
   | { k: 'tell-block'; lines: Stmt[]; pos: Pos }
   | { duration: Expr; k: 'wait'; pos: Pos }
-  | { event: Event; k: 'wait-for'; pos: Pos; timeout: Expr | null }
+  | {
+      event: Event;
+      guard: Guard | null;
+      k: 'wait-for';
+      pos: Pos;
+      timeout: Expr | null;
+    }
   | { branches: WaitBranch[]; k: 'wait-block'; pos: Pos }
   | { body: Stmt[]; end: Pos; k: 'join'; pos: Pos }
   /** A Timeout Block (ADR 0073). */
@@ -1272,11 +1278,14 @@ const wait = (node: SemanticNode, of: Of): Stmt => {
   const third = children[2];
   if (third?.kind === 'node') {
     const event = of<Event>(third);
+    const or = children.findIndex(child => isToken(child, 'or'));
+    const where = children.findIndex(child => isToken(child, 'where'));
     return {
       k: 'wait-for',
       pos: at,
       event,
-      timeout: children[4] ? of<Expr>(children[4]) : null,
+      timeout: or < 0 ? null : of<Expr>(children[or + 1]),
+      guard: where < 0 ? null : guardAt(children[where + 1], of),
     };
   }
   const branches: WaitBranch[] = [];

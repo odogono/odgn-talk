@@ -1380,7 +1380,7 @@ class BodyLowering {
       yield this.expr(s.event.from);
     }
     entry.branches.push(
-      (yield this.eventBody(s.event, null, s.pos)) as EventBranch,
+      (yield this.eventBody(s.event, s.guard, s.pos)) as EventBranch,
     );
     if (s.timeout) {
       yield this.expr(s.timeout);

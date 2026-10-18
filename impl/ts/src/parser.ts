@@ -1512,7 +1512,7 @@ class Parser {
     }
   }
 
-  // `wait d`, `wait for ev [or d]`, and, where a block may go, the block
+  // `wait d`, `wait for ev [or d] [where g]`, and, where a block may go, the block
   // `wait for` and the Join.
   *wait(blockAllowed: boolean): ParseTask<Node> {
     const frame = this.enter('Wait');
@@ -1586,7 +1586,14 @@ class Parser {
         this.next('operator');
         timeout = (yield this.expr()) as Node;
       }
-      return { ...ev, k: 'WaitFor', timeout };
+      // A Guard comes after any timeout, so the timeout ends at `where` and
+      // an `or` in the Guard is boolean (ADR 0109).
+      let guard: Node | null = null;
+      if (this.atOperatorWord('where')) {
+        this.next('operator');
+        guard = (yield this.expr()) as Node;
+      }
+      return { ...ev, k: 'WaitFor', timeout, guard };
     } finally {
       this.leave(frame);
     }

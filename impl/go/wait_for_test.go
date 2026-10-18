@@ -344,3 +344,54 @@ func TestWaitForObservationAllocationFaultWaitsUntilResumption(t *testing.T) {
 		t.Fatal(r, err)
 	}
 }
+
+// A one-line `wait for` takes a Guard after any timeout, and an `or` in the
+// Guard is boolean (ADR 0109). watched gives what the wait left in `it` once
+// `key` messages carrying each of keys have been dispatched and the Clock
+// has reached until, or "waiting".
+func TestOneLineWaitForGuard(t *testing.T) {
+	watched := func(wait string, keys []string, until time.Duration) string {
+		t.Helper()
+		g := New().NewGroup(GroupOptions{})
+		s, err := g.Load(LoadOptions{Name: "s", Source: "script variable seen = \"waiting\"\non watch\n " + wait + "\n put it into seen\nend watch\non key k\nend key\n"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Deliver(Message{Name: "watch"})
+		t0 := time.Unix(0, 0)
+		if _, err := g.Pump(t0, PumpOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range keys {
+			v, err := Text(k)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.Deliver(Message{Name: "key", Args: []Value{v}})
+			if _, err := g.Pump(t0, PumpOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := g.Pump(t0.Add(until), PumpOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		return g.Inspect().Scripts[0].Vars[0].Val.String()
+	}
+	for _, tc := range []struct {
+		wait  string
+		keys  []string
+		until time.Duration
+		want  string
+	}{
+		{`wait for key k where k = "Y"`, []string{"N"}, 0, `"waiting"`},
+		{`wait for key k where k = "Y"`, []string{"N", "Y"}, 0, `{name: "key", args: ["Y"]}`},
+		{`wait for key k where k = "Y" or k = "N"`, []string{"A", "N"}, 0, `{name: "key", args: ["N"]}`},
+		{`wait for key k or 5 s where k = "Y"`, []string{"N"}, 4 * time.Second, `"waiting"`},
+		{`wait for key k or 5 s where k = "Y"`, []string{"N"}, 5 * time.Second, `nothing`},
+		{`wait for key k or 5 s where k = "Y"`, []string{"N", "Y"}, 5 * time.Second, `{name: "key", args: ["Y"]}`},
+	} {
+		if got := watched(tc.wait, tc.keys, tc.until); got != tc.want {
+			t.Errorf("%s after %v, %v: got %s, want %s", tc.wait, tc.keys, tc.until, got, tc.want)
+		}
+	}
+}

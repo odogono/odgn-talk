@@ -262,7 +262,7 @@ An Argument Label names the parameter after it, in a Handler's head and at its c
 ```ebnf
 Block          ::= ( Statement? NL )*
 Statement      ::= If | Repeat | Match | Try | Wait | TellBlock | TimeoutBlock | Simple
-Inline         ::= Simple | 'wait' ( 'for' Event Timeout? | Expression )
+Inline         ::= Simple | 'wait' ( 'for' Event Timeout? Guard? | Expression )
 Simple         ::= Put | Let | Set | Add | Subtract | Multiply | Divide | Delete
                  | Send | Ask | Tell | Return | Veto | Pass | Exit | Next | Throw
                  | Replace | ChooseOffer | CallStatement | CommandCall
@@ -348,7 +348,7 @@ CatchClause    ::= 'catch' Pattern RecoveryMarker? Guard? NL Block
 RecoveryMarker ::= 'before' 'unwind'
 FinallyClause  ::= 'finally' NL Block
 ChooseOffer    ::= 'choose' 'offer' Name ( CallOpen ExpressionList? ')' )?
-Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? ) | Expression )
+Wait           ::= 'wait' ( 'for' ( Join | WaitBlock | Event Timeout? Guard? ) | Expression )
 Join           ::= 'all' NL Block 'end' 'wait'?
 WaitBlock      ::= NL ( NL | WaitBranch )* 'end' 'wait'?
 WaitBranch     ::= 'when' Event Guard? 'then' Body | 'after' Expression 'then' Body
@@ -366,7 +366,7 @@ TimeoutBlock   ::= 'with' 'timeout' 'of' Expression NL Block 'end' 'timeout'?
 - **`repeat`:** `forever` straight after `repeat` always means a loop with no end, and never a count. A count is any expression before `times`.
 - **`collecting`:** any `repeat` head may end with one `collecting e into v`, where `v` is a Name. `collecting` is in the FOLLOW set, so `repeat for each c in item collecting c into cs` reads `item` as a Name, and `into` ends `e`, since it isn't an operator. So `collecting x into item 1 of xs` is a syntax error at `1`, and a second `collecting` at that word ([ADR 0059](../docs/adr/0059-a-repeat-may-collect-its-results.md)).
 - **`match`:** each `when` has one pattern, then an optional Guard. `when contains <…>` searches rather than matching the whole value. At most one `else` comes last. A branch body is an `Inline` statement on the same line, or a block.
-- **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). An event's patterns take [Argument Labels](#argument-labels) as a head's parameters do (`wait for move p to sq`), and since `from` is never a label, it always starts the source. `from` takes a postfix-level operand, so the `or` there is the timeout. At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
+- **`wait for`:** an event, optionally with `from` and a timeout (`wait for click from okButton or 30 s`). An event's patterns take [Argument Labels](#argument-labels) as a head's parameters do (`wait for move p to sq`), and since `from` is never a label, it always starts the source. `from` takes a postfix-level operand, so the `or` there is the timeout. A Guard comes last, after any timeout (`wait for pressed key or 30 s where key = "Y"`): the timeout's expression ends at `where`, and the Guard runs to the end of the line, so an `or` in it is boolean ([ADR 0109](../docs/adr/0109-a-one-line-wait-for-takes-a-guard-after-its-timeout.md)). At the end of a line, `wait for` starts a block of `when` and `after` branches, and `wait for all` starts a Join. Neither block has a one-line form.
 - **`try`:** `catch` clauses are Destructuring heads with optional Guards, tried top to bottom ([chapter 6](06-errors-and-limits.md)).
 - **`tell` block:** `tell g` at the end of a line opens a block of Operation lines, closed by `end` or `end tell` ([ADR 0063](../docs/adr/0063-a-tell-block-calls-several-operations-of-one-grant.md)). A line's first word is always an Operation name, even a Reserved Word, except that `end` always closes the block. So `put url, {json: order} and wait` in a `tell http` block calls `http`'s `put`. Nothing but Operation lines, blank lines and comments goes in the block, so a line starting `if` or `tell` is an Operation named `if` or `tell`, and an empty block is allowed. It is a full statement, not an `Inline`, so a one-line `if` or `when` can't hold one. What each line calls is in [chapter 4](04-expressions-and-statements.md#capabilities).
 - **Timeout Block:** `with timeout of` and an expression at the end of a line opens a block, closed by `end` or `end timeout` ([ADR 0073](../docs/adr/0073-a-timeout-block-sets-one-deadline-for-the-waits-written-inside-it.md)). At the start of a statement, `with` followed by `timeout` always opens one, and otherwise `with` starts a Command Call. `timeout` is a keyword only there and after the block's `end`, and stays a Name elsewhere. There is no one-line form, and it is a full statement, not an `Inline`. What it bounds is in [chapter 5](05-handlers-messages-and-scheduling.md#timeout-blocks).

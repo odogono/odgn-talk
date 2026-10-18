@@ -1,0 +1,41 @@
+# Unblessed: one-line `wait for` Guards (#1247); first blessing awaits human review.
+# wait-for-guard: r1 waits for a "Y" or "N" key, and r2 for a "Y" key or
+# 5 s. "A" matches neither Guard. "N" ends r1's wait but not r2's, which
+# times out at 5 s with Nothing. A later confirm waits again, and "Y" ends
+# it with the message.
+
+> load keys identity=cc0f61caef8c332a3b4e5bf6e46e2e59e94b505156b9b49f01217b74710906e2
+> deliver d1 to=keys message=answer
+> deliver d2 to=keys message=confirm
+> pump clock=2026-09-30T09:00:00Z
+seg keys/r1 start delivery=d1 handler=answer clause=1 fuel=14 alloc=0 state=256 end=wait-for
+seg keys/r2 start delivery=d2 handler=confirm clause=1 fuel=15 alloc=0 state=432 end=wait-for until=2026-09-30T09:00:05Z
+pumped state=idle fuel=29 next=2026-09-30T09:00:05Z
+> deliver d3 to=keys message=key args=["A"]
+> deliver d4 to=keys message=key args=["N"]
+> pump clock=2026-09-30T09:00:01Z
+seg keys/r3 start delivery=d3 handler=key clause=1 fuel=21 alloc=58 state=514 end=return
+run keys/r3 outcome=completed delivery=d3 handler=key fuel=21 alloc=58
+seg keys/r4 start delivery=d4 handler=key clause=1 fuel=21 alloc=58 state=647 end=return
+run keys/r4 outcome=completed delivery=d4 handler=key fuel=21 alloc=58
+seg keys/r1 resume fuel=19 alloc=370 state=479 end=return
+run keys/r1 outcome=completed delivery=d1 handler=answer fuel=70 alloc=411
+pumped state=idle fuel=114 next=2026-09-30T09:00:05Z
+> pump clock=2026-09-30T09:00:05Z
+seg keys/r2 resume fuel=13 alloc=16 state=287 end=return
+run keys/r2 outcome=completed delivery=d2 handler=confirm fuel=44 alloc=16
+pumped state=idle fuel=13
+> deliver d5 to=keys message=confirm
+> pump clock=2026-09-30T09:00:06Z
+seg keys/r5 start delivery=d5 handler=confirm clause=1 fuel=15 alloc=0 state=495 end=wait-for until=2026-09-30T09:00:11Z
+pumped state=idle fuel=15 next=2026-09-30T09:00:11Z
+> deliver d6 to=keys message=key args=["Y"]
+> pump clock=2026-09-30T09:00:07Z
+seg keys/r6 start delivery=d6 handler=key clause=1 fuel=21 alloc=58 state=677 end=return
+run keys/r6 outcome=completed delivery=d6 handler=key fuel=21 alloc=58
+seg keys/r5 resume fuel=13 alloc=140 state=460 end=return
+run keys/r5 outcome=completed delivery=d5 handler=confirm fuel=41 alloc=181
+pumped state=idle fuel=47
+
+> vars
+vars keys seen=["handled A", "handled N", [{name: "key", args: ["N"]}, "N"], nothing, "handled Y", {name: "key", args: ["Y"]}]
