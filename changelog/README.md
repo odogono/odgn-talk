@@ -11,7 +11,7 @@ Add the Store Standard Capability with segment-bound writes (ADR 0050).
 ```
 
 - `type` is `feat`, `fix` or `perf`, the same as the PR title's.
-- `scope` is the PR title's scope. Leave it out when the title has none.
+- `scope` is the PR title's scope. Leave it out when the title has none. Most older fragments have none because their titles had none, so copy the scope from your title, not from another fragment.
 - `breaking: true` marks a breaking change. A breaking `refactor!` or similar uses the closest of the three types.
 
 The text after the frontmatter is the entry, written for someone reading the changelog. `bun run changelog` prints every fragment as one `## Unreleased` section. [The commit conventions](../docs/agents/commits.md) describe when a fragment is needed.

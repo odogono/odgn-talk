@@ -325,7 +325,7 @@ selection. `TestCoordinatorMappingHoldsAcrossReloadAndRestore` still needs
 Save/Restore; `TestEffectUncertaintyStopsEveryScriptAndCannotReload` reads native
 private Script state, so public Host scenarios cover fatal outcomes instead.
 
-`build-artifact.py` refuses uncommitted Core/spec changes. To try an
+[`build-artifact.py`](../../spikes/go-zig-binding/build-artifact.py) refuses uncommitted Core/spec changes. To try an
 uncommitted Zig change, build it and swap the embedded copy by hand; the
 digest in `artifact.json` must match, or `NewEngine` refuses the artifact:
 
@@ -338,7 +338,7 @@ shasum -a 256 impl/go/internal/zigwasm/talk.wasm
 
 Never commit these hand-built files. Restore them with
 `git checkout -- impl/go/internal/zigwasm`, then, once the Zig change is
-committed, run `build-artifact.py` and commit its output. If a test panics
+committed, run `python3 spikes/go-zig-binding/build-artifact.py` and commit its output. If a test panics
 mid-suite, compile once and run tests singly:
 `go -C impl/go test -c -tags talk_zig_experimental -o /tmp/adapter.test .`, then
 `(cd impl/go && /tmp/adapter.test -test.run '^TestName$')`.

@@ -95,6 +95,7 @@ Commands run from `impl/elixir/` unless they say otherwise.
 
 ## The pinned reactor release
 
+- When: the Zig Core's save format changed (`bun run check` runs `check-save-format.sh`), or the package should ship a newer reactor.
 - Files: `@release`, `@sha256` and `@save_format` in [`artifact.ex`](lib/north_talk/artifact.ex), [the compile step](lib/mix/tasks/compile.north_talk_reactor.ex), [the release workflow](../../.github/workflows/elixir-reactor.yml), [`check-save-format.sh`](scripts/check-save-format.sh)
 - Steps: pushing a `reactor-v*` tag publishes the reactor. Then set `@release` to the tag and `@sha256` to the published file's digest. `mix compile` refuses a download whose digest differs.
 - Check: from `examples/shop/`, run `mix deps.get && mix test`. It fetches the pinned release, because nothing overrides the reactor there.

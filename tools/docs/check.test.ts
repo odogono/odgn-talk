@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { anchors, links, withoutCode } from './check';
+import { adrClashes, anchors, links, withoutCode } from './check';
 
 describe('withoutCode', () => {
   test('blanks fences and spans but keeps line numbers', () => {
@@ -40,5 +40,14 @@ describe('links', () => {
       { target: 'a.md#x', line: 1 },
       { target: '../c.md', line: 3 },
     ]);
+  });
+});
+
+describe('adrClashes', () => {
+  test('report numbers that two ADRs claim', () => {
+    expect(
+      adrClashes(['0107-a.md', '0108-b.md', '0108-c.md', 'README.md']),
+    ).toEqual(['ADR 0108 is claimed by 0108-b.md and 0108-c.md']);
+    expect(adrClashes(['0107-a.md', '0108-b.md'])).toEqual([]);
   });
 });
