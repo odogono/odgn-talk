@@ -354,6 +354,10 @@ _Avoid_: preview, test mode, Play mode
 A window in Folio where an author types one line of NorthTalk and runs it at once. While browsing it acts on the Play Session; in Edit it changes the Project as one undoable edit.
 _Avoid_: console, REPL, Message (for the window)
 
+**Variables window**:
+A window in Folio that, while browsing, shows the Script Variables of the Project's and the showing Page's Scripts with their current values. After the Play Session ends it keeps the last values it showed until the next session starts.
+_Avoid_: inspector, debugger, watch window
+
 **Present**:
 To run a Play Session full-window, with the authoring windows hidden, as a reader would see it.
 _Avoid_: publish, preview, fullscreen
