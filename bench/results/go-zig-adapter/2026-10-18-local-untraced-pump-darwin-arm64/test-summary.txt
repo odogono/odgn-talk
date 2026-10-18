@@ -1,0 +1,22 @@
+test
++- run test w
+polling suspending: save@240=708, save@480=708
+polling immediate: save@240=579, save@480=579
+failed command: cd . && ./.zig-cache/o/86166d409b6e836c5a130495164e7a0c/test --cache-dir=./.zig-cache --seed=0x3942a545 --listen=-
+
+Build Summary: 12/12 steps succeeded; 344/344 tests passed
+test success
++- run test 327 pass (327 total) 5s MaxRSS:370M
+|  +- compile test safe native success 1m MaxRSS:2G
++- run test 8 pass (8 total) 240ms MaxRSS:4M
+|  +- compile test safe native success 47s MaxRSS:1G
+|     +- translate-c cached 73ms MaxRSS:32M
++- run test 9 pass (9 total) 184ms MaxRSS:83M
+|  +- compile test safe native success 45s MaxRSS:1G
+|     +- translate-c (reused)
++- run exe talk-h-test success 264ms
+   +- compile exe talk-h-test safe native success 84ms MaxRSS:71M
+      +- WriteFile cached
+      +- compile lib talk-test safe native success 44s MaxRSS:1G
+      +- compile lib talk-test safe native (reused)
+

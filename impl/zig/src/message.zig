@@ -1908,6 +1908,14 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     }
     const mg = &entry.group.group;
     mg.observe_crossings = s.crossing_trace and entry.traced;
+    // Load/change-code workers still need the sink for diagnostics when
+    // Trace is disabled. A Pump has no load diagnostics: avoid formatting
+    // and retaining records that finishOk would immediately discard.
+    const trace = mg.trace;
+    if (!entry.traced) mg.trace = null;
+    defer if (!entry.traced) {
+        mg.trace = trace;
+    };
     if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
@@ -4695,6 +4703,28 @@ fn nestedJson(a: Allocator, depth: usize, objects_only: bool) ![]u8 {
     try out.writer.writeByte('1');
     for (0..depth) |_| try out.writer.writeAll(if (objects_only) "}" else "]");
     return out.toOwnedSlice();
+}
+
+test "untraced Pump skips machine Trace formatting but keeps Reports" {
+    const s = Session.init(std.testing.allocator).?;
+    defer s.deinit();
+    var c = Client.init(s);
+    defer c.deinit();
+    _ = try okOf(try c.send("{{\"m\":\"hello\",\"ref\":{d},\"protocol\":1}}", .{1}));
+    _ = try okOf(try c.send("{{\"m\":\"new-group\",\"ref\":{d},\"name\":\"g\",\"trace\":false}}", .{2}));
+    _ = try okOf(try c.send("{{\"m\":\"load\",\"ref\":{d},\"group\":\"g\",\"name\":\"s\",\"source\":\"on ping n\\n return n + 1\\nend ping\\n\"}}", .{3}));
+    _ = try okOf(try c.send("{{\"m\":\"request\",\"ref\":{d},\"group\":\"g\",\"to\":{{\"script\":\"s\"}},\"message\":{{\"name\":\"ping\",\"args\":[41]}}}}", .{4}));
+    const entry = s.groupNamed("g").?;
+    var capture: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer capture.deinit();
+    const trace = entry.group.group.trace;
+    entry.group.group.trace = &capture.writer;
+    defer entry.group.group.trace = trace;
+    const reply = try c.send("{{\"m\":\"pump\",\"ref\":{d},\"group\":\"g\",\"now\":\"2026-10-17T12:00:00Z\"}}", .{5});
+    const ended = try runEnd(reply);
+    try std.testing.expectEqual(@as(i64, 42), ended.object.get("result").?.integer);
+    try std.testing.expectEqual(@as(usize, 0), capture.written().len);
+    try std.testing.expectEqual(@as(?*std.Io.Writer, &capture.writer), entry.group.group.trace);
 }
 
 test "queued-inputs reads the owning Group without execution or Trace" {

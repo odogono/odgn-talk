@@ -1,0 +1,12 @@
+test
++- run test 326 pass, 1 fail (327 total)
+error: 'message.test.untraced Pump skips machine Trace formatting but keeps Reports' failed:
+       polling suspending: save@240=708, save@480=708
+       polling immediate: save@240=579, save@480=579
+       expected 0, found 264
+failed command: cd . && ./.zig-cache/o/7b367ad35d968953ecf890e7cc32fd62/test --cache-dir=./.zig-cache --seed=0xb5183d9e --listen=-
+
+Build Summary: 10/12 steps succeeded (1 failed); 343/344 tests passed (1 failed)
+test transitive failure
++- run test 326 pass, 1 fail (327 total)
+
