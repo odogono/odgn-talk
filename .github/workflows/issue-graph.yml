@@ -1,0 +1,34 @@
+name: Issue graph
+
+# Redraws the dependency graph in the pinned issue (#1243) with
+# tools/issues/update.ts. Adding a sub-issue or an issue dependency doesn't
+# fire an `issues` event, so the schedule catches those changes.
+on:
+  issues:
+    types: [opened, edited, deleted, closed, reopened, assigned, unassigned, labeled, unlabeled]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-graph
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # The workflow's own edit to #1243 doesn't trigger a run, since edits made
+    # with GITHUB_TOKEN don't; this skips edits made by hand.
+    if: github.event.issue.number != 1243
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun tools/issues/update.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
