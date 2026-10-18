@@ -1365,11 +1365,15 @@ typedef struct talk_counters {
  * does: it charges nothing, drains no Host Inputs and writes a counters
  * record to the Trace. */
 void talk_script_counters(talk_script *s, talk_counters *out);
-/* The Request's result, an owned reference: Nothing until it settles. */
+/* The Request's result, an owned reference: Nothing until it settles, or
+ * when it ends without a successful return. Run failure details are in Reports. */
 talk_host_error_code talk_pending_result(const talk_pending *p, talk_value **out);
 /* C only: ends the caller's handle on a Request. */
 void talk_pending_release(talk_pending *p);
-/* Whether a Pump has ended the Run the Request started. */
+/* Whether the Request has settled, including unsuccessful Run outcomes,
+ * lifecycle discards and rejection before a Run starts. Climbing the Message
+ * Path, Rewind and a Reload-kept mailbox keep it open until the Delivery
+ * finishes. */
 bool talk_pending_done(const talk_pending *p);
 bool talk_deciding_done(const talk_deciding *d);
 /* The Verdict, borrowed from the Group, or NULL until a Pump seals it. */

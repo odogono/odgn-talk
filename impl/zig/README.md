@@ -702,6 +702,15 @@ uncharged and writes its `load` record with its code identity, or its `diag`
 records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
 through `talk.h` yet.
 
+C Requests and Host Function Value calls settle their `talk_pending` when the
+Delivery finishes, including errors, Limit Faults, cancellation, dropped or
+unhandled messages, stale Function calls and Stop/Reload/library-replacement
+discards. `talk_pending_done` distinguishes an open Request from a settled one;
+`talk_pending_result` gives an owned successful result, or Nothing while open
+or after an unsuccessful outcome. Run failure details remain in the typed Reports.
+Climbing the Message Path and Rewind keep the Request open, as does Reload for
+messages it keeps in the mailbox. Settlement survives releasing the Reports and later Pumps.
+
 `talk_inspect` is the Host Input `vars`: it writes each Script's `vars`
 record and, when asked, returns the `talk_inspection` a REPL renders `:vars`,
 `:runs` and `:mailbox` from. That is each Script's disabled Grants, its Script

@@ -38,6 +38,13 @@ static void expect_refused(const char *in, size_t len, const char *what) {
     expect(v == NULL, "a refusal builds no value");
 }
 
+static void expect_pending_nothing(talk_pending *pending, const char *what) {
+    expect(talk_pending_done(pending), what);
+    talk_value *value = NULL;
+    expect(talk_pending_result(pending, &value) == TALK_OK && talk_value_kind(value) == TALK_KIND_NOTHING, what);
+    talk_value_release(value);
+}
+
 /* Collects the Trace's lines, one per call. */
 static char trace[4096];
 static size_t trace_len = 0;
@@ -118,6 +125,165 @@ static int group_test(void) {
     talk_group_release(group);
     talk_core_release(core);
     return bad;
+}
+
+/* Failed Requests and Function calls still end their direct C Pending. */
+static int pending_failure_test(void) {
+    talk_core *core = talk_new();
+    if (core == NULL) return 1;
+    talk_group *group = NULL;
+    talk_group_options options = {"g", 1, record, NULL, NULL, 0, 0};
+    if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+    const char *source =
+        "script variable errors = 0\n"
+        "function fail\n  throw {code: \"mine\"}\nend fail\n"
+        "on exported\n  return fail\nend exported\n"
+        "on go\n  throw {code: \"mine\"}\nend go\n"
+        "on error e\n  add 1 to errors\nend error\n"
+        "on countErrors\n  return errors\nend countErrors\n";
+    talk_load_options load = {"s", 1, source, strlen(source), NULL, 0, false, NULL, NULL, 0, NULL};
+    talk_script *script = NULL;
+    if (talk_load(group, &load, &script) != TALK_OK) return 1;
+    talk_message exported = {"exported", 8, NULL, 0, NULL};
+    talk_pending *made = NULL;
+    expect(talk_script_request(script, &exported, NULL, &made) == TALK_OK, "request a Function Value");
+    expect(talk_pump(group, 1790000000, 0, NULL, NULL) == TALK_OK, "pump the Function Value export");
+    talk_value *fn = NULL;
+    expect(talk_pending_result(made, &fn) == TALK_OK && talk_value_kind(fn) == TALK_KIND_FUNCTION, "export returns a Function Value");
+    for (int call = 0; call < 2; ++call) {
+        talk_pending *pending = NULL;
+        talk_message message = {"go", 2, NULL, 0, NULL};
+        expect((call ? talk_group_call(group, fn, NULL, 0, NULL, NULL, &pending)
+                     : talk_script_request(script, &message, NULL, &pending)) == TALK_OK, "admit the failing Request or Function call");
+        expect(!talk_pending_done(pending), "the failing Pending starts open");
+        talk_pump_result pumped = {0};
+        expect(talk_pump(group, 1790000000, 0, NULL, &pumped) == TALK_OK && pumped.state == TALK_IDLE, "pump the failing Run to idle");
+        const talk_report *reports = NULL;
+        size_t count = talk_reports_items(pumped.reports, &reports);
+        int errored = 0;
+        for (size_t i = 0; i < count; ++i) {
+            if (reports[i].kind == TALK_REPORT_RUN_END && reports[i].as.run_end.outcome == TALK_ERRORED) {
+                const talk_script_error *error = reports[i].as.run_end.error;
+                expect(error != NULL && error->code_len == 4 && memcmp(error->code, "mine", 4) == 0, "the typed Report preserves the thrown error");
+                errored++;
+            }
+        }
+        expect(errored == 1, "the failing Run still reports errored");
+        talk_reports_release(pumped.reports);
+        expect_pending_nothing(pending, call ? "a failed Function call settles its Pending" : "a failed message Request settles its Pending");
+        talk_pending_release(pending);
+    }
+    talk_message count_errors = {"countErrors", 11, NULL, 0, NULL};
+    talk_pending *counted = NULL;
+    expect(talk_script_request(script, &count_errors, NULL, &counted) == TALK_OK, "request the error Handler count");
+    expect(talk_pump(group, 1790000000, 0, NULL, NULL) == TALK_OK, "pump after the failed Requests");
+    talk_value *count = NULL;
+    const talk_decimal *decimal = NULL;
+    int64_t integer = 0;
+    expect(talk_pending_result(counted, &count) == TALK_OK && talk_value_as_dec(count, &decimal) && talk_decimal_int64(decimal, &integer) == TALK_OK && integer == 2, "both failed Runs still send their error message");
+    talk_value_release(count);
+    talk_pending_release(counted);
+    const char *replacement = "on go\nend go\n";
+    expect(talk_script_reload(script, replacement, strlen(replacement), TALK_RESET_VARIABLES, NULL, NULL) == TALK_OK, "reload makes the Function Value stale");
+    talk_pending *stale = NULL;
+    expect(talk_group_call(group, fn, NULL, 0, NULL, NULL, &stale) == TALK_OK, "admit a stale Function call");
+    expect(!talk_pending_done(stale), "the stale call waits for a Pump");
+    expect(talk_pump(group, 1790000000, 0, NULL, NULL) == TALK_OK, "pump the stale Function call without a Run");
+    expect_pending_nothing(stale, "a stale Function call settles without starting a Run");
+    talk_pending_release(stale);
+    talk_value_release(fn);
+    talk_pending_release(made);
+    talk_group_release(group);
+    talk_core_release(core);
+    return 0;
+}
+
+/* Settlement follows the Delivery's final outcome, including lifecycle
+ * discards without run end. Kept mailboxes and Rewind retain the Request. */
+static int pending_terminal_test(void) {
+    enum action { NONE, DROP, CANCEL_QUEUED, CANCEL_LIVE, STOP_QUEUED, STOP_LIVE, RELOAD_QUEUED, RELOAD_LIVE, KEEP_QUEUED, REWIND, REWIND_DROP };
+    const char *waiting = "on go\n wait 1 s\nend go\n";
+    const char *returning = "on go\nend go\n";
+    const struct {
+        const char *name;
+        const char *source;
+        enum action action;
+        int outcome;
+    } cases[] = {
+        {"successful Nothing settles", returning, NONE, TALK_COMPLETED},
+        {"a Limit Fault settles", "on go\n repeat forever\n end repeat\nend go\n", NONE, TALK_LIMIT_FAULT},
+        {"an unhandled Request settles", "on other\nend other\n", NONE, TALK_UNHANDLED_OUTCOME},
+        {"a dropped Request settles", "on go, dropping\n wait 1 s\nend go\n", DROP, TALK_DROPPED},
+        {"mailbox cancellation settles", waiting, CANCEL_QUEUED, TALK_CANCELLED},
+        {"live cancellation settles", waiting, CANCEL_LIVE, TALK_CANCELLED},
+        {"Stop drops and settles a queued Request", waiting, STOP_QUEUED, -1},
+        {"Stop discards and settles a live Request", waiting, STOP_LIVE, -1},
+        {"Reload preserves an undrained Request", waiting, RELOAD_QUEUED, TALK_COMPLETED},
+        {"Reload discards and settles a live Request", waiting, RELOAD_LIVE, -1},
+        {"a kept Request settles after dispatch", waiting, KEEP_QUEUED, TALK_COMPLETED},
+        {"a rewound Request settles after redispatch", "on go\n repeat forever\n end repeat\nend go\n", REWIND, TALK_COMPLETED},
+        {"Reload drops and settles a rewound mailbox Request", "on go\n repeat forever\n end repeat\nend go\n", REWIND_DROP, -1},
+    };
+    for (size_t c = 0; c < sizeof cases / sizeof cases[0]; ++c) {
+        talk_core *core = talk_new();
+        if (core == NULL) return 1;
+        talk_group *group = NULL;
+        talk_group_options options = {"g", 1, NULL, NULL, NULL, 0, 0};
+        if (talk_new_group(core, &options, &group) != TALK_OK) return 1;
+        talk_limits limits = {0};
+        limits.fuel_per_run = 1000;
+        talk_load_options load = {"s", 1, cases[c].source, strlen(cases[c].source), NULL, 0, false, NULL, NULL, 0, &limits};
+        talk_script *script = NULL;
+        if (talk_load(group, &load, &script) != TALK_OK) return 1;
+        talk_message message = {"go", 2, NULL, 0, NULL};
+        enum action action = cases[c].action;
+        if (action == DROP) expect(talk_script_deliver(script, &message, NULL) == TALK_OK, "occupy the dropping clause");
+        talk_pending *pending = NULL;
+        talk_owned_bytes id = {0};
+        expect(talk_script_request(script, &message, &id, &pending) == TALK_OK, "admit a terminal-outcome Request");
+        expect(!talk_pending_done(pending), "a queued Request is open");
+        if (action == CANCEL_LIVE || action == STOP_LIVE || action == RELOAD_LIVE || action == REWIND || action == REWIND_DROP) {
+            talk_pump_options slice = {20, 0};
+            expect(talk_pump(group, 1790000000, 0, &slice, NULL) == TALK_OK, "start a live Request");
+            expect(!talk_pending_done(pending), "a suspended or preempted Request stays open");
+        }
+        if (action == CANCEL_QUEUED || action == CANCEL_LIVE) expect(talk_cancel_delivery(group, (const char *)id.data, id.len) == TALK_OK, "cancel the Request");
+        if (action == STOP_QUEUED || action == STOP_LIVE) expect(talk_script_stop(script, "done", 4) == TALK_OK, "stop the Request's Script");
+        if (action == REWIND || action == REWIND_DROP) {
+            expect(talk_script_rewind_run(script, "s/r1", 4) == TALK_OK, "rewind the preempted Run");
+            talk_pump_result rewound = {0};
+            expect(talk_pump(group, 1790000000, 0, NULL, &rewound) == TALK_OK && rewound.state == TALK_REWOUND, "the Pump returns rewound");
+            talk_reports_release(rewound.reports);
+            expect(!talk_pending_done(pending), "Rewind keeps the original Request open");
+        }
+        if (action == RELOAD_QUEUED || action == RELOAD_LIVE || action == KEEP_QUEUED || action == REWIND || action == REWIND_DROP) {
+            talk_reload_options reload = {action == KEEP_QUEUED || action == REWIND};
+            expect(talk_script_reload(script, returning, strlen(returning), TALK_RESET_VARIABLES, &reload, NULL) == TALK_OK, "reload the Request's Script");
+            expect(talk_pending_done(pending) == (action == RELOAD_LIVE || action == REWIND_DROP), "Reload settles discards and retains kept mailbox or undrained Requests");
+        }
+        talk_pump_result pumped = {0};
+        expect(talk_pump(group, 1790000000, 0, NULL, &pumped) == TALK_OK, "pump the terminal outcome");
+        const talk_report *reports = NULL;
+        size_t count = talk_reports_items(pumped.reports, &reports);
+        int found = 0;
+        for (size_t i = 0; i < count; ++i) {
+            if (reports[i].kind != TALK_REPORT_RUN_END) continue;
+            const talk_run_end *end = &reports[i].as.run_end;
+            if (end->delivery_len == id.len && memcmp(end->delivery, id.data, id.len) == 0) {
+                expect((int)end->outcome == cases[c].outcome, "the Request keeps its typed terminal outcome");
+                found++;
+            }
+        }
+        expect(found == (cases[c].outcome < 0 ? 0 : 1), "terminal Reports are neither lost nor duplicated");
+        talk_reports_release(pumped.reports);
+        expect_pending_nothing(pending, cases[c].name);
+        expect(talk_pump(group, 1790000000, 0, NULL, NULL) == TALK_OK && talk_pending_done(pending), "settlement survives another Pump");
+        talk_owned_bytes_release(&id);
+        talk_pending_release(pending);
+        talk_group_release(group);
+        talk_core_release(core);
+    }
+    return 0;
 }
 
 /* An immediate Operation's Do: the text, doubled, or a Script error for "". */
@@ -506,8 +672,11 @@ static int segment_test(void) {
     /* One begin for the first Grant; the commit sees both. */
     bad |= strcmp(effects_seen, "begin a s/r1.s1 1\ncommit a s/r1.s1 2\n") != 0;
     commit_status = TALK_EFFECT_FAILED;
-    bad |= talk_script_deliver(script, &message, NULL) != TALK_OK;
+    talk_pending *failed_commit = NULL;
+    bad |= talk_script_request(script, &message, NULL, &failed_commit) != TALK_OK;
     bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    expect_pending_nothing(failed_commit, "an effect-failed Request settles");
+    talk_pending_release(failed_commit);
     commit_status = TALK_EFFECT_OK;
     talk_inspect(group, NULL);
     bad |= strstr(trace, "run s/r2 outcome=effect-failed delivery=d2 handler=go effect={grant: \"a\", segment: \"s/r2.s1\", phase: \"commit\", status: \"failed\"}") == NULL;
@@ -1274,6 +1443,29 @@ static int object_path_test(void) {
     bad |= strstr(trace, "fault reader/r1 limit=fuel") == NULL || strstr(trace, "prop reader/r1") != NULL;
     bad |= strstr(trace, "note child/r1 kind=climb-full\nunhandled d2 message=ping target=<object room \"a\">\n") == NULL;
     bad |= strstr(trace, "raise sender/r1 code=\"send failed\"") == NULL;
+    expect_pending_nothing(climbing, "a climb into a full mailbox settles at the end of its path");
+    talk_pending_release(climbing);
+    /* A child's completed pass must not settle a Request while its parent
+     * is still running it. Exercise the object-targeted Request API too. */
+    const char *waiting_parent = "on ping\n wait 1 s\n return 42\nend ping\n";
+    bad |= talk_script_reload(parent, waiting_parent, strlen(waiting_parent), TALK_RESET_VARIABLES, NULL, NULL) != TALK_OK;
+    talk_pending *forwarded = NULL;
+    bad |= talk_request(group, a, &ping, NULL, &forwarded) != TALK_OK;
+    bad |= talk_pump(group, 1790000000, 0, NULL, NULL) != TALK_OK;
+    expect(!talk_pending_done(forwarded), "a forwarded Request stays open while its parent waits");
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    expect(talk_pending_done(forwarded), "the forwarded Request settles when its parent returns");
+    talk_value *forwarded_result = NULL;
+    const talk_decimal *decimal = NULL;
+    int64_t integer = 0;
+    expect(talk_pending_result(forwarded, &forwarded_result) == TALK_OK && talk_value_as_dec(forwarded_result, &decimal) && talk_decimal_int64(decimal, &integer) == TALK_OK && integer == 42, "forwarding preserves the successful result");
+    talk_value_release(forwarded_result);
+    talk_pending_release(forwarded);
+    talk_pending *ownerless = NULL;
+    bad |= talk_request(group, meter, &ping, NULL, &ownerless) != TALK_OK;
+    bad |= talk_pump(group, 1790000001, 0, NULL, NULL) != TALK_OK;
+    expect_pending_nothing(ownerless, "an ownerless object Request settles without a Run");
+    talk_pending_release(ownerless);
     if (bad) fprintf(stderr, "%s", trace);
     talk_group_release(group);
     talk_core_release(core);
@@ -2639,6 +2831,8 @@ int main(void) {
     expect(talk_script_error_error(&script_error, &buffer) == TALK_OK && buffer.len == 22 && memcmp(buffer.data, "empty: nothing to echo", 22) == 0, "a Script error's text");
     talk_owned_bytes_release(&buffer);
     expect(group_test() == 0, "a Group loads and pumps a Script through talk.h alone");
+    expect(pending_failure_test() == 0, "failed C Requests and Function calls settle");
+    expect(pending_terminal_test() == 0, "C Pending handles settle for terminal outcomes");
     expect(capability_test() == 0, "a Host defines, grants and answers a Capability through talk.h alone");
     expect(release_cancellation_test() == 0, "Stop cancels pending Calls before releasing Grants");
     expect(revoke_test() == 0, "revoke releases a Grant once, and later calls through it raise capability revoked");
