@@ -1,7 +1,37 @@
 // Folio's ownership tree. Coordinates are always Page-relative; group boxes
 // and collection order are derived views, never a second ownership graph.
 import type { DeepReadonly } from '../readonly';
-import type { Element, GroupElement } from '../model';
+import type { Element, GroupElement, Page, Project } from '../model';
+
+export type ChildrenKey = 'pages' | 'elements' | 'members';
+type Owner = Project | Page | Element;
+
+export const isGroupElement = (
+  element: DeepReadonly<Element>,
+): element is DeepReadonly<GroupElement> => element.kind === 'group';
+
+/** The ownership field, absent for leaf Elements. */
+export const childrenKey = (
+  owner: DeepReadonly<Owner>,
+): ChildrenKey | undefined =>
+  'pages' in owner
+    ? 'pages'
+    : 'elements' in owner
+      ? 'elements'
+      : isGroupElement(owner)
+        ? 'members'
+        : undefined;
+
+export const children = (owner: Owner): Owner[] => {
+  const key = childrenKey(owner);
+  return key ? (owner as unknown as Record<string, Owner[]>)[key]! : [];
+};
+
+/** Stage geometry without copying leaf content such as rich text. */
+export const geometryCopy = (node: Element): Element =>
+  isGroupElement(node)
+    ? { ...node, members: node.members.map(geometryCopy) }
+    : { ...node };
 
 export const MAX_GROUP_ELEMENTS = 1024;
 export const MAX_GROUP_DEPTH = 32;

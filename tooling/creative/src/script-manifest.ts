@@ -1,5 +1,6 @@
 import type { DeepReadonly } from './readonly';
-import { allElements, GEOMETRY_FUEL, PROPERTY_FUEL } from './tree/rules';
+import { allElements } from './tree/rules';
+import { propertiesForKind } from './tree/properties';
 // The authoring Host interface from ADR 0084 and #735. Data only: Edit never
 // constructs a Core Group or executes an authored Script.
 import {
@@ -47,36 +48,15 @@ type ManifestProperty = {
   setCost?: { fuel: number };
   shape: string;
 };
-const props = (fields: Record<string, string>): ManifestProperty[] =>
-  Object.entries(fields).map(([name, shape]) => ({
-    name,
-    shape,
-    readOnly: name === 'name',
-  }));
-const common = {
-  name: 'text',
-  left: 'number',
-  top: 'number',
-  width: 'number',
-  height: 'number',
-  visible: 'boolean',
-};
-const specific: Record<Element['kind'], Record<string, string>> = {
-  text: {
-    text: 'text',
-    textColor: 'text',
-    textSize: 'number',
-    textAlign: 'text',
-    font: 'text',
-    editable: 'boolean',
-  },
-  image: { image: 'text' },
-  button: { label: 'text', fill: 'text', textColor: 'text' },
-  rectangle: { fill: 'text', stroke: 'text', thickness: 'number' },
-  ellipse: { fill: 'text', stroke: 'text', thickness: 'number' },
-  line: { stroke: 'text', thickness: 'number' },
-  group: {},
-};
+const props = (kind: string): ManifestProperty[] =>
+  [...propertiesForKind(kind)]
+    .filter(([, descriptor]) => descriptor.script !== false)
+    .map(([name, descriptor]) => ({
+      name,
+      shape: descriptor.shape,
+      readOnly: !descriptor.set,
+      ...(descriptor.setCost ? { setCost: descriptor.setCost } : {}),
+    }));
 /**
  * Folio's Host Commands (ADR 0094): Operations of the `folio` Grant that any
  * Script calls by name alone, as `hide welcomeText`.
@@ -124,10 +104,10 @@ const options = (fields: Record<string, string>) => ({
 
 // Shared by every Script's manifest.
 const objectKinds = [
-  { name: 'project', props: props({ name: 'text' }) },
+  { name: 'project', props: props('project') },
   {
     name: 'page',
-    props: props({ name: 'text', background: 'text', height: 'number' }),
+    props: props('page'),
     // Play's Page Object Collection (#1143), as data.
     elements: {
       shape: elementShape,
@@ -138,21 +118,7 @@ const objectKinds = [
   },
   ...ELEMENT_KINDS.map(name => ({
     name,
-    props: props({ ...common, ...specific[name] }).map(prop => {
-      // A group's box is derived from its members.
-      const readOnly =
-        prop.readOnly ||
-        (name === 'group' && (prop.name === 'width' || prop.name === 'height'));
-      return {
-        ...prop,
-        setCost: readOnly
-          ? undefined
-          : ['left', 'top', 'width', 'height'].includes(prop.name)
-            ? { fuel: GEOMETRY_FUEL }
-            : { fuel: PROPERTY_FUEL },
-        readOnly,
-      };
-    }),
+    props: props(name),
     ...(name === 'group'
       ? {
           elements: {

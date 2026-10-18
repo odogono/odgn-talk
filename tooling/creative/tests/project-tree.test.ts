@@ -322,3 +322,70 @@ test('snapshots and history freeze detached data while live owners remain mutabl
   tree.replay(journal, false);
   expect(tree.snapshot()).toEqual(snapshot);
 });
+
+test('property writes preserve rich text alignment, group bounds and reversible history', () => {
+  const tree = new ProjectTree(fixture());
+  const page = tree.project.pages[0]!;
+  const entry = tree.find(page, 'entry')!;
+  if (entry.kind !== 'text') {
+    throw new Error('fixture');
+  }
+  tree.replaceRichText(entry, [
+    { align: 'right', runs: [{ bold: true, text: 'Original' }] },
+  ]);
+  const before = tree.snapshot();
+  let changes: TreeJournal = [];
+  const unsubscribe = tree.subscribe(event => {
+    changes = event.changes;
+  });
+  tree.transaction(() => {
+    tree.setProperty(entry, 'textAlign', 'center');
+    tree.setProperty(entry, 'text', 'One\r\nTwo');
+    tree.setProperty(entry, 'left', 700);
+    tree.setProperty(page, 'background', '#123456');
+    tree.setProperty(tree.project, 'designWidth', 900);
+  });
+  unsubscribe();
+  expect(entry.richText).toEqual([
+    { align: 'center', runs: [{ text: 'One' }] },
+    { align: 'center', runs: [{ text: 'Two' }] },
+  ]);
+  expect(tree.find(page, 'inner')!.left).toBe(700);
+  expect(tree.project.designWidth).toBe(900);
+  expect(page.background).toBe('#123456');
+  check(tree);
+  const after = tree.snapshot();
+  tree.replay(changes, false);
+  expect(tree.project).toEqual(before);
+  tree.replay(changes, true);
+  expect(tree.project).toEqual(after);
+  check(tree);
+});
+
+test('invalid and dedicated property writes leave the tree and indexes unchanged', () => {
+  const tree = new ProjectTree(fixture());
+  const page = tree.project.pages[0]!;
+  const entry = tree.find(page, 'entry')!;
+  const border = tree.create('rectangle', page);
+  const before = tree.snapshot();
+  let events = 0;
+  tree.subscribe(() => events++);
+  for (const [owner, field, value] of [
+    [entry, 'textAlign', 'middle'],
+    [entry, 'textSize', Infinity],
+    [entry, 'left', Number.NaN],
+    [border, 'thickness', -1],
+    [tree.find(page, 'panel')!, 'width', 10],
+    [entry, 'name', 'renamed'],
+    [entry, 'richText', 'replacement'],
+    [entry, 'members', 'replacement'],
+    [entry, 'label', 'wrong kind'],
+    [entry, 'constructor', 'unknown'],
+    [entry, '__proto__', 'unknown'],
+  ] as const) {
+    expect(() => tree.setProperty(owner, field, value)).toThrow();
+    expect(tree.project).toEqual(before);
+  }
+  expect(events).toBe(0);
+  check(tree);
+});

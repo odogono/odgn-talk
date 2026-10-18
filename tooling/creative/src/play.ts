@@ -1,6 +1,7 @@
 import type { DeepReadonly } from './readonly';
 import { allElements } from './tree/rules';
 import { ProjectTree, TreeError, type TreeParent } from './tree/project-tree';
+import { propertiesForKind } from './tree/properties';
 // A Play Session owns its Group and a disposable copy of the authored Project.
 import { scriptNameProblems } from './script-names';
 import {
@@ -29,8 +30,6 @@ import {
 } from '@northtalk/ts';
 import {
   ELEMENT_KINDS,
-  textAlignOf,
-  textOf,
   type Element,
   type ElementKind,
   type Page,
@@ -562,8 +561,10 @@ export class PlaySession {
     this.#kinds = new Map(
       scriptManifest(project, project).objectKinds.map(def => {
         const props: Record<string, PropDef<ScriptOwner>> = {};
+        const descriptors = propertiesForKind(def.name);
         for (const prop of def.props) {
           const key = prop.name;
+          const descriptor = descriptors.get(key)!;
           props[key] = {
             ...(prop.setCost ? { setCost: prop.setCost } : {}),
             shape:
@@ -573,14 +574,7 @@ export class PlaySession {
                   ? shape.bool
                   : shape.text,
             get: ({ native }) => {
-              const value =
-                'kind' in native && native.kind === 'text' && key === 'text'
-                  ? textOf(native)
-                  : 'kind' in native &&
-                      native.kind === 'text' &&
-                      key === 'textAlign'
-                    ? textAlignOf(native)
-                    : (native as Record<string, unknown>)[key];
+              const value = descriptor.get(native);
               return typeof value === 'number'
                 ? num(value)
                 : typeof value === 'boolean'

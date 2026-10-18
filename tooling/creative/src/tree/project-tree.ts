@@ -5,11 +5,8 @@ import {
   duplicateElement,
   duplicatePage,
   freshName,
-  hasBorder,
   isIdentifierName,
-  isTextAlign,
   replacePlainText,
-  setTextAlign,
   type Asset,
   type Element,
   type ElementKind,
@@ -23,13 +20,19 @@ import { elementNamesTaken, pageNamesTaken } from '../script-names';
 import {
   allElements,
   checkHierarchy,
+  children,
+  childrenKey,
+  geometryCopy,
+  isGroupElement,
   refreshBounds,
   BOX_FIELDS,
   refreshBox,
   updateGeometry,
   MAX_GROUP_ELEMENTS,
   type Box,
+  type ChildrenKey,
 } from './rules';
+import { propertiesOf } from './properties';
 
 export class TreeError extends Error {}
 const domain = <T>(action: () => T): T => {
@@ -44,7 +47,6 @@ export type TreeOwner = DeepReadonly<Project | Page | Element>;
 export type TreeParent = DeepReadonly<Page | GroupElement>;
 type Owner = Project | Page | Element;
 type Parent = Page | GroupElement;
-type ChildrenKey = 'pages' | 'elements' | 'members';
 type SavedNode = {
   children?: SavedNode[];
   field?: ChildrenKey;
@@ -115,10 +117,6 @@ export const equal = (a: unknown, b: unknown): boolean => {
     keys.every(key => equal(left[key], right[key]))
   );
 };
-const geometryCopy = (node: Element): Element =>
-  node.kind === 'group'
-    ? { ...node, members: node.members.map(geometryCopy) }
-    : { ...node };
 const detached = <T>(value: T): T =>
   value !== null && typeof value === 'object' ? structuredClone(value) : value;
 /** Freeze detached plain-data snapshots and history, never live owners. */
@@ -135,18 +133,6 @@ const ownSize = (value: unknown): number =>
   typeof value === 'number' || typeof value === 'boolean'
     ? 64
     : (JSON.stringify(value)?.length ?? 0);
-const childrenKey = (owner: Owner): ChildrenKey | undefined =>
-  'pages' in owner
-    ? 'pages'
-    : 'elements' in owner
-      ? 'elements'
-      : owner.kind === 'group'
-        ? 'members'
-        : undefined;
-const children = (owner: Owner): Owner[] => {
-  const key = childrenKey(owner);
-  return key ? (owner as unknown as Record<string, Owner[]>)[key]! : [];
-};
 
 /**
  * The sole writer of a live Project. Views preserve node identity, not array
@@ -337,7 +323,7 @@ export class ProjectTree {
       this.#initWork(node);
       let size = 1;
       let work = this.#ownWork.get(node)!;
-      if (node.kind === 'group') {
+      if (isGroupElement(node)) {
         this.#memberNames.set(
           node,
           new Map(node.members.map(member => [member.name, member])),
@@ -684,19 +670,8 @@ export class ProjectTree {
   ): void {
     this.transaction(() => {
       const node = this.#mutable(owner);
-      if (
-        [
-          'id',
-          'kind',
-          'name',
-          'pages',
-          'elements',
-          'members',
-          'assets',
-          'script',
-          'richText',
-        ].includes(field)
-      ) {
+      const descriptor = propertiesOf(node).get(field);
+      if (!descriptor?.set) {
         throw new TreeError(
           'Use the dedicated tree operation for this property',
         );
@@ -704,34 +679,16 @@ export class ProjectTree {
       if (typeof value === 'number' && !Number.isFinite(value)) {
         throw new TreeError('Property must be finite');
       }
-      if ('kind' in node && (BOX_FIELDS as readonly string[]).includes(field)) {
-        this.setGeometry(node, { [field]: Number(value) });
-        return;
+      const error = descriptor.validate?.(node, value);
+      if (error) {
+        throw new TreeError(error);
       }
-      if (
-        'kind' in node &&
-        field === 'thickness' &&
-        hasBorder(node) &&
-        Number(value) < 0
-      ) {
-        throw new TreeError('thickness must be zero or above');
-      }
-      if ('kind' in node && node.kind === 'text' && field === 'text') {
-        this.replaceText(node, String(value));
-        return;
-      }
-      if ('kind' in node && node.kind === 'text' && field === 'textAlign') {
-        if (!isTextAlign(value)) {
-          throw new TreeError(
-            'textAlign must be left, center, right or justify',
-          );
-        }
-        const staged = { ...node };
-        setTextAlign(staged, value);
-        this.#field(node, 'richText', staged.richText, true);
-        return;
-      }
-      this.#field(node, field, value);
+      descriptor.set(node, value, {
+        field: (key, next, knownDifferent) =>
+          this.#field(node, key, next, knownDifferent),
+        geometry: changes => this.setGeometry(node as Element, changes),
+        text: next => this.replaceText(node as TextElement, next),
+      });
     });
   }
   setProjectName(name: string): void {
