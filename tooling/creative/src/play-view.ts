@@ -92,7 +92,9 @@ export const mountPlay = (shell: StackShell): void => {
   // Each session's id; the worker's word about an earlier one is dropped.
   let sessionId = 0;
   // The Project as it was when Play started, for assets and problem owners.
-  let playing: Immutable<Project> | undefined;
+  let playing: Project | undefined;
+  // Problem owners by the place the worker names, in the authored Project.
+  let owners: ReturnType<typeof scriptOwners<Immutable<Project>>> = [];
   let mode: PlayMode | undefined;
   // requestAnimationFrame pauses with a hidden tab, so frames do too.
   let frameRequest: number | undefined;
@@ -102,7 +104,7 @@ export const mountPlay = (shell: StackShell): void => {
   // Physical key codes keep releases paired if modifiers change event.key.
   const heldKeys = new Map<
     string,
-    { key: string; target: MirrorPage | TextElement }
+    { key: string; pageIndex: number; target: MirrorPage | TextElement }
   >();
   // Sounds play here for the worker, each voice under the worker's number.
   const voices = new Map<number, { stop(): void }>();
@@ -125,10 +127,12 @@ export const mountPlay = (shell: StackShell): void => {
     },
   });
   const post = (request: PlayRequest) => void supervisor.call(request);
+  /** `pageIndex` names the Page `target` is on, if it isn't the showing one. */
   const sendTo = (
     target: MirrorPage | Element,
     message: ReaderMessage,
     args?: string[],
+    pageIndex = session?.page.index,
   ) => {
     if (!session || session.stopped || session.navigating) {
       return;
@@ -136,9 +140,9 @@ export const mountPlay = (shell: StackShell): void => {
     post({
       kind: 'send',
       session: sessionId,
-      pageIndex: session.page.index,
+      pageIndex: pageIndex!,
       message,
-      ...(target === session.page ? {} : { target: target.name }),
+      ...('index' in target ? {} : { target: target.name }),
       ...(args ? { args } : {}),
     });
   };
@@ -184,12 +188,11 @@ export const mountPlay = (shell: StackShell): void => {
     session.apply(response);
     draw();
     prompts.draw(session.prompt, response.notices);
-    const owners = scriptOwners(playing!);
     errors.add(
       response.problems.map(problem => ({
         line: problem.line,
         message: problem.message,
-        owner: owners[problem.owner]!,
+        owner: owners[problem.owner] ?? shell.editor.project,
       })),
     );
     requestFrame();
@@ -200,8 +203,10 @@ export const mountPlay = (shell: StackShell): void => {
     if (session?.navigating) {
       return;
     }
-    for (const { key, target } of heldKeys.values()) {
-      sendTo(target, 'keyUp', [key]);
+    // A Page left since the press still gets its release, as the old
+    // Page's Message Path leads on to any surviving Project Handler.
+    for (const { key, pageIndex, target } of heldKeys.values()) {
+      sendTo(target, 'keyUp', [key], pageIndex);
     }
     heldKeys.clear();
   };
@@ -427,7 +432,7 @@ export const mountPlay = (shell: StackShell): void => {
   };
   /**
    * Silences Play at once, then asks the worker to stop its session. A
-   * worker that doesn't answer in time is ended (ADR 0086).
+   * worker that doesn't answer in time is ended (ADR 0107).
    */
   const stopPlay = () => {
     heldKeys.clear();
@@ -488,7 +493,8 @@ export const mountPlay = (shell: StackShell): void => {
     mode = next;
     shell.setPlaying(mode);
     generation = shell.editor.generation;
-    playing = shell.editor.project;
+    playing = shell.editor.project as Project;
+    owners = scriptOwners(shell.editor.project);
     sessionId++;
     session = new PlayMirror((element, richText, pageIndex, edit) =>
       post({
@@ -503,15 +509,13 @@ export const mountPlay = (shell: StackShell): void => {
     post({
       kind: 'open',
       session: sessionId,
-      project: playing as Project,
+      project: playing,
       pageIndex: shell.editor.pageIndex,
       // A different game each time (ADR 0096).
       seed: BigInt(Date.now()),
     });
     // Draw the authored Page at once, as the worker starts its session.
-    session.apply(
-      firstView(playing as Project, shell.editor.pageIndex, sessionId),
-    );
+    session.apply(firstView(playing, shell.editor.pageIndex, sessionId));
     histories.clear();
     if (mode === 'browse') {
       byId('desk').append(toolbar, reader);
@@ -608,7 +612,11 @@ export const mountPlay = (shell: StackShell): void => {
       if (event.repeat) {
         return;
       }
-      heldKeys.set(code, { key: event.key, target });
+      heldKeys.set(code, {
+        key: event.key,
+        pageIndex: session.page.index,
+        target,
+      });
     }
     // A handled key belongs to the Project: arrows and space don't scroll.
     // Editable text keeps typing, so only the Page's keys are claimed.
@@ -627,7 +635,7 @@ export const mountPlay = (shell: StackShell): void => {
     if (held.target === session.page && session.pageHandles.keyUp) {
       event.preventDefault();
     }
-    sendTo(held.target, 'keyUp', [held.key]);
+    sendTo(held.target, 'keyUp', [held.key], held.pageIndex);
   });
   // Release to the original recipient before focus moves to another field,
   // a Script window or a prompt. The later physical keyup is ignored.

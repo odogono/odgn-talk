@@ -7,6 +7,7 @@ import {
 } from '@northtalk/tooling/worker-supervisor';
 import {
   createElement,
+  createPage,
   createProject,
   richTextFromPlainText,
   textOf,
@@ -66,7 +67,9 @@ const hosted = (project: Project) => {
       edit,
     }),
   );
-  const host = new PlayHost(reply => {
+  // Copied as `postMessage` would, so the mirror never shares the session's objects.
+  const host = new PlayHost(sent => {
+    const reply = structuredClone(sent);
     replies.push(reply);
     if (reply.response.kind === 'view') {
       views.push(reply.response);
@@ -276,4 +279,59 @@ test('the mirror keeps a reader edit the worker has not applied yet', () => {
   }
   mirror.apply(stale);
   expect(textOf(note)).toBe('Script');
+});
+
+test('a refused reader edit is replaced by the worker’s text', async () => {
+  const project = fixture();
+  const note = project.pages[0]!.elements[1]!;
+  note.visible = false;
+  const { mirror, element } = hosted(project);
+  const mirrored = element('note');
+  if (mirrored.kind !== 'text') {
+    throw new Error('Expected text');
+  }
+  mirror.editText(mirrored, richTextFromPlainText('Sneaky'));
+  await until(() => textOf(mirrored) === 'Text');
+});
+
+test('Elements a Script deletes leave the mirror', async () => {
+  const project = fixture();
+  project.pages[0]!.elements[0]!.script =
+    'on click\n tell elements to delete note\nend click';
+  const { request, mirror } = hosted(project);
+  request({
+    kind: 'send',
+    session: 1,
+    pageIndex: 0,
+    target: 'go',
+    message: 'click',
+  });
+  await until(() => mirror.elementsOf().length === 1);
+  expect(mirror.elementsOf().map(e => e.name)).toEqual(['go']);
+});
+
+test('a key held across navigation is released to the Project', async () => {
+  const project = fixture();
+  const first = project.pages[0]!;
+  project.pages.push(createPage('two'));
+  // The release leads back, so the test can see it arrive.
+  project.script = `on keyUp k\n tell pages to show ${first.name}\nend keyUp`;
+  // A stopped Page Script ends the path, so this Page has none.
+  delete first.script;
+  first.elements[0]!.script = 'on click\n tell pages to show two\nend click';
+  const { request, mirror } = hosted(project);
+  const send = (message: 'keyDown' | 'keyUp' | 'click', pageIndex: number) =>
+    request({
+      kind: 'send',
+      session: 1,
+      pageIndex,
+      message,
+      ...(message === 'click' ? { target: 'go' } : { args: ['a'] }),
+    });
+  send('keyDown', 0);
+  send('click', 0);
+  await until(() => mirror.page.index === 1);
+  // The page releases the key to the Page it was pressed on.
+  send('keyUp', 0);
+  await until(() => mirror.page.index === 0);
 });

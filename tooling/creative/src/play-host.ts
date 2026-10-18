@@ -24,7 +24,7 @@ const wallClock = () =>
 
 /** An Element as the page receives it: a group without its members. */
 // Views cross `postMessage` as copies, so the readonly live node can go as is.
-const plain = (element: Immutable<Element>): Element =>
+const withoutMembers = (element: Immutable<Element>): Element =>
   (element.kind === 'group' ? { ...element, members: [] } : element) as Element;
 
 /**
@@ -38,7 +38,7 @@ export const firstView = (
 ): PlayView => {
   const play = new PlaySession(project, pageIndex, { events: false });
   const elements = play.elementsOf().map(element => ({
-    element: plain(element),
+    element: withoutMembers(element),
     shown: play.isVisible(element),
   }));
   return {
@@ -130,18 +130,23 @@ export class PlayHost {
         return;
       }
       case 'send': {
-        if (request.pageIndex === session.pageIndex) {
-          const target =
-            request.target === undefined
-              ? session.page
-              : session.elementsOf().find(e => e.name === request.target);
-          if (target) {
-            session.send(
-              target,
-              request.message,
-              (request.args ?? []).map(arg => text(arg)),
-            );
-          }
+        // Only a release can name a Page left since its press; its Message
+        // Path still leads to any surviving Project Handler.
+        const page =
+          request.pageIndex === session.pageIndex || request.message === 'keyUp'
+            ? session.project.pages[request.pageIndex]
+            : undefined;
+        const target =
+          page &&
+          (request.target === undefined
+            ? page
+            : session.elementsOf(page).find(e => e.name === request.target));
+        if (target) {
+          session.send(
+            target,
+            request.message,
+            (request.args ?? []).map(arg => text(arg)),
+          );
         }
         break;
       }
@@ -157,6 +162,11 @@ export class PlayHost {
         ) {
           session.editText(element, request.richText);
           this.#edits.set(element, request.edit);
+        } else if (element) {
+          // A refused edit: resend the Element so the page drops its copy.
+          this.#sent.delete(element.name);
+          this.#edits.set(element, request.edit);
+          session.changed = true;
         }
         break;
       }
@@ -300,7 +310,7 @@ export class PlayHost {
       for (const element of session.elementsOf()) {
         const edit = this.#edits.get(element);
         const entry = {
-          element: plain(element),
+          element: withoutMembers(element),
           shown: session.isVisible(element),
           ...(edit === undefined ? {} : { edit }),
         };

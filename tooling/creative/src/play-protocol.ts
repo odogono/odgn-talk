@@ -11,6 +11,9 @@ export type ReaderMessage = Extract<
   'click' | 'pointerEnter' | 'pointerLeave' | 'keyDown' | 'keyUp'
 >;
 
+/** A reader's answer to a prompt; Nothing when dismissed. */
+export type PromptAnswer = boolean | string | readonly string[] | undefined;
+
 export type PlayRequest =
   | {
       kind: 'open';
@@ -42,7 +45,7 @@ export type PlayRequest =
       kind: 'answer';
       prompt: number;
       session: number;
-      value: boolean | string | readonly string[] | undefined;
+      value: PromptAnswer;
     }
   | { kind: 'message'; session: number; text: string }
   | { error?: string; kind: 'soundEnded'; voice: number }

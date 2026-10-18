@@ -1,6 +1,6 @@
 # Folio Play runs in a supervised worker
 
-Folio runs every Play Session in a dedicated Play worker, behind the shared worker supervisor in `@northtalk/tooling` ([#1216](https://github.com/odogono/odgn-talk/issues/1216)). This supersedes [ADR 0104](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md) and brings back the worker and Stop deadline of [ADR 0086](0086-creative-play-runs-in-a-worker-and-stop-freezes-the-session.md). On the page thread, Pump slices and Fuel-metered Host Crossings bounded Stop only as far as each Fuel cost bounded its work. One instruction or Host Crossing that ran longer than that froze the editor until the browser offered to stop the page. A worker makes Stop independent of metering. It also lets a future rendering-loop Host keep its clock beside the Group ([#1225](https://github.com/odogono/odgn-talk/issues/1225)).
+Folio runs every Play Session in a dedicated Play worker, behind the shared worker supervisor in `@northtalk/tooling` ([#1216](https://github.com/odogono/odgn-talk/issues/1216)). This supersedes [ADR 0104](0104-folio-play-runs-on-the-page-thread-and-stop-is-cooperative.md) and brings back the worker and Stop deadline of [ADR 0086](0086-creative-play-runs-in-a-worker-and-stop-freezes-the-session.md). On the page thread, Pump slices and Fuel-metered Host Crossings bounded Stop only as far as each Fuel cost bounded its work. One instruction or Host Crossing that ran longer than that froze the editor until the browser offered to stop the page. A worker makes Stop independent of metering. It also lets a future rendering-loop Host keep its clock beside the Group.
 
 The worker owns the Play Session and the clock that pumps it. The page keeps the DOM, audio and the editor:
 
@@ -11,7 +11,7 @@ The worker owns the Play Session and the clock that pumps it. The page keeps the
 - Sounds, prompts, notices and Script problems cross as messages. Sounds play through the page's audio.
 - While browsing, the Message Box sends its command to the worker and answers when the command's Run ends. In Edit it still runs on the page as one undoable edit.
 
-Stop, Esc and choosing Edit silence the page's audio, disable Play input and return to Edit at once. They then send Stop to the worker as a supervised request. The worker requests sticky Core Stop for every Script and runs one final Pump. Its reply is the acknowledgement. Without a reply in 500 ms the supervisor ends the worker. The page then reports that a Script did not respond, and a fresh worker waits for the next session. Nothing restarts Play.
+Stop, Esc and choosing Edit silence the page's audio, disable Play input and return to Edit at once. They then send Stop to the worker as a supervised request. The worker requests sticky Core Stop for every Script and runs one final Pump. Its reply is the acknowledgement. Without a reply in 500 ms the supervisor ends the worker. The page then reports that a Script did not respond, and a fresh worker waits for the next session. Nothing restarts Play. Leaving the page and changing the Project end Play the same way, so the worker is ended only when it fails to answer.
 
 ## Considered Options
 

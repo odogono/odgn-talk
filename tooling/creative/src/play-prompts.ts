@@ -3,9 +3,7 @@
 // briefly without waiting for anyone.
 import { h } from './dom';
 import { type UserNotice } from './play';
-import { type PromptView } from './play-protocol';
-
-type Answer = boolean | string | readonly string[] | undefined;
+import { type PromptAnswer, type PromptView } from './play-protocol';
 
 const NOTICE_MS = 4000;
 
@@ -24,7 +22,7 @@ export type PlayPrompts = {
  */
 export const mountPlayPrompts = (
   over: HTMLElement,
-  answer: (prompt: PromptView, value: Answer) => void,
+  answer: (prompt: PromptView, value: PromptAnswer) => void,
 ): PlayPrompts => {
   const backdrop = h('div', { class: 'play-prompt-backdrop', hidden: true });
   const notices = h('div', {
