@@ -52,7 +52,7 @@ A leading `--|` block keeps the prompt open until its declaration is complete. B
   - Enter Entries and Session Commands at the `>` prompt. An unfinished Entry goes on at `|` until the whole Entry is complete, including labelled calls whose arguments continue inside brackets.
   - A `console` `read` is answered at the `<` prompt.
   - While the Run the prompt waits for sleeps until a deadline, lines typed at the prompt wait their turn and run once it wakes.
-  - **Cancel** or Esc is `:cancel`, and `:help` lists the commands.
+  - **Cancel** or Esc is `:cancel`, and `:help` lists the commands. The session's worker reads no request while it runs, so the prompt shows "Stopping…" until it answers. If it hasn't answered within 500 ms, the page ends the worker and starts a fresh session in a new one, from the setup and the tabs, without running the launch line. Restart and Run fresh do the same.
   - **Copy result as source** copies the latest value an Entry echoed in source form, which pastes into a Script or test as an equal value: `("2026-09-27" as civil date)` rather than `2026-09-27`. A value holding a Function Value or Host Object has none, and the button says so.
   - The **@ ~** box shows the Clock readings and Capability answers the Transcript records.
 - **Grants:** before the session starts, the Grants panel issues `:grant` and `:mock`.
