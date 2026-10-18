@@ -3,6 +3,7 @@ package northtalk
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -242,6 +243,77 @@ func TestRestorePendingSettlementsAndObjectIdentity(t *testing.T) {
 	}
 }
 
+// Saves are Core-specific (ADR 0008). Change only the Cost Model header and
+// integrity digest so both backends exercise the same mismatch policy.
+func rewriteSaveCostModel(t *testing.T, saved []byte) []byte {
+	t.Helper()
+	if !bytes.HasPrefix(saved, []byte("NTZS")) {
+		return rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
+	}
+	payload := saved[:len(saved)-sha256.Size]
+	at := 4
+	read := func() uint64 {
+		value, n := binary.Uvarint(payload[at:])
+		if n <= 0 {
+			t.Fatal("invalid Zig save header")
+		}
+		at += n
+		return value
+	}
+	read() // Save format.
+	length := read()
+	at += int(length) // Language version.
+	start := at
+	cost := read()
+	changed := append([]byte(nil), payload[:start]...)
+	changed = binary.AppendUvarint(changed, cost+1)
+	changed = append(changed, payload[at:]...)
+	digest := sha256.Sum256(changed)
+	return append(changed, digest[:]...)
+}
+
+func TestVariablesOnlyReportsPendingScriptCalls(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, calls string
+	}{
+		{"ordinary wait", "send slow to b and wait", "[a/r1.c1]"},
+		{"join members", "wait for all\n send slow to b and wait\n send slow to b and wait\nend wait", "[a/r1.c1 a/r1.c2]"},
+		{"timer", "wait 1 s", "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := New()
+			g := c.NewGroup(GroupOptions{})
+			s, err := g.Load(LoadOptions{Name: "a", Source: "script variable n = 0\non go\n add 1 to n\n" + tc.body + "\nend go"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := g.Load(LoadOptions{Name: "b", Source: "on slow\n wait 1 s\nend slow"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Deliver(Message{Name: "go"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := g.Pump(time.Unix(1, 0), PumpOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			saved, err := g.Save()
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, result, err := c.Restore(rewriteSaveCostModel(t, saved), RestoreOptions{Mismatch: VariablesOnly})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !result.VariablesOnly || len(result.Pending) != 0 || fmt.Sprint(result.AbandonedCalls) != tc.calls {
+				t.Fatalf("abandoned calls: %#v, want %s", result, tc.calls)
+			}
+			if got := restored.Inspect().Scripts[0].Vars[0].Val.String(); got != "1" {
+				t.Fatalf("committed value lost: %s", got)
+			}
+		})
+	}
+}
+
 func TestVariablesOnlyUsesRollbackBaseAndReportsScriptCall(t *testing.T) {
 	c := New()
 	g := c.NewGroup(GroupOptions{})
@@ -253,13 +325,20 @@ func TestVariablesOnlyUsesRollbackBaseAndReportsScriptCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.Deliver(Message{Name: "go"})
-	g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 40})
+	if _, err := s.Deliver(Message{Name: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.Pump(time.Unix(1, 0), PumpOptions{FuelSlice: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if got := g.Inspect().Scripts[0].Vars[0].Val.String(); got == "0" {
+		t.Fatal("expected a provisional write before preemption")
+	}
 	saved, err := g.Save()
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved = rewriteSave(t, saved, func(data map[string]any) { data["Versions"].(map[string]any)["CostModel"] = "old" })
+	saved = rewriteSaveCostModel(t, saved)
 	restored, result, err := c.Restore(saved, RestoreOptions{Mismatch: VariablesOnly})
 	if err != nil {
 		t.Fatal(err)

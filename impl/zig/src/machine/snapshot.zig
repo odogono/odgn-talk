@@ -2541,6 +2541,12 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
     const k = r.keep();
     var dropped: std.ArrayList(u64) = .empty;
     defer dropped.deinit(a);
+    // The Wait table includes ordinary waits and Join Members. Script
+    // calls keep their id on the Wait; timers and events have no call id.
+    for (g.waits.all()) |p| {
+        const id = if (p.call) |c| c.id else p.id;
+        if (id.len > 0) try out.abandoned.append(a, try k.dupe(u8, id));
+    }
     for (g.scripts.items, saved) |s, *x| {
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(a);
@@ -2572,8 +2578,6 @@ fn discard(r: *Restoring, saved: []const Saved, out: *Discarded) Error!void {
             try out.runs.append(a, try k.dupe(u8, run.id));
             s.fuel_total += run.fuel;
             s.alloc_total += run.alloc;
-            if (run.waiting) |p| if (p.call) |c| try out.abandoned.append(a, try k.dupe(u8, c.id));
-            if (run.join) |j| for (j.members.items) |m| if (m.pending) |p| if (p.call) |c| try out.abandoned.append(a, try k.dupe(u8, c.id));
             if (run.verdict or run.delivery.decision) try defer_(g, run.delivery, s.name, run.id);
         }
         for (s.work.items) |w| switch (w) {
@@ -2813,6 +2817,8 @@ test "a variables-only restore keeps Script Variables and discards the rest" {
     try testing.expectEqual(Outcome.variables_only, try restore(&restored, good, .{ .variables_only = true }, &result));
     try testing.expectEqual(@as(usize, 4), result.discarded.len);
     try testing.expectEqual(@as(usize, 1), result.dropped.len);
+    try testing.expectEqual(@as(usize, 1), result.abandoned.len);
+    try testing.expectEqualStrings("a/r1.c1", result.abandoned[0]);
     for (restored.scripts.items) |x| try testing.expectEqual(@as(usize, 0), x.live.items.len);
     try testing.expectEqual(@as(usize, 0), restored.waits.all().len);
     try restored.pump(.{ .seconds = 1790000010, .micros = 0 });
