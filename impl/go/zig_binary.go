@@ -759,7 +759,7 @@ func (b *zigGroup) zbPumpResult(p *zbPacket) (PumpResult, error) {
 		if err != nil {
 			return result, err
 		}
-		if err := b.zbDecodeStruct(row, reflect.ValueOf(report).Elem()); err != nil {
+		if err := b.zbDecodeReport(row, report); err != nil {
 			return result, err
 		}
 		if c := row.get("climbed"); len(c) == 1 && c[0] == 0x02 {
@@ -893,4 +893,67 @@ func (b *zigGroup) zbDecodeStruct(view zbView, dst reflect.Value) error {
 		}
 	}
 	return nil
+}
+
+// zbDecodeReport reads the Reports every Request produces directly, and
+// others through zbDecodeStruct.
+func (b *zigGroup) zbDecodeReport(row zbView, report Report) error {
+	text := func(key string) string { s, _ := zbText(row.get(key)); return s }
+	num := func(key string) (int64, error) {
+		span := row.get(key)
+		if span == nil {
+			return 0, nil
+		}
+		n, ok := zbInt(span)
+		if !ok {
+			return 0, fmt.Errorf("%s: expected Zig integer", key)
+		}
+		return n, nil
+	}
+	ancestry := func() RunAncestry {
+		return RunAncestry{RootDelivery: DeliveryID(text("rootDelivery")), ParentRun: RunID(text("parentRun")), ParentCall: CallID(text("parentCall"))}
+	}
+	var err error
+	switch r := report.(type) {
+	case *RunStarted:
+		r.RunAncestry = ancestry()
+		r.Script, r.Run, r.Delivery, r.Selector = text("script"), RunID(text("run")), DeliveryID(text("delivery")), text("selector")
+		if err = b.zbDecode(row.get("args"), reflect.ValueOf(&r.Args).Elem()); err == nil {
+			err = b.zbDecode(row.get("fn"), reflect.ValueOf(&r.Function).Elem())
+		}
+	case *RunAccounting:
+		r.RunAncestry = ancestry()
+		r.Script, r.Run, r.State = text("script"), RunID(text("run")), text("state")
+		r.Fuel, err = num("fuel")
+	case *CausalWork:
+		r.RootDelivery = DeliveryID(text("rootDelivery"))
+		if r.LiveRuns, err = num("liveRuns"); err == nil {
+			if r.QueuedMessages, err = num("queuedMessages"); err == nil {
+				r.DiscardedMessages, err = num("discardedMessages")
+			}
+		}
+	case *RunEnd:
+		if row.get("effect") != nil || row.get("cleanupFailed") != nil || row.get("error") != nil || row.get("at") != nil {
+			return b.zbDecodeStruct(row, reflect.ValueOf(r).Elem())
+		}
+		r.Script, r.Run, r.Delivery, r.Broadcast, r.Handler, r.Limit = text("script"), RunID(text("run")), DeliveryID(text("delivery")), BroadcastID(text("broadcast")), text("handler"), text("limit")
+		if f := row.get("fallback"); len(f) == 1 && f[0] == 0x02 {
+			r.Fallback = true
+		}
+		outcome, _ := zbText(row.get("outcome"))
+		if err = zigEnumText(outcome, reflect.ValueOf(&r.Outcome).Elem(), zigEnums[reflect.TypeFor[Outcome]()]); err != nil {
+			return err
+		}
+		if span := row.get("result"); span != nil {
+			if r.Result, err = b.zbDecodeValue(span); err != nil {
+				return err
+			}
+		}
+		if r.Fuel, err = num("fuel"); err == nil {
+			r.Alloc, err = num("alloc")
+		}
+	default:
+		return b.zbDecodeStruct(row, reflect.ValueOf(report).Elem())
+	}
+	return err
 }

@@ -108,9 +108,50 @@ scaled zero, malformed and truncated input, duplicate keys and NFC refusal.
 A five-second Go decoder fuzz run completed 1,356,781 executions without failure.
 Spec generation, repository checks, formatting and documentation links pass.
 
+## Gate measurements (#1254)
+
+`impl/go/zig-request-pump-bench.sh`, run by the `go-zig-bench` workflow,
+measures five backends in one job. It runs native `BackendRequest` at
+`ff543e29`, the commit before the experiment. It also runs native, Zig JSON,
+Zig map and Zig fields at the head. Each is ten interleaved rounds of 2,000
+iterations. Medians in µs/op, with Zig as a multiple of native in the same job:
+
+| Run | Platform | Native Request | Fields Request | Map Request | Native combined | Fields combined | Map combined |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| [Baseline](../../bench/results/go-zig-adapter/1254-baseline/) | macOS arm64 | 8.25 | 31.0 (3.76×) | 39.6 (4.80×) | 8.01 | 29.0 (3.62×) | 35.3 (4.42×) |
+| | Linux arm64 | 10.09 | 50.1 (4.97×) | 56.4 (5.59×) | 10.42 | 49.1 (4.71×) | 54.7 (5.25×) |
+| | Linux amd64 | 9.66 | 35.6 (3.69×) | 41.7 (4.32×) | 10.25 | 31.4 (3.06×) | 37.3 (3.64×) |
+| [Optimized](../../bench/results/go-zig-adapter/1254-optimized/) | macOS arm64 | 8.00 | 28.2 (3.53×) | 32.7 (4.09×) | 7.75 | 27.5 (3.55×) | 29.8 (3.85×) |
+| | Linux arm64 | 10.01 | 45.6 (4.55×) | 52.4 (5.23×) | 10.38 | 41.7 (4.02×) | 47.2 (4.54×) |
+| | Linux amd64 | 11.72 | 71.3 (6.09×) | 78.1 (6.67×) | 12.09 | 63.8 (5.28×) | 70.5 (5.83×) |
+
+Native shows no regression against the base on any platform; the largest
+significant change is −7.65%. The optimized amd64 job's runner was slower
+throughout: its JSON Request took 98 µs against 55 µs in the baseline. Read
+ratios within each job.
+
+**Neither gate passes on any platform, with either envelope.** Fields beats map
+by 10–19% on the unchanged Request in every job.
+
+The targeted pass followed a profile of the fields Request round trip. It
+decodes the four Reports every Request produces without reflection, and reads
+integer Values without a decimal parse. It gained 6–13% on the Zig arm64 jobs.
+Idle inline polls were profiled too; answering them without parsing made no
+measurable difference, so that change was dropped.
+
+**Bottleneck.** On Apple M5, a fields Request round trip took 11.8 µs. Guest
+frames took 8.3 µs of it: the wazero call and Zig execution under
+`-Doptimize=safe`. The Host-side remainder, about 3.4 µs, is about what native
+Go takes for the whole round trip. A transport-only pass can't reach the
+limit. Getting under 3× needs cheaper guest execution, or a cheaper wazero call
+and memory crossing, per Request. Either is outside this envelope experiment.
+
+Per the acceptance rule, broader implementation stops here for maintainer
+review. ADR 0110 stays proposed and ADR 0098 accepted. #1255–#1257 stay blocked.
+
 ## Remaining implementation
 
-Steps 1–3 below are done in #1253, as described above.
+Steps 1–3 below are done in #1253. Step 4 is measured above, and failed; step 5 is blocked.
 
 1. Integrate both binary frame candidates into the Go adapter and Zig Session,
    using typed Values and Reports rather than JSON transcoding. Preserve binary
