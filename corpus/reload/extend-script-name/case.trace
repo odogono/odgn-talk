@@ -1,0 +1,16 @@
+> load element:page.one/button:primary identity=7b1db323d6037598b09f109bf1e976e36ef29307fc51fcbdf8600161f2b4ab12
+> extend element:page.one/button:primary source="constant next = k + 1" identity=50742a96d4ea87945ae34102b6c62d7e7b689e6b4f695c12b6be526046f32850
+> extend element:page.one/button:primary source="script variable result = k + next" & newline & "on hello" & newline & "  return [result, plus(), plus(next)]" & newline & "end hello" & newline & "on fail" & newline & "  return k / 0" & newline & "end fail" identity=f334ff0a1ac4919a13d7689eab4f71149a2e91421f080be051b09c5dd810ebd4
+> deliver d1 to=element:page.one/button:primary message=hello
+> pump clock=1970-01-01T00:00:00Z
+seg element:page.one/button:primary/r1 start delivery=d1 handler=hello clause=1 fuel=46 alloc=120 state=16 end=return
+run element:page.one/button:primary/r1 outcome=completed delivery=d1 handler=hello value=[7, 6, 7] fuel=46 alloc=120
+pumped state=idle fuel=46
+> deliver d2 to=element:page.one/button:primary message=fail
+> pump clock=1970-01-01T00:00:00Z
+raise element:page.one/button:primary/r2 code="division by zero" at=element:page.one/button:primary+2:17 pos=6:12
+seg element:page.one/button:primary/r2 start delivery=d2 handler=fail clause=1 fuel=13 alloc=0 state=16 end=error
+run element:page.one/button:primary/r2 outcome=errored delivery=d2 handler=fail error={code: "division by zero", at: {unit: "element:page.one/button:primary+2", handler: "fail", line: 6, column: 12}} fuel=13 alloc=0
+pumped state=idle fuel=13
+> vars
+vars element:page.one/button:primary result=7

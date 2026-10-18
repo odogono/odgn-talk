@@ -1,0 +1,10 @@
+# Host-chosen Script names cannot be mistaken for Library imports (#1140).
+kind = "trace"
+
+[versions]
+language = "1.0-rc.3"
+costModel = "0"
+
+[[scripts]]
+name = "element:page.one/button:primary"
+source = "s.talk"

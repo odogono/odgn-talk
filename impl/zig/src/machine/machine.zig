@@ -626,7 +626,8 @@ pub const Script = struct {
     /// An extension's definition's value: `@<unit>:<name>`, a Constant of
     /// one of the Script's units, or an imported Library's.
     fn inheritedDefinition(s: *const Script, d: []const u8, imports: []const *Library) !?*Value {
-        const colon = std.mem.indexOfScalar(u8, d, ':') orelse return null;
+        // A Constant's Name has no colon; its Host-chosen unit name may.
+        const colon = std.mem.lastIndexOfScalar(u8, d, ':') orelse return null;
         if (d[0] != '@') return importedDefinition(imports, d);
         const unit = d[1..colon];
         const name = d[colon + 1 ..];
