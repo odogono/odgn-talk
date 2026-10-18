@@ -283,12 +283,15 @@ still use. Check names against the installed source, under `lib_dir` from
 - `@typeInfo` of an enum gives `field_names` and `field_values`, not `fields`.
 
 The experimental [Go adapter](../go/README.md#experimental-zig-backend) also
-uses Zig's opaque `zig/11` saves. Its `restore-bindings-v1` Message Layer feature
+uses Zig's opaque `zig/12` saves. Its `restore-bindings-v1` Message Layer feature
 permits Capability/Grant registration while answering resolution, keeps public
 Capability names separate from transport handles, and returns the restored
 Script/Object identities and pending Call metadata. Pending Segment ids are
-reconstructed from retained Run accounting; preserving the original Call Clock
-across later Pumps remains [#1067](https://github.com/odogono/odgn-talk/issues/1067).
+reconstructed from retained Run accounting, including preempted open Joins and
+suspended waits. Saves retain each pending Call's original Clock for adoption,
+even after later Pumps; Reissue uses the first restored Pump's Clock. `zig/12`
+rejects earlier save layouts with `invalid save`, including under VariablesOnly;
+Hosts must drain existing Groups on their old runtime or start fresh Groups.
 Rejected mismatches retain their mandatory Trace mode and error-reply records.
 
 The `wasm32-wasi` target is the Message Layer reactor for Hosts with a WASM runtime, replacing the retired Go `wasip1` entry point ([ADR 0089](../../docs/adr/0089-the-zig-build-serves-the-message-layer-reactor.md)). A browser Host can run it through [`@northtalk/ts/wasm`](../ts/README.md#the-zig-reactor-in-a-browser), the TS embedding API over the Message Layer ([ADR 0097](../../docs/adr/0097-browser-hosts-may-run-the-zig-reactor-through-the-ts-embedding-api.md)). The native sidecar also uses Zig ([ADR 0090](../../docs/adr/0090-the-native-message-layer-sidecar-uses-zig.md)). Go-Core saves cannot be restored here: saves are per Core ([ADR 0008](../../docs/adr/0008-same-core-save-restore.md)). Start fresh Groups from source and Host-owned data, or retain the old Go runtime/artifact until existing Groups are drained or rebuilt; no save converter is supplied.
@@ -661,7 +664,7 @@ at the originating call, including a Join Member, without a synthetic Segment.
 A preempted Join's open Segment rolls back; a suspended Run keeps its committed
 variables. `talk_save` refuses with `effects pending` for pending metered calls
 or unresolved requests, even after Reload ends their call. Successful saves
-preserve the request counter and issued-call eligibility in save format `zig/11`;
+preserve the request counter and issued-call eligibility in save format `zig/12`;
 older Zig snapshot layouts are refused. Issued ids are kept as consecutive
 per-Run ranges with the same eligibility. Repeated polling through one Operation
 therefore keeps a fixed number of history entries in memory and in saves.

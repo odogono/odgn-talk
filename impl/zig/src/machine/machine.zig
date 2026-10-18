@@ -9802,6 +9802,9 @@ pub const Group = struct {
                 gpa.destroy(c);
                 return err;
             };
+            // Segment ids are normally instruction scratch. A retained
+            // Call exposes its originating Segment after later Pumps too.
+            c.segment = try g.keep.allocator().dupe(u8, local.segment);
             // Its arguments, for the answer's check and for a save, which
             // a restore may reissue it with.
             c.args = try gpa.dupe(*Value, args);

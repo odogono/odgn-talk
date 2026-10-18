@@ -131,7 +131,7 @@ was already stopped. Function Values made by the old code are stale afterwards.
 
 `Group.Save`, `Core.Restore`, `Group.Settle` and `Group.Fingerprint` use the
 guest's `save`, `restore`/`resolve`, `settle` and `fingerprint` exchanges.
-Saves are opaque `zig/11` bytes; native Go saves remain per-Core and cannot be
+Saves are opaque `zig/12` bytes; native Go saves remain per-Core and cannot be
 read by this backend. Restore compiles the supplied Libraries in its fresh
 guest, rebinds Grants and native Objects through the public callbacks, and
 returns typed accounting Reports and pending Calls. Answer, Fail, Reissue and
@@ -146,9 +146,11 @@ Capability handles select callbacks; public Capability names participate in
 Fingerprints and declaration matching, independently of registration order.
 Save passes through live-effect refusals, with a transport fixture covering
 `effects pending`; public scoped/Segment attachments remain the separate
-slice. Restored Call Segment ids are reconstructed from retained Run state
-without changing the save format. Original Call Clock retention across later
-Pumps remains [#1067](https://github.com/odogono/odgn-talk/issues/1067).
+slice. Restored Call Segment ids are reconstructed from retained Run state,
+including preempted open Joins and suspended waits. Adopted Calls keep their
+original Clock across later Pumps; reissued Start reads the new Pump Clock.
+Earlier Zig save layouts are refused with `invalid save`, even under
+VariablesOnly; drain old Groups on their old runtime or start fresh Groups.
 Reissue Fuel faults inside Joins remain [#1068](https://github.com/odogono/odgn-talk/issues/1068),
 and uncaught lost-call error Data differs from native Go ([#1069](https://github.com/odogono/odgn-talk/issues/1069)).
 Save-record input-generating Trace sinks remain part of [#1051](https://github.com/odogono/odgn-talk/issues/1051).
