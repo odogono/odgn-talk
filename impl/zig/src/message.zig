@@ -1913,7 +1913,9 @@ fn runPump(s: *Session, ref: i64, entry: *GroupEntry, resuming: bool, now: model
     // and retaining records that finishOk would immediately discard.
     const trace = mg.trace;
     if (!entry.traced) mg.trace = null;
-    defer mg.trace = trace;
+    defer if (!entry.traced) {
+        mg.trace = trace;
+    };
     if (resuming) mg.resumePump() catch |e| return hostError(s.gpa, ref, talk.status(e)) else mg.pumpWith(now, slice, cap) catch |e| return hostError(s.gpa, ref, talk.status(e));
     entry.group.flush();
     if (mg.pumpPaused()) {
