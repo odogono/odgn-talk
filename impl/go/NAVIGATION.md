@@ -3,7 +3,9 @@
 Find your task's heading (`rg -n '^## ' impl/go/NAVIGATION.md` lists them), then read the linked rules and tests. Read the
 [implementation guide](README.md) when you need feature details or limitations.
 List paths with `rg --files` in the relevant directory before opening files by
-name. For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
+name: the root package is flat, named by area (`group_*.go`, `zig_*.go`), and
+has no `script.go`, `types.go` or `report.go`. Pump and Run report types are in
+[`execution_types.go`](execution_types.go). For domain terms, use [GLOSSARY.md](../../GLOSSARY.md); for rationale, use the
 [ADR index](../../docs/adr/README.md).
 
 All commands below run from the repository root. See the
@@ -68,9 +70,9 @@ Files, grammar, or lowering.
 
 ## Dispatch, scheduling and waits
 
-- Implementation: [Host inputs](group.go), [Run scheduling](group_run.go), [message observation](group_observe.go), [sends](group_send.go)
+- Implementation: [Host inputs, `Request` and `Pump`](group.go), [pending replies](group_pending.go), [`Group.Call` and Function Values](group_function.go), [Run scheduling](group_run.go), [Run cancellation](group_cancel_run.go), [message observation](group_observe.go), [sends](group_send.go)
 - Rules: [scheduling](../../spec/05-handlers-messages-and-scheduling.md), [embedding](../../spec/09-embedding.md)
-- Tests and cases: [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go)
+- Tests and cases: [error delivery](error_delivery_test.go), [waits](wait_test.go), [message waits](wait_for_test.go), [sends](send_wait_test.go), [queueing policies](policy_test.go), [Function calls](foreign_function_test.go)
 - First check: `go -C impl/go test .`
 
 ## Capability Operations
@@ -96,17 +98,25 @@ Files, grammar, or lowering.
 
 ## Experimental Zig backend
 
-- Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](zig-experimental-check.sh)
+- Implementation: [adapter](zig_backend.go), [shared guests](zig_shared.go), [inline inputs](zig_inline.go), [reply decoding](zig_reply.go), [persistence bridge](zig_save.go), [Capability bridge](zig_capability.go), [guest ownership](internal/zigwasm/), [build/acceptance](zig-experimental-check.sh)
 - Rules: [embedding](../../spec/09-embedding.md), [supported slice and limits](README.md#experimental-zig-backend)
-- Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared native/Zig Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against native `TestCapabilityBridge` observations; to test uncommitted Zig, see the [local loop](README.md#experimental-zig-backend)
+- Tests and cases: [public adapter acceptance](zig_backend_test.go), [Capability acceptance](zig_capability_test.go), [shared native/Zig Hosts](zig_capability_public_test.go), [Scope/Segment Hosts](zig_effect_public_test.go), [Standard factory Hosts](zig_standard_public_test.go), [persistence Hosts](zig_save_public_test.go) and [live-effect refusal](zig_save_test.go) plus unchanged public Go tests; `TestZigBackendCapabilityParity` diffs Zig against native `TestCapabilityBridge` observations. To add a parity scenario, write a `run<Area>BridgeCases(t) []bridgeObservation` in a `zig_<area>_public_test.go` and append it in `runBridgeCases` ([`zig_capability_public_test.go`](zig_capability_public_test.go))
 - Measurements against native Go: [Backend benchmarks](backend_bench_test.go), [Group instantiation](group_bench_test.go) and the Benchmark Suite, run on both by [zig-adapter-bench.sh](zig-adapter-bench.sh); results in [the binding research](../../docs/research/go-zig-binding.md)
-- First check: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`; one test: `go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
+- First check: `CGO_ENABLED=0 impl/go/zig-experimental-check.sh`, the gate CI runs; an unfiltered `go test -tags talk_zig_experimental .` also runs tests outside its selection that the adapter doesn't pass yet, so failures there are expected. One test: `go -C impl/go test -tags talk_zig_experimental -run '^TestZigBackendCapabilityParity$' .`; cross-compile (also in CI): `impl/go/cross-check.sh`
+- After changing the Zig Core: try it with the [hand swap](README.md#experimental-zig-backend), then commit and refresh the embedded copy with `python3 spikes/go-zig-binding/build-artifact.py`; the [Zig task map](../zig/NAVIGATION.md#after-changing-the-zig-core) lists every step
+
+## Binary Request/Pump and combined calls
+
+- Implementation: [binary exchange](zig_binary.go), [combined calls through the adapter](zig_combined.go), [combined Request and Pump](group_combined.go)
+- Rules: [the binary exchange](../../spec/embedding/request-pump-binary.md), [ADR 0110](../../docs/adr/0110-request-and-pump-have-an-optional-binary-exchange.md), [measurements](../../docs/research/request-pump-binary.md)
+- Tests and cases: [adapter tests](zig_combined_test.go), [native tests](group_combined_test.go), [benchmarks](group_combined_bench_test.go); `TALK_ZIG_REQUEST_PUMP=map` or `fields` runs the adapter suites on a binary candidate, as the [probe workflow](../../.github/workflows/go-zig-probe.yml) does
+- First check: `CGO_ENABLED=0 TALK_ZIG_REQUEST_PUMP=fields impl/go/zig-experimental-check.sh`; envelope gates: `impl/go/zig-request-pump-bench.sh`, also run by the [bench workflow](../../.github/workflows/go-zig-bench.yml)
 
 ## Public embedding API
 
 - Implementation: [declarations](../../spec/embedding/talk.go) mirrored by the root package
 - Rules: [Embedding](../../spec/09-embedding.md)
-- Tests and cases: [API comparison](internal/apicheck/api_test.go): a root export absent from `talk.go`, or a signature that differs, fails; declare new exports there first
+- Tests and cases: [API comparison](internal/apicheck/api_test.go): a root export absent from `talk.go`, or a signature that differs, fails; declare new exports there first. `bun tools/zig/api.ts` also requires each `talk.go` name to have its C declaration in [`talk.h`](../zig/include/talk.h), so add both in one PR, or keep an experimental API unexported
 - First check: `go -C impl/go test ./internal/apicheck`
 
 ## Host Manifest

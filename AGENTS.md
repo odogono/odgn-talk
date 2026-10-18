@@ -20,8 +20,8 @@ Use a single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/a
 
 On a fresh worktree, run `bun install --frozen-lockfile && bun run unicode:check` before any test, lint or push.
 
-For implementation work, start with [the layout](README.md#layout), then the task map: [Go](impl/go/NAVIGATION.md), [Zig](impl/zig/NAVIGATION.md), [TS and tooling](impl/ts/NAVIGATION.md), [Elixir](impl/elixir/NAVIGATION.md) or [Folio](tooling/creative/NAVIGATION.md).
+For implementation work, open the area's task map: [Go](impl/go/NAVIGATION.md), [Zig](impl/zig/NAVIGATION.md), [TS and tooling](impl/ts/NAVIGATION.md), [Elixir](impl/elixir/NAVIGATION.md) or [Folio](tooling/creative/NAVIGATION.md). These and this file are the only agent guides; [the layout](README.md#layout) covers the other directories. A language change (Data Files, grammar, lowering) also touches [the consumers in spec-changes.md](docs/agents/spec-changes.md).
 
 ### Review
 
-When reviewing behavior changes, apply [the documentation standard](CODING_STANDARDS.md).
+When reviewing, apply [the coding standards](CODING_STANDARDS.md), which index every rule a review checks.

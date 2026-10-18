@@ -1,6 +1,10 @@
 #!/bin/sh
-# Runs the checks CI's Spec job runs (.github/workflows/spec.yml).
+# Runs the branch half of the Conventions job, changelog fragments and ADR
+# numbers against a fresh origin/main (docs/agents/commits.md), then the
+# checks CI's Spec job runs (.github/workflows/spec.yml).
 set -e
+git fetch -q origin main || echo "pre-push: fetch failed; checking against the last origin/main" >&2
+bun tools/commits/check.ts branch
 bun run lint
 bun run format:check
 bun run check

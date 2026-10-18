@@ -8,7 +8,7 @@
 // and a #fragment on a Markdown target must name one of its headings, by
 // GitHub's slug rules. Links inside code are ignored. Each task map,
 // impl/*/NAVIGATION.md or tooling/*/NAVIGATION.md, must also be linked from
-// AGENTS.md and README.md.
+// AGENTS.md and README.md. No two ADRs share a number.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -79,7 +79,23 @@ export const links = (text: string): { line: number; target: string }[] => {
   return out.filter(({ target }) => !/^[a-z][\d+.a-z-]*:/i.test(target));
 };
 
-/** Every broken link in the tracked Markdown files, and every task map AGENTS.md or README.md misses. */
+/** Each ADR number that more than one of the file names claims, with its files. */
+export const adrClashes = (names: string[]): string[] => {
+  const byNumber = new Map<string, string[]>();
+  for (const name of names) {
+    const number = /^(\d{4})-/.exec(name)?.[1];
+    if (number) {
+      byNumber.set(number, [...(byNumber.get(number) ?? []), name]);
+    }
+  }
+  return [...byNumber]
+    .filter(([, files]) => files.length > 1)
+    .map(
+      ([number, files]) => `ADR ${number} is claimed by ${files.join(' and ')}`,
+    );
+};
+
+/** Every broken link in the tracked Markdown files, every task map AGENTS.md or README.md misses, and every ADR number clash. */
 export const check = (): { files: number; problems: string[] } => {
   const problems: string[] = [];
   const tracked = execFileSync('git', ['ls-files', '-z', '*.md'], {
@@ -135,6 +151,11 @@ export const check = (): { files: number; problems: string[] } => {
       }
     }
   }
+  for (const clash of adrClashes(readdirSync(join(ROOT, 'docs/adr')).sort())) {
+    problems.push(
+      `docs/adr: ${clash}; renumber yours from origin/main (docs/agents/domain.md)`,
+    );
+  }
   return { files: tracked.length, problems };
 };
 
@@ -143,7 +164,7 @@ if (import.meta.main) {
   if (problems.length > 0) {
     console.error(problems.join('\n'));
     console.error(
-      `✗ ${problems.length} broken Markdown link${problems.length === 1 ? '' : 's'}.`,
+      `✗ ${problems.length} Markdown problem${problems.length === 1 ? '' : 's'}.`,
     );
     process.exit(1);
   }
