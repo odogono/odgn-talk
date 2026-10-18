@@ -4973,6 +4973,9 @@ pub const Group = struct {
         for (args.items) |v| size += costs.size(v);
         m.fuel_extra = (size + 31) / 32;
         m.alloc_extra = size;
+        // Cover the complete instruction before any report, delivery, call id
+        // or Wait becomes observable. The run loop records this charge once.
+        try g.coverCharge(run, costs.chargeInstruction(ins.op, m));
         // No Owning Script on its path: `unhandled`, reported as a Host
         // Delivery's is (chapter 5), and nothing is sent.
         const dest = to orelse {
@@ -9692,8 +9695,7 @@ pub const Group = struct {
         m.declared = decl.cost.fuel;
         m.alloc_extra = decl.cost.alloc;
         const before = costs.chargeInstruction(ins.op, m);
-        if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
-        if (run.base == 0 and (run.alloc + before.alloc > run.limits.alloc_per_run)) return g.faultOn(.alloc);
+        try g.coverCharge(run, before);
         run.calls += 1;
         const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
         const left: ?u64 = fuelLeft(run) -| (if (decl.metering != null) before.fuel + run.clause_fuel else decl.cost.fuel);
@@ -10119,9 +10121,16 @@ pub const Group = struct {
         var probe = m.*;
         probe.fuel_extra = cost.fuel;
         probe.alloc_extra = cost.alloc;
-        const before = costs.chargeInstruction(op, &probe);
-        if (run.base == 0 and before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
-        if (run.base == 0 and run.alloc + before.alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
+        try g.coverCharge(run, costs.chargeInstruction(op, &probe));
+    }
+
+    /// A Run that can't cover an instruction's charge faults before any of
+    /// the instruction's effects become observable. Resumed Runs have
+    /// already paid.
+    fn coverCharge(g: *Group, run: *const Run, before: costs.Charge) error{LimitFault}!void {
+        if (run.base != 0) return;
+        if (before.fuel + run.clause_fuel > fuelLeft(run)) return g.faultOn(.fuel);
+        if (run.alloc + before.alloc > run.limits.alloc_per_run) return g.faultOn(.alloc);
     }
 
     fn recordPropertyReturn(g: *Group, run: *Run, o: *objects.Object, key: []const u8, op: []const u8, result: objects.Result, valid: bool, input: ?*Value) !void {

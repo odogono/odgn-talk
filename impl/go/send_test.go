@@ -101,9 +101,18 @@ func TestSelfSendCountsMailboxAtPersistentBoundaries(t *testing.T) {
 	}
 }
 
+// sendBudgetFaults are limits a Send's charge can't cover, each with the
+// limit that faults first.
+var sendBudgetFaults = []struct {
+	limits Limits
+	limit  string
+}{{Limits{FuelPerRun: 6}, "fuel"}, {Limits{FuelPerRun: 27}, "fuel"}, {Limits{AllocPerRun: 1}, "alloc"}, {Limits{AllocPerRun: 47}, "alloc"}, {Limits{FuelPerRun: 6, AllocPerRun: 1}, "fuel"}}
+
 func TestSendBudgetFaultDoesNotDeliver(t *testing.T) {
-	for _, limits := range []Limits{{FuelPerRun: 6}, {AllocPerRun: 1}} {
-		g := New().NewGroup(GroupOptions{})
+	for _, tc := range sendBudgetFaults {
+		limits := tc.limits
+		var trace lines
+		g := New().NewGroup(GroupOptions{Trace: &trace})
 		a, err := g.Load(LoadOptions{Name: "a", Limits: limits, Source: "on go\n send ping with 7 to b\nend go"})
 		if err != nil {
 			t.Fatal(err)
@@ -118,10 +127,10 @@ func TestSendBudgetFaultDoesNotDeliver(t *testing.T) {
 			t.Fatalf("%+v %v", result, err)
 		}
 		end := operationalReports(result.Reports)[0].(*RunEnd)
-		if end.Outcome != LimitFault || end.Fuel != 6 || end.Alloc != 0 {
+		if end.Outcome != LimitFault || end.Limit != tc.limit || end.Fuel != 6 || end.Alloc != 0 || end.At.Unit != "a" || end.At.PC != 4 || result.FuelUsed != 6 {
 			t.Fatal(end)
 		}
-		if g.Inspect().Scripts[1].Runs != nil {
+		if len(g.Inspect().Scripts[1].Runs) != 0 || g.Script("b").Counters().Runs != 0 || strings.Contains(strings.Join(trace, "\n"), "send a/r1") {
 			t.Fatal("budget fault delivered message")
 		}
 	}

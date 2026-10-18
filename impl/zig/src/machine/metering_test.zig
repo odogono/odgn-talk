@@ -57,9 +57,54 @@ fn contains(trace: *std.Io.Writer.Allocating, text: []const u8) !void {
         return error.TestExpectedEqual;
     }
 }
+fn absent(trace: *std.Io.Writer.Allocating, text: []const u8) !void {
+    if (std.mem.indexOf(u8, trace.written(), text) != null) {
+        std.debug.print("unexpected {s} in:\n{s}", .{ text, trace.written() });
+        return error.TestExpectedEqual;
+    }
+}
 fn endReport(g: *machine.Group) !machine.report.RunEnd {
     for (g.reports.list.items) |r| if (r == .run_end) return r.run_end;
     return error.TestExpectedEqual;
+}
+
+test "Send charges before delivery or reply registration" {
+    for ([_][]const u8{ "", " and wait" }) |suffix| {
+        for ([_]machine.Limits{ .{ .fuel_per_run = 6 }, .{ .fuel_per_run = 27 }, .{ .alloc_per_run = 1 }, .{ .alloc_per_run = 47 }, .{ .fuel_per_run = 6, .alloc_per_run = 1 } }) |limits| {
+            var trace: std.Io.Writer.Allocating = .init(t.allocator);
+            defer trace.deinit();
+            var g: machine.Group = .init(t.allocator, &trace.writer);
+            defer g.deinit();
+            const text = try std.fmt.allocPrint(t.allocator, "on go\n send ping with 7 to b{s}\nend go", .{suffix});
+            defer t.allocator.free(text);
+            const a = try g.load("a", text, .{ .limits = limits });
+            try t.expect(a == .loaded);
+            const b = try g.load("b", "on ping n\n return n\nend ping", .{});
+            try t.expect(b == .loaded);
+            _ = try g.deliver("a", "go", &.{}, false);
+            try g.pump(clock);
+            try t.expectEqual(@as(u64, 6), g.pump_fuel);
+            const end = try endReport(&g);
+            try t.expectEqual(.limit_fault, end.outcome);
+            try t.expectEqualStrings(if (limits.fuel_per_run <= 27) "fuel" else "alloc", end.limit);
+            try t.expectEqualStrings("a", end.at.unit);
+            try t.expectEqual(@as(u32, 4), end.at.pc);
+            try t.expectEqual(@as(u64, 6), end.fuel);
+            try t.expectEqual(@as(u64, 0), end.alloc);
+            try t.expectEqual(@as(u64, 0), b.loaded.runs);
+            try t.expectEqual(@as(usize, 0), b.loaded.live.items.len);
+            try t.expectEqual(@as(usize, 0), b.loaded.work.items.len);
+            try t.expectEqual(@as(usize, 0), g.waits.pending.items.len);
+            try t.expectEqual(@as(u64, 0), g.waits.timers);
+            for (g.ids.items) |id| try t.expect(std.mem.indexOf(u8, id, ".c") == null);
+            try absent(&trace, "send a/r1");
+            try absent(&trace, "abandon a/r1");
+            // The failed instruction must not leave delivery work for a later Pump.
+            try g.pump(clock);
+            try t.expectEqual(@as(u64, 0), g.pump_fuel);
+            try t.expectEqual(@as(u64, 0), b.loaded.runs);
+        }
+    }
 }
 
 test "long-lived polling Runs compact issued call history" {
