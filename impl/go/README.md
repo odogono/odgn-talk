@@ -1994,21 +1994,29 @@ replay and are required in the Go passing gate. Three keep their
 `standard-store-coordinator` await review. That review remains separate from
 the memory Store's 32 store-kit sequences.
 
-### Combined admission and Pump experiment
+### Combined admission and Pump
 
-The [proposed binary-exchange contract](../../spec/embedding/request-pump-binary.md)
-has private native-Go experiment helpers and a `BackendRequestPump` benchmark.
-The helpers admit one input and perform one ordinary Pump under the worker guard.
-A Pending can remain unsettled; Pump failure retains the admitted input.
-They omit initial OnReady and notify after releasing the worker on Pump refusal.
-With `TALK_ZIG_REQUEST_PUMP` set to `map` or `fields`, the experimental Zig
-backend negotiates that candidate for new guests. Ordinary Requests, Function
-calls and Pumps then use binary frames, and the helpers use the guest's combined
-messages after the ordinary Go-side admission checks. Their Pending is
-registered before sending, and context cancellation uses the exchange's token
-until its final reply, then the delivery id. Unset, the backend keeps JSON
-and refuses combined operations before admission. These helpers are not public
-Go APIs; run the adapter suites in either mode with the variable set.
-ADR 0110 is accepted, with the fields envelope selected. The Go, TS, Elixir and C
-declarations land together in #1255–#1257; until then the public cross-Host API
-checks retain their existing contract.
+`Script.RequestPump` and `Group.RequestPump` preserve their respective Script
+and Object targets; `Group.CallPump` preserves Function arguments and limit
+overrides. Each is a worker call: it admits one input and performs exactly one
+ordinary Pump under the same worker guard. Earlier queued inputs keep their
+order, and the returned Pending may still be unsettled.
+
+All three return `(DeliveryID, *Pending, PumpResult, error)`. An admission
+refusal returns no id or Pending and does not Pump. A Pump refusal after
+admission returns the admitted id and Pending alongside the error and leaves
+the input queued. Hosts must retain those handles even when `err != nil`.
+Initial OnReady is omitted; a Pump refusal notifies after releasing the worker.
+Function staleness fails at drain and wrong arity at execution, as with `Call`.
+
+The experimental Zig backend negotiates the accepted fields envelope by default
+for new guests, following the [binary-exchange contract](../../spec/embedding/request-pump-binary.md).
+Ordinary Requests, Function calls and Pumps then use binary frames, and the
+combined APIs use the guest's combined messages after ordinary admission checks.
+Their Pending is registered before sending; context cancellation uses the
+exchange's token until its final reply, then the delivery id. Unsupported guests
+refuse combined operations before admission, without a two-call fallback.
+Set `TALK_ZIG_REQUEST_PUMP=map` to measure the other envelope, `fields` to select
+fields explicitly, or an empty value to keep JSON and test unsupported combined
+calls. `BackendRequestPump` and `BackendCallPump` benchmark the public APIs;
+`BackendRequest` retains the separate-call workload.

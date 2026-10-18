@@ -14,11 +14,15 @@ import (
 	corevalue "github.com/odogono/odgn-talk/impl/go/internal/value"
 )
 
-// The binary Request/Pump candidates of #1245 (proposed ADR 0110,
-// spec/embedding/request-pump-binary.md). Experimental: guests made after
-// zigRequestPump is set negotiate "map" or "fields"; "" keeps JSON only.
-// TALK_ZIG_REQUEST_PUMP sets it, so the adapter suites can run on either.
-var zigRequestPump = os.Getenv("TALK_ZIG_REQUEST_PUMP")
+// New guests negotiate the accepted fields envelope. An explicit empty
+// TALK_ZIG_REQUEST_PUMP keeps JSON for compatibility checks; map remains an
+// opt-in measurement candidate.
+var zigRequestPump = func() string {
+	if layout, ok := os.LookupEnv("TALK_ZIG_REQUEST_PUMP"); ok {
+		return layout
+	}
+	return "fields"
+}()
 
 type zbLayout byte
 

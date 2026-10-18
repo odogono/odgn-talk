@@ -1519,6 +1519,8 @@ pub const Group = struct {
     /// lands at its next Host crossing, or at its end, rather than waiting
     /// for the next Pump (chapter 9, Threads and the input queue).
     pumping: bool = false,
+    /// A combined Host admission/Pump holds the worker through final observation.
+    worker_claimed: bool = false,
     /// A Host function deferred, so this Pump pauses mid-turn for its
     /// answer; `resumePump` takes the turns up again (the Message Layer).
     crossing_pause: bool = false,
@@ -1599,7 +1601,7 @@ pub const Group = struct {
 
     /// Worker calls cannot reenter a Pump or code-change lifecycle callback.
     pub fn checkWorker(g: *const Group) error{ReentrantCall}!void {
-        if (g.pumping or g.reworking or g.crossing_pause or g.paused_work != null) return error.ReentrantCall;
+        if (g.worker_claimed or g.pumping or g.reworking or g.crossing_pause or g.paused_work != null) return error.ReentrantCall;
     }
 
     fn checkCodeChange(g: *const Group) error{ ReentrantCall, EffectStateUnknown }!void {
@@ -3663,6 +3665,12 @@ pub const Group = struct {
     /// for none (chapter 5, Fuel Slices).
     pub fn pumpWith(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
         try g.checkWorker();
+        return g.pumpOwned(clock, slice, cap);
+    }
+
+    /// One ordinary Pump after the Host has claimed the worker. The caller
+    /// must exclude competing workers until all observations have been sent.
+    pub fn pumpOwned(g: *Group, clock: model.dates.Instant, slice: u64, cap: u64) !void {
         const previous = g.observed_clock orelse if (g.restored) |r| r.clock else null;
         if (previous) |last| if (clock.seconds < last.seconds or (clock.seconds == last.seconds and clock.micros < last.micros)) {
             g.refusePump(clock, @intCast(slice), @intCast(cap));

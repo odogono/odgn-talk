@@ -717,8 +717,8 @@ and the roots not yet reported. `talk_restore_result_reports` gives a
 restore's baseline. The [shared fixtures](../testdata/run-accounting.json)
 run against the exports. Loading a Script parses, checks and lowers it, runs its initialiser
 uncharged and writes its `load` record with its code identity, or its `diag`
-records and `TALK_LOAD_REFUSED`. Limits and Fuel Slices aren't reachable
-through `talk.h` yet.
+records and `TALK_LOAD_REFUSED`. C Hosts set limits through Load and message
+options, and Fuel Slices through Pump options.
 
 C Requests and Host Function Value calls settle their `talk_pending` when the
 Delivery finishes, including errors, Limit Faults, cancellation, dropped or
@@ -728,6 +728,16 @@ discards. `talk_pending_done` distinguishes an open Request from a settled one;
 or after an unsuccessful outcome. Run failure details remain in the typed Reports.
 Climbing the Message Path and Rewind keep the Request open, as does Reload for
 messages it keeps in the mailbox. Settlement survives releasing the Reports and later Pumps.
+
+`talk_script_request_pump`, `talk_request_pump` (Object target), and
+`talk_call_pump` admit one Request or Function call and perform exactly one Pump
+under the worker guard, through the final Trace callback. Earlier inputs retain
+their order, and the Pending may remain open. An admission refusal clears all
+outputs and does not Pump; a Pump refusal retains the owned delivery id and
+Pending, with an empty Pump result, leaving the input queued. Release them with
+`talk_owned_bytes_release`, `talk_pending_release` and `talk_reports_release`
+as usual. Initial OnReady is omitted; Pump refusal notifies readiness after
+worker release. Function staleness is checked at drain and arity at execution.
 
 `talk_inspect` is the Host Input `vars`: it writes each Script's `vars`
 record and, when asked, returns the `talk_inspection` a REPL renders `:vars`,
@@ -1604,7 +1614,7 @@ decrease. Without `crossing-trace-v1`, the Message Layer retains refusal Trace
 for its next successful reply; opted-in Hosts receive available records on the
 error reply itself. Early Load refusals record the attempted input and refusal.
 
-### Binary Value codec experiment
+### Binary Request/Pump exchange
 
 `src/binary_value.zig` implements the Value items for the
 [Request/Pump binary exchange](../../spec/embedding/request-pump-binary.md).
@@ -1615,5 +1625,6 @@ candidates' envelope reader and writer. The Session offers both features at
 `request`, `call`, `pump`, `request-pump` and `call-pump` frames, keeps each
 Group exchange's layout across JSON needs, and accepts `cancel-correlated` by
 token until the final reply.
-The [experiment record](../../docs/research/request-pump-binary.md) distinguishes
-the tested codec foundation from transport and performance acceptance.
+ADR 0110 accepts the fields envelope; map remains available for measurements.
+The [experiment record](../../docs/research/request-pump-binary.md) records the
+transport implementation and the performance evidence.
