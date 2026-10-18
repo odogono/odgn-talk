@@ -1113,7 +1113,7 @@ export class Parser {
       timeout = this.expr();
     }
     // A Guard comes after any timeout, so the timeout ends at `where` and an
-    // `or` in the Guard is boolean (ADR 0108).
+    // `or` in the Guard is boolean (ADR 0109).
     let guard: Node | null = null;
     if (this.atOperatorWord('where')) {
       this.next('operator');

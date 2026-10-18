@@ -346,7 +346,7 @@ func TestWaitForObservationAllocationFaultWaitsUntilResumption(t *testing.T) {
 }
 
 // A one-line `wait for` takes a Guard after any timeout, and an `or` in the
-// Guard is boolean (ADR 0108). watched gives what the wait left in `it` once
+// Guard is boolean (ADR 0109). watched gives what the wait left in `it` once
 // `key` messages carrying each of keys have been dispatched and the Clock
 // has reached until, or "waiting".
 func TestOneLineWaitForGuard(t *testing.T) {

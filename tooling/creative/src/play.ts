@@ -552,7 +552,7 @@ export class PlaySession {
     if (names.length) {
       throw new Error(names.map(p => p.message).join('\n'));
     }
-    this.#tree = new ProjectTree(project, undefined, false);
+    this.#tree = new ProjectTree(project, undefined, { trackWork: true });
     this.#tree.subscribe(() => {
       this.changed = true;
     });

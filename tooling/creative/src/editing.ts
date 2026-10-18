@@ -10,6 +10,7 @@ import {
   type ReadonlySignal,
 } from '@preact/signals-core';
 import { equal, ProjectTree, type TreeJournal } from './tree/project-tree';
+import { TreeHistory } from './tree/history';
 import {
   elementNamesTaken,
   pageNamesTaken,
@@ -214,7 +215,7 @@ type HistoryEntry = {
 type PendingEdit = {
   before: EditorPosition;
   beforeContent: number;
-  changes: TreeJournal;
+  history: TreeHistory;
   keys: ReadonlySet<number>;
 };
 const copyPosition = (state: DeepReadonly<EditorPosition>): EditorPosition => ({
@@ -371,10 +372,7 @@ export class StackEditor {
       }
       const pending = this.#pending.peek();
       if (pending && !this.#replaying) {
-        pending.changes = this.#tree.compact([
-          ...pending.changes,
-          ...event.changes,
-        ]);
+        pending.history.append(event.changes);
         this.#pending.value = { ...pending };
       }
       this.#noticePending = true;
@@ -494,7 +492,9 @@ export class StackEditor {
   }
   get #pendingChanged(): boolean {
     const pending = this.#pending.value;
-    return !!pending && !this.#tree.isNetZero(pending.changes, pending.keys);
+    return (
+      !!pending && !this.#tree.isNetZero(pending.history.changes, pending.keys)
+    );
   }
   #finish(): void {
     batch(() => {
@@ -502,12 +502,15 @@ export class StackEditor {
       if (!pending) {
         return;
       }
-      const changed = !this.#tree.isNetZero(pending.changes, pending.keys);
+      const changed = !this.#tree.isNetZero(
+        pending.history.changes,
+        pending.keys,
+      );
       if (changed && this.readOnly) {
         this.#replaying = true;
         this.#applying = true;
         try {
-          this.#tree.replay(pending.changes, false);
+          this.#tree.replay(pending.history.changes, false);
         } finally {
           this.#replaying = false;
           this.#applying = false;
@@ -522,7 +525,7 @@ export class StackEditor {
             after: copyPosition(this.#position),
             beforeContent: pending.beforeContent,
             afterContent: this.#content,
-            changes: this.#tree.compact(pending.changes),
+            changes: pending.history.snapshot(),
           },
         ];
         this.#future.value = [];
@@ -562,7 +565,7 @@ export class StackEditor {
       before: copyPosition(this.#position),
       beforeContent: this.#content,
       keys: this.#tree.historyKeys(),
-      changes: [],
+      history: new TreeHistory(),
     };
     this.#pending.value = pending;
     return {
@@ -1053,10 +1056,7 @@ class EditorTextHistory implements TextHistory {
   set(text: DeepReadonly<RichText>): void {
     const target = this.element;
     const next = renormalizeRichText(text);
-    if (
-      JSON.stringify(next) !==
-      JSON.stringify(renormalizeRichText(target.richText))
-    ) {
+    if (!equal(next, renormalizeRichText(target.richText))) {
       this.editor.edit(draft => {
         const element = elementOf(draft, target.name);
         if (element?.kind === 'text') {

@@ -76,7 +76,7 @@ const watched = (wait: string, keys: string[], until = t0) => {
   return result;
 };
 
-describe('a one-line `wait for` with a Guard (ADR 0108)', () => {
+describe('a one-line `wait for` with a Guard (ADR 0109)', () => {
   test('matches only a message its Guard holds for', () => {
     expect(watched('wait for key k where k = "Y"', ['N'])).toBeUndefined();
     expect(watched('wait for key k where k = "Y"', ['N', 'Y'])).toBe(

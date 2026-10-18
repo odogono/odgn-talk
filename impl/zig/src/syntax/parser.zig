@@ -1014,7 +1014,7 @@ const Parser = struct {
             timeout = try p.expr();
         }
         // A Guard comes after any timeout, so the timeout ends at `where` and
-        // an `or` in the Guard is boolean (ADR 0108).
+        // an `or` in the Guard is boolean (ADR 0109).
         var guard: ?ast.Guard = null;
         if (try p.atWord("where", .operator)) guard = try p.guardClause();
         return p.stmt(first, .{ .wait_for = .{ .event = ev, .timeout = timeout, .guard = guard } });
@@ -2390,7 +2390,7 @@ test "declarations and statements parse losslessly" {
     , "parses");
 }
 
-test "a one-line `wait for` takes a Guard after its timeout (ADR 0108)" {
+test "a one-line `wait for` takes a Guard after its timeout (ADR 0109)" {
     try expectOutcome(
         \\on t
         \\  wait for pressed key where key = "Y"

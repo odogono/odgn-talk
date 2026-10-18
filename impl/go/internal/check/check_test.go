@@ -18,7 +18,7 @@ func TestLoadDiagnostics(t *testing.T) {
 	}{
 		{"on t\nreturn absent\nend", "unknown name", 2, 8},
 		// A one-line `wait for`'s Guard has a Guard's restrictions and its
-		// event's bindings (ADR 0108).
+		// event's bindings (ADR 0109).
 		{"function f x\nreturn x\nend\non t\nwait for go n or 1 s where n > 0 and f(n)\nend", "not in a guard", 5, 38},
 		{"on t\nwait for go n where m > 0\nend", "unknown name", 2, 21},
 		{"on t\nreturn min\nend", "not a value", 2, 8},

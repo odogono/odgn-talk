@@ -317,7 +317,7 @@ func TestWhoseClauseShape(t *testing.T) {
 }
 
 // A one-line `wait for` takes its Guard after any timeout, so the timeout
-// ends at `where` and an `or` in the Guard is boolean (ADR 0108).
+// ends at `where` and an `or` in the Guard is boolean (ADR 0109).
 func TestOneLineWaitForGuardFollowsTimeout(t *testing.T) {
 	for _, source := range []string{
 		"on t\n wait for key k where k = \"Y\" or k = \"N\"\nend t",

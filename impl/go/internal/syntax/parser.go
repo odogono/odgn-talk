@@ -853,7 +853,7 @@ func (p *parser) tryStatement() *Node {
 }
 
 // event parses a `wait for` event. A block `when` branch takes its Guard
-// here; a one-line wait takes it after any timeout (ADR 0108).
+// here; a one-line wait takes it after any timeout (ADR 0109).
 func (p *parser) event(t Token, guard bool) *Node {
 	e := node("event", t)
 	name := p.name()

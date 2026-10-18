@@ -1,4 +1,4 @@
-//! A one-line `wait for` with a Guard after any timeout (ADR 0108),
+//! A one-line `wait for` with a Guard after any timeout (ADR 0109),
 //! observed through the `watch` Run's record in the Trace.
 const std = @import("std");
 const machine = @import("machine.zig");
