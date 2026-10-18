@@ -124,7 +124,12 @@ source require placing the editor cursor explicitly and choosing **Use current
 cursor and preview**. No duplicate handler is added. **Insert action** applies
 one undoable edit and selects the inserted source; it remains freely editable,
 with no connection to the picker. Changing the Script after preview requires
-another preview.
+another preview. The picker is a Preact component
+([`src/recipe-picker.tsx`](src/recipe-picker.tsx)): its action, target, text,
+position, preview and status are component state, so changing the action
+updates the controls in place and keeps the typed text. Changing any input
+clears the preview. Closing the picker unmounts it; the CodeMirror Script stays
+imperative and the insertion is one `view.dispatch`.
 
 Page names are unique across the Project. Element names are unique on their
 Page and cannot collide with any Page name. Both avoid reserved words and Host
@@ -137,7 +142,8 @@ source (see [Delays with `wait`](#delays-with-wait)).
 
 Recipe unit tests check source, literal values, target filtering, placement,
 names and execution through the Play Host. Browser checks cover Info, previews,
-explicit placement, selection, undo/redo, stale previews and read-only windows.
+explicit placement, selection, undo/redo, stale previews, in-place updates
+that keep typed text, and read-only windows.
 
 Build it with the other suites (see [Browser test suites](#browser-test-suites)).
 
