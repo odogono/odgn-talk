@@ -4175,7 +4175,10 @@ pub const Group = struct {
             }
             g.turn_at = 0;
         }
-        if (g.host_poll) |poll| poll(g.host_poll_context);
+        // A Trace sink's admissions belong to this Pump, so they land here.
+        // Without one, inputs arriving now wait for the export boundary and
+        // land in the next Pump: an idle poll costs a Host crossing per Pump.
+        if (g.trace != null) if (g.host_poll) |poll| poll(g.host_poll_context);
         g.land(null) catch |e| {
             if (e != error.Deferred) return e;
             g.crossing_pause = true;
