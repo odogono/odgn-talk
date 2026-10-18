@@ -207,6 +207,9 @@ guest services it at checkpoints and export boundaries on its original stack,
 without reentering WASM. Admission replies validate and reserve in the guest;
 OnReady and sink callbacks run outside adapter locks. Atomic guest work can delay
 an admission acknowledgement until its next checkpoint or export boundary.
+Without a Trace sink, a Pump has no checkpoint after its drain: a Stop,
+CancelRun or Rewind arriving then is admitted at the export boundary and lands in
+the next Pump, where native Go would land it in this one (#1267).
 The public Host matrix compares exact Trace, Fuel, typed Reports, futures and
 inspection with a separately compiled native-Go binary; a Trace-disabled long
 export exercises concurrent Delivery, Stop, CancelRun and Answer. The native

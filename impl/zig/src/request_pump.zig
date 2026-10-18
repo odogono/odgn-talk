@@ -123,6 +123,11 @@ pub const Report = enum(u8) {
 
 pub const Error = error{ Malformed, OutOfMemory };
 
+/// Field names are usually the same literal as the table's.
+fn sameName(x: []const u8, y: []const u8) bool {
+    return (x.ptr == y.ptr and x.len == y.len) or std.mem.eql(u8, x, y);
+}
+
 /// Writes one frame. A record is a map (named fields, absent ones omitted)
 /// or, for the fields candidate's messages and Reports, a list whose
 /// positions are the record's field names (absent ones Nothing).
@@ -155,10 +160,34 @@ pub const Writer = struct {
     pub fn raw(w: *Writer, bytes: []const u8) Allocator.Error!void {
         try w.out.appendSlice(w.a, bytes);
     }
-    fn leb(w: *Writer, n0: u128) Allocator.Error!void {
-        var n = n0;
-        while (n >= 128) : (n >>= 7) try w.out.append(w.a, @as(u8, @truncate(n)) | 128);
-        try w.out.append(w.a, @intCast(n));
+    /// One item header, a tag then an unsigned LEB128, and its bytes,
+    /// written together into reserved capacity: on `wasm32`, appending byte
+    /// by byte, and short `memory.copy` calls, cost more than the encoding.
+    fn tagged(w: *Writer, t: u8, n0: u128, bytes: []const u8) Allocator.Error!void {
+        try w.out.ensureUnusedCapacity(w.a, 20 + bytes.len);
+        const out = w.out.unusedCapacitySlice();
+        out[0] = t;
+        var len: usize = 1;
+        if (std.math.cast(u64, n0)) |small| {
+            var n = small;
+            while (n >= 128) : (n >>= 7) {
+                out[len] = @as(u8, @truncate(n)) | 128;
+                len += 1;
+            }
+            out[len] = @intCast(n);
+        } else {
+            var n = n0;
+            while (n >= 128) : (n >>= 7) {
+                out[len] = @as(u8, @truncate(n)) | 128;
+                len += 1;
+            }
+            out[len] = @intCast(n);
+        }
+        len += 1;
+        if (bytes.len <= 16) {
+            for (bytes, out[len..][0..bytes.len]) |b, *o| o.* = b;
+        } else @memcpy(out[len..][0..bytes.len], bytes);
+        w.out.items.len += len + bytes.len;
     }
 
     /// Opens a record. Every record has at most 16 fields, so a map's
@@ -174,12 +203,10 @@ pub const Writer = struct {
         const r = &w.records.items[w.records.items.len - 1];
         if (!r.positional) {
             r.count += 1;
-            try w.out.append(w.a, tag.text);
-            try w.leb(name.len);
-            try w.out.appendSlice(w.a, name);
+            try w.tagged(tag.text, name.len, name);
             return;
         }
-        while (r.next < r.names.len and !std.mem.eql(u8, r.names[r.next], name)) : (r.next += 1) try w.out.append(w.a, tag.nothing);
+        while (r.next < r.names.len and !sameName(r.names[r.next], name)) : (r.next += 1) try w.out.append(w.a, tag.nothing);
         std.debug.assert(r.next < r.names.len);
         r.next += 1;
     }
@@ -209,32 +236,26 @@ pub const Writer = struct {
     }
     pub fn int(w: *Writer, n: i128) Allocator.Error!void {
         if (n < 0) {
-            try w.out.append(w.a, tag.negative);
-            try w.leb(@intCast(-n));
+            try w.tagged(tag.negative, @intCast(-n), "");
         } else {
-            try w.out.append(w.a, tag.integer);
-            try w.leb(@intCast(n));
+            try w.tagged(tag.integer, @intCast(n), "");
         }
     }
     /// Protocol text: UTF-8 the Core wrote, never NFC-normalized.
     pub fn ptext(w: *Writer, s: []const u8) Allocator.Error!void {
-        try w.out.append(w.a, tag.protocol_text);
-        try w.leb(s.len);
-        try w.out.appendSlice(w.a, s);
+        try w.tagged(tag.protocol_text, s.len, s);
     }
     pub fn ptexts(w: *Writer, xs: []const []const u8) Allocator.Error!void {
         try w.list(xs.len);
         for (xs) |x| try w.ptext(x);
     }
     pub fn list(w: *Writer, n: usize) Allocator.Error!void {
-        try w.out.append(w.a, tag.list);
-        try w.leb(n);
+        try w.tagged(tag.list, n, "");
     }
     pub fn instant(w: *Writer, t: model.dates.Instant) Allocator.Error!void {
         const n: i64 = t.seconds * 1000000 + t.micros;
         const bits: u64 = @bitCast(n);
-        try w.out.append(w.a, tag.instant);
-        try w.leb((bits << 1) ^ @as(u64, @bitCast(n >> 63)));
+        try w.tagged(tag.instant, (bits << 1) ^ @as(u64, @bitCast(n >> 63)), "");
     }
     pub fn value(w: *Writer, v: *const Value, options: binary_value.EncodeOptions) (Allocator.Error || error{InvalidValue})!void {
         const mark = w.out.items.len;

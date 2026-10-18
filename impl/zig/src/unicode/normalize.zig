@@ -3,6 +3,7 @@
 //! composition tables, with Hangul syllables handled algorithmically.
 
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const properties = @import("properties.zig");
 const utf8 = @import("utf8.zig");
@@ -53,7 +54,7 @@ fn reorder(entries: []Entry) void {
         }
         var end = i + 1;
         while (end < entries.len and entries[end].class != 0) end += 1;
-        if (end - i > 1) std.mem.sort(Entry, entries[i..end], {}, byClass);
+        if (end - i > 1) sorting.stable(Entry, entries[i..end], {}, byClass);
         i = end;
     }
 }

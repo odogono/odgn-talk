@@ -329,6 +329,17 @@ func zbClock(w *zbWriter, now time.Time, o PumpOptions) {
 type zbReader struct {
 	d  []byte
 	at int
+	// The fields candidate's Reports, read as skipReports passes them.
+	rows []zbRow
+	// The rows' field spans share this backing, sized for want more.
+	spans [][]byte
+	want  int
+}
+
+// zbRow is one positional Report: its zbReports index and fields.
+type zbRow struct {
+	kind int
+	view zbView
 }
 
 var errZigBinary = fmt.Errorf("malformed binary Zig reply")
@@ -416,14 +427,19 @@ func (r *zbReader) skipReports() ([]byte, error) {
 	if err != nil || n > uint64(len(r.d)-r.at) {
 		return nil, errZigBinary
 	}
-	for range n {
+	r.rows = make([]zbRow, 0, n)
+	for i := range n {
+		// Reports average under ten fields; one backing usually holds them all.
+		r.want = int(n-i) * 10
 		tag, err := r.byte()
 		if err != nil || tag == 0 || int(tag) > len(zbReports) {
 			return nil, errZigBinary
 		}
-		if _, err := r.skip(); err != nil {
+		view, err := r.positional(zbReports[tag-1].fields)
+		if err != nil {
 			return nil, err
 		}
+		r.rows = append(r.rows, zbRow{kind: int(tag - 1), view: view})
 	}
 	return r.d[start:r.at], nil
 }
@@ -482,13 +498,22 @@ func zbMapView(span []byte) (zbView, error) {
 
 // zbPositional reads a fields-candidate record of the given names.
 func zbPositional(r *zbReader, names []string) (zbView, error) {
+	return r.positional(names)
+}
+
+func (r *zbReader) positional(names []string) (zbView, error) {
 	if t, err := r.byte(); err != nil || t != 0x06 {
 		return zbView{}, errZigBinary
 	}
 	if n, err := r.uvarint(); err != nil || n != uint64(len(names)) {
 		return zbView{}, errZigBinary
 	}
-	v := zbView{keys: names, vals: make([][]byte, len(names))}
+	if cap(r.spans)-len(r.spans) < len(names) {
+		r.spans = make([][]byte, 0, max(r.want, len(names)))
+	}
+	at := len(r.spans)
+	r.spans = r.spans[:at+len(names)]
+	v := zbView{keys: names, vals: r.spans[at : at+len(names) : at+len(names)]}
 	for i, name := range names {
 		skip := r.skip
 		if name == "reports" {
@@ -498,9 +523,10 @@ func zbPositional(r *zbReader, names []string) (zbView, error) {
 		if err != nil {
 			return zbView{}, err
 		}
-		if !zbNothing(val) {
-			v.vals[i] = val
+		if zbNothing(val) {
+			val = nil
 		}
+		v.vals[i] = val
 	}
 	return v, nil
 }
@@ -602,7 +628,8 @@ type zbPacket struct {
 	ok          bool
 	// A completion's outcome, as items.
 	state, deadline, fuel, reports, gone []byte
-	fields                               bool // the fields candidate's Reports
+	fields                               bool    // the fields candidate's Reports
+	rows                                 []zbRow // and those Reports, already read
 	err                                  []byte
 	abandoned, settled, trace            []byte
 }
@@ -628,6 +655,7 @@ func zbParse(data []byte) (*zbPacket, error) {
 		}
 		p.state, p.deadline, p.fuel = top.get("state"), top.get("nextDeadline"), top.get("fuelUsed")
 		p.reports, p.gone, p.trace = top.get("reports"), top.get("gone"), top.get("trace")
+		p.rows = r.rows
 	case zbMap:
 		span, err := r.skip()
 		if err != nil {
@@ -729,50 +757,59 @@ func (b *zigGroup) zbPumpResult(p *zbPacket) (PumpResult, error) {
 	}
 	result.FuelUsed = fuel
 	climbed := map[Report]bool{}
-	r := zbReader{d: p.reports}
-	if t, err := r.byte(); err != nil || t != 0x06 {
-		return result, errZigBinary
-	}
-	n, err := r.uvarint()
-	if err != nil || n > uint64(len(p.reports)) {
-		return result, errZigBinary
-	}
-	for range n {
-		var row zbView
-		var kind string
-		if p.fields {
-			tag, err := r.byte()
-			if err != nil || tag == 0 || int(tag) > len(zbReports) {
-				return result, errZigBinary
-			}
-			kind = zbReports[tag-1].kind
-			if row, err = zbPositional(&r, zbReports[tag-1].fields); err != nil {
-				return result, err
-			}
-		} else {
-			span, err := r.skip()
-			if err != nil {
-				return result, err
-			}
-			if row, err = zbMapView(span); err != nil {
-				return result, err
-			}
-			kind, _ = zbText(row.get("kind"))
-		}
+	add := func(kind string, row zbView) error {
 		report, err := zigReportOf(kind)
 		if err != nil {
-			return result, err
+			return err
 		}
 		if err := b.zbDecodeReport(row, report); err != nil {
-			return result, err
+			return err
 		}
 		if c := row.get("climbed"); len(c) == 1 && c[0] == 0x02 {
 			climbed[report] = true
 		}
 		result.Reports = append(result.Reports, report)
+		return nil
 	}
-	if r.at != len(p.reports) {
-		return result, errZigBinary
+	if p.fields {
+		// zbParse read the positional Reports as it found the list's end.
+		if len(p.rows) > 0 {
+			result.Reports = make([]Report, 0, len(p.rows))
+		}
+		for _, row := range p.rows {
+			if err := add(zbReports[row.kind].kind, row.view); err != nil {
+				return result, err
+			}
+		}
+	} else {
+		r := zbReader{d: p.reports}
+		if t, err := r.byte(); err != nil || t != 0x06 {
+			return result, errZigBinary
+		}
+		n, err := r.uvarint()
+		if err != nil || n > uint64(len(p.reports)) {
+			return result, errZigBinary
+		}
+		if n > 0 {
+			result.Reports = make([]Report, 0, n)
+		}
+		for range n {
+			span, err := r.skip()
+			if err != nil {
+				return result, err
+			}
+			row, err := zbMapView(span)
+			if err != nil {
+				return result, err
+			}
+			kind, _ := zbText(row.get("kind"))
+			if err := add(kind, row); err != nil {
+				return result, err
+			}
+		}
+		if r.at != len(p.reports) {
+			return result, errZigBinary
+		}
 	}
 	gone, err := zbTexts(p.gone)
 	if err != nil {
@@ -883,6 +920,25 @@ func (b *zigGroup) zbDecode(span []byte, dst reflect.Value) error {
 	return nil
 }
 
+// zbDecodeValues reads a list of Values, as zbDecode would into a []Value,
+// without reflection; a missing list stays nil.
+func (b *zigGroup) zbDecodeValues(span []byte) ([]Value, error) {
+	if span == nil {
+		return nil, nil
+	}
+	items, err := zbItems(span)
+	if err != nil {
+		return nil, fmt.Errorf("expected Zig list for []Value")
+	}
+	vs := make([]Value, len(items))
+	for i, item := range items {
+		if vs[i], err = b.zbDecodeValue(item); err != nil {
+			return nil, err
+		}
+	}
+	return vs, nil
+}
+
 func (b *zigGroup) zbDecodeStruct(view zbView, dst reflect.Value) error {
 	fields := zigFields(dst.Type())
 	for i, f := range fields.fields {
@@ -922,7 +978,7 @@ func (b *zigGroup) zbDecodeReport(row zbView, report Report) error {
 	case *RunStarted:
 		r.RunAncestry = ancestry()
 		r.Script, r.Run, r.Delivery, r.Selector = text("script"), RunID(text("run")), DeliveryID(text("delivery")), text("selector")
-		if err = b.zbDecode(row.get("args"), reflect.ValueOf(&r.Args).Elem()); err == nil {
+		if r.Args, err = b.zbDecodeValues(row.get("args")); err == nil {
 			err = b.zbDecode(row.get("fn"), reflect.ValueOf(&r.Function).Elem())
 		}
 	case *RunAccounting:

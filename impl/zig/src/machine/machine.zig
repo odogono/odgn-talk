@@ -5,6 +5,8 @@
 //! and writes the Trace. Frames live on the heap, so the run loop never
 //! recurses on Script-controlled depth.
 const std = @import("std");
+const sorting = @import("../sort.zig");
+const id_text = @import("../ids.zig");
 const Allocator = std.mem.Allocator;
 const model = @import("../value.zig");
 const display = @import("../display.zig");
@@ -42,6 +44,10 @@ const Value = model.Value;
 /// A Timeout Block's mathematical deadline and duration, in microseconds.
 pub const Deadline = struct { at: DeadlineTicks, us: DeadlineTicks };
 
+/// A Timeout Block's deadline on the operand stack, shared by reference:
+/// unboxed, its wide Ticks would make every Slot ten times the size.
+pub const DeadlineBox = struct { references: usize = 1, deadline: Deadline };
+
 /// Mathematical wait deadlines, wide enough for every 34-digit duration.
 pub const DeadlineTicks = wait_table.Ticks;
 
@@ -51,7 +57,7 @@ pub const Slot = union(enum) {
     reader: *binary.Reader,
     replacement: *Replacement,
     /// A Timeout Block's deadline, below the block's body.
-    deadline: Deadline,
+    deadline: *DeadlineBox,
 
     pub fn release(self: Slot, gpa: Allocator) void {
         switch (self) {
@@ -77,7 +83,10 @@ pub const Slot = union(enum) {
                 r.pieces.deinit(gpa);
                 gpa.destroy(r);
             },
-            .deadline => {},
+            .deadline => |d| {
+                d.references -= 1;
+                if (d.references == 0) gpa.destroy(d);
+            },
         }
     }
 };
@@ -1315,7 +1324,7 @@ fn operationRefs(a: Allocator, needs: []const check.Need) ![]const OperationRef 
             if (!refLess({}, r, ref) and !refLess({}, ref, r)) break;
         } else try refs.append(a, ref);
     }
-    std.mem.sort(OperationRef, refs.items, {}, refLess);
+    sorting.stable(OperationRef, refs.items, {}, refLess);
     return refs.items;
 }
 
@@ -1699,7 +1708,7 @@ pub const Group = struct {
     /// or the call of a Run, that sent it.
     fn ancestry(g: *Group, d: Delivery) !report.Ancestry {
         const r = &g.reports;
-        var out: report.Ancestry = .{ .root = try r.print("d{d}", .{rootOf(d)}) };
+        var out: report.Ancestry = .{ .root = try r.id("d", rootOf(d)) };
         const from = d.from orelse return out;
         // A call id is its Run's id, `.c` and a number.
         if (std.mem.lastIndexOf(u8, from, ".c")) |dot| if (dot + 2 < from.len and std.ascii.isDigit(from[dot + 2])) {
@@ -1723,7 +1732,7 @@ pub const Group = struct {
             .ancestry = g.ancestry(d) catch return,
             .script = r.text(s.name) catch return,
             .run = r.text(run.id) catch return,
-            .delivery = if (d.from == null and d.id > 0) r.print("d{d}", .{d.id}) catch return else "",
+            .delivery = if (d.from == null and d.id > 0) r.id("d", d.id) catch return else "",
             .selector = if (d.function == null) r.text(d.message) catch return else "",
             .function = if (d.function) |f| r.value(f) catch return else null,
             .args = r.valueList(d.args) catch return,
@@ -1788,14 +1797,14 @@ pub const Group = struct {
             run.reported_fuel = run.fuel;
             g.markRoot(rootOf(run.delivery));
         };
-        std.mem.sort(Ended, rows.items, {}, struct {
+        sorting.stable(Ended, rows.items, {}, struct {
             fn less(_: void, x: Ended, y: Ended) bool {
                 return x.order < y.order;
             }
         }.less);
         for (rows.items) |x| try r.add(.{ .run_accounting = .{ .ancestry = x.ancestry, .script = x.script, .run = x.run, .fuel = x.fuel, .state = x.state } });
         const roots = g.changed_roots.keys();
-        std.mem.sort(u64, roots, {}, std.sort.asc(u64));
+        sorting.stable(u64, roots, {}, std.sort.asc(u64));
         for (roots) |root| {
             var live: u64 = 0;
             var queued: u64 = 0;
@@ -1810,7 +1819,7 @@ pub const Group = struct {
                 .deliver => |x| queued += @intFromBool(rootOf(x.delivery) == root),
                 else => {},
             };
-            try r.add(.{ .causal_work = .{ .root = try r.print("d{d}", .{root}), .live_runs = live, .queued_messages = queued, .discarded_messages = g.root_discards.get(root) orelse 0 } });
+            try r.add(.{ .causal_work = .{ .root = try r.id("d", root), .live_runs = live, .queued_messages = queued, .discarded_messages = g.root_discards.get(root) orelse 0 } });
         }
     }
 
@@ -1997,7 +2006,7 @@ pub const Group = struct {
         var diagnostics: std.ArrayList(check.Diagnostic) = .empty;
         try diagnostics.appendSlice(scratch, checked.diagnostics);
         try g.libraryNeeds(scratch, t, context.grants orelse &.{}, &diagnostics);
-        std.mem.sort(check.Diagnostic, diagnostics.items, &lines, check.Diagnostic.lessThan);
+        sorting.stable(check.Diagnostic, diagnostics.items, &lines, check.Diagnostic.lessThan);
         if (diagnostics.items.len > 0) {
             for (diagnostics.items) |d| {
                 const p = d.position(&lines);
@@ -2418,7 +2427,7 @@ pub const Group = struct {
         var runs: std.ArrayList(*Run) = .empty;
         defer runs.deinit(g.gpa);
         try runs.appendSlice(g.gpa, s.live.items);
-        std.mem.sort(*Run, runs.items, {}, struct {
+        sorting.stable(*Run, runs.items, {}, struct {
             fn less(_: void, x: *Run, y: *Run) bool {
                 return runNumber(x.id) < runNumber(y.id);
             }
@@ -3132,7 +3141,7 @@ pub const Group = struct {
             }
             out.writeAll(" fuel=0 alloc=0\n") catch {};
         }
-        g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.print("d{d}", .{d.id}) catch "", .broadcast = if (d.broadcast != 0) g.reports.print("b{d}", .{d.broadcast}) catch "" else "", .outcome = .cancelled } });
+        g.addReport(.{ .run_end = .{ .script = g.reports.text(x.name) catch "", .delivery = g.reports.id("d", d.id) catch "", .broadcast = if (d.broadcast != 0) g.reports.id("b", d.broadcast) catch "" else "", .outcome = .cancelled } });
         try g.endDelivery(d, .{ .failed = .{ .reason = "cancelled" } }, .{
             .part = if (d.decision) .{ .undecided = .{ .script = x.name, .run = "", .outcome = "cancelled" } } else null,
         });
@@ -3236,7 +3245,7 @@ pub const Group = struct {
         const order = try g.gpa.alloc(*const ScriptGrant, s.grants.len);
         defer g.gpa.free(order);
         for (s.grants, order) |*sg, *o| o.* = sg;
-        std.mem.sort(*const ScriptGrant, order, {}, struct {
+        sorting.stable(*const ScriptGrant, order, {}, struct {
             fn less(_: void, x: *const ScriptGrant, y: *const ScriptGrant) bool {
                 return std.mem.order(u8, x.name, y.name) == .lt;
             }
@@ -3727,11 +3736,13 @@ pub const Group = struct {
             else => {},
         };
         for (g.batch.items) |input| g.writeInput(input);
-        const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
-        g.write("> pump clock={s}", .{shown});
-        if (slice > 0) g.write(" fuel-slice={d}", .{slice});
-        if (cap > 0) g.write(" fuel-cap={d}", .{cap});
-        g.write("\n", .{});
+        if (g.trace != null) {
+            const shown = try model.dates.string(g.scratch.allocator(), model.dates.fields(clock), true);
+            g.write("> pump clock={s}", .{shown});
+            if (slice > 0) g.write(" fuel-slice={d}", .{slice});
+            if (cap > 0) g.write(" fuel-cap={d}", .{cap});
+            g.write("\n", .{});
+        }
         g.pump_fuel = 0;
         // Each Script's slice in this Pump is what its debt leaves of it.
         for (g.scripts.items) |x| {
@@ -3768,7 +3779,7 @@ pub const Group = struct {
         };
         const q = try g.gpa.create(capabilities.ChargeRequest);
         errdefer g.gpa.destroy(q);
-        const request = try std.fmt.allocPrint(g.gpa, "q{d}", .{g.charge_counter + 1});
+        const request = try id_text.alloc(g.gpa, "", "q", g.charge_counter + 1);
         errdefer g.gpa.free(request);
         const call = try g.gpa.dupe(u8, id);
         errdefer g.gpa.free(call);
@@ -4023,7 +4034,7 @@ pub const Group = struct {
         // The open Decisions a variables-only restore discarded settle
         // undecided, `cancelled`, before any Stretch.
         if (g.deferred.items.len > 0) {
-            std.mem.sort(Deferred, g.deferred.items, {}, struct {
+            sorting.stable(Deferred, g.deferred.items, {}, struct {
                 fn less(_: void, x: Deferred, y: Deferred) bool {
                     return x.id < y.id;
                 }
@@ -4172,7 +4183,10 @@ pub const Group = struct {
             }
             g.turn_at = 0;
         }
-        if (g.host_poll) |poll| poll(g.host_poll_context);
+        // A Trace sink's admissions belong to this Pump, so they land here.
+        // Without one, inputs arriving now wait for the export boundary and
+        // land in the next Pump: an idle poll costs a Host crossing per Pump.
+        if (g.trace != null) if (g.host_poll) |poll| poll(g.host_poll_context);
         g.land(null) catch |e| {
             if (e != error.Deferred) return e;
             g.crossing_pause = true;
@@ -4382,7 +4396,7 @@ pub const Group = struct {
             g.releaseDelivery(d);
             return e;
         };
-        const id = std.fmt.allocPrint(g.gpa, "{s}/r{d}", .{ s.name, s.runs }) catch |e| {
+        const id = id_text.alloc(g.gpa, s.name, "/r", s.runs) catch |e| {
             g.gpa.destroy(run);
             g.releaseDelivery(d);
             return e;
@@ -5010,7 +5024,7 @@ pub const Group = struct {
         }
         const from: []const u8 = if (waits) blk: {
             run.calls += 1;
-            const id = try std.fmt.allocPrint(gpa, "{s}.c{d}", .{ run.id, run.calls });
+            const id = try id_text.alloc(gpa, run.id, ".c", run.calls);
             g.ids.append(gpa, id) catch |e| {
                 gpa.free(id);
                 return e;
@@ -5321,8 +5335,8 @@ pub const Group = struct {
         const undecided = try a.alloc(report.UndecidedBy, decided.undecided.len);
         for (decided.undecided, undecided) |m, *x| x.* = .{ .script = try r.text(m.script), .run = try r.text(m.run), .outcome = undecidedOutcome(m.outcome) };
         try r.add(.{ .decided = .{
-            .delivery = if (is_broadcast) "" else try r.print("d{d}", .{id}),
-            .broadcast = if (is_broadcast) try r.print("b{d}", .{id}) else "",
+            .delivery = if (is_broadcast) "" else try r.id("d", id),
+            .broadcast = if (is_broadcast) try r.id("b", id) else "",
             .verdict = switch (decided.verdict) {
                 .allowed => .allowed,
                 .vetoed => .vetoed,
@@ -5637,7 +5651,7 @@ pub const Group = struct {
 
     /// The current Segment's id, `<run>.s<N>`.
     fn segmentId(g: *Group, run: *const Run) []const u8 {
-        return std.fmt.allocPrint(g.scratch.allocator(), "{s}.s{d}", .{ run.id, run.segments + 1 }) catch "";
+        return id_text.alloc(g.scratch.allocator(), run.id, ".s", run.segments + 1) catch "";
     }
 
     /// Automatic abandonment as a Run ends: each occupied slot's
@@ -5667,7 +5681,7 @@ pub const Group = struct {
             const capability = slot.grant.grant.capability;
             const op = &capability.operations[slot.abandon];
             run.calls += 1;
-            const id = std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls }) catch "";
+            const id = id_text.alloc(a, run.id, ".c", run.calls) catch "";
             const segment = g.segmentId(run);
             var call: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = slot.grant.name, .binding = slot.grant.grant.binding, .now = g.clock, .left = 0, .starting = false, .gpa = g.gpa, .owner = g, .run = run.id, .segment = segment, .scope = slot.name, .automatic = true, .deferrable = deferrable };
             // An allocation refusal already makes the C worker refuse;
@@ -5742,8 +5756,8 @@ pub const Group = struct {
         const r = &g.reports;
         const d = run.delivery;
         var end: report.RunEnd = .{ .script = try r.text(s.name), .run = try r.text(run.id), .outcome = .completed, .fallback = run.fallback, .fuel = run.fuel, .alloc = run.alloc };
-        if (d.from == null) end.delivery = try r.print("d{d}", .{d.id});
-        if (d.broadcast > 0) end.broadcast = try r.print("b{d}", .{d.broadcast});
+        if (d.from == null) end.delivery = try r.id("d", d.id);
+        if (d.broadcast > 0) end.broadcast = try r.id("b", d.broadcast);
         if (run.fallback or g.hasHandler(s, run.handler)) {
             end.handler = try r.text(run.handler);
         } else if (d.function) |f| {
@@ -6119,7 +6133,7 @@ pub const Group = struct {
         var decisions: DeliveryDecisions = .empty;
         defer decisions.deinit(g.gpa);
         try decisions.ensureTotalCapacity(g.gpa, runs.items.len);
-        std.mem.sort(*Run, runs.items, {}, struct {
+        sorting.stable(*Run, runs.items, {}, struct {
             fn less(_: void, x: *Run, y: *Run) bool {
                 return runNumber(x.id) < runNumber(y.id);
             }
@@ -6159,7 +6173,7 @@ pub const Group = struct {
                 if (p.call) |c| try abandoned.append(g.gpa, c.id);
             };
         }
-        std.mem.sort([]const u8, abandoned.items, {}, struct {
+        sorting.stable([]const u8, abandoned.items, {}, struct {
             fn less(_: void, x: []const u8, y: []const u8) bool {
                 return callOrder(x, y);
             }
@@ -6240,7 +6254,7 @@ pub const Group = struct {
         const runs = try a.alloc([]const u8, discarded.len);
         for (discarded, runs) |id, *x| x.* = try r.text(id);
         const messages = try a.alloc([]const u8, dropped.len);
-        for (dropped, messages) |id, *x| x.* = try r.print("d{d}", .{id});
+        for (dropped, messages) |id, *x| x.* = try r.id("d", id);
         const calls = try a.alloc([]const u8, pending.len);
         for (pending, calls) |id, *x| x.* = try r.text(id);
         try r.add(.{ .stop = .{ .script = try r.text(script_name), .reason = try r.text(reason), .discarded_runs = runs, .dropped_messages = messages, .pending_calls = calls } });
@@ -6414,7 +6428,7 @@ pub const Group = struct {
     fn reportUnhandled(g: *Group, d: Delivery) !void {
         const r = &g.reports;
         try r.add(.{ .unhandled = .{
-            .delivery = if (d.from == null and d.id > 0) try r.print("d{d}", .{d.id}) else "",
+            .delivery = if (d.from == null and d.id > 0) try r.id("d", d.id) else "",
             .message = try r.text(d.message),
             .args = try r.valueList(d.args),
             .target = d.target,
@@ -6885,7 +6899,7 @@ pub const Group = struct {
                 return g.raise("mailbox full", &.{.{ .key = "to", .value = shown }});
             }
             run.calls += 1;
-            const id = try std.fmt.allocPrint(g.gpa, "{s}.c{d}", .{ run.id, run.calls });
+            const id = try id_text.alloc(g.gpa, run.id, ".c", run.calls);
             g.ids.append(g.gpa, id) catch |e| {
                 g.gpa.free(id);
                 return e;
@@ -8585,7 +8599,12 @@ pub const Group = struct {
                 const own: Deadline = .{ .at = micros(g.clock) + ns, .us = ns };
                 // An enclosing block's deadline that is no later stays.
                 const deadline = if (blockDeadline(frame)) |outer| (if (outer.at <= own.at) outer else own) else own;
-                try frame.stack.append(gpa, .{ .deadline = deadline });
+                const box = try gpa.create(DeadlineBox);
+                box.* = .{ .deadline = deadline };
+                frame.stack.append(gpa, .{ .deadline = box }) catch |e| {
+                    gpa.destroy(box);
+                    return e;
+                };
             },
             .timeout_end => frame.stack.pop().?.release(gpa),
             .join_start => {
@@ -9705,7 +9724,7 @@ pub const Group = struct {
         const before = costs.chargeInstruction(ins.op, m);
         try g.coverCharge(run, before);
         run.calls += 1;
-        const id = try std.fmt.allocPrint(a, "{s}.c{d}", .{ run.id, run.calls });
+        const id = try id_text.alloc(a, run.id, ".c", run.calls);
         const left: ?u64 = fuelLeft(run) -| (if (decl.metering != null) before.fuel + run.clause_fuel else decl.cost.fuel);
         var local: capabilities.Call = .{ .id = id, .script = run.script.name, .grant = grant_name, .binding = granted.grant.binding, .now = g.clock, .left = left, .gpa = g.gpa, .owner = g, .run = run.id, .segment = g.segmentId(run), .scope = decl.scope.name() orelse "", .request_eligible = decl.mode == .suspending and decl.metering == .read_only, .at_unit = unitName(run, frame), .at_pc = frame.pc - 1, .at_line = ins.position.line, .at_column = ins.position.column };
         // A suspending call outlives the instruction: the Host answers it
@@ -10507,7 +10526,10 @@ fn retainSlot(slot: Slot) Slot {
             r.references += 1;
             break :blk .{ .replacement = r };
         },
-        .deadline => slot,
+        .deadline => |d| blk: {
+            d.references += 1;
+            break :blk .{ .deadline = d };
+        },
     };
 }
 
@@ -10813,7 +10835,7 @@ fn blockDeadline(frame: *const Frame) ?Deadline {
     var i = frame.stack.items.len;
     while (i > 0) {
         i -= 1;
-        if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline;
+        if (frame.stack.items[i] == .deadline) return frame.stack.items[i].deadline.deadline;
     }
     return null;
 }

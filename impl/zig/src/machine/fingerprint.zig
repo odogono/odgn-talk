@@ -4,6 +4,7 @@
 //! in the Host Manifest's data model, and a save keeps that text, so a Grant
 //! a restore couldn't re-bind still counts with its saved declarations.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const capabilities = @import("capabilities.zig");
 const version = @import("../generated/version.zig").version;
@@ -114,7 +115,7 @@ pub fn writeOperation(w: *std.Io.Writer, op: *const capabilities.Operation, docu
             order[n] = i;
             n += 1;
         };
-        std.mem.sort(usize, order[0..n], op.errors, struct {
+        sorting.stable(usize, order[0..n], op.errors, struct {
             fn less(errs: []const capabilities.ErrorDecl, x: usize, y: usize) bool {
                 return std.mem.order(u8, errs[x].code, errs[y].code) == .lt;
             }
@@ -184,7 +185,7 @@ pub fn writeGrant(a: Allocator, w: *std.Io.Writer, capability: *const capabiliti
     var order: std.ArrayList(usize) = .empty;
     defer order.deinit(a);
     for (kept, 0..) |k, i| if (k) try order.append(a, i);
-    std.mem.sort(usize, order.items, capability.operations, struct {
+    sorting.stable(usize, order.items, capability.operations, struct {
         fn less(ops: []const capabilities.Operation, x: usize, y: usize) bool {
             return std.mem.order(u8, ops[x].name, ops[y].name) == .lt;
         }
@@ -211,12 +212,12 @@ pub const Script = struct {
 
 /// The Group Fingerprint of these Libraries and Scripts, which it sorts.
 pub fn compute(libraries: []Library, scripts: []Script) [32]u8 {
-    std.mem.sort(Library, libraries, {}, struct {
+    sorting.stable(Library, libraries, {}, struct {
         fn less(_: void, x: Library, y: Library) bool {
             return std.mem.order(u8, x.name, y.name) == .lt;
         }
     }.less);
-    std.mem.sort(Script, scripts, {}, struct {
+    sorting.stable(Script, scripts, {}, struct {
         fn less(_: void, x: Script, y: Script) bool {
             return std.mem.order(u8, x.name, y.name) == .lt;
         }
@@ -252,7 +253,7 @@ fn write(w: *std.Io.Writer, libraries: []const Library, scripts: []const Script)
         var order: [256]usize = undefined;
         const n = @min(s.grants.len, order.len);
         for (order[0..n], 0..) |*o, j| o.* = j;
-        std.mem.sort(usize, order[0..n], s.grants, struct {
+        sorting.stable(usize, order[0..n], s.grants, struct {
             fn less(gs: []const Grant, x: usize, y: usize) bool {
                 return std.mem.order(u8, gs[x].name, gs[y].name) == .lt;
             }

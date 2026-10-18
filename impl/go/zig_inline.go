@@ -7,6 +7,9 @@ import (
 	"slices"
 )
 
+// zigNull acknowledges an inline event; inlineIO copies it.
+var zigNull = []byte("null")
+
 // A queued admission owns its fields and receipt until the export goroutine
 // serves it. No caller touches guest memory or starts a nested export.
 type zigAdmission struct {
@@ -202,7 +205,7 @@ func (b *zigGroup) inlineEvent(data []byte) ([]byte, error) {
 		}
 		b.frameMu.Unlock()
 		if len(b.inlineWait) == 0 {
-			return []byte("null"), nil
+			return zigNull, nil
 		}
 		<-b.inlineWake
 	}

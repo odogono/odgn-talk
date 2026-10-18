@@ -4,6 +4,7 @@
 //! documentation. It is a pure function of the definitions, never of a live
 //! Group, and the Core never reads it.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const capabilities = @import("capabilities.zig");
 const objects = @import("objects.zig");
@@ -44,7 +45,7 @@ fn nameOf(x: anytype) []const u8 {
 fn sorted(a: Allocator, comptime T: type, items: []const T) Error![]T {
     const out = try a.dupe(T, items);
     errdefer a.free(out);
-    std.mem.sort(T, out, {}, struct {
+    sorting.stable(T, out, {}, struct {
         fn less(_: void, x: T, y: T) bool {
             return std.mem.order(u8, nameOf(x), nameOf(y)) == .lt;
         }

@@ -5,6 +5,7 @@
 //! Disassembly Cases pin. The instructions' byte encoding is the Zig Core's
 //! own (ADR 0009); nothing outside `src/` depends on this representation.
 const std = @import("std");
+const sorting = @import("../sort.zig");
 const Allocator = std.mem.Allocator;
 const ast = @import("../syntax/ast.zig");
 const lexer = @import("../syntax/lexer.zig");
@@ -710,7 +711,7 @@ const Frame = struct {
             f.body.info.captures = @intCast(cb.captures.len);
             const order = try f.a().alloc(usize, cb.locals.len);
             for (order, 0..) |*o, i| o.* = i;
-            std.mem.sort(usize, order, cb, struct {
+            sorting.stable(usize, order, cb, struct {
                 fn less(b: *const check.Body, x: usize, y: usize) bool {
                     return b.binding[x] < b.binding[y];
                 }

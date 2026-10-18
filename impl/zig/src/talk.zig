@@ -4,6 +4,8 @@
 //! Returned values own one reference. Decimal pointers and text slices borrow
 //! their value; byte, display and encoding results own buffers.
 const std = @import("std");
+const sorting = @import("sort.zig");
+const id_text = @import("ids.zig");
 const builtin = @import("builtin");
 const model = @import("value.zig");
 const display = @import("display.zig");
@@ -1214,7 +1216,7 @@ fn queue(s: *Script, m: *const Message, how: Asking, id: ?*Buffer, n_out: *u64) 
     };
     n_out.* = n;
     if (id) |b| {
-        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        const text = id_text.alloc(allocator, "", "d", n) catch return .out_of_memory;
         b.* = .{ .data = text.ptr, .len = text.len };
     }
     return .ok;
@@ -1285,7 +1287,7 @@ export fn talk_group_call(g: *Group, f: *Value, args: ?[*]const *Value, len: usi
         return .out_of_memory;
     };
     if (id) |b| {
-        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        const text = id_text.alloc(allocator, "", "d", n) catch return .out_of_memory;
         b.* = .{ .data = text.ptr, .len = text.len };
     }
     const p = g.core.gpa.create(Pending) catch return .out_of_memory;
@@ -1306,7 +1308,7 @@ export fn talk_pending_result(p: *const Pending, out: *?*Value) HostErrorCode {
 fn deciding(g: *Group, n: u64, broadcast: bool, out: *?*Deciding) HostErrorCode {
     const gpa = g.core.gpa;
     const d = gpa.create(Deciding) catch return .out_of_memory;
-    const name = std.fmt.allocPrint(gpa, "{s}{d}", .{ if (broadcast) "b" else "d", n }) catch {
+    const name = id_text.alloc(gpa, "", if (broadcast) "b" else "d", n) catch {
         gpa.destroy(d);
         return .out_of_memory;
     };
@@ -1927,7 +1929,7 @@ export fn talk_script_grants(s: *Script, out: *[*]const ScriptGrant) usize {
         for (sg.grant.capability.operations, sg.kept) |op, kept| if (kept) {
             g.grant_operations.append(gpa, .{ .data = op.name.ptr, .len = op.name.len }) catch return 0;
         };
-        std.mem.sort(Id, g.grant_operations.items[start..], {}, idLess);
+        sorting.stable(Id, g.grant_operations.items[start..], {}, idLess);
         g.grants.append(gpa, .{ .name = sg.name.ptr, .name_len = sg.name.len, .operations = undefined, .operations_len = g.grant_operations.items.len - start }) catch return 0;
     }
     // The Operation names are all in place, so the views can point at them.
@@ -2016,7 +2018,7 @@ fn inspect(g: *machine.Group, x: *Inspecting) !void {
     for (g.scripts.items, scripts) |s, *view| {
         var disabled: std.ArrayList(Id) = .empty;
         for (s.grants) |sg| if (sg.disabled) try disabled.append(a, .{ .data = sg.name.ptr, .len = sg.name.len });
-        std.mem.sort(Id, disabled.items, {}, struct {
+        sorting.stable(Id, disabled.items, {}, struct {
             fn less(_: void, p: Id, q: Id) bool {
                 return std.mem.order(u8, p.data[0..p.len], q.data[0..q.len]) == .lt;
             }
@@ -2025,7 +2027,7 @@ fn inspect(g: *machine.Group, x: *Inspecting) !void {
         for (s.variableNames(), s.variables, vars) |name, v, *pair| pair.* = .{ .key = name.ptr, .key_len = name.len, .value = try x.value(v) };
         // Runs in the order they started.
         const live = try a.dupe(*machine.Run, s.live.items);
-        std.mem.sort(*machine.Run, live, {}, struct {
+        sorting.stable(*machine.Run, live, {}, struct {
             fn less(_: void, p: *machine.Run, q: *machine.Run) bool {
                 return runNumber(p.id) < runNumber(q.id);
             }
@@ -2035,7 +2037,7 @@ fn inspect(g: *machine.Group, x: *Inspecting) !void {
         var mailbox: std.ArrayList(MessageView) = .empty;
         for (s.work.items) |w| switch (w) {
             .message => |d| {
-                const delivery: []const u8 = if (d.from == null and d.id > 0) try std.fmt.allocPrint(a, "d{d}", .{d.id}) else "";
+                const delivery: []const u8 = if (d.from == null and d.id > 0) try id_text.alloc(a, "", "d", d.id) else "";
                 const from: []const u8 = d.from orelse "";
                 const args = try a.alloc(*Value, d.args.len);
                 for (d.args, args) |v, *arg| arg.* = try x.value(v);
@@ -2180,7 +2182,7 @@ pub fn defineCapabilityZigWith(c: *Core, name: []const u8, operations: []caps.Op
     const gpa = c.gpa;
     if (name.len == 0) return .invalid_value;
     for (c.definitions.items) |d| if (std.mem.eql(u8, d.name, name)) return .name_reused;
-    std.mem.sort(caps.Operation, operations, {}, struct {
+    sorting.stable(caps.Operation, operations, {}, struct {
         fn less(_: void, x: caps.Operation, y: caps.Operation) bool {
             return std.mem.order(u8, x.name, y.name) == .lt;
         }
@@ -2822,7 +2824,7 @@ fn defineCapability(c: *Core, name: ?[*]const u8, len: usize, ops: ?[*]const Ope
         };
         made += 1;
     }
-    std.mem.sort(caps.Operation, operations, {}, struct {
+    sorting.stable(caps.Operation, operations, {}, struct {
         fn less(_: void, x: caps.Operation, y: caps.Operation) bool {
             return std.mem.order(u8, x.name, y.name) == .lt;
         }
@@ -3671,7 +3673,7 @@ fn queueTo(g: *Group, to: *objects.Object, m: *const Message, how: Asking, id: ?
     };
     n_out.* = n;
     if (id) |b| {
-        const text = std.fmt.allocPrint(allocator, "d{d}", .{n}) catch return .out_of_memory;
+        const text = id_text.alloc(allocator, "", "d", n) catch return .out_of_memory;
         b.* = .{ .data = text.ptr, .len = text.len };
     }
     return .ok;
@@ -3713,7 +3715,7 @@ fn queueBroadcast(g: *Group, m: *const Message, decision: bool, id: ?*Buffer, n_
     };
     n_out.* = n;
     if (id) |b| {
-        const text = std.fmt.allocPrint(allocator, "b{d}", .{n}) catch return .out_of_memory;
+        const text = id_text.alloc(allocator, "", "b", n) catch return .out_of_memory;
         b.* = .{ .data = text.ptr, .len = text.len };
     }
     return .ok;

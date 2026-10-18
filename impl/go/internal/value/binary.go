@@ -43,6 +43,14 @@ func AppendBinary(dst []byte, root Value, functions BinaryOptions) ([]byte, erro
 				dst = append(dst, 1)
 			}
 		case Number:
+			if i, ok := v.Number().SmallInteger(); ok {
+				if i >= 0 {
+					dst = binary.AppendUvarint(append(dst, 3), uint64(i))
+				} else {
+					dst = binary.AppendUvarint(append(dst, 16), uint64(-(i+1))+1)
+				}
+				continue
+			}
 			s := v.Number().String()
 			if v.Number().Exponent() == 0 {
 				if n, err := strconv.ParseUint(s, 10, 64); err == nil {
